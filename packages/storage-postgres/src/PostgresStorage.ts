@@ -1,7 +1,7 @@
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
-import { makeSqlSubmissionLedger } from "@yielded/agent-storage-sql/sql-submission-ledger";
+import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-submission-ledger";
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
 import { makeSqlThreadStore } from "@yielded/agent-storage-sql/sql-thread-store";
 import {
@@ -14,6 +14,7 @@ import {
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
 import { ScheduleStore } from "@yielded/agent/schedule";
+import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   DEFAULT_OWNERSHIP_LEASE_DURATION,
   LedgerError,
@@ -116,7 +117,7 @@ const makeThreadStore = ({ config, journal, hitFailpoint }: Journal) =>
   });
 
 const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
-  makeSqlSubmissionLedger(journal, {
+  makeSqlSubmissionLedgerKernel(journal, {
     namespace: config.schema,
     errors: postgresStorageErrors,
     hitFailpoint,
@@ -128,7 +129,7 @@ const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
     },
   });
 
-/** Thread history and submissions sharing one initialized journal. Requires SqlClient and Crypto. */
+/** Thread history, submissions, and settlement publication over one journal. Requires SqlClient and Crypto. */
 export const layerWith = (options: PostgresStorageOptions) =>
   ThreadReader.layer().pipe(
     Layer.provideMerge(
@@ -139,7 +140,8 @@ export const layerWith = (options: PostgresStorageOptions) =>
           const submissionLedger = yield* makeSubmissionLedger(journal);
 
           return Context.make(ThreadStore, threadStore).pipe(
-            Context.add(SubmissionLedger, submissionLedger),
+            Context.add(SubmissionLedger, submissionLedger.ledger),
+            Context.add(SettlementPublisher, submissionLedger.publisher),
           );
         }),
       ),
@@ -157,9 +159,17 @@ export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
     ),
   );
 
-/** Standalone submissions over the application's SqlClient and Crypto. */
+/** Submissions and canonical settlement publication over the application's SqlClient and Crypto. */
 export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
-  Layer.effect(SubmissionLedger, Effect.flatMap(openJournal(options), makeSubmissionLedger));
+  Layer.effectContext(
+    Effect.flatMap(openJournal(options), makeSubmissionLedger).pipe(
+      Effect.map((services) =>
+        Context.make(SubmissionLedger, services.ledger).pipe(
+          Context.add(SettlementPublisher, services.publisher),
+        ),
+      ),
+    ),
+  );
 
 /** Schedules over the application's SqlClient. */
 export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>

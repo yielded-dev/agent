@@ -1120,7 +1120,8 @@ for (const point of ["terminalize:after-canonical-append", "failed-with-queue"] 
               runtimeFailpoint: (location) =>
                 armed &&
                 (location === point ||
-                  (point === "failed-with-queue" && location === "terminalize:after-reserve"))
+                  (point === "failed-with-queue" &&
+                    location === "terminalize:after-canonical-append"))
                   ? DurableRuntimeFailpointError.make({ location })
                   : Effect.void,
             }).pipe(Layer.provide(authority)),
@@ -1287,7 +1288,7 @@ it.effect(
           NodeHost.NodeDurableHost.layerRegistered(registrations, {
             ...options,
             runtimeFailpoint: (location) =>
-              armed && location === "terminalize:after-reserve"
+              armed && location === "terminalize:before-publication"
                 ? DurableRuntimeFailpointError.make({ location })
                 : Effect.void,
           }).pipe(Layer.provide(authority)),

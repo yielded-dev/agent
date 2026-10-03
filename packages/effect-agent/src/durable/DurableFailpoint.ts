@@ -42,7 +42,7 @@ export const DurableRuntimeFailpointLocation = Schema.Literals([
   "join:after-claim",
   "join:after-canonical-append",
   "resolve:after-intent",
-  "terminalize:after-reserve",
+  "terminalize:before-publication",
   "terminalize:after-canonical-append",
   "abort:after-intent",
   "subagent:after-reserve",

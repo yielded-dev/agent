@@ -248,7 +248,7 @@ export const drainAlarmsUntil = async (
       const rows = await laneRows(thread, namespace);
 
       const actionable = rows.some((row) =>
-        ["ready", "input-applied", "running", "joining", "terminalizing"].includes(row.state),
+        ["ready", "input-applied", "running", "joining"].includes(row.state),
       );
 
       if (actionable) {

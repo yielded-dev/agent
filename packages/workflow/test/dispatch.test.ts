@@ -104,8 +104,7 @@ const toolDefinition = Agent.make("dispatch-ordinary-tool", {
 });
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WorkflowEngine.layerMemory,
   RunToolAuthorization.allowAll,
   ToolReconciler.uncertain,

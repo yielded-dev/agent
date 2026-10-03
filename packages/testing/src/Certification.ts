@@ -32,6 +32,7 @@ import {
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
@@ -130,12 +131,17 @@ export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> 
     readonly version?: string | undefined;
   };
   /**
-   * The candidate Layer pair. When both ports must share one connection root (the ADR-0011
+   * The candidate Layer pair. The ledger Layer also supplies its co-owned settlement publisher.
+   * When both ports must share one connection root (the ADR-0011
    * "same file" rule), pass the SAME combined Layer instance for both fields — Layer
    * memoization builds it once. A candidate may require `Crypto.Crypto` (the memory reference
    * does); the certification's own environment supplies nothing else.
    */
-  readonly submissionLedger: Layer.Layer<SubmissionLedger, LedgerE, Crypto.Crypto>;
+  readonly submissionLedger: Layer.Layer<
+    SubmissionLedger | SettlementPublisher,
+    LedgerE,
+    Crypto.Crypto
+  >;
   readonly threadStore: Layer.Layer<ThreadStore, StoreE, Crypto.Crypto>;
   /** Defaults to `WakeScheduler.layerNoop`; the runner re-drives lanes explicitly. */
   readonly wakeScheduler?: Layer.Layer<WakeScheduler> | undefined;
@@ -1080,12 +1086,25 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
     }),
   ).pipe(Layer.provide(options.threadStore));
 
+  const capturingPublisher = Layer.effect(SettlementPublisher)(
+    Effect.gen(function* () {
+      const inner = yield* SettlementPublisher;
+
+      return SettlementPublisher.of({
+        publish: (request) =>
+          Effect.sync(() => {
+            batchProducers.set(request.append.batch.batchId, request.append.batch.producerId);
+          }).pipe(Effect.andThen(inner.publish(request))),
+      });
+    }),
+  ).pipe(Layer.provideMerge(options.submissionLedger));
+
   // RUN-036: certification uses the default-none Tool failure observer. Trusted application
   // reporting adds no durable transition and is verified separately from adapter certification.
   const environment = Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        options.submissionLedger,
+        capturingPublisher,
         capturingStore,
         options.wakeScheduler ?? WakeScheduler.layerNoop,
         DurableRuntimeFailpointTestControl.layer,

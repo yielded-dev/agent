@@ -337,15 +337,17 @@ delivery, and activity progress. SQLite and Postgres supply connections, format 
 and transaction settings. Cloudflare reuses the SQL helpers that fit Durable Objects.
 Applications normally install their database adapter; adapter authors can use these factories
 with Effect's `SqlClient`. The shared package imports no platform runtime.
-`makeSqlThreadStore` and `makeSqlSubmissionLedger` return Effects of service values; install
-them with `Layer.effect(ThreadStore, ...)` and `Layer.effect(SubmissionLedger, ...)`.
+`makeSqlThreadStore` and `makeSqlSubmissionLedger` return individual service values in Effects.
+Durable adapters also need `SettlementPublisher`: `makeSqlSubmissionLedgerKernel` returns
+co-owned `ledger` and `publisher` services over the supplied journal. Install them together
+with `Layer.effectContext`, alongside the thread store built over that journal.
 
 <a id="effect-agent-storage-sqlite"></a>
 
 ### `@yielded/agent-storage-sqlite`
 
 Stores thread history and pending work in one Node SQLite database.
-Upgrades supported predecessor formats atomically and rejects incompatible stored versions.
+Accepts fresh databases or the exact current thread format; rejects mismatches without migration.
 `CurrentSqliteStorageVersion` identifies the supported version.
 See the [SQLite storage guide](/storage/sqlite/) for installation and agent wiring.
 
@@ -366,19 +368,20 @@ Stores thread history and pending work in one Postgres database, which several N
 share. Rejects incompatible stored versions; no migration path is promised.
 Requires Postgres 16 or newer.
 
-`PostgresStorage.layer` provides `ThreadStore` and `SubmissionLedger`, requiring the application's
-native Effect `SqlClient` and `Crypto`. See the [PostgreSQL storage guide](/storage/postgres/)
+`PostgresStorage.layer` provides `ThreadStore`, `ThreadReader`, `SubmissionLedger`, and
+`SettlementPublisher`, requiring the application's native Effect `SqlClient` and `Crypto`.
+See the [PostgreSQL storage guide](/storage/postgres/)
 for client composition and agent wiring. Use `PostgresStorage.layerWith(options)` to configure
 the core pair, or select individual ports:
 
-| Constructor                                       | Provides                 |
-| ------------------------------------------------- | ------------------------ |
-| `threadStoreLayer(options = {})`                  | `ThreadStore`            |
-| `submissionLedgerLayer(options = {})`             | `SubmissionLedger`       |
-| `scheduleStoreLayer(options = {})`                | `ScheduleStore`          |
-| `activityStoreLayer(options = {})`                | `ActivityProcessorStore` |
-| `messageDeliveryStoreLayer(options = {})`         | `MessageDeliveryStore`   |
-| `subscriptionStoreLayer(partition, options = {})` | `SubscriptionStore`      |
+| Constructor                                       | Provides                                  |
+| ------------------------------------------------- | ----------------------------------------- |
+| `threadStoreLayer(options = {})`                  | `ThreadStore`, `ThreadReader`             |
+| `submissionLedgerLayer(options = {})`             | `SubmissionLedger`, `SettlementPublisher` |
+| `scheduleStoreLayer(options = {})`                | `ScheduleStore`                           |
+| `activityStoreLayer(options = {})`                | `ActivityProcessorStore`                  |
+| `messageDeliveryStoreLayer(options = {})`         | `MessageDeliveryStore`                    |
+| `subscriptionStoreLayer(partition, options = {})` | `SubscriptionStore`                       |
 
 These constructors are exported by `PostgresStorage`. Activity progress remains independent of
 the journal; subscriptions require an explicit partition. Message delivery accepts `limits` in

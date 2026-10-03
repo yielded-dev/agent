@@ -281,14 +281,13 @@ const configLayer = DurableRuntimeConfig.layer({
 /** Test-only fault switch for the memory ledger's authoritative admission lookup (SUB-031). */
 let admissionFault: string | undefined;
 
-const baseLayer = (ledger: Layer.Layer<SubmissionLedger>) =>
+const baseLayer = (ledger: typeof MemorySubmissionLedgerLive) =>
   DurableAgentRuntime.layer
     .pipe(Layer.provide(runStorageLayer()))
     .pipe(
       Layer.provideMerge(
         Layer.mergeAll(
-          ledger,
-          MemoryThreadStoreLive,
+          ledger.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
           WakeScheduler.layerNoop,
           DurableRuntimeFailpointTestControl.layer,
           ToolReconciler.uncertain,

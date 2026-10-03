@@ -36,8 +36,11 @@ The [SQLite](/storage/sqlite/) and [PostgreSQL](/storage/postgres/) guides show 
 Successful Runs are retained; interrupted execution is not resumed. Reuse a thread ID
 to continue its conversation. See [Threads](/guide/threads/) for history behavior.
 
-Durable execution also needs a `SubmissionLedger`, registered agents, and a host that
-drives recovery and pending work. The [Node.js](/platforms/node/) and
+Durable execution also needs a `SubmissionLedger`, a `SettlementPublisher`, registered agents,
+and a host that drives recovery and pending work. The publisher belongs to the same storage owner
+as the journal and ledger: it checks settlement authority and appends the canonical terminal fact
+atomically. `RunStorage.layer()` requires this adapter service; independently supplied stores do
+not provide a non-atomic fallback. The [Node.js](/platforms/node/) and
 [Cloudflare](/platforms/cloudflare/) hosts assemble those pieces with their storage.
 For another host, see [custom durable runtime composition](/guide/run-agents/#assemble-a-custom-durable-runtime).
 Storage alone does not start workers or recover unfinished Runs.

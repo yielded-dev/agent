@@ -102,7 +102,6 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
         'effect_agent_submissions',
         'effect_agent_submission_ownership',
         'effect_agent_attempts',
-        'effect_agent_settlement_reservations',
         'effect_agent_abort_intents',
         'effect_agent_approval_decisions',
         'effect_agent_unknown_resolutions',
@@ -121,7 +120,7 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
       requiredRows,
     );
 
-    if (required.length !== 24) {
+    if (required.length !== 23) {
       return yield* SqliteStorageCompatibilityError.make({
         actualVersion: CurrentSqliteStorageVersion,
         supportedVersion: CurrentSqliteStorageVersion,

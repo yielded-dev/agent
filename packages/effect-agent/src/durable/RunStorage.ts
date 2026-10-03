@@ -4,6 +4,12 @@ import { Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } fr
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import type { CanonicalBatch, CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";
 import {
+  SettlementPublication,
+  type SettlementPublicationFailure,
+  type SettlementPublicationResult,
+  SettlementPublisher,
+} from "./SettlementPublisher.ts";
+import {
   AttachChildToReservationRequest,
   ChildBudgetReservationRequest,
   ClaimJoiningRequest,
@@ -18,7 +24,6 @@ import {
   ReleaseOwnershipRequest,
   RenewOwnershipRequest,
   RevertJoiningRequest,
-  SettlementReservation,
   SubmissionLedger,
   SuspendRequest,
   type SuspensionReason,
@@ -34,15 +39,6 @@ import {
   type ThreadStoreFailure,
   ThreadTailRequest,
 } from "./ThreadStore.ts";
-
-export const RunSettlementReservation = Schema.Struct({
-  settlementId: SettlementReservation.fields.settlementId,
-  outcome: SettlementReservation.fields.outcome,
-  record: SettlementReservation.fields.record,
-  recordDigest: SettlementReservation.fields.recordDigest,
-});
-
-export type RunSettlementReservation = typeof RunSettlementReservation.Type;
 
 export const RunChildBudgetReservation = Schema.Struct({
   reservationId: ChildBudgetReservationRequest.fields.reservationId,
@@ -79,9 +75,6 @@ export interface RunOwnership {
   readonly suspend: (
     reason: SuspensionReason,
   ) => ReturnType<SubmissionLedger["Service"]["suspend"]>;
-  readonly reserveSettlement: (
-    request: RunSettlementReservation,
-  ) => ReturnType<SubmissionLedger["Service"]["reserveSettlement"]>;
   readonly reserveChildBudget: (
     request: RunChildBudgetReservation,
   ) => ReturnType<SubmissionLedger["Service"]["reserveChildBudget"]>;
@@ -104,6 +97,9 @@ export interface RunWriter {
 
 /** A claim-scoped owner; a committed suspension ends it, while resume-immediately does not. */
 export interface RunStorageSession extends RunWriter, RunOwnership {
+  readonly publishSettlement: (
+    batch: CanonicalBatch,
+  ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
   /** Initial grant for binding identity. Its token is not an authority for subsequent commands. */
   readonly claim: Claim;
   /** Rebind once after initialization's administrative canonical writes. */
@@ -117,6 +113,7 @@ export interface RunStorageSession extends RunWriter, RunOwnership {
 export class RunStorage extends Context.Service<
   RunStorage,
   {
+    readonly publishSettlement: SettlementPublisher["Service"]["publish"];
     readonly claim: (
       request: ClaimRequest,
     ) => Effect.Effect<
@@ -172,12 +169,6 @@ export const bindRunOwnership = (
   suspend: (reason) =>
     Effect.flatMap(token, (ownershipToken) =>
       ledger.suspend(SuspendRequest.make({ submissionId, ownershipToken, reason })),
-    ),
-  reserveSettlement: (request) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.reserveSettlement(
-        SettlementReservation.make({ ...request, submissionId, ownershipToken }),
-      ),
     ),
   reserveChildBudget: (request) =>
     Effect.flatMap(token, (ownershipToken) =>
@@ -274,6 +265,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
 export const make = Effect.gen(function* () {
   const ledger = yield* SubmissionLedger;
   const store = yield* ThreadStore;
+  const publisher = yield* SettlementPublisher;
 
   const claim = Effect.fn("RunStorage.claim")(function* (request: ClaimRequest) {
     const acquiredAt = yield* Clock.currentTimeMillis;
@@ -420,7 +412,57 @@ export const make = Effect.gen(function* () {
             Effect.uninterruptible,
           ),
         ),
-      reserveSettlement: (value) => owned(ownership.reserveSettlement(value)),
+      publishSettlement: (batch) =>
+        owned<SettlementPublicationResult, SettlementPublicationFailure>(
+          Effect.gen(function* () {
+            let tail = yield* writer.tail;
+
+            for (let retries = 0; ; retries++) {
+              const result = yield* publisher
+                .publish(
+                  SettlementPublication.make({
+                    submissionId: claimed.submissionId,
+                    authority: { _tag: "Owned", ownershipToken: token },
+                    append: FencedAppendRequest.make({
+                      threadId: request.threadId,
+                      producerEpoch: claimed.producerEpoch,
+                      expectedTailSequence: tail.sequence,
+                      expectedTailDigest: tail.digest,
+                      batch,
+                    }),
+                  }),
+                )
+                .pipe(
+                  Effect.catchTag("AppendConflict", (conflict) => {
+                    if (
+                      conflict.reason !== "tail" ||
+                      conflict.actualTailSequence === undefined ||
+                      conflict.actualTailDigest === undefined ||
+                      retries >= 8
+                    )
+                      return Effect.fail(conflict);
+                    tail = {
+                      sequence: conflict.actualTailSequence,
+                      digest: conflict.actualTailDigest,
+                    };
+
+                    return Effect.succeed(undefined);
+                  }),
+                );
+
+              if (result === undefined) continue;
+              yield* writer.refresh;
+
+              return result;
+            }
+          }).pipe(
+            Effect.onError(() =>
+              Effect.sync(() => {
+                closed = true;
+              }),
+            ),
+          ),
+        ),
       reserveChildBudget: (value) => owned(ownership.reserveChildBudget(value)),
       attachChildToReservation: (value) => owned(ownership.attachChildToReservation(value)),
     };
@@ -428,7 +470,7 @@ export const make = Effect.gen(function* () {
     return Option.some(session);
   }, Effect.uninterruptible);
 
-  return RunStorage.of({ claim });
+  return RunStorage.of({ claim, publishSettlement: publisher.publish });
 });
 
 /** Bind one assembly to its selected storage ports; separate assemblies never share a captured owner. */

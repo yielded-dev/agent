@@ -126,8 +126,7 @@ const makeModel = (
   );
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
@@ -1052,13 +1051,13 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       bindings.length = 0;
       const first = yield* runtime.submit(agent, "first", options("bounded", "first"));
-      const reserved = yield* Deferred.make<void>();
+      const publishing = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
       const control = yield* DurableRuntimeFailpointTestControl;
 
       yield* control.setHandler((location) =>
-        location === "terminalize:after-reserve"
-          ? Deferred.succeed(reserved, undefined).pipe(Effect.andThen(Deferred.await(finish)))
+        location === "terminalize:before-publication"
+          ? Deferred.succeed(publishing, undefined).pipe(Effect.andThen(Deferred.await(finish)))
           : Effect.void,
       );
 
@@ -1066,7 +1065,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       const worker = yield* runtime.processThreadHead(first.threadId).pipe(Effect.forkChild);
 
-      yield* Deferred.await(reserved);
+      yield* Deferred.await(publishing);
       // Admission after the final Turn cannot join that Run and must remain FIFO work.
       const second = yield* runtime.submit(agent, "second", options("bounded", "second"));
 
@@ -1311,7 +1310,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
   );
 
   it.effect(
-    "releases recovery ownership when settlement reservation fails before its canonical append",
+    "releases recovery ownership when settlement publication fails before its canonical append",
     () =>
       Effect.gen(function* () {
         const runtime = yield* makeRuntime();
@@ -1331,7 +1330,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           }),
         );
         yield* control.setHandler((location) =>
-          location === "terminalize:after-reserve"
+          location === "terminalize:before-publication"
             ? Effect.fail(DurableRuntimeFailpointError.make({ location }))
             : Effect.void,
         );
@@ -1348,7 +1347,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
   );
 
   for (const location of [
-    "terminalize:after-reserve",
+    "terminalize:before-publication",
     "terminalize:after-canonical-append",
   ] as const) {
     it.effect(`holds admission group through ${location} until canonical repair finalizes`, () =>

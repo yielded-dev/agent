@@ -126,7 +126,7 @@ const localRun =
                     options.readAbortIntent?.(ledger.readAbortIntent) ?? ledger.readAbortIntent,
                 }),
               ),
-            ).pipe(Layer.provide(submissionLedgerLayer));
+            ).pipe(Layer.provideMerge(submissionLedgerLayer));
 
             const ports = Layer.mergeAll(observedStore, observedLedger).pipe(
               Layer.provide(

@@ -51,6 +51,56 @@ export interface SqlThreadStoreOptions<
   readonly offsetPrefix: string;
 }
 
+/** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
+export const prepareSqlAppend = Effect.fnUntraced(function* (
+  request: FencedAppendRequest,
+  crypto: Crypto.Crypto,
+  requireMaterialized: Effect.Effect<
+    unknown,
+    ThreadStoreError | ThreadNotMaterialized
+  > = Effect.void,
+) {
+  const invalid = (operation: string) => (cause: { readonly message: string }) =>
+    ThreadStoreError.make({ operation, message: cause.message, cause });
+
+  const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
+    Effect.mapError(invalid("validate canonical append")),
+  );
+
+  yield* requireMaterialized;
+
+  const tailDigest = yield* digestCanonicalBatch(
+    validated.expectedTailDigest,
+    validated.batch,
+  ).pipe(
+    Effect.provideService(Crypto.Crypto, crypto),
+    Effect.mapError(invalid("digest canonical append")),
+  );
+
+  const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(
+    validated.batch,
+  ).pipe(Effect.mapError(invalid("encode canonical batch")));
+
+  const records = yield* Effect.forEach(validated.batch.records, (record) =>
+    Schema.encodeEffect(Schema.fromJsonString(CanonicalRecord))(record).pipe(
+      Effect.mapError(invalid("encode canonical record")),
+      Effect.map((recordJson) => ({ recordId: record.recordId, recordJson })),
+    ),
+  );
+
+  return yield* Schema.decodeEffect(RawAppendRequest)({
+    threadId: validated.threadId,
+    batchId: validated.batch.batchId,
+    batchDigest: tailDigest,
+    batchJson,
+    expectedTailSequence: validated.expectedTailSequence,
+    expectedTailDigest: validated.expectedTailDigest,
+    producerEpoch: validated.producerEpoch,
+    records,
+    tailDigest,
+  }).pipe(Effect.mapError(invalid("encode canonical append")));
+});
+
 /** Canonical ThreadStore behavior over an adapter-initialized SQL journal. */
 export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(function* <
   S extends Diagnostic,
@@ -118,22 +168,6 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
       Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
     );
   });
-
-  const encodeCanonicalRecord = (
-    record: CanonicalRecord,
-  ): Effect.Effect<string, ThreadStoreError> =>
-    Effect.suspend(() =>
-      encodeRecordJson(record).pipe(
-        Effect.mapError((error) => schemaStoreError("encode canonical record", error)),
-      ),
-    );
-
-  const encodeCanonicalBatch = (batch: CanonicalBatch): Effect.Effect<string, ThreadStoreError> =>
-    Effect.suspend(() =>
-      Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(batch).pipe(
-        Effect.mapError((error) => schemaStoreError("encode canonical batch", error)),
-      ),
-    );
 
   const encodeCheckpoint = (
     checkpoint: ThreadCheckpoint,
@@ -450,9 +484,6 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
     yield* decodeStartupPayloads(journal, crypto);
   }
 
-  const provideCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
-
   const hitFailpoint = (
     location: SqlStorageFailpointLocation,
   ): Effect.Effect<void, ThreadStoreError> =>
@@ -492,38 +523,7 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
     requireMaterialized: Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
     commit: SqlJournal<S, C, W, F>["append"],
   ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate canonical append", error)),
-    );
-
-    yield* requireMaterialized;
-
-    const tailDigest = yield* provideCrypto(
-      digestCanonicalBatch(validated.expectedTailDigest, validated.batch),
-    ).pipe(Effect.mapError((error) => storeError("digest canonical append", error)));
-
-    const batchJson = yield* encodeCanonicalBatch(validated.batch);
-
-    const rawRecords = yield* Effect.forEach(validated.batch.records, (record) =>
-      encodeCanonicalRecord(record).pipe(
-        Effect.map((recordJson) => ({
-          recordId: record.recordId,
-          recordJson,
-        })),
-      ),
-    );
-
-    const rawRequest = yield* Schema.decodeEffect(RawAppendRequest)({
-      threadId: validated.threadId,
-      batchId: validated.batch.batchId,
-      batchDigest: tailDigest,
-      batchJson,
-      expectedTailSequence: validated.expectedTailSequence,
-      expectedTailDigest: validated.expectedTailDigest,
-      producerEpoch: validated.producerEpoch,
-      records: rawRecords,
-      tailDigest,
-    }).pipe(Effect.mapError((error) => schemaStoreError("encode canonical append", error)));
+    const rawRequest = yield* prepareSqlAppend(request, crypto, requireMaterialized);
 
     yield* hitFailpoint("append:before");
 

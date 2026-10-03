@@ -23,6 +23,7 @@ import {
   routedMessageDeliveryStoreLayer,
   routedThreadStoreLayer,
   routedSubmissionLedgerLayer,
+  routedSettlementPublisherLayer,
   routedWorkerAdmissionLayer,
 } from "@yielded/agent-storage-cloudflare/port-routing";
 import {
@@ -71,6 +72,7 @@ import {
 } from "@yielded/agent/run-options";
 import type { RunStorage } from "@yielded/agent/run-storage";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { SettlementPublisher, validatePublication } from "@yielded/agent/settlement-publisher";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   LedgerError,
@@ -82,7 +84,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
 import type { ThreadReader } from "@yielded/agent/thread-store";
-import { ThreadStoreError, ThreadStore } from "@yielded/agent/thread-store";
+import { AppendResult, ThreadStoreError, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
@@ -233,6 +235,7 @@ export type CloudflareDurableRuntimeServices =
   | ThreadStore
   | ThreadReader
   | RunStorage
+  | SettlementPublisher
   | MessageDeliveryStore
   | WakeScheduler
   | DurableAlarmService
@@ -753,6 +756,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
               Effect.gen(function* () {
                 const store = yield* ThreadStore;
                 const ledger = yield* SubmissionLedger;
+                const settlementPublisher = yield* SettlementPublisher;
                 const mutations = yield* ThreadMutationGate;
                 const index = yield* ThreadProjectionMaintenance;
                 const publish = yield* Effect.context<ThreadPublication>();
@@ -884,6 +888,63 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                 const stopWorker = ledger.stopWorker;
 
                 return Context.make(ThreadStore, observedStore).pipe(
+                  Context.add(SettlementPublisher, {
+                    publish: (input) =>
+                      Effect.gen(function* () {
+                        const { request } = yield* validatePublication(input);
+
+                        return yield* mutations
+                          .withMutation(
+                            sourceCommits
+                              .withPermit(
+                                settlementPublisher.publish(request).pipe(
+                                  Effect.tap((result) =>
+                                    result.replayed
+                                      ? Effect.void
+                                      : index
+                                          .applyCommitted(
+                                            request.append,
+                                            AppendResult.make({
+                                              firstSequence: result.tailSequence,
+                                              lastSequence: result.tailSequence,
+                                              tailDigest: result.tailDigest,
+                                              replayed: false,
+                                            }),
+                                          )
+                                          .pipe(
+                                            Effect.catchCause((cause) =>
+                                              Cause.hasInterrupts(cause)
+                                                ? Effect.interrupt
+                                                : Effect.logError(
+                                                    "Thread projection deferred after settlement publication",
+                                                    cause,
+                                                  ),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              )
+                              .pipe(Effect.tap(() => afterCommit)),
+                            {
+                              lanes: [
+                                ...(options.projection === undefined ? [] : [DueQueue.Projection]),
+                                ...(options.lifecyclePublication === undefined
+                                  ? []
+                                  : [DueQueue.Lifecycle]),
+                              ],
+                            },
+                          )
+                          .pipe(
+                            Effect.catchTag("DurableAlarmError", (cause) =>
+                              ThreadStoreError.make({
+                                operation: "prearm settlement publication",
+                                message: cause.message,
+                                cause,
+                              }),
+                            ),
+                          );
+                      }),
+                  }),
                   Context.add(SubmissionLedger, {
                     ...ledger,
                     ...(options.hostLanesForMutation === undefined
@@ -941,6 +1002,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Effect.gen(function* () {
           const local = yield* Effect.context<
             | SubmissionLedger
+            | SettlementPublisher
             | ThreadStore
             | MessageDeliveryStore
             | WakeScheduler
@@ -959,6 +1021,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
 
       const routedPorts = Layer.mergeAll(
         routedSubmissionLedgerLayer({ ownsThread }),
+        routedSettlementPublisherLayer({ ownsThread }),
         routedThreadStoreLayer({ ownsThread }),
         routedWorkerAdmissionLayer({ ownsThread }),
       ).pipe(Layer.provide(localPorts), Layer.provide(threadPortTransportLayer));

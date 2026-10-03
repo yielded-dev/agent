@@ -3,7 +3,7 @@ import { createStorageSchema } from "@yielded/agent-storage-sql/sql-storage-sche
 import { Effect } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-export const CurrentSqliteStorageVersion = 15;
+export const CurrentSqliteStorageVersion = 16;
 
 /** One permanent destination inbox fence, including workers stopped before admission. */
 export const createWorkerStops = Effect.gen(function* () {
@@ -28,6 +28,6 @@ export const sqliteMigrations = SqliteMigrator.fromRecord({
 
     yield* createStorageSchema();
     yield* createWorkerStops;
-    yield* sql`PRAGMA user_version = 15`.withoutTransform;
+    yield* sql`PRAGMA user_version = 16`.withoutTransform;
   }),
 });

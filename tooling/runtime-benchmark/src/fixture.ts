@@ -31,6 +31,7 @@ import {
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
+import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionRequest,
   ClaimRequest,
@@ -39,8 +40,8 @@ import {
   Principal,
   type Settlement,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
+  submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
@@ -254,7 +255,7 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
   }
 });
 
-/** Adapter-only settled rows isolate ledger growth from canonical-history growth. */
+/** Ledger growth includes its authoritative canonical settlement records on a separate Thread. */
 const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
   const ledger = yield* SubmissionLedger;
   const inputDigest = yield* digestJson("fixture");
@@ -286,6 +287,7 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
         settlementId,
         receiptId: admitted.receiptId,
         outcome: "aborted",
+        runId: runIdForSubmission(admitted.submissionId),
       }),
     );
 
@@ -298,16 +300,25 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
       payload,
     });
 
-    const recordDigest = yield* digestJson(yield* Schema.encodeEffect(RecordEnvelope)(record));
+    const publisher = yield* SettlementPublisher;
+    const store = yield* ThreadStore;
+    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
 
-    yield* ledger.reserveSettlement(
-      SettlementReservation.make({
+    yield* publisher.publish(
+      SettlementPublication.make({
         submissionId: admitted.submissionId,
-        ownershipToken: claim.value.ownershipToken,
-        settlementId,
-        outcome: "aborted",
-        record,
-        recordDigest,
+        authority: { _tag: "Owned", ownershipToken: claim.value.ownershipToken },
+        append: FencedAppendRequest.make({
+          threadId: seedThread,
+          producerEpoch: claim.value.producerEpoch,
+          expectedTailSequence: tail.tailSequence,
+          expectedTailDigest: tail.tailDigest,
+          batch: CanonicalBatch.make({
+            batchId: submissionSettlementBatchId(admitted.submissionId),
+            producerId,
+            records: [record],
+          }),
+        }),
       }),
     );
     yield* ledger.finalizeSettlement(

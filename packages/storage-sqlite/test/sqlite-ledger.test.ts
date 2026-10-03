@@ -34,6 +34,8 @@ import {
   type PersistedJson,
   type SettlementOutcome,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionPolicyError,
   SubmissionAdmissionFence,
@@ -64,7 +66,6 @@ import {
   ResolutionNeverHappened,
   RevertJoiningRequest,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
   SubmissionLookupById,
   SubmissionLookupByKey,
@@ -74,10 +75,11 @@ import {
   WaitingForChildSuspension,
   submissionInputRecordId,
   submissionSettlementId,
+  submissionSettlementBatchId,
   submissionSettlementRecordId,
   type AdmissionResult,
   type ParentLinkage,
-  type OwnershipToken,
+  type Claim,
 } from "@yielded/agent/submission-ledger";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
 import {
@@ -158,9 +160,10 @@ const admission = Effect.fn("SqliteLedgerTest.admission")(function* (
   });
 });
 
-const settlementReservation = Effect.fn("SqliteLedgerTest.settlementReservation")(function* (
+const settlementPublication = Effect.fn("SqliteLedgerTest.settlementPublication")(function* (
   admitted: AdmissionResult,
-  ownershipToken: OwnershipToken,
+  claim: Claim,
+  threadId: string,
   outcome: SettlementOutcome,
 ) {
   const settlementId = submissionSettlementId(admitted.submissionId);
@@ -171,6 +174,7 @@ const settlementReservation = Effect.fn("SqliteLedgerTest.settlementReservation"
       settlementId,
       receiptId: admitted.receiptId,
       outcome,
+      runId: runIdForSubmission(admitted.submissionId),
       ...(outcome === "failed"
         ? {
             result: {
@@ -191,16 +195,20 @@ const settlementReservation = Effect.fn("SqliteLedgerTest.settlementReservation"
     payload,
   });
 
-  const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
-  const recordDigest = yield* digestJson(encoded);
-
-  return SettlementReservation.make({
+  return SettlementPublication.make({
     submissionId: admitted.submissionId,
-    ownershipToken,
-    settlementId,
-    outcome,
-    record,
-    recordDigest,
+    authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
+    append: FencedAppendRequest.make({
+      threadId: thread(threadId),
+      producerEpoch: claim.producerEpoch,
+      expectedTailSequence: sequence(0),
+      expectedTailDigest: EMPTY_TAIL_DIGEST,
+      batch: CanonicalBatch.make({
+        batchId: submissionSettlementBatchId(admitted.submissionId),
+        producerId: TEST_PRODUCER,
+        records: [record],
+      }),
+    }),
   });
 });
 
@@ -268,7 +276,7 @@ const withTemporaryDatabase = <A, E>(
 
 const withLedger = <A, E>(
   filename: string,
-  effect: Effect.Effect<A, E, SubmissionLedger | Crypto.Crypto>,
+  effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
 ) => Effect.provide(effect, [ledgerLayer({ filename }), NodeCrypto.layer]);
 
 const withSql = <A, E>(filename: string, effect: Effect.Effect<A, E, SqlClientService.SqlClient>) =>
@@ -386,7 +394,9 @@ describe("SqliteSubmissionLedger", () => {
   describe("shared SubmissionLedger conformance", () => {
     for (const conformanceCase of submissionLedgerConformanceCases) {
       it.effect(conformanceCase.name, () =>
-        withTemporaryDatabase((filename) => withLedger(filename, conformanceCase.run)),
+        withTemporaryDatabase((filename) =>
+          conformanceCase.run.pipe(Effect.provide(combinedLayer(filename))),
+        ),
       );
     }
   });
@@ -827,7 +837,7 @@ describe("SqliteSubmissionLedger", () => {
           Ref.set(active, location);
 
         const failingLedger = <A, E>(
-          effect: Effect.Effect<A, E, SubmissionLedger | Crypto.Crypto>,
+          effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
         ) =>
           Effect.provide(effect, [
             ledgerLayer({
@@ -868,7 +878,7 @@ describe("SqliteSubmissionLedger", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, state, receipt_id, input_applied_record_id
+              SELECT submission_id, state, receipt_id, input_applied_record_id, finalized_at
               FROM effect_agent_submissions
               ORDER BY thread_id, queue_sequence
             `;
@@ -900,14 +910,14 @@ describe("SqliteSubmissionLedger", () => {
           }),
         );
 
-        const reservationRows = withSql(
+        const canonicalRows = withSql(
           filename,
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, settlement_id, outcome, finalized_at
-              FROM effect_agent_settlement_reservations
+              SELECT record_id, record_json
+              FROM effect_agent_canonical_records
             `;
           }),
         );
@@ -1018,34 +1028,28 @@ describe("SqliteSubmissionLedger", () => {
         yield* select(undefined);
         yield* markInputOnce;
 
-        const reservation = yield* settlementReservation(
-          admitted,
-          claim.value.ownershipToken,
-          "completed",
-        ).pipe(Effect.provide(NodeCrypto.layer));
+        const publication = yield* settlementPublication(admitted, claim.value, lane, "completed");
 
-        const reserveOnce = failingLedger(
+        const publishOnce = failingLedger(
           Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
+            const publisher = yield* SettlementPublisher;
 
-            return yield* ledger.reserveSettlement(reservation);
+            return yield* publisher.publish(publication);
           }),
         );
 
-        yield* select("ledger:reserve-settlement:after");
-        expectInjectedFailure(
-          yield* reserveOnce.pipe(Effect.exit),
-          "ledger:reserve-settlement:after",
+        yield* select("append:after");
+        expectInjectedFailure(yield* publishOnce.pipe(Effect.exit), "append:after");
+        const publishedRows = yield* canonicalRows;
+
+        expect(publishedRows).toHaveLength(1);
+        expect(publishedRows[0]?.record_id).toBe(
+          submissionSettlementRecordId(admitted.submissionId),
         );
-        const reservedRows = yield* reservationRows;
-
-        expect(reservedRows).toHaveLength(1);
-        expect(reservedRows[0]?.finalized_at).toBeNull();
-        expect((yield* submissionStates)[0]?.state).toBe("terminalizing");
+        expect((yield* submissionStates)[0]?.finalized_at).toBeNull();
+        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
         yield* select(undefined);
-        const replayedReservation = yield* reserveOnce;
-
-        expect(replayedReservation.replayed).toBe(true);
+        expect((yield* publishOnce).replayed).toBe(true);
 
         const finalizeOnce = failingLedger(
           Effect.gen(function* () {
@@ -1054,7 +1058,7 @@ describe("SqliteSubmissionLedger", () => {
             return yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: admitted.submissionId,
-                settlementId: reservation.settlementId,
+                settlementId: submissionSettlementId(admitted.submissionId),
               }),
             );
           }),
@@ -1065,7 +1069,7 @@ describe("SqliteSubmissionLedger", () => {
           yield* finalizeOnce.pipe(Effect.exit),
           "ledger:finalize-settlement:after",
         );
-        expect((yield* reservationRows)[0]?.finalized_at).not.toBeNull();
+        expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
         expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
@@ -1173,7 +1177,7 @@ describe("SqliteSubmissionLedger", () => {
             Ref.set(active, location);
 
           const failingLedger = <A, E>(
-            effect: Effect.Effect<A, E, SubmissionLedger | Crypto.Crypto>,
+            effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
           ) =>
             Effect.provide(effect, [
               ledgerLayer({
@@ -1537,7 +1541,7 @@ describe("SqliteSubmissionLedger", () => {
           Ref.set(active, location);
 
         const failingLedger = <A, E>(
-          effect: Effect.Effect<A, E, SubmissionLedger | Crypto.Crypto>,
+          effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
         ) =>
           Effect.provide(effect, [
             ledgerLayer({
@@ -1770,17 +1774,15 @@ describe("SqliteSubmissionLedger", () => {
 
             if (Option.isNone(childClaim)) return yield* Effect.die("missing child claim");
 
-            const reservation = yield* settlementReservation(
-              child,
-              childClaim.value.ownershipToken,
-              "completed",
-            );
+            const publisher = yield* SettlementPublisher;
 
-            yield* ledger.reserveSettlement(reservation);
+            yield* publisher.publish(
+              yield* settlementPublication(child, childClaim.value, childLane, "completed"),
+            );
             yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: child.submissionId,
-                settlementId: reservation.settlementId,
+                settlementId: submissionSettlementId(child.submissionId),
               }),
             );
           }),

@@ -1,6 +1,8 @@
 import { BrowserCrypto } from "@effect/platform-browser";
 import { SqliteClient } from "@effect/sql-sqlite-do";
+import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import type { ThreadStore } from "@yielded/agent/thread-store";
 import { Effect, Layer, type Crypto } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { describe, it } from "vite-plus/test";
@@ -8,7 +10,7 @@ import { describe, it } from "vite-plus/test";
 import { ledgerReadCases } from "../../../test/fixtures/ledger-read-contracts.ts";
 import { DoStorageFailpoint } from "../src/DoStorageFailpoint.ts";
 import { submissionLedgerLayer } from "../src/DoSubmissionLedger.ts";
-import { invalidate, storageConfigLayer } from "../src/DoThreadStore.ts";
+import { invalidate, storageConfigLayer, threadStoreLayer } from "../src/DoThreadStore.ts";
 import { withThreadStorage } from "./harness.ts";
 
 let nextId = 0;
@@ -16,7 +18,11 @@ let nextId = 0;
 const withFixture = <A, E>(
   build: (
     storage: DurableObjectStorage,
-  ) => Effect.Effect<A, E, SubmissionLedger | SqlClient.SqlClient | Crypto.Crypto>,
+  ) => Effect.Effect<
+    A,
+    E,
+    SubmissionLedger | SettlementPublisher | ThreadStore | SqlClient.SqlClient | Crypto.Crypto
+  >,
 ) =>
   withThreadStorage(`ledger-reads-${nextId++}`, (storage) =>
     Effect.gen(function* () {
@@ -30,7 +36,9 @@ const withFixture = <A, E>(
       );
 
       return yield* build(storage).pipe(
-        Effect.provide(submissionLedgerLayer.pipe(Layer.provideMerge(deps))),
+        Effect.provide(
+          Layer.mergeAll(submissionLedgerLayer, threadStoreLayer).pipe(Layer.provideMerge(deps)),
+        ),
       );
     }).pipe(Effect.provide(SqliteClient.layer({ storage }))),
   );

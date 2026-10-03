@@ -263,8 +263,7 @@ const configLayer = DurableRuntimeConfig.layer({
 
 const baseLayer = Layer.mergeAll(
   RunToolAuthorization.allowAll,
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
@@ -315,10 +314,11 @@ const corruptedCompletionStoreLayer = Layer.effect(
       read: (request) => inner.read(request).pipe(Stream.map(corruptCompletionEnvelope)),
     });
   }),
-).pipe(Layer.provide(MemoryThreadStoreLive));
+).pipe(
+  Layer.provideMerge(MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive))),
+);
 
 const corruptedCompletionBaseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
   corruptedCompletionStoreLayer,
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
@@ -392,12 +392,12 @@ const progressWaitSchedulerLayer = Layer.effect(
   Effect.map(ProgressWaitTestControl, (control) => control.scheduler),
 );
 
-const progressWaitAdapters = Layer.merge(progressWaitSchedulerLayer, MemoryThreadStoreLive).pipe(
-  Layer.provideMerge(progressWaitControlLayer),
-);
+const progressWaitAdapters = Layer.merge(
+  progressWaitSchedulerLayer,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
+).pipe(Layer.provideMerge(progressWaitControlLayer));
 
 const progressWaitBaseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
   progressWaitAdapters,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,

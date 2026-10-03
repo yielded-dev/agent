@@ -103,7 +103,11 @@ describe("bounded recovery failure isolation", () => {
                 }),
             }),
           ),
-        ).pipe(Layer.provide(MemorySubmissionLedgerLive));
+        ).pipe(
+          Layer.provideMerge(
+            MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
+          ),
+        );
 
         const services = DurableAgentRuntime.layer
           .pipe(Layer.provide(runStorageLayer()))
@@ -111,7 +115,6 @@ describe("bounded recovery failure isolation", () => {
             Layer.provideMerge(
               Layer.mergeAll(
                 observedLedger,
-                MemoryThreadStoreLive,
                 config,
                 DurableRuntimeFailpoint.layer,
                 WakeScheduler.layerNoop,
@@ -238,7 +241,11 @@ describe("bounded recovery failure isolation", () => {
                 }),
             }),
           ),
-        ).pipe(Layer.provide(MemoryThreadStoreLive));
+        ).pipe(
+          Layer.provideMerge(
+            MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
+          ),
+        );
 
         const services = DurableAgentRuntime.layer
           .pipe(Layer.provide(runStorageLayer()))
@@ -246,7 +253,6 @@ describe("bounded recovery failure isolation", () => {
             Layer.provideMerge(
               Layer.mergeAll(
                 observedStore,
-                MemorySubmissionLedgerLive,
                 config,
                 DurableRuntimeFailpoint.layer,
                 WakeScheduler.layerNoop,

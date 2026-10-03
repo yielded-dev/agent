@@ -102,6 +102,8 @@ export const createStorageSchema = (namespace?: string) =>
       receipt_id ${text} NOT NULL,
       state ${text} NOT NULL,
       settled_outcome ${text},
+      settled_record_id ${text},
+      finalized_at ${text},
       created_at ${text} NOT NULL,
       ready_at ${text},
       input_applied_record_id ${text},
@@ -149,22 +151,6 @@ export const createStorageSchema = (namespace?: string) =>
       owner_producer_id ${text} NOT NULL,
       producer_epoch ${integer} NOT NULL,
       claimed_at ${text} NOT NULL,
-      FOREIGN KEY (submission_id)
-        REFERENCES ${relation("effect_agent_submissions")}(submission_id)
-        ON DELETE RESTRICT
-    )
-  `.pipe(execute);
-
-    yield* sql`
-    CREATE TABLE ${relation("effect_agent_settlement_reservations")} (
-      submission_id ${text} PRIMARY KEY NOT NULL,
-      settlement_id ${text} NOT NULL,
-      outcome ${text} NOT NULL,
-      record_id ${text} NOT NULL,
-      record_json ${text} NOT NULL,
-      record_digest ${text} NOT NULL,
-      reserved_at ${text} NOT NULL,
-      finalized_at ${text},
       FOREIGN KEY (submission_id)
         REFERENCES ${relation("effect_agent_submissions")}(submission_id)
         ON DELETE RESTRICT

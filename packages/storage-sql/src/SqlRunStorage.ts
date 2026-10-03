@@ -15,6 +15,7 @@ import {
 } from "effect";
 import { Digest } from "effect-agent/records";
 import { bindRunOwnership, RunStorage, type RunStorageSession } from "effect-agent/run-storage";
+import { SettlementPublication, SettlementPublisher } from "effect-agent/settlement-publisher";
 import {
   type SubmissionLedger,
   LedgerError,
@@ -164,8 +165,6 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       admin(rawLedger.releaseOwnership(request), { submissionId: request.submissionId }),
     markInputApplied: (request) =>
       admin(rawLedger.markInputApplied(request), { submissionId: request.submissionId }),
-    reserveSettlement: (request) =>
-      admin(rawLedger.reserveSettlement(request), { submissionId: request.submissionId }),
     finalizeSettlement: (request) =>
       admin(rawLedger.finalizeSettlement(request), { submissionId: request.submissionId }),
     requestAbort: (request) => admin(rawLedger.requestAbort(request)),
@@ -203,6 +202,11 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
     readAbortIntent: (request) => bind(rawLedger.readAbortIntent(request)),
     scanNonterminal: bindStream(rawLedger.scanNonterminal),
   };
+
+  const publisher = SettlementPublisher.of({
+    publish: (request) =>
+      admin(ledgerKernel.publisher.publish(request), { threadId: request.append.threadId }),
+  });
 
   const checkpoints = rawStore.checkpoints;
   const recoveryCheckpoints = rawStore.recoveryCheckpoints;
@@ -541,10 +545,32 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
             owned.releaseNeeded = false;
           }
         }),
-      reserveSettlement: (value) =>
-        command(ownership.reserveSettlement(value), () => {
-          authority.submission = Object.freeze({ ...authority.submission, state: "terminalizing" });
-        }),
+      publishSettlement: (batch) =>
+        command(
+          Effect.suspend(() =>
+            ledgerKernel.publisher.publish(
+              SettlementPublication.make({
+                submissionId,
+                authority: { _tag: "Owned", ownershipToken: owned.token },
+                append: FencedAppendRequest.make({
+                  threadId: claimedThreadId,
+                  producerEpoch: owned.epoch,
+                  expectedTailSequence: authority.thread.tail_sequence,
+                  expectedTailDigest: owned.digest,
+                  batch,
+                }),
+              }),
+            ),
+          ),
+          (result) => {
+            authority.thread = Object.freeze({
+              ...authority.thread,
+              tail_sequence: result.tailSequence,
+              tail_digest: result.tailDigest,
+            });
+            owned.digest = result.tailDigest;
+          },
+        ),
       reserveChildBudget: (value) => command(ownership.reserveChildBudget(value)),
       attachChildToReservation: (value) => command(ownership.attachChildToReservation(value)),
     };
@@ -553,6 +579,7 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
   });
 
   const runStorage = RunStorage.of({
+    publishSettlement: publisher.publish,
     claim: (request) =>
       Effect.flatMap(Effect.scope, (scope) =>
         Effect.setContext(
@@ -573,5 +600,5 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       ),
   });
 
-  return { store, ledger, runStorage, reader: ThreadReader.fromStore(store) };
+  return { store, ledger, publisher, runStorage, reader: ThreadReader.fromStore(store) };
 });

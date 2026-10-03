@@ -104,8 +104,7 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
       const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
         Layer.provideMerge(
           Layer.mergeAll(
-            MemoryThreadStoreLive,
-            MemorySubmissionLedgerLive,
+            MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
             WakeScheduler.layerNoop,
             DurableRuntimeFailpoint.layer,
             ToolReconciler.uncertain,

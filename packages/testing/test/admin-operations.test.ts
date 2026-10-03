@@ -227,8 +227,7 @@ const authorizerLayer = Layer.effectContext(
 );
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,

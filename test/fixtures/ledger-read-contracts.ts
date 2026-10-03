@@ -1,28 +1,40 @@
-import { digestJson } from "@yielded/agent/digest";
 import {
+  CanonicalBatch,
   DefinitionDigests,
   DeploymentId,
   Digest,
   ProducerId,
   RecordEnvelope,
+  ProducerEpoch,
   SubmissionSettledRecord,
   type SettlementOutcome,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import {
+  SettlementPublication,
+  SettlementPublisher,
+  type SettlementPublicationAuthority,
+} from "@yielded/agent/settlement-publisher";
 import {
   AbortCommand,
   AdmissionRequest,
   ClaimRequest,
   MarkReadyRequest,
-  OwnershipToken,
   SettlementConflict,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
   SubmissionLookupById,
+  submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
   type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
+import {
+  FencedAppendRequest,
+  ThreadMaterialization,
+  ThreadStore,
+  ThreadTailRequest,
+} from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Exit, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
@@ -53,12 +65,13 @@ export const admitReadFixture = Effect.fn("LedgerReadFixture.admit")(function* (
   );
 });
 
-const reserve = Effect.fn("LedgerReadFixture.reserve")(function* (
-  submission: Pick<SubmissionSnapshot, "submissionId" | "receiptId">,
-  ownershipToken: OwnershipToken,
+const publish = Effect.fn("LedgerReadFixture.publish")(function* (
+  submission: Pick<SubmissionSnapshot, "submissionId" | "receiptId" | "threadId">,
+  authority: SettlementPublicationAuthority,
   outcome: SettlementOutcome,
 ) {
-  const ledger = yield* SubmissionLedger;
+  const publisher = yield* SettlementPublisher;
+  const store = yield* ThreadStore;
   const settlementId = submissionSettlementId(submission.submissionId);
 
   const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)({
@@ -67,6 +80,7 @@ const reserve = Effect.fn("LedgerReadFixture.reserve")(function* (
     settlementId,
     receiptId: submission.receiptId,
     outcome,
+    ...(authority._tag === "Owned" ? { runId: runIdForSubmission(submission.submissionId) } : {}),
     ...(outcome === "failed"
       ? { result: { errorTag: "FixtureFailure", message: "Fixture failed" } }
       : {}),
@@ -81,24 +95,31 @@ const reserve = Effect.fn("LedgerReadFixture.reserve")(function* (
     payload,
   });
 
-  const recordDigest = yield* digestJson(yield* Schema.encodeEffect(RecordEnvelope)(record));
+  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: submission.threadId }));
 
-  yield* ledger.reserveSettlement(
-    SettlementReservation.make({
+  yield* publisher.publish(
+    SettlementPublication.make({
       submissionId: submission.submissionId,
-      ownershipToken,
-      settlementId,
-      outcome,
-      record,
-      recordDigest,
+      authority,
+      append: FencedAppendRequest.make({
+        threadId: submission.threadId,
+        producerEpoch: tail.producerEpoch,
+        expectedTailSequence: tail.tailSequence,
+        expectedTailDigest: tail.tailDigest,
+        batch: CanonicalBatch.make({
+          batchId: submissionSettlementBatchId(submission.submissionId),
+          producerId,
+          records: [record],
+        }),
+      }),
     }),
   );
 
   return SettlementFinalization.make({ submissionId: submission.submissionId, settlementId });
 });
 
-/** Adapter fixture: reservation precedes finalization; runtime canonical append is outside this suite. */
-export const reserveReadFixture = Effect.fn("LedgerReadFixture.prepare")(function* (
+/** Publish canonical terminal intent through the co-owned adapter before finalization. */
+export const publishReadFixture = Effect.fn("LedgerReadFixture.prepare")(function* (
   key: string,
   outcome: SettlementOutcome = "completed",
 ) {
@@ -113,7 +134,11 @@ export const reserveReadFixture = Effect.fn("LedgerReadFixture.prepare")(functio
 
   if (Option.isNone(claim)) return yield* Effect.die("Fixture lane did not become claimable");
 
-  return yield* reserve(admitted, claim.value.ownershipToken, outcome);
+  return yield* publish(
+    { ...admitted, threadId: AdmissionRequest.fields.threadId.make(key) },
+    { _tag: "Owned", ownershipToken: claim.value.ownershipToken },
+    outcome,
+  );
 });
 
 const abortQueued = Effect.fn("LedgerReadFixture.abortQueued")(function* (submissionId: string) {
@@ -126,6 +151,14 @@ const abortQueued = Effect.fn("LedgerReadFixture.abortQueued")(function* (submis
   );
 
   if (Option.isNone(submission)) return yield* Effect.die("Missing scan fixture submission");
+  const store = yield* ThreadStore;
+
+  yield* store.materialize(
+    ThreadMaterialization.make({
+      threadId: submission.value.threadId,
+      producerEpoch: ProducerEpoch.make(0),
+    }),
+  );
   yield* ledger.requestAbort(
     AbortCommand.make({
       submissionId: submission.value.submissionId,
@@ -135,7 +168,7 @@ const abortQueued = Effect.fn("LedgerReadFixture.abortQueued")(function* (submis
   );
 
   return yield* ledger.finalizeSettlement(
-    yield* reserve(submission.value, OwnershipToken.make("unused-queued-abort"), "aborted"),
+    yield* publish(submission.value, { _tag: "QueuedAbort" }, "aborted"),
   );
 });
 
@@ -209,7 +242,7 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
     name: `replays ${outcome} settlement with unchanged timestamp and diagnostics`,
     run: Effect.gen(function* () {
       const ledger = yield* SubmissionLedger;
-      const request = yield* reserveReadFixture(`settlement-${outcome}`, outcome);
+      const request = yield* publishReadFixture(`settlement-${outcome}`, outcome);
       const active = yield* ledger.finalizeSettlement(request);
 
       expect(active.outcome).toBe(outcome);
@@ -247,21 +280,23 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
     run: Effect.gen(function* () {
       const ledger = yield* SubmissionLedger;
       const sql = yield* SqlClient.SqlClient;
-      const request = yield* reserveReadFixture(`corrupt-${corruption}`);
+      const request = yield* publishReadFixture(`corrupt-${corruption}`);
 
       yield* ledger.finalizeSettlement(request);
-      yield* sql`DELETE FROM effect_agent_settlement_reservations WHERE submission_id=${request.submissionId}`;
+      const recordId = submissionSettlementRecordId(request.submissionId);
+
+      yield* sql`DELETE FROM effect_agent_canonical_records WHERE record_id=${recordId}`;
       yield* invalidateReadState;
 
       const before =
-        yield* sql`SELECT * FROM effect_agent_settlement_reservations WHERE submission_id=${request.submissionId}`;
+        yield* sql`SELECT * FROM effect_agent_canonical_records WHERE record_id=${recordId}`;
 
       const result = yield* ledger.finalizeSettlement(request).pipe(Effect.result);
 
       expect(result).toMatchObject({ _tag: "Failure", failure: { _tag: "LedgerError" } });
 
       expect(
-        yield* sql`SELECT * FROM effect_agent_settlement_reservations WHERE submission_id=${request.submissionId}`,
+        yield* sql`SELECT * FROM effect_agent_canonical_records WHERE record_id=${recordId}`,
       ).toEqual(before);
       expect(
         yield* sql`SELECT state FROM effect_agent_submissions WHERE submission_id=${request.submissionId}`,
@@ -272,7 +307,7 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
     name: `releases a ${mode} during a cold settled read and permits later mutations`,
     run: Effect.gen(function* () {
       const ledger = yield* SubmissionLedger;
-      const request = yield* reserveReadFixture(`cleanup-${mode}`);
+      const request = yield* publishReadFixture(`cleanup-${mode}`);
       const settled = yield* ledger.finalizeSettlement(request);
 
       yield* invalidateReadState;

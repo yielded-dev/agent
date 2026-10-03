@@ -11,6 +11,10 @@ import {
 } from "@yielded/agent/message-delivery";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import {
+  SettlementPublication,
+  SettlementPublicationResult,
+} from "effect-agent/settlement-publisher";
+import {
   AbortCommand,
   WorkerStopCommand,
   WorkerLedgerState,
@@ -24,6 +28,7 @@ import {
   ChildSettledOutcome,
   JoinedToHost,
   LedgerError,
+  OwnershipLost,
   MarkReadyRequest,
   SettlementConflict,
   SubmissionLookup,
@@ -66,6 +71,7 @@ import { Schema } from "effect";
  * - worker: `admitWorker` (ledger admission, materialization, creation, origin, readiness);
  * - ledger: `admit`, `markReady`, `lookup`, `resolveAdmission`, `requestAbort`,
  *   `recordChildSettled`;
+ * - publisher: `publish`;
  * - store: `materialize`, `append`, `read` (one page), `readIdentity`, `inspectTail`, `export`.
  *
  * Every other port operation is lane-local and has no envelope. A foreign disposable
@@ -174,6 +180,17 @@ export class LedgerRecordChildSettledCall extends Schema.TaggedClass<LedgerRecor
   request: ChildSettledNotification,
 }) {}
 
+/** Publish canonical settlement intent at the owning Thread. */
+export class SettlementPublishCall extends Schema.TaggedClass<SettlementPublishCall>()(
+  "SettlementPublish",
+  { request: SettlementPublication },
+) {}
+
+export class SettlementPublishResult extends Schema.TaggedClass<SettlementPublishResult>()(
+  "SettlementPublishResult",
+  { result: SettlementPublicationResult },
+) {}
+
 /** Routed `ThreadStore.materialize` against the owning Object. */
 export class StoreMaterializeCall extends Schema.TaggedClass<StoreMaterializeCall>(
   "@effect-agent/storage-cloudflare/StoreMaterializeCall",
@@ -233,6 +250,7 @@ export class MessageDeliveryCompleteCall extends Schema.TaggedClass<MessageDeliv
 
 /** Every request that may cross a Durable Object boundary — the CLOSED route-capable subset. */
 export const PortRequest = Schema.Union([
+  SettlementPublishCall,
   WorkerAdmitCall,
   MessageDeliveryListCall,
   MessageDeliveryCompleteCall,
@@ -356,6 +374,7 @@ export class MessageDeliveryCompleteResult extends Schema.TaggedClass<MessageDel
 
 /** Every successful routed result. Callers narrow by the tag their request implies. */
 export const PortResult = Schema.Union([
+  SettlementPublishResult,
   WorkerAdmitResult,
   MessageDeliveryListResult,
   MessageDeliveryCompleteResult,
@@ -388,6 +407,7 @@ export type PortResult = typeof PortResult.Type;
  * thread ports declare, so a routed caller observes identical error tags and fields.
  */
 export const PortFailure = Schema.Union([
+  OwnershipLost,
   DurableRuntimeFailpointError,
   MessageDeliveryError,
   MessageDeliveryFailpointError,

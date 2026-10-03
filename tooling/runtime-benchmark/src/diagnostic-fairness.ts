@@ -425,7 +425,8 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
             lane.claimedSubmissionId === lane.receipt!.submissionId &&
             settlement.submissionId === lane.receipt!.submissionId &&
             snapshot.ownership === undefined &&
-            snapshot.reservation?.finalized === true &&
+            snapshot.submission.state === "settled" &&
+            snapshot.submission.settledOutcome === "completed" &&
             snapshot.hostSubmissionId === undefined,
           "Fairness lane identity, canonical work, finalization, or timestamp mismatch",
         );

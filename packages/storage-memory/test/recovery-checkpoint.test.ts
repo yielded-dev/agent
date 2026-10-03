@@ -41,8 +41,7 @@ const digest = Schema.decodeSync(Digest)("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
 
 const base = Layer.mergeAll(
-  MemoryThreadStoreLive,
-  MemorySubmissionLedgerLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   DurableRuntimeFailpointTestControl.layer,
   WakeScheduler.layerNoop,
   ToolReconciler.uncertain,

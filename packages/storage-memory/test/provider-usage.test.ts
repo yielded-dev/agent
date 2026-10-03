@@ -91,8 +91,7 @@ for (const failure of ["open-part", "missing-usage"] as const) {
       );
 
       const base = Layer.mergeAll(
-        MemoryThreadStoreLive,
-        MemorySubmissionLedgerLive,
+        MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
         WakeScheduler.layerNoop,
         ToolReconciler.uncertain,
         DurableRuntimeFailpoint.layer,
@@ -275,8 +274,7 @@ it.live(
       );
 
       const base = Layer.mergeAll(
-        MemoryThreadStoreLive,
-        MemorySubmissionLedgerLive,
+        MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
         WakeScheduler.layerNoop,
         ToolReconciler.uncertain,
         DurableRuntimeFailpoint.layer,

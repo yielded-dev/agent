@@ -2,12 +2,18 @@ import type { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { LifecyclePublicationError } from "@yielded/agent/lifecycle-publication";
 import { MessageDeliveryStore, MessageDeliveryError } from "@yielded/agent/message-delivery";
 import {
+  SettlementPublisher,
+  type SettlementPublicationResult,
+  type SettlementPublicationFailure,
+} from "effect-agent/settlement-publisher";
+import {
   AdmissionIndeterminate,
   AdmissionConflict,
   AdmissionPolicyError,
   ChildAttachmentSnapshot,
   JoinedToHost,
   LedgerError,
+  OwnershipLost,
   RecoverySnapshot,
   SettlementConflict,
   SubmissionLedger,
@@ -33,6 +39,8 @@ import {
 import { Cause, Clock, Context, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 
 import {
+  SettlementPublishCall,
+  SettlementPublishResult,
   WorkerAdmitCall,
   WorkerAdmitResult,
   MessageDeliveryListCall,
@@ -690,15 +698,6 @@ const makeRoutedLedgerServices = Effect.fn("DoPortRouting.makeRoutedLedgerServic
         ),
       ),
 
-    reserveSettlement: (request) =>
-      submissionTarget("ledger reserve settlement", request.submissionId).pipe(
-        Effect.flatMap((target) =>
-          target._tag === "local"
-            ? local.reserveSettlement(request)
-            : Effect.fail(crossThreadLedgerError("ledger reserve settlement", target.threadId)),
-        ),
-      ),
-
     finalizeSettlement: (request) =>
       submissionTarget("ledger finalize settlement", request.submissionId).pipe(
         Effect.flatMap((target) =>
@@ -806,6 +805,68 @@ const makeRoutedLedgerServices = Effect.fn("DoPortRouting.makeRoutedLedgerServic
 
   return Context.make(SubmissionLedger, routed);
 });
+
+/** Route the data-only atomic publication to the same owner as its canonical Thread. */
+export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
+  Layer.effect(SettlementPublisher)(
+    Effect.gen(function* () {
+      const local = yield* SettlementPublisher;
+      const call = makeTransportCall(yield* ThreadPortTransport);
+
+      const isFailure = Schema.is(
+        Schema.Union([
+          LedgerError,
+          OwnershipLost,
+          SettlementConflict,
+          ThreadStoreError,
+          ThreadNotMaterialized,
+          AppendConflict,
+          FenceRejected,
+        ]),
+      );
+
+      return SettlementPublisher.of({
+        publish: (request) => {
+          if (options.ownsThread(request.append.threadId)) return local.publish(request);
+
+          return call(request.append.threadId, SettlementPublishCall.make({ request })).pipe(
+            Effect.mapError((cause) =>
+              LedgerError.make({
+                operation: "route settlement publication",
+                message: cause.message,
+                cause,
+              }),
+            ),
+            Effect.flatMap(
+              (
+                response,
+              ): Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure> => {
+                if (response._tag === "PortFailed")
+                  return isFailure(response.failure)
+                    ? Effect.fail(response.failure)
+                    : Effect.fail(
+                        LedgerError.make({
+                          operation: "route settlement publication",
+                          message: "Unexpected publication failure",
+                          cause: response.failure,
+                        }),
+                      );
+
+                return response.result._tag === "SettlementPublishResult"
+                  ? Effect.succeed(response.result.result)
+                  : Effect.fail(
+                      LedgerError.make({
+                        operation: "route settlement publication",
+                        message: "Mismatched publication result",
+                      }),
+                    );
+              },
+            ),
+          );
+        },
+      });
+    }),
+  );
 
 const makeRoutedStoreServices = Effect.fn("DoPortRouting.makeRoutedStoreServices")(function* (
   options: RoutedPortOptions,
@@ -1231,9 +1292,23 @@ export const executePortRequest = Effect.fn("DoPortRouting.executePortRequest")(
 ): Effect.fn.Return<
   PortResponse,
   never,
-  SubmissionLedger | ThreadStore | MessageDeliveryStore | WakeScheduler | DurableRuntimeFailpoint
+  | SubmissionLedger
+  | SettlementPublisher
+  | ThreadStore
+  | MessageDeliveryStore
+  | WakeScheduler
+  | DurableRuntimeFailpoint
 > {
   switch (request._tag) {
+    case "SettlementPublish": {
+      const publisher = yield* SettlementPublisher;
+
+      return yield* capture(
+        publisher
+          .publish(request.request)
+          .pipe(Effect.map((result) => SettlementPublishResult.make({ result }))),
+      );
+    }
     case "MessageDeliveryComplete": {
       const store = yield* MessageDeliveryStore;
 
@@ -1439,7 +1514,12 @@ export const handleEncodedPortRequest = Effect.fn("DoPortRouting.handleEncodedPo
   ): Effect.fn.Return<
     unknown,
     never,
-    SubmissionLedger | ThreadStore | MessageDeliveryStore | WakeScheduler | DurableRuntimeFailpoint
+    | SubmissionLedger
+    | SettlementPublisher
+    | ThreadStore
+    | MessageDeliveryStore
+    | WakeScheduler
+    | DurableRuntimeFailpoint
   > {
     const response = yield* decodePortRequest(encoded).pipe(
       Effect.flatMap(executePortRequest),

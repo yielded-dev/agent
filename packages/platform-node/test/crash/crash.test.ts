@@ -553,19 +553,19 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill before settlement reservation: canonical completion avoids another model call and settles once",
+      "kill before settlement publication: canonical completion avoids another model call and settles once",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
-            const thread = "thread-kill-prereserve";
-            const key = "kill-prereserve-1";
+            const thread = "thread-kill-prepublication";
+            const key = "kill-prepublication-1";
 
             const result = yield* runWorkerToExit({
               db: site.db,
               scenario: "run",
               thread,
               key,
-              killAtStorage: "ledger:reserve-settlement:before",
+              killAt: "terminalize:before-publication",
               leaseMillis: CHILD_LEASE_MS,
             });
 
@@ -583,7 +583,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(settlements[0]?.outcome).toBe("completed");
 
                 // The response and Run completion committed atomically before
-                // reservation, so recovery terminalizes without another model call.
+                // publication, so recovery terminalizes without another model call.
                 const records = yield* readLog(thread);
 
                 expect(
@@ -593,66 +593,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(logTags(records).filter((tag) => tag === "SubmissionSettled")).toHaveLength(
                   1,
                 );
-                yield* assertConvergence(thread, [snapshot.submissionId]);
-              }),
-            );
-          }),
-        ),
-      30_000,
-    );
-
-    it.effect(
-      "kill at terminalize:after-reserve: recovery appends the EXACT reserved record",
-      () =>
-        withCrashSite((site) =>
-          Effect.gen(function* () {
-            const thread = "thread-kill-reserved";
-            const key = "kill-reserved-1";
-
-            const result = yield* runWorkerToExit({
-              db: site.db,
-              scenario: "run",
-              thread,
-              key,
-              killAt: "terminalize:after-reserve",
-              leaseMillis: CHILD_LEASE_MS,
-            });
-
-            expectKilled(result);
-            yield* waitAfterChildExit;
-
-            yield* withHost(
-              site.db,
-              Effect.gen(function* () {
-                const host = yield* NodeDurableHost;
-                const ledger = yield* SubmissionLedger;
-                const snapshot = yield* lookupByKey(thread, key);
-
-                expect(yield* lookupState(snapshot.submissionId)).toBe("settled");
-
-                // The appended canonical settlement IS the reserved record, byte for byte.
-                const recovered = yield* ledger.loadRecoverySnapshot(
-                  RecoverySnapshotRequest.make({ submissionId: snapshot.submissionId }),
-                );
-
-                const records = yield* readLog(thread);
-
-                const settled = records.filter(
-                  (envelope) => envelope.record.payload._tag === "SubmissionSettled",
-                );
-
-                expect(settled).toHaveLength(1);
-                expect(settled[0]?.record).toEqual(recovered.reservation?.record);
-                expect(records.map((envelope) => envelope.record.recordId)).toContain(
-                  recoveryRepairRecordId(snapshot.submissionId, "AppendReservedSettlement"),
-                );
-
-                // awaitSettlement after restart returns the recorded Settlement.
-                const receipt = yield* resubmit(thread, key);
-                const settlement = yield* host.awaitSettlement(receipt);
-
-                expect(settlement.outcome).toBe("completed");
-                expect(settlement.receiptId).toBe(snapshot.receiptId);
                 yield* assertConvergence(thread, [snapshot.submissionId]);
               }),
             );

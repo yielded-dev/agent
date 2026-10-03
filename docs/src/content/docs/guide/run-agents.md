@@ -247,9 +247,12 @@ export const RuntimeLive = DurableAgentRuntime.layerWithServices.pipe(
 );
 ```
 
-This layer still requires `SubmissionLedger`, `ThreadStore`, `WakeScheduler`,
+This layer still requires `SubmissionLedger`, `ThreadStore`, `RunStorage`, `WakeScheduler`,
 `DurableRuntimeFailpoint`, `DurableRuntimeConfig`, `ToolReconciler`, and `Crypto.Crypto`.
-Provide those before acquiring the runtime.
+Build `RunStorage.layer()` from the same adapter's `ThreadStore`, `SubmissionLedger`, and
+`SettlementPublisher`. The publisher checks authority and appends the canonical settlement in
+one storage transaction; there is no fallback for independently supplied stores. Provide these
+services before acquiring the runtime.
 
 The runtime captures its services at acquisition. Supplying a different layer around a later
 worker call does not replace them. Acquire service dependencies in their layers and keep them

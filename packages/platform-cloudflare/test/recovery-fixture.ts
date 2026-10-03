@@ -144,7 +144,7 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
                 .pipe(Effect.catchTag("DurableAlarmError", Effect.die)),
           });
         }),
-      ).pipe(Layer.provide(submissionLedgerLayer));
+      ).pipe(Layer.provideMerge(submissionLedgerLayer));
 
       const ports = Layer.mergeAll(observedStore, observedLedger).pipe(
         Layer.provide(

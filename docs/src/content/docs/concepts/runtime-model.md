@@ -58,6 +58,10 @@ flowchart LR
   canonical terminal settlement. Approval, input, and capacity waits park the exact accepted
   Receipt. Generic host deliveries must supply terminal acknowledgement or explicit recovery;
   a wake hint is never proof of completion. See [messaging](/guide/messaging/).
+- Canonical `SubmissionSettled` is the single terminal intent. Its publisher checks live authority
+  and appends the record in one storage transaction. Delivery and parent acknowledgements follow
+  that publication; ledger finalization then records a stable receipt timestamp and releases the
+  lane. Recovery completes those obligations from the same canonical record.
 - The append-only journal owns execution facts; the ledger owns what is still owed and who may
   advance it. Projections and checkpoints are disposable. Current bindings select queued and
   resumed work; each committed model response owns its normalized tool arguments and original

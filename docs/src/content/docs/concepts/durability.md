@@ -43,6 +43,18 @@ calls and subagent invocations by Run and Tool Call ID. Decode projection state 
 before replaying a suffix. Earlier versions, including empty views, must be discarded and rebuilt
 from canonical records.
 
+## Complete a submission
+
+The storage owner publishes one canonical `SubmissionSettled` record after checking the current
+claim, joined host, or queued abort authority in the same transaction. Delivery and parent
+acknowledgements complete before ledger finalization releases the lane. Finalization derives the
+outcome from that record and preserves its first finalization timestamp on every retry.
+
+A crash before publication resumes from existing execution facts: a committed `RunCompleted`
+retains its output, while unresolved ordinary tools remain uncertain. A crash after publication
+repeats notifications and finalization without choosing another outcome. There is no separate
+settlement reservation or reserved-record recovery phase.
+
 <a id="recovery-checkpoints"></a>
 
 ## Resume through a recovery checkpoint

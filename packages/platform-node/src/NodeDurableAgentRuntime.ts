@@ -623,7 +623,7 @@ export class NodeDurableAgentRuntime {
           Layer.provideMerge(
             Layer.mergeAll(
               threadStoreLayer,
-              ownershipDrainLayer.pipe(Layer.provide(submissionLedgerLayer)),
+              ownershipDrainLayer.pipe(Layer.provideMerge(submissionLedgerLayer)),
             ),
           ),
         );

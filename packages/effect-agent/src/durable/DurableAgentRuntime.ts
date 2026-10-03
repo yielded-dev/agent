@@ -290,6 +290,12 @@ import {
   type RunWriter,
 } from "./RunStorage.ts";
 import {
+  SettlementPublication,
+  type SettlementPublicationAuthority,
+  type SettlementPublicationFailure,
+  type SettlementPublicationResult,
+} from "./SettlementPublisher.ts";
+import {
   type AdmissionFence,
   AdmissionPolicyError,
   type AbortIntent,
@@ -318,7 +324,6 @@ import {
   MarkJoinedRequest,
   MarkReadyRequest,
   MarkUnknownRequest,
-  OwnershipToken,
   ParentLinkage,
   Principal,
   RecoverySnapshotRequest,
@@ -326,7 +331,6 @@ import {
   ReleaseOwnershipRequest,
   RevertJoiningRequest,
   SettlementFinalization,
-  SettlementReservation,
   Settlement,
   SubmissionLedger,
   SubmissionLookupById,
@@ -421,22 +425,6 @@ const APPROVAL_POLICY_RESOLVER = "approval-policy";
 const RECOVERY_RESOLVER = "recovery";
 /** Upper bound of one `drain("all")` joining pass (`claimJoining.maxCount` must be positive). */
 const MAX_JOIN_DRAIN = 32;
-/**
- * Token presented when reserving a joined Submission's settlement (plan §2.5). A `joined` lane is
- * never worker-claimable (WP2 claim rule), so no real ownership token can exist for it: the
- * ledger authorizes the reservation by the recorded host linkage and does not consult this value.
- */
-const JOINED_SETTLEMENT_TOKEN = Schema.decodeSync(OwnershipToken)("ownership-joined-settlement");
-
-/**
- * Placeholder token for the P7 §7(c) queued-abort settlement: an aborted, never-claimed,
- * still-queued `ready` Submission has no live ownership to fence against, so the ledger
- * authorizes its aborted reservation by the durable abort intent itself (the joined-settlement
- * pattern) and the presented token is not consulted.
- */
-const QUEUED_ABORT_SETTLEMENT_TOKEN = Schema.decodeSync(OwnershipToken)(
-  "ownership-aborted-queued-settlement",
-);
 
 /** Bound a hook-supplied approval reason to the canonical `BoundedText` persistence limits. */
 const boundedApprovalReason = (reason: string | undefined, fallback: string): string => {
@@ -1238,6 +1226,9 @@ interface PendingToolBatch {
 }
 
 type AttemptAppendContext = RunWriter;
+type PublishSettlement = (
+  batch: CanonicalBatch,
+) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
 
 /** What the resuming worker knows about the ownership period it superseded (durability §9). */
 interface AttemptLineage {
@@ -2085,7 +2076,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     ) {
       return yield* LedgerError.make({
         operation: "settlementPayloadFromRecord",
-        message: `The reserved canonical record is not the exact Settlement for Submission ${submissionId}`,
+        message: `The canonical record is not the exact Settlement for Submission ${submissionId}`,
       });
     }
 
@@ -2696,7 +2687,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
     makeRunWriter(store, threadId, producerEpoch);
 
-  /** Ownership-free settlement uses its canonical reservation, never Run execution authority. */
+  /** Administrative publication rechecks its explicit authority under the canonical writer. */
   const attemptContextAtTail = Effect.fnUntraced(function* (threadId: ThreadId) {
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
@@ -2705,6 +2696,51 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
   const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
     ctx.append(batch).pipe(Effect.tap(() => wake.notify(ctx.threadId, "progress")));
+
+  const publicationFor = (
+    ctx: AttemptAppendContext,
+    submissionId: SubmissionId,
+    authority: SettlementPublicationAuthority,
+  ): PublishSettlement =>
+    Effect.fnUntraced(function* (batch: CanonicalBatch) {
+      let tail = yield* ctx.tail;
+
+      for (let retries = 0; ; retries++) {
+        const result = yield* runStorage
+          .publishSettlement(
+            SettlementPublication.make({
+              submissionId,
+              authority,
+              append: FencedAppendRequest.make({
+                threadId: ctx.threadId,
+                producerEpoch: ctx.producerEpoch,
+                expectedTailSequence: tail.sequence,
+                expectedTailDigest: tail.digest,
+                batch,
+              }),
+            }),
+          )
+          .pipe(
+            Effect.catchTag("AppendConflict", (conflict) => {
+              if (
+                conflict.reason !== "tail" ||
+                conflict.actualTailSequence === undefined ||
+                conflict.actualTailDigest === undefined ||
+                retries >= 8
+              )
+                return Effect.fail(conflict);
+              tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
+
+              return Effect.succeed(undefined);
+            }),
+          );
+
+        if (result === undefined) continue;
+        yield* ctx.checkFence;
+
+        return result;
+      }
+    });
 
   /** Append the canonical `AbortRequested` record; an identity conflict means it already exists. */
   const appendAbortRecord = Effect.fn("DurableAgentRuntime.appendAbortRecord")(function* (
@@ -3232,15 +3268,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /**
-   * Settle ONE joined Submission with its host Run's outcome (plan §2.5, DUR-002: every accepted
-   * Submission is owed its own settlement). The same recoverable reserve → append → finalize
-   * sequence as `terminalize`, with two joined-specific rules: the canonical record's `runId` is
-   * the HOST Run (the joined input was consumed there), and the reservation is authorized by the
-   * recorded host linkage instead of lane ownership — a `joined` lane is never worker-claimable,
-   * so no ownership token can exist for it. Each step is idempotent; recovery completes any
-   * prefix (`AppendReservedSettlement` / `FinalizeLedgerFromHistory` / `SettleJoinedWithHost`).
-   */
-  /**
    * Cross-lane drive-forward after one child Submission settles (spec §12 step 10): the child's
    * canonical Settlement is already durable, so the idempotent `recordChildSettled` wake is the
    * durable notification — `suspended(WaitingForChild) → input-applied` once every listed child
@@ -3366,74 +3393,36 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     const submission = joined.submission;
     const submissionId = submission.submissionId;
     const settlementId = submissionSettlementId(submissionId);
-    let record: RecordEnvelope;
 
-    if (joined.reservation !== undefined) {
-      // A prior pass already reserved the exact outcome: re-append the STORED record so the
-      // batch replay is byte-identical (DUR-011).
-      record = joined.reservation.record;
-    } else {
-      const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
-        SubmissionSettled.make({
-          submissionId,
-          settlementId,
-          receiptId: submission.receiptId,
-          outcome,
-          runId: runIdForSubmission(hostSubmissionId),
-          ...(hostSettlement.outcome === "failed" ? { result: hostSettlement.result } : {}),
-        }),
-      ).pipe(Effect.orDie);
+    const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
+      SubmissionSettled.make({
+        submissionId,
+        settlementId,
+        receiptId: submission.receiptId,
+        outcome,
+        runId: runIdForSubmission(hostSubmissionId),
+        ...(hostSettlement.outcome === "failed" ? { result: hostSettlement.result } : {}),
+      }),
+    ).pipe(Effect.orDie);
 
-      const envelope = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
-      // The envelope was constructed from validated parts, so an encode failure is a defect.
-      const encoded = yield* Schema.encodeEffect(RecordEnvelope)(envelope).pipe(Effect.orDie);
-      const recordDigest = yield* withCrypto(digestJson(encoded));
+    const envelope = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
 
-      const reserved = yield* ledger
-        .reserveSettlement(
-          SettlementReservation.make({
-            submissionId,
-            ownershipToken: JOINED_SETTLEMENT_TOKEN,
-            settlementId,
-            outcome,
-            record: envelope,
-            recordDigest,
-          }),
-        )
-        .pipe(
-          // A racing pass reserved first (its envelope differs only by `createdAt`): the
-          // stored reservation with the same host-derived outcome is the exact record owed.
-          Effect.catchTag("SettlementConflict", (conflict) =>
-            Effect.gen(function* () {
-              const current = yield* ledger.loadRecoverySnapshot(
-                RecoverySnapshotRequest.make({ submissionId }),
-              );
+    yield* hit("terminalize:before-publication");
 
-              const reservation = current.reservation;
-
-              if (reservation === undefined || reservation.outcome !== outcome) {
-                return yield* conflict;
-              }
-
-              return reservation;
-            }),
-          ),
-        );
-
-      record = reserved.record;
-      yield* hit("terminalize:after-reserve");
-    }
-    yield* appendBatch(
-      ctx,
+    const published = yield* publicationFor(ctx, submissionId, {
+      _tag: "Joined",
+      hostSubmissionId,
+    })(
       CanonicalBatch.make({
         batchId: submissionSettlementBatchId(submissionId),
         producerId: config.producerId,
-        records: [record],
+        records: [envelope],
       }),
-    ).pipe(
-      Effect.catchTag("AppendConflict", () => Effect.void),
-      Effect.asVoid,
     );
+
+    const record = published.record;
+
+    yield* wake.notify(ctx.threadId, "progress");
     yield* hit("terminalize:after-canonical-append");
     yield* notifyParentOfChildSettlement(submission, record);
 
@@ -3447,14 +3436,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return settlement;
   });
 
-  /**
-   * Terminalize joined-settlement loop (plan §2.5): after the host's own reserve → append →
-   * finalize, every Submission joined to the host settles with the host outcome. `terminalizing`
-   * rows are a prior pass's crashed joined settlement (reservation committed, finalize lost) and
-   * complete here too; `joining` rows were never consumed and are recovery's to revert, and
-   * settled rows are done. A crash anywhere in the loop leaves a classifiable prefix
-   * (`SettleJoinedWithHost` / `AppendReservedSettlement` finish the rest).
-   */
+  /** Every joined receipt publishes the host outcome; canonical history repairs any lost finalization. */
   const settleJoinedSubmissions = Effect.fn("DurableAgentRuntime.settleJoinedSubmissions")(
     function* (
       ctx: AttemptAppendContext,
@@ -3467,7 +3449,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
 
       for (const join of snapshot.joins) {
-        if (join.state !== "joined" && join.state !== "terminalizing") continue;
+        if (join.state !== "joined") continue;
 
         const joinedSnapshot = yield* ledger.loadRecoverySnapshot(
           RecoverySnapshotRequest.make({ submissionId: join.submissionId }),
@@ -3480,15 +3462,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   );
 
   /**
-   * Terminalization (durability §12, DUR-011): reserve the single exact settlement record, append
-   * that exact record canonically, finalize the ledger, release the lane, and hint waiters.
+   * Terminalization: publish the single canonical settlement, complete notifications, then
+   * finalize its ledger projection, release the lane, and hint waiters.
    * Submissions joined to this host Run settle with the host outcome immediately after
    * (plan §2.5); recovery completes any prefix of that loop.
    */
   const terminalize = Effect.fn("DurableAgentRuntime.terminalize")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    ownership: RunOwnership,
+    publishSettlement: PublishSettlement,
     outcome: AttemptOutcome,
     includeRunId: boolean,
     afterCanonical?: Effect.Effect<void, DurableWorkerFailure>,
@@ -3529,86 +3511,34 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     ).pipe(Effect.orDie);
 
     const record = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
-    // The envelope was constructed from validated parts, so an encode failure is a defect.
-    const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
-    const recordDigest = yield* withCrypto(digestJson(encoded));
 
-    const reserved = yield* ownership.reserveSettlement({
-      settlementId,
-      outcome: outcome._tag,
-      record,
-      recordDigest,
-    });
+    yield* hit("terminalize:before-publication");
 
-    yield* hit("terminalize:after-reserve");
-    yield* appendBatch(
-      ctx,
+    const published = yield* publishSettlement(
       CanonicalBatch.make({
         batchId: submissionSettlementBatchId(submissionId),
         producerId: config.producerId,
-        records: [reserved.record],
+        records: [record],
       }),
-    ).pipe(
-      Effect.catchTag("AppendConflict", () => Effect.void),
-      Effect.asVoid,
     );
+
+    yield* wake.notify(ctx.threadId, "progress");
     yield* hit("terminalize:after-canonical-append");
-    yield* notifyParentOfChildSettlement(submission, reserved.record);
-    if (afterCanonical !== undefined) yield* afterCanonical;
+    const canonicalSettlement = yield* settlementPayloadFromRecord(published.record, submissionId);
+
+    yield* notifyParentOfChildSettlement(submission, published.record);
+    if (afterCanonical !== undefined && canonicalSettlement.outcome === "completed")
+      yield* afterCanonical;
 
     const settlement = yield* ledger.finalizeSettlement(
       SettlementFinalization.make({ submissionId, settlementId }),
     );
 
-    const canonicalSettlement = yield* settlementPayloadFromRecord(reserved.record, submissionId);
-
     yield* wake.notify(submission.threadId);
-    yield* notifyParentOfChildSettlement(submission, reserved.record);
+    yield* notifyParentOfChildSettlement(submission, published.record);
     yield* settleJoinedSubmissions(ctx, canonicalSettlement);
 
-    return materializeSettlement(settlement, reserved.record);
-  });
-
-  /** Complete a previously reserved settlement: append the EXACT reserved record, then finalize. */
-  const completeReservation = Effect.fn("DurableAgentRuntime.completeReservation")(function* (
-    ctx: AttemptAppendContext,
-    submission: SubmissionSnapshot,
-    reservation: NonNullable<RecoverySnapshot["reservation"]>,
-    alreadyRecorded: boolean,
-  ): Effect.fn.Return<Settlement, DurableWorkerFailure> {
-    if (!alreadyRecorded) {
-      yield* appendBatch(
-        ctx,
-        CanonicalBatch.make({
-          batchId: submissionSettlementBatchId(submission.submissionId),
-          producerId: config.producerId,
-          records: [reservation.record],
-        }),
-      ).pipe(
-        Effect.catchTag("AppendConflict", () => Effect.void),
-        Effect.asVoid,
-      );
-      yield* hit("terminalize:after-canonical-append");
-    }
-    yield* notifyParentOfChildSettlement(submission, reservation.record);
-
-    const settlement = yield* ledger.finalizeSettlement(
-      SettlementFinalization.make({
-        submissionId: submission.submissionId,
-        settlementId: reservation.settlementId,
-      }),
-    );
-
-    const canonicalSettlement = yield* settlementPayloadFromRecord(
-      reservation.record,
-      submission.submissionId,
-    );
-
-    yield* wake.notify(submission.threadId);
-    yield* notifyParentOfChildSettlement(submission, reservation.record);
-    yield* settleJoinedSubmissions(ctx, canonicalSettlement);
-
-    return materializeSettlement(settlement, reservation.record);
+    return materializeSettlement(settlement, published.record);
   });
 
   /** Canonical settlement exists: rebuild the ledger from history, never the reverse (DUR-015). */
@@ -3641,7 +3571,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const settleAborted = Effect.fn("DurableAgentRuntime.settleAborted")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    ownership: RunOwnership,
+    publishSettlement: PublishSettlement,
     intent: AbortIntent,
     evidence: RecoveryEvidence,
     knownIds: Set<string>,
@@ -3662,7 +3592,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* terminalize(
       ctx,
       submission,
-      ownership,
+      publishSettlement,
       { _tag: "aborted" },
       evidence.inputRecorded,
     );
@@ -8340,11 +8270,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
         return Option.some(settlement);
       }
-      if (snapshot.reservation !== undefined) {
-        return Option.some(
-          yield* completeReservation(ctx, submission, snapshot.reservation, false),
-        );
-      }
       if (snapshot.abortIntent !== undefined) {
         // request-abort-and-join (spec §13.1, SUB-022): propagate the durable abort to every
         // nonterminal attached child, join every settled child coordinator-side, and settle
@@ -8362,7 +8287,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         }
 
         return Option.some(
-          yield* settleAborted(ctx, submission, session, snapshot.abortIntent, evidence, knownIds),
+          yield* settleAborted(
+            ctx,
+            submission,
+            session.publishSettlement,
+            snapshot.abortIntent,
+            evidence,
+            knownIds,
+          ),
         );
       }
       yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
@@ -8710,7 +8642,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             return Option.none<Settlement>();
           }
 
-          return Option.some(yield* terminalize(ctx, submission, session, outcome, true));
+          return Option.some(
+            yield* terminalize(ctx, submission, session.publishSettlement, outcome, true),
+          );
         }
         // Canonical joins drive their reservation release BEFORE the parent settles (a settled
         // lane would strand the repair); a reserved row WITHOUT a canonical join is an open
@@ -8769,7 +8703,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           yield* terminalize(
             ctx,
             submission,
-            session,
+            session.publishSettlement,
             outcome,
             true,
             outcome._tag === "completed"
@@ -9230,7 +9164,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         // instead of waiting to head the lane — settlement order of never-run work is not
         // execution order (DUR-004 bounds execution; DUR-012 allows settling inactive
         // accepted work without an Attempt). The appends run at the current tail with the
-        // durable abort intent as the reservation authority; any racing owner's fence
+        // durable abort intent as publication authority; any racing owner's fence
         // advance (or a concurrent joining claim) defers honestly to the next pass.
         if (submission.state === "ready" && snapshot.ownership === undefined) {
           return yield* Effect.gen(function* () {
@@ -9242,17 +9176,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             );
             const ctx = yield* attemptContextAtTail(submission.threadId);
 
-            const ownership = bindRunOwnership(
-              ledger,
-              submission.threadId,
-              submission.submissionId,
-              Effect.succeed(QUEUED_ABORT_SETTLEMENT_TOKEN),
-            );
-
             yield* settleAborted(
               ctx,
               submission,
-              ownership,
+              publicationFor(ctx, submission.submissionId, { _tag: "QueuedAbort" }),
               intent,
               evidence,
               knownRecordIdsOf(records),
@@ -9281,14 +9208,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
       const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
 
-      const ownership = bindRunOwnership(
-        ledger,
-        submission.threadId,
-        submission.submissionId,
-        Effect.succeed(claim.ownershipToken),
+      yield* settleAborted(
+        ctx,
+        submission,
+        publicationFor(ctx, submission.submissionId, {
+          _tag: "Owned",
+          ownershipToken: claim.ownershipToken,
+        }),
+        intent,
+        evidence,
+        knownRecordIdsOf(records),
       );
-
-      yield* settleAborted(ctx, submission, ownership, intent, evidence, knownRecordIdsOf(records));
 
       return "repaired";
     },
@@ -9815,59 +9745,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               }),
             )
             .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-
-          return "repaired";
-        }
-        case "AppendReservedSettlement": {
-          const reservation = snapshot.reservation;
-
-          if (reservation === undefined) return "deferred";
-          const claimed = yield* claimFor(submission, decision);
-
-          if (Option.isNone(claimed)) {
-            // P7 §7(c) crash replay: a queued-abort settlement that committed its reservation
-            // but lost the append/finalize completes at the current tail — the aborted,
-            // never-claimed row still holds no live ownership, so no claim can ever exist
-            // for it while it stays queued behind the head.
-            if (
-              reservation.outcome === "aborted" &&
-              snapshot.abortIntent !== undefined &&
-              snapshot.ownership === undefined
-            ) {
-              const ctx = yield* attemptContextAtTail(submission.threadId);
-
-              return yield* completeReservation(
-                ctx,
-                submission,
-                reservation,
-                evidence.recordedSettlementOutcome !== undefined,
-              ).pipe(
-                Effect.as("repaired" as const),
-                Effect.catchTags({
-                  FenceRejected: () => Effect.succeed("deferred" as const),
-                  AppendConflict: () => Effect.succeed("deferred" as const),
-                }),
-              );
-            }
-
-            return "deferred";
-          }
-          const claim = claimed.value;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({
-              threadId: submission.threadId,
-              producerEpoch: claim.producerEpoch,
-            }),
-          );
-          const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-
-          yield* completeReservation(
-            ctx,
-            submission,
-            reservation,
-            evidence.recordedSettlementOutcome !== undefined,
-          );
 
           return "repaired";
         }

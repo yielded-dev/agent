@@ -120,7 +120,7 @@ const runtimeLayer = DurableAgentRuntime.layer.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       countingThreadStoreLayer,
-      MemorySubmissionLedgerLive,
+      MemorySubmissionLedgerLive.pipe(Layer.provide(MemoryThreadStoreLive)),
       WakeScheduler.layerNoop,
       DurableRuntimeFailpoint.layer,
       DurableRuntimeConfig.layer({

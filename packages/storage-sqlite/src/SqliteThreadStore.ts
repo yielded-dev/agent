@@ -6,6 +6,7 @@ import { makeSqlThreadStore } from "@yielded/agent-storage-sql/sql-thread-store"
 import { ThreadId } from "@yielded/agent/identifiers";
 import { ProducerEpoch } from "@yielded/agent/records";
 import { RunStorage } from "@yielded/agent/run-storage";
+import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   DEFAULT_OWNERSHIP_LEASE_DURATION,
   SubmissionLedger,
@@ -302,6 +303,7 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
         return Context.make(ThreadStore, services.store).pipe(
           Context.add(ThreadReader, services.reader),
           Context.add(SubmissionLedger, services.ledger),
+          Context.add(SettlementPublisher, services.publisher),
           Context.add(RunStorage, services.runStorage),
         );
       }),

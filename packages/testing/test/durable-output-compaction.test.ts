@@ -29,8 +29,7 @@ const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools
 const testLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      MemorySubmissionLedgerLive,
-      MemoryThreadStoreLive,
+      MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
       WakeScheduler.layerNoop,
       ToolReconciler.uncertain,
       RunToolAuthorization.allowAll,

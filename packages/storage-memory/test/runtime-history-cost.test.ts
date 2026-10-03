@@ -68,8 +68,7 @@ const response: ReadonlyArray<Response.StreamPartEncoded> = [
 ];
 
 const base = Layer.mergeAll(
-  MemoryThreadStoreLive,
-  MemorySubmissionLedgerLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   ToolReconciler.uncertain,
   DurableRuntimeFailpoint.layer,
@@ -307,7 +306,6 @@ it.live.each([{ kind: "interruption", phase: "suffix" }] satisfies ReadonlyArray
     expect(Exit.isFailure(result.exit)).toBe(true);
     expect(result.openedPages).toBe(result.closedPages);
     expect(result.snapshot.ownership).toBeUndefined();
-    expect(result.snapshot.reservation).toBeUndefined();
     expect(result.requests.every((request) => request.limit <= 1_024)).toBe(true);
   }),
 );

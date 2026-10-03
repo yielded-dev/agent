@@ -90,7 +90,7 @@ reports without reconstructing transport validation. These reads grant no execut
 
 Aborting a submission retains its unknown outcomes. A terminal settlement does not authorize
 retrying or resolving those operations. Current SQLite, PostgreSQL, and Cloudflare thread stores
-accept only fresh storage or format 15. Earlier beta formats fail before mutation; use a fresh
+accept only fresh storage or format 16. Earlier beta formats fail before mutation; use a fresh
 store for this release.
 
 <a id="obligation-monitoring"></a>
@@ -420,7 +420,7 @@ use their existing bounded sweeps and retry deadlines; settlement probes retry c
 The delivery attempt cap does not cap all background maintenance.
 
 Optional `admissionGroup` permits one actually unsettled submission per group **in a destination
-thread**. Admission, suspension, unknown outcome and terminalization all retain occupancy until
+thread**. Admission, suspension, unknown outcome and canonical settlement publication retain occupancy until
 canonical settlement finalization. A lagging finalization conservatively holds capacity until repair.
 `FreshThread` per event does not provide exclusion across threads. Schedules retain one frozen
 pending occurrence and coalesce missed recurring times; distinct events keep separate durable
@@ -471,7 +471,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 
 ### Adopting these contracts
 
-SQLite, PostgreSQL, and Cloudflare Thread adapters accept fresh storage or exactly format 15.
+SQLite, PostgreSQL, and Cloudflare Thread adapters accept fresh storage or exactly format 16.
 Earlier Thread formats fail acquisition without mutation; this release provides no Thread migration.
 Preserve old stores and their compatible writer for retained work or inspection, and use fresh storage
 for this release. The same format requirement applies to combined SQLite files used by Schedule
