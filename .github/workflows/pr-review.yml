@@ -33,7 +33,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      number: ${{ steps.pr.outputs.number }}
+      numbers: ${{ steps.pr.outputs.numbers || '[]' }}
       head: ${{ steps.pr.outputs.head }}
     steps:
       - name: Resolve the admitted PR head
@@ -42,7 +42,7 @@ jobs:
         with:
           script: |
             if (context.eventName === 'issue_comment') {
-              core.setOutput('number', context.payload.issue.number);
+              core.setOutput('numbers', JSON.stringify([context.payload.issue.number]));
               return;
             }
             const run = context.payload.workflow_run;
@@ -55,6 +55,7 @@ jobs:
                 head: `${run.head_repository.owner.login}:${run.head_branch}`,
                 per_page: 100,
               });
+            const numbers = [];
             for (const candidate of candidates) {
               const { data: pr } = await github.rest.pulls.get({
                 ...context.repo, pull_number: candidate.number,
@@ -69,16 +70,21 @@ jobs:
               const generated = /^(?:\.changeset\/|bun\.lock$|packages\/[^/]+\/(?:CHANGELOG\.md|package\.json)$)/;
               if (files.length && files.every(file => generated.test(file.filename) &&
                   (!file.previous_filename || generated.test(file.previous_filename)))) continue;
-              core.setOutput('number', pr.number);
-              core.setOutput('head', run.head_sha);
-              return;
+              numbers.push(pr.number);
             }
+            core.setOutput('numbers', JSON.stringify(numbers));
+            core.setOutput('head', run.head_sha);
 
   review:
     needs: resolve
-    if: needs.resolve.outputs.number != ''
+    if: needs.resolve.outputs.numbers != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        number: ${{ fromJSON(needs.resolve.outputs.numbers) }}
     concurrency:
-      group: pr-review-${{ needs.resolve.outputs.number }}
+      group: pr-review-${{ matrix.number }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -108,7 +114,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
-          pull-request: ${{ needs.resolve.outputs.number }}
+          pull-request: ${{ matrix.number }}
           review-author: effect-agent[bot]
           check-name: Effect Agent review
           checks-token: ${{ github.token }}
