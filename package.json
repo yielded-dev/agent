@@ -150,5 +150,8 @@
     "docs": {
       "typescript": "6.0.3"
     }
+  },
+  "patchedDependencies": {
+    "effect@4.0.0": "patches/effect@4.0.0.patch"
   }
 }

@@ -529,6 +529,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "effect@4.0.0": "patches/effect@4.0.0.patch",
+  },
   "overrides": {
     "@effect/platform-browser": "catalog:",
     "@effect/platform-node": "catalog:",
