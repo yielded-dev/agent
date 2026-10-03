@@ -563,7 +563,9 @@ The remaining-workspace job includes every other package and runs one package ta
 The generated Changesets PR uses the release metadata proof below, with ordinary CI as its fallback.
 Explicit `@effect-agent review` comments still request review.
 
-PR Review uses `pull_request_target` and runs only trusted default-branch code.
+PR Review follows completed pull-request CI runs using `workflow_run` and runs only
+trusted default-branch code. It starts after CI succeeds or fails; cancelled runs do
+not start reviews. Drafts and generated release metadata remain excluded.
 It publishes the shared `Effect Agent review` check on the inspected PR head using the workflow
 token's `checks: write` permission. Automatic and manual reviews use the same check name;
 manual retries show progress in the PR checks panel. Published findings and incomplete coverage
@@ -573,26 +575,19 @@ Maintainers and authorized coding agents can clear a fixed or refuted bot review
 the disposition and refreshes the check without inference; other blockers and incomplete coverage
 remain blocking. See [dismissal and CLI usage](../action/README.md#dismissing-a-review).
 See the [Action check configuration](../action/README.md#pr-check-status) for consumer setup.
-Fork reviews wait for approval before checkout, token creation, or model execution.
-Open the PR Review run from the PR's checks, select **Review deployments**, select
-`pr-review-forks`, then **Approve and deploy**. GitHub uses deployment wording for
-this approval gate, but the job does not deploy anything or create deployment records.
-Approving an ordinary fork workflow does not grant it repository secrets.
+For fork PRs that require GitHub workflow approval, click **Approve workflows to run**
+once on the PR. CI runs first, then PR Review starts without a separate environment
+approval. The `pr-review` environment is used for all reviews and must have no required
+reviewers. The old `pr-review-forks` environment is no longer used.
+Approving CI does not give the CI job repository secrets.
 
-Before enabling this workflow, configure **Settings → Environments → pr-review-forks**
-with repository maintainers as required reviewers. The current reviewer is `danieljvdm`;
-update this list when maintainers change. Allow self-review so a maintainer can approve
-their own fork PR. Keep this environment and its required-reviewer rule in place;
-a missing environment is automatically created without protection by GitHub.
-The separate `pr-review` environment has no approval requirement and is used for
-same-repository PRs and authorized review comments. Both environments use
-`deployment: false` to avoid adding review runs to deployment history.
-
-Each fork PR update requires approval. The Action's expected-head check skips an
-approved run if its PR head has since changed. Comment-triggered reviews retain their
-existing maintainer authorization and do not require a second approval. Never check
-out, install dependencies from, or execute the PR head in this secret-bearing workflow;
-the reviewer reads untrusted source through GitHub's API instead.
+The workflow resolves the PR through GitHub's API and checks that the CI run belongs to
+this repository and its head still matches the open, non-draft PR. The Action's
+expected-head check also skips a review if the PR changes after that resolution.
+Comment-triggered reviews retain their maintainer authorization and do not wait for CI.
+Never check out, install dependencies from, or execute the PR head in this secret-bearing
+workflow; the reviewer reads untrusted source through GitHub's API instead. CI artifacts
+and caches are not consumed by the review workflow.
 
 Each test-matrix job has its own task-cache key. The three suites split from the workspace job
 also fall back to its earlier cache, so splitting the matrix does not discard reusable results.
