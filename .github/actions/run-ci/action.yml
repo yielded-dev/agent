@@ -1,0 +1,47 @@
+name: Run CI command
+description: Run a command with a deadline and one bounded retry
+
+inputs:
+  command:
+    description: Repository command to run
+    required: true
+  timeout:
+    description: Per-attempt GNU timeout duration
+    default: 8m
+  retry-errors:
+    description: Also retry failures for installs or tests that need a fresh process
+    default: "false"
+  working-directory:
+    description: Checkout in which to run the command
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CI_COMMAND: ${{ inputs.command }}
+        CI_TIMEOUT: ${{ inputs.timeout }}
+        CI_RETRY_ERRORS: ${{ inputs.retry-errors }}
+      run: |
+        # Wrapper controls are not build inputs. Keep them out of child tasks
+        # so the same command can reuse its cache across different callers.
+        export -n CI_COMMAND CI_TIMEOUT CI_RETRY_ERRORS
+        for attempt in 1 2; do
+          echo "::group::Attempt $attempt of 2"
+          # Kill the process group before retrying, including children that
+          # ignore TERM. Preserve both normal exit codes and fatal signals.
+          if timeout --kill-after=15s "$CI_TIMEOUT" bash --noprofile --norc -eo pipefail -c "$CI_COMMAND"; then
+            echo "::endgroup::"
+            exit 0
+          else
+            status=$?
+          fi
+          echo "::endgroup::"
+          if [ "$attempt" -eq 2 ] || { [ "$status" -ne 124 ] && [ "$status" -ne 137 ] && [ "$CI_RETRY_ERRORS" != true ]; }; then
+            exit "$status"
+          fi
+          echo "::warning::Attempt $attempt exited $status; retrying once in 5 seconds."
+          sleep 5
+        done

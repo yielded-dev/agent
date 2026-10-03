@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
-    "prove:live": "vp test run --config vite.live.config.ts",
-    "test": "vp test --passWithNoTests"
+    "prove:live": "vp test run --config vite.live.config.ts"
   },
   "dependencies": {
     "@effect/ai-openai": "catalog:",
