@@ -50,8 +50,8 @@ jobs:
         with:
           task-cache: build
 
-      # Each checkout installs its own lockfile. Only Vite Task's input-checked
-      # results are shared; the base never uses the candidate's node_modules.
+      # Each checkout installs its own lockfile and keeps its task results.
+      # Vite's command fingerprints differ between these checkout paths.
       - name: Install base dependencies
         uses: ./.github/actions/run-ci
         with:
@@ -60,10 +60,14 @@ jobs:
           working-directory: .bundle-base
           command: vp install --frozen-lockfile --ignore-scripts
 
-      - name: Share the restored task cache with the base build
-        run: |
-          mkdir -p node_modules/.vite/task-cache .bundle-base/node_modules/.vite
-          ln -s "$GITHUB_WORKSPACE/node_modules/.vite/task-cache" .bundle-base/node_modules/.vite/task-cache
+      - name: Restore base Vite Task cache
+        id: base-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .bundle-base/node_modules/.vite/task-cache
+          key: vite-task-bundle-base-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vite-task-bundle-base-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build base packages
         id: base
@@ -85,8 +89,15 @@ jobs:
       - name: Compare bundles
         run: vp run bundle:compare -- --base-dir .bundle-base
 
-      - name: Save Vite Task cache
+      - name: Save base Vite Task cache
         if: ${{ !cancelled() && (steps.base.outcome == 'success' || steps.base.outcome == 'failure') }}
+        uses: actions/cache/save@v4
+        with:
+          path: .bundle-base/node_modules/.vite/task-cache
+          key: ${{ steps.base-cache.outputs.cache-primary-key }}
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.head.outcome == 'success' || steps.head.outcome == 'failure') }}
         uses: actions/cache/save@v4
         with:
           path: node_modules/.vite/task-cache

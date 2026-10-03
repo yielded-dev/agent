@@ -449,8 +449,8 @@ Pull requests that change package code, build tooling, or dependencies run the *
 workflow against the exact base and head commits. Prose and site-only changes skip it.
 Like [Effect's bundle check](https://github.com/Effect-TS/effect/tree/main/packages/tools/bundle),
 it bundles small consumer fixtures against built packages. Each checkout installs its own
-lockfile. Sequential builds share the restored Vite Task cache, which checks each checkout's inputs
-before reusing results. The comparison uses the PR's esbuild version and the same fixture source for both sides.
+lockfile and keeps its own Vite Task cache: the checkout paths produce different command fingerprints.
+The comparison uses the PR's esbuild version and the same fixture source for both sides.
 Disposable comparison manifests alias historical PascalCase subpaths to their kebab-case names;
 staged modules also expose the former `Ephemeral` assembly as `InMemory`. The published packages
 retain only their canonical exports. Renamed modules remain comparable.
@@ -576,11 +576,13 @@ invocation runs and receives its deployment environment.
 Cloudflare storage, Cloudflare platform, Node platform, and testing have dedicated test runners.
 The remaining-workspace job includes every other package and runs one package task at a time.
 
-CI retries individual test failures twice, one second apart, only when their error message
-contains a timeout. Other assertion failures fail immediately. Installation gets at most two
-attempts. Check and build commands, including the test-runner process, get one retry after their
-own deadline or forced termination; the old process group is terminated before restarting.
-Repeated timeouts remain failures, and the job deadline leaves room for both attempts.
+CI retries individual timeout failures twice, one second apart. Cloudflare suites instead retry
+the entire task once after any failure: their worker pool keeps Object storage between cases, so
+a test retry could inherit a failed attempt's state. Other assertion failures fail immediately.
+Installation gets at most two attempts. Check and build commands, including the test-runner
+process, get one retry after their own deadline or forced termination. The command deadline
+applies to the process group, and the job deadline leaves room for both attempts. Persistent
+failures still fail CI.
 
 The generated Changesets PR uses the release metadata proof below, with ordinary CI as its fallback.
 Explicit `@effect-agent review` comments still request review.
@@ -611,8 +613,9 @@ Never check out, install dependencies from, or execute the PR head in this secre
 workflow; the reviewer reads untrusted source through GitHub's API instead. CI artifacts
 and caches are not consumed by the review workflow.
 
-Each cacheable test-matrix job has its own task-cache key. Docs-only builds and bundle comparisons
-reuse the build cache; dependency installation always precedes task-cache restoration.
+Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
+builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
+always precedes task-cache restoration.
 Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
 by newer pushes. GitHub scopes PR caches to each PR's merge ref, so another PR cannot reuse them.
 A new release PR can restore the latest main results only after those jobs finish saving their

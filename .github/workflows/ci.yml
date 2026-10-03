@@ -239,8 +239,12 @@ jobs:
             postgres: "18"
           - suite: platform-cloudflare
             filters: -F @yielded/agent-platform-cloudflare
+            # Worker-pool storage survives test retries. Retry the whole task
+            # in a fresh process instead of reusing a failed attempt's state.
+            stateful: true
           - suite: storage-cloudflare
             filters: -F @yielded/agent-storage-cloudflare
+            stateful: true
     services:
       postgres:
         image: ${{ matrix.postgres && format('postgres:{0}-alpine', matrix.postgres) || '' }}
@@ -273,12 +277,13 @@ jobs:
         uses: ./.github/actions/run-ci
         with:
           # Retry a hung process once, within the outer job budget. Vitest
-          # separately retries only individual timeout failures, twice.
+          # retries individual timeouts except in the shared-storage suites.
           timeout: 8m
+          retry-errors: ${{ matrix.stateful && 'true' || 'false' }}
           command: >-
             vp run -v --parallel --concurrency-limit 1
             --fail-if-no-match ${{ matrix.filters }} test
-            --retry.count 2 --retry.delay 1000
+            --retry.count ${{ matrix.stateful && '0' || '2' }} --retry.delay 1000
             --retry.condition 'timed out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT'
 
       # Vite Task never caches failed tasks. Retain successful siblings so

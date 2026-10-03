@@ -1,5 +1,5 @@
 name: Run CI command
-description: Retry a timed-out command once, preserving non-timeout failures
+description: Run a command with a deadline and one bounded retry
 
 inputs:
   command:
@@ -9,7 +9,7 @@ inputs:
     description: Per-attempt GNU timeout duration
     default: 8m
   retry-errors:
-    description: Also retry non-timeout errors for idempotent dependency installation
+    description: Also retry failures for installs or tests that need a fresh process
     default: "false"
   working-directory:
     description: Checkout in which to run the command
@@ -25,6 +25,9 @@ runs:
         CI_TIMEOUT: ${{ inputs.timeout }}
         CI_RETRY_ERRORS: ${{ inputs.retry-errors }}
       run: |
+        # Wrapper controls are not build inputs. Keep them out of child tasks
+        # so the same command can reuse its cache across different callers.
+        export -n CI_COMMAND CI_TIMEOUT CI_RETRY_ERRORS
         for attempt in 1 2; do
           echo "::group::Attempt $attempt of 2"
           # Kill the process group before retrying, including children that
