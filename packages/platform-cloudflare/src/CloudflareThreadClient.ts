@@ -1,4 +1,3 @@
-import { BrowserCrypto } from "@effect/platform-browser";
 import { AgentInputError } from "@yielded/agent/agent-error";
 import { DigestError } from "@yielded/agent/digest";
 import {
@@ -56,6 +55,7 @@ import {
 } from "./CloudflareBindings.ts";
 import { AdmissionLimitExceeded } from "./CloudflareConfig.ts";
 import { cloudflareFailureSignals, safeCauseMessage } from "./internal/boundary.ts";
+import { cloudflareCryptoLayer } from "./internal/crypto.ts";
 
 /**
  * The Worker↔Thread-Object host protocol (plan §1.4): Schema envelopes for the host
@@ -457,7 +457,10 @@ export class CloudflareThreadClient extends Context.Service<
     readonly rpcTracing?: string;
   }): Layer.Layer<CloudflareThreadClient> {
     return CloudflareThreadClient.layer.pipe(
-      Layer.provide([ThreadObjectNamespace.layer(options.namespace, options), BrowserCrypto.layer]),
+      Layer.provide([
+        ThreadObjectNamespace.layer(options.namespace, options),
+        cloudflareCryptoLayer,
+      ]),
     );
   }
 

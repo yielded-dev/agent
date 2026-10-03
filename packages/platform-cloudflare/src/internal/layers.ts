@@ -1,4 +1,3 @@
-import { BrowserCrypto } from "@effect/platform-browser";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { doMessageDeliveryStoreLayer } from "@yielded/agent-storage-cloudflare/do-message-delivery-store";
 import {
@@ -125,6 +124,7 @@ import {
 } from "../CloudflareConfig.ts";
 import { CloudflareThreadClient } from "../CloudflareThreadClient.ts";
 import { cloudflareWakeSchedulerLayer } from "../WakeScheduler.ts";
+import { cloudflareCryptoLayer } from "./crypto.ts";
 import * as DueQueue from "./due-queue.ts";
 import {
   guardedMessageDeliveryStoreLayer,
@@ -359,7 +359,7 @@ const runtimeConfigLayer = (
             ? {}
             : { estimateCostMicrousd: options.estimateCostMicrousd }),
         }),
-        BrowserCrypto.layer,
+        cloudflareCryptoLayer,
         storageFailpointLayer({ storage: ctx.storage, failpoint: options.storageFailpoint?.(ctx) }),
         options.runtimeFailpoint === undefined
           ? DurableRuntimeFailpoint.layer
