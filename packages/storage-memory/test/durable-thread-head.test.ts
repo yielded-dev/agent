@@ -18,7 +18,7 @@ import {
 } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
-import { ReceiptId, RunId, ThreadId } from "@yielded/agent/identifiers";
+import { ReceiptId, RunId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import { OperationAuthorizer, OperationDenied } from "@yielded/agent/operation-authorizer";
 import {
   CanonicalBatch,
@@ -416,11 +416,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
               ]),
             );
             expect(
-              original.records.some(
-                (entry) =>
-                  entry.record.payload._tag === "ToolCallPrepared" ||
-                  entry.record.payload._tag === "ToolCallSettled",
-              ),
+              original.records.some((entry) => entry.record.payload._tag === "ToolCallSettled"),
             ).toBe(false);
 
             const response = original.records.find(
@@ -467,6 +463,15 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
           const response = yield* turnResponseBatch({
             runId: oldRunId,
+            toolOperations: [
+              {
+                toolCallId: Schema.decodeSync(ToolCallId)("uncertain-call"),
+                toolName: "failing_action",
+                executionClass: "uncertain",
+                executionKind: "ordinary",
+                replay: digest,
+              },
+            ],
             turn: 1,
             turnId: turnIdForRun(oldRunId, 1),
             producerId: Schema.decodeSync(ProducerId)("head-test"),
@@ -501,17 +506,6 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
                 producerId: Schema.decodeSync(ProducerId)("head-test"),
                 records: [
                   ...response.records,
-                  record("prepared-old", {
-                    _tag: "ToolCallPrepared",
-                    runId: "run:old-submission",
-                    turn: 1,
-                    turnId: "turn:run:old-submission:1",
-                    toolCallId: "uncertain-call",
-                    toolName: "failing_action",
-                    parameters: {},
-                    parametersDigest: digest,
-                    executionKind: "ordinary",
-                  }),
                   record("settled-old", {
                     _tag: "SubmissionSettled",
                     submissionId: "old-submission",
@@ -587,11 +581,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(handlerCalls).toBe(0);
         if (providerFailure) {
           expect(
-            after.records.some(
-              (entry) =>
-                entry.record.payload._tag === "ToolCallPrepared" ||
-                entry.record.payload._tag === "ToolCallSettled",
-            ),
+            after.records.some((entry) => entry.record.payload._tag === "ToolCallSettled"),
           ).toBe(false);
         }
         if (scenario === "retained-incomplete") {

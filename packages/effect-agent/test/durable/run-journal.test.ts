@@ -16,7 +16,6 @@ import {
   ObservationOffset,
   ProducerId,
   RecordEnvelope,
-  ToolCallPrepared,
   ToolCallUnknown,
   ToolOperation,
 } from "@yielded/agent/records";
@@ -25,7 +24,6 @@ import {
   projectRunJournal,
   projectRunJournalStream,
   runIdForSubmission,
-  toolCallPreparedRecordId,
   toolCallUnknownRecordId,
   turnCanonicalBatch,
   turnIdForRun,
@@ -134,6 +132,23 @@ const turnInput = (
   turn,
   turnId: turnIdForRun(runId, turn),
   appended,
+  toolOperations: appended.flatMap((message) =>
+    message.role !== "assistant"
+      ? []
+      : message.content.flatMap((part) =>
+          part.type === "tool-call" && !part.providerExecuted
+            ? [
+                ToolOperation.make({
+                  toolCallId: Schema.decodeSync(ToolCallId)(part.id),
+                  toolName: part.name,
+                  executionClass: "uncertain",
+                  executionKind: "ordinary",
+                  replay: Digest.make("f".repeat(64)),
+                }),
+              ]
+            : [],
+        ),
+  ),
   producerId: PRODUCER_ID,
   deploymentId: DEPLOYMENT_ID,
   createdAt: CREATED_AT,
@@ -347,9 +362,9 @@ describe("run journal batch split (plan §2.1)", () => {
         }),
     );
 
-    // Authorization failed before preparation, but later history claimed the action may have run.
+    // A committed declaration can outlive its attempt without a canonical execution outcome.
     it.effect(
-      "distinguishes an undispatched historical call from a prepared unknown operation",
+      "preserves uncertain historical declarations without granting the current Run replay",
       () =>
         Effect.gen(function* () {
           const response = yield* turnResponseBatch(turnInput(toolTurnAppended));
@@ -379,27 +394,12 @@ describe("run journal batch split (plan §2.1)", () => {
                 }),
               }),
             ),
-            envelopeAt(
-              2,
-              RecordEnvelope.make({
-                ...record,
-                recordId: toolCallPreparedRecordId(RUN_ID, 1, CALL_TWO),
-                payload: ToolCallPrepared.make({
-                  ...operations[1]!,
-                  runId: RUN_ID,
-                  turnId: turnIdForRun(RUN_ID, 1),
-                  turn: 1,
-                  parameters: { nights: 3 },
-                  parametersDigest: Digest.make("e".repeat(64)),
-                }),
-              }),
-            ),
           ];
 
           const later = yield* projectRunJournal(records, LATER_RUN_ID);
 
           expect(toolResults(later.prompt)).toEqual([
-            expect.objectContaining({ _tag: "ToolUnavailable", execution: "not-executed" }),
+            expect.objectContaining({ _tag: "ToolOutcomeUnknown" }),
             expect.objectContaining({ _tag: "ToolOutcomeUnknown" }),
           ]);
           const recovering = yield* projectRunJournal(records, RUN_ID);
@@ -1025,50 +1025,40 @@ describe("engine compaction records and projection (RUN-026)", () => {
         }),
     );
 
-    it.effect(
-      "streams a validated summary without decoding covered responses, but rejects split coverage",
-      () =>
-        Effect.gen(function* () {
-          const turn = yield* turnCanonicalBatch(turnInput(toolTurnAppended));
+    it.effect("streams a validated summary and retains original history for split coverage", () =>
+      Effect.gen(function* () {
+        const turn = yield* turnCanonicalBatch(turnInput(toolTurnAppended));
 
-          const records = envelopesOf([turn]).map((envelope) => {
-            const payload = envelope.record.payload;
+        const records = envelopesOf([turn]);
 
-            return payload._tag !== "ModelResponseRecorded"
-              ? envelope
-              : CanonicalRecordEnvelope.make({
-                  ...envelope,
-                  record: RecordEnvelope.make({
-                    ...envelope.record,
-                    payload: { ...payload, messages: { archived: true } },
-                  }),
-                });
-          });
+        const summarize = envelopeAt(
+          records.length + 1,
+          auditRecord("stream-summary", compactionPayload({ coversThrough: 3 })),
+        );
 
-          const summarize = envelopeAt(
-            records.length + 1,
-            auditRecord("stream-summary", compactionPayload({ coversThrough: 3 })),
-          );
+        const source = Stream.fromIterable([...records, summarize]);
 
-          const source = Stream.fromIterable([...records, summarize]);
+        const projected = yield* projectRunJournalStream(source, LATER_RUN_ID);
 
-          const projected = yield* projectRunJournalStream(source, LATER_RUN_ID);
+        expect(promptText(projected.prompt)).toContain("Goal: book the Kyoto trip");
+        expect(toolResults(projected.prompt)).toEqual([]);
 
-          expect(promptText(projected.prompt)).toContain("Goal: book the Kyoto trip");
-          expect(toolResults(projected.prompt)).toEqual([]);
+        const split = envelopeAt(
+          records.length + 1,
+          auditRecord("stream-split", compactionPayload({ coversThrough: 1 })),
+        );
 
-          const split = envelopeAt(
-            records.length + 1,
-            auditRecord("stream-split", compactionPayload({ coversThrough: 1 })),
-          );
+        const unsummarized = yield* projectRunJournalStream(
+          Stream.fromIterable([...records, split]),
+          LATER_RUN_ID,
+        );
 
-          const failure = yield* projectRunJournalStream(
-            Stream.fromIterable([...records, split]),
-            LATER_RUN_ID,
-          ).pipe(Effect.flip);
+        const baseline = yield* projectRunJournalStream(Stream.fromIterable(records), LATER_RUN_ID);
 
-          expect(failure._tag).toBe("RunJournalError");
-        }),
+        expect(unsummarized).toEqual(baseline);
+        expect(promptText(unsummarized.prompt)).not.toContain("Goal: book the Kyoto trip");
+        expect(toolResults(unsummarized.prompt)).toHaveLength(2);
+      }),
     );
 
     it.effect(
@@ -1178,6 +1168,7 @@ layer(NodeCrypto.layer)("Tool exposure journal", (it) => {
 
         const seed = JournalCheckpointSeed.make({
           runId: RUN_ID,
+          retiredToolCallIds: [CALL_ONE, CALL_TWO],
           throughSequence: CanonicalSequence.make(3),
           firstSequence: CanonicalSequence.make(1),
           committedTurns: projected.committedTurns,

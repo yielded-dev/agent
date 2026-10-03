@@ -10,7 +10,6 @@ import {
   runIdForSubmission,
   toolApprovalDecisionRecordId,
   toolApprovalRequestRecordId,
-  toolCallPreparedRecordId,
   toolCallResolvedRecordId,
   toolCallSettledRecordId,
   toolCallUnknownRecordId,
@@ -912,12 +911,12 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     // ------------------------------------------------------------------------------------------
 
     it.effect(
-      "kill at turn:after-response-append: the declared batch resumes without model re-invocation",
+      "kill at turn:after-response-append under the default reconciler: Unknown parks work until resolveUnknown from a second process",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
-            const thread = "thread-kill-response";
-            const key = "kill-response-1";
+            const thread = "thread-kill-declared-unknown";
+            const key = "kill-declared-unknown-1";
 
             const result = yield* runWorkerToExit({
               db: site.db,
@@ -925,73 +924,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "turn:after-response-append",
-              leaseMillis: CHILD_LEASE_MS,
-              supplierDir: site.supplier,
-            });
-
-            expectKilled(result);
-            yield* waitAfterChildExit;
-
-            yield* withHost(
-              site.db,
-              Effect.gen(function* () {
-                const snapshot = yield* lookupByKey(thread, key);
-                const runId = runIdForSubmission(snapshot.submissionId);
-
-                expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
-
-                const settlements = yield* drainUncertainBook(site, thread, FRESH_ANSWER);
-
-                expect(settlements).toHaveLength(1);
-                expect(settlements[0]?.outcome).toBe("completed");
-                expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(1);
-
-                // No model re-invocation for the declared Turn: exactly one ModelResponseRecorded
-                // for Turn 1 and no interruption audit — the resumed batch replayed the canonical
-                // declaration instead of asking the model again.
-                const records = yield* readLog(thread);
-                const ids = records.map((envelope) => envelope.record.recordId);
-
-                expect(
-                  records.filter(
-                    (envelope) => envelope.record.recordId === modelResponseRecordId(runId, 1),
-                  ),
-                ).toHaveLength(1);
-                expect(
-                  logTags(records).filter((tag) => tag === "ModelResponseRecorded"),
-                ).toHaveLength(2);
-                expect(ids).toContain(
-                  toolCallPreparedRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
-                expect(ids).toContain(
-                  toolCallSettledRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
-                expect(ids).not.toContain(modelResponseInterruptedRecordId(runId, 1));
-                yield* assertConvergence(thread, [snapshot.submissionId], {
-                  site,
-                  counts: { [`book:${BOOK_REF}`]: 1 },
-                });
-              }),
-            );
-          }),
-        ),
-      30_000,
-    );
-
-    it.effect(
-      "kill at tools:after-prepared-append under the default reconciler: Unknown parks work until resolveUnknown from a second process",
-      () =>
-        withCrashSite((site) =>
-          Effect.gen(function* () {
-            const thread = "thread-kill-prepared-unknown";
-            const key = "kill-prepared-unknown-1";
-
-            const result = yield* runWorkerToExit({
-              db: site.db,
-              scenario: "run-uncertain",
-              thread,
-              key,
-              killAt: "tools:after-prepared-append",
               leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
@@ -1191,10 +1123,8 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(snapshot.state).not.toBe("settled");
                 const before = (yield* readLog(thread)).map((envelope) => envelope.record.recordId);
 
-                // The result was lost in memory: prepared is canonical, settled is not.
-                expect(before).toContain(
-                  toolCallPreparedRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
+                // The result was lost in memory: the declaration is canonical, settlement is not.
+                expect(before).toContain(modelResponseRecordId(runId, 1));
                 expect(before).not.toContain(
                   toolCallSettledRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
                 );

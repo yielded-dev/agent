@@ -499,21 +499,3 @@ export const upgradeV2Subscriptions = Effect.fn("SqlStorageV2Upgrade.subscriptio
       .withoutTransform,
   );
 });
-
-/** Check the shared layout without reading journal, receipt, lease or settlement payloads. */
-export const checkV2ThreadLayout = Effect.fn("SqlStorageV2Upgrade.threadLayout")(function* () {
-  yield* checkColumns([
-    "effect_agent_threads",
-    "effect_agent_canonical_batches",
-    "effect_agent_canonical_records",
-    "effect_agent_checkpoints",
-    "effect_agent_submissions",
-    "effect_agent_submission_ownership",
-    "effect_agent_attempts",
-    "effect_agent_settlement_reservations",
-    "effect_agent_abort_intents",
-    "effect_agent_approval_decisions",
-    "effect_agent_unknown_resolutions",
-    "effect_agent_child_reservations",
-  ]);
-});

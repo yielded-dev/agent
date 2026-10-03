@@ -84,7 +84,7 @@ export const ensurePostgresSchema = Effect.fnUntraced(function* (schema: string)
   }
 });
 
-export const CurrentPostgresStorageVersion = 1;
+export const CurrentPostgresStorageVersion = 15;
 
 /** Initialize empty storage with the complete current schema. */
 const createPostgresStorageSchema = Effect.fnUntraced(function* (namespace: string) {
@@ -120,7 +120,6 @@ const REQUIRED_OBJECTS = [
   "effect_agent_message_deliveries_pending",
   "effect_agent_recovery_checkpoints",
   "effect_agent_records_call",
-  "effect_agent_records_outstanding",
   "effect_agent_records_run_input",
   "effect_agent_records_subtree",
   "effect_agent_records_worker_input",

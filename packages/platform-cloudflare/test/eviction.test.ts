@@ -203,7 +203,7 @@ describe("Durable Object retirement — committed client acknowledgements", () =
   it("eviction at ledger:unknown-resolution:after: the durable covering resolution wakes the lane by alarm alone", async () => {
     const { thread, receipt } = await passRow(
       "book",
-      { kind: "runtime", location: "tools:after-prepared-append" },
+      { kind: "runtime", location: "tools:after-dispatch-fence" },
       "unknown",
     );
 

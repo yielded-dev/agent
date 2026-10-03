@@ -19,14 +19,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   restoreV2,
-  removeNativeReadIndexes,
-  removeWorkerContractIndexes,
   assertPreserved,
-  assertReceiptReplay,
   assertSubscriptionReplay,
   snapshotStore,
   fixturePartition,
-  type FixtureStore,
 } from "../../../test/fixtures/storage-upgrade.ts";
 import { DoScheduleTransaction, scheduleStoreLayer } from "../src/DoScheduleStore.ts";
 import { DoStorageFailpointError } from "../src/DoStorageError.ts";
@@ -39,7 +35,7 @@ import { admission, withScheduleStorage } from "./harness.ts";
 let counter = 0;
 
 const fixture = <A, E>(
-  store: Exclude<FixtureStore, "sqlite">,
+  store: "schedule" | "subscription",
   body: (
     open: Effect.Effect<
       void,
@@ -60,22 +56,15 @@ const fixture = <A, E>(
       const deps = services(storage, hit);
 
       const open =
-        store === "thread"
-          ? SubmissionLedger.pipe(
+        store === "schedule"
+          ? ScheduleStore.pipe(
               Effect.asVoid,
-              Effect.provide(submissionLedgerLayer.pipe(Layer.provide(deps))),
+              Effect.provide(scheduleStoreLayer.pipe(Layer.provide(deps))),
             )
-          : store === "schedule"
-            ? ScheduleStore.pipe(
-                Effect.asVoid,
-                Effect.provide(scheduleStoreLayer.pipe(Layer.provide(deps))),
-              )
-            : SubscriptionStore.pipe(
-                Effect.asVoid,
-                Effect.provide(
-                  doSubscriptionStoreLayer(fixturePartition).pipe(Layer.provide(deps)),
-                ),
-              );
+          : SubscriptionStore.pipe(
+              Effect.asVoid,
+              Effect.provide(doSubscriptionStoreLayer(fixturePartition).pipe(Layer.provide(deps))),
+            );
 
       const value = yield* body(open, deps);
 
@@ -148,7 +137,7 @@ const services = (
   );
 };
 
-describe("unpatched v2 native storage upgrade", () => {
+describe("current thread storage and independent v2 store upgrades", () => {
   // Regression: https://github.com/yielded-dev/agent/commit/78d05490ac4f3512b57ec37be37cab4a454a03a3
   it("initializes beside an application's migration history and preserves admission receipts", () =>
     withScheduleStorage(`shared-sql-migrations-${counter++}`, (storage) =>
@@ -189,146 +178,7 @@ describe("unpatched v2 native storage upgrade", () => {
       }).pipe(Effect.provide(SqliteClient.layer({ storage }))),
     ));
 
-  for (const point of ["upgrade:after-version"] as const) {
-    it(`preserves v4 data and atomically adds recovery checkpoints at ${point}`, () => {
-      let armed = false;
-
-      return fixture(
-        "thread",
-        (open) =>
-          Effect.gen(function* () {
-            yield* open;
-            const sql = yield* SqlClientService.SqlClient;
-
-            yield* removeNativeReadIndexes;
-            yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-            yield* sql`DROP TABLE effect_agent_recovery_checkpoints`;
-            yield* sql`UPDATE effect_agent_meta SET value='4' WHERE key='storage_version'`;
-            const before = yield* snapshotStore;
-
-            armed = true;
-            expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-            expect(yield* snapshotStore).toEqual(before);
-            expect(
-              yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-            ).toEqual([{ value: "4" }]);
-            armed = false;
-            yield* open;
-            yield* assertPreserved("thread");
-            expect(
-              yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-            ).toEqual([{ value: "9" }]);
-            expect(yield* sql`SELECT * FROM effect_agent_recovery_checkpoints`).toEqual([]);
-            const upgraded = yield* snapshotStore;
-
-            yield* open;
-            expect(yield* snapshotStore).toEqual(upgraded);
-          }),
-        (location) => (armed && location === point ? "failure" : undefined),
-      );
-    });
-  }
-
-  it("rejects an ambiguous v4 layout without changing retained data or native alarm", () =>
-    fixture("thread", (open) =>
-      Effect.gen(function* () {
-        yield* open;
-        const sql = yield* SqlClientService.SqlClient;
-
-        yield* removeNativeReadIndexes;
-        yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-        yield* sql`DROP TABLE effect_agent_recovery_checkpoints`;
-        yield* sql`ALTER TABLE effect_agent_submissions RENAME COLUMN message_admission_json TO malformed_column`;
-        yield* sql`UPDATE effect_agent_meta SET value='4' WHERE key='storage_version'`;
-        const before = yield* snapshotStore;
-
-        expect(yield* open.pipe(Effect.result)).toMatchObject({
-          _tag: "Failure",
-          failure: { _tag: "DoStorageCompatibilityError", actualVersion: 4 },
-        });
-        expect(yield* snapshotStore).toEqual(before);
-      }),
-    ));
-
-  for (const [table, column] of [
-    ["effect_agent_submissions", "admission_fence_json"],
-    ["effect_agent_child_settlements", "child_outcome"],
-  ] as const) {
-    it(`rejects v3 missing ${table}.${column} without mutating storage or its alarm`, () => {
-      let armed = false;
-      let mutations = 0;
-
-      return fixture(
-        "thread",
-        (open) =>
-          Effect.gen(function* () {
-            yield* open;
-            const sql = yield* SqlClientService.SqlClient;
-
-            yield* removeNativeReadIndexes;
-            yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-            yield* sql`DROP TABLE effect_agent_recovery_checkpoints`;
-            yield* sql`DROP TABLE effect_agent_message_deliveries`;
-            yield* sql`ALTER TABLE effect_agent_submissions DROP COLUMN worker_admission_json`;
-            yield* sql`ALTER TABLE effect_agent_submissions DROP COLUMN message_admission_json`;
-            yield* sql`UPDATE effect_agent_meta SET value='3' WHERE key='storage_version'`;
-            yield* sql.unsafe(`ALTER TABLE ${table} DROP COLUMN ${column}`);
-            const before = yield* snapshotStore;
-
-            armed = true;
-            expect(yield* open.pipe(Effect.result)).toMatchObject({
-              _tag: "Failure",
-              failure: { _tag: "DoStorageCompatibilityError", actualVersion: 3 },
-            });
-            expect(mutations).toBe(0);
-            expect(yield* snapshotStore).toEqual(before);
-            expect(
-              yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-            ).toEqual([{ value: "3" }]);
-          }),
-        (location) => {
-          if (armed && location === "upgrade:before-mutation") mutations += 1;
-
-          return undefined;
-        },
-      );
-    });
-  }
-
-  it("adds message storage to v3 atomically and preserves native alarm and canonical data", () => {
-    let armed = false;
-
-    return fixture(
-      "thread",
-      (open) =>
-        Effect.gen(function* () {
-          yield* open;
-          const sql = yield* SqlClientService.SqlClient;
-
-          yield* removeNativeReadIndexes;
-          yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-          yield* sql`DROP TABLE effect_agent_recovery_checkpoints`;
-          yield* sql`DROP TABLE effect_agent_message_deliveries`;
-          yield* sql`ALTER TABLE effect_agent_submissions DROP COLUMN worker_admission_json`;
-          yield* sql`ALTER TABLE effect_agent_submissions DROP COLUMN message_admission_json`;
-          yield* sql`UPDATE effect_agent_meta SET value='3' WHERE key='storage_version'`;
-          const before = yield* snapshotStore;
-
-          armed = true;
-          expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-          expect(yield* snapshotStore).toEqual(before);
-          armed = false;
-          yield* open;
-          yield* assertPreserved("thread");
-          expect(
-            yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-          ).toEqual([{ value: "9" }]);
-          expect(yield* sql`SELECT * FROM effect_agent_message_deliveries`).toEqual([]);
-        }),
-      (point) => (armed && point === "upgrade:after-version" ? "failure" : undefined),
-    );
-  });
-  for (const store of ["thread", "schedule", "subscription"] as const) {
+  for (const store of ["schedule", "subscription"] as const) {
     it(`preserves ${store} state, native alarm and repeated acquisition`, () =>
       fixture(store, (open, deps) =>
         Effect.gen(function* () {
@@ -340,32 +190,13 @@ describe("unpatched v2 native storage upgrade", () => {
           expect(yield* snapshotStore).toEqual(after);
           const sql = yield* SqlClientService.SqlClient;
 
-          if (store === "thread") {
-            expect(
-              yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-            ).toEqual([{ value: "9" }]);
-            expect(yield* sql`SELECT * FROM effect_agent_child_settlements`).toEqual([
-              {
-                parent_submission_id: "parent",
-                child_submission_id: "child",
-                child_outcome: null,
-                recorded_at: "1970-01-01T00:00:01.000Z",
-              },
-            ]);
-            yield* assertReceiptReplay.pipe(
-              Effect.provide(submissionLedgerLayer.pipe(Layer.provide(deps))),
+          expect(
+            yield* sql`SELECT storage_version,alarm_generation FROM ${sql(store === "schedule" ? "effect_agent_schedule_store_state" : "effect_agent_subscription_store_state")}`,
+          ).toEqual([{ storage_version: 3, alarm_generation: store === "schedule" ? 17 : 23 }]);
+          if (store === "subscription")
+            yield* assertSubscriptionReplay.pipe(
+              Effect.provide(doSubscriptionStoreLayer(fixturePartition).pipe(Layer.provide(deps))),
             );
-          } else {
-            expect(
-              yield* sql`SELECT storage_version,alarm_generation FROM ${sql(store === "schedule" ? "effect_agent_schedule_store_state" : "effect_agent_subscription_store_state")}`,
-            ).toEqual([{ storage_version: 3, alarm_generation: store === "schedule" ? 17 : 23 }]);
-            if (store === "subscription")
-              yield* assertSubscriptionReplay.pipe(
-                Effect.provide(
-                  doSubscriptionStoreLayer(fixturePartition).pipe(Layer.provide(deps)),
-                ),
-              );
-          }
         }),
       ));
     for (const mode of ["interrupt"] as const) {
@@ -407,23 +238,6 @@ describe("unpatched v2 native storage upgrade", () => {
       );
     });
   }
-  it("rejects a missing required v2 table without adding columns or advancing the version", () =>
-    fixture("thread", (open) =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClientService.SqlClient;
-
-        yield* sql`DROP TABLE effect_agent_child_settlements`;
-        const before = yield* snapshotStore;
-        const failure = yield* open.pipe(Effect.result);
-
-        expect(failure).toMatchObject({
-          _tag: "Failure",
-          failure: { _tag: "DoStorageCompatibilityError", actualVersion: 2 },
-        });
-        expect(yield* snapshotStore).toEqual(before);
-      }),
-    ));
-
   it("retains ambiguous prepared delivery bytes and the v2 version", () =>
     fixture("subscription", (open) =>
       Effect.gen(function* () {
@@ -440,219 +254,4 @@ describe("unpatched v2 native storage upgrade", () => {
         expect(yield* snapshotStore).toEqual(before);
       }),
     ));
-});
-
-describe("nonterminal index upgrade", () => {
-  for (const point of ["upgrade:after-version"] as const) {
-    for (const mode of ["interrupt"] as const) {
-      it(`preserves v5 rows and recovery checkpoints atomically at ${point} (${mode})`, () => {
-        let armed = false;
-
-        return fixture(
-          "thread",
-          (open) =>
-            Effect.gen(function* () {
-              yield* open;
-              const sql = yield* SqlClientService.SqlClient;
-
-              yield* sql`INSERT INTO effect_agent_recovery_checkpoints (thread_id, through_sequence, tail_digest, checkpoint_json) SELECT thread_id, tail_sequence, tail_digest, '{"retained":true}' FROM effect_agent_threads LIMIT 1`;
-              yield* removeNativeReadIndexes;
-              yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-              yield* sql`UPDATE effect_agent_meta SET value='5' WHERE key='storage_version'`;
-              const before = yield* snapshotStore;
-
-              armed = true;
-              expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-              expect(yield* snapshotStore).toEqual(before);
-              expect(
-                yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-              ).toEqual([{ value: "5" }]);
-              armed = false;
-              yield* open;
-              const after = yield* snapshotStore;
-
-              for (const [table, rows] of Object.entries(before.contents)) {
-                if (table !== "effect_agent_meta")
-                  expect(after.contents[table]).toMatchObject(rows);
-              }
-              expect(
-                after.definitions.filter(
-                  (entry) =>
-                    entry.name !== "effect_agent_submissions_nonterminal" &&
-                    entry.name !== "effect_agent_message_deliveries_pending" &&
-                    !entry.name.startsWith("effect_agent_records_") &&
-                    ![
-                      "effect_agent_worker_stops",
-                      "effect_agent_worker_starts",
-                      "effect_agent_worker_pending",
-                      "effect_agent_worker_execution",
-                    ].includes(entry.name) &&
-                    entry.name !== "effect_agent_canonical_records",
-                ),
-              ).toEqual(
-                before.definitions.filter(
-                  (entry) => entry.name !== "effect_agent_canonical_records",
-                ),
-              );
-              expect(
-                after.definitions.find(
-                  (entry) => entry.name === "effect_agent_submissions_nonterminal",
-                )?.sql,
-              ).toContain("WHERE state <> 'settled'");
-              expect(
-                yield* sql`SELECT value FROM effect_agent_meta WHERE key='storage_version'`,
-              ).toEqual([{ value: "9" }]);
-              yield* open;
-              expect(yield* snapshotStore).toEqual(after);
-            }),
-          (location) => (armed && location === point ? mode : undefined),
-        );
-      });
-    }
-  }
-
-  for (const [table, column] of [
-    ["effect_agent_submissions", "queue_sequence"],
-    ["effect_agent_recovery_checkpoints", "checkpoint_json"],
-  ] as const) {
-    it(`rejects malformed v5 ${table} before any mutation`, () => {
-      let armed = false;
-      let mutations = 0;
-
-      return fixture(
-        "thread",
-        (open) =>
-          Effect.gen(function* () {
-            yield* open;
-            const sql = yield* SqlClientService.SqlClient;
-
-            yield* removeNativeReadIndexes;
-            yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-            yield* sql`UPDATE effect_agent_meta SET value='5' WHERE key='storage_version'`;
-            yield* sql.unsafe(`ALTER TABLE ${table} RENAME COLUMN ${column} TO malformed_column`);
-            const before = yield* snapshotStore;
-
-            armed = true;
-            expect(yield* open.pipe(Effect.result)).toMatchObject({
-              _tag: "Failure",
-              failure: { _tag: "DoStorageCompatibilityError", actualVersion: 5 },
-            });
-            expect(mutations).toBe(0);
-            expect(yield* snapshotStore).toEqual(before);
-          }),
-        (location) => {
-          if (armed && location === "upgrade:before-mutation") mutations++;
-
-          return undefined;
-        },
-      );
-    });
-  }
-
-  it("rejects a predecessor with a conflicting index without mutation", () =>
-    fixture("thread", (open) =>
-      Effect.gen(function* () {
-        yield* open;
-        const sql = yield* SqlClientService.SqlClient;
-
-        yield* sql`UPDATE effect_agent_meta SET value='5' WHERE key='storage_version'`;
-        const before = yield* snapshotStore;
-
-        expect(yield* open.pipe(Effect.result)).toMatchObject({
-          _tag: "Failure",
-          failure: { _tag: "DoStorageCompatibilityError", actualVersion: 5 },
-        });
-        expect(yield* snapshotStore).toEqual(before);
-      }),
-    ));
-});
-
-describe("native canonical index upgrade", () => {
-  for (const point of ["upgrade:after-version"] as const) {
-    for (const version of [6, 7, 8])
-      it(`preserves v${version} canonical rows atomically at ${point}`, () => {
-        let armed = false;
-
-        return fixture(
-          "thread",
-          (open) =>
-            Effect.gen(function* () {
-              yield* open;
-              const sql = yield* SqlClientService.SqlClient;
-
-              if (version === 8) {
-                yield* sql`ALTER TABLE effect_agent_worker_stops DROP COLUMN terminal`;
-                yield* sql`INSERT INTO effect_agent_worker_stops (thread_id) VALUES ('retained-stop')`;
-              } else {
-                yield* version === 6 ? removeNativeReadIndexes : removeWorkerContractIndexes;
-              }
-              yield* sql`UPDATE effect_agent_meta SET value = ${String(version)} WHERE key = 'storage_version'`;
-              const before = yield* snapshotStore;
-
-              armed = true;
-              expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-              expect(yield* snapshotStore).toEqual(before);
-              armed = false;
-              yield* open;
-              yield* assertPreserved("thread");
-              if (version === 8)
-                expect(
-                  yield* sql`SELECT thread_id, terminal FROM effect_agent_worker_stops`,
-                ).toEqual([{ thread_id: "retained-stop", terminal: null }]);
-              expect(
-                yield* sql`SELECT value FROM effect_agent_meta WHERE key = 'storage_version'`,
-              ).toEqual([{ value: "9" }]);
-            }),
-          (location) => (armed && location === point ? "failure" : undefined),
-        );
-      });
-  }
-  it("rejects malformed worker-stop predecessor storage without mutation", () =>
-    fixture("thread", (open) =>
-      Effect.gen(function* () {
-        yield* open;
-        const sql = yield* SqlClientService.SqlClient;
-
-        yield* removeWorkerContractIndexes;
-        yield* sql`UPDATE effect_agent_meta SET value = '7' WHERE key = 'storage_version'`;
-        yield* sql`ALTER TABLE effect_agent_abort_intents DROP COLUMN reason`;
-        const before = yield* snapshotStore;
-
-        expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-        expect(yield* snapshotStore).toEqual(before);
-      }),
-    ));
-  it("rejects ambiguous assignment-seal predecessor storage without mutation", () =>
-    fixture("thread", (open) =>
-      Effect.gen(function* () {
-        yield* open;
-        const sql = yield* SqlClientService.SqlClient;
-
-        yield* sql`ALTER TABLE effect_agent_worker_stops DROP COLUMN terminal`;
-        yield* sql`ALTER TABLE effect_agent_worker_stops ADD COLUMN unexpected TEXT`;
-        yield* sql`UPDATE effect_agent_meta SET value = '8' WHERE key = 'storage_version'`;
-        const before = yield* snapshotStore;
-
-        expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-        expect(yield* snapshotStore).toEqual(before);
-      }),
-    ));
-  for (const corruption of ["canonical gap", "missing index"] as const)
-    it(`rejects a predecessor ${corruption} without mutation`, () =>
-      fixture("thread", (open) =>
-        Effect.gen(function* () {
-          yield* open;
-          const sql = yield* SqlClientService.SqlClient;
-
-          yield* removeNativeReadIndexes;
-          yield* sql`UPDATE effect_agent_meta SET value = '6' WHERE key = 'storage_version'`;
-          if (corruption === "canonical gap")
-            yield* sql`DELETE FROM effect_agent_canonical_records WHERE sequence = 1`;
-          else yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
-          const before = yield* snapshotStore;
-
-          expect(Exit.isFailure(yield* open.pipe(Effect.exit))).toBe(true);
-          expect(yield* snapshotStore).toEqual(before);
-        }),
-      ));
 });

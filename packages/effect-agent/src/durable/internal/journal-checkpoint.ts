@@ -1,7 +1,7 @@
 import { Option, Schema } from "effect";
 import { Prompt } from "effect/ai";
 
-import { RunId, SubmissionId } from "../../core/Identifiers.ts";
+import { RunId, SubmissionId, ToolCallId } from "../../core/Identifiers.ts";
 import { RunPolicyUsage } from "../../core/RunPolicyUsage.ts";
 import { Selection } from "../../core/ToolExposure.ts";
 import { RunUsageSummary } from "../../core/Usage.ts";
@@ -12,6 +12,8 @@ export class JournalCheckpointSeed extends Schema.Class<JournalCheckpointSeed>(
   "@effect-agent/thread/internal/JournalCheckpointSeed",
 )({
   runId: RunId,
+  /** Identities whose settled declarations were removed from the sparse checkpoint. */
+  retiredToolCallIds: Schema.Array(ToolCallId).check(Schema.isMaxLength(4_096)),
   throughSequence: CanonicalSequence,
   firstSequence: Schema.optionalKey(CanonicalSequence),
   toolSelection: Schema.optionalKey(Selection),
@@ -66,7 +68,7 @@ export class RecoveryCheckpointContents extends Schema.Class<RecoveryCheckpointC
   digest: Digest,
 }) {}
 
-export const RECOVERY_ENGINE_VERSION = "effect-agent/recovery@4";
+export const RECOVERY_ENGINE_VERSION = "effect-agent/recovery@5";
 
 /**
  * Prove that indexed original-input absence also means absent prefix Run/control evidence.
@@ -121,13 +123,20 @@ export const checkpointSuffixCompatible = (
   seed: JournalCheckpointSeed,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   retained: ReadonlyArray<CanonicalRecordEnvelope>,
-): boolean =>
-  records.every(({ sequence, record: { payload } }) => {
+): boolean => {
+  const retiredIds = new Set(seed.retiredToolCallIds);
+
+  return records.every(({ sequence, record: { payload } }) => {
     if ("runId" in payload && payload.runId !== undefined && payload.runId !== seed.runId)
       return false;
     if ("turn" in payload && payload.turn <= seed.committedTurns) return false;
+    if (
+      payload._tag === "ModelResponseRecorded" &&
+      payload.toolOperations.some((operation) => retiredIds.has(operation.toolCallId))
+    )
+      return false;
     if (payload._tag === "ToolCallSettled" || payload._tag === "ToolCallResolved") {
-      // These records have no turn. The retained declaration/preparation proves their scope.
+      // These records have no turn. The retained declaration proves their scope.
       return [...retained, ...records].some(
         ({ sequence: declarationSequence, record: { payload: candidate } }) => {
           if (
@@ -157,3 +166,4 @@ export const checkpointSuffixCompatible = (
 
     return payload._tag !== "CompactionCreated" || payload.coversThrough >= seed.throughSequence;
   });
+};

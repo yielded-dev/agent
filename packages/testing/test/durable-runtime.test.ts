@@ -54,6 +54,7 @@ import {
   Principal,
   RecoverySnapshotRequest,
   ResolutionCompletedWithResult,
+  ResolutionNeverHappened,
   ResolutionSafeToRetry,
   UnknownResolutionCommand,
   SubmissionLedger,
@@ -227,7 +228,7 @@ const receiptCreateParts: ReadonlyArray<Response.StreamPartEncoded> = [
 ];
 
 // `readonly` keeps the P4 canonical record shape byte-stable (plan §4.3): an unannotated tool
-// fails closed to `uncertain` and gains `ToolCallPrepared` records under the P5 split commits.
+// fails closed to `uncertain` after its declaration commits.
 const Search = Tool.make("search", {
   parameters: Schema.Struct({ query: Schema.String }),
   success: Schema.Struct({ available: Schema.Boolean }),
@@ -603,7 +604,7 @@ layer(progressWaitTestLayer)("#94 DurableAgentRuntime progress waits", (it) => {
 
 layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
   // Requested hosted-search recovery seam: interruption before the response commit, and
-  // a crash after it, must neither replay provider results nor duplicate a local effect.
+  // a crash after it requires nonexecution proof before the local effect can run.
   it.effect("recovers native hosted search before and after response commit", () =>
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
@@ -703,6 +704,17 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
 
       expect(failureTag(crashed)).toBe("DurableRuntimeFailpointError");
       expect(deliveries).toBe(0);
+      expect(yield* process).toEqual([]);
+      expect(deliveries).toBe(0);
+      yield* runtime.resolveUnknown(
+        UnknownResolutionCommand.make({
+          submissionId: receipt.submissionId,
+          toolCallId: ToolCallId.make("deliver_1"),
+          author: "operator",
+          reason: "The retained delivery counter confirms dispatch never started",
+          resolution: ResolutionNeverHappened.make(),
+        }),
+      );
       const settled = yield* process;
 
       expect(settled[0]).toMatchObject({
@@ -1032,7 +1044,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
           submitOptions(thread, "recovered-result"),
         );
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
 
         const crashed = yield* runtime
           .processThread(agent, decodeThreadId(thread))
@@ -1250,13 +1262,6 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
               result: { _tag: "ModelProtocolError" },
             },
           ]);
-          expect(
-            before.some(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                (payload.toolCallId === "premature-0" || payload.toolCallId === "rejected-0"),
-            ),
-          ).toBe(false);
           expect(before.some((payload) => payload._tag === "RunCompleted")).toBe(false);
           expect(starts).toEqual(["search"]);
 
@@ -2152,7 +2157,11 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
               start,
             ]);
             expect(
-              after.filter(({ record }) => record.payload._tag === "ToolCallPrepared"),
+              after.flatMap(({ record }) =>
+                record.payload._tag === "ModelResponseRecorded"
+                  ? record.payload.toolOperations
+                  : [],
+              ),
             ).toHaveLength(1);
             expect(
               after.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
@@ -2245,7 +2254,7 @@ layer(testLayer)("deployment continuity", (it) => {
             submitOptions("unsupported-retry-admin", "original"),
           );
 
-          yield* armFailpoint("tools:after-prepared-append");
+          yield* armFailpoint("tools:after-dispatch-fence");
           expect(failureTag(yield* Effect.exit(runtime.processThreadHead(receipt.threadId)))).toBe(
             "DurableRuntimeFailpointError",
           );
@@ -2395,7 +2404,7 @@ layer(testLayer)("deployment continuity", (it) => {
             submitOptions(`continuity-proof-${proof}`, "original"),
           );
 
-          yield* armFailpoint("tools:after-prepared-append");
+          yield* armFailpoint("tools:after-dispatch-fence");
           expect(failureTag(yield* Effect.exit(runtime.processThreadHead(receipt.threadId)))).toBe(
             "DurableRuntimeFailpointError",
           );

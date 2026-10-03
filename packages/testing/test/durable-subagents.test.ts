@@ -33,7 +33,7 @@ import {
   Digest,
   ProducerId,
   RecordEnvelope,
-  ToolCallPrepared,
+  ModelResponseRecorded,
   type CanonicalRecordEnvelope,
 } from "@yielded/agent/records";
 import { childThreadIdFor, runIdForSubmission } from "@yielded/agent/run-journal";
@@ -867,72 +867,67 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
       }),
   );
 
-  it.effect(
-    "missing or conflicting preparation classification never grants delegation replay",
-    () =>
-      Effect.gen(function* () {
-        const store = yield* ThreadStore;
+  it.effect("conflicting declaration classification never grants delegation replay", () =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
 
-        for (const classification of ["missing", "conflicting"] as const) {
-          yield* clearFailpoint;
-          const harness = yield* makeHarness();
-          const parent = yield* harness.submitParent(`classification-${classification}`, "parent");
+      {
+        yield* clearFailpoint;
+        const harness = yield* makeHarness();
+        const parent = yield* harness.submitParent("classification-conflicting", "parent");
 
-          yield* armFailpoint(
-            classification === "missing"
-              ? "tools:after-prepared-append"
-              : "subagent:after-request-append",
-          );
-          expect(failureTag(yield* Effect.exit(drive(harness)(parent.threadId)))).toBe(
-            "DurableRuntimeFailpointError",
-          );
-          yield* clearFailpoint;
+        yield* armFailpoint("subagent:after-request-append");
+        expect(failureTag(yield* Effect.exit(drive(harness)(parent.threadId)))).toBe(
+          "DurableRuntimeFailpointError",
+        );
+        yield* clearFailpoint;
 
-          const corruptStore = ThreadStore.of({
-            ...store,
-            read: (request) =>
-              store.read(request).pipe(
-                Stream.map((envelope) => {
-                  if (
-                    request.threadId !== parent.threadId ||
-                    envelope.record.payload._tag !== "ToolCallPrepared"
-                  )
-                    return envelope;
-                  const { executionKind: _kind, ...prepared } = envelope.record.payload;
+        const corruptStore = ThreadStore.of({
+          ...store,
+          read: (request) =>
+            store.read(request).pipe(
+              Stream.map((envelope) => {
+                if (
+                  request.threadId !== parent.threadId ||
+                  envelope.record.payload._tag !== "ModelResponseRecorded"
+                )
+                  return envelope;
 
-                  return {
-                    ...envelope,
-                    record: RecordEnvelope.make({
-                      ...envelope.record,
-                      payload: ToolCallPrepared.make({
-                        ...prepared,
-                        ...(classification === "missing" ? {} : { executionKind: "ordinary" }),
-                      }),
+                return {
+                  ...envelope,
+                  record: RecordEnvelope.make({
+                    ...envelope.record,
+                    payload: ModelResponseRecorded.make({
+                      ...envelope.record.payload,
+                      toolOperations: envelope.record.payload.toolOperations.map((operation) => ({
+                        ...operation,
+                        executionKind: "ordinary",
+                      })),
                     }),
-                  };
-                }),
-              ),
-          });
-
-          const hostileRuntime = yield* DurableAgentRuntime.pipe(
-            Effect.provide(
-              DurableAgentRuntime.layerWithBindings(harness.bindings)
-                .pipe(Layer.provide(runStorageLayer()))
-                .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+                  }),
+                };
+              }),
             ),
-            Effect.provideService(ThreadStore, corruptStore),
-          );
+        });
 
-          const before = yield* readLog(parent.threadId);
-          const result = yield* Effect.exit(hostileRuntime.processThreadResolved(parent.threadId));
+        const hostileRuntime = yield* DurableAgentRuntime.pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(harness.bindings)
+              .pipe(Layer.provide(runStorageLayer()))
+              .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+          ),
+          Effect.provideService(ThreadStore, corruptStore),
+        );
 
-          // The original response still records the delegation kind; missing or contradictory
-          // preparation evidence must not erase that contract or authorize child admission.
-          expect(failureTag(result)).toBe("RunJournalError");
-          expect(yield* readLog(parent.threadId)).toEqual(before);
-          expect(yield* harness.childInvocations).toBe(0);
-        }
-      }),
+        const before = yield* readLog(parent.threadId);
+        const result = yield* Effect.exit(hostileRuntime.processThreadResolved(parent.threadId));
+
+        // A declaration contradicting the canonical child request cannot authorize admission.
+        expect(failureTag(result)).toBe("RunJournalError");
+        expect(yield* readLog(parent.threadId)).toEqual(before);
+        expect(yield* harness.childInvocations).toBe(0);
+      }
+    }),
   );
 
   it.effect(
@@ -944,7 +939,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         const harness = yield* makeHarness();
         const parent = yield* harness.submitParent("changed-delegation-binding", "parent");
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
         expect(failureTag(yield* Effect.exit(drive(harness)(parent.threadId)))).toBe(
           "DurableRuntimeFailpointError",
         );
@@ -1537,7 +1532,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         );
 
         originalRunId = runIdForSubmission(original.submissionId);
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
         expect(failureTag(yield* Effect.exit(runtime.processThreadHead(original.threadId)))).toBe(
           "DurableRuntimeFailpointError",
         );

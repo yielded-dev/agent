@@ -309,7 +309,7 @@ export const plannerDefinition = Agent.make("crash-planner", {
 
 // `readonly` is a deliberate P5 migration (plan §4.3): the crash matrix's search tool performs
 // no external mutation, so annotating it keeps the P4 rows' canonical record shape byte-stable —
-// an unannotated tool would fail closed to `uncertain` and gain `ToolCallPrepared` records.
+// an unannotated tool would fail closed to `uncertain` after its declaration commits.
 const Search = Tool.make("search", {
   parameters: Schema.Struct({ query: Schema.String }),
   success: Schema.Struct({ available: Schema.Boolean }),

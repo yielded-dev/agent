@@ -4,7 +4,7 @@ import { ThreadId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
 import {
   CanonicalSequence,
   SettlementOutcome,
-  ToolCallPrepared,
+  DeclaredToolCall,
   ToolCallUnknown,
 } from "./Records.ts";
 import {
@@ -91,10 +91,10 @@ export class ExplainedEvidence extends Schema.Class<ExplainedEvidence>(
   inputRecorded: Schema.Boolean,
   abortRecorded: Schema.Boolean,
   recordedSettlementOutcome: Schema.optionalKey(SettlementOutcome),
-  /** Prepared ordinary Tool Calls without a canonical outcome (DUR-009). */
+  /** Declared ordinary Tool Calls without a canonical outcome (DUR-009). */
   openToolCalls: Schema.Array(OpenToolCallEvidence),
-  /** Original prepared operation identities, arguments and recovery contracts; settled calls are excluded. */
-  pendingOperations: Schema.Array(ToolCallPrepared).pipe(
+  /** Original declared operation identities, arguments and recovery contracts; settled calls are excluded. */
+  pendingOperations: Schema.Array(DeclaredToolCall).pipe(
     Schema.withConstructorDefault(Effect.succeed([])),
   ),
   /** Delegation Tool Calls with an open parent-side obligation. */
@@ -165,7 +165,7 @@ export const RECOVERY_DECISION_MEANINGS: Readonly<Record<RecoveryDecision["_tag"
   SettleAborted:
     "A durable abort intent exists with no reserved outcome and no open attached-child obligation: recovery settles aborted, first recording ToolCallUnknown audits for open ordinary calls — abort never asserts external rollback (durability §13).",
   MarkUnknown:
-    "Prepared ordinary Tool Calls have no canonical outcome: recovery reconciles each open call and marks the remainder Unknown — never an automatic replay (DUR-009/DUR-017).",
+    "Declared ordinary Tool Calls have no canonical outcome: recovery reconciles each open call and marks the remainder Unknown — never an automatic replay (DUR-009/DUR-017).",
   ResumePendingToolBatch:
     "A committed tool-declaring response has zero prepared and zero settled records: a claiming worker checks unfinished operation contracts and resumes the declared batch without model re-invocation (durability §15).",
   AwaitApprovalDecision:

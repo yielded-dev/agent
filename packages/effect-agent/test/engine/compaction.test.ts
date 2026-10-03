@@ -204,7 +204,7 @@ const driveRun = (setup: RunSetup) =>
         ? undefined
         : {
             commitResponse: () => Effect.void,
-            prepareToolCalls: () => Effect.void,
+            checkToolDispatch: Effect.void,
             step: {
               lookup: () => Effect.succeed(Option.none()),
               commit: () => Effect.void,

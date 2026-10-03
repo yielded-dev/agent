@@ -344,7 +344,7 @@ const makeUnknownLane = (thread: string, key: string) =>
       submitOptions(thread, key),
     );
 
-    yield* armFailpoint("tools:after-prepared-append");
+    yield* armFailpoint("tools:after-dispatch-fence");
 
     const killed = yield* Effect.exit(
       runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(bookToolLayer)),

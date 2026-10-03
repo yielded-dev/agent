@@ -68,6 +68,7 @@ import {
   type TurnId,
 } from "../../core/Identifiers.ts";
 import { IdGenerator } from "../../core/IdGenerator.ts";
+import { copyJson } from "../../core/internal/json.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import {
@@ -668,11 +669,13 @@ interface TurnTrace {
   providerStagedPayloadBytes: number;
   /** Turn completion held with provider results so malformed trailing parts append neither. */
   turnCompletion: { readonly finishReason: Response.FinishReason } | undefined;
-  readonly applicationToolCalls: Array<Response.ToolCallPart<string, unknown>>;
+  readonly applicationToolCalls: Array<Response.ToolCallPart<string, Schema.Json>>;
   /** Fresh validation failures retained independently of executable parameters. */
   readonly toolParameterRejections: Map<string, ToolParameterRejection>;
   /** Durable-hook view of the application calls, in declaration order (encoded parameters). */
-  readonly applicationCallDescriptors: Array<RunToolCallDescriptor>;
+  readonly applicationCallDescriptors: Array<
+    RunToolCallDescriptor & { readonly parameters: Schema.Json }
+  >;
   readonly applicationToolResults: Array<{
     readonly toolSelection?: Selection | undefined;
     readonly id: string;
@@ -1074,7 +1077,7 @@ type PartLifecycle = "open" | "closed";
 type ToolUnion<Tools extends Record<string, Tool.Any>> = Tools[keyof Tools];
 
 interface PreparedToolCall<Tools extends Record<string, Tool.Any>> {
-  readonly call: Response.ToolCallPart<string, unknown>;
+  readonly call: Response.ToolCallPart<string, Schema.Json>;
   readonly name: keyof Tools & string;
   readonly toolCallId: ToolCallId;
   readonly validation: Result.Result<Tool.Parameters<ToolUnion<Tools>>, ToolParameterRejection>;
@@ -1214,7 +1217,7 @@ const decodeToolCallParameters = <Tools extends Record<string, Tool.Any>>(
  */
 const prepareToolCall = <Tools extends Record<string, Tool.Any>>(
   toolkit: Toolkit.WithHandler<Tools>,
-  call: Response.ToolCallPart<string, unknown>,
+  call: Response.ToolCallPart<string, Schema.Json>,
   declarationIndex: number,
   rejection?: ToolParameterRejection,
 ): Effect.Effect<
@@ -1236,7 +1239,9 @@ const prepareToolCall = <Tools extends Record<string, Tool.Any>>(
 
     const validation: PreparedToolCall<Tools>["validation"] =
       rejection === undefined
-        ? Result.succeed(yield* decodeToolCallParameters<Tools>(tool, call.name, call.params))
+        ? Result.succeed(
+            yield* decodeToolCallParameters<Tools>(tool, call.name, copyJson(call.params)),
+          )
         : Result.fail(rejection);
 
     return { call, name, toolCallId, validation, tool, declarationIndex };
@@ -1466,7 +1471,7 @@ const decodeResumeUsage = Effect.fn("AgentRuntime.decodeResumeUsage")((input: un
 const makeToolFailedEvent = Effect.fn("AgentRuntime.makeToolFailedEvent")(function* (
   context: RunContext,
   turnId: TurnId,
-  call: Response.ToolCallPart<string, unknown>,
+  call: Response.ToolCallPart<string, Schema.Json>,
   error: unknown,
   failureHandling: "propagated" | "returned-to-model",
   budgetRejected?: true,
@@ -1632,7 +1637,7 @@ const approvalDecision = <Tools extends Record<string, Tool.Any>, Error, Require
       readonly decision: RunApprovalDecision;
     },
   Error | ModelProtocolError,
-  Requirements
+  Requirements | Tool.HandlerServices<ToolUnion<Tools>>
 > =>
   Effect.gen(function* () {
     if (Result.isFailure(prepared.validation)) return { required: false } as const;
@@ -1646,13 +1651,73 @@ const approvalDecision = <Tools extends Record<string, Tool.Any>, Error, Require
 
     const required =
       typeof approval === "function"
-        ? yield* Effect.suspend(() => {
+        ? yield* Effect.gen(function* () {
+            // Approval callbacks own their view; mutating it must not rewrite official history.
+            const history = yield* Schema.encodeEffect(Prompt.Prompt)(context.history).pipe(
+              Effect.flatMap((encoded) =>
+                Effect.try({
+                  try: () => {
+                    if (typeof structuredCloneFunction !== "function") {
+                      throw new TypeError("structuredClone is unavailable");
+                    }
+
+                    const clone = (value: unknown): unknown =>
+                      Reflect.apply(structuredCloneFunction, globalThis, [value]);
+
+                    const validateJson = Schema.decodeUnknownSync(Schema.Json);
+
+                    return {
+                      content: encoded.content.map((message) => ({
+                        ...message,
+                        options: clone(message.options),
+                        content:
+                          typeof message.content === "string"
+                            ? message.content
+                            : message.content.map((part) => {
+                                // Native Prompt permits Unknown here; approval history requires JSON.
+                                if (part.type === "tool-call") validateJson(part.params);
+                                else if (part.type === "tool-result") validateJson(part.result);
+
+                                return part.type !== "file"
+                                  ? clone(part)
+                                  : {
+                                      ...part,
+                                      options: clone(part.options),
+                                      data:
+                                        typeof part.data === "string"
+                                          ? part.data
+                                          : part.data instanceof Uint8Array
+                                            ? new Uint8Array(part.data)
+                                            : Schema.decodeSync(Schema.URLFromString)(
+                                                part.data.href,
+                                              ),
+                                    };
+                              }),
+                      })),
+                    };
+                  },
+                  catch: (cause) =>
+                    ModelProtocolError.make({
+                      message: `Could not copy Tool approval history: ${errorMessage(cause)}`,
+                    }),
+                }),
+              ),
+              Effect.flatMap(Schema.decodeUnknownEffect(Prompt.Prompt)),
+              Effect.mapError((cause) =>
+                cause._tag === "ModelProtocolError"
+                  ? cause
+                  : ModelProtocolError.make({
+                      message: `Could not snapshot Tool approval history: ${cause.message}`,
+                    }),
+              ),
+            );
+
             const result = approval(decodedParams, {
               toolCallId: prepared.call.id,
-              messages: context.history.content,
+              messages: history.content,
             });
 
-            return Effect.isEffect(result) ? result : Effect.succeed(result);
+            return yield* Effect.isEffect(result) ? result : Effect.succeed(result);
           })
         : approval;
 
@@ -1677,6 +1742,15 @@ const approvalDecision = <Tools extends Record<string, Tool.Any>, Error, Require
     }
     const toolCallId = yield* decodeToolCallId(prepared.call.id);
 
+    const parameters =
+      typeof approval === "function"
+        ? yield* decodeToolCallParameters<Tools>(
+            prepared.tool,
+            prepared.call.name,
+            copyJson(prepared.call.params),
+          )
+        : decodedParams;
+
     const decision = yield* options.approval.request({
       request,
       threadId: context.threadId,
@@ -1684,7 +1758,7 @@ const approvalDecision = <Tools extends Record<string, Tool.Any>, Error, Require
       turnId,
       toolCallId,
       toolName: prepared.call.name,
-      parameters: decodedParams,
+      parameters,
     });
 
     return {
@@ -1707,7 +1781,7 @@ const preflightApproval = <Tools extends Record<string, Tool.Any>, HookError, Ho
 ): Stream.Stream<
   RunEvent,
   HookError | ModelProtocolError | AgentApprovalDenied | AgentApprovalPending,
-  HookRequirements
+  HookRequirements | Tool.HandlerServices<ToolUnion<Tools>>
 > =>
   Stream.unwrap(
     approvalDecision(context, turnId, prepared, options).pipe(
@@ -1779,7 +1853,7 @@ const preflightApproval = <Tools extends Record<string, Tool.Any>, HookError, Ho
   );
 
 /**
- * Recheck host-owned Tool authority after approval and before durable preparation or scheduling.
+ * Recheck host-owned Tool authority after approval and before the durable dispatch fence or scheduling.
  * Every call in the executable batch is authorized in declaration order before ANY Handler may
  * start, so a later denial leaves this Attempt's complete batch at zero application side effects.
  */
@@ -1787,7 +1861,7 @@ const preflightToolAuthorization = <HookError, HookRequirements>(
   context: RunContext,
   turnId: TurnId,
   turn: number,
-  call: RunToolCallDescriptor,
+  call: RunToolCallDescriptor & { readonly parameters: Schema.Json },
   options: RunOptions<HookError, HookRequirements>,
   annotations: Context.Context<never>,
 ): Stream.Stream<
@@ -1821,7 +1895,7 @@ const preflightToolAuthorization = <HookError, HookRequirements>(
         turnId,
         turn,
         input: context.input,
-        call,
+        call: { ...call, parameters: copyJson(call.parameters) },
       })
       .pipe(
         Effect.map((decision) => {
@@ -2156,7 +2230,7 @@ const executePreparedToolCall = <Tools extends Record<string, Tool.Any>>(
   > = rejection === undefined
     ? Stream.unwrap(
         Effect.flatMap(ToolSpanTelemetry, ({ isolateToolkitHandle }) =>
-          isolateToolkitHandle(handle.call(toolkit, prepared.name, call.params, call.id)),
+          isolateToolkitHandle(handle.call(toolkit, prepared.name, copyJson(call.params), call.id)),
         ),
       )
     : Stream.fromEffect(
@@ -2431,7 +2505,7 @@ const executeToolBatch = <Tools extends Record<string, Tool.Any>, HookError, Hoo
   turnId: TurnId,
   turn: number,
   toolkit: Toolkit.WithHandler<Tools>,
-  calls: ReadonlyArray<Response.ToolCallPart<string, unknown>>,
+  calls: ReadonlyArray<Response.ToolCallPart<string, Schema.Json>>,
   trace: TurnTrace,
   concurrency: number,
   options: RunOptions<HookError, HookRequirements>,
@@ -2447,7 +2521,7 @@ const executeToolBatch = <Tools extends Record<string, Tool.Any>, HookError, Hoo
   /**
    * Call IDs already settled canonically (batch-resume seam). Their recorded
    * results were injected into the trace by the caller; approval preflight
-   * and durable preparation still cover them, but no handler starts.
+   * and the dispatch fence cover only unfinished calls.
    */
   settledCallIds?: ReadonlySet<string>,
 ): Stream.Stream<
@@ -2519,7 +2593,7 @@ const executeToolBatch = <Tools extends Record<string, Tool.Any>, HookError, Hoo
         Stream.Stream<
           RunEvent,
           HookError | ModelProtocolError | AgentApprovalDenied | AgentApprovalPending,
-          HookRequirements
+          HookRequirements | Tool.HandlerServices<ToolUnion<Tools>>
         >
       >(
         (stream, call) =>
@@ -2574,26 +2648,15 @@ const executeToolBatch = <Tools extends Record<string, Tool.Any>, HookError, Hoo
         Stream.empty,
       );
 
-      // Durable preparation runs strictly after every approval resolved
-      // approved and before any handler acquires a permit. Ordinary `readonly`
-      // calls need no uncertainty protocol. Delegations always prepare their
-      // classification, including a caller-annotated readonly delegation.
-      // A resumed batch replays the identical full
-      // descriptor list so the prepared batch identity stays stable.
-      const preparation: Stream.Stream<never, HookError, HookRequirements> =
-        durability === undefined
+      // The response already records uncertainty. Recheck its writer fence after effectful
+      // preflight and before any unfinished mutating/delegation handler acquires a permit.
+      const dispatchFence: Stream.Stream<never, HookError, HookRequirements> =
+        durability === undefined ||
+        !executableDescriptors.some(
+          (call) => call.executionClass !== "readonly" || call.executionKind !== "ordinary",
+        )
           ? Stream.empty
-          : Stream.fromEffect(
-              Effect.suspend(() => {
-                const preparedDescriptors = descriptors.filter(
-                  (call) => call.executionClass !== "readonly" || call.executionKind !== "ordinary",
-                );
-
-                return preparedDescriptors.length === 0
-                  ? Effect.void
-                  : durability.prepareToolCalls(preparedDescriptors);
-              }),
-            ).pipe(Stream.drain);
+          : Stream.fromEffect(durability.checkToolDispatch).pipe(Stream.drain);
 
       // Each executable call gets its own locally provided `DurableStep`,
       // bound to that call's identity: durable over the coordinator's step
@@ -2959,7 +3022,7 @@ const executeToolBatch = <Tools extends Record<string, Tool.Any>, HookError, Hoo
 
       return approvalPreflight.pipe(
         Stream.concat(authorizationPreflight),
-        Stream.concat(preparation),
+        Stream.concat(dispatchFence),
         Stream.concat(settled),
       );
     }),
@@ -4969,11 +5032,13 @@ const eventsForPart = Effect.fnUntraced(function* <Tools extends Record<string, 
         providerExecuted: part.providerExecuted,
       });
       if (!part.providerExecuted) {
-        trace.applicationToolCalls.push(canonicalCall);
+        const executionParameters = copyJson(parameters);
+
+        trace.applicationToolCalls.push({ ...canonicalCall, params: executionParameters });
         trace.applicationCallDescriptors.push({
           toolCallId,
           toolName: part.name,
-          parameters,
+          parameters: executionParameters,
           executionClass: getToolExecutionClass(tool),
           executionKind: getToolExecutionKind(tool.annotations),
         });
@@ -4984,7 +5049,7 @@ const eventsForPart = Effect.fnUntraced(function* <Tools extends Record<string, 
         turnId,
         toolCallId,
         toolName: part.name,
-        parameters,
+        parameters: copyJson(parameters),
         providerExecuted: part.providerExecuted,
       });
 
@@ -7155,8 +7220,8 @@ const makeTurn = <
 
                 if (options.durability !== undefined) {
                   // Turn-response commit seam: staged canonical response events are emitted before
-                  // this persistence mutation, while approval preflight and preparation still run
-                  // afterward. This retains durability §15's provably-safe resume window without
+                  // this persistence mutation, while approval preflight and the dispatch fence still run
+                  // afterward. This retains durability §15's canonical recovery boundary without
                   // allowing eager continuation work to overtake the append-only event stream.
                   yield* options.durability.commitResponse({
                     turn,
@@ -7444,7 +7509,7 @@ const toolBatchContinuation = <
           selectedOutput = yield* projectCompletionFromToolOutput(
             agent,
             actionCompletion,
-            call.parameters,
+            copyJson(call.parameters),
             successfulResult.encodedResult,
           );
         } else if (completion !== undefined) {
@@ -7452,7 +7517,7 @@ const toolBatchContinuation = <
             yield* projectCompletionOutput(
               agent,
               completion,
-              call.parameters,
+              copyJson(call.parameters),
               successfulResult.encodedResult,
             ),
           );
@@ -7525,7 +7590,7 @@ const toolBatchContinuation = <
  * Only unfinished calls are validated through their current parameter Schemas before
  * execution. Settled siblings retain bounded canonical JSON without looking up old Tools.
  * The original response and declaration order remain intact; approval, authorization and
- * durable preparation cover only calls that can still execute.
+ * the durable dispatch fence cover only calls that can still execute.
  * No model request is made and no usage is consumed for the resumed Turn.
  */
 const makeResumeTurn = <
@@ -7710,10 +7775,11 @@ const makeResumeTurn = <
         const tool = tools[call.name] as ToolUnion<Tools>;
         const toolCallId = yield* decodeToolCallId(call.id);
 
-        if (!recordedSettledIds.has(call.id)) {
-          yield* decodeToolCallParameters<Tools>(tool, call.name, call.params, "resume");
-        }
         const parameters = yield* decodeEventJson(call.params, "Tool parameters");
+
+        if (!recordedSettledIds.has(call.id)) {
+          yield* decodeToolCallParameters<Tools>(tool, call.name, copyJson(parameters), "resume");
+        }
         const providerExecuted = call.providerExecuted === true;
 
         declarationByCallId.set(call.id, {
@@ -7731,14 +7797,17 @@ const makeResumeTurn = <
         );
         trace.toolCalls.set(call.id, { name: call.name, providerExecuted });
         if (providerExecuted) continue;
-        trace.applicationToolCalls.push(
-          Response.makePart("tool-call", {
+        const executionParameters = copyJson(parameters);
+
+        trace.applicationToolCalls.push({
+          ...Response.makePart("tool-call", {
             id: call.id,
             name: call.name,
-            params: parameters,
+            params: executionParameters,
             providerExecuted: false,
           }),
-        );
+          params: executionParameters,
+        });
         if (
           (!recordedSettledIds.has(call.id) || resume.settledCompletion === call.id) &&
           hasTool(tools, call.name)
@@ -7746,7 +7815,7 @@ const makeResumeTurn = <
           trace.applicationCallDescriptors.push({
             toolCallId,
             toolName: call.name,
-            parameters,
+            parameters: executionParameters,
             executionClass: getToolExecutionClass(tool),
             executionKind: getToolExecutionKind(tool.annotations),
           });

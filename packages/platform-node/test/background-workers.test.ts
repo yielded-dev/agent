@@ -16,7 +16,7 @@ import {
   IdempotencyKey,
   Principal,
 } from "@yielded/agent/submission-ledger";
-import { readOutstanding, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadReader, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { AssignmentDisposition, WorkerError, type WorkerSummary } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
 import {
@@ -449,12 +449,18 @@ it.effect(
         yield* Deferred.succeed(pay, undefined);
         expect(payments).toBe(0);
 
-        const outstanding = yield* readOutstanding({
-          threadId: start.worker.threadId,
-          limit: 10,
-        }).pipe(Effect.provide(first));
+        const interruptedLog = yield* Context.get(first, ThreadReader).export(
+          ThreadExportRequest.make({ threadId: start.worker.threadId }),
+        );
 
-        expect(outstanding.operations).toHaveLength(1);
+        expect(
+          interruptedLog.records.flatMap(({ record }) =>
+            record.payload._tag === "ModelResponseRecorded" ? record.payload.toolOperations : [],
+          ),
+        ).toHaveLength(1);
+        expect(
+          interruptedLog.records.some(({ record }) => record.payload._tag === "ToolCallSettled"),
+        ).toBe(false);
         yield* Scope.close(firstScope, Exit.void);
 
         const second = yield* Layer.build(
@@ -491,11 +497,21 @@ it.effect(
           ),
         ).toMatchObject({ status: "refused", reason: "worker-stopped" });
         expect(payments).toBe(0);
+
+        const recoveredLog = yield* Context.get(second, ThreadReader).export(
+          ThreadExportRequest.make({ threadId: start.worker.threadId }),
+        );
+
         expect(
-          (yield* readOutstanding({ threadId: start.worker.threadId, limit: 10 }).pipe(
-            Effect.provide(second),
-          )).operations,
-        ).toHaveLength(1);
+          recoveredLog.records.some(({ record }) => record.payload._tag === "ToolCallSettled"),
+        ).toBe(false);
+        expect(
+          recoveredLog.records.some(
+            ({ record }) =>
+              record.payload._tag === "WorkerInputCompleted" &&
+              record.payload.effectsResolved === true,
+          ),
+        ).toBe(false);
 
         // The Main lane remains independently usable.
         const main = yield* reopened.submitRegistered(
@@ -905,8 +921,10 @@ it.effect(
           ),
         );
         expect(
-          payloads.filter(
-            (payload) => payload._tag === "ToolCallPrepared" && payload.toolCallId === consentId,
+          payloads.flatMap((payload) =>
+            payload._tag === "ModelResponseRecorded"
+              ? payload.toolOperations.filter((operation) => operation.toolCallId === consentId)
+              : [],
           ),
         ).toHaveLength(1);
         expect(payloads.filter((payload) => payload._tag === "RunStarted")).toHaveLength(2);

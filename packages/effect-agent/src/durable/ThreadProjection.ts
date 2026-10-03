@@ -15,17 +15,17 @@ import {
   SubmissionSettledRecord,
   ToolApprovalDecided,
   ToolApprovalRequested,
-  ToolCallPrepared,
+  DeclaredToolCall,
   ToolCallUnknown,
 } from "./Records.ts";
 
-/** One prepared ordinary Tool Call still awaiting a canonical settled/resolved outcome. */
+/** One declared application Tool Call still awaiting a canonical settled/resolved outcome. */
 export class OpenToolCallState extends Schema.Class<OpenToolCallState>(
   "@effect-agent/thread/OpenToolCallState",
 )({
   toolCallId: ToolCallId,
-  toolName: ToolCallPrepared.fields.toolName,
-  turn: ToolCallPrepared.fields.turn,
+  toolName: DeclaredToolCall.fields.toolName,
+  turn: DeclaredToolCall.fields.turn,
   runId: RunId,
 }) {}
 
@@ -53,21 +53,15 @@ export class SubagentInvocationState extends Schema.Class<SubagentInvocationStat
  * Rebuildable canonical projection. It contains only canonical values and can be discarded and
  * reconstructed from the record stream at any time.
  *
- * Phase 4 added `settlements` and `abortRequests`; Phase 5 added `openToolCalls` (the
- * prepared-minus-settled/resolved fold), `unknownToolCalls`, and `approvals`; S2 adds
- * `subagentInvocations` (the parent-side requested/started/joined fold) and `parentLink` (the
- * child-side immutable lineage). A checkpoint whose persisted state lacks these fields fails to
- * decode against this schema; callers must reject the checkpoint and rebuild the projection from
- * canonical records (documented disposable-checkpoint behavior, STORE-007/STORE-008).
- * Version 2 scopes Tool identities by Run. Earlier projections must rebuild, including empty
- * invocation views that may have already lost an earlier Run's unresolved Tool evidence.
- * `ModelResponseRecorded` advances `throughSequence` without dedicated projection state: Prompt
- * reconstruction reads canonical records directly.
+ * Open Tool Calls derive from committed model declarations and close on canonical settlement or
+ * resolution. Approval and subagent state are views of the same log. Version 3 uses declaration
+ * ownership; older checkpoints must be discarded and rebuilt from current canonical records.
+ * Prompt reconstruction reads the canonical response messages directly.
  */
 export class ThreadProjection extends Schema.Class<ThreadProjection>(
   "@effect-agent/thread/ThreadProjection",
 )({
-  schemaVersion: Schema.Literal(2),
+  schemaVersion: Schema.Literal(3),
   threadId: ThreadId,
   throughSequence: CanonicalSequence,
   tailDigest: Digest,
@@ -86,7 +80,7 @@ export class ThreadProjection extends Schema.Class<ThreadProjection>(
 
 export const initialThreadProjection = (threadId: ThreadId): ThreadProjection =>
   ThreadProjection.make({
-    schemaVersion: 2,
+    schemaVersion: 3,
     threadId,
     throughSequence: Schema.decodeSync(CanonicalSequence)(0),
     tailDigest: EMPTY_TAIL_DIGEST,
@@ -177,24 +171,28 @@ export const reduceThreadRecord = (
       ? [...projection.abortRequests, payload]
       : projection.abortRequests;
 
-  // `ToolCallPrepared` opens a call; `ToolCallSettled` (results batch or late settle) and
-  // `ToolCallResolved` (DUR-017) close it. `ToolCallUnknown` does NOT close it: the call stays
-  // open until an authorized resolution or a recovered result arrives.
+  // Declarations open calls, including blocked approvals. Only canonical closure removes them.
   const openToolCalls =
-    payload._tag === "ToolCallPrepared"
-      ? projection.openToolCalls.some(
-          (call) => call.runId === payload.runId && call.toolCallId === payload.toolCallId,
-        )
-        ? projection.openToolCalls
-        : [
-            ...projection.openToolCalls,
-            OpenToolCallState.make({
-              toolCallId: payload.toolCallId,
-              toolName: payload.toolName,
-              turn: payload.turn,
-              runId: payload.runId,
-            }),
-          ]
+    payload._tag === "ModelResponseRecorded"
+      ? [
+          ...projection.openToolCalls,
+          ...payload.toolOperations
+            .filter(
+              (operation) =>
+                !projection.openToolCalls.some(
+                  (call) =>
+                    call.runId === payload.runId && call.toolCallId === operation.toolCallId,
+                ),
+            )
+            .map((operation) =>
+              OpenToolCallState.make({
+                toolCallId: operation.toolCallId,
+                toolName: operation.toolName,
+                turn: payload.turn,
+                runId: payload.runId,
+              }),
+            ),
+        ]
       : payload._tag === "ToolCallSettled" || payload._tag === "ToolCallResolved"
         ? projection.openToolCalls.filter(
             (call) => call.runId !== payload.runId || call.toolCallId !== payload.toolCallId,
@@ -223,7 +221,7 @@ export const reduceThreadRecord = (
     projection.parentLink ?? (payload._tag === "SubagentLineageRecorded" ? payload : undefined);
 
   return ThreadProjection.make({
-    schemaVersion: 2,
+    schemaVersion: 3,
     threadId: projection.threadId,
     throughSequence: envelope.sequence,
     tailDigest,

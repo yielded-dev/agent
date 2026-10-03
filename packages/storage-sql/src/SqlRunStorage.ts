@@ -478,6 +478,22 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
         ),
       );
 
+    const checkFence = bind(
+      gate.withPermits(1)(
+        Effect.suspend(() =>
+          owned.closed
+            ? Effect.fail(
+                FenceRejected.make({
+                  threadId: claimedThreadId,
+                  attemptedEpoch: owned.epoch,
+                  actualEpoch: authority.thread.producer_epoch,
+                }),
+              )
+            : Effect.void,
+        ),
+      ),
+    );
+
     const session: RunStorageSession = {
       claim: claimed,
       threadId: claimedThreadId,
@@ -488,21 +504,8 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       append,
       release,
       renew,
-      refresh: bind(
-        gate.withPermits(1)(
-          Effect.suspend(() =>
-            owned.closed
-              ? Effect.fail(
-                  FenceRejected.make({
-                    threadId: claimedThreadId,
-                    attemptedEpoch: owned.epoch,
-                    actualEpoch: authority.thread.producer_epoch,
-                  }),
-                )
-              : Effect.void,
-          ),
-        ),
-      ),
+      checkFence,
+      refresh: checkFence,
       maintain: (interval: Duration.Duration) =>
         bind(
           Effect.forever(

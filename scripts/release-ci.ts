@@ -588,7 +588,6 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
   });
 
   yield* checkCurrent;
-  yield* readMetadata(root, revisions.base, revisions.head);
 
   const workflow = yield* get("actions/workflows/ci.yml", Workflow);
 
@@ -616,12 +615,6 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
   );
 
   yield* verifyEvidence(revisions.base, workflow.id, run, jobs);
-  const refreshed = yield* get(`actions/runs/${run.id}`, Run);
-
-  yield* requireProof(
-    JSON.stringify(refreshed) === JSON.stringify(run),
-    "CI attempt changed during proof",
-  );
   let buildRun: typeof Run.Type | undefined;
 
   if (merged) {
@@ -644,6 +637,17 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
     );
 
     yield* verifyBuildEvidence(revisions.head, workflow.id, buildRun, buildJobs, "pull_request");
+  }
+  // Reject unavailable CI evidence before reading metadata, then recheck mutable evidence
+  // after the Git reads so a changed attempt or PR cannot authorize reuse.
+  yield* readMetadata(root, revisions.base, revisions.head);
+  const refreshed = yield* get(`actions/runs/${run.id}`, Run);
+
+  yield* requireProof(
+    JSON.stringify(refreshed) === JSON.stringify(run),
+    "CI attempt changed during proof",
+  );
+  if (buildRun !== undefined) {
     yield* requireProof(
       JSON.stringify(yield* get(`actions/runs/${buildRun.id}`, Run)) === JSON.stringify(buildRun),
       "Build attempt changed during proof",

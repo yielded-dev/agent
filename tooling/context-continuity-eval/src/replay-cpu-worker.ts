@@ -394,6 +394,7 @@ const application = Layer.unwrap(
                 );
 
                 payload = ModelResponseRecorded.make({
+                  toolOperations: [],
                   runId,
                   turnId: TurnId.make(`seed-turn-${index}`),
                   turn: 1,

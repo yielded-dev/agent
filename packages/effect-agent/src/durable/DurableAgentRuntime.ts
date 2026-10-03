@@ -49,6 +49,7 @@ import {
   type TurnId,
 } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
+import { copyJson } from "../core/internal/json.ts";
 import { Receipt } from "../core/Receipt.ts";
 import { type ExhaustedLimit, type RunEvent } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
@@ -166,6 +167,11 @@ import {
 import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
+import {
+  initialDispatchBlockedTurns,
+  toolOperationStates,
+  unresolvedToolOperations,
+} from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
 import { WorkerRuntime } from "./internal/worker-runtime.ts";
 import { MessageDeliveryStore } from "./MessageDelivery.ts";
@@ -205,7 +211,7 @@ import {
   SubmissionSettledRecord,
   ToolApprovalDecided,
   ToolApprovalRequested,
-  ToolCallPrepared,
+  DeclaredToolCall,
   ToolOperation,
   ToolUnavailable,
   RunPolicyUsageReserved,
@@ -262,7 +268,6 @@ import {
   subagentStartedRecordId,
   toolApprovalDecisionRecordId,
   toolApprovalRequestRecordId,
-  toolCallPreparedRecordId,
   toolCallResolutionBatchId,
   toolCallResolvedRecordId,
   toolCallResultBatchId,
@@ -273,7 +278,6 @@ import {
   turnApprovalsBatchId,
   turnCanonicalBatch,
   turnIdForRun,
-  turnPreparedBatchId,
   turnResponseBatch,
   turnResultsBatch,
 } from "./RunJournal.ts";
@@ -368,7 +372,7 @@ import {
   ThreadReader,
   getRunInput,
 } from "./ThreadStore.ts";
-import { PreparedToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
+import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
 import { WakeScheduler } from "./WakeScheduler.ts";
 import { WorkerAdmissionPort, WorkerAdmissionRequest } from "./WorkerAdmission.ts";
 
@@ -491,8 +495,8 @@ interface SubagentCallRecords {
   readonly requested: Map<ToolCallId, SubagentRequested>;
   readonly started: Map<ToolCallId, SubagentStarted>;
   readonly joined: Map<ToolCallId, SubagentJoined>;
-  /** Declared Tool name per prepared call (delegation joins reuse it for `ToolCallSettled`). */
-  readonly preparedNames: Map<ToolCallId, string>;
+  /** Declared Tool name per application call (delegation joins reuse it for `ToolCallSettled`). */
+  readonly declaredNames: Map<ToolCallId, string>;
 }
 
 /** Pure fold of one Run's canonical subagent lifecycle records (plan §1.2). */
@@ -503,7 +507,7 @@ const subagentRecordsOf = (
   const requested = new Map<ToolCallId, SubagentRequested>();
   const started = new Map<ToolCallId, SubagentStarted>();
   const joined = new Map<ToolCallId, SubagentJoined>();
-  const preparedNames = new Map<ToolCallId, string>();
+  const declaredNames = new Map<ToolCallId, string>();
 
   for (const envelope of records) {
     const payload = envelope.record.payload;
@@ -521,8 +525,10 @@ const subagentRecordsOf = (
         if (payload.runId === runId) joined.set(payload.toolCallId, payload);
         break;
       }
-      case "ToolCallPrepared": {
-        if (payload.runId === runId) preparedNames.set(payload.toolCallId, payload.toolName);
+      case "ModelResponseRecorded": {
+        if (payload.runId === runId)
+          for (const operation of payload.toolOperations)
+            declaredNames.set(operation.toolCallId, operation.toolName);
         break;
       }
       default: {
@@ -531,7 +537,7 @@ const subagentRecordsOf = (
     }
   }
 
-  return { requested, started, joined, preparedNames };
+  return { requested, started, joined, declaredNames };
 };
 
 /** Joined reports are canonical snapshots, keyed by child Run so replay cannot double charge. */
@@ -1138,7 +1144,7 @@ interface DeclaredToolCalls {
 
 /**
  * Pure inspection of every Tool Call declared in one canonical response. Provider-executed calls
- * retain their terminal results, while only application calls enter the durable prepared/settled
+ * retain their terminal results, while only application calls enter the durable declaration/settlement
  * protocol and completion singleton invariant.
  */
 const declaredToolCalls = (
@@ -1205,14 +1211,6 @@ const declaredToolCalls = (
     ),
   );
 
-/** Application calls alone drive durable preparation, settlement, and batch resume. */
-const declaredApplicationCalls = (
-  messages: PersistedJson,
-): Effect.Effect<Array<DeclaredApplicationCall>, RunJournalError> =>
-  Effect.suspend(() =>
-    declaredToolCalls(messages).pipe(Effect.map(({ application }) => application)),
-  );
-
 /**
  * The declared-but-unsettled Tool batch of one Run's last committed Turn (§2.4 batch resume):
  * every declared call in canonical encoded form plus the recorded results of the calls that
@@ -1220,7 +1218,7 @@ const declaredApplicationCalls = (
  * path). `undefined` when the Run's journal ends at a complete Turn boundary.
  */
 interface PendingToolBatch {
-  readonly toolOperations?: ReadonlyArray<ToolOperation> | undefined;
+  readonly toolOperations: ReadonlyArray<ToolOperation>;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
   readonly turn: number;
@@ -1250,7 +1248,7 @@ interface AttemptLineage {
   readonly inputWasRecorded: boolean;
 }
 
-/** Review of one Submission's open (prepared-without-outcome) ordinary Tool Calls (DUR-009). */
+/** Review of one Submission's open (declared-without-outcome) ordinary Tool Calls (DUR-009). */
 interface OpenCallReview {
   /** No proof either way: these calls must become Unknown Outcomes (never auto-replayed). */
   readonly uncertain: Array<OpenToolCallEvidence>;
@@ -1367,7 +1365,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       record: { payload },
     } of records) {
       if (payload._tag !== "ModelResponseRecorded" || payload.runId !== runId) continue;
-      for (const operation of payload.toolOperations ?? [])
+      for (const operation of payload.toolOperations)
         operations.set(operation.toolCallId, operation);
     }
 
@@ -1375,10 +1373,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   };
 
   const supportsOperation = (
-    submission: SubmissionSnapshot,
     call: OpenToolCallEvidence,
     operation: ToolOperation | undefined,
-    prepared: ToolCallPrepared | undefined,
     current:
       | {
           readonly definition: Agent.AnyDefinition;
@@ -1388,22 +1384,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   ): boolean => {
     const tool = current?.definition.toolkit.tools[call.toolName];
 
-    const replay =
-      operation?.replay ?? prepared?.replay ?? submission.agentDigests.replay?.tools[call.toolName];
-
     return (
       tool !== undefined &&
-      replay !== undefined &&
-      current?.contracts[call.toolName] === replay &&
-      (operation === undefined ||
-        (operation.toolName === call.toolName &&
-          operation.executionClass === getToolExecutionClass(tool) &&
-          operation.executionKind === getToolExecutionKind(tool.annotations))) &&
-      (prepared === undefined ||
-        (prepared.toolName === call.toolName &&
-          (prepared.executionClass === undefined ||
-            prepared.executionClass === getToolExecutionClass(tool)) &&
-          (prepared.executionKind ?? "ordinary") === getToolExecutionKind(tool.annotations)))
+      operation !== undefined &&
+      current?.contracts[call.toolName] === operation.replay &&
+      operation.toolName === call.toolName &&
+      operation.executionClass === getToolExecutionClass(tool) &&
+      operation.executionKind === getToolExecutionKind(tool.annotations)
     );
   };
 
@@ -2125,12 +2112,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /**
-   * Fold structured recovery evidence from canonical records (plan §2.2). Canonical history is
-   * the only recovery truth (DUR-015): open Tool Calls are `ToolCallPrepared` without a closing
-   * `ToolCallSettled`/`ToolCallResolved`, a declared-pending batch is a committed tool-declaring
-   * response with zero prepared and zero settled records for its Turn (the provably-safe
-   * durability §15 window), approvals pend until a canonical decision exists, and joined-side
-   * prompt coverage requires a host `ModelResponseRecorded` after the joined `input:{sid}` record.
+   * Fold canonical declaration and closure evidence. Unsettled ordinary effects are uncertain
+   * unless canonical parameter rejection or a whole-batch approval blocker proves no dispatch.
+   * Original operation contracts classify idempotent delegation and orchestration recovery.
    */
   const evidenceFor = Effect.fnUntraced(function* (
     records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -2157,12 +2141,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     let recordedSettlementOutcome: SettlementOutcome | undefined;
     let hostSettlementOutcome: SettlementOutcome | undefined;
     let hostRespondedAfterInput = false;
-    const prepared: Array<OpenToolCallEvidence> = [];
-    const preparedKinds = new Map<RecordId, ToolCallPrepared["executionKind"]>();
-    const preparedTurns = new Set<number>();
-    const settledIds = new Set<string>();
-    const resolvedIds = new Set<string>();
     const unknownIds = new Set<string>();
+    const declarationIds = new Set<string>();
+    const responseTurns = new Set<number>();
     const requested: Array<PendingApprovalEvidence> = [];
     const decidedIds = new Set<string>();
 
@@ -2200,41 +2181,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         continue;
       }
       switch (payload._tag) {
-        case "ToolCallPrepared": {
-          if (payload.runId !== runId) break;
-          const identity = toolCallPreparedRecordId(runId, payload.turn, payload.toolCallId);
-
-          if (preparedKinds.has(identity)) {
-            return yield* RunJournalError.make({
-              message: "Duplicate canonical Tool preparation evidence",
-            });
-          }
-          preparedKinds.set(identity, payload.executionKind);
-          prepared.push(
-            OpenToolCallEvidence.make({
-              toolCallId: payload.toolCallId,
-              toolName: payload.toolName,
-              turn: payload.turn,
-            }),
-          );
-          preparedTurns.add(payload.turn);
-          break;
-        }
-        case "ToolCallSettled": {
-          if (payload.runId === runId) settledIds.add(payload.toolCallId);
-          break;
-        }
         case "ToolCallUnknown": {
           if (payload.runId === runId) unknownIds.add(payload.toolCallId);
-          break;
-        }
-        case "ToolCallResolved": {
-          if (
-            payload.runId === runId &&
-            (payload.resolution === "completed-with-result" ||
-              payload.resolution === "failed-with-error")
-          )
-            resolvedIds.add(payload.toolCallId);
           break;
         }
         case "ToolApprovalRequested": {
@@ -2256,6 +2204,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           break;
         }
         case "ModelResponseRecorded": {
+          if (payload.runId === runId) {
+            if (
+              responseTurns.has(payload.turn) ||
+              recordId !== modelResponseRecordId(runId, payload.turn) ||
+              payload.turnId !== turnIdForRun(runId, payload.turn)
+            )
+              return yield* RunJournalError.make({
+                message: "Tool declaration has no unique original response",
+              });
+            responseTurns.add(payload.turn);
+            for (const operation of payload.toolOperations) {
+              if (declarationIds.has(operation.toolCallId))
+                return yield* RunJournalError.make({
+                  message: "Tool Call identity is reused within a Run",
+                });
+              declarationIds.add(operation.toolCallId);
+            }
+          }
           if (
             payload.runId === runId &&
             (lastResponse === undefined || payload.turn > lastResponse.turn)
@@ -2282,20 +2248,31 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       }
     }
 
-    const allOpenCalls = prepared.filter(
-      (call) => !settledIds.has(call.toolCallId) && !resolvedIds.has(call.toolCallId),
+    const operationStates = toolOperationStates(records, runId);
+    const operations = operationsFor(records, runId);
+
+    for (const toolCallId of unknownIds)
+      if (!operations.has(toolCallId))
+        return yield* RunJournalError.make({
+          message: "Unknown Tool call has no original declaration",
+        });
+
+    const allOpenCalls = unresolvedToolOperations(records, runId).map((state) =>
+      OpenToolCallEvidence.make({
+        toolCallId: state.operation.toolCallId,
+        toolName: state.operation.toolName,
+        turn: state.turn,
+      }),
     );
 
-    // Only canonical classification authorizes the idempotent establishment protocol.
-    // A lifecycle record cannot silently upgrade an ordinary or unclassified preparation.
+    // Only the original response's operation contract authorizes idempotent establishment.
     const subagent = subagentRecordsOf(records, runId);
 
-    const isPreparedDelegation = (call: OpenToolCallEvidence): boolean =>
-      preparedKinds.get(toolCallPreparedRecordId(runId, call.turn, call.toolCallId)) ===
-      "delegation";
+    const isDeclaredDelegation = (call: OpenToolCallEvidence): boolean =>
+      operations.get(call.toolCallId)?.executionKind === "delegation";
 
     const openByCallId = new Map(
-      allOpenCalls.filter(isPreparedDelegation).map((call) => [call.toolCallId, call]),
+      allOpenCalls.filter(isDeclaredDelegation).map((call) => [call.toolCallId, call]),
     );
 
     const delegationCallIds: Array<ToolCallId> = [];
@@ -2313,22 +2290,20 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     for (const toolCallId of delegationCallIds) {
       const request = subagent.requested.get(toolCallId);
 
-      if (
-        request === undefined ||
-        preparedKinds.get(toolCallPreparedRecordId(runId, request.turn, toolCallId)) !==
-          "delegation"
-      ) {
+      if (request === undefined || operations.get(toolCallId)?.executionKind !== "delegation") {
         return yield* RunJournalError.make({
-          message: "Subagent evidence conflicts with Tool preparation classification",
+          message: "Subagent evidence conflicts with original Tool classification",
         });
       }
     }
     for (const call of allOpenCalls) {
-      if (isPreparedDelegation(call)) noteDelegation(call.toolCallId);
+      if (isDeclaredDelegation(call)) noteDelegation(call.toolCallId);
     }
     const openDelegationCalls: Array<OpenDelegationCallEvidence> = [];
 
     for (const toolCallId of delegationCallIds) {
+      // Explicit uncertainty must reach ordinary reconciliation, even for a framework call.
+      if (unknownIds.has(toolCallId)) continue;
       const open = openByCallId.get(toolCallId);
       const requestedRecord = subagent.requested.get(toolCallId);
       const startedRecord = subagent.started.get(toolCallId);
@@ -2370,7 +2345,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           toolCallId,
           toolName:
             open?.toolName ??
-            subagent.preparedNames.get(toolCallId) ??
+            subagent.declaredNames.get(toolCallId) ??
             requestedRecord?.delegationId ??
             "delegate_unknown",
           turn: open?.turn ?? requestedRecord?.turn ?? 1,
@@ -2384,30 +2359,30 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
     }
 
-    const isPreparedWorker = (call: OpenToolCallEvidence): boolean =>
-      preparedKinds.get(toolCallPreparedRecordId(runId, call.turn, call.toolCallId)) ===
-      "orchestration";
+    const isDeclaredWorker = (call: OpenToolCallEvidence): boolean =>
+      operations.get(call.toolCallId)?.executionKind === "orchestration";
 
     const openWorkerCalls = allOpenCalls.filter(
-      (call) => isPreparedWorker(call) && !unknownIds.has(call.toolCallId),
+      (call) => isDeclaredWorker(call) && !unknownIds.has(call.toolCallId),
     );
 
     const openToolCalls = allOpenCalls.filter(
       (call) =>
-        unknownIds.has(call.toolCallId) || (!isPreparedDelegation(call) && !isPreparedWorker(call)),
+        unknownIds.has(call.toolCallId) || (!isDeclaredDelegation(call) && !isDeclaredWorker(call)),
     );
 
     let declaredPendingBatch: DeclaredPendingBatchEvidence | undefined;
 
-    if (lastResponse !== undefined && !preparedTurns.has(lastResponse.turn)) {
-      const declared = yield* declaredApplicationCalls(lastResponse.messages);
+    if (lastResponse !== undefined) {
+      const pending = operationStates.filter(
+        (state) => state.turn === lastResponse.turn && !state.settled,
+      );
 
-      if (declared.length > 0 && !declared.some((call) => settledIds.has(call.id))) {
+      if (pending.length > 0)
         declaredPendingBatch = DeclaredPendingBatchEvidence.make({
           turn: lastResponse.turn,
-          callCount: declared.length,
+          callCount: pending.length,
         });
-      }
     }
     const approvalsPending = requested.filter((pending) => !decidedIds.has(pending.toolCallId));
 
@@ -2427,51 +2402,91 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     });
   });
 
-  /** Verify immutable preparation against the original declaration before any recovery side effect. */
-  const validatePreparedCall = Effect.fnUntraced(function* (
-    prepared: ToolCallPrepared,
-    declared: Effect.Success<ReturnType<typeof declaredToolCalls>>,
-    operations: ReadonlyArray<ToolOperation> | undefined,
+  /** Validate all original declarations before any reconciliation callback can observe them. */
+  const declaredCallsFor = Effect.fnUntraced(function* (
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    runId: RunId,
   ) {
-    const call = declared.application.find((call) => call.id === prepared.toolCallId);
+    const calls = new Map<string, DeclaredToolCall>();
+    const turns = new Set<number>();
 
-    if (call === undefined || prepared.toolName !== call.name)
-      return yield* RunJournalError.make({
-        message: `Prepared Tool ${prepared.toolCallId} differs from its original declaration`,
-      });
+    for (const { record } of records) {
+      const response = record.payload;
 
-    const parameters = yield* decodePersisted(call.params).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Invalid canonical Tool parameters", cause }),
-      ),
-    );
+      if (response._tag !== "ModelResponseRecorded" || response.runId !== runId) continue;
+      if (
+        turns.has(response.turn) ||
+        record.recordId !== modelResponseRecordId(runId, response.turn) ||
+        response.turnId !== turnIdForRun(runId, response.turn)
+      )
+        return yield* RunJournalError.make({
+          message: "Tool declaration has no unique original response",
+        });
+      turns.add(response.turn);
 
-    const declarationDigest = yield* withCrypto(digestJson(parameters)).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Cannot verify declared Tool parameters", cause }),
-      ),
-    );
+      const messagesDigest = yield* withCrypto(digestJson(response.messages)).pipe(
+        Effect.mapError((cause) =>
+          RunJournalError.make({ message: "Cannot verify original Tool response", cause }),
+        ),
+      );
 
-    const preparedDigest = yield* withCrypto(digestJson(prepared.parameters)).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Cannot verify prepared Tool parameters", cause }),
-      ),
-    );
+      if (messagesDigest !== response.messagesDigest)
+        return yield* RunJournalError.make({
+          message: "Original Tool response has an invalid digest",
+        });
+      const declared = yield* declaredToolCalls(response.messages);
+      const identities = new Set<string>();
 
-    const operation = operations?.find((entry) => entry.toolCallId === prepared.toolCallId);
+      for (const operation of response.toolOperations) {
+        const matches = declared.application.filter(
+          (call) => call.id === operation.toolCallId && call.name === operation.toolName,
+        );
 
-    if (
-      prepared.parametersDigest !== declarationDigest ||
-      preparedDigest !== declarationDigest ||
-      (operation !== undefined &&
-        ((prepared.executionClass !== undefined &&
-          prepared.executionClass !== operation.executionClass) ||
-          (prepared.executionKind ?? "ordinary") !== operation.executionKind ||
-          (prepared.replay !== undefined && prepared.replay !== operation.replay)))
-    )
-      return yield* RunJournalError.make({
-        message: `Prepared Tool ${prepared.toolCallId} differs from its original operation`,
-      });
+        const call = matches[0];
+
+        if (
+          call === undefined ||
+          matches.length !== 1 ||
+          identities.has(operation.toolCallId) ||
+          calls.has(operation.toolCallId)
+        )
+          return yield* RunJournalError.make({
+            message: "Operation evidence differs from the original declaration",
+          });
+        identities.add(operation.toolCallId);
+
+        const parameters = yield* decodePersisted(call.params).pipe(
+          Effect.map(copyJson),
+          Effect.mapError((cause) =>
+            RunJournalError.make({ message: "Invalid canonical Tool parameters", cause }),
+          ),
+        );
+
+        const parametersDigest = yield* withCrypto(digestJson(parameters)).pipe(
+          Effect.mapError((cause) =>
+            RunJournalError.make({ message: "Cannot verify declared Tool parameters", cause }),
+          ),
+        );
+
+        calls.set(
+          operation.toolCallId,
+          DeclaredToolCall.make({
+            ...operation,
+            runId,
+            turnId: response.turnId,
+            turn: response.turn,
+            parameters,
+            parametersDigest,
+          }),
+        );
+      }
+      if (identities.size !== declared.application.length)
+        return yield* RunJournalError.make({
+          message: "Declared Tool batch has incomplete operation evidence",
+        });
+    }
+
+    return calls;
   });
 
   /**
@@ -2489,7 +2504,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       | {
           readonly turn: number;
           readonly messages: PersistedJson;
-          readonly toolOperations?: ReadonlyArray<ToolOperation> | undefined;
+          readonly toolOperations: ReadonlyArray<ToolOperation>;
           readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
           readonly toolExposure?: Snapshot | undefined;
         }
@@ -2540,38 +2555,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     if (declared.application.length === 0) return undefined;
     const calls = declared.all;
 
-    if (lastResponse.toolOperations !== undefined) {
-      const identities = new Set<string>();
+    const identities = new Set<string>();
 
-      for (const operation of lastResponse.toolOperations) {
-        if (
-          identities.has(operation.toolCallId) ||
-          !declared.application.some(
-            (call) => call.id === operation.toolCallId && call.name === operation.toolName,
-          )
-        )
-          return yield* RunJournalError.make({
-            message: "Operation evidence differs from the declared Tool batch",
-          });
-        identities.add(operation.toolCallId);
-      }
-      if (identities.size !== declared.application.length)
-        return yield* RunJournalError.make({
-          message: "Declared Tool batch has incomplete operation evidence",
-        });
-    }
-
-    for (const {
-      record: { payload },
-    } of records) {
+    for (const operation of lastResponse.toolOperations) {
       if (
-        payload._tag !== "ToolCallPrepared" ||
-        payload.runId !== runId ||
-        payload.turn !== lastResponse.turn
+        identities.has(operation.toolCallId) ||
+        !declared.application.some(
+          (call) => call.id === operation.toolCallId && call.name === operation.toolName,
+        )
       )
-        continue;
-      yield* validatePreparedCall(payload, declared, lastResponse.toolOperations);
+        return yield* RunJournalError.make({
+          message: "Operation evidence differs from the declared Tool batch",
+        });
+      identities.add(operation.toolCallId);
     }
+    if (identities.size !== declared.application.length)
+      return yield* RunJournalError.make({
+        message: "Declared Tool batch has incomplete operation evidence",
+      });
 
     for (const part of declared.providerResults) {
       const result = yield* decodePersisted(part.result).pipe(
@@ -2911,66 +2912,19 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
     yield* pendingToolBatchFor(records, runId);
     const operations = operationsFor(records, runId);
-    const preparedByCallId = new Map<string, ToolCallPrepared>();
+    const declaredByCallId = yield* declaredCallsFor(records, runId);
 
-    for (const { record } of records) {
-      const payload = record.payload;
-
-      if (
-        payload._tag === "ToolCallPrepared" &&
-        payload.runId === runId &&
-        openCalls.some(
-          (call) => call.toolCallId === payload.toolCallId && call.turn === payload.turn,
-        )
-      ) {
-        if (
-          preparedByCallId.has(payload.toolCallId) ||
-          record.recordId !== toolCallPreparedRecordId(runId, payload.turn, payload.toolCallId)
-        )
-          return yield* RunJournalError.make({
-            message: `Prepared Tool ${payload.toolCallId} has inconsistent canonical identity`,
-          });
-        preparedByCallId.set(payload.toolCallId, payload);
-      }
-    }
-    // Validate all open declarations before the first reconciler call. A missing response or
-    // a damaged turn number must never bypass the original parameters/identity checks.
     for (const call of openCalls) {
-      const prepared = preparedByCallId.get(call.toolCallId);
-
-      const responses = records.filter(
-        ({ record }) =>
-          record.payload._tag === "ModelResponseRecorded" &&
-          record.payload.runId === runId &&
-          record.payload.turn === call.turn,
-      );
-
-      const response = responses[0]?.record;
+      const declared = declaredByCallId.get(call.toolCallId);
 
       if (
-        prepared === undefined ||
-        prepared.turn !== call.turn ||
-        prepared.toolName !== call.toolName ||
-        responses.length !== 1 ||
-        response?.payload._tag !== "ModelResponseRecorded" ||
-        response.recordId !== modelResponseRecordId(runId, call.turn) ||
-        response.payload.turnId !== turnIdForRun(runId, call.turn)
+        declared === undefined ||
+        declared.turn !== call.turn ||
+        declared.toolName !== call.toolName
       )
         return yield* RunJournalError.make({
-          message: `Prepared Tool ${call.toolCallId} has no unique original response`,
+          message: `Tool ${call.toolCallId} has no unique original declaration`,
         });
-      if (
-        (yield* withCrypto(digestJson(response.payload.messages))) !==
-        response.payload.messagesDigest
-      )
-        return yield* RunJournalError.make({
-          message: `Original response for Tool ${call.toolCallId} has an invalid digest`,
-        });
-      yield* validatePreparedCall(
-        prepared,
-        yield* declaredToolCalls(response.payload.messages),
-        response.payload.toolOperations,
-      );
     }
 
     const intents = new Map(
@@ -2981,10 +2935,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     let recovered = 0;
 
     for (const call of openCalls) {
-      const prepared = preparedByCallId.get(call.toolCallId);
+      const declared = declaredByCallId.get(call.toolCallId);
       const operation = operations.get(call.toolCallId);
 
-      const supported = supportsOperation(submission, call, operation, prepared, current);
+      const supported = supportsOperation(call, operation, current);
 
       const intent = intents.get(call.toolCallId);
       const author = intent?.author ?? RECONCILER_AUTHOR;
@@ -3057,10 +3011,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       }
       const tool = current?.definition.toolkit.tools[call.toolName];
 
-      if (
-        current === undefined &&
-        (operation?.executionClass ?? prepared?.executionClass) === "idempotent"
-      ) {
+      if (current === undefined && operation?.executionClass === "idempotent") {
         review.unproven.push(call);
         continue;
       }
@@ -3068,29 +3019,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         review.retryable.push(call);
         continue;
       }
-      if (prepared === undefined) {
+      if (declared === undefined) {
         review.unproven.push(call);
         continue;
       }
 
       const reconciled = yield* reconciler
         .reconcile(
-          PreparedToolCallEvidence.make({
+          DeclaredToolCallEvidence.make({
             threadId: submission.threadId,
             submissionId,
-            runId,
-            turn: prepared.turn,
-            toolCallId: prepared.toolCallId,
-            toolName: prepared.toolName,
-            parameters: prepared.parameters,
-            parametersDigest: prepared.parametersDigest,
-            ...(prepared.executionKind === undefined
-              ? {}
-              : { executionKind: prepared.executionKind }),
-            ...(prepared.executionClass === undefined
-              ? {}
-              : { executionClass: prepared.executionClass }),
-            ...(prepared.replay === undefined ? {} : { replay: prepared.replay }),
+            ...declared,
           }),
         )
         .pipe(
@@ -4242,7 +4181,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         reason === "unavailable"
           ? {
               _tag: "ToolUnavailable",
-              toolName: subagent.preparedNames.get(toolCallId) ?? request.delegationId,
+              toolName: subagent.declaredNames.get(toolCallId) ?? request.delegationId,
               execution: "unavailable",
               message: `The original delegation implementation is unavailable. Its original child settled ${verified.outcome}; no replacement child was started.`,
             }
@@ -4285,7 +4224,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ToolCallSettled.make({
           runId,
           toolCallId,
-          toolName: subagent.preparedNames.get(toolCallId) ?? request.delegationId,
+          toolName: subagent.declaredNames.get(toolCallId) ?? request.delegationId,
           result: boundedResult,
           isFailure: true,
         }),
@@ -4426,7 +4365,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           pending === undefined ||
           call === undefined ||
           request === undefined ||
-          subagent.preparedNames.get(toolCallId) !== call.name ||
+          subagent.declaredNames.get(toolCallId) !== call.name ||
           request.delegationId !== call.name ||
           reservation.parentSubmissionId !== parent.submissionId ||
           request.reservationId !== reservation.reservationId ||
@@ -4880,7 +4819,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           let compaction: CanonicalRecordEnvelope | undefined;
           let latestResponse: CanonicalSequence | undefined;
           let firstSequence = journalSeed?.firstSequence;
-          const orchestrationCalls = new Set<string>();
+          const protectedCalls = new Set<string>();
+          const protectedTurns = new Set<number>();
+          const operationRecords: Array<CanonicalRecordEnvelope> = [];
 
           yield* Stream.runForEach(source, (entry) =>
             Effect.sync(() => {
@@ -4889,15 +4830,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               if (entry.record.recordId === compactionId) compaction = entry;
               if (!("runId" in payload) || payload.runId !== runId) return;
               firstSequence ??= entry.sequence;
-              if (payload._tag === "ModelResponseRecorded") latestResponse = entry.sequence;
-              if (
-                payload._tag === "ToolCallPrepared" &&
-                (payload.executionKind === "delegation" ||
-                  payload.executionKind === "orchestration")
-              )
-                orchestrationCalls.add(payload.toolCallId);
+              operationRecords.push(entry);
+              if (payload._tag === "ModelResponseRecorded") {
+                latestResponse = entry.sequence;
+                for (const operation of payload.toolOperations)
+                  if (
+                    operation.executionKind === "delegation" ||
+                    operation.executionKind === "orchestration"
+                  ) {
+                    protectedCalls.add(operation.toolCallId);
+                    protectedTurns.add(payload.turn);
+                  }
+              }
             }),
           );
+          for (const state of unresolvedToolOperations(operationRecords, runId)) {
+            protectedCalls.add(state.operation.toolCallId);
+            protectedTurns.add(state.turn);
+          }
           if (
             compaction === undefined ||
             compaction.record.payload._tag !== "CompactionCreated" ||
@@ -4945,6 +4895,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 );
 
           let frontier = journalSeed?.frontier;
+          const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
 
           const retained = yield* Stream.runCollect(
             source.pipe(
@@ -4961,11 +4912,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 )
                   return true;
                 if (!("runId" in payload) || payload.runId !== runId) return false;
-                if ("toolCallId" in payload && orchestrationCalls.has(payload.toolCallId))
-                  return true;
+                if ("toolCallId" in payload && protectedCalls.has(payload.toolCallId)) return true;
                 switch (payload._tag) {
                   case "ModelResponseRecorded":
-                  case "ToolCallPrepared":
+                    if (protectedTurns.has(payload.turn)) return true;
+                    for (const operation of payload.toolOperations)
+                      retiredToolCallIds.add(operation.toolCallId);
+
+                    return false;
                   case "ToolCallSettled":
                   case "ToolCallUnknown":
                   case "ToolCallResolved":
@@ -4998,6 +4952,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 submissionIds: [...ids],
                 seed: JournalCheckpointSeed.make({
                   runId,
+                  retiredToolCallIds: [...retiredToolCallIds],
                   throughSequence: retiredThrough,
                   ...(firstSequence === undefined ? {} : { firstSequence }),
                   committedTurns: retired.committedTurns,
@@ -5185,16 +5140,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         pending !== undefined &&
         completionCandidate !== undefined &&
         supportsOperation(
-          submission,
           OpenToolCallEvidence.make({
             toolCallId: Schema.decodeSync(ToolCallId)(completionCandidate.id),
             toolName: completionCandidate.name,
             turn: pending.turn,
           }),
-          pending.toolOperations?.find(
+          pending.toolOperations.find(
             (operation) => operation.toolCallId === completionCandidate.id,
           ),
-          undefined,
           { definition: agent.definition, contracts: currentContracts },
         )
           ? Schema.decodeSync(ToolCallId)(completionCandidate.id)
@@ -5635,7 +5588,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const encodedParamsByCallId = new Map<string, unknown>();
       // Declared Tool name per call: the subagent join/sibling-settle appends rebuild exact
       // `ToolCallSettled` records outside the engine's results commit, so the declared name must
-      // be recoverable per call id (seeded from canonical prepared records, the resumed batch,
+      // be recoverable per call id (seeded from canonical responses, the resumed batch,
       // and every `commitResponse`).
       const declaredNamesByCallId = new Map<string, string>();
       // Canonical subagent lifecycle state of this Run (SUB-016): seeded from canonical records,
@@ -5643,7 +5596,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       // identical establishment converges on the one existing child.
       const subagentState = subagentRecordsOf(records, runId);
 
-      for (const [callId, name] of subagentState.preparedNames) {
+      const declaredToolIds = new Set([
+        ...(journalSeed?.retiredToolCallIds ?? []),
+        ...subagentState.declaredNames.keys(),
+      ]);
+
+      for (const [callId, name] of subagentState.declaredNames) {
         declaredNamesByCallId.set(callId, name);
       }
       if (pending !== undefined) {
@@ -5687,6 +5645,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           );
         }
       }
+
+      // A canonical initial blocker proves no dispatch preceded this Attempt. Carry that
+      // proof across sequential approvals until the fence, as for a newly committed response.
+      // Resumption, retry permission and parameter rejection alone provide no such proof.
+      const initialDispatchProofTurns = new Set(initialDispatchBlockedTurns(records, runId));
 
       let currentToolTurn: { readonly turn: number; readonly turnId: TurnId } | undefined =
         pending === undefined ? undefined : { turn: pending.turn, turnId: pending.turnId };
@@ -5919,13 +5882,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const canonicalTurn = commit.turn;
 
               currentToolTurn = { turn: canonicalTurn, turnId: commit.turnId };
-              for (const call of commit.calls) {
-                encodedParamsByCallId.set(call.toolCallId, call.parameters);
-                declaredNamesByCallId.set(call.toolCallId, call.toolName);
-              }
               const responseId = modelResponseRecordId(runId, canonicalTurn);
 
               if (knownIds.has(responseId)) return;
+              for (const call of commit.calls)
+                if (declaredToolIds.has(call.toolCallId))
+                  return yield* RunJournalError.make({
+                    message: "Tool Call identity is reused within a Run",
+                  });
               const state = yield* Ref.get(stateRef);
               const history = state.history;
 
@@ -5969,77 +5933,29 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               );
 
               yield* appendBatch(ctx, batch);
+              for (const call of commit.calls) {
+                declaredToolIds.add(call.toolCallId);
+                encodedParamsByCallId.set(call.toolCallId, call.parameters);
+                declaredNamesByCallId.set(call.toolCallId, call.toolName);
+              }
+              initialDispatchProofTurns.add(canonicalTurn);
               recordCommittedUsage(batch);
               for (const record of batch.records) knownIds.add(record.recordId);
               yield* hit("turn:after-response-append");
             }),
           ),
-        prepareToolCalls: (calls) =>
-          recordHalt(
-            Effect.gen(function* () {
-              const first = calls[0];
-
-              if (first === undefined) return;
-              const turnInfo = currentToolTurn;
-
-              if (turnInfo === undefined) {
-                return yield* RunJournalError.make({
-                  message: "Tool Calls were prepared before any canonical response commit",
-                });
-              }
-              // The prepared batch is atomic: one canonical record implies all of them, so a
-              // batch-identity replay (resume) is skipped wholesale.
-              if (knownIds.has(toolCallPreparedRecordId(runId, turnInfo.turn, first.toolCallId))) {
-                return;
-              }
-              const preparedRecords: Array<RecordEnvelope> = [];
-
-              for (const call of calls) {
-                const parameters = yield* decodePersisted(call.parameters).pipe(
-                  Effect.mapError((cause) =>
-                    RunJournalError.make({
-                      message: `Tool Call ${call.toolCallId} parameters exceed canonical persistence bounds`,
-                      cause,
-                    }),
-                  ),
-                );
-
-                const parametersDigest = yield* withCrypto(digestJson(parameters));
-
-                preparedRecords.push(
-                  yield* makeEnvelope(
-                    toolCallPreparedRecordId(runId, turnInfo.turn, call.toolCallId),
-                    ToolCallPrepared.make({
-                      runId,
-                      turnId: turnInfo.turnId,
-                      turn: turnInfo.turn,
-                      toolCallId: call.toolCallId,
-                      toolName: call.toolName,
-                      parameters,
-                      parametersDigest,
-                      executionKind: call.executionKind,
-                      executionClass: call.executionClass,
-                      replay: currentContracts[call.toolName]!,
-                    }),
-                  ),
-                );
-              }
-              const head = preparedRecords[0];
-
-              if (head === undefined) return;
-              yield* hit("tools:before-prepared-append");
-              yield* appendBatch(
-                ctx,
-                CanonicalBatch.make({
-                  batchId: turnPreparedBatchId(runId, turnInfo.turn),
-                  producerId: config.producerId,
-                  records: [head, ...preparedRecords.slice(1)],
-                }),
-              );
-              for (const record of preparedRecords) knownIds.add(record.recordId);
-              yield* hit("tools:after-prepared-append");
-            }),
-          ),
+        checkToolDispatch: recordHalt(
+          Effect.gen(function* () {
+            if (currentToolTurn === undefined)
+              return yield* RunJournalError.make({
+                message: "Tool dispatch preceded its canonical response",
+              });
+            yield* hit("tools:before-dispatch-fence");
+            yield* ctx.checkFence;
+            initialDispatchProofTurns.delete(currentToolTurn.turn);
+            yield* hit("tools:after-dispatch-fence");
+          }),
+        ),
         step: {
           lookup: (key) =>
             Effect.sync(() => {
@@ -6304,7 +6220,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }),
       };
 
-      /** Digest of one declared call's canonical encoded parameters (same family as prepared). */
+      /** Digest of one declared call's canonical encoded parameters (the original normalized wire). */
       const approvalParametersDigest = (
         toolCallId: string,
       ): Effect.Effect<Digest, DurableWorkerFailure> =>
@@ -6363,6 +6279,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               yield* makeEnvelope(
                 requestRecordId,
                 ToolApprovalRequested.make({
+                  blocksInitialDispatch: initialDispatchProofTurns.has(turnInfo.turn),
                   runId,
                   turnId: turnInfo.turnId,
                   turn: turnInfo.turn,
@@ -7652,7 +7569,51 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             yield* hit("turn:after-results-append");
           }
         } else {
-          // No durable response commit: the P4 single-batch shape (no-tool Turns).
+          // No separate response commit: no-tool Turns and rejected application batches
+          // keep their response and synthetic settlements in one atomic append.
+          const toolOperations: Array<ToolOperation> = [];
+          const fallbackToolIds = new Set<ToolCallId>();
+
+          for (const message of appended) {
+            if (message.role !== "assistant") continue;
+            for (const part of message.content) {
+              if (part.type !== "tool-call" || part.providerExecuted) continue;
+
+              const toolCallId = yield* decodeToolCallIdUnknown(part.id).pipe(
+                Effect.mapError((cause) =>
+                  RunJournalError.make({
+                    message: "Rejected Tool declaration has an invalid identity",
+                    cause,
+                  }),
+                ),
+              );
+
+              if (declaredToolIds.has(toolCallId) || fallbackToolIds.has(toolCallId))
+                return yield* RunJournalError.make({
+                  message: "Tool Call identity is reused within a Run",
+                });
+              const tool = agent.definition.toolkit.tools[part.name];
+              const replay = currentContracts[part.name];
+
+              // The engine rejects unknown/unexposed names before retaining a declaration.
+              // Every application call reaching this atomic boundary has an original Tool.
+              if (tool === undefined || replay === undefined)
+                return yield* RunJournalError.make({
+                  message: "Canonical Tool declaration has no original operation contract",
+                });
+              toolOperations.push(
+                ToolOperation.make({
+                  toolCallId,
+                  toolName: part.name,
+                  executionClass: getToolExecutionClass(tool),
+                  executionKind: getToolExecutionKind(tool.annotations),
+                  replay,
+                }),
+              );
+              fallbackToolIds.add(toolCallId);
+            }
+          }
+
           const runScopedPrefixLength =
             canonicalTurn === 1
               ? appended.findIndex((message) => message.role === "assistant")
@@ -7660,6 +7621,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
           const batch = yield* withCrypto(
             turnCanonicalBatch({
+              toolOperations,
               toolExposure: stagedToolExposure.get(canonicalTurn),
               toolSelections: stagedToolSelections,
               budgetRejectedCalls,
@@ -7678,6 +7640,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           );
 
           yield* appendBatch(ctx, batch);
+          for (const toolCallId of fallbackToolIds) declaredToolIds.add(toolCallId);
           recordCommittedUsage(batch);
           for (const record of batch.records) knownIds.add(record.recordId);
           yield* hit("turn:after-canonical-append");
@@ -8431,7 +8394,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         expiredChildObligation = yield* completeJoinedReleases(submission);
       }
 
-      // Recheck after duration interruption too: that Attempt may have prepared new ordinary calls.
+      // Recheck after duration interruption too: that Attempt may have declared new ordinary calls.
       const ordinaryCallsResolved = Effect.gen(function* () {
         const reconciliationRecords = yield* refreshControl();
 
@@ -8506,29 +8469,28 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         const unsupported: Array<OpenToolCallEvidence> = [];
         const unavailableDelegations = new Set<ToolCallId>();
 
+        const operationStates = toolOperationStates(
+          continuationRecords,
+          runIdForSubmission(submissionId),
+        );
+
         for (const call of continuation.calls) {
-          const original = continuationRecords
-            .map(({ record }) => record.payload)
-            .find(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                payload.runId === runIdForSubmission(submissionId) &&
-                payload.toolCallId === call.id,
-            );
+          const operation = operations.get(call.id);
 
           if (
-            original?._tag === "ToolCallPrepared" &&
-            original.executionKind === "delegation" &&
+            operation?.executionKind === "delegation" &&
             !settled.has(call.id) &&
             !supportsOperation(
-              submission,
-              OpenToolCallEvidence.make(original),
-              operations.get(call.id),
-              original,
+              OpenToolCallEvidence.make({
+                toolCallId: operation.toolCallId,
+                toolName: operation.toolName,
+                turn: continuation.turn,
+              }),
+              operation,
               current,
             )
           )
-            unavailableDelegations.add(original.toolCallId);
+            unavailableDelegations.add(operation.toolCallId);
         }
 
         const children =
@@ -8554,32 +8516,25 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
           const operation = operations.get(call.id);
 
-          const prepared = continuationRecords
-            .map(({ record }) => record.payload)
-            .find(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                payload.runId === runIdForSubmission(submissionId) &&
-                payload.turn === continuation.turn &&
-                payload.toolCallId === call.id,
-            );
+          if (supportsOperation(evidence, operation, current)) continue;
 
-          const preparation = prepared?._tag === "ToolCallPrepared" ? prepared : undefined;
+          const blocked =
+            operationStates.find(
+              (state) =>
+                state.turn === continuation.turn &&
+                state.operation.toolCallId === evidence.toolCallId,
+            )?.dispatchBlocked === true;
 
-          if (supportsOperation(submission, evidence, operation, preparation, current)) continue;
-          if (preparation !== undefined && !children?.notExecuted.has(evidence.toolCallId)) {
+          const notExecuted = blocked || children?.notExecuted.has(evidence.toolCallId) === true;
+
+          const readonly =
+            operation?.executionClass === "readonly" && operation.executionKind === "ordinary";
+
+          if (!notExecuted && !readonly) {
             if (!unavailableDelegations.has(evidence.toolCallId)) unsupported.push(evidence);
             continue;
           }
-
-          // Mutating handlers cannot cross this protocol boundary without preparation.
-          // Readonly handlers may already have run; their unavailable result makes no nonexecution claim.
-          const execution =
-            children?.notExecuted.has(evidence.toolCallId) ||
-            (operation !== undefined &&
-              (operation.executionClass !== "readonly" || operation.executionKind !== "ordinary"))
-              ? "not-executed"
-              : "unavailable";
+          const execution = notExecuted ? "not-executed" : "unavailable";
 
           const result = yield* Schema.encodeEffect(ToolUnavailable)(
             ToolUnavailable.make({
@@ -8588,7 +8543,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               message:
                 execution === "not-executed"
                   ? "This operation was not executed and its original implementation is unavailable. Continue with the current tools."
-                  : "The original operation is unavailable. No mutating handler was dispatched; readonly work may have run without a recorded result.",
+                  : "The original readonly operation is unavailable and may have run without a recorded result.",
             }),
           ).pipe(Effect.flatMap(decodePersisted), Effect.orDie);
 
@@ -9420,30 +9375,22 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     const current = yield* currentOperationsFor(submission);
     const operations = operationsFor(records, runIdForSubmission(submission.submissionId));
 
-    for (const intent of snapshot.unknownResolutions) {
-      if (intent.resolution._tag === "SafeToRetry") {
-        const prepared = records
-          .map(({ record }) => record.payload)
-          .find(
-            (payload) =>
-              payload._tag === "ToolCallPrepared" &&
-              payload.runId === runIdForSubmission(submission.submissionId) &&
-              payload.toolCallId === intent.toolCallId,
-          );
+    const declared = yield* declaredCallsFor(records, runIdForSubmission(submission.submissionId));
 
-        if (
-          prepared?._tag !== "ToolCallPrepared" ||
-          (current !== undefined &&
-            !supportsOperation(
-              submission,
-              OpenToolCallEvidence.make(prepared),
-              operations.get(intent.toolCallId),
-              prepared,
-              current,
-            ))
-        )
-          return true;
-      }
+    for (const intent of snapshot.unknownResolutions) {
+      if (intent.resolution._tag !== "SafeToRetry") continue;
+      const original = declared.get(intent.toolCallId);
+
+      if (
+        original === undefined ||
+        (current !== undefined &&
+          !supportsOperation(
+            OpenToolCallEvidence.make(original),
+            operations.get(intent.toolCallId),
+            current,
+          ))
+      )
+        return true;
     }
 
     return false;
@@ -10961,6 +10908,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         }),
       );
     }
+    const declared = yield* declaredCallsFor(read.records, runId);
+
+    const pendingIds = new Set(
+      toolOperationStates(read.records, runId)
+        .filter((state) => !state.settled && !state.resolved)
+        .map((state) => state.operation.toolCallId),
+    );
+
     const row = snapshot.submission;
 
     return RecoveryExplanation.make({
@@ -10981,13 +10936,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         inputRecorded: evidence.inputRecorded,
         abortRecorded: evidence.abortRecorded,
         openToolCalls: evidence.openToolCalls,
-        pendingOperations: read.records.flatMap(({ record }) =>
-          record.payload._tag === "ToolCallPrepared" &&
-          record.payload.runId === runId &&
-          !resolvedIds.has(record.payload.toolCallId)
-            ? [record.payload]
-            : [],
-        ),
+        pendingOperations: [...declared.values()].filter((call) => pendingIds.has(call.toolCallId)),
         openDelegationCalls: evidence.openDelegationCalls,
         approvalsPending: evidence.approvalsPending,
         unknownCalls,
@@ -11465,7 +11414,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
  *   (`suspended → input-applied`) and the next Attempt resumes the declared batch without model
  *   re-invocation, appending the canonical `ToolApprovalDecided` before honoring the decision.
  * - `processThread(agent, threadId)` — drain one lane: fenced FIFO-head claims,
- *   canonical input apply, split response/prepared/results Turn commits (plan §2.1),
+ *   canonical input apply, split response/results Turn commits (plan §2.1),
  *   reconcile-then-mark for open ordinary Tool Calls (DUR-009, never an automatic replay),
  *   declared-batch resume without model re-invocation (§15), and terminalization. An active
  *   host Run claims the contiguous ready prefix of later queued Submissions at every safe Turn

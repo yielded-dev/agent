@@ -1,10 +1,6 @@
 import { Schema } from "effect";
 
 export const SqlStorageFailpointLocation = Schema.Literals([
-  "upgrade:before-mutation",
-  "upgrade:after-mutation",
-  "upgrade:before-version",
-  "upgrade:after-version",
   "materialize:before",
   "materialize:after",
   "append:before",

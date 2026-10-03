@@ -61,11 +61,9 @@ interface StoredBatch {
 
 interface StoredThread {
   readonly peerCount: number;
-  readonly unverifiedWorkerInputs: ReadonlySet<string>;
   readonly workerRecords: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
   readonly byId: ReadonlyMap<string, CanonicalRecordEnvelope>;
   readonly runInputs: ReadonlyMap<string, CanonicalRecordEnvelope | null>;
-  readonly outstanding: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
   readonly producerEpoch: ProducerEpoch;
   readonly tailSequence: CanonicalSequence;
   readonly tailDigest: Digest;
@@ -239,12 +237,10 @@ const makeThreadStore = Effect.gen(function* () {
             producerEpoch: request.producerEpoch,
             tailSequence: ZERO_CANONICAL_SEQUENCE,
             tailDigest: EMPTY_TAIL_DIGEST,
-            unverifiedWorkerInputs: new Set(),
             byId: new Map(),
             workerRecords: new Map(),
             peerCount: 0,
             runInputs: new Map(),
-            outstanding: new Map(),
             records: [],
             recordIds: new Set(),
             batches: new Map(),
@@ -411,12 +407,10 @@ const makeThreadStore = Effect.gen(function* () {
             tailDigests.set(lastSequence, digest);
             const threads = new Map(current.threads);
 
-            const unverifiedWorkerInputs = new Set(thread.unverifiedWorkerInputs);
             let peerCount = thread.peerCount;
             const workerRecords = new Map(thread.workerRecords);
             const byId = new Map(thread.byId);
             const runInputs = new Map(thread.runInputs);
-            const outstanding = new Map(thread.outstanding);
 
             for (const entry of records) {
               byId.set(entry.record.recordId, entry);
@@ -454,35 +448,6 @@ const makeThreadStore = Effect.gen(function* () {
                 payload.runId !== undefined
               )
                 runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
-              if (
-                payload._tag === "ToolCallPrepared" ||
-                payload._tag === "ToolCallUnknown" ||
-                payload._tag === "ToolCallSettled"
-              ) {
-                const key = JSON.stringify([payload.runId, payload.toolCallId]);
-
-                if (payload._tag === "ToolCallSettled") outstanding.delete(key);
-                else
-                  outstanding.set(key, [
-                    ...(outstanding.get(key) ?? []).filter(
-                      (prior) =>
-                        payload._tag !== "ToolCallUnknown" ||
-                        prior.record.payload._tag !== "ToolCallPrepared",
-                    ),
-                    entry,
-                  ]);
-              }
-              if (payload._tag === "WorkerInputRequested")
-                outstanding.set(`worker:${payload.admission.messageId}`, [
-                  ...(outstanding.get(`worker:${payload.admission.messageId}`) ?? []),
-                  entry,
-                ]);
-              if (payload._tag === "WorkerInputCompleted") {
-                if (payload.effectsResolved) {
-                  outstanding.delete(`worker:${payload.messageId}`);
-                  unverifiedWorkerInputs.delete(payload.messageId);
-                } else unverifiedWorkerInputs.add(payload.messageId);
-              }
             }
             threads.set(request.threadId, {
               ...thread,
@@ -490,8 +455,6 @@ const makeThreadStore = Effect.gen(function* () {
               workerRecords,
               peerCount,
               runInputs,
-              outstanding,
-              unverifiedWorkerInputs,
               tailSequence: lastSequence,
               tailDigest: digest,
               records: [...thread.records, ...records],
@@ -569,11 +532,6 @@ const makeThreadStore = Effect.gen(function* () {
               records = input === undefined ? [] : [input];
               break;
             }
-            case "Outstanding":
-              if (thread.unverifiedWorkerInputs.size > 0)
-                return yield* storeError("selected read", "Unverified worker acknowledgement");
-              records = [...thread.outstanding.values()].flat();
-              break;
             case "WorkerExecution":
               records = ["UserInputRecorded", "RunStarted"].flatMap(
                 (tag) => thread.workerRecords.get(`execution:${tag}`) ?? [],

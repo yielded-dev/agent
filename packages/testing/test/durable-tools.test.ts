@@ -30,7 +30,7 @@ import {
 import {
   promptFromCanonicalRecords,
   runIdForSubmission,
-  toolCallPreparedRecordId,
+  modelResponseRecordId,
 } from "@yielded/agent/run-journal";
 import {
   RunContextPreparation,
@@ -58,7 +58,7 @@ import { DiscoveryTool, RunToolVisibility } from "@yielded/agent/tool-exposure";
 import {
   ReconciliationUncertain,
   ToolReconciler,
-  type PreparedToolCallEvidence,
+  type DeclaredToolCallEvidence,
   type ReconciliationDecision,
 } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -220,7 +220,7 @@ class ReconcilerTestControl extends Context.Service<
   ReconcilerTestControl,
   {
     readonly set: (
-      decide: (evidence: PreparedToolCallEvidence) => ReconciliationDecision,
+      decide: (evidence: DeclaredToolCallEvidence) => ReconciliationDecision,
     ) => Effect.Effect<void>;
     readonly reset: Effect.Effect<void>;
     readonly consultations: Effect.Effect<number>;
@@ -233,7 +233,7 @@ const uncertainDefault = (): ReconciliationDecision =>
 const reconcilerTestLayer = Layer.effectContext(
   Effect.gen(function* () {
     const handler =
-      yield* Ref.make<(evidence: PreparedToolCallEvidence) => ReconciliationDecision>(
+      yield* Ref.make<(evidence: DeclaredToolCallEvidence) => ReconciliationDecision>(
         uncertainDefault,
       );
 
@@ -399,7 +399,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
     const location = "turn:after-response-append" as const;
 
     it.effect(
-      `recovers strict native argument rejection after ${location} without replaying actions`,
+      `retains argument rejection and requires sibling nonexecution proof after ${location}`,
       () =>
         Effect.gen(function* () {
           yield* resetReconciler;
@@ -491,6 +491,24 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           yield* clearFailpoint;
           yield* runtime.runRecovery();
 
+          const uncertain = yield* runtime
+            .processThread(agent, receipt.threadId)
+            .pipe(Effect.provide(handlers));
+
+          expect(uncertain).toEqual([]);
+          expect(actions).toBe(0);
+          expect(searches).toEqual([]);
+          expect(yield* lookupState(receipt.submissionId)).toBe("unknown");
+          yield* runtime.resolveUnknown(
+            UnknownResolutionCommand.make({
+              submissionId: receipt.submissionId,
+              toolCallId: decodeToolCallId("action"),
+              author: "operator",
+              reason: "The retained action counter confirms dispatch never started",
+              resolution: ResolutionNeverHappened.make(),
+            }),
+          );
+
           const completed = yield* runtime
             .processThread(agent, receipt.threadId)
             .pipe(Effect.provide(handlers));
@@ -506,12 +524,12 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           const records = yield* readLog(thread);
 
           expect(
-            records
-              .filter(({ record }) => record.payload._tag === "ToolCallPrepared")
-              .map(({ record }) =>
-                record.payload._tag === "ToolCallPrepared" ? record.payload.toolCallId : "",
-              ),
-          ).toEqual(["action", "corrected"]);
+            records.flatMap(({ record }) =>
+              record.payload._tag === "ModelResponseRecorded"
+                ? record.payload.toolOperations.map((operation) => operation.toolCallId)
+                : [],
+            ),
+          ).toEqual(["invalid", "action", "corrected"]);
           const prompt = yield* promptFromCanonicalRecords(records);
 
           const failures = prompt.content
@@ -541,7 +559,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
   {
     const location = "turn:after-results-append" as const;
 
-    it.effect(`does not inherit a prior Turn's reused call ID after ${location}`, () =>
+    it.effect(`rejects a prior Turn's reused call ID before dispatch after ${location}`, () =>
       Effect.gen(function* () {
         yield* clearFailpoint;
         const runtime = yield* DurableAgentRuntime;
@@ -629,7 +647,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const control = yield* DurableRuntimeFailpointTestControl;
 
         yield* control.setHandler((currentLocation) =>
-          currentLocation === location && ++commits === 3
+          currentLocation === location && ++commits === 2
             ? Effect.fail(DurableRuntimeFailpointError.make({ location }))
             : Effect.void,
         );
@@ -641,17 +659,16 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         expect(failureTag(interrupted)).toBe("DurableRuntimeFailpointError");
         yield* clearFailpoint;
 
-        const settled = yield* runtime
+        const resumed = yield* runtime
           .processThread(agent, decodeThreadId(thread))
-          .pipe(Effect.provide(handlers));
+          .pipe(Effect.provide(handlers), Effect.exit);
 
-        expect(settled[0]?.outcome).toBe("completed");
+        expect(failureTag(resumed)).toBe("RunJournalError");
         expect(searchCalls).toBe(2);
-        expect(actionCalls).toBe(1);
+        expect(actionCalls).toBe(0);
         expect(requests).toEqual([
           ["discover"],
           ["discover", "first_action"],
-          ["discover", "last_action"],
           ["discover", "last_action"],
         ]);
         const records = yield* readLog(thread);
@@ -662,7 +679,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
             entry.record.payload.toolName === "last_action",
         );
 
-        expect(actionResult?.record.payload).not.toHaveProperty("toolSelection");
+        expect(actionResult).toBeUndefined();
       }),
     );
   }
@@ -1152,7 +1169,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           submitOptions(threadId, "replacement"),
         );
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
 
         const interrupted = yield* runtime
           .processThread(replacement, threadId)
@@ -1338,7 +1355,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
         // The replacement declares canonical Turn 2 from engine-local Turn 1, authorizes it, and
         // dies after preparation. Its following Attempt resumes that exact durable batch.
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
 
         const turnTwoInterrupted = yield* Effect.exit(
           runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
@@ -1351,15 +1368,11 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
         const runId = runIdForSubmission(receipt.submissionId);
 
-        const targetPreparedId = toolCallPreparedRecordId(
-          runId,
-          2,
-          decodeToolCallId("book-582-turn-2"),
-        );
+        const targetResponseId = modelResponseRecordId(runId, 2);
 
         expect(
           (yield* readLog(thread)).filter(
-            (envelope) => envelope.record.recordId === targetPreparedId,
+            (envelope) => envelope.record.recordId === targetResponseId,
           ),
         ).toHaveLength(1);
         yield* authorization.set(() => ({
@@ -1413,7 +1426,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const records = yield* readLog(thread);
 
         expect(
-          records.filter((envelope) => envelope.record.recordId === targetPreparedId),
+          records.filter((envelope) => envelope.record.recordId === targetResponseId),
         ).toHaveLength(1);
         expect(
           records.filter((envelope) => envelope.record.payload._tag === "SubmissionSettled"),
@@ -1576,9 +1589,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const records = yield* readLog(receipt.threadId);
 
         expect(records.every((record) => record.threadId === threadId)).toBe(true);
-        expect(records.some(({ record }) => record.payload._tag === "ToolCallPrepared")).toBe(
-          false,
-        );
+        expect(records.some(({ record }) => record.payload._tag === "ToolCallSettled")).toBe(false);
 
         const canonical = records.find(({ record }) => record.payload._tag === "SubmissionSettled")
           ?.record.payload;
@@ -1711,7 +1722,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           submitOptions(thread, "resolve-two-1"),
         );
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
 
         const killed = yield* Effect.exit(
           runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(desk.toolLayer)),
@@ -1813,7 +1824,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           submitOptions(thread, "resolve-idem-1"),
         );
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
         yield* Effect.exit(
           runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(desk.toolLayer)),
         );

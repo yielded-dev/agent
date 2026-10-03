@@ -1,28 +1,28 @@
 import { Context, Effect, Layer, Schema } from "effect";
 
 import { ThreadId, RunId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
-import { Digest, PersistedJson, ToolCallPrepared } from "./Records.ts";
+import { Digest, PersistedJson, DeclaredToolCall } from "./Records.ts";
 
 /**
- * Everything a reconciliation policy can consult about one prepared-but-unsettled ordinary Tool
+ * Everything a reconciliation policy can consult about one declared-but-unsettled ordinary Tool
  * Call (durability §10): deterministic identities for supplier-side lookup plus the exact
- * Schema-encoded parameters and their digest. Built from the canonical `ToolCallPrepared` record
+ * Schema-encoded parameters and their digest. Derived from the canonical normalized response
  * and the owning Submission's identities — never from in-memory Attempt state.
  */
-export class PreparedToolCallEvidence extends Schema.Class<PreparedToolCallEvidence>(
-  "@effect-agent/thread/PreparedToolCallEvidence",
+export class DeclaredToolCallEvidence extends Schema.Class<DeclaredToolCallEvidence>(
+  "@effect-agent/thread/DeclaredToolCallEvidence",
 )({
   threadId: ThreadId,
   submissionId: SubmissionId,
   runId: RunId,
-  turn: ToolCallPrepared.fields.turn,
+  turn: DeclaredToolCall.fields.turn,
   toolCallId: ToolCallId,
-  toolName: ToolCallPrepared.fields.toolName,
+  toolName: DeclaredToolCall.fields.toolName,
   parameters: PersistedJson,
   parametersDigest: Digest,
-  executionKind: ToolCallPrepared.fields.executionKind,
-  executionClass: ToolCallPrepared.fields.executionClass,
-  replay: ToolCallPrepared.fields.replay,
+  executionKind: DeclaredToolCall.fields.executionKind,
+  executionClass: DeclaredToolCall.fields.executionClass,
+  replay: DeclaredToolCall.fields.replay,
 }) {}
 
 /** Proof of nonexecution: resume the original operation or report it unavailable. */
@@ -54,7 +54,7 @@ export class ReconciliationUncertain extends Schema.TaggedClass<ReconciliationUn
 }) {}
 
 /**
- * What a reconciliation policy can prove about one prepared-but-unsettled ordinary Tool Call
+ * What a reconciliation policy can prove about one declared-but-unsettled ordinary Tool Call
  * (durability §10): execution never started, execution completed with a recoverable result,
  * execution is safe to repeat, or nothing — in which case the Run enters Unknown. The engine
  * never invents an external result. Proven nonexecution can close a retired operation with
@@ -93,7 +93,7 @@ export class ToolReconciler extends Context.Service<
   ToolReconciler,
   {
     readonly reconcile: (
-      evidence: PreparedToolCallEvidence,
+      evidence: DeclaredToolCallEvidence,
     ) => Effect.Effect<ReconciliationDecision, ToolReconcilerError>;
   }
 >()("@effect-agent/thread/ToolReconciler") {

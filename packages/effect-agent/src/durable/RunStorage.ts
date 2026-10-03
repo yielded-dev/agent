@@ -95,6 +95,11 @@ export interface RunWriter {
   readonly producerEpoch: ProducerEpoch;
   readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
   readonly append: (batch: CanonicalBatch) => Effect.Effect<AppendResult, ThreadStoreFailure>;
+  /** Recheck the writer fence after effectful preflight, before dispatch; append no record. */
+  readonly checkFence: Effect.Effect<
+    void,
+    ThreadStoreError | ThreadNotMaterialized | FenceRejected
+  >;
 }
 
 /** A claim-scoped owner; a committed suspension ends it, while resume-immediately does not. */
@@ -255,7 +260,14 @@ export const makeRunWriter = Effect.fnUntraced(function* (
       }),
     );
 
-  return { threadId, producerEpoch, tail: Effect.sync(() => tail), append, refresh };
+  return {
+    threadId,
+    producerEpoch,
+    tail: Effect.sync(() => tail),
+    append,
+    refresh,
+    checkFence: refresh,
+  };
 });
 
 /** Explicit assembly for adapters whose own transactions validate every mutation. */
@@ -373,6 +385,7 @@ export const make = Effect.gen(function* () {
       release,
       renew,
       append: (batch) => canonical(writer.append(batch)),
+      checkFence: canonical(writer.checkFence),
       refresh: canonical(writer.refresh),
       maintain: (interval) =>
         Effect.forever(

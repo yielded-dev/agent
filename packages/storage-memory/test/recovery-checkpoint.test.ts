@@ -71,7 +71,7 @@ const scenarios = [
   "gap",
   "uncertain",
   "approval",
-  "steps",
+  "reused-call-id",
   "checkpoint-after-interruption",
 ];
 
@@ -358,7 +358,7 @@ describe("disposable durable recovery checkpoint", () => {
         const older = yield* submit("older unresolved input");
 
         yield* failpoints.setHandler((location) =>
-          location === "tools:after-prepared-append"
+          location === "tools:after-dispatch-fence"
             ? DurableRuntimeFailpointError.make({ location })
             : Effect.void,
         );
@@ -462,7 +462,7 @@ describe("disposable durable recovery checkpoint", () => {
           success: Schema.String,
           dependencies: [DurableStep],
           failure: DurableStepError,
-        }).annotate(ToolExecutionClass, scenario === "steps" ? "idempotent" : "uncertain"),
+        }).annotate(ToolExecutionClass, scenario === "reused-call-id" ? "idempotent" : "uncertain"),
         Tool.make("approve", {
           parameters: Tool.EmptyParams,
           success: Schema.String,
@@ -474,7 +474,7 @@ describe("disposable durable recovery checkpoint", () => {
         write: () =>
           Effect.gen(function* () {
             calls++;
-            if (scenario !== "steps") return "recorded";
+            if (scenario !== "reused-call-id") return "recorded";
             const steps = yield* DurableStep;
 
             return yield* steps.do(
@@ -511,7 +511,7 @@ describe("disposable durable recovery checkpoint", () => {
                       {
                         type: "tool-call",
                         id:
-                          scenario === "steps" && requests.length === 4
+                          scenario === "reused-call-id" && requests.length === 4
                             ? "call-1"
                             : `call-${requests.length}`,
                         name:
@@ -589,14 +589,15 @@ describe("disposable durable recovery checkpoint", () => {
 
       yield* failpoints.setHandler((location) => {
         const atCheckpoint =
-          scenario.startsWith("checkpoint-") && location === "checkpoint:after-save";
+          (scenario.startsWith("checkpoint-") || scenario === "reused-call-id") &&
+          location === "checkpoint:after-save";
 
         const atBatch =
           !scenario.startsWith("checkpoint-") &&
           requests.length === 4 &&
           location ===
             (scenario === "uncertain"
-              ? "tools:after-prepared-append"
+              ? "tools:after-dispatch-fence"
               : scenario === "approval"
                 ? "approval:after-request-append"
                 : "turn:after-results-append");
@@ -686,6 +687,33 @@ describe("disposable durable recovery checkpoint", () => {
         );
       }
 
+      if (scenario === "reused-call-id") {
+        const failure = yield* resumed
+          .processThreadHead(receipt.threadId)
+          .pipe(Effect.provide(handlers), Effect.flip);
+
+        expect(failure._tag).toBe("RunJournalError");
+        expect(requests).toHaveLength(4);
+        // The checkpoint precedes call-3's dispatch; recovery may finish that unique call.
+        expect(callsBefore).toBe(2);
+        expect(calls).toBe(3);
+        expect(stepEffects).toBe(3);
+        const after = yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId }));
+
+        expect(after.records.slice(0, original.records.length)).toEqual(original.records);
+        expect(
+          after.records.flatMap(({ record }) =>
+            record.payload._tag === "ModelResponseRecorded"
+              ? record.payload.toolOperations.filter(
+                  (operation) => operation.toolCallId === "call-1",
+                )
+              : [],
+          ),
+        ).toHaveLength(1);
+
+        return;
+      }
+
       const outcome = yield* resumed
         .processThreadHead(receipt.threadId)
         .pipe(Effect.provide(handlers));
@@ -703,7 +731,6 @@ describe("disposable durable recovery checkpoint", () => {
       } else {
         expect(Option.isSome(outcome) && outcome.value.outcome).toBe("completed");
         expect(calls).toBe(4);
-        if (scenario === "steps") expect(stepEffects).toBe(3);
         expect(requests).toHaveLength(5);
         const prompt = JSON.stringify(requests.at(-1));
 
@@ -712,7 +739,7 @@ describe("disposable durable recovery checkpoint", () => {
         expect(prompt).toContain("Keep the continuation.");
         expect(prompt).toContain("turn 5/10");
         expect(prompt).toContain("tokens 440/");
-        if (scenario !== "steps") expect(prompt).not.toContain('"id":"call-1"');
+        expect(prompt).not.toContain('"id":"call-1"');
         if (Option.isSome(outcome)) expect(outcome.value.usageSummary?.modelCalls).toBe(5);
       }
 

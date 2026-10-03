@@ -2,7 +2,6 @@ import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
-import type { ToolCallPrepared, WorkerInputRequested } from "./Records.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -14,13 +13,7 @@ import {
   ProducerEpoch,
   RecordId,
 } from "./Records.ts";
-import {
-  runIdForSubmission,
-  subagentLineageRecordId,
-  toolCallPreparedRecordId,
-  workerOriginRecordId,
-} from "./RunJournal.ts";
-import { SubmissionLedger, SubmissionLookupById } from "./SubmissionLedger.ts";
+import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 
 export const MAX_THREAD_EXPORT_RECORDS = 131_072;
 
@@ -31,28 +24,6 @@ export type ThreadRecordRequest = typeof ThreadRecordRequest.Type;
 /** The original user input for a Run, excluding later joined inputs. */
 export const ThreadRunInputRequest = Schema.Struct({ threadId: ThreadId, runId: RunId });
 export type ThreadRunInputRequest = typeof ThreadRunInputRequest.Type;
-
-export const ThreadOutstandingRequest = Schema.Struct({
-  threadId: ThreadId,
-  /** Exceeding this bound fails; a truncated inventory never grants authority. */
-  limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(4_096)),
-});
-
-export type ThreadOutstandingRequest = typeof ThreadOutstandingRequest.Type;
-
-export interface ThreadOutstanding {
-  readonly threadId: ThreadId;
-  readonly throughSequence: CanonicalSequence;
-  readonly complete: true;
-  readonly operations: ReadonlyArray<{
-    readonly submissionId: SubmissionId;
-    readonly prepared: ToolCallPrepared;
-    /** Prepared is not an unknown outcome or a grant to execute. */
-    readonly state: "prepared" | "unknown";
-  }>;
-  /** Source reservations without proof that external effects are resolved. */
-  readonly workerInputs: ReadonlyArray<WorkerInputRequested>;
-}
 
 /** Native worker reservation/accounting snapshot at a captured canonical tail. */
 export const ThreadWorkerStateRequest = Schema.Struct({
@@ -194,103 +165,6 @@ export const readWorkerState = Effect.fn("ThreadStore.readWorkerState")(function
   };
 });
 
-/**
- * Work is proportional to outstanding records, independent of completed history. Unknown
- * effects survive abort and resolution intent; only canonical closure removes them. A
- * preparation from another Run still requires native recovery before it can be treated as
- * safe. This snapshot grants no execution authority and does not freeze other owners.
- */
-export const readOutstanding = Effect.fn("ThreadStore.readOutstanding")(function* (
-  request: ThreadOutstandingRequest,
-) {
-  yield* Schema.decodeEffect(ThreadOutstandingRequest)(request).pipe(
-    Effect.mapError(() => incomplete("readOutstanding request")),
-  );
-  const store = yield* ThreadReader;
-  const ledger = yield* SubmissionLedger;
-  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
-
-  const records = yield* selectedRecords(
-    request.threadId,
-    {
-      _tag: "Outstanding",
-      expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
-    },
-    request.limit,
-  );
-
-  const operations: Array<ThreadOutstanding["operations"][number]> = [];
-  const workerInputs: Array<WorkerInputRequested> = [];
-
-  for (const entry of records) {
-    const payload = entry.record.payload;
-
-    if (payload._tag === "WorkerInputRequested") {
-      workerInputs.push(payload);
-      continue;
-    }
-    if (payload._tag !== "ToolCallPrepared" && payload._tag !== "ToolCallUnknown")
-      return yield* incomplete("readOutstanding record");
-
-    const preparedEntry =
-      payload._tag === "ToolCallPrepared"
-        ? entry
-        : Option.getOrUndefined(
-            yield* getRecord({
-              threadId: request.threadId,
-              recordId: toolCallPreparedRecordId(payload.runId, payload.turn, payload.toolCallId),
-            }),
-          );
-
-    const inputEntry = Option.getOrUndefined(
-      yield* getRunInput({ threadId: request.threadId, runId: payload.runId }),
-    );
-
-    if (
-      preparedEntry === undefined ||
-      inputEntry === undefined ||
-      preparedEntry.sequence > tail.tailSequence ||
-      inputEntry.sequence > tail.tailSequence
-    )
-      return yield* incomplete("readOutstanding proof beyond snapshot");
-    const prepared = preparedEntry.record.payload;
-    const input = inputEntry.record.payload;
-
-    if (
-      prepared?._tag !== "ToolCallPrepared" ||
-      prepared.runId !== payload.runId ||
-      prepared.turn !== payload.turn ||
-      prepared.toolCallId !== payload.toolCallId ||
-      prepared.toolName !== payload.toolName ||
-      input?._tag !== "UserInputRecorded" ||
-      input.submissionId === undefined ||
-      runIdForSubmission(input.submissionId) !== prepared.runId
-    )
-      return yield* incomplete("readOutstanding canonical ownership");
-
-    const submission = yield* ledger.lookup(
-      SubmissionLookupById.make({ submissionId: input.submissionId }),
-    );
-
-    if (Option.isNone(submission) || submission.value.threadId !== request.threadId)
-      return yield* incomplete("readOutstanding native admission");
-    operations.push({
-      submissionId: input.submissionId,
-      prepared,
-      state: payload._tag === "ToolCallUnknown" ? "unknown" : "prepared",
-    });
-  }
-
-  return {
-    threadId: request.threadId,
-    throughSequence: tail.tailSequence,
-    complete: true as const,
-    operations,
-    workerInputs,
-  };
-});
-
 export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   "@effect-agent/thread/ThreadMaterialization",
 )({
@@ -325,11 +199,6 @@ export class ThreadRead extends Schema.Class<ThreadRead>("@effect-agent/thread/T
 export const ThreadSelection = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("RecordId"), recordId: RecordId }),
   Schema.Struct({ _tag: Schema.Literal("RunInput"), runId: RunId }),
-  Schema.Struct({
-    _tag: Schema.Literal("Outstanding"),
-    expectedTailSequence: CanonicalSequence,
-    expectedTailDigest: Digest,
-  }),
   Schema.Struct({
     _tag: Schema.Literal("WorkerExecution"),
     expectedTailSequence: CanonicalSequence,

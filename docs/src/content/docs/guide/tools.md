@@ -422,7 +422,9 @@ request into a typed Effect service with stable run identity, normalized resourc
 bounded preview, expiration, audit, and a deny or unresolved decision.
 
 Approval occurs after parameter decoding and before the handler starts. The model cannot approve
-a tool call.
+a tool call. Function-based approval predicates receive detached history, and approval decisions
+receive independent decoded arguments. Supplied history must use JSON values for tool arguments
+and results; native file URLs and byte arrays retain their types.
 
 ## Authorize tool calls
 

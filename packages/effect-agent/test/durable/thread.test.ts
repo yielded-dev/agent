@@ -110,16 +110,38 @@ describe("thread canonical contracts", () => {
   });
 });
 
-describe("phase 5 durable canonical payloads", () => {
-  const encodedToolCallPrepared = {
-    _tag: "ToolCallPrepared",
+describe("durable tool declarations", () => {
+  const encodedModelResponse = {
+    _tag: "ModelResponseRecorded",
     runId: "run-1",
     turnId: "turn-1",
     turn: 2,
-    toolCallId: "call-1",
-    toolName: "book_flight",
-    parameters: { destination: "Kyoto", travelerRef: "traveler-7" },
-    parametersDigest: SHA_256_A,
+    messages: {
+      content: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              id: "call-1",
+              name: "book_flight",
+              params: { destination: "Kyoto", travelerRef: "traveler-7" },
+              providerExecuted: false,
+            },
+          ],
+        },
+      ],
+    },
+    messagesDigest: SHA_256_A,
+    toolOperations: [
+      {
+        toolCallId: "call-1",
+        toolName: "book_flight",
+        executionClass: "uncertain",
+        executionKind: "ordinary",
+        replay: SHA_256_B,
+      },
+    ],
   } as const;
 
   const encodedToolCallUnknown = {
@@ -128,7 +150,7 @@ describe("phase 5 durable canonical payloads", () => {
     turn: 2,
     toolCallId: "call-1",
     toolName: "book_flight",
-    reason: "worker lost after preparation without a canonical outcome",
+    reason: "worker lost after declaration without a canonical outcome",
   } as const;
 
   const encodedToolCallResolved = {
@@ -142,7 +164,7 @@ describe("phase 5 durable canonical payloads", () => {
 
   it("keeps an aborted Run's unknown call open when a later Run reuses its call ID", () => {
     const threadId = Schema.decodeSync(ThreadId)("travel-thread");
-    const prepared = decodeEnvelope(1, decodeRecord("run-1-prepared", encodedToolCallPrepared));
+    const declared = decodeEnvelope(1, decodeRecord("run-1-response", encodedModelResponse));
     const unknown = decodeEnvelope(2, decodeRecord("run-1-unknown", encodedToolCallUnknown));
 
     const aborted = decodeEnvelope(
@@ -157,16 +179,16 @@ describe("phase 5 durable canonical payloads", () => {
       }),
     );
 
-    const preparedAgain = decodeEnvelope(
+    const declaredAgain = decodeEnvelope(
       4,
-      decodeRecord("run-2-prepared", {
-        ...encodedToolCallPrepared,
+      decodeRecord("run-2-response", {
+        ...encodedModelResponse,
         runId: "run-2",
         turnId: "turn-2",
       }),
     );
 
-    const prefix = [prepared, unknown, aborted, preparedAgain];
+    const prefix = [declared, unknown, aborted, declaredAgain];
 
     const checkpoint = Schema.decodeSync(ThreadProjection)(
       Schema.encodeSync(ThreadProjection)(replayThread(threadId, prefix)),

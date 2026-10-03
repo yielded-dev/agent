@@ -582,10 +582,10 @@ export class AgentUpdateAcceptance extends Context.Service<
  * Invocation ordering inside one Tool-declaring Turn is normative:
  * `commitResponse` fires after the finish part's continuation validations and staged canonical
  * provider/Turn events have been emitted, but before approval preflight (making the response
- * canonical before any Tool work — the provably-safe resume window); `prepareToolCalls` fires after
- * every approval and host authorization resolved allowed and before any handler acquires a
- * scheduler permit, with all delegations and non-`readonly` ordinary calls (it is skipped
- * entirely when no call needs preparation); `step` persists Durable Step
+ * canonical before any Tool work and conservatively recording possible execution);
+ * `checkToolDispatch` checks the writer fence after every approval and host authorization resolved
+ * allowed and before any handler acquires a scheduler permit. It is skipped when no unfinished
+ * call is a delegation or non-`readonly` ordinary call; `step` persists Durable Step
  * results mid-flight. When the hook is absent the engine behaves exactly as
  * the ephemeral runtime always has.
  */
@@ -617,10 +617,8 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
   readonly commitResponse: (
     commit: RunTurnResponseCommit,
   ) => Effect.Effect<void, Error, Requirements>;
-  /** After every approval and host authorization resolved allowed, before any handler starts. */
-  readonly prepareToolCalls: (
-    calls: ReadonlyArray<RunToolCallDescriptor>,
-  ) => Effect.Effect<void, Error, Requirements>;
+  /** Check the writer fence after approval/authorization and before handler permits; no write. */
+  readonly checkToolDispatch: Effect.Effect<void, Error, Requirements>;
   readonly step: RunStepHook<Error, Requirements>;
   /**
    * RUN-026: called at the pre-Turn seam BEFORE the engine applies a
@@ -860,9 +858,8 @@ export type RunResumeUsage = typeof RunResumeUsageSchema.Type;
  * executable calls are re-validated through their Tool parameter Schemas (a
  * decode failure executes nothing). Canonically rejected calls retain their native failure;
  * the rejection must match their exact arguments and any settled result. Approval preflight
- * for executable calls runs against recorded decisions, host Tool authorization is re-evaluated, `prepareToolCalls` replays the full
- * prepared batch idempotently,
- * calls listed in `settled` are injected as final results without starting
+ * for executable calls uses recorded decisions, host Tool authorization is re-evaluated,
+ * and the writer fence is checked before dispatch. Calls listed in `settled` use final results without starting
  * their handlers, and only the remaining open calls execute. The Run then
  * proceeds through the normal continuation.
  */
@@ -1034,7 +1031,7 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
    * Host-owned action-time authorization for model-declared application Tool batches. The engine
    * uses this per-Run override when present, otherwise the provided RunToolAuthorization service.
    * It invokes the policy for every still-executable call after complete-batch validation and approval, but
-   * before durable preparation or any Handler permit. A resumed durable batch invokes it again
+   * before the durable dispatch fence or any Handler permit. A resumed durable batch invokes it again
    * with the same canonical Run/Turn/input authority and Tool Call identity. Programmatic
    * `ToolBroker` calls invoke it after schema/visibility checks and before budget reservation or
    * execution, with their parent identity in `programmatic`. Inner denials become catchable

@@ -138,6 +138,7 @@ import {
 import { lastWorkerReportMessageId } from "./agent-updates.ts";
 import { messageStatus } from "./message-status.ts";
 import { ensureWorkerOrigin } from "./thread-initialization.ts";
+import { unresolvedToolOperations } from "./tool-operations.ts";
 
 const failure = (
   operation: WorkerError["operation"],
@@ -1877,19 +1878,24 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       return yield* failure("inspect", "corrupt");
 
     const unresolved = new Set<string>();
+    const declarationIds = new Set<string>();
 
     for (const { record } of child.records) {
       const value = record.payload;
 
-      if (
-        (value._tag === "ToolCallPrepared" || value._tag === "ToolCallUnknown") &&
-        value.runId === settled.runId
-      )
+      if (value._tag === "ModelResponseRecorded" && value.runId === settled.runId) {
+        for (const operation of value.toolOperations) {
+          if (declarationIds.has(operation.toolCallId)) return yield* failure("inspect", "corrupt");
+          declarationIds.add(operation.toolCallId);
+        }
+      }
+      if (value._tag === "ToolCallUnknown" && value.runId === settled.runId)
         unresolved.add(value.toolCallId);
       if (value._tag === "ToolCallSettled" && value.runId === settled.runId)
         unresolved.delete(value.toolCallId);
     }
-    if (unresolved.size > 0) return;
+    if (unresolved.size > 0 || unresolvedToolOperations(child.records, settled.runId).length > 0)
+      return;
 
     const payload = WorkerInputCompleted.make({
       effectsResolved: true,

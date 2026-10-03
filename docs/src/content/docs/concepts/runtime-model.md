@@ -60,8 +60,10 @@ flowchart LR
   a wake hint is never proof of completion. See [messaging](/guide/messaging/).
 - The append-only journal owns execution facts; the ledger owns what is still owed and who may
   advance it. Projections and checkpoints are disposable. Current bindings select queued and
-  resumed work; retained operation contracts govern unfinished effects. Unresolved ordinary tools are never
-  automatically replayed after ownership loss. Durable Steps still require external idempotency
+  resumed work; each committed model response owns its normalized tool arguments and original
+  operation contracts. A declared mutating call without a result may have executed, including when
+  ownership is lost before its handler starts. Initial blocked approvals and parameter rejections
+  prove nonexecution; unresolved ordinary tools are never automatically replayed after ownership loss. Durable Steps still require external idempotency
   or reconciliation: exactly-once recording does not promise exactly-once execution.
 - Keep application reads in application-owned views. Durable Object SQLite retains execution
   and recovery state, not a second application query model. Measure a statement budget for a

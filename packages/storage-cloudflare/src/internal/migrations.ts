@@ -8,7 +8,7 @@ import { createMessageDeliveryTables } from "./message-delivery-schema.ts";
 import { createRecoveryCheckpointTable } from "./recovery-checkpoint-schema.ts";
 
 /** The current storage version recorded in `effect_agent_meta`. */
-export const CurrentDoStorageVersion = 9;
+export const CurrentDoStorageVersion = 15;
 
 /** One permanent destination inbox fence, including workers stopped before admission. */
 export const createWorkerStops = Effect.gen(function* () {
