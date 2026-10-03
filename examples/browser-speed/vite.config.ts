@@ -48,6 +48,7 @@ export default defineConfig({
         input: [
           { auto: true },
           "*",
+          { pattern: "!.", base: "workspace" },
           { pattern: "!examples/browser-speed", base: "workspace" },
           "src/**",
           "!.wrangler",
