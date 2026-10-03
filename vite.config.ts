@@ -167,6 +167,12 @@ export default defineConfig({
       scripts: true,
     },
     tasks: {
+      "ci:format": {
+        command: "vp fmt --check",
+      },
+      "ci:docs": {
+        command: "vp check docs && vp run -F @yielded/agent-docs check && vp run docs:build",
+      },
       "ci:release-proof": {
         cache: false,
         command: "bun scripts/release-ci.ts",

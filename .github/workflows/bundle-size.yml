@@ -2,6 +2,19 @@ name: Bundle size
 
 on:
   pull_request:
+    paths:
+      - "packages/**"
+      - "!packages/*/README.md"
+      - "!packages/*/CHANGELOG.md"
+      - "scripts/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - "patches/**"
+      - ".github/actions/**"
+      - ".github/workflows/bundle-size.yml"
 
 permissions:
   contents: read
@@ -18,7 +31,7 @@ jobs:
   compare:
     name: Compare consumer bundles
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -31,32 +44,53 @@ jobs:
           path: .bundle-base
           persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
         with:
-          bun-version: 1.4.2
+          task-cache: build
 
-      # Bootstrap the repository-owned vp, as in CI. Each checkout installs its
-      # own lockfile so workspace links and dependency changes are measured too.
-      - name: Install PR dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
+      # Each checkout installs its own lockfile. Only Vite Task's input-checked
+      # results are shared; the base never uses the candidate's node_modules.
       - name: Install base dependencies
-        working-directory: .bundle-base
-        run: bun install --frozen-lockfile --ignore-scripts
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 3m
+          retry-errors: "true"
+          working-directory: .bundle-base
+          command: vp install --frozen-lockfile --ignore-scripts
 
-      - name: Build PR packages
+      - name: Share the restored task cache with the base build
         run: |
-          ./node_modules/.bin/vp run patch:tsgo
-          ./node_modules/.bin/vp run -F './packages/*' build
+          mkdir -p node_modules/.vite/task-cache .bundle-base/node_modules/.vite
+          ln -s "$GITHUB_WORKSPACE/node_modules/.vite/task-cache" .bundle-base/node_modules/.vite/task-cache
 
       - name: Build base packages
-        working-directory: .bundle-base
-        run: |
-          ./node_modules/.bin/vp run patch:tsgo
-          ./node_modules/.bin/vp run -F './packages/*' build
+        id: base
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          working-directory: .bundle-base
+          command: |
+            vp run --no-cache patch:tsgo
+            vp run -F './packages/*' build
+
+      - name: Build PR packages
+        id: head
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          command: vp run -F './packages/*' build
 
       - name: Compare bundles
-        run: ./node_modules/.bin/vp run bundle:compare -- --base-dir .bundle-base
+        run: vp run bundle:compare -- --base-dir .bundle-base
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.base.outcome == 'success' || steps.base.outcome == 'failure') }}
+        uses: actions/cache/save@v4
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
 
       - name: Show comparison
         env:

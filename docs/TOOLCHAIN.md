@@ -135,14 +135,16 @@ Builds follow dependency order. Process-kill and adapter contract suites are par
 the ordinary test command.
 
 Vite Task caches successful results against their inputs. Vitest's mutable result cache is
-disabled so it does not invalidate task caching. CI transfers `node_modules/.vite/task-cache`.
-Direct Vitest tasks, Node platform and Cloudflare-memory tests, and travel-planner tests and builds
-exclude generated Vite files and dependency directory listings, but track imported dependency files
-and the lockfile. Wrangler dry-run builds exclude their temporary `.wrangler` bundles; the Action
-build excludes its generated bundle from inputs and restores `action/dist/index.mjs` on a cache hit.
-Failed tasks are never cached. Vite Task fingerprints whole files, including package manifests: a version-only change
-can invalidate tests even when their source is unchanged. Keep manifests tracked because exports,
-module type, and dependency declarations also affect execution.
+disabled so it does not invalidate task caching. CI uses `setup-vp` for the pinned toolchain and
+package-manager cache, then restores `node_modules/.vite/task-cache` after installation.
+Task caches are scoped by job, operating system, and architecture; Vite Task fingerprints source,
+manifests, dependency files, and lockfiles itself. Live Postgres checks remain uncached.
+
+Tests and builds exclude generated Vite, Astro, and Wrangler paths from their inputs where those
+paths would prevent reuse on fresh runners. Builds restore their outputs, including the docs site
+and Action bundle. Failed tasks are never cached; successful siblings are saved even when a job
+fails. A version-only manifest change can still invalidate tasks: exports, module type, and
+dependency declarations must remain tracked.
 
 Use `vp run -v test` for cache decisions, `vp run --last-details` for the previous run,
 or `vp run --no-cache test` to rerun every suite.
@@ -443,10 +445,12 @@ package remains unmarked because its optional Puppeteer adapters patch globals o
 
 ## Bundle size comparisons
 
-Pull requests run the **Bundle size** workflow against the exact base and head commits.
+Pull requests that change package code, build tooling, or dependencies run the **Bundle size**
+workflow against the exact base and head commits. Prose and site-only changes skip it.
 Like [Effect's bundle check](https://github.com/Effect-TS/effect/tree/main/packages/tools/bundle),
 it bundles small consumer fixtures against built packages. Each checkout installs its own
-lockfile. The comparison uses the PR's esbuild version and the same fixture source for both sides.
+lockfile. Sequential builds share the restored Vite Task cache, which checks each checkout's inputs
+before reusing results. The comparison uses the PR's esbuild version and the same fixture source for both sides.
 Disposable comparison manifests alias historical PascalCase subpaths to their kebab-case names;
 staged modules also expose the former `Ephemeral` assembly as `InMemory`. The published packages
 retain only their canonical exports. Renamed modules remain comparable.
@@ -551,7 +555,19 @@ observe and must accompany claims about the exact candidate and configuration it
 
 ## CI and hooks
 
-PR CI runs static checks, tests, and builds, then reports the required `ready` result.
+Every PR runs CI and reports the required `ready` result. CI selects work from the complete PR
+diff, including both paths of a rename:
+
+- Prose, contributor skills, and auxiliary workflows require formatting and workflow validation.
+- Site documentation requires those checks plus docs linting, types, build, and link validation.
+- Source, dependencies, shared tooling, CI execution policy, and unclassified paths require all
+  static checks, test suites, and builds.
+
+Missing, truncated, or stale file listings select the full gate. `ready` accepts only the skips
+selected by a successful classification; a failed or cancelled required job still fails the gate.
+Changesets release PRs retain their complete release checks. Main pushes run the full gate to
+provide release evidence and populate shared caches.
+
 Static checks include `check:deploy`, which invokes both deployment entry points with `--help`
 and imports both stack files using a temporary Alchemy profile. This catches missing dependencies
 and incompatible Effect APIs without credentials or infrastructure changes; it does not verify
@@ -559,6 +575,12 @@ Cloudflare credentials or remote deployment. Deployment tasks disable Vite Task 
 invocation runs and receives its deployment environment.
 Cloudflare storage, Cloudflare platform, Node platform, and testing have dedicated test runners.
 The remaining-workspace job includes every other package and runs one package task at a time.
+
+CI retries individual test failures twice, one second apart, only when their error message
+contains a timeout. Other assertion failures fail immediately. Installation gets at most two
+attempts. Check and build commands, including the test-runner process, get one retry after their
+own deadline or forced termination; the old process group is terminated before restarting.
+Repeated timeouts remain failures, and the job deadline leaves room for both attempts.
 
 The generated Changesets PR uses the release metadata proof below, with ordinary CI as its fallback.
 Explicit `@effect-agent review` comments still request review.
@@ -589,11 +611,9 @@ Never check out, install dependencies from, or execute the PR head in this secre
 workflow; the reviewer reads untrusted source through GitHub's API instead. CI artifacts
 and caches are not consumed by the review workflow.
 
-Each test-matrix job has its own task-cache key. The three suites split from the workspace job
-also fall back to its earlier cache, so splitting the matrix does not discard reusable results.
-Static checks, tests, and builds save successful task results even when another task fails.
-Ordinary main pushes run static checks, tests, and builds to populate shared caches
-and validate Action releases. Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
+Each cacheable test-matrix job has its own task-cache key. Docs-only builds and bundle comparisons
+reuse the build cache; dependency installation always precedes task-cache restoration.
+Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
 by newer pushes. GitHub scopes PR caches to each PR's merge ref, so another PR cannot reuse them.
 A new release PR can restore the latest main results only after those jobs finish saving their
 caches. Waiting for those caches alone does not prevent version fields from invalidating whole-file
@@ -678,11 +698,11 @@ remain required. Local controlled proofs establish correctness; hosted release l
 matched version-merge run.
 
 The pre-commit hook runs `vp check --fix` on staged JavaScript and TypeScript.
-CI runs the full gate, including package type checks and the Action build.
+The full CI gate includes package type checks and the Action build.
 
 Action bundles use the catalog-pinned esbuild. `vp run action:build` writes ignored
 output to `action/dist/index.mjs` and checks its Node.js syntax. The root build task
-also builds the Action, so every PR validates bundling without committing generated
+also builds the Action, so source PRs validate bundling without committing generated
 JavaScript. There is no bundle freshness check or input-hash manifest.
 
 On successful `main` runs, CI publishes the exact build artifact in a child commit

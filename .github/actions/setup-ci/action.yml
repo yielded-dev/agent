@@ -1,0 +1,45 @@
+name: Set up CI
+description: Install the pinned toolchain and restore compatible Vite Task results
+
+inputs:
+  task-cache:
+    description: Task cache namespace; leave empty for uncached live-service tests
+    default: ""
+
+outputs:
+  cache-key:
+    description: Key for saving successful task results, including after a sibling fails
+    value: ${{ steps.task-cache.outputs.cache-primary-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Vite+
+      uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
+      with:
+        node-version: "24.20.0"
+        run-install: false
+        cache: true
+
+    - name: Install dependencies (frozen, scripts suppressed)
+      uses: ./.github/actions/run-ci
+      with:
+        timeout: 3m
+        retry-errors: "true"
+        command: vp install --frozen-lockfile --ignore-scripts
+
+    - name: Patch Effect TypeScript-Go
+      shell: bash
+      run: vp run patch:tsgo
+
+    # Installation can recreate node_modules. Restore task results afterwards;
+    # Vite Task, rather than the Actions key, fingerprints source and lockfiles.
+    - name: Restore Vite Task cache
+      if: inputs.task-cache != ''
+      id: task-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: node_modules/.vite/task-cache
+        key: vite-task-${{ inputs.task-cache }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          vite-task-${{ inputs.task-cache }}-${{ runner.os }}-${{ runner.arch }}-

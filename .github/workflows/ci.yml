@@ -1,6 +1,5 @@
-# The pull-request gate, split into three parallel jobs (static checks,
-# tests, build) with a fan-in `ready` job so the branch-protection check name
-# stays `ready`.
+# Every PR reports `ready`, including changes that need only formatting and
+# workflow validation. Path selection never removes the required workflow.
 #
 # Main also publishes the validated Action bundle on distribution tags.
 # PR caches remain scoped to their merge refs. Each job has a separate cache
@@ -11,7 +10,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
+    # Retargeting a PR changes its diff without changing the head commit.
+    types: [opened, reopened, synchronize, ready_for_review, edited]
 
 permissions:
   contents: read
@@ -26,6 +26,73 @@ env:
   VP_GIT_HOOKS: "0"
 
 jobs:
+  changes:
+    name: Select required checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      pull-requests: read
+    outputs:
+      full: ${{ steps.paths.outputs.full }}
+      docs: ${{ steps.paths.outputs.docs }}
+    steps:
+      - name: Classify the complete PR diff
+        id: paths
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea9 # v7
+        with:
+          retries: 2
+          script: |
+            const pr = context.payload.pull_request;
+            // Main supplies complete release evidence and warms every task cache.
+            // Release PRs must retain builds and paid gates even for metadata only.
+            let full = !pr || (pr.base.ref === 'main' &&
+              pr.head.ref === 'changeset-release/main' &&
+              pr.head.repo?.full_name === context.repo.owner + '/' + context.repo.repo);
+            let docs = false;
+            if (!full) {
+              try {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  ...context.repo, pull_number: pr.number, per_page: 100,
+                });
+                const { data: current } = await github.rest.pulls.get({
+                  ...context.repo, pull_number: pr.number,
+                });
+                // The API caps its file listing. Incomplete or moved diffs must
+                // never authorize skips, including renames out of source paths.
+                if (!files.length || files.length !== current.changed_files ||
+                    current.head.sha !== pr.head.sha || current.base.sha !== pr.base.sha) {
+                  full = true;
+                } else {
+                  const passive = /^(?:[^/]+\.md|LICENSE|docs\/TOOLCHAIN\.md|action\/README\.md|(?:packages|examples|tooling)\/[^/]+\/(?:README|CHANGELOG)\.md|\.changeset\/[^/]+\.md)$/;
+                  for (const file of files) {
+                    for (const path of [file.filename, file.previous_filename].filter(Boolean)) {
+                      // Changes to the commands or setup that run CI exercise
+                      // the full gate. Other workflows get actionlint below.
+                      if (path === '.github/workflows/ci.yml' || path.startsWith('.github/actions/')) {
+                        full = true;
+                      } else if (passive.test(path) || /^(?:\.agents|\.claude|\.opencode)\//.test(path) ||
+                          /^\.github\/(?:workflows\/[^/]+\.ya?ml|assets\/.*|[^/]+\.md)$/.test(path)) {
+                        continue;
+                      } else if (path.startsWith('docs/')) {
+                        docs = true;
+                      } else {
+                        // Unknown paths are executable inputs until classified.
+                        full = true;
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                core.warning(`Cannot prove a limited diff; running full CI: ${error.message}`);
+                full = true;
+              }
+            }
+            core.setOutput('full', String(full));
+            core.setOutput('docs', String(docs && !full));
+            await core.summary.addRaw(full ? 'Full checks, tests, and builds required.' :
+              docs ? 'Formatting, workflow validation, and docs checks/build required.' :
+              'Formatting and workflow validation required.').write();
+
   release-proof:
     name: Verify release equivalence
     # Eligibility is only a cost filter. Ordinary main pushes start CI without
@@ -37,7 +104,7 @@ jobs:
           github.event.pull_request.head.ref == 'changeset-release/main' &&
           github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     # Setup/API failures must select ordinary CI, including bootstrap before this
     # verifier first exists on main. An absent output can never authorize reuse.
     continue-on-error: true
@@ -58,13 +125,19 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha || github.event.before }}
           persist-credentials: false
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
         with:
-          bun-version: 1.4.2
+          node-version: "24.20.0"
+          run-install: false
+          cache: true
 
       - name: Install trusted base dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 1m
+          retry-errors: "true"
+          command: vp install --frozen-lockfile --ignore-scripts
 
       - name: Prove release equivalence and ordinary base CI
         id: proof
@@ -77,54 +150,54 @@ jobs:
 
   checks:
     name: Static checks
-    needs: [release-proof]
-    if: ${{ !cancelled() && needs.release-proof.outputs.fast != 'true' }}
+    needs: [changes, release-proof]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.release-proof.outputs.fast != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
         with:
-          bun-version: 1.4.2
+          task-cache: checks
 
-      - name: Install dependencies (frozen, scripts suppressed)
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
-      # Restored after the install because a reinstall can recreate
-      # node_modules, which would drop a cache restored earlier.
-      - name: Restore Vite Task cache
-        id: task-cache
-        uses: actions/cache/restore@v4
+      - name: Validate GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
         with:
-          path: node_modules/.vite/task-cache
-          key: vite-task-checks-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            vite-task-checks-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
-            vite-task-checks-${{ runner.os }}-
+          args: -color -shellcheck= -pyflakes=
+
+      - name: Check formatting for a limited diff
+        id: format
+        if: needs.changes.outputs.full != 'true'
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 2m
+          command: vp run ci:format
 
       - name: Format, lint, and type checks
         id: checks
-        run: ./node_modules/.bin/vp run check
+        if: needs.changes.outputs.full == 'true'
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 8m
+          command: vp run check
 
       - name: Save Vite Task cache
-        if: ${{ !cancelled() && (steps.checks.outcome == 'success' || steps.checks.outcome == 'failure') }}
+        if: ${{ !cancelled() && (steps.checks.outcome == 'success' || steps.checks.outcome == 'failure' || steps.format.outcome == 'success') }}
         uses: actions/cache/save@v4
         with:
           path: node_modules/.vite/task-cache
-          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+          key: ${{ steps.setup.outputs.cache-key }}
 
   test:
     name: Tests (${{ matrix.suite }})
-    needs: [release-proof]
-    if: ${{ !cancelled() && needs.release-proof.outputs.fast != 'true' }}
+    needs: [changes, release-proof]
+    if: ${{ !cancelled() && needs.changes.outputs.full == 'true' && needs.release-proof.outputs.fast != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     # Each suite already starts a full Vitest/workerd worker pool. Running
     # the heavy suites together oversubscribes one runner and can starve the
     # crash fixtures' ownership-lease renewals. Keep their runners separate.
@@ -147,13 +220,10 @@ jobs:
               -F '!@yielded/agent-example-runtime-benchmark'
           - suite: travel-planner
             filters: -F @yielded/agent-example-travel-planner
-            cache-seed: workspace
           - suite: context-continuity
             filters: -F @yielded/agent-example-context-continuity-eval
-            cache-seed: workspace
           - suite: runtime-benchmark
             filters: -F @yielded/agent-example-runtime-benchmark
-            cache-seed: workspace
           - suite: platform-node
             filters: -F @yielded/agent-platform-node
           - suite: testing
@@ -164,11 +234,9 @@ jobs:
           - suite: storage-postgres-16
             filters: -F @yielded/agent-storage-postgres
             postgres: "16"
-            cache-seed: storage-postgres
           - suite: storage-postgres-18
             filters: -F @yielded/agent-storage-postgres
             postgres: "18"
-            cache-seed: storage-postgres
           - suite: platform-cloudflare
             filters: -F @yielded/agent-platform-cloudflare
           - suite: storage-cloudflare
@@ -191,54 +259,43 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
         with:
-          bun-version: 1.4.2
-
-      - name: Install dependencies (frozen, scripts suppressed)
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
-      - name: Restore Vite Task cache
-        id: task-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: node_modules/.vite/task-cache
-          key: vite-task-test-v2-${{ matrix.suite }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          # New suites can reuse results from before the split. Vite Task
-          # still fingerprints every task before replaying any restored entry.
-          restore-keys: |
-            vite-task-test-v2-${{ matrix.suite }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}-
-            vite-task-test-v2-${{ matrix.suite }}-${{ runner.os }}-${{ runner.arch }}-
-            vite-task-test-v2-${{ matrix.cache-seed || matrix.suite }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}-
-            vite-task-test-v2-${{ matrix.cache-seed || matrix.suite }}-${{ runner.os }}-${{ runner.arch }}-
+          # Live Postgres tasks are deliberately uncached.
+          task-cache: ${{ !matrix.postgres && format('test-v2-{0}', matrix.suite) || '' }}
 
       - name: Run workspace test suites
         id: tests
         env:
           EFFECT_AGENT_TEST_POSTGRES_URL: ${{ matrix.postgres && 'postgres://postgres:postgres@localhost:5432/effect_agent' || '' }}
-        run: >-
-          ./node_modules/.bin/vp run -v --parallel --concurrency-limit 1
-          --fail-if-no-match ${{ matrix.filters }} test
+        uses: ./.github/actions/run-ci
+        with:
+          # Retry a hung process once, within the outer job budget. Vitest
+          # separately retries only individual timeout failures, twice.
+          timeout: 8m
+          command: >-
+            vp run -v --parallel --concurrency-limit 1
+            --fail-if-no-match ${{ matrix.filters }} test
+            --retry.count 2 --retry.delay 1000
+            --retry.condition 'timed out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT'
 
       # Vite Task never caches failed tasks. Retain successful siblings so
       # fixing one failure does not force the entire suite to run cold again.
       - name: Save Vite Task cache
-        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
+        if: ${{ !cancelled() && steps.setup.outputs.cache-key != '' && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
         uses: actions/cache/save@v4
         with:
           path: node_modules/.vite/task-cache
-          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+          key: ${{ steps.setup.outputs.cache-key }}
 
   build:
     name: Build
-    needs: [release-proof]
-    if: ${{ !cancelled() }}
+    needs: [changes, release-proof]
+    if: ${{ !cancelled() && needs.changes.outputs.full == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: read
@@ -248,26 +305,11 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
         with:
-          bun-version: 1.4.2
-
-      - name: Install dependencies (frozen, scripts suppressed)
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
-      - name: Restore Vite Task cache
-        id: task-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: node_modules/.vite/task-cache
-          key: vite-task-build-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            vite-task-build-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
-            vite-task-build-${{ runner.os }}-
+          task-cache: build
 
       - name: Restore verified version PR build
         id: restore
@@ -287,7 +329,10 @@ jobs:
       - name: Build packages, examples, and docs
         id: build
         if: ${{ steps.restore.outcome != 'success' }}
-        run: ./node_modules/.bin/vp run -v build
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 8m
+          command: vp run -v build
 
       - name: Validate versioned release packages
         run: |
@@ -323,7 +368,38 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: node_modules/.vite/task-cache
-          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+          key: ${{ steps.setup.outputs.cache-key }}
+
+  docs:
+    name: Build docs
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.docs == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
+        with:
+          # Mutually exclusive with the full build job; share its warm results.
+          task-cache: build
+
+      - name: Check and build documentation
+        id: docs
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 8m
+          command: vp run ci:docs
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.docs.outcome == 'success' || steps.docs.outcome == 'failure') }}
+        uses: actions/cache/save@v4
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
 
   # Paid acceptance runs on the exact version PR head before it can merge.
   # Publication reuses the result for an identical merged tree.
@@ -397,20 +473,43 @@ jobs:
   # It runs even after a PR gate fails, and never posts a main-push ready check.
   ready:
     name: ready
-    needs: [release-proof, checks, test, build, release-gates]
+    needs: [changes, release-proof, checks, test, build, docs, release-gates]
     if: ${{ always() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify all required gates passed
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          FULL: ${{ needs.changes.outputs.full }}
+          DOCS: ${{ needs.changes.outputs.docs }}
+          DOCS_RESULT: ${{ needs.docs.result }}
           RELEASE_FAST: ${{ needs.release-proof.outputs.fast }}
           PROOF_RESULT: ${{ needs.release-proof.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           TEST_RESULT: ${{ needs.test.result }}
         run: |
-          test "$BUILD_RESULT" = "success"
+          test "$CHANGES_RESULT" = "success"
+          case "$FULL/$DOCS" in
+            true/false)
+              test "$BUILD_RESULT" = "success"
+              test "$DOCS_RESULT" = "skipped"
+              ;;
+            false/true|false/false)
+              test "$RELEASE_FAST" != "true"
+              test "$BUILD_RESULT" = "skipped"
+              test "$TEST_RESULT" = "skipped"
+              test "$CHECKS_RESULT" = "success"
+              if [ "$DOCS" = "true" ]; then
+                test "$DOCS_RESULT" = "success"
+              else
+                test "$DOCS_RESULT" = "skipped"
+              fi
+              exit 0
+              ;;
+            *) exit 1 ;;
+          esac
           if [ "$RELEASE_FAST" = "true" ]; then
             test "$PROOF_RESULT" = "success"
             test "$CHECKS_RESULT" = "skipped"
