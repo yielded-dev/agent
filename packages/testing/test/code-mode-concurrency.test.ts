@@ -12,6 +12,7 @@ import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
@@ -200,7 +201,7 @@ layer(Layer.mergeAll(ThreadHistory.layer, RunContextPreparationPassthrough), {
         (id) => (id === 0 ? Effect.sync(() => ++writes) : Effect.interrupt),
       );
 
-      const runtimeLayer = DurableAgentRuntime.layer.pipe(
+      const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
         Layer.provideMerge(
           Layer.mergeAll(
             MemoryThreadStoreLive,

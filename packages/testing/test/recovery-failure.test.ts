@@ -6,6 +6,7 @@ import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durabl
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { AgentId, ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   IdempotencyKey,
   LedgerError,
@@ -104,18 +105,20 @@ describe("bounded recovery failure isolation", () => {
           ),
         ).pipe(Layer.provide(MemorySubmissionLedgerLive));
 
-        const services = DurableAgentRuntime.layer.pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              observedLedger,
-              MemoryThreadStoreLive,
-              config,
-              DurableRuntimeFailpoint.layer,
-              WakeScheduler.layerNoop,
-              ToolReconciler.uncertain,
-            ).pipe(Layer.provideMerge(NodeCrypto.layer)),
-          ),
-        );
+        const services = DurableAgentRuntime.layer
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                observedLedger,
+                MemoryThreadStoreLive,
+                config,
+                DurableRuntimeFailpoint.layer,
+                WakeScheduler.layerNoop,
+                ToolReconciler.uncertain,
+              ).pipe(Layer.provideMerge(NodeCrypto.layer)),
+            ),
+          );
 
         yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;
@@ -237,18 +240,20 @@ describe("bounded recovery failure isolation", () => {
           ),
         ).pipe(Layer.provide(MemoryThreadStoreLive));
 
-        const services = DurableAgentRuntime.layer.pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              observedStore,
-              MemorySubmissionLedgerLive,
-              config,
-              DurableRuntimeFailpoint.layer,
-              WakeScheduler.layerNoop,
-              ToolReconciler.uncertain,
-            ).pipe(Layer.provideMerge(NodeCrypto.layer)),
-          ),
-        );
+        const services = DurableAgentRuntime.layer
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                observedStore,
+                MemorySubmissionLedgerLive,
+                config,
+                DurableRuntimeFailpoint.layer,
+                WakeScheduler.layerNoop,
+                ToolReconciler.uncertain,
+              ).pipe(Layer.provideMerge(NodeCrypto.layer)),
+            ),
+          );
 
         yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;

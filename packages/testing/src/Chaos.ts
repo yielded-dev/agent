@@ -29,6 +29,7 @@ import {
 } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
@@ -754,6 +755,7 @@ const makeLaneFixture = Effect.fn("Chaos.makeLaneFixture")(function* (
       const registeredRuntime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
           DurableAgentRuntime.layerWithBindings([parentResolved, childResolved]).pipe(
+            Layer.provide(runStorageLayer()),
             Layer.provide(RunToolAuthorization.allowAll),
           ),
         ),

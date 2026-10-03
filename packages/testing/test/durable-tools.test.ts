@@ -41,6 +41,7 @@ import {
   type RunToolAuthorizationDecision,
   type RunToolAuthorizationRequest,
 } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   IdempotencyKey,
@@ -324,7 +325,9 @@ const baseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layerWithServices.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layerWithServices
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const readLog = (threadId: string) =>
   Effect.gen(function* () {
@@ -915,13 +918,21 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
           return receipt;
         }),
-      ).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(before)));
+      ).pipe(
+        Effect.provide(
+          DurableAgentRuntime.layerWithBindings(before).pipe(Layer.provide(runStorageLayer())),
+        ),
+      );
 
       const retained = yield* readLog(receipt.threadId);
 
       const outcome = yield* DurableAgentRuntime.use((runtime) =>
         runtime.processThreadHead(receipt.threadId),
-      ).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(after)));
+      ).pipe(
+        Effect.provide(
+          DurableAgentRuntime.layerWithBindings(after).pipe(Layer.provide(runStorageLayer())),
+        ),
+      );
 
       expect(Option.isSome(outcome) && outcome.value.outcome).toBe("completed");
       expect(discoveries).toBe(1);
@@ -990,7 +1001,9 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       ]);
 
       const runtime = yield* DurableAgentRuntime.pipe(
-        Effect.provide(DurableAgentRuntime.layerWithBindings(bindings)),
+        Effect.provide(
+          DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer())),
+        ),
       );
 
       for (let run = 0; run < 2; run++) {
@@ -1189,10 +1202,9 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         ).toHaveLength(2);
       }).pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithServices.pipe(
-            Layer.provideMerge(baseLayer),
-            Layer.provide(observerLayer),
-          ),
+          DurableAgentRuntime.layerWithServices
+            .pipe(Layer.provide(runStorageLayer()))
+            .pipe(Layer.provideMerge(baseLayer), Layer.provide(observerLayer)),
           { local: true },
         ),
       );
@@ -1417,7 +1429,9 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         yield* authorization.reset;
       }).pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(
             Layer.provide(
               Layer.succeed(RunContextPreparation, {
                 hook: {
@@ -1524,7 +1538,9 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
         const runtime = yield* DurableAgentRuntime.pipe(
           Effect.provide(
-            Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
+            Layer.fresh(
+              DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+            ).pipe(
               Layer.provide(
                 Layer.succeed(RunToolAuthorization, { authorize: () => Effect.fail(check) }),
               ),
@@ -1613,7 +1629,9 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
       const runtime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(
             Layer.provide(
               Layer.succeed(RunToolAuthorization, {
                 // TestClock stays frozen: persist intent and deny before the watcher can tick.

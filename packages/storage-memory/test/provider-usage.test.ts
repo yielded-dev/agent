@@ -9,6 +9,7 @@ import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   ApprovalDecisionCommand,
   IdempotencyKey,
@@ -114,7 +115,11 @@ for (const failure of ["open-part", "missing-usage"] as const) {
 
       yield* Effect.gen(function* () {
         const store = yield* ThreadStore;
-        const runtime = yield* DurableAgentRuntime.pipe(Effect.provide(DurableAgentRuntime.layer));
+
+        const runtime = yield* DurableAgentRuntime.pipe(
+          Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+        );
+
         const threadId = Schema.decodeSync(ThreadId)("usage-test");
         const agent = Agent.withModel(definition, model);
 
@@ -297,7 +302,9 @@ it.live(
         const threadId = Schema.decodeSync(ThreadId)("recovery-usage");
 
         const freshRuntime = DurableAgentRuntime.pipe(
-          Effect.provide(Layer.fresh(DurableAgentRuntime.layer)),
+          Effect.provide(
+            Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+          ),
         );
 
         const receipt = yield* Effect.scoped(

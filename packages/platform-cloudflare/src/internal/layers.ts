@@ -69,6 +69,8 @@ import {
   RunToolAuthorization,
   toolFailureObserverLayer,
 } from "@yielded/agent/run-options";
+import type { RunStorage } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   LedgerError,
@@ -79,6 +81,7 @@ import {
   type WorkerStopCommand,
 } from "@yielded/agent/submission-ledger";
 import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
+import type { ThreadReader } from "@yielded/agent/thread-store";
 import { ThreadStoreError, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -228,6 +231,8 @@ export type CloudflareDurableRuntimeServices =
   | DurableAgentRuntime
   | SubmissionLedger
   | ThreadStore
+  | ThreadReader
+  | RunStorage
   | MessageDeliveryStore
   | WakeScheduler
   | DurableAlarmService
@@ -964,6 +969,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       );
 
       const runtimeStack = application.pipe(
+        Layer.provideMerge(runStorageLayer()),
         Layer.provide(
           cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
         ),
@@ -986,7 +992,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   const storage = store.lifecyclePublications;
 
                   const context = yield* Effect.context<
-                    LifecyclePublicationHandler | ThreadStore | SubmissionLedger
+                    LifecyclePublicationHandler | ThreadStore | ThreadReader | SubmissionLedger
                   >();
 
                   const failure = (cause: unknown) => {

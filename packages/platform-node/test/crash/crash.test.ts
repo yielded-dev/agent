@@ -448,6 +448,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(records.map((envelope) => envelope.record.recordId)).toContain(
                   modelResponseRecordId(runId, 2),
                 );
+                expect(records.map((envelope) => envelope.record.recordId)).toContain(
+                  modelResponseInterruptedRecordId(runId, 1),
+                );
                 const settlement = yield* host.awaitSettlement(receipt);
 
                 expect(settlement.outcome).toBe("completed");

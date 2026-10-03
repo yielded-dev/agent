@@ -1,17 +1,26 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { SqliteClient } from "@effect/sql-sqlite-node";
+import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
 import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqlThreadStore } from "@yielded/agent-storage-sql/sql-thread-store";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { ProducerEpoch } from "@yielded/agent/records";
-import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
-import { ThreadStore } from "@yielded/agent/thread-store";
-import type { Crypto } from "effect";
-import { Duration, Effect, Layer, Schema } from "effect";
+import { RunStorage } from "@yielded/agent/run-storage";
+import {
+  DEFAULT_OWNERSHIP_LEASE_DURATION,
+  SubmissionLedger,
+} from "@yielded/agent/submission-ledger";
+import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
+import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 import { CurrentSqliteStorageVersion } from "./internal/migrations.ts";
-import { initializeSqliteJournal, sqliteErrors } from "./internal/sqlite-journal.ts";
+import {
+  initializeSqliteJournal,
+  initializeSqliteJournalKernel,
+  sqliteErrors,
+} from "./internal/sqlite-journal.ts";
+import { sqlFailure } from "./internal/sqlite-ledger-errors.ts";
 import { SqliteStorageConfig, SqliteStorageConfigValue } from "./SqliteStorageConfig.ts";
 import {
   SqliteStorageCompatibilityError,
@@ -47,6 +56,16 @@ export type SqliteStorageInitializationError =
   | SqliteStorageCorruptionError
   | SqliteStorageError;
 
+/** Only the exclusive client acquisition can construct managed mutation authority. */
+class ExclusiveSqliteHost extends Context.Service<
+  ExclusiveSqliteHost,
+  { readonly sql: SqlClientService.SqlClient }
+>()("@effect-agent/storage-sqlite/internal/ExclusiveSqliteHost") {}
+
+const PersistentTriggerHeader = Schema.Tuple([
+  Schema.Struct({ user_version: SqlInteger, trigger_count: SqlInteger }),
+]);
+
 const ExclusiveMode = Schema.Tuple([Schema.Struct({ locking_mode: Schema.Literal("exclusive") })]);
 const JournalMode = Schema.Tuple([Schema.Struct({ journal_mode: Schema.String })]);
 
@@ -73,13 +92,15 @@ const RetainedOwnership = Schema.Array(
  * This excludes ALL other database connections, including readers. After compatibility checks,
  * retire retained ownership and advance its Thread epochs in one transaction, then recover
  * through the ordinary ledger protocol. Producer names confer no takeover authority. Journals,
- * receipts, queue states and unresolved external effects are left intact.
+ * receipts, queue states and unresolved external effects are left intact. Managed databases
+ * must contain no persistent SQL triggers: hidden metadata writes would invalidate claim-scoped
+ * authority. Trigger-bearing databases are rejected before initialization or ownership retirement.
  */
 export const exclusiveHostClientLayer: Layer.Layer<
-  SqlClientService.SqlClient,
+  SqlClientService.SqlClient | ExclusiveSqliteHost,
   SqliteStorageInitializationError,
   SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
-> = Layer.effect(SqlClientService.SqlClient)(
+> = Layer.effectContext(
   Effect.gen(function* () {
     const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
 
@@ -124,6 +145,22 @@ export const exclusiveHostClientLayer: Layer.Layer<
       // A mode setting alone is not authority. Acquire the write lock now; EXCLUSIVE mode
       // retains it after commit/rollback until this client's enclosing Scope closes.
       yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(Effect.void);
+
+      const [triggerHeader] = yield* Schema.decodeUnknownEffect(PersistentTriggerHeader)(
+        yield* sql`
+          SELECT (SELECT user_version FROM pragma_user_version) AS user_version,
+                 (SELECT COUNT(*) FROM main.sqlite_master WHERE type = 'trigger') AS trigger_count
+        `,
+      );
+
+      if (triggerHeader.trigger_count !== 0) {
+        return yield* SqliteStorageCompatibilityError.make({
+          actualVersion: triggerHeader.user_version,
+          supportedVersion: CurrentSqliteStorageVersion,
+          message:
+            "Managed-host databases cannot contain persistent SQL triggers; no schema or ownership data was changed.",
+        });
+      }
     }).pipe(
       Effect.mapError((error) =>
         Schema.is(SqliteStorageCompatibilityError)(error) ? error : acquireError(error),
@@ -183,7 +220,9 @@ export const exclusiveHostClientLayer: Layer.Layer<
         ),
       );
 
-    return sql;
+    return Context.make(SqlClientService.SqlClient, sql).pipe(
+      Context.add(ExclusiveSqliteHost, { sql }),
+    );
   }),
 );
 
@@ -205,10 +244,71 @@ const makeServices = Effect.fn("SqliteThreadStore.makeServices")(function* () {
  * authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore,
+  ThreadStore | ThreadReader,
   SqliteStorageInitializationError,
   SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
-> = Layer.effect(ThreadStore, makeServices());
+> = Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore)).pipe(
+  Layer.provideMerge(Layer.effect(ThreadStore, makeServices())),
+);
+
+/**
+ * Managed-host storage for an already acquired exclusiveHostClientLayer. The composition
+ * root consumes the mutation ports privately and exposes only ThreadReader to application
+ * bindings. Its private construction witness binds the exact exclusive client; supplying a
+ * generic SqlClient cannot create this owner. A nonexclusive client must use the ordinary
+ * ThreadStore and ledger Layers.
+ */
+export const exclusiveRunStorageLayer = Layer.effectContext(
+  Effect.gen(function* () {
+    const exclusive = yield* ExclusiveSqliteHost;
+
+    const context = Context.add(
+      Context.pick(
+        Crypto.Crypto,
+        SqliteStorageConfig,
+        SqliteStorageFailpoint,
+        Scope.Scope,
+      )(
+        yield* Effect.context<
+          Crypto.Crypto | SqliteStorageConfig | SqliteStorageFailpoint | Scope.Scope
+        >(),
+      ),
+      SqlClientService.SqlClient,
+      exclusive.sql,
+    );
+
+    return yield* Effect.setContext(
+      Effect.gen(function* () {
+        const config = yield* SqliteStorageConfig;
+        const failpoint = yield* SqliteStorageFailpoint;
+        const journal = yield* initializeSqliteJournalKernel();
+
+        const services = yield* makeSqlRunStorage(
+          journal,
+          {
+            ...config,
+            errors: sqliteErrors,
+            hitFailpoint: failpoint.hit,
+            offsetPrefix: "effect-agent-sqlite@1:",
+          },
+          {
+            errors: sqliteErrors,
+            hitFailpoint: failpoint.hit,
+            ownershipLeaseDuration: config.ownershipLeaseDuration,
+            sqlFailure,
+          },
+        );
+
+        return Context.make(ThreadStore, services.store).pipe(
+          Context.add(ThreadReader, services.reader),
+          Context.add(SubmissionLedger, services.ledger),
+          Context.add(RunStorage, services.runStorage),
+        );
+      }),
+      context,
+    );
+  }),
+);
 
 /**
  * Validated SQLite storage configuration Layer with the documented defaults applied. Shared
@@ -250,7 +350,7 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: SqliteStorageOptions,
-): Layer.Layer<ThreadStore, SqliteStorageInitializationError> =>
+): Layer.Layer<ThreadStore | ThreadReader, SqliteStorageInitializationError> =>
   Layer.unwrap(
     Effect.map(SqliteStorageConfig, (config) =>
       threadStoreLayer.pipe(

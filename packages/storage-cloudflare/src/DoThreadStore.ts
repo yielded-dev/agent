@@ -27,6 +27,7 @@ import {
   ThreadObservation,
   ThreadReadRequest,
   ThreadStore,
+  ThreadReader,
   type ThreadCheckpoints,
   ThreadStoreError,
   ThreadStoreDiagnostic,
@@ -1045,10 +1046,10 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
  * Crypto authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore,
+  ThreadStore | ThreadReader,
   DoStorageInitializationError,
   DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
-> = Layer.effectContext(makeServices());
+> = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
 
 /**
  * Validated Durable Object storage configuration Layer with the documented defaults applied.
@@ -1092,7 +1093,7 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: DoStorageOptions,
-): Layer.Layer<ThreadStore, DoStorageInitializationError> =>
+): Layer.Layer<ThreadStore | ThreadReader, DoStorageInitializationError> =>
   Layer.unwrap(
     Effect.map(DoStorageConfig, (config) =>
       threadStoreLayer.pipe(

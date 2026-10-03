@@ -6,6 +6,7 @@ import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object"
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { Receipt } from "@yielded/agent/receipt";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
@@ -195,6 +196,7 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
             Effect.provideService(DurableObjectContext, { ctx: state, env }),
             Effect.provide(
               DurableAgentRuntime.layer.pipe(
+                Layer.provide(runStorageLayer()),
                 Layer.provide(observedLedger),
                 Layer.provideMerge(ThreadObject.layer([])),
                 Layer.provide(

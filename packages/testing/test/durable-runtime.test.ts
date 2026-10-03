@@ -47,6 +47,7 @@ import {
   runIdForSubmission,
 } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   IdempotencyKey,
@@ -269,7 +270,9 @@ const baseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const AnswerCompletionOutput = Schema.Struct({ answer: Schema.String });
 
@@ -322,9 +325,9 @@ const corruptedCompletionBaseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const corruptedCompletionTestLayer = DurableAgentRuntime.layer.pipe(
-  Layer.provideMerge(corruptedCompletionBaseLayer),
-);
+const corruptedCompletionTestLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(corruptedCompletionBaseLayer));
 
 class ProgressWaitTestControl extends Context.Service<
   ProgressWaitTestControl,
@@ -400,9 +403,9 @@ const progressWaitBaseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const progressWaitTestLayer = DurableAgentRuntime.layer.pipe(
-  Layer.provideMerge(progressWaitBaseLayer),
-);
+const progressWaitTestLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(progressWaitBaseLayer));
 
 const waitForAtLeast = (ref: Ref.Ref<number>, expected: number): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -1755,7 +1758,9 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         expect(JSON.stringify(records)).not.toContain("HOST-REFERENCE");
       }).pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(
             Layer.provide(ContextCompactor.layerRollover),
             Layer.provide(
               Layer.succeed(RunContextPreparation, {
@@ -1970,10 +1975,9 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         );
       }).pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
-            Layer.provide(preparation),
-            Layer.provideMerge(baseLayer),
-          ),
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(Layer.provide(preparation), Layer.provideMerge(baseLayer)),
         ),
       );
     },
@@ -2154,7 +2158,11 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
               after.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
             ).toHaveLength(1);
           }).pipe(
-            Effect.provide(DurableAgentRuntime.layerWithBindings([binding])),
+            Effect.provide(
+              DurableAgentRuntime.layerWithBindings([binding]).pipe(
+                Layer.provide(runStorageLayer()),
+              ),
+            ),
             Effect.provideService(RunContextPreparation, {
               hook: {
                 prepare: ({ source }) =>
@@ -2244,10 +2252,20 @@ layer(testLayer)("deployment continuity", (it) => {
           yield* clearFailpoint;
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         const runtime = yield* DurableAgentRuntime.pipe(
-          Effect.provide(DurableAgentRuntime.layerWithBindings(currentBindings)),
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
         );
 
         yield* runtime.runRecovery();
@@ -2384,26 +2402,34 @@ layer(testLayer)("deployment continuity", (it) => {
           yield* clearFailpoint;
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         const retained = yield* readLog(receipt.threadId);
         const reviewed: Array<unknown> = [];
 
-        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
-          Layer.provide(
-            Layer.succeed(ToolReconciler)({
-              reconcile: (evidence) => {
-                reviewed.push(evidence);
+        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings)
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provide(
+              Layer.succeed(ToolReconciler)({
+                reconcile: (evidence) => {
+                  reviewed.push(evidence);
 
-                return Effect.succeed(
-                  proof === "NeverStarted"
-                    ? ReconciliationNeverStarted.make({})
-                    : ReconciliationSafeToRetry.make({}),
-                );
-              },
-            }),
-          ),
-        );
+                  return Effect.succeed(
+                    proof === "NeverStarted"
+                      ? ReconciliationNeverStarted.make({})
+                      : ReconciliationSafeToRetry.make({}),
+                  );
+                },
+              }),
+            ),
+          );
 
         const outcome = yield* DurableAgentRuntime.use((runtime) =>
           runtime.processThreadHead(receipt.threadId),
@@ -2501,7 +2527,13 @@ layer(testLayer)("deployment continuity", (it) => {
           yield* Fiber.interrupt(worker);
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         expect(yield* Ref.get(effects)).toBe(1);
         expect(yield* Ref.get(finalized)).toBe(1);
@@ -2511,27 +2543,29 @@ layer(testLayer)("deployment continuity", (it) => {
           [],
         );
 
-        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
-          Layer.provide(
-            Layer.succeed(ToolReconciler)({
-              reconcile: (evidence) => {
-                expect(evidence).toMatchObject({
-                  submissionId: receipt.submissionId,
-                  runId: runIdForSubmission(receipt.submissionId),
-                  toolCallId: "search-1",
-                  parameters: { query: "sea" },
-                });
+        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings)
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provide(
+              Layer.succeed(ToolReconciler)({
+                reconcile: (evidence) => {
+                  expect(evidence).toMatchObject({
+                    submissionId: receipt.submissionId,
+                    runId: runIdForSubmission(receipt.submissionId),
+                    toolCallId: "search-1",
+                    parameters: { query: "sea" },
+                  });
 
-                return Effect.succeed(
-                  ReconciliationCompleted.make({
-                    result: { available: true, supplierReceipt: "external-1" },
-                    isFailure: false,
-                  }),
-                );
-              },
-            }),
-          ),
-        );
+                  return Effect.succeed(
+                    ReconciliationCompleted.make({
+                      result: { available: true, supplierReceipt: "external-1" },
+                      isFailure: false,
+                    }),
+                  );
+                },
+              }),
+            ),
+          );
 
         const settled = yield* DurableAgentRuntime.use((runtime) =>
           runtime.processThreadHead(receipt.threadId),
@@ -2694,34 +2728,36 @@ layer(testLayer)("independent input scheduling", (it) => {
               ),
           };
 
-          const runtimeLayer = DurableAgentRuntime.layerWithBindings([tracked]).pipe(
-            Layer.provide(
-              Layer.succeed(SubmissionScheduling, {
-                yieldTo: ({ next }) => Effect.succeed(next.principal === "human-one"),
-              }),
-            ),
-            Layer.provide(
-              Layer.succeed(SubmissionLedger, {
-                ...ledger,
-                claimJoining: () => Effect.succeed([]),
-              }),
-            ),
-            Layer.provide(
-              Layer.succeed(RunToolAuthorization, {
-                authorize: (request) =>
-                  Effect.sync(() => {
-                    const admitted = Schema.decodeUnknownSync(input)(request.input);
+          const runtimeLayer = DurableAgentRuntime.layerWithBindings([tracked])
+            .pipe(Layer.provide(runStorageLayer()))
+            .pipe(
+              Layer.provide(
+                Layer.succeed(SubmissionScheduling, {
+                  yieldTo: ({ next }) => Effect.succeed(next.principal === "human-one"),
+                }),
+              ),
+              Layer.provide(
+                Layer.succeed(SubmissionLedger, {
+                  ...ledger,
+                  claimJoining: () => Effect.succeed([]),
+                }),
+              ),
+              Layer.provide(
+                Layer.succeed(RunToolAuthorization, {
+                  authorize: (request) =>
+                    Effect.sync(() => {
+                      const admitted = Schema.decodeUnknownSync(input)(request.input);
 
-                    authorizations.push({ runId: request.runId, question: admitted.question });
-                    if (activeSubmission === undefined)
-                      throw new Error("Missing active submission");
-                    expect(request.runId).toBe(runIdForSubmission(activeSubmission));
+                      authorizations.push({ runId: request.runId, question: admitted.question });
+                      if (activeSubmission === undefined)
+                        throw new Error("Missing active submission");
+                      expect(request.runId).toBe(runIdForSubmission(activeSubmission));
 
-                    return { _tag: "allowed" as const };
-                  }),
-              }),
-            ),
-          );
+                      return { _tag: "allowed" as const };
+                    }),
+                }),
+              ),
+            );
 
           let first: Receipt;
           let second: Receipt;

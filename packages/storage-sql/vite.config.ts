@@ -5,6 +5,7 @@ export default defineConfig({
     entry: [
       "src/index.ts",
       "src/SqlStorage.ts",
+      "src/SqlRunStorage.ts",
       "src/SqlStorageFailpoint.ts",
       "src/SqlStorageProgress.ts",
       "src/SqlJournal.ts",

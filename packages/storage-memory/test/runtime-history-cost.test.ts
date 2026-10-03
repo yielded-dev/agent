@@ -25,6 +25,7 @@ import {
   ThreadCreated,
 } from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   IdempotencyKey,
   Principal,
@@ -264,7 +265,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   const agent = Agent.withModel(definition, model);
 
   const runtime = yield* DurableAgentRuntime.pipe(
-    Effect.provide(DurableAgentRuntime.layer),
+    Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
     Effect.provideService(ThreadStore, counted),
   );
 

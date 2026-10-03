@@ -31,6 +31,7 @@ import {
 } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
@@ -59,6 +60,7 @@ import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import {
   ThreadExportRequest,
   ThreadStore,
+  ThreadReader,
   LoadCheckpointRequest,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
@@ -1080,19 +1082,23 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
 
   // RUN-036: certification uses the default-none Tool failure observer. Trusted application
   // reporting adds no durable transition and is verified separately from adapter certification.
-  const environment = Layer.mergeAll(
-    options.submissionLedger,
-    capturingStore,
-    options.wakeScheduler ?? WakeScheduler.layerNoop,
-    DurableRuntimeFailpointTestControl.layer,
-    ToolReconciler.uncertain,
-    DurableRuntimeConfig.layer({
-      deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
-      producerId: Schema.decodeSync(ProducerId)("producer-certification"),
-      settlementPollInterval: Duration.millis(50),
-      leaseRenewalInterval: Duration.seconds(5),
-      abortPollInterval: Duration.millis(50),
-    }),
+  const environment = Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        options.submissionLedger,
+        capturingStore,
+        options.wakeScheduler ?? WakeScheduler.layerNoop,
+        DurableRuntimeFailpointTestControl.layer,
+        ToolReconciler.uncertain,
+        DurableRuntimeConfig.layer({
+          deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
+          producerId: Schema.decodeSync(ProducerId)("producer-certification"),
+          settlementPollInterval: Duration.millis(50),
+          leaseRenewalInterval: Duration.seconds(5),
+          abortPollInterval: Duration.millis(50),
+        }),
+      ),
+    ),
   );
 
   const leaseAdvance = Duration.millis(

@@ -250,9 +250,9 @@ export const toolApprovalDecisionRecordId = (
 ): RecordId => decodeRecordId(`approval-decision:${runId}:${turn}:${toolCallId}`);
 
 /**
- * Deterministic identity of one superseded Attempt's `ModelResponseInterrupted` audit record
- * (durability §9). Keyed by the superseded epoch, so each interrupted ownership period is
- * recorded at most once; the one-record batch reuses the same string.
+ * Deterministic identity of a conservative `ModelResponseInterrupted` audit, keyed by the
+ * preceding fencing generation. Retirement and repair can also advance generations; the key
+ * does not identify an exact missing model call. The one-record batch reuses the same string.
  */
 export const modelResponseInterruptedRecordId = (runId: RunId, supersededEpoch: number): RecordId =>
   decodeRecordId(`interrupted:${runId}:${supersededEpoch}`);

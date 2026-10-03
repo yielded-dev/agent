@@ -29,6 +29,7 @@ import {
   Digest,
   ProducerId,
 } from "@yielded/agent/records";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ApprovalDecisionCommand,
@@ -235,7 +236,9 @@ const baseLayer = Layer.mergeAll(
   authorizerLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const readLog = (threadId: string) =>
   Effect.gen(function* () {
@@ -560,7 +563,9 @@ layer(testLayer)("DUR-017/SEC-011 P7 administrative operations", (it) => {
           ),
         ).toBe("OperationDenied");
       }).pipe(
-        Effect.provide(Layer.fresh(DurableAgentRuntime.layer)),
+        Effect.provide(
+          Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+        ),
         Effect.provideService(SubmissionLedger, guardedLedger),
         Effect.provideService(WakeScheduler, { ...wake, notify: () => protectedAccess("notify") }),
       );
@@ -632,7 +637,9 @@ layer(testLayer)("DUR-017/SEC-011 P7 administrative operations", (it) => {
         expect(settlement.submissionId).toBe(allowed.submissionId);
         expect(settlement.outcome).toBe("completed");
       }).pipe(
-        Effect.provide(Layer.fresh(DurableAgentRuntime.layer)),
+        Effect.provide(
+          Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+        ),
         Effect.provideService(SubmissionLedger, guardedLedger),
         Effect.provideService(OperationAuthorizer, authorizer),
       );

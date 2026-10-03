@@ -22,6 +22,7 @@ import {
   WorkerOriginRecorded,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   AdmissionRequest,
@@ -115,6 +116,7 @@ const HISTORY_RECORDS = 2_050;
 const HISTORY_TAIL = Schema.decodeSync(CanonicalSequence)(HISTORY_RECORDS);
 
 const runtimeLayer = DurableAgentRuntime.layer.pipe(
+  Layer.provide(runStorageLayer()),
   Layer.provideMerge(
     Layer.mergeAll(
       countingThreadStoreLayer,

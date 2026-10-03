@@ -20,6 +20,7 @@ import {
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadStore,
+  ThreadReader,
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
@@ -1075,8 +1076,10 @@ export const routedSubmissionLedgerLayer = (
  */
 export const routedThreadStoreLayer = (
   options: RoutedPortOptions,
-): Layer.Layer<ThreadStore, never, ThreadStore | ThreadPortTransport> =>
-  Layer.effectContext(makeRoutedStoreServices(options));
+): Layer.Layer<ThreadStore | ThreadReader, never, ThreadStore | ThreadPortTransport> =>
+  ThreadReader.layer().pipe(
+    Layer.provideMerge(Layer.effectContext(makeRoutedStoreServices(options))),
+  );
 
 /** Route validated worker admission as one operation; source policy hooks stay at the caller. */
 export const routedWorkerAdmissionLayer = (options: RoutedPortOptions) =>

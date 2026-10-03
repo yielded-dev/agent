@@ -1,6 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { SqliteMigrator } from "@effect/sql-sqlite-node";
-import { makeSqlJournal } from "@yielded/agent-storage-sql/sql-journal";
+import { makeSqlJournalKernel } from "@yielded/agent-storage-sql/sql-journal";
 import { createMessageDeliveryPendingIndex } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeRowDecoder, makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import {
@@ -302,7 +302,7 @@ const checkPredecessorLayout = Effect.fn("SqliteJournal.checkPredecessorLayout")
   }
 });
 
-export const initializeSqliteJournal = Effect.fn("SqliteJournal.initialize")(function* () {
+export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { hit: failpoint } = yield* SqliteStorageFailpoint;
   const { busyTimeout } = yield* SqliteStorageConfig;
@@ -771,7 +771,7 @@ export const initializeSqliteJournal = Effect.fn("SqliteJournal.initialize")(fun
           })
         : storageError(operation)(error);
 
-  return yield* makeSqlJournal({
+  return yield* makeSqlJournalKernel({
     errors: sqliteErrors,
     hitFailpoint: failpoint,
     transactions: {
@@ -795,5 +795,8 @@ export const initializeSqliteJournal = Effect.fn("SqliteJournal.initialize")(fun
     },
   });
 });
+
+export const initializeSqliteJournal = () =>
+  Effect.map(initializeSqliteJournalKernel(), (kernel) => kernel.journal);
 
 export type SqliteJournal = Effect.Success<ReturnType<typeof initializeSqliteJournal>>;

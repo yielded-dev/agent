@@ -52,7 +52,7 @@ export interface SqlThreadStoreOptions<
 }
 
 /** Canonical ThreadStore behavior over an adapter-initialized SQL journal. */
-export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
+export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -487,14 +487,16 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     yield* hitFailpoint("materialize:after");
   });
 
-  const append: ThreadStore["Service"]["append"] = Effect.fn("SqlThreadStore.append")(function* (
+  const appendKernel = Effect.fn("SqlThreadStore.append")(function* (
     request: FencedAppendRequest,
+    requireMaterialized: Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
+    commit: SqlJournal<S, C, W, F>["append"],
   ) {
     const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate canonical append", error)),
     );
 
-    yield* requireThread(journal, validated.threadId);
+    yield* requireMaterialized;
 
     const tailDigest = yield* provideCrypto(
       digestCanonicalBatch(validated.expectedTailDigest, validated.batch),
@@ -525,7 +527,7 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
 
     yield* hitFailpoint("append:before");
 
-    const result = yield* journal.append(rawRequest).pipe(
+    const result = yield* commit(rawRequest).pipe(
       Effect.mapError((error) => {
         if (isFenceRejected(error) || isAppendConflict(error)) return error;
 
@@ -849,13 +851,18 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
 
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
 
-  return ThreadStore.of({
+  const store = ThreadStore.of({
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     countPeerMessages: selectedReads.countPeerMessages,
     readIdentity: selectedReads.readIdentity,
-    append,
+    append: (request) =>
+      appendKernel(
+        request,
+        Effect.suspend(() => requireThread(journal, request.threadId)),
+        journal.append,
+      ),
     export: exportThread,
     inspectTail,
     materialize,
@@ -864,4 +871,20 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
     recoveryCheckpoints: { save: saveRecoveryCheckpoint, load: loadRecoveryCheckpoint },
   });
+
+  return {
+    store,
+    appendOwned: (request: FencedAppendRequest, commit: SqlJournal<S, C, W, F>["append"]) =>
+      appendKernel(request, Effect.void, commit),
+  };
 });
+
+export const makeSqlThreadStore = <
+  S extends Diagnostic,
+  C extends Diagnostic,
+  W extends Diagnostic,
+  F extends Diagnostic,
+>(
+  journal: SqlJournal<S, C, W, F>,
+  options: SqlThreadStoreOptions<S, C, F>,
+) => Effect.map(makeSqlThreadStoreKernel(journal, options), (kernel) => kernel.store);

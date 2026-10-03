@@ -1,4 +1,4 @@
-import { Context, Effect, Option, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
@@ -86,7 +86,7 @@ const selectedRecords = Effect.fnUntraced(function* (
   selection: ThreadSelection,
   limit: number,
 ) {
-  const store = yield* ThreadStore;
+  const store = yield* ThreadReader;
   const records: Array<CanonicalRecordEnvelope> = [];
   let afterSequence: CanonicalSequence | undefined;
 
@@ -170,7 +170,7 @@ export const readWorkerState = Effect.fn("ThreadStore.readWorkerState")(function
   yield* Schema.decodeEffect(ThreadWorkerStateRequest)(request).pipe(
     Effect.mapError(() => incomplete("readWorkerState request")),
   );
-  const store = yield* ThreadStore;
+  const store = yield* ThreadReader;
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
 
   const records = yield* selectedRecords(
@@ -206,7 +206,7 @@ export const readOutstanding = Effect.fn("ThreadStore.readOutstanding")(function
   yield* Schema.decodeEffect(ThreadOutstandingRequest)(request).pipe(
     Effect.mapError(() => incomplete("readOutstanding request")),
   );
-  const store = yield* ThreadStore;
+  const store = yield* ThreadReader;
   const ledger = yield* SubmissionLedger;
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
 
@@ -635,3 +635,30 @@ export class ThreadStore extends Context.Service<
       | undefined;
   }
 >()("@effect-agent/thread/ThreadStore") {}
+
+/** Canonical observation without append, materialization, or checkpoint mutation authority. */
+export class ThreadReader extends Context.Service<
+  ThreadReader,
+  Pick<
+    ThreadStore["Service"],
+    "read" | "observe" | "export" | "inspectTail" | "readIdentity" | "countPeerMessages"
+  >
+>()("@effect-agent/thread/ThreadReader") {
+  static fromStore(store: ThreadStore["Service"]): ThreadReader["Service"] {
+    return {
+      read: store.read,
+      observe: store.observe,
+      export: store.export,
+      inspectTail: store.inspectTail,
+      readIdentity: store.readIdentity,
+      ...(store.countPeerMessages === undefined
+        ? {}
+        : { countPeerMessages: store.countPeerMessages }),
+    };
+  }
+
+  /** Capture this assembly's store, independently of other local or routed stores. */
+  static layer() {
+    return Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore));
+  }
+}

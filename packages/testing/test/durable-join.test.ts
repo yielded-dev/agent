@@ -35,6 +35,7 @@ import {
   type CanonicalRecordEnvelope,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   IdempotencyKey,
@@ -161,7 +162,9 @@ const baseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const readLog = (threadId: string) =>
   Effect.gen(function* () {
@@ -364,7 +367,7 @@ layer(Layer.mergeAll(baseLayer, publicationStorageLayer))("asynchronous lifecycl
         expect(delivered).toEqual(pending[1]?.map((fact) => fact.id));
         expect(failureTag(result)).toBe("LifecyclePublicationError");
         expect(yield* publications.pending(Number.MAX_SAFE_INTEGER, 2)).toEqual([pending[0]]);
-      }).pipe(Effect.provide(DurableAgentRuntime.layer));
+      }).pipe(Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))));
     }),
   );
 });

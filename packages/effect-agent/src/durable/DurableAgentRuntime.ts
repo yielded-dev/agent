@@ -14,7 +14,6 @@ import {
   Option,
   Ref,
   Result,
-  Schedule,
   Schema,
   Semaphore,
   Stream,
@@ -279,6 +278,14 @@ import {
   turnResultsBatch,
 } from "./RunJournal.ts";
 import {
+  RunStorage,
+  bindRunOwnership,
+  makeRunWriter,
+  type RunOwnership,
+  type RunStorageSession,
+  type RunWriter,
+} from "./RunStorage.ts";
+import {
   type AdmissionFence,
   AdmissionPolicyError,
   type AbortIntent,
@@ -296,17 +303,14 @@ import {
   ApprovalPendingSuspension,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
-  ChildBudgetReservationRequest,
   ChildReservationId,
   ChildSettledNotification,
   ClaimHandoff,
   SubmissionScheduling,
-  ClaimJoiningRequest,
   type JoiningClaim,
   ClaimRequest,
   IdempotencyKey,
   LedgerError,
-  MarkInputAppliedRequest,
   MarkJoinedRequest,
   MarkReadyRequest,
   MarkUnknownRequest,
@@ -316,7 +320,6 @@ import {
   RecoverySnapshotRequest,
   ReleaseChildBudgetRequest,
   ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   RevertJoiningRequest,
   SettlementFinalization,
   SettlementReservation,
@@ -362,6 +365,7 @@ import {
   ThreadCheckpoint,
   SaveRecoveryCheckpointRequest,
   getRecord,
+  ThreadReader,
   getRunInput,
 } from "./ThreadStore.ts";
 import { PreparedToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
@@ -405,8 +409,6 @@ const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
 const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
 const READ_PAGE = 1_024;
-/** Stale-tail append retries per batch before the conflict propagates (see `appendBatch`). */
-const MAX_APPEND_FENCE_REFRESHES = 8;
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
 const RECONCILER_AUTHOR = "reconciler";
 /** Canonical `ToolApprovalDecided.resolver` for policy-auto decisions made by the delegate. */
@@ -1237,18 +1239,12 @@ interface PendingToolBatch {
   readonly messages: PersistedJson;
 }
 
-interface AttemptAppendContext {
-  readonly threadId: ThreadId;
-  readonly producerEpoch: ProducerEpoch;
-  readonly tailRef: Ref.Ref<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
-  /** Serializes every canonical append of one Attempt (run commits vs. the abort watcher). */
-  readonly gate: Semaphore.Semaphore;
-}
+type AttemptAppendContext = RunWriter;
 
 /** What the resuming worker knows about the ownership period it superseded (durability §9). */
 interface AttemptLineage {
   readonly attemptId: AttemptId;
-  /** The Thread-store fence BEFORE this Attempt advanced it (0 = no prior producer). */
+  /** The fencing generation preceding this claim (0 = no prior generation). */
   readonly supersededEpoch: ProducerEpoch;
   /** The canonical `input:{sid}` record existed before this Attempt started. */
   readonly inputWasRecorded: boolean;
@@ -1275,6 +1271,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const ledger = yield* SubmissionLedger;
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
+  const reader = ThreadReader.fromStore(store);
+  const runStorage = yield* RunStorage;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
   // Disposable: canonical tail and owner identify the exact projection, never ownership.
@@ -1737,7 +1735,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const runId = runIdForSubmission(submissionId);
 
       const input = yield* getRunInput({ threadId, runId }).pipe(
-        Effect.provideService(ThreadStore, store),
+        Effect.provideService(ThreadReader, reader),
       );
 
       const controls = yield* Effect.forEach(
@@ -1749,7 +1747,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           runCompletedRecordId(runId),
         ],
         (recordId) =>
-          getRecord({ threadId, recordId }).pipe(Effect.provideService(ThreadStore, store)),
+          getRecord({ threadId, recordId }).pipe(Effect.provideService(ThreadReader, reader)),
       );
 
       const fresh = [input, ...controls].every(
@@ -1863,7 +1861,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     priorContext?: ThreadContextCheckpoint,
   ): Effect.fn.Return<void, DurableWorkerFailure> {
     if (store.recoveryCheckpoints === undefined) return;
-    const tail = yield* Ref.get(ctx.tailRef);
+    const tail = yield* ctx.tail;
     const loaded = yield* loadRecoveryCheckpoint(ctx.threadId, tail.sequence);
 
     // Start certification only after compaction has produced an eligible runtime checkpoint.
@@ -2694,89 +2692,18 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       definitions,
     ).pipe(Effect.provideService(ThreadStore, store), Effect.provideService(WakeScheduler, wake));
 
-  const attemptContextFor = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    producerEpoch: ProducerEpoch,
-  ): Effect.fn.Return<AttemptAppendContext, ThreadStoreError | ThreadNotMaterialized> {
+  const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
+    makeRunWriter(store, threadId, producerEpoch);
+
+  /** Ownership-free settlement uses its canonical reservation, never Run execution authority. */
+  const attemptContextAtTail = Effect.fnUntraced(function* (threadId: ThreadId) {
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-    const tailRef = yield* Ref.make({ sequence: tail.tailSequence, digest: tail.tailDigest });
-    const gate = yield* Semaphore.make(1);
 
-    return { threadId, producerEpoch, tailRef, gate };
-  });
-
-  /**
-   * Existing ownership-free settlement protocol for queued aborts and joined outcomes.
-   * Its canonical settlement reservation authorizes the append; it never authorizes tool
-   * execution, unknown-resolution appends, or repair audits beside a live writer.
-   */
-  const attemptContextAtTail = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-  ): Effect.fn.Return<AttemptAppendContext, ThreadStoreError | ThreadNotMaterialized> {
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-    const tailRef = yield* Ref.make({ sequence: tail.tailSequence, digest: tail.tailDigest });
-    const gate = yield* Semaphore.make(1);
-
-    return { threadId, producerEpoch: tail.producerEpoch, tailRef, gate };
+    return yield* makeRunWriter(store, threadId, tail.producerEpoch);
   });
 
   const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
-    ctx.gate.withPermits(1)(
-      Effect.gen(function* () {
-        // Bounded fence refresh on a stale-tail conflict: `AppendConflict(reason: "tail")`
-        // means this batch was NOT appended — another legitimate same-epoch writer advanced
-        // the log after this context read its tail (a parent's establishment repair appending
-        // the deterministic lineage/start records to a child Thread while the child's
-        // own Attempt runs — routine when the child lives in its own Durable Object). The
-        // retry re-reads the ACTUAL tail the conflict carries and re-appends under the SAME
-        // epoch: a superseded epoch still fails `FenceRejected` (DUR-006 untouched) and the
-        // batch/record identity dedupe absorbs true replays. Treating a stale-tail conflict
-        // as "already appended" at the tolerant call sites would let a settlement finalize
-        // WITHOUT its canonical record.
-        for (let refresh = 0; ; refresh++) {
-          const tail = yield* Ref.get(ctx.tailRef);
-
-          const result = yield* store
-            .append(
-              FencedAppendRequest.make({
-                threadId: ctx.threadId,
-                batch,
-                expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
-                producerEpoch: ctx.producerEpoch,
-              }),
-            )
-            .pipe(
-              Effect.catchTag("AppendConflict", (conflict) =>
-                conflict.reason === "tail" &&
-                conflict.actualTailSequence !== undefined &&
-                conflict.actualTailDigest !== undefined &&
-                refresh < MAX_APPEND_FENCE_REFRESHES
-                  ? Effect.as(
-                      Ref.set(ctx.tailRef, {
-                        sequence: conflict.actualTailSequence,
-                        digest: conflict.actualTailDigest,
-                      }),
-                      undefined,
-                    )
-                  : Effect.fail(conflict),
-              ),
-            );
-
-          if (result !== undefined) {
-            yield* Ref.set(ctx.tailRef, {
-              sequence: result.lastSequence,
-              digest: result.tailDigest,
-            });
-            // Canonical storage is already committed. This hint may be lost or duplicated, but
-            // it lets scoped progress waiters re-read promptly without making memory authoritative.
-            yield* wake.notify(ctx.threadId, "progress");
-
-            return result;
-          }
-        }
-      }),
-    );
+    ctx.append(batch).pipe(Effect.tap(() => wake.notify(ctx.threadId, "progress")));
 
   /** Append the canonical `AbortRequested` record; an identity conflict means it already exists. */
   const appendAbortRecord = Effect.fn("DurableAgentRuntime.appendAbortRecord")(function* (
@@ -3242,7 +3169,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const applyCanonicalInput = Effect.fn("DurableAgentRuntime.applyCanonicalInput")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     inputApplied: RecoverySnapshot["inputApplied"],
   ) {
@@ -3252,16 +3179,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
     if (existing !== undefined) {
       if (inputApplied === undefined) {
-        const ownershipToken = yield* Ref.get(tokenRef);
-
-        yield* ledger.markInputApplied(
-          MarkInputAppliedRequest.make({
-            submissionId,
-            ownershipToken,
-            recordId,
-            sequence: existing.sequence,
-          }),
-        );
+        yield* ownership.markInputApplied({ recordId, sequence: existing.sequence });
       }
 
       return;
@@ -3290,16 +3208,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     );
 
     yield* hit("input:after-canonical-append");
-    const ownershipToken = yield* Ref.get(tokenRef);
-
-    yield* ledger.markInputApplied(
-      MarkInputAppliedRequest.make({
-        submissionId,
-        ownershipToken,
-        recordId,
-        sequence: result.firstSequence,
-      }),
-    );
+    yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
   const canonicalRunStartFromRecords = Effect.fnUntraced(function* (
@@ -3640,7 +3549,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const terminalize = Effect.fn("DurableAgentRuntime.terminalize")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     outcome: AttemptOutcome,
     includeRunId: boolean,
     afterCanonical?: Effect.Effect<void, DurableWorkerFailure>,
@@ -3684,18 +3593,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     // The envelope was constructed from validated parts, so an encode failure is a defect.
     const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
     const recordDigest = yield* withCrypto(digestJson(encoded));
-    const ownershipToken = yield* Ref.get(tokenRef);
 
-    const reserved = yield* ledger.reserveSettlement(
-      SettlementReservation.make({
-        submissionId,
-        ownershipToken,
-        settlementId,
-        outcome: outcome._tag,
-        record,
-        recordDigest,
-      }),
-    );
+    const reserved = yield* ownership.reserveSettlement({
+      settlementId,
+      outcome: outcome._tag,
+      record,
+      recordDigest,
+    });
 
     yield* hit("terminalize:after-reserve");
     yield* appendBatch(
@@ -3798,7 +3702,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const settleAborted = Effect.fn("DurableAgentRuntime.settleAborted")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     intent: AbortIntent,
     evidence: RecoveryEvidence,
     knownIds: Set<string>,
@@ -3819,7 +3723,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* terminalize(
       ctx,
       submission,
-      tokenRef,
+      ownership,
       { _tag: "aborted" },
       evidence.inputRecorded,
     );
@@ -4451,7 +4355,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     function* (
       ctx: AttemptAppendContext,
       parent: SubmissionSnapshot,
-      ownershipToken: OwnershipToken,
+      ownership: RunOwnership,
       unavailableCalls?: ReadonlySet<ToolCallId>,
     ) {
       const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -4617,14 +4521,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             message: `Tool Call ${call.id} has inconsistent canonical child attachment evidence`,
           });
         }
-        yield* ledger
-          .attachChildToReservation(
-            AttachChildToReservationRequest.make({
-              reservationId: reservation.reservationId,
-              ownershipToken,
-              childSubmissionId: started.childSubmissionId,
-            }),
-          )
+        yield* ownership
+          .attachChildToReservation({
+            reservationId: reservation.reservationId,
+            childSubmissionId: started.childSubmissionId,
+          })
           .pipe(
             Effect.catchTag(
               "ChildReservationConflict",
@@ -4669,7 +4570,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const abortAttachedChildren = Effect.fn("DurableAgentRuntime.abortAttachedChildren")(function* (
     ctx: AttemptAppendContext,
     parent: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     knownIds: Set<string>,
   ): Effect.fn.Return<ChildAbortDisposition, DurableWorkerFailure> {
     const submissionId = parent.submissionId;
@@ -4777,14 +4678,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const first = waiting[0];
 
       if (first === undefined) return "clear";
-      const ownershipToken = yield* Ref.get(tokenRef);
 
-      const suspension = yield* ledger.suspend(
-        SuspendRequest.make({
-          submissionId,
-          ownershipToken,
-          reason: WaitingForChildSuspension.make({ children: [first, ...waiting.slice(1)] }),
-        }),
+      const suspension = yield* ownership.suspend(
+        WaitingForChildSuspension.make({ children: [first, ...waiting.slice(1)] }),
       );
 
       yield* hit("subagent:after-suspend");
@@ -4827,10 +4723,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
   /**
    * Superseding-Attempt interruption audit (durability §9): appended at most once per superseded
-   * fence epoch before this Attempt re-invokes the model. It deliberately over-approximates — a
-   * prior ownership period that ended cleanly between commits still gets one — because durable
-   * state cannot distinguish a mid-stream provider loss from a crash between boundaries, and the
-   * honest direction is to record that duplicate provider cost is possible, never to hide it.
+   * fence generation before this Attempt re-invokes the model. It deliberately over-approximates:
+   * an owner may have stopped between commits, and host retirement or repair can advance the
+   * fence without inference. History cannot distinguish these from a lost provider response.
+   * This records incomplete accounting, not an exact number or identity of missing model calls.
    */
   const appendInterruptedAudit = Effect.fn("DurableAgentRuntime.appendInterruptedAudit")(function* (
     ctx: AttemptAppendContext,
@@ -4916,8 +4812,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     >,
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
-    renewAtRef: Ref.Ref<number>,
+    session: RunStorageSession,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     canonical: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     canonicalThrough: CanonicalSequence,
@@ -4972,7 +4867,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const saveRecoveryCheckpoint = Effect.fn("DurableAgentRuntime.saveRecoveryCheckpoint")(
         function* (compactionId: RecordId): Effect.fn.Return<void, DurableWorkerFailure> {
           if (store.recoveryCheckpoints === undefined) return;
-          const tail = yield* Ref.get(ctx.tailRef);
+          const tail = yield* ctx.tail;
 
           const source =
             priorContext === undefined
@@ -6230,7 +6125,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               // compactions remain overlays on this Attempt's append-only source, so omit those
               // overlays while reconstructing the exact source-to-record mapping.
               if (commit.kind !== "summarize") yield* recordHalt(commitPendingTurn);
-              const tail = yield* Ref.get(ctx.tailRef);
+              const tail = yield* ctx.tail;
 
               sourceBoundaries = [];
               sourceJournal = yield* recordHalt(
@@ -6672,16 +6567,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         [];
 
       const claimInputs = Effect.fnUntraced(function* (maxCount: number) {
-        const ownershipToken = yield* Ref.get(tokenRef);
-
-        const claims = yield* ledger.claimJoining(
-          ClaimJoiningRequest.make({
-            threadId: submission.threadId,
-            hostSubmissionId: submissionId,
-            ownershipToken,
-            maxCount,
-          }),
-        );
+        const claims = yield* session.claimJoining(maxCount);
 
         pendingJoinClaims.push(...claims.map((claim) => ({ claim })));
 
@@ -6692,15 +6578,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         claims: ReadonlyArray<(typeof pendingJoinClaims)[number]>,
       ) {
         for (const pending of claims) {
-          yield* ledger.revertJoining(
-            RevertJoiningRequest.make({
-              submissionId: pending.claim.submissionId,
-              guard: {
-                hostSubmissionId: submissionId,
-                ownershipToken: yield* Ref.get(tokenRef),
-              },
-            }),
-          );
+          yield* session.revertJoining(pending.claim.submissionId);
           pendingJoinClaims.splice(pendingJoinClaims.indexOf(pending), 1);
         }
       }, Effect.uninterruptible);
@@ -6806,16 +6684,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                   if (join.state === "joining") {
                     // Canonical input without its joined marker (crash between the append and
                     // `markJoined`): repair the marker from history before reattaching.
-                    const ownershipToken = yield* Ref.get(tokenRef);
-
-                    yield* ledger.markJoined(
-                      MarkJoinedRequest.make({
-                        submissionId: joinId,
-                        ownershipToken,
-                        recordId: existing.record.recordId,
-                        sequence: existing.sequence,
-                      }),
-                    );
+                    yield* session.markJoined(joinId, {
+                      recordId: existing.record.recordId,
+                      sequence: existing.sequence,
+                    });
                   }
                   deliveredJoinInputs.add(joinId);
                   if (
@@ -6870,17 +6742,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                     knownIds.add(recordId);
                     yield* hit("join:after-canonical-append");
                   }
-                  // Re-read the token: the concurrent lease renewal may rotate it mid-batch.
-                  const markToken = yield* Ref.get(tokenRef);
-
-                  yield* ledger.markJoined(
-                    MarkJoinedRequest.make({
-                      submissionId: claim.submissionId,
-                      ownershipToken: markToken,
-                      recordId,
-                      sequence,
-                    }),
-                  );
+                  yield* session.markJoined(claim.submissionId, { recordId, sequence });
                   deliveredJoinInputs.add(claim.submissionId);
                   joinedInputs.push({
                     ...payload,
@@ -7139,7 +7001,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const grantDigest = yield* withCrypto(digestJson(grant.value));
               const allocationDigest = yield* withCrypto(digestJson(allocation.value));
               const reservationId = childReservationIdFor(runId, toolCallId);
-              const ownershipToken = yield* Ref.get(tokenRef);
 
               // Top-level attached declarations retain their independent explicit pool. A
               // child with an ancestor allocation shares its residual with both lifetimes.
@@ -7175,17 +7036,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 );
               }
 
-              yield* ledger
-                .reserveChildBudget(
-                  ChildBudgetReservationRequest.make({
-                    reservationId,
-                    parentSubmissionId: submissionId,
-                    parentToolCallId: toolCallId,
-                    ownershipToken,
-                    allocation: allocation.value,
-                    allocationDigest,
-                  }),
-                )
+              yield* session
+                .reserveChildBudget({
+                  reservationId,
+                  parentToolCallId: toolCallId,
+                  allocation: allocation.value,
+                  allocationDigest,
+                })
                 .pipe(
                   Effect.catchTag(
                     "ChildReservationConflict",
@@ -7289,16 +7146,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 message: `The canonical SubagentStarted record names child ${startedPayload.childSubmissionId} but admission resolved ${admission.childSubmissionId}; establishment fails closed (SUB-016)`,
               });
             }
-            const attachToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .attachChildToReservation(
-                AttachChildToReservationRequest.make({
-                  reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
-                  ownershipToken: attachToken,
-                  childSubmissionId: startedPayload.childSubmissionId,
-                }),
-              )
+            yield* session
+              .attachChildToReservation({
+                reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
+                childSubmissionId: startedPayload.childSubmissionId,
+              })
               .pipe(
                 Effect.catchTag(
                   "ChildReservationConflict",
@@ -8160,35 +8012,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       // Liveness only: the lease keeps the claim visible; correctness stays with the epoch fence.
       // OwnershipLost ends the race and interrupts the Run fiber cleanly.
-      const renewal = halt(
-        Effect.gen(function* () {
-          // Binding selection and preparation consume the acquired lease too. Carry the next
-          // deadline across model continuations; an overdue first renewal must run immediately.
-          const renewAt = yield* Ref.get(renewAtRef);
-          const now = yield* Clock.currentTimeMillis;
-
-          yield* Effect.sleep(Math.max(0, renewAt - now));
-          yield* Effect.repeat(
-            Effect.gen(function* () {
-              const ownershipToken = yield* Ref.get(tokenRef);
-              const renewingAt = yield* Clock.currentTimeMillis;
-
-              const renewal = yield* ledger.renewOwnership(
-                RenewOwnershipRequest.make({ submissionId, ownershipToken }),
-              );
-
-              yield* Ref.set(tokenRef, renewal.ownershipToken);
-              yield* Ref.set(
-                renewAtRef,
-                renewingAt + Duration.toMillis(config.leaseRenewalInterval),
-              );
-            }).pipe(Effect.uninterruptible),
-            { schedule: Schedule.spaced(config.leaseRenewalInterval) },
-          );
-
-          return yield* Effect.never;
-        }),
-      );
+      const renewal = halt(session.maintain(config.leaseRenewalInterval));
 
       const execution = Effect.raceFirst(consume, Effect.raceFirst(abortWatcher, renewal));
 
@@ -8406,27 +8230,21 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       InputPromptValue,
       UpdatesSchema
     >,
-    threadId: ThreadId,
-    claim: Claim,
-    tokenRef: Ref.Ref<OwnershipToken>,
-    renewAtRef: Ref.Ref<number>,
+    session: RunStorageSession,
     resumeAfterRetention: () => void,
     onHandoff: (nextSubmissionId: SubmissionId) => void,
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
-      // The Thread-store fence BEFORE this Attempt advances it identifies the superseded
-      // ownership period for the durability §9 interruption audit.
-      const supersededEpoch = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
-        Effect.map((tail) => tail.producerEpoch),
-        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(ZERO_EPOCH)),
-      );
-
-      // Advance the Thread-store fence to this Attempt's epoch (idempotent when equal).
-      yield* store.materialize(
-        ThreadMaterialization.make({ threadId, producerEpoch: claim.producerEpoch }),
+      // Claim atomically advances the lane fence. SQL/DO share that fence with ThreadStore,
+      // so reading the tail here already observes this claim, not its predecessor. Use the
+      // granted generation; canonical input and response evidence below decide whether a
+      // conservative interruption audit is needed before inference can repeat.
+      const supersededEpoch = Schema.decodeSync(ProducerEpoch)(
+        Math.max(0, claim.producerEpoch - 1),
       );
 
       const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -8450,10 +8268,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       if (submission.state === "admitted") {
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId }));
       }
-      const ctx = yield* attemptContextFor(threadId, claim.producerEpoch);
-
-      let controlThrough = (yield* store.inspectTail(ThreadTailRequest.make({ threadId })))
-        .tailSequence;
+      yield* session.refresh;
+      const ctx: AttemptAppendContext = session;
+      let controlThrough = (yield* session.tail).sequence;
 
       const initialThrough = controlThrough;
 
@@ -8570,26 +8387,22 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         // nonterminal attached child, join every settled child coordinator-side, and settle
         // aborted ONLY once no child obligation stays open. A waiting/blocked disposition ends
         // the ownership period without settling — the obligation stays owed.
-        const disposition = yield* abortAttachedChildren(ctx, submission, tokenRef, knownIds);
+        const disposition = yield* abortAttachedChildren(ctx, submission, session, knownIds);
 
         if (disposition === "waiting") {
           return Option.none<Settlement>();
         }
         if (disposition === "blocked") {
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          yield* ledger
-            .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
           return Option.none<Settlement>();
         }
 
         return Option.some(
-          yield* settleAborted(ctx, submission, tokenRef, snapshot.abortIntent, evidence, knownIds),
+          yield* settleAborted(ctx, submission, session, snapshot.abortIntent, evidence, knownIds),
         );
       }
-      yield* applyCanonicalInput(ctx, submission, tokenRef, records, snapshot.inputApplied);
+      yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
 
       const savedRunTiming = yield* ensureRunStarted(
         ctx,
@@ -8614,7 +8427,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       let expiredChildObligation = false;
 
       if ((yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(runTiming.deadline)) {
-        yield* reconcileRetainedChildren(ctx, submission, yield* Ref.get(tokenRef));
+        yield* reconcileRetainedChildren(ctx, submission, session);
         expiredChildObligation = yield* completeJoinedReleases(submission);
       }
 
@@ -8659,11 +8472,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }
           // This Submission is parked (marked Unknown, or reconciliation itself failed):
           // release the claim without settling — the accepted-work obligation stays owed.
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          yield* ledger
-            .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
           return false;
         }
@@ -8725,12 +8534,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         const children =
           unavailableDelegations.size === 0
             ? undefined
-            : yield* reconcileRetainedChildren(
-                ctx,
-                submission,
-                yield* Ref.get(tokenRef),
-                unavailableDelegations,
-              );
+            : yield* reconcileRetainedChildren(ctx, submission, session, unavailableDelegations);
 
         for (const envelope of yield* refreshControl()) knownIds.add(envelope.record.recordId);
 
@@ -8800,13 +8604,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         const firstWaiting = children?.waiting[0];
 
         if (children !== undefined && firstWaiting !== undefined) {
-          const disposition = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken: yield* Ref.get(tokenRef),
-              reason: WaitingForChildSuspension.make({
-                children: [firstWaiting, ...children.waiting.slice(1)],
-              }),
+          const disposition = yield* session.suspend(
+            WaitingForChildSuspension.make({
+              children: [firstWaiting, ...children.waiting.slice(1)],
             }),
           );
 
@@ -8839,30 +8639,30 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       let priorContext = initialView.context;
 
       while (true) {
-        const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+        yield* session.refresh;
+        const tail = yield* session.tail;
 
         // An immediate resume may include a newly committed compaction. Rebuild its canonical
         // proof rather than carrying the initial Thread context across that boundary.
         const fullContextReplay = initialView.context !== undefined && priorContext === undefined;
 
         const canonical = fullContextReplay
-          ? canonicalRange(threadId, tail.tailSequence)
+          ? canonicalRange(threadId, tail.sequence)
           : Stream.concat(
               initialView.canonical,
-              canonicalRange(threadId, tail.tailSequence, initialThrough),
+              canonicalRange(threadId, tail.sequence, initialThrough),
             );
 
-        const currentRecords = yield* refreshControl(tail.tailSequence);
+        const currentRecords = yield* refreshControl(tail.sequence);
 
         const outcome = yield* runModel(
           agent,
           ctx,
           submission,
-          tokenRef,
-          renewAtRef,
+          session,
           currentRecords,
           canonical,
-          tail.tailSequence,
+          tail.sequence,
           initialView.seed,
           priorContext,
           fullContextReplay ? undefined : takeJournalMetadata(),
@@ -8902,14 +8702,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             ),
           ];
 
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          const suspension = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken,
-              reason: WaitingForChildSuspension.make({ children: waitingChildren }),
-            }),
+          const suspension = yield* session.suspend(
+            WaitingForChildSuspension.make({ children: waitingChildren }),
           );
 
           yield* hit("subagent:after-suspend");
@@ -8927,14 +8721,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           // consumes no worker permit. A decision that raced ahead of the suspend transaction
           // returns `resume-immediately`. Retained resources require a fresh Attempt; otherwise
           // the declared batch replays under this claim with the fresh decision intents.
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          const suspension = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken,
-              reason: ApprovalPendingSuspension.make({ toolCallIds: [outcome.toolCallId] }),
-            }),
+          const suspension = yield* session.suspend(
+            ApprovalPendingSuspension.make({ toolCallIds: [outcome.toolCallId] }),
           );
 
           yield* hit("approval:after-suspend");
@@ -8956,22 +8744,18 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         if (outcome._tag === "aborted") {
           // Durable abort ended the Run while attached children may still be open:
           // request-abort-and-join before the aborted settlement (spec §13.1).
-          const disposition = yield* abortAttachedChildren(ctx, submission, tokenRef, knownIds);
+          const disposition = yield* abortAttachedChildren(ctx, submission, session, knownIds);
 
           if (disposition === "waiting") {
             return Option.none<Settlement>();
           }
           if (disposition === "blocked") {
-            const ownershipToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
             return Option.none<Settlement>();
           }
 
-          return Option.some(yield* terminalize(ctx, submission, tokenRef, outcome, true));
+          return Option.some(yield* terminalize(ctx, submission, session, outcome, true));
         }
         // Canonical joins drive their reservation release BEFORE the parent settles (a settled
         // lane would strand the repair); a reserved row WITHOUT a canonical join is an open
@@ -8998,18 +8782,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             );
             yield* hit("run:after-duration-append");
           }
-          yield* reconcileRetainedChildren(ctx, submission, yield* Ref.get(tokenRef));
+          yield* reconcileRetainedChildren(ctx, submission, session);
         }
         const openObligation = yield* completeJoinedReleases(submission);
 
         if (openObligation) {
           if (outcome._tag === "failed") {
             // Release the claim and leave the lane to recovery classification.
-            const ownershipToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
             return Option.none<Settlement>();
           }
@@ -9034,7 +8814,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           yield* terminalize(
             ctx,
             submission,
-            tokenRef,
+            session,
             outcome,
             true,
             outcome._tag === "completed"
@@ -9048,54 +8828,49 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   /** A missing current binding leaves both roots and children owed, with their claims released. */
   type CapturedWorkerBinding = Effect.Success<ReturnType<typeof makeLegacyWorkerBinding>>;
 
-  // Register cleanup before any interruptible work can observe a granted claim. The token
-  // reference is shared with renewal, so cleanup never releases with a superseded token.
-  const acquireClaim = Effect.fn("DurableAgentRuntime.acquireClaim")(function* (
-    threadId: ThreadId,
-    handoff?: ClaimHandoff,
-  ) {
-    const acquiringAt = yield* Clock.currentTimeMillis;
+  // Administrative repairs acquire separately from active Run sessions and never renew.
+  // Register cleanup before any interruptible work can observe the granted claim.
+  const acquireAdministrativeClaim = Effect.fn("DurableAgentRuntime.acquireAdministrativeClaim")(
+    function* (threadId: ThreadId, handoff?: ClaimHandoff) {
+      const claimed = yield* ledger.claim(
+        ClaimRequest.make({
+          threadId,
+          producerId: config.producerId,
+          ...(handoff === undefined ? {} : { handoff }),
+        }),
+      );
 
-    const claimed = yield* ledger.claim(
-      ClaimRequest.make({
-        threadId,
-        producerId: config.producerId,
-        ...(handoff === undefined ? {} : { handoff }),
-      }),
-    );
+      if (Option.isNone(claimed)) return Option.none();
+      const claim = claimed.value;
 
-    if (Option.isNone(claimed)) return Option.none();
-    const claim = claimed.value;
-    const tokenRef = yield* Ref.make(claim.ownershipToken);
-
-    const renewAtRef = yield* Ref.make(
-      acquiringAt + Duration.toMillis(config.leaseRenewalInterval),
-    );
-
-    yield* Effect.addFinalizer(() =>
-      Ref.get(tokenRef).pipe(
-        Effect.flatMap((ownershipToken) =>
-          ledger.releaseOwnership(
-            ReleaseOwnershipRequest.make({ submissionId: claim.submissionId, ownershipToken }),
+      yield* Effect.addFinalizer(() =>
+        ledger
+          .releaseOwnership(
+            ReleaseOwnershipRequest.make({
+              submissionId: claim.submissionId,
+              ownershipToken: claim.ownershipToken,
+            }),
+          )
+          .pipe(
+            Effect.catchTag("OwnershipLost", () => Effect.void),
+            Effect.catchTag("LedgerError", () =>
+              Effect.logWarning(
+                "Attempt ownership release failed; lease recovery remains required",
+              ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
+            ),
           ),
-        ),
-        Effect.catchTag("OwnershipLost", () => Effect.void),
-        Effect.catchTag("LedgerError", () =>
-          Effect.logWarning(
-            "Attempt ownership release failed; lease recovery remains required",
-          ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
-        ),
-      ),
-    );
+      );
 
-    if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
-      return yield* LedgerError.make({
-        operation: "claim handoff",
-        message: "The submission adapter did not honor the requested handoff",
-      });
+      if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
+        return yield* LedgerError.make({
+          operation: "claim handoff",
+          message: "The submission adapter did not honor the requested handoff",
+        });
 
-    return Option.some({ claim, tokenRef, renewAtRef });
-  }, Effect.uninterruptible);
+      return Option.some({ claim });
+    },
+    Effect.uninterruptible,
+  );
 
   const processThreadHead = (
     resolve: (
@@ -9118,10 +8893,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const attempt = Effect.scoped(
         Effect.gen(function* () {
-          const claimed = yield* acquireClaim(threadId, handoff);
+          const claimed = yield* runStorage.claim(
+            ClaimRequest.make({
+              threadId,
+              producerId: config.producerId,
+              ...(handoff === undefined ? {} : { handoff }),
+            }),
+          );
 
           if (Option.isNone(claimed)) return Option.none();
-          const { claim, tokenRef, renewAtRef } = claimed.value;
+          const session = claimed.value;
+          const { claim } = session;
 
           firstClaimedSubmissionId ??= claim.submissionId;
 
@@ -9161,14 +8943,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             );
 
             if (!lineageRecorded) {
-              yield* ledger
-                .releaseOwnership(
-                  ReleaseOwnershipRequest.make({
-                    submissionId: claim.submissionId,
-                    ownershipToken: claim.ownershipToken,
-                  }),
-                )
-                .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+              yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
               const parent = yield* ledger.lookup(
                 SubmissionLookupById.make({
@@ -9197,13 +8972,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }
 
           return yield* resolution.binding.attempt(
-            (agent, attemptThreadId, attemptClaim) =>
+            (agent) =>
               runAttempt(
                 agent,
-                attemptThreadId,
-                attemptClaim,
-                tokenRef,
-                renewAtRef,
+                session,
                 () => {
                   resumeAfterRetention = true;
                 },
@@ -9365,7 +9137,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     if (Option.isNone(head) || head.value.submissionId !== submission.submissionId) {
       return Option.none();
     }
-    const claimed = yield* acquireClaim(submission.threadId);
+    const claimed = yield* acquireAdministrativeClaim(submission.threadId);
 
     if (Option.isNone(claimed)) return Option.none();
     if (claimed.value.claim.submissionId !== submission.submissionId) {
@@ -9514,12 +9286,18 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               submission.agentDigests,
             );
             const ctx = yield* attemptContextAtTail(submission.threadId);
-            const tokenRef = yield* Ref.make(QUEUED_ABORT_SETTLEMENT_TOKEN);
+
+            const ownership = bindRunOwnership(
+              ledger,
+              submission.threadId,
+              submission.submissionId,
+              Effect.succeed(QUEUED_ABORT_SETTLEMENT_TOKEN),
+            );
 
             yield* settleAborted(
               ctx,
               submission,
-              tokenRef,
+              ownership,
               intent,
               evidence,
               knownRecordIdsOf(records),
@@ -9547,9 +9325,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
       yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
       const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-      const tokenRef = yield* Ref.make(claim.ownershipToken);
 
-      yield* settleAborted(ctx, submission, tokenRef, intent, evidence, knownRecordIdsOf(records));
+      const ownership = bindRunOwnership(
+        ledger,
+        submission.threadId,
+        submission.submissionId,
+        Effect.succeed(claim.ownershipToken),
+      );
+
+      yield* settleAborted(ctx, submission, ownership, intent, evidence, knownRecordIdsOf(records));
 
       return "repaired";
     },
@@ -9836,7 +9620,16 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         );
         const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
 
-        yield* reconcileRetainedChildren(ctx, submission, claim.ownershipToken);
+        yield* reconcileRetainedChildren(
+          ctx,
+          submission,
+          bindRunOwnership(
+            ledger,
+            submission.threadId,
+            submission.submissionId,
+            Effect.succeed(claim.ownershipToken),
+          ),
+        );
         const open = yield* completeJoinedReleases(submission);
 
         yield* ledger
@@ -10043,7 +9836,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             submission.agentDigests,
           );
           const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-          const tokenRef = yield* Ref.make(claim.ownershipToken);
+
+          const ownership = bindRunOwnership(
+            ledger,
+            submission.threadId,
+            submission.submissionId,
+            Effect.succeed(claim.ownershipToken),
+          );
 
           const currentRecords = yield* refreshRecoveryHistory(
             submission.threadId,
@@ -10055,11 +9854,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           yield* applyCanonicalInput(
             ctx,
             submission,
-            tokenRef,
+            ownership,
             currentRecords,
             snapshot.inputApplied,
           );
-          const ownershipToken = yield* Ref.get(tokenRef);
+          const ownershipToken = claim.ownershipToken;
 
           yield* ledger
             .releaseOwnership(
@@ -10720,6 +10519,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         .pipe(
           Effect.provideService(SubmissionLedger, ledger),
           Effect.provideService(ThreadStore, store),
+          Effect.provideService(ThreadReader, reader),
           Effect.provideService(WakeScheduler, wake),
           Effect.provideService(DurableRuntimeFailpoint, failpoint),
         );
@@ -10822,7 +10622,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       threadId: receipt.threadId,
       recordId: submissionSettlementRecordId(receipt.submissionId),
     }).pipe(
-      Effect.provideService(ThreadStore, store),
+      Effect.provideService(ThreadReader, reader),
       Effect.mapError((cause) =>
         LedgerError.make({
           operation: "awaitSettlement",
@@ -11922,6 +11722,7 @@ export class DurableAgentRuntime extends Context.Service<
     never,
     | SubmissionLedger
     | ThreadStore
+    | RunStorage
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig
@@ -11936,6 +11737,7 @@ export class DurableAgentRuntime extends Context.Service<
     never,
     | SubmissionLedger
     | ThreadStore
+    | RunStorage
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig

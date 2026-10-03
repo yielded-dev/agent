@@ -30,7 +30,7 @@ import {
 } from "@yielded/agent/durable-agent-runtime";
 import { type ThreadId, type SubmissionId } from "@yielded/agent/identifiers";
 import {
-  type MessageDeliveryStore,
+  MessageDeliveryStore,
   MessageDeliveryDriver,
   type MessageDeliveryError,
 } from "@yielded/agent/message-delivery";
@@ -41,12 +41,17 @@ import {
   type AbortCommand,
   type AbortIntent,
   type Settlement,
-  type SubmissionLedger,
+  SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
-import { type ThreadNotMaterialized, type ThreadStoreError } from "@yielded/agent/thread-store";
-import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
+import {
+  ThreadReader,
+  type ThreadNotMaterialized,
+  type ThreadStoreError,
+} from "@yielded/agent/thread-store";
+import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { type Stream, Context, Effect, Fiber, Layer, Ref, Schema } from "effect";
 
+import { applicationInvocationContext } from "./internal/application-context.ts";
 import { ExclusiveSqliteHost } from "./internal/exclusive-host.ts";
 import { runNodeMessageDeliveries } from "./internal/message-delivery.ts";
 import { makeNodePreparedInputAdmission, NodeAdmission } from "./internal/prepared-admission.ts";
@@ -108,7 +113,9 @@ const makeHost = Effect.fn("NodeDurableHost.make")(function* (
     InputSchema["EncodingServices"]
   > => requireAdmission.pipe(Effect.andThen(runtime.submit(agent, input, options)));
 
-  const deliveryServices = yield* Effect.context<MessageDeliveryStore>();
+  const deliveryServices = (yield* Effect.context<MessageDeliveryStore>()).pipe(
+    Context.pick(MessageDeliveryStore),
+  );
 
   const deliveryContext = yield* Layer.build(
     MessageDeliveryDriver.layer({
@@ -126,8 +133,12 @@ const makeHost = Effect.fn("NodeDurableHost.make")(function* (
     ),
   );
 
-  const runDeliveries = runNodeMessageDeliveries(config.wakeScanInterval).pipe(
-    Effect.provide(Context.merge(deliveryServices, deliveryContext)),
+  const runDeliveries = Effect.contextWith((live: Context.Context<never>) =>
+    runNodeMessageDeliveries(config.wakeScanInterval).pipe(
+      Effect.setContext(
+        Context.mergeAll(applicationInvocationContext(live), deliveryServices, deliveryContext),
+      ),
+    ),
   );
 
   const withDeliveries = <A, E, R>(worker: Effect.Effect<A, E, R>): Effect.Effect<void, E, R> =>
@@ -364,25 +375,46 @@ export const layer = <
     ReconcilerRequirements
   >,
 ) =>
-  Layer.effect(NodeDurableHost)(
+  Layer.effectContext(
     Effect.gen(function* () {
-      const config = yield* NodeDurableAgentRuntimeConfig;
+      // The runtime compiles registrations in application Context before acquiring storage.
+      const services = yield* Layer.build(
+        NodeDurableAgentRuntime.layerRegistered(registrations, options).pipe(
+          Layer.provide(Layer.succeed(ExclusiveSqliteHost, true)),
+        ),
+      );
 
-      const services = yield* Effect.context<
-        DurableAgentRuntime | SubmissionLedger | WakeScheduler
-      >();
+      const config = Context.get(services, NodeDurableAgentRuntimeConfig);
 
-      return yield* makeHost(
+      const workerServices = services.pipe(
+        Context.pick(DurableAgentRuntime, SubmissionLedger, WakeScheduler),
+      );
+
+      const hostServices = services.pipe(
+        Context.pick(DurableAgentRuntime, NodeDurableAgentRuntimeConfig, MessageDeliveryStore),
+      );
+
+      const host = yield* makeHost(
         true,
-        runNodeWorkerDispatch(config.workerConcurrency).pipe(Effect.provide(services)),
+        Effect.contextWith((live: Context.Context<never>) =>
+          runNodeWorkerDispatch(config.workerConcurrency).pipe(
+            Effect.setContext(Context.merge(applicationInvocationContext(live), workerServices)),
+          ),
+        ),
+      ).pipe(Effect.provide(hostServices));
+
+      // Export actual capabilities: canonical reads and the separately owned delivery queue.
+      // Raw SQL, canonical writes and submission ownership remain private.
+      return services.pipe(
+        Context.pick(
+          DurableAgentRuntime,
+          ThreadReader,
+          NodeDurableAgentRuntimeConfig,
+          MessageDeliveryStore,
+        ),
+        Context.add(NodeDurableHost, host),
       );
     }),
-  ).pipe(
-    Layer.provideMerge(
-      NodeDurableAgentRuntime.layerRegistered(registrations, options).pipe(
-        Layer.provide(Layer.succeed(ExclusiveSqliteHost, true)),
-      ),
-    ),
   );
 
 /**

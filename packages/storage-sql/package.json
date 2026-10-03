@@ -16,6 +16,7 @@
   "sideEffects": [],
   "exports": {
     ".": "./src/index.ts",
+    "./sql-run-storage": "./src/SqlRunStorage.ts",
     "./sql-storage": "./src/SqlStorage.ts",
     "./sql-storage-failpoint": "./src/SqlStorageFailpoint.ts",
     "./sql-journal": "./src/SqlJournal.ts",

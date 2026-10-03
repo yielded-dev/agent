@@ -33,6 +33,7 @@ The automatic host holds SQLite's exclusive connection lock for its entire Scope
 fails startup, and independent readers cannot access the database while that connection is alive.
 Use a local filesystem with working SQLite locks; do not replace or unlink a live database file.
 New files are initialized in WAL mode; existing files must already use WAL mode.
+Managed storage rejects custom SQLite triggers because the host owns all journal and ownership mutations.
 `workerConcurrency` limits concurrently processed threads and defaults to one.
 The managed host dispatches wake hints through one bounded queue, coalescing repeated hints
 for pending or active threads. A shared periodic ledger scan recovers missed hints.
@@ -160,7 +161,11 @@ Startup recovery must succeed for every Thread before admission or workers open.
 fault or recovery timeout fails host construction with `RecoveryBlocked`; accepted work stays pending.
 
 Inspect `host.startupRecovery`, `host.explain`, `host.verify`, and `host.scanObligations`
-for recovery status while the host is running. Additional adapters and administrative SQL must
-share the host's exposed `SqlClient`; do not open a second connection. Stop the host before using
-the standalone `admin:durable` CLI or another database reader. See [operations](/guide/operations/)
+for recovery status while the host is running. The managed host exposes `ThreadReader` for
+canonical reads and `MessageDeliveryStore` for independent delivery obligations. Its SQLite
+client, canonical writes, and submission ownership ports are private. Each active Attempt
+owns a scoped storage session, so administrative writes and execution share one authority.
+Application SQL clients and instrumentation stay outside that private storage context.
+Use a manual runtime assembly when composing additional SQL adapters. Stop a managed host before
+using the standalone `admin:durable` CLI or another database reader. See [operations](/guide/operations/)
 for approvals, schedules, and backups.

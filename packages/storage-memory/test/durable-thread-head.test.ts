@@ -30,6 +30,7 @@ import {
 } from "@yielded/agent/records";
 import { projectRunJournal, turnIdForRun, turnResponseBatch } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ClaimRequest,
@@ -142,6 +143,7 @@ const makeRuntime = (bindings: ReadonlyArray<ResolvedBinding> = []) =>
   DurableAgentRuntime.pipe(
     Effect.provide(
       DurableAgentRuntime.layerWithBindings(bindings).pipe(
+        Layer.provide(runStorageLayer()),
         Layer.provide(RunToolAuthorization.allowAll),
       ),
     ),

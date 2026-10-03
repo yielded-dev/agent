@@ -29,6 +29,7 @@ import {
   ThreadObservation,
   ThreadReadRequest,
   ThreadStore,
+  ThreadReader,
   type ThreadCheckpoints,
   ThreadStoreError,
   ThreadTail,
@@ -936,9 +937,11 @@ const makeThreadStore = Effect.gen(function* () {
 
 /**
  * In-memory canonical Thread persistence. Durable accepted work is served by the separate
- * SubmissionLedger port; this Layer deliberately provides only the ThreadStore.
+ * SubmissionLedger port; this Layer provides ThreadStore and its ThreadReader.
  */
-export const MemoryThreadStoreLive = Layer.effect(ThreadStore, makeThreadStore);
+export const MemoryThreadStoreLive = ThreadReader.layer().pipe(
+  Layer.provideMerge(Layer.effect(ThreadStore, makeThreadStore)),
+);
 
 /** Configure a finite retained Thread capacity. Invalid construction options throw immediately. */
 export const memoryThreadStoreLayer = (options: { readonly maxThreads?: number } = {}) =>

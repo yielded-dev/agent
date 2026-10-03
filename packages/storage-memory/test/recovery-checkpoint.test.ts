@@ -11,6 +11,7 @@ import { RunId, SubmissionId, ThreadId, ToolCallId } from "@yielded/agent/identi
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   ApprovalDecisionCommand,
   IdempotencyKey,
@@ -117,6 +118,7 @@ describe("disposable durable recovery checkpoint", () => {
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
               DurableAgentRuntime.layerWithBindings([binding]).pipe(
+                Layer.provide(runStorageLayer()),
                 Layer.provide(
                   Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
                 ),
@@ -312,6 +314,7 @@ describe("disposable durable recovery checkpoint", () => {
         const runtime = yield* DurableAgentRuntime.pipe(
           Effect.provide(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
+              Layer.provide(runStorageLayer()),
               Layer.provide(
                 Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),
@@ -549,6 +552,7 @@ describe("disposable durable recovery checkpoint", () => {
         return yield* DurableAgentRuntime.pipe(
           Effect.provide(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
+              Layer.provide(runStorageLayer()),
               Layer.provide(
                 Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),

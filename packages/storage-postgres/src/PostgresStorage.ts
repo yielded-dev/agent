@@ -20,7 +20,7 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import { SubscriptionError, SubscriptionStore, SourcePartition } from "@yielded/agent/subscription";
-import { ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
 import { Context, Duration, Effect, Layer, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
@@ -130,16 +130,20 @@ const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
 
 /** Thread history and submissions sharing one initialized journal. Requires SqlClient and Crypto. */
 export const layerWith = (options: PostgresStorageOptions) =>
-  Layer.effectContext(
-    Effect.gen(function* () {
-      const journal = yield* openJournal(options);
-      const threadStore = yield* makeThreadStore(journal);
-      const submissionLedger = yield* makeSubmissionLedger(journal);
+  ThreadReader.layer().pipe(
+    Layer.provideMerge(
+      Layer.effectContext(
+        Effect.gen(function* () {
+          const journal = yield* openJournal(options);
+          const threadStore = yield* makeThreadStore(journal);
+          const submissionLedger = yield* makeSubmissionLedger(journal);
 
-      return Context.make(ThreadStore, threadStore).pipe(
-        Context.add(SubmissionLedger, submissionLedger),
-      );
-    }),
+          return Context.make(ThreadStore, threadStore).pipe(
+            Context.add(SubmissionLedger, submissionLedger),
+          );
+        }),
+      ),
+    ),
   );
 
 /** Thread history and submissions with default settings. Requires SqlClient and Crypto. */
@@ -147,7 +151,11 @@ export const layer = layerWith({});
 
 /** Standalone thread history over the application's SqlClient and Crypto. */
 export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
-  Layer.effect(ThreadStore, Effect.flatMap(openJournal(options), makeThreadStore));
+  ThreadReader.layer().pipe(
+    Layer.provideMerge(
+      Layer.effect(ThreadStore, Effect.flatMap(openJournal(options), makeThreadStore)),
+    ),
+  );
 
 /** Standalone submissions over the application's SqlClient and Crypto. */
 export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>

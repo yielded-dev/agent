@@ -53,6 +53,7 @@ import {
   ThreadObservation,
   ThreadRead,
   ThreadStore,
+  ThreadReader,
   getRecord,
   getRunInput,
   readWorkerState,
@@ -193,7 +194,7 @@ const conformanceCase = (
       description: string,
       effect: Effect.Effect<A, E, R>,
     ) => Effect.Effect<E, ThreadStoreConformanceViolation, R>;
-  }) => Effect.Effect<void, ThreadStoreConformanceFailure, ThreadStore>,
+  }) => Effect.Effect<void, ThreadStoreConformanceFailure, ThreadStore | ThreadReader>,
 ): ThreadStoreConformanceCase => ({
   name,
   run: build({
@@ -210,7 +211,7 @@ const conformanceCase = (
           }),
         ),
       ),
-  }).pipe(Effect.withSpan(`ThreadStoreConformance.${name}`)),
+  }).pipe(Effect.provide(ThreadReader.layer()), Effect.withSpan(`ThreadStoreConformance.${name}`)),
 });
 
 const atomicBatchVisibility = conformanceCase(

@@ -7,6 +7,7 @@ import {
 import { CurrentBindingSelection, type BindingSelection } from "@yielded/agent/agent-registration";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ProducerId } from "@yielded/agent/records";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   ClaimRequest,
   RecoverySnapshotRequest,
@@ -772,6 +773,7 @@ describe("maintenance retry deadlines", () => {
                   );
 
                   const services = DurableAgentRuntime.layerWithBindings(bindings).pipe(
+                    Layer.provide(runStorageLayer()),
                     Layer.provideMerge(ports),
                     Layer.provide(WakeScheduler.layerNoop),
                   );
@@ -1000,6 +1002,7 @@ describe("maintenance retry deadlines", () => {
                       Effect.provide(
                         Layer.fresh(ThreadMaintenance.layer).pipe(
                           Layer.provideMerge(DurableAgentRuntime.layerWithBindings(deployed)),
+                          Layer.provide(runStorageLayer()),
                           Layer.provide(Layer.succeed(CurrentBindingSelection, selection)),
                           Layer.provide(ports),
                         ),

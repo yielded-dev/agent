@@ -57,7 +57,7 @@ const MAX_IDENTIFIER_LENGTH = 1_024;
 
 const storedTextBytes = (value: string): number => new TextEncoder().encode(value).byteLength;
 
-class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
+export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
@@ -143,7 +143,7 @@ export class RawThreadExport extends Schema.Class<RawThreadExport>(
 }) {}
 
 /** Construct journal operations over an already initialized database. */
-export const makeSqlJournal = Effect.fn("SqlJournal.make")(function* <
+export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -266,8 +266,29 @@ export const makeSqlJournal = Effect.fn("SqlJournal.make")(function* <
     return yield* decodeRows(Schema.Array(ThreadRow), "effect_agent_threads", threadId, rows);
   });
 
-  const append = Effect.fn("SqlJournal.append")(function* (
+  const readAppendThread = Effect.fnUntraced(function* (threadId: string) {
+    const threadRows = yield* sql<Record<string, unknown>>`
+          SELECT
+            thread_id,
+            created_at,
+            tail_sequence,
+            tail_digest,
+            producer_epoch
+          FROM ${relation("effect_agent_threads")}
+          WHERE thread_id = ${threadId}
+        `.pipe(execute, Effect.mapError(storageError("read append tail")));
+
+    return yield* decodeSingleRow(
+      Schema.Array(ThreadRow),
+      "effect_agent_threads",
+      threadId,
+      threadRows,
+    );
+  });
+
+  const appendKernel = Effect.fn("SqlJournal.append")(function* (
     request: RawAppendRequest,
+    readThread: Effect.Effect<ThreadRow, C | S>,
   ): Effect.fn.Return<RawAppendResult, AppendConflict | FenceRejected | C | S | F | W> {
     if (
       request.threadId.length > MAX_IDENTIFIER_LENGTH ||
@@ -299,23 +320,7 @@ export const makeSqlJournal = Effect.fn("SqlJournal.make")(function* <
           });
         }
 
-        const threadRows = yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            created_at,
-            tail_sequence,
-            tail_digest,
-            producer_epoch
-          FROM ${relation("effect_agent_threads")}
-          WHERE thread_id = ${request.threadId}
-        `.pipe(execute, Effect.mapError(storageError("read append tail")));
-
-        const thread = yield* decodeSingleRow(
-          Schema.Array(ThreadRow),
-          "effect_agent_threads",
-          request.threadId,
-          threadRows,
-        );
+        const thread = yield* readThread;
 
         if (request.producerEpoch !== thread.producer_epoch) {
           return yield* FenceRejected.make({
@@ -965,9 +970,13 @@ export const makeSqlJournal = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  return {
+  const journal = {
     lifecycle,
-    append,
+    append: (request: RawAppendRequest) =>
+      appendKernel(
+        request,
+        Effect.suspend(() => readAppendThread(request.threadId)),
+      ),
     exportThread,
     getThread,
     getTailDigestAt,
@@ -982,7 +991,23 @@ export const makeSqlJournal = Effect.fn("SqlJournal.make")(function* <
     withReadTransaction,
     isTransactionFailure: options.transactions.isTransactionFailure,
   } as const;
+
+  return {
+    journal,
+    appendWithThread: (request: RawAppendRequest, thread: ThreadRow) =>
+      appendKernel(request, Effect.succeed(thread)),
+  };
 });
+
+/** Ordinary journals retain transactionally read producer and tail fences. */
+export const makeSqlJournal = <
+  S extends Diagnostic,
+  C extends Diagnostic,
+  W extends Diagnostic,
+  F extends Diagnostic,
+>(
+  options: SqlJournalOptions<S, C, W, F>,
+) => Effect.map(makeSqlJournalKernel(options), (kernel) => kernel.journal);
 
 export type SqlJournal<
   S extends Diagnostic,

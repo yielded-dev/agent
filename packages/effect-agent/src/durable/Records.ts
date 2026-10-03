@@ -504,9 +504,9 @@ export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>
 }) {}
 
 /**
- * First-class interruption audit (durability §9): appended by a superseding Attempt before it
- * re-invokes the model for a Turn whose prior owner died without a complete canonical response.
- * Duplicate provider cost is thereby possible AND observable in canonical history.
+ * Conservative interruption audit before resuming inference without a canonical response.
+ * The preceding fencing generation may include retirement or repair, so this marks incomplete
+ * usage coverage and possible duplicate provider cost, not an exact missing-call count.
  */
 export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseInterrupted>(
   "@effect-agent/thread/ModelResponseInterrupted",

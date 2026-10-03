@@ -4,6 +4,7 @@ import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { submissionSettlementRecordId } from "@yielded/agent/submission-ledger";
 import { ThreadCheckpoint, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
@@ -169,6 +170,7 @@ describe("Cloudflare replaceable compaction", () => {
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
               DurableAgentRuntime.layerWithBindings([binding]).pipe(
+                Layer.provide(runStorageLayer()),
                 Layer.provide(
                   Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
                 ),
