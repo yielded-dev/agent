@@ -158,10 +158,14 @@ Condition waits accept a case-sensitive text qualifier for every state, normaliz
 as observations do. For example,
 `{ selector: "body", state: "hidden", text: "Loading", timeoutMillis: 5000 }`
 waits until the visible body no longer contains "Loading".
+Set `settleAfterAction: true` on the native controller for bounded DOM settling, or
+`"input"` for brief frame and autocomplete settling. `maxWaitMillis: 5000` caps condition
+waits at five seconds and returns the current observation on timeout; inspect that observation
+to determine whether the condition was met.
 The [standalone journey host](https://github.com/danieljvdm/effect-agent/tree/main/examples/browser-speed)
 shows the complete composition.
 
-An observation contains live values, options, disabled/checked state, frame and tab
+By default, an observation contains live values, options, disabled/checked state, frame and tab
 references, and visible controls outside the viewport, including open shadow roots.
 It marks truncation explicitly. Inspection expires previous control references; narrow
 by selector or an observed frame when necessary. Hidden content is excluded from bounded
@@ -170,9 +174,17 @@ its scan budget. Open-shadow discovery remains bounded and marks truncation expl
 Default inspection reads the main frame;
 other frames are listed with `inspected: false` for explicit lookup. After input, observation
 follows the target frame, falling back to the main frame if it detached. Use `optionFilter`
-to find select options by label or value; current selections remain visible. Native fill
-supports writable inputs, textareas, and contenteditable controls. It verifies native selection
-of existing content before trusted deletion and typing; unsupported selection returns
+to find select options by label or value; current selections remain visible.
+
+`viewportOnly: true` prioritizes controls in view, retaining offscreen popup controls only
+when none of that popup's controls are in view. Duplicate names gain nearby captions.
+`observationMode: "jev"` reads enabled document controls whose centers are in the viewport,
+using accessible names and at most 6,000 characters of visible text. This mode follows the
+Jev reader's roles and naming; its refs must remain in view through input preparation.
+Both modes retain the same native authorization and input guards.
+
+Native fill supports writable inputs, textareas, and contenteditable controls. It verifies native selection
+of existing content before replacing it with native text input; unsupported selection returns
 `not-dispatched`. Closed shadow roots
 and transformed iframe coordinate spaces are unsupported. Switching tabs expires the previous page's
 references; tab selection stays inside the attachment's browser context.
@@ -197,7 +209,8 @@ receipt. Outstanding work belongs to the controller's Scope and retains its nati
 deadline. Observation waits briefly for a loading document to finish parsing; use an
 explicit condition wait for application readiness. A failed read reports that it dispatched no new
 input, without changing earlier input receipts or the session's outstanding-work fencing.
-A failed observation never authorizes replay. Use a specific condition wait or fresh inspection to reconcile state.
+Read-only navigation races retry with fresh host authorization. Input is never automatically
+retried, and a failed observation never authorizes replay. Use a specific condition wait or fresh inspection to reconcile state.
 Password/file inputs remain host-owned; use the existing credential and file-selection
 contracts on the session's original page; selecting a tab does not retarget those host helpers. A blocking JavaScript dialog can be inspected and answered after an input;
 a dialog that prevents navigation from settling remains subject to the native timeout.

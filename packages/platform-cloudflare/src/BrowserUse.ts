@@ -32,6 +32,7 @@ import {
   settleInputDom,
   waitDom,
 } from "./internal/browser-dom.ts";
+import { inspectJevDom } from "./internal/browser-jev-dom.ts";
 
 export type Command =
   | { readonly kind: "observe" | "screenshot" }
@@ -56,6 +57,8 @@ export interface Options<R = never> {
   readonly maxReturnedBytes: number;
   /** Prefer viewport controls; retain off-screen popups only if none of their controls are in view. Defaults to false. */
   readonly viewportOnly?: boolean;
+  /** Jev reads enabled controls centered in the viewport with accessible names and at most 6,000 visible text characters. Defaults to "default". */
+  readonly observationMode?: "default" | "jev";
   /** True waits for 100 ms of DOM quiet (at most 1 s). "input" waits two frames/50 ms, or visible combobox options/200 ms. Defaults to false. */
   readonly settleAfterAction?: boolean | "input";
   /** Cap condition waits and return a fresh observation on a condition timeout. Omit to retain timeout errors. */
@@ -76,6 +79,7 @@ const Limits = Schema.Struct({
   maxActions: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1_000 })),
   maxReturnedBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 * 1024 * 1024 })),
   viewportOnly: Schema.Boolean,
+  observationMode: Schema.Literals(["default", "jev"]),
   settleAfterAction: Schema.Union([Schema.Boolean, Schema.Literal("input")]),
   maxWaitMillis: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 15_000 }))),
 });
@@ -111,6 +115,7 @@ export const make = Effect.fnUntraced(function* <R>(
     maxActions: options.maxActions,
     maxReturnedBytes: options.maxReturnedBytes,
     viewportOnly: options.viewportOnly ?? false,
+    observationMode: options.observationMode ?? "default",
     settleAfterAction: options.settleAfterAction ?? false,
     maxWaitMillis: options.maxWaitMillis ?? null,
   }).pipe(Effect.mapError(() => invalid("Invalid browser controller limits.")));
@@ -482,16 +487,26 @@ export const make = Effect.fnUntraced(function* <R>(
         if (ref === undefined) continue;
 
         const read = async (): Promise<unknown> =>
-          frame
-            .isolatedRealm()
-            .evaluate(
-              inspectDom,
-              request.selector,
-              `r${scopeId}-${generation}-${controls.length}`,
-              256 - controls.length,
-              request.optionFilter,
-              limits.viewportOnly,
-            );
+          limits.observationMode === "jev"
+            ? frame
+                .isolatedRealm()
+                .evaluate(
+                  inspectJevDom,
+                  request.selector,
+                  `r${scopeId}-${generation}-${controls.length}`,
+                  256 - controls.length,
+                  request.optionFilter,
+                )
+            : frame
+                .isolatedRealm()
+                .evaluate(
+                  inspectDom,
+                  request.selector,
+                  `r${scopeId}-${generation}-${controls.length}`,
+                  256 - controls.length,
+                  request.optionFilter,
+                  limits.viewportOnly,
+                );
 
         let result = Schema.decodeUnknownSync(Observation)(await read());
 
@@ -510,7 +525,7 @@ export const make = Effect.fnUntraced(function* <R>(
         }
         readyState = result.readyState;
 
-        text += `\n[${ref}]${result.text}`;
+        text += limits.observationMode === "jev" ? result.text : `\n[${ref}]${result.text}`;
         truncated ||= result.truncated ?? false;
         for (const control of result.controls) {
           const current = { ...control, frame: ref };
@@ -520,11 +535,13 @@ export const make = Effect.fnUntraced(function* <R>(
         }
       }
 
+      const textLimit = limits.observationMode === "jev" ? 6_000 : 24_000;
+
       return {
-        text: text.slice(0, 24_000),
+        text: text.slice(0, textLimit),
         controls,
         ...(readyState === undefined ? {} : { readyState }),
-        truncated: truncated || text.length > 24_000,
+        truncated: truncated || text.length > textLimit,
         frames: currentFrames.slice(0, 32).map((frame) => ({
           ref: frameId(frame),
           name: frame.name().slice(0, 300),

@@ -54,8 +54,8 @@ recent tail. Exhaustion fails explicitly; partial board changes cannot pass the 
 ## Run a standalone browser journey
 
 The `journey` task takes a goal and uses the public native tools without the comparison UI.
-Choose `chromium` or `kitesurf` explicitly; it never switches engines. Supply Cloudflare
-and OpenAI credentials using [live credentials](../../docs/TOOLCHAIN.md#live-credentials).
+Choose hosted `chromium` or `kitesurf`, or `local-chromium`; it never switches engines.
+Supply the chosen browser and model credentials using [live credentials](../../docs/TOOLCHAIN.md#live-credentials).
 Start local Maple on its OTLP HTTP port, then run:
 
 ```sh
@@ -65,13 +65,17 @@ BROWSER_JOURNEY_GOAL='Navigate to https://example.com and report its visible hea
 vp run -F @effect-agent/example-browser-speed journey
 ```
 
-The output directory must be new. The host uses GPT-6 Luna, Fast processing, no reasoning,
+The output directory must be new. The default direct host uses GPT-6 Luna, Fast processing, no reasoning,
 and a 1280 × 900 viewport; `BROWSER_JOURNEY_MODEL` chooses another compatible model
 and `BROWSER_JOURNEY_REASONING` selects none, low, medium or high reasoning.
 It permits 50 turns, 100 tools, eight minutes and two million cumulative tokens;
 `BROWSER_JOURNEY_TOKEN_BUDGET` changes the token limit. Exhaustion fails the run.
-Existing mechanical compaction bounds each model context to 60,000 estimated tokens,
-retaining an 8,000-token recent tail; the full journal remains available in the export.
+The default direct journey uses viewport observations, settles after input, and caps condition
+waits at five seconds, returning the current observation at the cap. Set
+`BROWSER_JOURNEY_OPTIMIZED=false` to compare the original observation and wait settings.
+Each turn starts from full canonical history. Existing mechanical compaction bounds each
+model context to 60,000 estimated tokens, retaining an 8,000-token recent tail; older tool
+results can be pruned before dispatch, and the full journal remains available in the export.
 `result.json` records the actual CDP engine revision, goal, trace ID, agent claim and a
 separate native DOM read. `thread.json` retains the existing conversation export;
 `page.png` and `cleanup.json` retain the final page and closure acknowledgement. Traces
@@ -84,6 +88,16 @@ inputs, reset rules and trace alongside that evidence. A failed setup can leave 
 the cleanup record and command log. This host supplies no authenticated account.
 For a disposable native reproduction, `BROWSER_JOURNEY_HTML`
 accepts host-owned fixture HTML before the agent starts.
+
+`BROWSER_JOURNEY_PATH=jev` opts into a Jev-only loop over observed controls and requires
+`TYPESAFEAI_API_KEY`. A text model supplies field values; it defaults to GPT-6 Luna through
+OpenAI. For Mercury 2.5, set `BROWSER_JOURNEY_TEXT_PROVIDER=openrouter`,
+`BROWSER_JOURNEY_TEXT_MODEL=inception/mercury-2.5`, `BROWSER_JOURNEY_TEXT_REASONING=none`,
+and supply `OPENROUTER_API_KEY`. Field generation has a five-second timeout and one retry
+on timeout. The loop defaults to 60 steps (`BROWSER_JOURNEY_STEPS`) and eight minutes.
+It caps each target question at 255 choices, uses enabled viewport controls and visible text,
+and stops after three input proposals in a row leave the page unchanged, including refusals.
+Page-wide decisions are refreshed after model latency. DONE remains an unverified claim.
 
 `BROWSER_JOURNEY_PATH=plan` uses bounded native Jev plans and requires
 `TYPESAFEAI_API_KEY`; `BROWSER_JOURNEY_CONFIDENCE` defaults to the experimental 0.6

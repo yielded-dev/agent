@@ -524,12 +524,24 @@ export const checkDom = (
 ) => {
   if (!node.isConnected || !(node instanceof HTMLElement)) return false;
 
-  const nameCheck: { name: string; originalName: string; verify: () => boolean } | undefined =
-    Reflect.get(globalThis, "@effect-agent/native-browser-name-checks")?.get(expected.ref);
+  const nameCheck:
+    | {
+        name: string;
+        originalName: string;
+        kind?: string;
+        viewport?: boolean;
+        verify: () => boolean;
+      }
+    | undefined = Reflect.get(globalThis, "@effect-agent/native-browser-name-checks")?.get(
+    expected.ref,
+  );
 
   if (nameCheck !== undefined && (nameCheck.name !== expected.name || !nameCheck.verify()))
     return false;
-  if (scroll) node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+  // Jev refs require their centers to remain in view. Do not move a visible
+  // form or popup just to prepare input; the same native hit test still applies.
+  if (scroll && !nameCheck?.viewport)
+    node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
   const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
   const type = associated instanceof HTMLInputElement ? associated.type : "";
 
@@ -556,7 +568,8 @@ export const checkDom = (
   if (node.isContentEditable && node.innerText.slice(0, 4_096) !== expected.value) return false;
 
   const kind =
-    node instanceof HTMLLabelElement &&
+    nameCheck?.kind ??
+    (node instanceof HTMLLabelElement &&
     associated instanceof HTMLInputElement &&
     ["checkbox", "radio"].includes(type)
       ? type
@@ -565,7 +578,7 @@ export const checkDom = (
           ? type
           : node.tagName === "A"
             ? "link"
-            : node.tagName.toLowerCase()));
+            : node.tagName.toLowerCase())));
 
   if (
     kind !== expected.kind ||

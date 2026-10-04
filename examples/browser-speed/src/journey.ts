@@ -27,7 +27,7 @@ import * as BrowserUse from "effect-agent/browser-use";
 import { ThreadId } from "effect-agent/identifiers";
 import { InteractiveBrowserTargetUrl } from "effect-agent/interactive-browser";
 import { ToolResultBounds } from "effect-agent/tool-result";
-import { LanguageModel, Prompt, Tool, Toolkit } from "effect/unstable/ai";
+import { Prompt, Tool, Toolkit } from "effect/unstable/ai";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 import puppeteer from "puppeteer-core";
@@ -126,7 +126,7 @@ const JourneyRecord = Schema.fromJsonString(
     }),
     model: Schema.String,
     reasoning: Schema.String,
-    path: Schema.Literals(["direct", "plan", "code", "jev", "delegate"]),
+    path: Schema.Literals(["direct", "plan", "code", "jev"]),
     textModel: Schema.NullOr(Schema.String),
     textProvider: Schema.NullOr(Schema.Literals(["openai", "openrouter"])),
     textReasoning: Schema.NullOr(Schema.Literals(["none", "low"])),
@@ -262,7 +262,6 @@ const sdk = <A>(stage: string, action: () => Promise<A>) =>
 
 /** Standalone acceptance host. Inputs and site goals stay outside the library and its prompts. */
 export const journey = Effect.gen(function* () {
-  const plannerModel = "gpt-6-sol";
   const goal = yield* Config.String("BROWSER_JOURNEY_GOAL");
   const engine = yield* Config.String("BROWSER_JOURNEY_ENGINE");
   const output = yield* Config.String("BROWSER_JOURNEY_OUTPUT");
@@ -281,24 +280,16 @@ export const journey = Effect.gen(function* () {
 
   const path = yield* Config.String("BROWSER_JOURNEY_PATH").pipe(
     Config.withDefault("direct"),
-    Effect.flatMap(
-      Schema.decodeUnknownEffect(Schema.Literals(["direct", "plan", "code", "jev", "delegate"])),
-    ),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["direct", "plan", "code", "jev"]))),
   );
 
-  const compactLoop = path === "jev" || path === "delegate";
+  const compactLoop = path === "jev";
 
   const optimizeFrontier = yield* Config.Boolean("BROWSER_JOURNEY_OPTIMIZED").pipe(
     Config.withDefault(true),
   );
 
   const optimizedFrontier = path === "direct" && optimizeFrontier;
-
-  const assistJev = yield* Config.Boolean("BROWSER_JOURNEY_JEV_ASSISTANCE").pipe(
-    Config.withDefault(true),
-  );
-
-  const jevAssistance = path === "jev" && assistJev;
 
   const textModel = yield* Config.String("BROWSER_JOURNEY_TEXT_MODEL").pipe(
     Config.withDefault("gpt-6-luna"),
@@ -631,6 +622,7 @@ export const journey = Effect.gen(function* () {
       maxActions: 200,
       maxReturnedBytes: 128 * 1024,
       viewportOnly: compactLoop || optimizedFrontier,
+      observationMode: compactLoop ? "jev" : "default",
       settleAfterAction: compactLoop ? "input" : optimizedFrontier,
       ...(optimizedFrontier ? { maxWaitMillis: 5_000 } : {}),
     });
@@ -675,58 +667,20 @@ export const journey = Effect.gen(function* () {
 
     const result = yield* Effect.gen(function* () {
       if (compactLoop)
-        return yield* Effect.gen(function* () {
-          const frontier = yield* LanguageModel.LanguageModel;
-
-          const planner =
-            path === "delegate" || !jevAssistance
-              ? frontier
-              : yield* LanguageModel.LanguageModel.pipe(
-                  Effect.provide(
-                    OpenAiLanguageModel.model(plannerModel, {
-                      max_output_tokens: 4_096,
-                      reasoning: { effort: "low" },
-                    }).pipe(
-                      Layer.provide(
-                        OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") }),
-                      ),
-                      Layer.provide(FetchHttpClient.layer),
-                    ),
-                  ),
-                );
-
-          return yield* runJevJourney({
-            driver: path === "delegate" ? "delegate" : "jev",
-            assistance: jevAssistance,
-            goal,
-            output,
-            textModel,
-            textProvider,
-            textReasoning,
-            frontier,
-            frontierModel: "gpt-6-luna",
-            frontierReasoning: "low",
-            planner,
-            plannerModel,
-            stepBudget,
-            session,
-            ready: () => {
-              readyAt = now();
-              readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
-            },
-          }).pipe(Effect.provide([controller.layer, jevDecisionLayer(output), textLayer]));
+        return yield* runJevJourney({
+          goal,
+          output,
+          textModel,
+          textProvider,
+          textReasoning,
+          stepBudget,
+          session,
+          ready: () => {
+            readyAt = now();
+            readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
+          },
         }).pipe(
-          Effect.provide(
-            OpenAiLanguageModel.model("gpt-6-luna", {
-              max_output_tokens: 4_096,
-              reasoning: { effort: "low" },
-            }).pipe(
-              Layer.provide(
-                OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") }),
-              ),
-              Layer.provide(FetchHttpClient.layer),
-            ),
-          ),
+          Effect.provide([controller.layer, jevDecisionLayer(output), textLayer]),
           Effect.timeout("8 minutes"),
           Effect.exit,
         );
@@ -787,7 +741,7 @@ export const journey = Effect.gen(function* () {
       Effect.provide(
         Layer.mergeAll(
           InMemory.layer,
-          modelLayer,
+          ...(compactLoop ? [] : [modelLayer]),
           finishing.toLayer({ finish: Effect.succeed }),
           BrowserUse.browserLayer.pipe(Layer.provide(controller.layer)),
         ),
@@ -895,18 +849,18 @@ export const journey = Effect.gen(function* () {
     const json = Schema.encodeSync(JourneyRecord)({
       engine,
       identity,
-      model: path === "jev" ? "jev-latest" : path === "delegate" ? "gpt-6-luna" : model,
-      reasoning: path === "jev" ? "none" : path === "delegate" ? "low" : reasoning,
+      model: path === "jev" ? "jev-latest" : model,
+      reasoning: path === "jev" ? "none" : reasoning,
       path,
       textModel: compactLoop ? textModel : null,
       textProvider: compactLoop ? textProvider : null,
       textReasoning: compactLoop ? textReasoning : null,
-      frontierModel: path === "delegate" || jevAssistance ? "gpt-6-luna" : null,
-      frontierReasoning: path === "delegate" || jevAssistance ? "low" : null,
-      plannerModel: jevAssistance ? plannerModel : null,
+      frontierModel: null,
+      frontierReasoning: null,
+      plannerModel: null,
       viewportOnly: compactLoop || optimizedFrontier,
       optimizedFrontier,
-      jevAssistance,
+      jevAssistance: false,
       stepBudget: compactLoop ? stepBudget : null,
       minimumProbability: path === "plan" ? minimumProbability : null,
       setupMillis,
