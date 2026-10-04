@@ -23,6 +23,13 @@ A partial or failed search cannot establish that a caller is absent. Start from 
 and line anchors, read the relevant complete definition, and widen searches only when a concrete
 question requires more context.
 
+Hosts can supply `webSearch` with a native provider-executed search tool. The reviewer
+uses official documentation or upstream source to verify external API claims and
+cites supporting URLs in findings. Queries use public identifiers; retrieved text
+is untrusted evidence. Repository source still establishes callers, guards, and impact.
+The host owns search access, provider limits, and billing. The GitHub Action exposes
+this as the opt-in `web-search` input; its usage includes `webSearchCalls`.
+
 The reviewer starts with the promised consumer outcome and traces supported execution paths,
 including unchanged callers and consumers. It distinguishes missing promised behavior from
 optional feature expansion. Before recording a defect, it checks the
@@ -155,8 +162,8 @@ A delegation supplies one unresolved, falsifiable question whose answer could ch
 and one to three distinct admitted changed paths. Instructions ask neutrally for supporting or
 refuting evidence and discourage generic second reviews; children use the same finding rubric.
 The host selects their exact patches, rejecting more than 32,000 total patch characters.
-Children receive the immutable revisions and current saved findings, and can use only the
-three repository read tools, `record_finding`, and `finish_research`. The completion contains
+Children receive the immutable revisions and current saved findings, and can use the
+three repository read tools, the host's optional web search, `record_finding`, and `finish_research`. The completion contains
 an evidence summary and incomplete flag; findings go directly to the same canonical ledger.
 Children cannot delegate further, establish parent diff coverage, or resolve prior reviews.
 
@@ -203,7 +210,7 @@ const program = reviewer.review(request).pipe(Effect.provideService(ReviewReposi
 `ReviewRepository` implementations provide typed Effect operations for `readFile`, `findFiles`,
 and `searchCode`. Hosts authorize source sent to models, pin immutable revisions, enforce read
 bounds, and treat all source and model output as untrusted. The reviewer has no ambient filesystem
-or network access. `ReviewSource.fromText` applies the shared source-range bounds.
+or network access; optional hosted search is supplied explicitly. `ReviewSource.fromText` applies the shared source-range bounds.
 
 The navigable diff approach is informed by [Pullfrog's review workflow](https://github.com/pullfrog/pullfrog/blob/0212dedb0f92b8ba4020c17dc30d3eced32415d7/modes.ts)
 and [Codex's review task](https://github.com/openai/codex/blob/588b781ab4924ce7352488394028e63d74cf807f/codex-rs/core/src/tasks/review.rs).

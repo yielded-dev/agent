@@ -1,4 +1,4 @@
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import {
   isCommentableLine,
   makeReviewer,
@@ -66,6 +66,8 @@ import {
   reviewModel,
   reviewModelPricing,
   reviewReasoningEffort,
+  reviewWebSearch,
+  REVIEW_WEB_SEARCH_MAX_TOOL_CALLS,
 } from "./review-openai.ts";
 import {
   dismissalFromCommand,
@@ -90,6 +92,7 @@ const ACTION_INPUT_BY_CONFIG: Readonly<Record<string, string>> = {
   PR_REVIEW_EXPECTED_HEAD: "INPUT_EXPECTED-HEAD",
   PR_REVIEW_MODEL: "INPUT_MODEL",
   PR_REVIEW_EFFORT: "INPUT_EFFORT",
+  PR_REVIEW_WEB_SEARCH: "INPUT_WEB-SEARCH",
   PR_REVIEW_PRIORITY: "INPUT_PRIORITY",
   PR_REVIEW_MAX_COST_USD: "INPUT_MAX-COST-USD",
   PR_REVIEW_BASE_COST_USD: "INPUT_BASE-COST-USD",
@@ -920,6 +923,7 @@ const prepareReview = Effect.gen(function* () {
 
   const modelName = yield* reviewModel;
   const effort = yield* reviewReasoningEffort;
+  const webSearch = yield* reviewWebSearch;
   const priority = yield* reviewPriority;
 
   const maxCostUsd = yield* reviewMaxCostUsd;
@@ -1024,6 +1028,7 @@ const prepareReview = Effect.gen(function* () {
     history,
     modelName,
     effort,
+    webSearch,
     priority,
     maxCostUsd,
     baseCostUsd,
@@ -1045,6 +1050,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
     history,
     modelName,
     effort,
+    webSearch,
     priority,
     maxCostUsd,
     baseCostUsd,
@@ -1178,6 +1184,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
         cachedInputTokens: 0,
         cacheWriteInputTokens: 0,
         outputTokens: 0,
+        webSearchCalls: 0,
         estimatedCostMicrousd: undefined,
         reservedCostMicrousd: 0,
         costLimitMicrousd: 0,
@@ -1239,7 +1246,9 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
         ...(priority === "" ? {} : { service_tier: priority }),
         strictJsonSchema: true,
         reasoning: { effort },
+        ...(webSearch ? { max_tool_calls: REVIEW_WEB_SEARCH_MAX_TOOL_CALLS } : {}),
       }),
+      ...(webSearch ? { webSearch: OpenAiTool.WebSearch({ search_context_size: "medium" }) } : {}),
       costControl: provider.costControl,
       contextTokenLimit: 128_000,
       ...(guidance === undefined ? {} : { guidance }),
@@ -1285,6 +1294,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
       cachedInputTokens: result.usage.cachedInputTokens,
       cacheWriteInputTokens: result.usage.cacheWriteInputTokens,
       outputTokens: result.usage.outputTokens,
+      webSearchCalls: result.usage.webSearchCalls ?? 0,
       estimatedCostMicrousd: result.usage.estimatedCostMicrousd,
       reservedCostMicrousd: result.usage.reservedCostMicrousd ?? 0,
       costLimitMicrousd,
@@ -1362,6 +1372,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
     cachedInputTokens,
     cacheWriteInputTokens,
     outputTokens,
+    webSearchCalls,
     estimatedCostMicrousd,
     reservedCostMicrousd,
     costLimitMicrousd,
@@ -1461,6 +1472,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
       cachedInputTokens,
       cacheWriteInputTokens,
       outputTokens,
+      webSearchCalls,
       estimatedCost,
       reservedCostMicrousd,
       costLimitMicrousd,
@@ -1505,6 +1517,7 @@ const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
     ["cached-input-tokens", cachedInputTokens],
     ["cache-write-input-tokens", cacheWriteInputTokens],
     ["output-tokens", outputTokens],
+    ["web-search-calls", webSearchCalls],
     ["reserved-cost-usd", (reservedCostMicrousd / 1_000_000).toFixed(6)],
     ["cost-limit-usd", (costLimitMicrousd / 1_000_000).toFixed(6)],
     [

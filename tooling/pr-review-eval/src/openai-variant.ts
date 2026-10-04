@@ -1,4 +1,4 @@
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import {
   makeReviewOpenAi,
   reviewCostLimitMicrousd,
@@ -6,6 +6,8 @@ import {
   reviewMaxCostUsd,
   reviewModel,
   reviewReasoningEffort,
+  reviewWebSearch,
+  REVIEW_WEB_SEARCH_MAX_TOOL_CALLS,
 } from "@yielded/agent-pr-review-action/review-openai";
 import {
   makeReviewer,
@@ -68,6 +70,7 @@ export const makeCurrentOpenAiVariant = Effect.fn("PrReviewEval.makeCurrentOpenA
     const baseCostUsd = yield* reviewBaseCostUsd;
     const model = yield* reviewModel;
     const reasoningEffort = yield* reviewReasoningEffort;
+    const webSearch = yield* reviewWebSearch;
 
     const serviceTier = yield* Config.schema(EvalServiceTier, "PR_REVIEW_PRIORITY").pipe(
       Config.withDefault("default"),
@@ -102,6 +105,7 @@ export const makeCurrentOpenAiVariant = Effect.fn("PrReviewEval.makeCurrentOpenA
       serviceTier,
       compaction,
       contextTokenLimit,
+      ...(webSearch ? { webSearch: { maxToolCalls: REVIEW_WEB_SEARCH_MAX_TOOL_CALLS } } : {}),
       ...(researchConcurrency === 0
         ? {}
         : { research: { concurrency: researchConcurrency, maxOutputTokens: 4_000 } }),
@@ -120,6 +124,9 @@ export const makeCurrentOpenAiVariant = Effect.fn("PrReviewEval.makeCurrentOpenA
         store: configuration.store,
         service_tier: configuration.serviceTier,
         strictJsonSchema: configuration.strictJsonSchema,
+        ...(configuration.webSearch === undefined
+          ? {}
+          : { max_tool_calls: configuration.webSearch.maxToolCalls }),
       });
 
     return {
@@ -138,6 +145,9 @@ export const makeCurrentOpenAiVariant = Effect.fn("PrReviewEval.makeCurrentOpenA
           costControl: provider.costControl,
           compaction: configuration.compaction,
           contextTokenLimit: configuration.contextTokenLimit,
+          ...(webSearch
+            ? { webSearch: OpenAiTool.WebSearch({ search_context_size: "medium" }) }
+            : {}),
           ...(configuration.research === undefined
             ? {}
             : {

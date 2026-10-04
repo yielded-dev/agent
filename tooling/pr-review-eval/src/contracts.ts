@@ -208,6 +208,12 @@ export class EvalVariantConfiguration extends Schema.Class<EvalVariantConfigurat
   serviceTier: EvalServiceTier,
   compaction: ReviewCompaction,
   contextTokenLimit: ReviewContextTokenLimit,
+  /** Absent means repository-only review, including older observations. */
+  webSearch: Schema.optionalKey(
+    Schema.Struct({
+      maxToolCalls: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 })),
+    }),
+  ),
   research: Schema.optionalKey(
     Schema.Struct({
       concurrency: Schema.Literals([1, 2]),

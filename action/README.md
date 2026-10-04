@@ -173,6 +173,13 @@ mismatched response is marked unavailable. A missing review commit does not excl
 attributable dismissal evidence.
 The source tools read committed Git files and do not install dependencies.
 
+Set `web-search: "true"` (local `PR_REVIEW_WEB_SEARCH=true`) to let the reviewer
+search and open public documentation through OpenAI's hosted web tool. It is off
+by default. Queries should contain public API names and versions, never repository
+source or private values. External evidence remains untrusted, and findings that
+depend on it must cite a public URL. The review footer and `web-search-calls` output
+count billed searches; opening or finding text within a page is not a billed search.
+
 Reviews with findings include a **Copy all findings** dropdown. Expand it and use the code
 block's copy button to copy every finding from that review, including paths, inline line numbers
 when available, and the inspected commit. The block reminds coding agents to verify findings
@@ -319,8 +326,18 @@ Before each research, compaction, or completion request, the Action uses OpenAI'
 encoded input, tools, reasoning, and output-format settings. It rejects inputs above 128,000 tokens,
 then reserves every input token at the cache-write rate plus the full output allowance, including
 reasoning. Admission never assumes a cache hit. The ledger releases unused reservations only after
-validating the response's usage, model, tier, and counted bounds. Failed, interrupted, or unmetered
+validating the response's usage, model, tier, and reserved bounds. Failed, interrupted, or unmetered
 requests retain their possible charge; the transport does not automatically retry them.
+
+With web search enabled, each response requests a limit of eight hosted web actions. A response
+that exceeds the admitted bounds stops the review as incomplete and retains its reservation.
+The model may continue searching or opening pages in later turns. Because preflight cannot count
+retrieved text, admission reserves the full 128,000-token search context at the
+cache-write rate, plus eight $0.01 searches and the output allowance. Settlement charges
+observed tokens and searches within the same spending cap. This conservative reserve
+can stop a review while some allowance remains. Exact-function finalization uses the
+ordinary counted reservation. Search pricing follows
+[OpenAI's built-in tool rates](https://developers.openai.com/api/docs/pricing#built-in-tools).
 
 Character admission does not guarantee a token fit. If the engine's context estimate or the
 provider's exact count exceeds the input limit, the Action publishes an incomplete token-budget
