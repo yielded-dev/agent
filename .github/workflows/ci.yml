@@ -126,7 +126,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
+        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version: "24.20.0"
           run-install: false
@@ -352,7 +352,7 @@ jobs:
           RELEASE_BUILD_MODE: write
 
       - name: Upload release build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
           path: .release-build/build.json
@@ -360,7 +360,7 @@ jobs:
           retention-days: 7
 
       - name: Upload the Action bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pr-review-action
           path: action/dist/index.mjs
@@ -439,7 +439,7 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Download this run's Action bundle
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pr-review-action
           path: action/dist
