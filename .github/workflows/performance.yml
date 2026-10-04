@@ -21,7 +21,11 @@ on:
         type: string
         default: ""
       cpu_profile:
-        description: Capture whole-child Node CPU profiles; timings become diagnostic only
+        description: Capture whole-process Node CPU (includes imports/setup); diagnostic timings only
+        type: boolean
+        default: false
+      steady_state_profile:
+        description: Profile resident SQLite tool rounds after long warmup (case sqlite-tool-rounds-4; excludes setup/disposal)
         type: boolean
         default: false
 
@@ -120,6 +124,7 @@ jobs:
           BASE_TAG: ${{ steps.comparison.outputs.base_tag }}
           CASES: ${{ inputs.cases }}
           CPU_PROFILE: ${{ inputs.cpu_profile }}
+          STEADY_STATE_PROFILE: ${{ inputs.steady_state_profile }}
         run: |
           rm -f .performance-base/test/fixtures/checkpoints.d.ts .performance-base/test/fixtures/storage-upgrade.d.ts .performance-base/test/fixtures/storage-v2.d.ts
           args=(--base-dir .performance-base --require-clean)
@@ -132,6 +137,13 @@ jobs:
             done <<< "${CASES//,/$'\n'}"
           fi
           if [ "$CPU_PROFILE" = true ]; then args+=(--cpu-profile); fi
+          if [ "$STEADY_STATE_PROFILE" = true ]; then
+            if [ "$CPU_PROFILE" = true ] || [ "$PROFILE" = diagnostic ]; then
+              printf '%s\n' 'Steady-state profiling requires perf:compare and cannot combine with whole-process CPU profiling' >&2
+              exit 1
+            fi
+            args+=(--steady-state-profile)
+          fi
           if [ "$PROFILE" = diagnostic ]; then
             ./node_modules/.bin/vp run --no-cache perf:diagnose "${args[@]}"
           else

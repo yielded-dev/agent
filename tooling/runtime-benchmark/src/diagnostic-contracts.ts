@@ -3,7 +3,7 @@ import { Context, Schema } from "effect";
 
 import type { BenchmarkError } from "./contracts.js";
 
-export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v1";
+export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v2";
 export const MAX_DIAGNOSTIC_MARKS = 512;
 export const DIAGNOSTIC_SIZES = { cohorts: 2, warmups: 2, samples: 5 } as const;
 

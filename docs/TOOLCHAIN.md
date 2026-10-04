@@ -512,13 +512,21 @@ running them. Repeat `--case` to focus a comparison on the component under inves
 
 ```sh
 vp run perf:compare --base-dir /path/to/base --case checkpoint-recovery-2048 --out-dir /tmp/recovery-comparison
-vp run perf:compare --base-dir /path/to/base --case checkpoint-recovery-2048 --cpu-profile --out-dir /tmp/recovery-profile
+vp run perf:compare --base-dir /path/to/base --steady-state-profile --case sqlite-tool-rounds-4 --out-dir /tmp/sqlite-profile
 ```
 
-CPU profiles cover the whole child process, including imports and setup. Use them to find work
-to investigate, then rerun without profiling to measure a change. Profiled reports keep raw
-samples but suppress timing comparisons. Timing tasks bypass the task cache; keep other builds,
-tests, and benchmarks idle during measurement.
+`--steady-state-profile` captures one warmed operation loop inside a resident file-backed SQLite
+host per revision. It performs exactly 500 warmup operations, then
+captures 1,000 fresh-Thread operations, each with four immediate tool calls and five provider
+requests. Imports, host acquisition, warmup, reporting, and host disposal are outside capture.
+The provider uses native `Stream.make`, so this is a diagnostic workload distinct from async-iterable
+delivery and the ordinary reopen-per-sample matrix. Select the workflow's
+`steady_state_profile` input to run it in Actions.
+
+`--cpu-profile` remains whole-process profiling, including imports and setup; diagnostics support
+that mode only. Both modes suppress timing comparisons. Use profiles to locate work, then rerun
+an unprofiled matched workload to measure a change. Timing tasks bypass the task cache; keep
+other builds, tests, and benchmarks idle during measurement.
 
 The bounded `pr` profile covers small runs and streams, fixed-size responses with increasing fragmentation,
 growing prompts, parallel tools and repeated rounds, file-backed SQLite history, checkpoint

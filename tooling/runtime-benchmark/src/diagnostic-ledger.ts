@@ -18,7 +18,6 @@ import {
   SubmissionSettledRecord,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionRequest,
   ClaimRequest,
@@ -65,6 +64,7 @@ import {
 } from "./diagnostic-writer.js";
 
 export { ledgerCases } from "./diagnostic-cases.js";
+import { publishSeedSettlement } from "./settlement.js";
 
 /** Test-only scheduling input; real diagnostic cases observe immediately after the go signal. */
 export const DiagnosticLedgerWaitForWriterRelease = Context.Reference(
@@ -137,24 +137,21 @@ const publish = Effect.fn("diagnostic.ledger.publish")(function* (index: number)
     }),
   });
 
-  const publisher = yield* SettlementPublisher;
   const store = yield* ThreadStore;
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
 
-  yield* publisher.publish(
-    SettlementPublication.make({
-      submissionId: admitted.submissionId,
-      authority: { _tag: "Owned", ownershipToken: claim.value.ownershipToken },
-      append: FencedAppendRequest.make({
-        threadId: seedThread,
-        producerEpoch: claim.value.producerEpoch,
-        expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
-        batch: CanonicalBatch.make({
-          batchId: submissionSettlementBatchId(admitted.submissionId),
-          producerId,
-          records: [record],
-        }),
+  yield* publishSeedSettlement(
+    admitted.submissionId,
+    claim.value.ownershipToken,
+    FencedAppendRequest.make({
+      threadId: seedThread,
+      producerEpoch: claim.value.producerEpoch,
+      expectedTailSequence: tail.tailSequence,
+      expectedTailDigest: tail.tailDigest,
+      batch: CanonicalBatch.make({
+        batchId: submissionSettlementBatchId(admitted.submissionId),
+        producerId,
+        records: [record],
       }),
     }),
   );

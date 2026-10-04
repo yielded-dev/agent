@@ -241,6 +241,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
             "diagnostic-worker.ts",
             "ids.ts",
             "history.ts",
+            "settlement.ts",
             "diagnostic-policy.ts",
             "diagnostic-capabilities.ts",
             "diagnostic-ledger.ts",

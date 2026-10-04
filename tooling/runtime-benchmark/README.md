@@ -29,12 +29,15 @@ The cleanup lines remove only declaration artifacts emitted by older package bui
 disposable checkouts. Every other modified or untracked file fails clean-checkout validation.
 
 Comparison staging aliases historical PascalCase exports to the current kebab-case paths without
-changing their implementations. Workers explicitly provide the same Effect AI identity generator
+changing their implementations. Settlement seeds conditionally load the compared revision’s publisher;
+older revisions use their own reservation Schema and append the same canonical settlement before
+finalization. A missing export selects that older protocol, while a broken existing module fails.
+No candidate implementation or dependency installation is substituted for the baseline. Workers explicitly provide the same Effect AI identity generator
 to both revisions so releases predating default IDs remain runnable. These compatibility choices
 apply only to the comparison fixtures; they add no published export aliases or runtime fallbacks.
 
 The performance workflow runs only by manual dispatch. Select exact base/head refs, a fixed
-profile, optional comma-separated case IDs, and optional CPU profiling. A blank base defaults
+profile, optional comma-separated case IDs, and optional whole-process or steady-state CPU profiling. A blank base defaults
 to the most recently published `@yielded/agent@…` release, including beta prereleases and excluding
 drafts and sibling-package/Action releases; head defaults to `main`. Refs are resolved to exact
 commits before checkout. Local `--base-dir` comparisons remain available for exact-revision
@@ -69,25 +72,55 @@ run only when `small-run` is selected. Run the same selection on both revisions 
 cohort, including slow samples. Selecting cases changes shared-process warmup and cache history;
 compare only matched selections, not selected runs against historical full-matrix timings.
 
-Add `--cpu-profile` in a separate diagnostic run, with a new output directory:
+Use `--steady-state-profile` for operation CPU, with a new output directory:
 
 ```sh
-vp run perf:compare --base-dir /tmp/effect-agent-base --profile smoke --case small-run --cpu-profile --out-dir /tmp/small-run-profile-001
+vp run perf:compare --steady-state-profile --list-cases
+vp run perf:compare --base-dir /tmp/effect-agent-base --steady-state-profile --case sqlite-tool-rounds-4 --out-dir /tmp/sqlite-profile-001
+```
+
+This mode has one explicit workload: a resident file-backed SQLite Node host, fresh Thread and
+Submission identities for each operation, four sequential immediate tool calls and five native
+provider requests. Input, final JSON output, and each tool result are 32 bytes. The scripted native
+Effect LanguageModel uses `Stream.make` delivery, performs no inference or network calls, and retains bounded counters instead
+of every prompt. This delivery differs from an async-iterable provider, so the profile diagnoses costs
+and does not establish latency for that other workload. There is no synthetic tool delay. The database accumulates completed Threads and
+Submissions across warmup and measurement; this intentionally exercises the resident host and ledger.
+
+Each revision runs in one child, baseline then candidate. After host acquisition, the worker warms
+for exactly 500 operations, leaving both revisions with the same completed ledger size. It then starts one in-process Inspector CPU
+profile, executes exactly 1,000 operations, and stops the profile. The captured operation runs from
+admission through settlement and the exact canonical completion read, including runtime validation,
+inline fixture checks, and resident host background work. Imports, host acquisition, warmup,
+profile serialization, report writes, and host disposal occur outside the captured interval.
+Run-owned model/tool finalizers remain part of each operation. The inspector connection and
+application resources belong to Scope; failure stops capture before disposing the host.
+
+JSON and Markdown retain actual warmup count/duration, measured operation count/duration, profile
+duration, 1 ms sampling interval, call/finalizer/completion counts, and the exact revision and fixture
+identities. This resident workload differs from the ordinary matrix, which reopens a host for every
+durable sample. `--profile` does not change the steady-state workload or its fixed loop sizes.
+Select `steady_state_profile` in the manual workflow; `cases` can be blank or `sqlite-tool-rounds-4`.
+The mode does not run cold samples or ordinary A/B timing cohorts.
+
+For startup, setup, or diagnostic-case investigations, `--cpu-profile` retains whole-process capture:
+
+```sh
+vp run perf:compare --base-dir /tmp/effect-agent-base --profile smoke --case small-run --cpu-profile --out-dir /tmp/whole-process-profile-001
 vp run perf:diagnose --base-dir /tmp/effect-agent-base --case history-single --cpu-profile --out-dir /tmp/history-profile-001
 ```
 
-Each controller-launched Node worker writes its own `.cpuprofile` alongside the JSON report.
-Open these files in a CPU-profile viewer such as Chrome DevTools. Profiles sample the whole child,
-including startup, imports, seed/setup work, warmups, operations, verification, reporting, and
-shutdown. They do not isolate operation CPU, include CPU from other processes (such as the
-diagnostic SQLite lock writer), or measure Cloudflare billing CPU. A missing requested profile
-makes the batch incomplete; a force-killed child may not flush a profile.
+Whole-process profiles include startup, imports, setup, warmups, operations, verification, reporting,
+and shutdown. They are explicitly labeled separately from steady-state operation profiles; the two
+flags cannot be combined. Diagnostics support whole-process capture only. Open `.cpuprofile` files
+in Chrome DevTools or another CPU-profile viewer. Neither mode includes CPU in other processes or
+measures Cloudflare billing CPU. Missing requested profiles fail completeness; force-killed children
+may leave partial evidence without a profile.
 
-Profiling mode is explicit in JSON and Markdown. Instrumented elapsed samples remain raw
-diagnostic evidence, and Markdown omits comparison timing tables. Use profiles to locate work,
-then run a separate unprofiled matched comparison to assess a change; profiled timings are never
-ordinary before/after acceptance measurements. Without `--cpu-profile`, execution and timing
-boundaries remain unchanged.
+Both profiling modes suppress timing-comparison tables. Instrumented elapsed values are diagnostic
+evidence only. Use profiles to locate work, then run a separate unprofiled matched workload to assess
+a change. Without either profiling flag, cohort order, sample counts, and timing boundaries stay
+unchanged.
 
 `--profile smoke` exercises every workload family with one sample and 16 retained records;
 it checks the command, not statistical confidence. `extended` takes 30 samples per revision and
@@ -101,15 +134,15 @@ limit. Cold subprocesses have a thirty-second limit. Interrupted children get fi
 before forceful termination. Timeouts retain partial evidence and fail correctness. No scheduled
 or paid execution is configured here.
 
-| Case                      | Completed work and timing boundary                                                                                                                                                                                                                                                                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Small run/stream          | One validated final answer and exactly one model invocation; warm operation begins after application Layer acquisition.                                                                                                                                                                                                                                   |
-| Fragmentation             | Exactly 65,536 JSON response bytes in 1/64/1,024/4,096 deltas. Stream delivery must reproduce every chunk and the final answer. All four sizes are in the default `pr` profile.                                                                                                                                                                           |
-| Prompt history            | A small answer with 64 KiB or 1 MiB of prior text. History creation occurs before timing.                                                                                                                                                                                                                                                                 |
-| Parallel tools and rounds | Eight 2 ms tools per round, concurrency four, one or four rounds. Subsequent normalized provider requests must contain every successful result. Actual overlap, call bounds, and finalizers are checked.                                                                                                                                                  |
-| Fresh durable submission  | A new Submission after 0/256/2,048 retained canonical records in a file-backed SQLite database. Each sample creates its own database; setup/seeding is excluded. Timing includes reopening the full Node durable runtime, admission, execution, and settlement.                                                                                           |
-| Checkpoint recovery       | Persist a native rollover checkpoint, inject the public after-save fault, close the runtime, and reopen the same file. Measure resuming that same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                               |
-| Settled ledger            | Seed settled adapter rows in a separate lane without growing canonical history. Measure reopening the Node runtime, fresh admission, a full public nonterminal scan, execution, and settlement. The scan must return only the new Submission. Synthetic ledger seeding is an adapter fixture, not evidence of a production canonical settlement protocol. |
+| Case                      | Completed work and timing boundary                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Small run/stream          | One validated final answer and exactly one model invocation; warm operation begins after application Layer acquisition.                                                                                                                                                                                                                                            |
+| Fragmentation             | Exactly 65,536 JSON response bytes in 1/64/1,024/4,096 deltas. Stream delivery must reproduce every chunk and the final answer. All four sizes are in the default `pr` profile.                                                                                                                                                                                    |
+| Prompt history            | A small answer with 64 KiB or 1 MiB of prior text. History creation occurs before timing.                                                                                                                                                                                                                                                                          |
+| Parallel tools and rounds | Eight 2 ms tools per round, concurrency four, one or four rounds. Subsequent normalized provider requests must contain every successful result. Actual overlap, call bounds, and finalizers are checked.                                                                                                                                                           |
+| Fresh durable submission  | A new Submission after 0/256/2,048 retained canonical records in a file-backed SQLite database. Each sample creates its own database; setup/seeding is excluded. Timing includes reopening the full Node durable runtime, admission, execution, and settlement.                                                                                                    |
+| Checkpoint recovery       | Persist a native rollover checkpoint, inject the public after-save fault, close the runtime, and reopen the same file. Measure resuming that same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                                        |
+| Settled ledger            | Seed settled adapter rows in a separate lane without growing canonical history. Measure reopening the Node runtime, fresh admission, a full public nonterminal scan, execution, and settlement. The scan must return only the new Submission. Seed construction uses each revision’s public settlement protocol and retains one canonical settlement per seed row. |
 
 Retained-history seeds contain ThreadCreated followed by complete input/model/completion triples
 matching the immediate PersistentHistory format, with shared Run identities and schema-encoded
@@ -125,7 +158,7 @@ SQLite uses the production Node assembly and its default scheduling, lease, and 
 configuration; checkpoint cases additionally install the documented host rollover preparation.
 Database teardown and evidence reads are outside the warm-operation interval.
 
-Fixture `runtime-v3` builds worker-local seed templates through those same public adapter
+Fixture `runtime-v4` builds worker-local seed templates through those same public adapter
 operations, once per history/ledger size and revision. It closes the full seed runtime and rejects
 any remaining WAL or SHM sidecar before copying the database to each sample's fresh directory.
 Copies share no mutable database state. Fresh submission and checkpoint recovery can reuse the
@@ -175,7 +208,7 @@ own installation. Reports identify exact commits, dirty state, lockfile hashes, 
 hashes, fixture hash/version, runtime, operating system, CPU, memory, sample counts, median,
 interquartile range, and process failures. The artifact includes the exact transpiled fixture.
 
-The `runtime-v3` artifact identifies Base and Head, the selected cases, and comparison or
+The `runtime-v4` artifact identifies Base and Head, the selected cases, and comparison or
 profiling mode. `baselineTag` names a release when one was selected; otherwise it is null.
 Ordinary comparison tables show medians and Q1–Q3 spread.
 The nine samples share three worker processes per revision; that spread is not a confidence
@@ -212,7 +245,7 @@ now run alongside default retention, rather than switching retention on and off.
 
 ## Manual diagnostics
 
-`vp run perf:diagnose` runs the separate `runtime-diagnostic-v1` fixture against clean, built
+`vp run perf:diagnose` runs the separate `runtime-diagnostic-v2` fixture against clean, built
 base/head checkouts. Install each checkout's own lockfile and build its public packages as above.
 Run this command from the candidate checkout, with no concurrent builds, tests, or measurements:
 

@@ -8,10 +8,12 @@ import {
   casesFor,
   FIXTURE_VERSION,
   selectCaseNames,
+  steadyStateCases,
   WorkerOptions,
   WorkerReport,
   type Sample,
   type SampleProgress,
+  type SteadyStateResult,
 } from "./contracts.js";
 import { BenchmarkProgress, writeEvidence } from "./evidence.js";
 import { BenchmarkRunner, SeedInitializerLive } from "./fixture.js";
@@ -25,10 +27,14 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
   const samples: Array<Sample> = [];
   let active: SampleProgress | null = null;
   let failure: string | null = null;
+  let steadyState: SteadyStateResult | undefined;
 
-  const available = options.cold
-    ? casesFor(options.profile).slice(0, 1)
-    : casesFor(options.profile);
+  const available =
+    options.mode === "steady-state-profile"
+      ? steadyStateCases
+      : options.cold
+        ? casesFor(options.profile).slice(0, 1)
+        : casesFor(options.profile);
 
   const cases = yield* selectCaseNames(
     available.map(({ name }) => name),
@@ -51,6 +57,7 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
         active,
         failure,
         samples,
+        ...(steadyState === undefined ? {} : { steadyState }),
       }),
     );
 
@@ -70,6 +77,46 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
 
   yield* Effect.gen(function* () {
     yield* persist();
+    if (options.mode === "steady-state-profile") {
+      const evidenceFs = yield* FileSystem.FileSystem;
+      const name = cases[0];
+
+      if (
+        options.cpuProfile === undefined ||
+        options.cold ||
+        cases.length !== 1 ||
+        name === undefined
+      )
+        return yield* BenchmarkError.make({
+          message: "Steady-state profiling requires one warm case and a profile output path",
+        });
+      active = { case: name, ordinal: 0, warmup: true, phase: "setup", elapsedMs: 0 };
+      yield* persist();
+
+      const fixture = yield* Effect.tryPromise({
+        try: () => import("./steady-state.js"),
+        catch: (cause) =>
+          BenchmarkError.make({ message: "Cannot load steady-state fixture", cause }),
+      });
+
+      steadyState = yield* fixture.runSteadyStateProfile(
+        options.cpuProfile,
+        (operations, elapsedMs) => {
+          active = {
+            case: name,
+            ordinal: operations,
+            warmup: false,
+            phase: "operation",
+            elapsedMs,
+          };
+
+          return persist().pipe(Effect.provideService(FileSystem.FileSystem, evidenceFs));
+        },
+      );
+      active = null;
+
+      return;
+    }
     // Acquire the cache after the first report so acquisition failures leave evidence, too.
     yield* Effect.gen(function* () {
       const runner = yield* BenchmarkRunner;

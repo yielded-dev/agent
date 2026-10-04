@@ -31,7 +31,6 @@ import {
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
-import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionRequest,
   ClaimRequest,
@@ -76,6 +75,7 @@ import { BenchmarkError, check, type Case, type Sample, type SamplePhase } from 
 import { BenchmarkProgress } from "./evidence.js";
 import { BenchmarkHistoryLive } from "./history.js";
 import { SeedInitializer, SeedTemplates, type SeedRequest } from "./seeds.js";
+import { publishSeedSettlement } from "./settlement.js";
 
 const answerSchema = Schema.Struct({ answer: Schema.String });
 
@@ -300,24 +300,21 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
       payload,
     });
 
-    const publisher = yield* SettlementPublisher;
     const store = yield* ThreadStore;
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
 
-    yield* publisher.publish(
-      SettlementPublication.make({
-        submissionId: admitted.submissionId,
-        authority: { _tag: "Owned", ownershipToken: claim.value.ownershipToken },
-        append: FencedAppendRequest.make({
-          threadId: seedThread,
-          producerEpoch: claim.value.producerEpoch,
-          expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
-          batch: CanonicalBatch.make({
-            batchId: submissionSettlementBatchId(admitted.submissionId),
-            producerId,
-            records: [record],
-          }),
+    yield* publishSeedSettlement(
+      admitted.submissionId,
+      claim.value.ownershipToken,
+      FencedAppendRequest.make({
+        threadId: seedThread,
+        producerEpoch: claim.value.producerEpoch,
+        expectedTailSequence: tail.tailSequence,
+        expectedTailDigest: tail.tailDigest,
+        batch: CanonicalBatch.make({
+          batchId: submissionSettlementBatchId(admitted.submissionId),
+          producerId,
+          records: [record],
         }),
       }),
     );
