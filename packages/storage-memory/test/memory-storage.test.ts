@@ -6,6 +6,7 @@ import { ThreadId, RunId, SubmissionId } from "@yielded/agent/identifiers";
 import {
   CanonicalBatch,
   CanonicalRecord,
+  CanonicalRecordEnvelope,
   CanonicalSequence,
   ProducerEpoch,
   UserInputRecorded,
@@ -150,7 +151,12 @@ describe("MemoryThreadStore", () => {
       yield* Deferred.await(readStarted);
       yield* append(store, batch("page-third", [inputRecord("page-5", "five")]), tail);
       yield* Deferred.succeed(resumeRead, undefined);
-      expect(yield* Fiber.join(reader)).toEqual(snapshot.records);
+      // Archive records also own their original wire; observation exposes the canonical view.
+      const encodeRecords = Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope));
+
+      expect(yield* encodeRecords(yield* Fiber.join(reader))).toEqual(
+        yield* encodeRecords(snapshot.records),
+      );
     }).pipe(Effect.provide(testLayer)),
   );
 

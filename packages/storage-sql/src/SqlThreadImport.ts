@@ -195,65 +195,85 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               Effect.mapError((cause) => failure("capture export tail", cause)),
             );
 
-          // Keep only one record page and a small batch page beside the resulting archive.
-          // Parsing a record row once supplies both the cross-table check and its wire owner.
-          let rows: ReadonlyArray<typeof Row.Type> = [];
-          let rowIndex = 0;
-          let afterRow: number | undefined;
-
-          const nextRow = Effect.fnUntraced(function* () {
-            if (rowIndex === rows.length) {
-              rows = yield* decode(
-                Schema.Array(Row),
-                yield* query(
-                  sql`SELECT batch_id, sequence, record_json FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} ${afterRow === undefined ? sql`` : sql`AND sequence>${afterRow}`} ORDER BY sequence LIMIT 256`,
-                ),
-              );
-              rowIndex = 0;
-              afterRow = rows.at(-1)?.sequence ?? afterRow;
-            }
-
-            return rows[rowIndex++];
-          });
-
+          // Page the indexed batch identity, cap hydrated JSON text, and read only that
+          // page's record rows. Restore canonical order by sequence without retaining a
+          // second full set of batch bodies or depending on batch-id order.
           const records: Array<typeof ThreadExportRecord.Type> = [];
-          const batches: Array<typeof ThreadExportBatch.Type> = [];
-          let cursor = 0;
-          let afterBatch: number | undefined;
+
+          const batchOrder: Array<{ firstSequence: number; batch: typeof ThreadExportBatch.Type }> =
+            [];
+
+          let recordCount = 0;
+          let afterBatch: string | undefined;
 
           while (true) {
             const page = yield* decode(
               Schema.Array(Batch),
               yield* query(
-                sql`SELECT batch_id, batch_json, first_sequence, last_sequence FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${request.threadId} ${afterBatch === undefined ? sql`` : sql`AND first_sequence>${afterBatch}`} ORDER BY first_sequence LIMIT 16`,
+                sql`SELECT batch_id, batch_json, first_sequence, last_sequence FROM (
+                  SELECT candidate.*, SUM(length(batch_json)) OVER (ORDER BY batch_id) AS page_length,
+                    ROW_NUMBER() OVER (ORDER BY batch_id) AS page_row
+                  FROM (
+                    SELECT batch_id, batch_json, first_sequence, last_sequence FROM ${table("effect_agent_canonical_batches")}
+                    WHERE thread_id=${request.threadId} ${afterBatch === undefined ? sql`` : sql`AND batch_id>${afterBatch}`}
+                    ORDER BY batch_id LIMIT 16
+                  ) candidate
+                ) bounded WHERE page_length<=1048576 OR page_row=1 ORDER BY batch_id`,
               ),
             );
 
             if (page.length === 0) break;
+
+            const rows = yield* decode(
+              Schema.Array(Row),
+              yield* query(
+                sql`SELECT batch_id, sequence, record_json FROM ${table("effect_agent_canonical_records")}
+                WHERE thread_id=${request.threadId} AND ${sql.in(
+                  "batch_id",
+                  page.map((batch) => batch.batch_id),
+                )}
+                ORDER BY batch_id, sequence LIMIT 4097`,
+              ),
+            );
+
+            const byBatch = new Map<string, Array<typeof Row.Type>>();
+
+            for (const row of rows) {
+              const entries = byBatch.get(row.batch_id) ?? [];
+
+              entries.push(row);
+              byBatch.set(row.batch_id, entries);
+            }
             for (const stored of page) {
+              if (stored.last_sequence > header.tail_sequence)
+                return yield* failure(
+                  "export complete Thread",
+                  "Canonical records exist beyond the captured thread tail; verify the source store before exporting",
+                );
               const batch = yield* json(WireBatch, stored.batch_json);
+              const batchRows = byBatch.get(stored.batch_id) ?? [];
 
               if (
                 stored.batch_id !== batch.batchId ||
-                stored.first_sequence !== cursor + 1 ||
-                stored.last_sequence !== cursor + batch.records.length ||
-                stored.last_sequence > header.tail_sequence
+                stored.first_sequence < 1 ||
+                stored.last_sequence !== stored.first_sequence + batch.records.length - 1 ||
+                batchRows.length !== batch.records.length
               )
                 return yield* failure(
                   "export canonical batches",
-                  "Batch identity or order mismatch",
+                  "Batch identity, order, or record count mismatch",
                 );
-              for (const wire of batch.records) {
-                const row = yield* nextRow();
+
+              for (const [index, wire] of batch.records.entries()) {
+                const row = batchRows[index];
 
                 if (
-                  row === undefined ||
-                  row.sequence !== cursor + 1 ||
-                  row.batch_id !== batch.batchId
+                  row.sequence !== stored.first_sequence + index ||
+                  records[row.sequence - 1] !== undefined
                 )
                   return yield* failure(
                     "export complete Thread",
-                    "Non-contiguous canonical prefix",
+                    "Overlapping or non-contiguous canonical prefix",
                   );
                 const encoded = yield* json(PersistedJson, row.record_json);
 
@@ -267,27 +287,47 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   Effect.mapError((cause) => failure("decode export record", cause)),
                 );
 
-                records.push(
-                  ThreadExportRecord.make({
-                    threadId: request.threadId,
-                    batchId: batch.batchId,
-                    sequence: row.sequence,
-                    offset: yield* decode(
-                      ObservationOffset,
-                      `${options.offsetPrefix}${encodeURIComponent(request.threadId)}:${row.sequence}`,
-                    ),
-                    record,
-                  }),
-                );
-                cursor++;
+                records[row.sequence - 1] = ThreadExportRecord.make({
+                  threadId: request.threadId,
+                  batchId: batch.batchId,
+                  sequence: row.sequence,
+                  offset: yield* decode(
+                    ObservationOffset,
+                    `${options.offsetPrefix}${encodeURIComponent(request.threadId)}:${row.sequence}`,
+                  ),
+                  record,
+                });
+                recordCount++;
               }
-              batches.push(
-                ThreadExportBatch.make({ batchId: batch.batchId, producerId: batch.producerId }),
-              );
+              batchOrder.push({
+                firstSequence: stored.first_sequence,
+                batch: ThreadExportBatch.make({
+                  batchId: batch.batchId,
+                  producerId: batch.producerId,
+                }),
+              });
             }
-            afterBatch = page.at(-1)?.first_sequence;
+            afterBatch = page.at(-1)?.batch_id;
           }
-          if (cursor !== header.tail_sequence || (yield* nextRow()) !== undefined)
+
+          const batches = batchOrder
+            .sort((left, right) => left.firstSequence - right.firstSequence)
+            .map(({ batch }) => batch);
+
+          const [count] = yield* decode(
+            Schema.Tuple([Schema.Struct({ records: SqlInteger, batches: SqlInteger })]),
+            yield* query(
+              sql`SELECT
+                (SELECT COUNT(*) FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId}) AS records,
+                (SELECT COUNT(*) FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${request.threadId}) AS batches`,
+            ),
+          );
+
+          if (
+            recordCount !== header.tail_sequence ||
+            count.records !== recordCount ||
+            count.batches !== batches.length
+          )
             return yield* failure(
               "export complete Thread",
               "Records or batches disagree with the captured tail",

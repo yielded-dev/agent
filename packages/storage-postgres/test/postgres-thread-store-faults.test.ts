@@ -23,6 +23,7 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   ThreadCheckpoint,
+  ThreadExport,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadRead,
@@ -53,6 +54,7 @@ const sequence = (value: number) => Schema.decodeSync(CanonicalSequence)(value);
 const epoch = (value: number) => Schema.decodeSync(ProducerEpoch)(value);
 const isThreadStoreError = Schema.is(ThreadStoreError);
 const isCompatibilityError = Schema.is(PostgresStorageCompatibilityError);
+const encodeRecords = Schema.encodeEffect(Schema.Array(CanonicalRecord));
 
 const at = (millis: number) => DateTime.toUtc(DateTime.makeUnsafe(millis));
 
@@ -202,9 +204,14 @@ describe("PostgresThreadStore faults", () => {
                 .pipe(Stream.runCollect);
 
               expect(selected.map((envelope) => envelope.record)).toEqual([record]);
-              const exported = yield* store.export(ThreadExportRequest.make({ threadId }));
 
-              expect(exported.records.map((envelope) => envelope.record)).toEqual([record]);
+              const exported = yield* store
+                .export(ThreadExportRequest.make({ threadId }))
+                .pipe(Effect.flatMap(Schema.encodeEffect(ThreadExport)));
+
+              expect(exported.records.map((envelope) => envelope.record)).toEqual(
+                yield* encodeRecords([record]),
+              );
             }),
           );
         });
@@ -270,7 +277,9 @@ describe("PostgresThreadStore faults", () => {
             )
             .pipe(Effect.exit);
 
-          const exported = yield* store.export(ThreadExportRequest.make({ threadId: validId }));
+          const exported = yield* store
+            .export(ThreadExportRequest.make({ threadId: validId }))
+            .pipe(Effect.flatMap(Schema.encodeEffect(ThreadExport)));
 
           expect({
             rejected,
@@ -284,7 +293,7 @@ describe("PostgresThreadStore faults", () => {
             ],
             validAppend: true,
             threadId: validId,
-            records: [first, second],
+            records: yield* encodeRecords([first, second]),
           });
         }),
       ),
