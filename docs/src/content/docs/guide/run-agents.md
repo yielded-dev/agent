@@ -129,9 +129,9 @@ and one terminal classification. Provider SDK chunks do not enter this stable un
 For structured output, treat text deltas as provisional wire data. Show activity or received-character
 progress until the terminal output passes its Schema; do not display partial JSON as an answer.
 The demo follows this pattern. Plain-text output can render provisional text directly.
-Primitive text and reasoning deltas are copied into owned, Schema-validated values; their transport
-fragmentation does not create one ownership tracing span per delta. Complex metadata retains the
-general bounded ownership path.
+Provider parts are copied into bounded, engine-owned data and Schema-validated in chunks. The engine
+publishes each chunk's semantic events in order; a later invalid part preserves previously accepted
+progress and reported usage. Transport fragmentation does not create an ownership span per delta.
 
 Once stream consumption starts, a scoped producer advances until its bounded event buffer fills.
 Slow consumption backpressures publication, but individual pulls do not pace tool execution.
