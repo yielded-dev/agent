@@ -100,7 +100,7 @@ import {
   FenceRejected,
   type ThreadStoreFailure,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
+import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream, Struct } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
@@ -202,6 +202,28 @@ class OwnershipRow extends Schema.Class<OwnershipRow>("OwnershipRow")({
   owner_producer_id: BoundedIdentifier,
   lease_expires_at: BoundedTimestamp,
 }) {}
+
+// Selection and readiness need lane state, not the retained input and recovery metadata.
+// Keep the ordering keys in the decoded projection because they govern claim authority.
+const ReadySubmissionRows = Schema.Array(
+  Schema.Struct(Struct.pick(SubmissionRow.fields, ["thread_id", "state"])),
+);
+
+const ClaimSubmissionRows = Schema.Array(
+  Schema.Struct(
+    Struct.pick(SubmissionRow.fields, [
+      "submission_id",
+      "thread_id",
+      "queue_sequence",
+      "state",
+      "input_json",
+    ]),
+  ),
+);
+
+const OwnershipLeaseRows = Schema.Array(
+  Schema.Struct(Struct.pick(OwnershipRow.fields, ["submission_id", "lease_expires_at"])),
+);
 
 class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")({
   submission_id: BoundedIdentifier,
@@ -377,7 +399,10 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   const crypto = yield* Crypto.Crypto;
   const lifecycle = journal.lifecycle;
 
-  const retainLifecycle = (submission: SubmissionRow, fact: LifecyclePublicationFact) =>
+  const retainLifecycle = (
+    submission: Pick<SubmissionRow, "thread_id">,
+    fact: LifecyclePublicationFact,
+  ) =>
     lifecycle === undefined
       ? Effect.void
       : Effect.gen(function* () {
@@ -1341,7 +1366,31 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+        const rows = yield* sql<Record<string, unknown>>`
+          SELECT thread_id, state FROM ${relation("effect_agent_submissions")}
+          WHERE submission_id = ${validated.submissionId}
+        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+        const decoded = yield* decodeRows(
+          ReadySubmissionRows,
+          "effect_agent_submissions",
+          validated.submissionId,
+          rows,
+        ).pipe(Effect.mapError(internalFailure(operation)));
+
+        if (decoded.length === 0)
+          return yield* LedgerError.make({
+            operation,
+            message: `Unknown submission ${validated.submissionId}.`,
+          });
+        if (decoded.length !== 1)
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_submissions",
+            validated.submissionId,
+            "A submission primary key returned more than one row.",
+          );
+        const submission = decoded[0];
 
         if (submission.state !== "admitted") return;
         const now = yield* currentInstant;
@@ -1468,7 +1517,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           // every live lease. This check and the epoch grant share one write transaction.
           // The guard lets SQLite skip the retained-submission scan when ownership is empty.
           const ownershipRows = yield* sql<Record<string, unknown>>`
-            SELECT ownership.*
+            SELECT ownership.submission_id, ownership.lease_expires_at
             FROM ${relation("effect_agent_submission_ownership")} AS ownership
             JOIN ${relation("effect_agent_submissions")} AS submission
               ON submission.submission_id = ownership.submission_id
@@ -1481,7 +1530,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
           const ownership = yield* decodeRows(
-            Schema.Array(OwnershipRow),
+            OwnershipLeaseRows,
             "effect_agent_submission_ownership",
             validated.threadId,
             ownershipRows,
@@ -1497,7 +1546,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           }
 
           const headRows = yield* sql<Record<string, unknown>>`
-            SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+            SELECT submission_id, thread_id, queue_sequence, state, input_json
             FROM ${relation("effect_agent_submissions")}
             WHERE thread_id = ${validated.threadId}
               AND state <> 'settled'
@@ -1511,7 +1560,12 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             LIMIT ${validated.handoff === undefined ? 1 : validated.handoff.deferredSubmissionIds.length + 1}
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const heads = yield* decodeSubmissionRows(operation, validated.threadId, headRows);
+          const heads = yield* decodeRows(
+            ClaimSubmissionRows,
+            "effect_agent_submissions",
+            validated.threadId,
+            headRows,
+          ).pipe(Effect.mapError(internalFailure(operation)));
 
           if (heads.length === 0) return Option.none<Claim>();
           let head = heads[0];
@@ -3834,6 +3888,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     readAbortIntent: readAbortIntentForSubmission,
   });
 
+  // A Claim carries the grant, not the complete lane state. Bind once from stored rows and
+  // verify the committed token and epoch before retaining authority for subsequent appends.
   const loadAuthority = Effect.fnUntraced(function* (claimed: Claim) {
     const operation = "bind claimed Run storage";
     const submission = yield* requireSubmission(operation, claimed.submissionId);
