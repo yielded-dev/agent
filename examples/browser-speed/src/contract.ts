@@ -27,8 +27,8 @@ export const ModelId = Schema.Literals([
 ]);
 
 export type ModelId = typeof ModelId.Type;
-export const Grounding = Schema.Literals(["direct", "jev"]);
-export const WikiDriver = Schema.Literals(["model", "jev"]);
+/** `model`: an agent picks observed refs. `jev`: Jev decides every step, without an agent. */
+export const Driver = Schema.Literals(["model", "jev"]);
 export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
 export const ServiceTier = Schema.Literals(["fast", "default"]);
 
@@ -77,12 +77,11 @@ export const RunInput = Schema.Struct({
   prompt: Schema.String.check(Schema.isMaxLength(2_000)),
   screenshots: Schema.Boolean,
   liveView: Schema.Boolean,
+  driver: Schema.optionalKey(Driver),
   model: Schema.optionalKey(ModelId),
-  grounding: Schema.optionalKey(Grounding),
   reasoning: Schema.optionalKey(Reasoning),
   serviceTier: Schema.optionalKey(ServiceTier),
   wikipedia: Schema.optionalKey(WikipediaChallenge),
-  wikiDriver: Schema.optionalKey(WikiDriver),
 });
 
 export type RunInput = typeof RunInput.Type;
@@ -183,6 +182,8 @@ export const Snapshot = Schema.Struct({
     Schema.Struct({ id: ModelId, label: Schema.String, configured: Schema.Boolean }),
   ),
   jevConfigured: Schema.Boolean,
+  /** The field-text model a Jev task-board run would use; null when none is configured. */
+  jevTextModel: Schema.NullOr(Schema.String),
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
   image: Schema.NullOr(Schema.String),

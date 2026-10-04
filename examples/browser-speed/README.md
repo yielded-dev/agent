@@ -1,13 +1,13 @@
 # Browser speed lab
 
-Ask an agent: **“Starting at the Wikipedia page for Mars, get to Nelson Mandela.”**
+Ask **Jev** or a model agent: **“Starting at the Wikipedia page for Mars, get to Nelson Mandela.”**
 Watch a real Cloudflare browser follow article links and inspect the route, hop count, and
-model/action timings. The browser independently verifies arrival; claiming success cannot win.
+decision/action timings. The browser independently verifies arrival; claiming success cannot win.
 The task-board presets remain available for repeatable form and batching measurements.
 
 ```text
 React + Effect Atom → typed HTTP API → one browser owner per tab
-                                        ├─ Effect Agent → observed links or controls
+                                        ├─ Jev loop or Effect Agent → observed links or controls
                                         ├─ Cloudflare Browser Run → Wikipedia or task board
                                         └─ independent verifier → route + trace + result
 ```
@@ -15,11 +15,10 @@ React + Effect Atom → typed HTTP API → one browser owner per tab
 The default **Wikipedia race** accepts starting and destination article titles. It permits only
 ordinary English Wikipedia article links in the current article body: no search, URL entry,
 back button, namespaces, external links, or fragment shortcuts. Each observation contains an
-article excerpt and up to 80 unique links in the two planner modes; the agent can page through the current article's
+article excerpt and up to 80 unique links for the model agent; it can page through the current article's
 remaining links or filter their titles and labels with a case-insensitive substring. Filtering
 only reads links already on the current article; offsets and counts refer to the matching links.
-Both direct selection and Jev element matching receive those same candidates. Refs expire when
-another link page is read or navigation occurs, and every click rechecks its anchor.
+Refs expire when another link page is read or navigation occurs, and every click rechecks its anchor.
 Clicks use the same guarded native adapter as the task board, including scrolling and
 hit-target verification. A condition wait verifies the next article document after acknowledged input.
 
@@ -37,11 +36,10 @@ Live pages, routes, network conditions, and link pagination affect results. Comp
 verified time, and hops for the **same start and destination**; a task-board winner is not a
 Wikipedia winner. Page text is untrusted input. Tools do not expose arbitrary JavaScript or URLs.
 
-The reusable browser toolkits and model + Jev element matching come from
-`@yielded/agent/browser-use`. `BrowserUse.make({ grounding, mode })` pairs tools with their handlers.
-The task board uses the upstream native controller and reads native Effect selection spans.
-Wikipedia eligibility, route choice, verification, model
-configuration, and the comparison UI remain here. [Consumer setup](../../docs/src/content/docs/guide/browser.md#opt-into-decision-grounded-browser-tools).
+The reusable browser tools come from `@yielded/agent/browser-use`: `BrowserUse.make({ mode })`
+for the model agent and `BrowserUse.runJev` for Jev, both over the upstream native controller.
+Wikipedia eligibility, route choice, verification, model configuration, and the comparison UI
+remain here. [Consumer setup](../../docs/src/content/docs/guide/browser.md#let-jev-drive-the-browser).
 
 The task board uses self-contained HTML and exposes observed clicks, fills, and selections.
 Its preset verifier checks the complete saved board before accepting completion. A mismatch
@@ -50,6 +48,9 @@ Free-form board requests are **unverified**.
 Task-board agents have 30 turns, 100 tool calls, 300,000 model tokens and three minutes.
 Mechanical pruning bounds each context to 10,000 estimated tokens and retains a 4,000-token
 recent tail. Exhaustion fails explicitly; partial board changes cannot pass the verifier.
+With **Driver → Jev**, `BrowserUse.runJev` operates the board from Jev observations and writes
+field values with Mercury 2.5 when `OPENROUTER_API_KEY` is set, otherwise GPT-6 Luna. The same
+verifier reads the saved board after Jev stops; a DONE claim alone never passes.
 
 ## Run a standalone browser journey
 
@@ -89,7 +90,7 @@ the cleanup record and command log. This host supplies no authenticated account.
 For a disposable native reproduction, `BROWSER_JOURNEY_HTML`
 accepts host-owned fixture HTML before the agent starts.
 
-`BROWSER_JOURNEY_PATH=jev` opts into a Jev-only loop over observed controls and requires
+`BROWSER_JOURNEY_PATH=jev` runs `BrowserUse.runJev` over Jev observations and requires
 `TYPESAFEAI_API_KEY`. A text model supplies field values; it defaults to GPT-6 Luna through
 OpenAI. For Mercury 2.5, set `BROWSER_JOURNEY_TEXT_PROVIDER=openrouter`,
 `BROWSER_JOURNEY_TEXT_MODEL=inception/mercury-2.5`, `BROWSER_JOURNEY_TEXT_REASONING=none`,
@@ -98,10 +99,9 @@ on timeout. The loop defaults to 60 steps (`BROWSER_JOURNEY_STEPS`) and eight mi
 It caps each target question at 255 choices, uses enabled viewport controls and visible text,
 and stops after three input proposals in a row leave the page unchanged, including refusals.
 Page-wide decisions are refreshed after model latency. DONE remains an unverified claim.
+`jev-result.json` records every step and receipt; `jev-requests.jsonl` keeps raw Jev requests.
 
-`BROWSER_JOURNEY_PATH=plan` uses bounded native Jev plans and requires
-`TYPESAFEAI_API_KEY`; `BROWSER_JOURNEY_CONFIDENCE` defaults to the experimental 0.6
-threshold. `BROWSER_JOURNEY_PATH=code` uses the same tools and broker through the
+`BROWSER_JOURNEY_PATH=code` uses the same tools and broker through the
 production isolated Dynamic Worker executor hosted by local Miniflare. Compare
 identical goals and settings before choosing a path.
 
@@ -133,13 +133,14 @@ cp examples/browser-speed/.dev.vars.example examples/browser-speed/.dev.vars
 
 Fill in the ignored `.dev.vars` file:
 
-| Variable                      | Purpose                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID`       | Account that owns the browser                                                 |
-| `BROWSER_RENDERING_API_TOKEN` | Account-scoped Browser Run Write token for lifecycle and read-only Live View  |
-| `OPENAI_API_KEY`              | Model access; optional for scripted and Jev-only runs                         |
-| `WORKERS_AI_API_KEY`          | Optional Cloudflare Workers AI key for the Llama comparison                   |
-| `TYPESAFE_API_KEY`            | Jev element selection or Jev-only routing through native Effect DecisionModel |
+| Variable                      | Purpose                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`       | Account that owns the browser                                                |
+| `BROWSER_RENDERING_API_TOKEN` | Account-scoped Browser Run Write token for lifecycle and read-only Live View |
+| `OPENAI_API_KEY`              | Model agents, and Jev field text without OpenRouter                          |
+| `WORKERS_AI_API_KEY`          | Optional Cloudflare Workers AI key for the Llama comparison                  |
+| `TYPESAFE_API_KEY`            | Jev through native Effect DecisionModel                                      |
+| `OPENROUTER_API_KEY`          | Optional Mercury 2.5 field text for Jev task-board runs                      |
 
 Wrangler also needs its normal Cloudflare login or deployment credential for the remote browser
 binding. Browser Run uses the real service during local development; agent runs also call the real
@@ -150,19 +151,20 @@ vp run -F @yielded/agent-example-browser-speed worker
 vp run -F @yielded/agent-example-browser-speed dev
 ```
 
-Open **http://127.0.0.1:5191** and press **Start race**. Mars → Nelson Mandela is already filled in.
+Open **http://127.0.0.1:5191** and press **Start race**. Mars → Nelson Mandela is already filled in,
+and Jev drives by default; choose **Model agent** to compare.
 A real Cloudflare browser opens Wikipedia; its route and timings appear beside the live view.
 The app connects automatically; there is no login or app token. Cloudflare and model credentials
 stay in the Worker. Missing configuration disables runs with an explanation.
 `worker --local` disables remote bindings for API checks; it cannot run a browser benchmark.
 
-The model picker offers **GPT-6 Sol** (initial selection), **GPT-6 Luna**, and **Llama 3.3**. OpenAI models
+The model picker offers **GPT-6 Luna** (initial selection), **GPT-6 Sol**, and **Llama 3.3**. OpenAI models
 use Responses; Llama uses Workers AI Chat Completions in the configured Cloudflare account.
 Provider credentials stay on the server, and requests can select only this approved catalog.
 Missing credentials disable the corresponding option.
 
-The UI starts with **Fast** processing and **high** reasoning for the Wikipedia race.
-API requests that omit reasoning use **none**. **OpenAI speed** switches
+The model agent starts with **Fast** processing and **none** reasoning, as do API requests that
+omit them. **OpenAI speed** switches
 between Fast and Standard; **Reasoning** exposes none, low, medium, high, xhigh, and max.
 Fast is a service tier, independent of reasoning effort, and has premium OpenAI pricing.
 The Worker explicitly sends both settings and records the tier actually returned by OpenAI.
@@ -187,7 +189,7 @@ WebSocket and closes it at scope exit. The persistent-session POST endpoint curr
 `@kitesurf` CDP revision before starting the clock. Kitesurf has screenshots but no persistent Live View or
 session resumption; interrupted actions are never replayed.
 
-**Route decisions → Jev only · no planner** gives Jev the current article, excerpt, destination,
+**Driver → Jev** on a Wikipedia race gives Jev the current article, excerpt, destination,
 route so far, and every eligible article link's title, label and href. Jev chooses the next hop;
 the browser clicks that observed link and verifies arrival. No language model, OpenAI key, or
 planner fallback is used. Jev returns a choice distribution, not a prose reasoning summary.
@@ -204,33 +206,23 @@ guarantee eventual success. The independent browser verifier remains authoritati
 Jev-only accepts two-decimal distribution rounding within 0.02 of total mass 1,
 rescales those probabilities for native DecisionModel validation, and records the raw selected
 probability and total in each trace. It never changes the chosen link or confidence. Missing,
-out-of-range, nonfinite, or more divergent probabilities still fail. Planner + Jev element
-matching retains its strict distributions and 0.6 threshold.
+out-of-range, nonfinite, or more divergent probabilities still fail.
 
-Compare these three strategies: **model route + model element**, **model route + Jev element**,
-and **Jev-only route + element**. Jev-only sees all links at once; planner modes see 80 per page.
-Both modes stop explicitly above 10,000 source anchors instead of returning incomplete observations.
+Compare the **model** and **Jev** drivers. Jev sees all links at once; the model sees 80 per page.
+Both stop explicitly above 10,000 source anchors instead of returning incomplete observations.
 This compares complete navigation strategies, not model latency on identical observations.
 The trace shows candidate/question counts, selected refs, probabilities, tokens, and separate
 planner/Jev call counts. History keeps the route driver in its cohort settings.
 
 Select a model, or **Compare configured models** to run the same task with each available model.
 Each repetition rotates the starting model/browser configuration; runs execute sequentially and return to the starting article or reset the board.
-The comparison table separates model, element selection, reasoning, and requested tier,
+The comparison table separates model, driver, reasoning, and requested tier,
 includes failures in the flow success count, lists preparation failures separately, and shows
 median ready-to-verified latency and successful race hop counts. Served tiers are reported
 across the entire configuration, including `unknown` when no tier was returned. A few runs
 do not establish a speed advantage.
 
-**Element selection → Jev** keeps the selected language model as the planner. It describes
-targets in plain language; native Effect `DecisionModel` asks `jev-latest` to select from visible,
-action-compatible controls. All targets in a batch share one decision request. An abstention,
-invalid answer, or selected probability below the experimental 0.6 threshold stops the whole
-batch before dispatch. The existing browser checks still guard visibility and partial execution.
-This threshold is not a correctness guarantee; the independent task verifier remains authoritative.
-Decision calls have a 15-second deadline and no automatic retries. Their time, reported tokens,
-selected controls, and probabilities appear in separate **Jev selection** spans; decision tokens
-are separate from the language model's token budget. Jev receives the observed page and targets.
+The model driver offers three execution modes:
 
 - **Scripted** runs a fixed UI sequence through the same action/observation implementation. It is
   a diagnostic baseline, not a claim about the fastest possible sequence.

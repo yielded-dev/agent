@@ -8,7 +8,6 @@ import {
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import type { Scope } from "effect";
 import { Config, Effect, Exit, Fiber, Layer, Option, Redacted, Schema } from "effect";
-import { DecisionModel } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 import puppeteer from "puppeteer-core";
 import browserPuppeteer from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
@@ -84,7 +83,7 @@ it.effect(
 
       const driverSamples = [
         report,
-        { ...report, input: { ...report.input, wikiDriver: "jev" as const } },
+        { ...report, input: { ...report.input, driver: "jev" as const } },
       ].map((report) => ({ report, clientElapsedMillis: 20 }));
 
       assert.strictEqual(
@@ -271,7 +270,7 @@ it.live(
           Effect.provideService(Trace, setupTrace),
         );
 
-        const result = yield* executeTask({ ...request(), wikiDriver: "jev" }, "unused", "").pipe(
+        const result = yield* executeTask({ ...request(), driver: "jev" }, "unused", "").pipe(
           Effect.provideService(Browser, setupBrowser),
           Effect.provideService(Trace, setupTrace),
           Effect.scoped,
@@ -339,7 +338,7 @@ it.live(
           ),
       );
 
-      for (const grounded of [false, true]) {
+      {
         const trace = yield* makeTrace(request(), "test-model");
 
         const browser = yield* makeBrowser(session, false, () => {}).pipe(
@@ -347,7 +346,6 @@ it.live(
         );
 
         let modelCalls = 0;
-        let decisions = 0;
 
         const planner = OpenAiLanguageModel.model("test-model").pipe(
           Layer.provide(
@@ -359,55 +357,17 @@ it.live(
           Layer.provide(FetchHttpClient.layer),
         );
 
-        const selector = Layer.effect(
-          DecisionModel.DecisionModel,
-          DecisionModel.make({
-            decide: (request) =>
-              Effect.sync(() => {
-                decisions++;
-                const question = request.decisions.element_0;
-
-                assert.strictEqual(question?._tag, "Classify");
-
-                const refs =
-                  question?._tag === "Classify"
-                    ? Object.keys(question.criteria).filter((key) => key !== "__none__")
-                    : [];
-
-                const ref = refs[0] ?? "invalid";
-
-                return {
-                  answers: {
-                    element_0: {
-                      _tag: "Classify",
-                      label: ref,
-                      probabilities: Object.fromEntries(
-                        ["__none__", ...refs].map((key) => [key, key === ref ? 1 : 0]),
-                      ),
-                    },
-                  },
-                  usage: { inputTokens: 50, outputTokens: 2 },
-                };
-              }),
-          }),
-        );
-
         yield* Effect.gen(function* () {
           const wiki = yield* makeWikipedia(defaultChallenge);
 
-          const result = yield* runWikipedia(defaultChallenge, grounded).pipe(
+          const result = yield* runWikipedia(defaultChallenge).pipe(
             Effect.provideService(Wikipedia, wiki),
-            Effect.provide([InMemory.layer, planner, selector]),
+            Effect.provide([InMemory.layer, planner]),
             Effect.provideService(FetchHttpClient.Fetch, async () => {
               modelCalls++;
               assert.isAtMost(modelCalls, 2, "Arrival must settle without a third model call");
 
-              return response(
-                modelCalls,
-                grounded
-                  ? { target: modelCalls === 1 ? "Earth" : "Madiba" }
-                  : { ref: modelCalls === 1 ? "p1-l0" : "p2-l0" },
-              );
+              return response(modelCalls, { ref: modelCalls === 1 ? "p1-l0" : "p2-l0" });
             }),
           );
 
@@ -418,7 +378,6 @@ it.live(
           );
           assert.strictEqual(trace.snapshot().status, "passed");
           assert.strictEqual(trace.snapshot().race?.path.at(-1)?.via?.url, articleUrl("Madiba"));
-          assert.strictEqual(decisions, grounded ? 2 : 0);
         }).pipe(
           Effect.provideService(Browser, browser),
           Effect.provideService(Trace, trace),
@@ -431,7 +390,7 @@ it.live(
         );
       }
 
-      const jevInput = { ...request(), wikiDriver: "jev" as const };
+      const jevInput = { ...request(), driver: "jev" as const };
       const routeTrace = yield* makeTrace(jevInput, "jev-latest");
       let routeCalls = 0;
 

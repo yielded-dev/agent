@@ -1,8 +1,7 @@
 import { Agent, AgentRuntime } from "@yielded/agent";
 import { CompactionPolicy } from "@yielded/agent/agent-policy";
-import { selectTargets } from "@yielded/agent/browser-use";
 import { Context, Effect, Option, Schema } from "effect";
-import { DecisionModel, Tool, Toolkit } from "effect/ai";
+import { Tool, Toolkit } from "effect/ai";
 import type { HTTPRequest } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { TaskResult, Browser } from "./browser.ts";
@@ -129,20 +128,6 @@ const directTools = Toolkit.make(
   }),
 );
 
-const jevTools = Toolkit.make(
-  readTool,
-  giveUp,
-  Tool.make("follow", {
-    description:
-      "Describe one link in the current observation by its label and destination. Jev selects and clicks it. Arrival at the goal automatically ends the race.",
-    parameters: Schema.Struct({ target: Schema.NonEmptyString.check(Schema.isMaxLength(300)) }),
-    dependencies: [DecisionModel.DecisionModel],
-    success: WikiObservation,
-    failure: LabError,
-    failureMode: "return",
-  }),
-);
-
 const definition = {
   input: Schema.String,
   inputPrompt: (value: string) => value,
@@ -178,8 +163,6 @@ export const wikiAgent = Agent.make("wikipedia-race-direct", {
   ...definition,
   toolkit: directTools,
 });
-
-export const wikiJevAgent = Agent.make("wikipedia-race-jev", { ...definition, toolkit: jevTools });
 
 /** Scoped navigation guard, observed-link capabilities and host verification; no arbitrary navigation tool. */
 export const makeWikipedia = Effect.fnUntraced(function* (
@@ -597,47 +580,6 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       message: "Start and destination resolve to the same article. Choose different pages.",
     });
 
-  const groundedFollow = Effect.fnUntraced(function* (description: string) {
-    if (!observation)
-      return yield* new LabError({
-        code: "invalid",
-        message: "Read the page before selecting a link.",
-      });
-
-    const selected = yield* trace.measure(
-      "decision",
-      "Jev · select article link",
-      selectTargets(
-        {
-          text: observation.excerpt,
-          controls: observation.links.map((link) => ({
-            ref: link.ref,
-            kind: "link",
-            name: link.label,
-            value: link.title,
-            options: [],
-          })),
-        },
-        [{ kind: "click", target: description }],
-      ).pipe(
-        Effect.mapError((error) => new LabError({ code: error.code, message: error.message })),
-      ),
-      ({ usage, choices }) => ({
-        model: "jev-latest",
-        choices,
-        ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
-        ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
-      }),
-    );
-
-    const action = selected.actions[0];
-
-    if (!action)
-      return yield* new LabError({ code: "invalid", message: "Jev did not select a link." });
-
-    return yield* follow(action.ref);
-  });
-
   const handlers = {
     read_links: ({ offset, query }: { offset: number; query?: string }) =>
       read(offset, undefined, query),
@@ -659,7 +601,6 @@ export const makeWikipedia = Effect.fnUntraced(function* (
           ),
     ),
     direct: directTools.toLayer({ ...handlers, follow: ({ ref }) => follow(ref) }),
-    jev: jevTools.toLayer({ ...handlers, follow: ({ target }) => groundedFollow(target) }),
   };
 });
 
@@ -708,14 +649,9 @@ export const runJevWikipedia = Effect.gen(function* () {
   }),
 );
 
-export const runWikipedia = Effect.fnUntraced(function* (
-  challenge: WikipediaChallenge,
-  grounded: boolean,
-) {
+export const runWikipedia = Effect.fnUntraced(function* (challenge: WikipediaChallenge) {
   const wiki = yield* Wikipedia;
   const message = `${racePrompt(challenge)}\n\nInitial browser observation:\n${Schema.encodeSync(Schema.fromJsonString(WikiObservation))(wiki.initial)}`;
 
-  return yield* grounded
-    ? AgentRuntime.run(wikiJevAgent, message).pipe(Effect.provide(wiki.jev))
-    : AgentRuntime.run(wikiAgent, message).pipe(Effect.provide(wiki.direct));
+  return yield* AgentRuntime.run(wikiAgent, message).pipe(Effect.provide(wiki.direct));
 });

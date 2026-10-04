@@ -326,5 +326,11 @@ export const inspectJevDom = (
     controls,
     readyState: document.readyState,
     truncated: truncated || text.length > 6_000 || scanned >= 10_000,
+    page: {
+      title: document.title,
+      scrollY,
+      viewportHeight: innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+    },
   };
 };

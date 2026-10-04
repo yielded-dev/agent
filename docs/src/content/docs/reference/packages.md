@@ -229,10 +229,10 @@ Start with `Agent`, `AgentRuntime`, and `InMemory.layer`.
 For storage-backed history, use the root namespace `PersistentHistory.layer`.
 Models, provider clients, credentials, tool handlers, and durable hosts remain application choices.
 
-`BrowserUse.make` (`@yielded/agent/browser-use`) returns a matching `toolkit` and `layer()`.
-It defaults to direct, single actions; opt into `grounding: "decision"` or `mode: "batched"`.
-Applications supply observed controls and guarded actions through `BrowserActions` and a native
-Effect `DecisionModel` for decision grounding. See [browser tools](/guide/browser/#opt-into-decision-grounded-browser-tools).
+`BrowserUse.make` (`@yielded/agent/browser-use`) returns a matching `toolkit` and `layer()`
+for a model agent; it defaults to single actions, or `mode: "batched"`. `BrowserUse.runJev`
+drives the page with a native Effect `DecisionModel` instead. Applications supply observed
+controls and guarded actions through `BrowserActions`. See [browser tools](/guide/browser/#let-jev-drive-the-browser).
 
 Sandbox contracts including `Sandbox`, `CodeExecutor`, `PageCapture`, and `InteractiveBrowser`
 are part of this package; concrete executors and browser adapters are separate. See

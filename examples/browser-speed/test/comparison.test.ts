@@ -29,7 +29,7 @@ it.effect(
         report,
         { ...report, verifiedAt: 35 },
         { ...report, status: "failed" as const, verifiedAt: null },
-        { ...report, input: { ...input, grounding: "jev" as const }, verifiedAt: 65 },
+        { ...report, input: { ...input, driver: "jev" as const }, verifiedAt: 65 },
         { ...report, model: "gpt-6-sol", verifiedAt: 25 },
         { ...legacy, verifiedAt: 1 },
         { ...report, readyAt: null, verifiedAt: null, status: "failed" as const },
@@ -41,9 +41,9 @@ it.effect(
       assert.strictEqual(cohort(samples, report).length, 4);
       assert.deepStrictEqual(
         comparisons(samples, report).map(
-          ({ model, grounding, count, started, preparationFailed, passed, median }) => ({
+          ({ model, driver, count, started, preparationFailed, passed, median }) => ({
             model,
-            grounding,
+            driver,
             count,
             started,
             preparationFailed,
@@ -54,7 +54,7 @@ it.effect(
         [
           {
             model: "gpt-6-luna",
-            grounding: "direct",
+            driver: "model",
             count: 4,
             started: 3,
             preparationFailed: 1,
@@ -63,7 +63,7 @@ it.effect(
           },
           {
             model: "gpt-6-luna",
-            grounding: "jev",
+            driver: "jev",
             count: 1,
             started: 1,
             preparationFailed: 0,
@@ -72,7 +72,7 @@ it.effect(
           },
           {
             model: "gpt-6-sol",
-            grounding: "direct",
+            driver: "model",
             count: 1,
             started: 1,
             preparationFailed: 0,

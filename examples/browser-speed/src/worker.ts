@@ -20,6 +20,8 @@ export interface Env {
   readonly OPENAI_MODEL?: string;
   readonly WORKERS_AI_API_KEY?: string;
   readonly TYPESAFE_API_KEY?: string;
+  /** Mercury 2.5 writes Jev field text when set; otherwise GPT-6 Luna through OPENAI_API_KEY. */
+  readonly OPENROUTER_API_KEY?: string;
 }
 
 const codec = Schema.fromJsonString(Control);
@@ -81,6 +83,25 @@ export class BrowserLab extends DurableObject<Env> {
           apiType: id.startsWith("@cf/") ? "chat-completions" : "responses",
         })),
         jevApiKey: env.TYPESAFE_API_KEY,
+        ...(env.OPENROUTER_API_KEY
+          ? {
+              jevText: {
+                provider: "openrouter",
+                model: "inception/mercury-2.5",
+                reasoning: "none",
+                apiKey: Redacted.make(env.OPENROUTER_API_KEY),
+              },
+            }
+          : env.OPENAI_API_KEY
+            ? {
+                jevText: {
+                  provider: "openai",
+                  model: "gpt-6-luna",
+                  reasoning: "low",
+                  apiKey: Redacted.make(env.OPENAI_API_KEY),
+                },
+              }
+            : {}),
         kitesurf: (retainClose) =>
           connectKitesurf(
             {

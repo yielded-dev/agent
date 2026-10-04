@@ -22,7 +22,7 @@ const trace = () =>
       prompt: "",
       screenshots: false,
       liveView: false,
-      wikiDriver: "jev",
+      driver: "jev",
     },
     "jev-latest",
   );

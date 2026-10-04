@@ -321,33 +321,21 @@ it.live(
         ];
 
         // Replace only provider transport; native Effect AI decoding, tools, agent loop and Chrome run.
-        for (const [mode, apiType, grounding] of [
-          ["agent", "responses", "direct"],
-          ["batched", "responses", "direct"],
-          ["agent", "chat-completions", "direct"],
-          ["batched", "chat-completions", "direct"],
-          ["batched", "responses", "jev"],
+        for (const [mode, apiType] of [
+          ["agent", "responses"],
+          ["batched", "responses"],
+          ["agent", "chat-completions"],
+          ["batched", "chat-completions"],
         ] as const) {
           modelConfig.apiType = apiType;
           modelConfig.model = apiType === "chat-completions" ? "@cf/test-model" : "test-model";
 
-          const requestedActions =
-            grounding === "jev"
-              ? actions.map((action) => ({
-                  kind: action.kind,
-                  target: action.ref === "new-task" ? "New task button" : action.ref,
-                  ...(action.kind === "click" ? {} : { value: action.value }),
-                }))
-              : actions;
-
           const calls =
             mode === "agent"
-              ? requestedActions.map((action) => ({ action }))
-              : [{ actions: requestedActions.slice(0, 1) }, { actions: requestedActions.slice(1) }];
+              ? actions.map((action) => ({ action }))
+              : [{ actions: actions.slice(0, 1) }, { actions: actions.slice(1) }];
 
           let ordinal = 0;
-          let decisionCalls = 0;
-          const selectedRefs: Array<string> = [];
 
           const fixtureRefs = async () =>
             Schema.decodeSync(Schema.Record(Schema.String, Schema.String))(
@@ -370,87 +358,16 @@ it.live(
             .run({
               ...request("create"),
               mode,
-              grounding,
-              ...(grounding === "jev"
-                ? {
-                    model: "gpt-6-luna" as const,
-                    reasoning: "max" as const,
-                    serviceTier: "default" as const,
-                  }
-                : {}),
             })
             .pipe(
               Effect.provideService(FetchHttpClient.Fetch, async (url, init) => {
                 const endpoint =
                   typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
 
-                if (endpoint === "https://api.typesafe.ai/v1/systemone") {
-                  const body = Schema.decodeUnknownSync(
-                    Schema.fromJsonString(
-                      Schema.Struct({
-                        model: Schema.String,
-                        questions: Schema.Record(
-                          Schema.String,
-                          Schema.Struct({ criteria: Schema.Record(Schema.String, Schema.String) }),
-                        ),
-                      }),
-                    ),
-                  )(
-                    init?.body instanceof Uint8Array
-                      ? new TextDecoder().decode(init.body)
-                      : init?.body,
-                  );
-
-                  assert.strictEqual(body.model, "jev-latest");
-                  const refs = await fixtureRefs();
-
-                  const expected = (
-                    decisionCalls++ === 0 ? actions.slice(0, 1) : actions.slice(1)
-                  ).map((action) => ({ ...action, ref: refs[action.ref]! }));
-
-                  selectedRefs.push(...expected.map((action) => action.ref));
-
-                  assert.strictEqual(Object.keys(body.questions).length, expected.length);
-
-                  return new Response(
-                    JSON.stringify({
-                      model: "jev-latest",
-                      answers: Object.fromEntries(
-                        expected.map((action, index) => {
-                          const question = body.questions[`element_${index}`];
-
-                          assert.isDefined(question?.criteria[action.ref]);
-
-                          return [
-                            `element_${index}`,
-                            {
-                              type: "choice",
-                              choice: action.ref,
-                              confidence: 1,
-                              probabilities: Object.fromEntries(
-                                Object.keys(question?.criteria ?? {}).map((ref) => [
-                                  ref,
-                                  ref === action.ref ? 1 : 0,
-                                ]),
-                              ),
-                            },
-                          ];
-                        }),
-                      ),
-                      usage: { input_tokens: 100, output_tokens: 5 },
-                    }),
-                    { headers: { "content-type": "application/json" } },
-                  );
-                }
                 assert.strictEqual(
                   endpoint,
-                  `https://${grounding === "jev" ? "selected-model" : "model"}.test/v1/${apiType === "responses" ? "responses" : "chat/completions"}`,
+                  `https://model.test/v1/${apiType === "responses" ? "responses" : "chat/completions"}`,
                 );
-                if (grounding === "jev")
-                  assert.strictEqual(
-                    new Headers(init?.headers).get("authorization"),
-                    "Bearer test-selected-key",
-                  );
                 if (apiType === "responses") {
                   const body = Schema.decodeUnknownSync(
                     Schema.fromJsonString(
@@ -466,16 +383,16 @@ it.live(
                       : init?.body,
                   );
 
-                  assert.strictEqual(body.service_tier, grounding === "jev" ? "default" : "fast");
-                  assert.strictEqual(body.reasoning.effort, grounding === "jev" ? "max" : "none");
+                  assert.strictEqual(body.service_tier, "fast");
+                  assert.strictEqual(body.reasoning.effort, "none");
                   assert.strictEqual(body.reasoning.summary, "auto");
                   assert.strictEqual(body.max_output_tokens, 16_384);
                 }
                 const params = calls[ordinal++];
-                const refs = grounding === "direct" ? await fixtureRefs() : {};
+                const refs = await fixtureRefs();
 
                 const resolved =
-                  params === undefined || grounding === "jev"
+                  params === undefined
                     ? params
                     : "action" in params
                       ? {
@@ -631,7 +548,7 @@ it.live(
                       model: "resolved-test-model",
                       created_at: 1,
                       status: "completed",
-                      service_tier: grounding === "jev" ? "default" : "fast",
+                      service_tier: "fast",
                       output: [item],
                       usage: {
                         input_tokens: 12,
@@ -657,39 +574,17 @@ it.live(
             );
 
           assert.strictEqual(report.status, "passed", report.message);
-          if (grounding === "jev") assert.strictEqual(report.model, "gpt-6-luna");
           assert.strictEqual(
             report.spans.filter((span) => span.phase === "action").length,
             mode === "agent" ? 6 : 2,
           );
-          assert.strictEqual(decisionCalls, grounding === "jev" ? 2 : 0);
-          const decisionSpans = report.spans.filter((span) => span.phase === "decision");
-
-          assert.strictEqual(decisionSpans.length, grounding === "jev" ? 2 : 0);
-          if (grounding === "jev") {
-            assert.deepStrictEqual(
-              decisionSpans.flatMap((span) => span.choices?.map((choice) => choice.ref) ?? []),
-              selectedRefs,
-            );
-            assert.isTrue(
-              decisionSpans.every(
-                (span) =>
-                  span.model === "jev-latest" &&
-                  span.inputTokens === 100 &&
-                  span.outcome === "success",
-              ),
-            );
-          }
+          assert.strictEqual(report.spans.filter((span) => span.phase === "decision").length, 0);
           const modelSpans = report.spans.filter((span) => span.phase === "model");
 
           if (apiType === "responses") {
-            assert.isTrue(
-              modelSpans.every(
-                (span) => span.serviceTier === (grounding === "jev" ? "default" : "fast"),
-              ),
-            );
+            assert.isTrue(modelSpans.every((span) => span.serviceTier === "fast"));
             assert.isTrue(modelSpans.every((span) => span.reasoningTokens === 2));
-            assert.strictEqual(report.input.reasoning, grounding === "jev" ? "max" : "none");
+            assert.strictEqual(report.input.reasoning, "none");
           }
 
           assert.strictEqual(modelSpans.length, mode === "agent" ? 7 : 3);

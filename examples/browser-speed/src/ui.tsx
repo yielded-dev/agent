@@ -19,7 +19,7 @@ import { useState } from "react";
 
 import {
   BrowserEngine,
-  Grounding,
+  Driver,
   ArticleTitle,
   defaultChallenge,
   racePrompt,
@@ -61,7 +61,7 @@ const benchmarkReportUrl: unknown = import.meta.env.VITE_BROWSER_BENCHMARK_REPOR
 const phaseNames: Record<Phase, string> = {
   setup: "Browser setup",
   model: "Model",
-  decision: "Jev selection",
+  decision: "Jev decision",
   action: "Action",
   observation: "Observation",
   wait: "Wait",
@@ -204,11 +204,10 @@ export const App = () => {
   const [wikiTarget, setWikiTarget] = useState(defaultChallenge.target);
   const [prompt, setPrompt] = useState<string>(scenarios[0].prompt);
   const [mode, setMode] = useState<typeof Mode.Type>("batched");
-  const [model, setModel] = useState<ModelId | "all">("gpt-6-sol");
+  const [driver, setDriver] = useState<typeof Driver.Type>("jev");
+  const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
   const [engine, setEngine] = useState<typeof BrowserEngine.Type | "all">("chromium");
-  const [grounding, setGrounding] = useState<typeof Grounding.Type>("direct");
-  const [wikiDriver, setWikiDriver] = useState<"model" | "jev">("model");
-  const [reasoning, setReasoning] = useState<typeof Reasoning.Type>("high");
+  const [reasoning, setReasoning] = useState<typeof Reasoning.Type>("none");
   const [serviceTier, setServiceTier] = useState<typeof ServiceTier.Type>("fast");
   const [screenshots, setScreenshots] = useState(false);
   const [liveView, setLiveView] = useState(true);
@@ -250,7 +249,8 @@ export const App = () => {
   const connected = remote !== null;
 
   const isWiki = scenario === "wikipedia";
-  const jevOnly = isWiki && wikiDriver === "jev";
+  const jev = driver === "jev";
+  const jevAvailable = Boolean(remote?.jevConfigured && (isWiki || remote.jevTextModel !== null));
   const effectivePrompt = isWiki ? racePrompt({ start: wikiStart, target: wikiTarget }) : prompt;
 
   const validChallenge =
@@ -264,11 +264,7 @@ export const App = () => {
     remote.browserConfigured &&
     !busy &&
     !control.waiting &&
-    (jevOnly
-      ? remote.jevConfigured
-      : mode === "scripted"
-        ? scenario !== "custom"
-        : modelConfigured && (grounding === "direct" || remote.jevConfigured));
+    (jev ? jevAvailable : mode === "scripted" ? scenario !== "custom" : modelConfigured);
 
   const live = !selected && remote?.liveViewUrl;
   const captured = !selected && remote?.image;
@@ -355,7 +351,8 @@ export const App = () => {
               event.preventDefault();
               start({
                 scenario,
-                mode,
+                mode: jev ? "agent" : mode,
+                driver,
                 prompt: effectivePrompt,
                 ...(isWiki
                   ? { wikipedia: { start: wikiStart.trim(), target: wikiTarget.trim() } }
@@ -364,13 +361,10 @@ export const App = () => {
                 liveView: liveView && engine !== "kitesurf",
                 repetitions,
                 ...(engine === "all" ? { compareEngines: ["chromium", "kitesurf"] } : { engine }),
-                ...(jevOnly
-                  ? { wikiDriver: "jev" }
-                  : { grounding: mode === "scripted" ? "direct" : grounding }),
-                ...(!jevOnly && mode !== "scripted" && !model.startsWith("@cf/")
+                ...(!jev && mode !== "scripted" && !model.startsWith("@cf/")
                   ? { reasoning, serviceTier }
                   : {}),
-                ...(jevOnly || mode === "scripted"
+                ...(jev || mode === "scripted"
                   ? {}
                   : model === "all"
                     ? { compareModels: configuredModels.map((candidate) => candidate.id) }
@@ -452,27 +446,21 @@ export const App = () => {
                 <a href={benchmarkReportUrl}>View the published browser comparison →</a>
               </p>
             )}
-            {isWiki && (
-              <>
-                <label className="eyebrow" htmlFor="wiki-driver">
-                  ROUTE DECISIONS
-                </label>
-                <select
-                  id="wiki-driver"
-                  value={wikiDriver}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setWikiDriver(event.target.value === "jev" ? "jev" : "model")
-                  }
-                >
-                  <option value="model">Model chooses the route</option>
-                  <option value="jev" disabled={!remote?.jevConfigured}>
-                    Jev only · no planner
-                  </option>
-                </select>
-              </>
-            )}
-            {!jevOnly && (
+            <label className="eyebrow" htmlFor="driver">
+              DRIVER
+            </label>
+            <select
+              id="driver"
+              value={driver}
+              disabled={busy}
+              onChange={(event) => setDriver(Schema.decodeUnknownSync(Driver)(event.target.value))}
+            >
+              <option value="jev" disabled={!jevAvailable}>
+                Jev · decides every step{jevAvailable ? "" : " · key needed"}
+              </option>
+              <option value="model">Model agent</option>
+            </select>
+            {!jev && (
               <>
                 <label className="eyebrow" htmlFor="model">
                   MODEL
@@ -539,22 +527,6 @@ export const App = () => {
                     </select>
                   </div>
                 </div>
-                <label className="eyebrow" htmlFor="grounding">
-                  ELEMENT SELECTION
-                </label>
-                <select
-                  id="grounding"
-                  value={grounding}
-                  disabled={busy || mode === "scripted"}
-                  onChange={(event) =>
-                    setGrounding(Schema.decodeUnknownSync(Grounding)(event.target.value))
-                  }
-                >
-                  <option value="direct">Agent chooses the element</option>
-                  <option value="jev" disabled={!remote?.jevConfigured}>
-                    Jev · DecisionModel{remote?.jevConfigured ? "" : " · key needed"}
-                  </option>
-                </select>
               </>
             )}
             <label className="eyebrow" htmlFor="mode">
@@ -562,8 +534,8 @@ export const App = () => {
             </label>
             <select
               id="mode"
-              value={mode}
-              disabled={busy || isWiki}
+              value={jev ? "agent" : mode}
+              disabled={busy || isWiki || jev}
               onChange={(event) => {
                 const value = Schema.decodeUnknownSync(Mode)(event.target.value);
 
@@ -614,13 +586,13 @@ export const App = () => {
               is excluded.
             </p>
             <p className="hint">
-              {jevOnly
-                ? "Jev chooses the next article from all eligible links using the destination and route history. Large pages use grouped choices, then a final choice. No planner model calls."
-                : grounding === "jev"
-                  ? "The agent describes the control; Jev selects an observed element. Decision time is measured separately."
-                  : model === "all"
-                    ? "Each repetition runs every configured model in a rotating order."
-                    : "Compare the same task across models and element selectors."}
+              {jev
+                ? isWiki
+                  ? "Jev chooses the next article from all eligible links using the destination and route history. Large pages use grouped choices, then a final choice. No planner model calls."
+                  : `Jev picks each action and its target from the visible controls in one request; ${remote?.jevTextModel ?? "a small model"} writes field values. No agent or planner.`
+                : model === "all"
+                  ? "Each repetition runs every configured model in a rotating order."
+                  : "Compare the same task across models and drivers."}
             </p>
           </div>
           {failure && (
@@ -634,7 +606,7 @@ export const App = () => {
               BROWSER_RENDERING_API_TOKEN in the Worker to start a real browser.
             </div>
           )}
-          {connected && !jevOnly && mode !== "scripted" && !modelConfigured && (
+          {connected && !jev && mode !== "scripted" && !modelConfigured && (
             <div className="hint">
               Set OPENAI_API_KEY in the Worker, or choose the scripted baseline.
             </div>
@@ -957,8 +929,8 @@ export const App = () => {
                         {comparison.map((group) => (
                           <tr key={group.key}>
                             <td>
-                              {group.wikiDriver === "jev"
-                                ? "Jev only"
+                              {group.driver === "jev"
+                                ? group.model
                                 : (modelChoices.find((value) => value.id === group.model)?.label ??
                                   group.model)}
                             </td>
@@ -969,13 +941,7 @@ export const App = () => {
                             >
                               {group.engine === "kitesurf" ? "Kitesurf" : "Chromium"}
                             </td>
-                            <td>
-                              {group.wikiDriver === "jev"
-                                ? "All links"
-                                : group.grounding === "jev"
-                                  ? "Jev elements"
-                                  : "Model elements"}
-                            </td>
+                            <td>{group.driver === "jev" ? "Jev" : "Agent"}</td>
                             <td>{group.reasoning}</td>
                             <td>
                               {group.serviceTier} / {group.servedTier}
@@ -996,7 +962,7 @@ export const App = () => {
                       <tr>
                         <th>Task</th>
                         <th>Mode</th>
-                        <th>Model / elements</th>
+                        <th>Model / driver</th>
                         <th>Browser</th>
                         <th>Reasoning / speed</th>
                         <th>Timing</th>
@@ -1019,19 +985,9 @@ export const App = () => {
                           </td>
                           <td>{row.input.mode}</td>
                           <td>
-                            {row.input.wikiDriver === "jev"
-                              ? "Jev only"
-                              : (modelChoices.find((value) => value.id === row.model)?.label ??
-                                row.model)}
-                            <small>
-                              {" "}
-                              /{" "}
-                              {row.input.wikiDriver === "jev"
-                                ? "all links"
-                                : row.input.grounding === "jev"
-                                  ? "Jev"
-                                  : "Agent"}
-                            </small>
+                            {modelChoices.find((value) => value.id === row.model)?.label ??
+                              row.model}
+                            <small> / {row.input.driver === "jev" ? "Jev" : "Agent"}</small>
                           </td>
                           <td
                             title={[row.browserVersion, row.browserRevision]
@@ -1041,7 +997,7 @@ export const App = () => {
                             {row.input.engine === "kitesurf" ? "Kitesurf" : "Chromium"}
                           </td>
                           <td>
-                            {row.input.wikiDriver === "jev" ||
+                            {row.input.driver === "jev" ||
                             row.model.startsWith("@cf/") ||
                             row.input.mode === "scripted"
                               ? "n/a"

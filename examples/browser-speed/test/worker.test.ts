@@ -115,9 +115,9 @@ it.live(
       assert.strictEqual(browserCalls, 0);
       for (const selection of [
         { engine: "unapproved-browser" },
-        { model: "unapproved-model", grounding: "direct" },
-        { model: "gpt-6-luna", grounding: "direct" },
-        { model: "gpt-6-luna", grounding: "jev" },
+        { model: "unapproved-model" },
+        { model: "gpt-6-luna" },
+        { model: "gpt-6-luna", driver: "jev" },
       ]) {
         const rejected = yield* status("/api/run", {
           method: "POST",

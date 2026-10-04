@@ -53,7 +53,7 @@ export const runAtom = LabClient.runtime.fn<
 
     return yield* Effect.gen(function* () {
       const models =
-        input.wikiDriver === "jev"
+        input.driver === "jev"
           ? [undefined]
           : input.compareModels?.length
             ? input.compareModels
@@ -92,9 +92,7 @@ export const runAtom = LabClient.runtime.fn<
             payload: {
               ...request,
               engine,
-              ...(input.wikiDriver !== "jev" &&
-              input.mode !== "scripted" &&
-              !model?.startsWith("@cf/")
+              ...(input.driver !== "jev" && input.mode !== "scripted" && !model?.startsWith("@cf/")
                 ? {
                     ...(reasoning === undefined ? {} : { reasoning }),
                     ...(serviceTier === undefined ? {} : { serviceTier }),
@@ -213,8 +211,7 @@ export const cohort = (samples: ReadonlyArray<ClientSample>, report: Report) =>
     ({ report: value }) =>
       sameWorkload(value, report) &&
       value.model === report.model &&
-      settingsKey(value) === settingsKey(report) &&
-      (value.input.grounding ?? "direct") === (report.input.grounding ?? "direct"),
+      settingsKey(value) === settingsKey(report),
   );
 
 const servedTiers = (reports: ReadonlyArray<Report>) =>
@@ -231,14 +228,14 @@ const servedTiers = (reports: ReadonlyArray<Report>) =>
     .join("+") || "unknown";
 
 const settingsKey = (report: Report) =>
-  `${report.input.engine ?? "chromium"}/${report.browserVersion ?? "unrecorded"}/${report.browserRevision ?? "unrecorded"}/${report.commandTimeoutMillis ?? 15_000}/${report.input.wikiDriver ?? "model"}/${report.input.reasoning ?? "provider-default"}/${report.input.serviceTier ?? "provider-default"}`;
+  `${report.input.engine ?? "chromium"}/${report.browserVersion ?? "unrecorded"}/${report.browserRevision ?? "unrecorded"}/${report.commandTimeoutMillis ?? 15_000}/${report.input.driver ?? "model"}/${report.input.reasoning ?? "provider-default"}/${report.input.serviceTier ?? "provider-default"}`;
 
 export const comparisons = (samples: ReadonlyArray<ClientSample>, report: Report) => {
   const groups = new Map<string, Array<Report>>();
 
   for (const { report: candidate } of samples) {
     if (!sameWorkload(candidate, report)) continue;
-    const key = `${candidate.model}/${candidate.input.grounding ?? "direct"}/${settingsKey(candidate)}`;
+    const key = `${candidate.model}/${settingsKey(candidate)}`;
     const group = groups.get(key) ?? [];
 
     group.push(candidate);
@@ -251,18 +248,17 @@ export const comparisons = (samples: ReadonlyArray<ClientSample>, report: Report
     browserVersion: reports[0]?.browserVersion,
     browserRevision: reports[0]?.browserRevision,
     model: reports[0]?.model ?? "none",
-    wikiDriver: reports[0]?.input.wikiDriver ?? "model",
-    grounding: reports[0]?.input.grounding ?? "direct",
+    driver: reports[0]?.input.driver ?? "model",
     reasoning:
-      reports[0]?.input.wikiDriver === "jev"
+      reports[0]?.input.driver === "jev"
         ? "n/a"
         : (reports[0]?.input.reasoning ??
           (reports[0]?.model.startsWith("@cf/") ? "n/a" : "provider-default")),
     serviceTier:
-      reports[0]?.input.wikiDriver === "jev"
+      reports[0]?.input.driver === "jev"
         ? "n/a"
         : (reports[0]?.input.serviceTier ?? "provider-default"),
-    servedTier: reports[0]?.input.wikiDriver === "jev" ? "n/a" : servedTiers(reports),
+    servedTier: reports[0]?.input.driver === "jev" ? "n/a" : servedTiers(reports),
     count: reports.length,
     started: reports.filter(flowStarted).length,
     preparationFailed: reports.filter((value) => !flowStarted(value) && value.status !== "running")

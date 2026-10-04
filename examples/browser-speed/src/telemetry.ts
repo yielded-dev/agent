@@ -19,7 +19,7 @@ import {
   type Phase,
   type Report,
   type RunInput,
-  Span,
+  type Span,
 } from "./contract.ts";
 
 type Details = Partial<
@@ -204,33 +204,12 @@ export const traceOpenAiClient = Effect.gen(function* () {
   });
 });
 
-const decodeSelectionEvidence = Schema.decodeUnknownOption(
-  Schema.Struct({
-    choices: Schema.Array(
-      Schema.Struct({
-        index: Schema.Natural,
-        ref: Schema.String,
-        probability: Schema.Finite,
-      }),
-    ),
-    inputTokens: Span.fields.inputTokens,
-    outputTokens: Span.fields.outputTokens,
-  }),
-);
+const jevSpans: Record<string, readonly [Phase, string]> = {
+  "BrowserUse.jevDecision": ["decision", "Jev · choose next action"],
+  "BrowserUse.jevWait": ["wait", "Jev · wait"],
+};
 
-const decodeSelection = (value: unknown) =>
-  decodeSelectionEvidence(value).pipe(
-    Option.map(({ choices, ...usage }) => ({
-      ...usage,
-      choices: choices.map(({ index, ref, probability }) => ({
-        target: `Action ${index + 1}`,
-        ref,
-        probability,
-      })),
-    })),
-  );
-
-/** Tap native model and browser selection spans without replacing either model service. */
+/** Tap native model and Jev spans without replacing either model service. */
 export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
   const trace = yield* Trace;
   const delegate = yield* Tracer.Tracer;
@@ -240,21 +219,18 @@ export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.
   const tracer = Tracer.make({
     span(options) {
       const span = delegate.span(options);
-      const selection = options.name === "BrowserUse.selectTargets";
+      const jev = jevSpans[options.name];
 
       if (
-        !selection &&
+        jev === undefined &&
         !options.name.startsWith("chat ") &&
         !options.name.startsWith("LanguageModel.")
       )
         return span;
 
-      const finish = trace.begin(
-        selection ? "decision" : "model",
-        selection ? "Jev · select controls" : options.name,
-      );
+      const finish = jev === undefined ? trace.begin("model", options.name) : trace.begin(...jev);
 
-      if (!selection) handles.set(span.spanId, finish);
+      if (jev === undefined) handles.set(span.spanId, finish);
 
       return {
         _tag: span._tag,
@@ -274,19 +250,7 @@ export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.
           return span.status;
         },
         end(time, exit) {
-          const details = selection
-            ? decodeSelection(span.attributes.get("browser.selection"))
-            : Option.none();
-
-          finish.end(
-            exit,
-            selection
-              ? {
-                  model: "jev-latest",
-                  ...(Option.isSome(details) ? details.value : {}),
-                }
-              : {},
-          );
+          finish.end(exit, jev?.[0] === "decision" ? { model: "jev-latest" } : {});
           span.end(time, exit);
         },
       };

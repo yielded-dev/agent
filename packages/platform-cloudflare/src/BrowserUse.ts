@@ -129,7 +129,6 @@ export const make = Effect.fnUntraced(function* <R>(
   let dialogSignal: Deferred.Deferred<void> | undefined;
   let nextInput = 0;
   let lastTabs: NonNullable<(typeof Observation.Type)["tabs"]> = [];
-  let latestObservation: typeof Observation.Type | null = null;
 
   const clearInput = () => {
     pendingInput = undefined;
@@ -207,7 +206,6 @@ export const make = Effect.fnUntraced(function* <R>(
             tabs.clear();
             activePage = undefined;
             targets.clear();
-            latestObservation = null;
             frames.clear();
           }),
         ),
@@ -389,7 +387,6 @@ export const make = Effect.fnUntraced(function* <R>(
     if (request.frame !== undefined && !frames.has(request.frame))
       return yield* invalid("Frame was not observed. Inspect the page first.");
     targets.clear();
-    latestObservation = null;
     generation++;
 
     if (pendingInput?.fiber.pollUnsafe()?._tag === "Failure") {
@@ -416,8 +413,6 @@ export const make = Effect.fnUntraced(function* <R>(
           },
         ],
       });
-
-      latestObservation = observation;
 
       return observation;
     }
@@ -475,6 +470,7 @@ export const make = Effect.fnUntraced(function* <R>(
       let text = "";
       let readyState: (typeof Observation.Type)["readyState"];
       let truncated = currentFrames.length > 32 || currentTabs.length > 32;
+      let metrics: (typeof Observation.Type)["page"];
       const controls: Array<typeof Control.Type> = [];
 
       for (const frame of inspected) {
@@ -524,6 +520,7 @@ export const make = Effect.fnUntraced(function* <R>(
           result = Schema.decodeUnknownSync(Observation)(await read());
         }
         readyState = result.readyState;
+        if (frame === page.mainFrame()) metrics = result.page;
 
         text += limits.observationMode === "jev" ? result.text : `\n[${ref}]${result.text}`;
         truncated ||= result.truncated ?? false;
@@ -541,6 +538,7 @@ export const make = Effect.fnUntraced(function* <R>(
         text: text.slice(0, textLimit),
         controls,
         ...(readyState === undefined ? {} : { readyState }),
+        ...(metrics === undefined ? {} : { page: metrics }),
         truncated: truncated || text.length > textLimit,
         frames: currentFrames.slice(0, 32).map((frame) => ({
           ref: frameId(frame),
@@ -556,8 +554,6 @@ export const make = Effect.fnUntraced(function* <R>(
     const observation = yield* bounded(value).pipe(
       Effect.tapError(() => Effect.sync(() => targets.clear())),
     );
-
-    latestObservation = observation;
 
     return observation;
   });
@@ -1278,7 +1274,6 @@ export const make = Effect.fnUntraced(function* <R>(
   });
 
   const actions = BrowserActions.of({
-    latestObservation: Effect.sync(() => latestObservation),
     observe: lock.withPermit(inspect({}, { kind: "observe" })),
     act: (values) => lock.withPermit(act(values)).pipe(Effect.withSpan("BrowserUse.act")),
   });

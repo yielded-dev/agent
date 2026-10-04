@@ -25,11 +25,14 @@ export const finishTool = Tool.make("finish", {
 
 export const completionTools = Toolkit.make(finishTool);
 
+/** `frontier`: viewport observations, settling and capped waits. `jev`: Jev observations. */
+export type BrowserProfile = "default" | "frontier" | "jev";
+
 export const makeBrowser = Effect.fnUntraced(function* (
   session: Pick<BrowserSession, "run">,
   screenshots: boolean,
   image: (value: string) => void,
-  optimizedFrontier = false,
+  profile: BrowserProfile = "default",
 ) {
   const trace = yield* Trace;
 
@@ -40,9 +43,11 @@ export const makeBrowser = Effect.fnUntraced(function* (
     authorize: () => Effect.void,
     maxActions: 100,
     maxReturnedBytes: 256 * 1024,
-    viewportOnly: optimizedFrontier,
-    settleAfterAction: optimizedFrontier,
-    ...(optimizedFrontier ? { maxWaitMillis: 5_000 } : {}),
+    viewportOnly: profile !== "default",
+    ...(profile === "jev"
+      ? { observationMode: "jev", settleAfterAction: "input" }
+      : { settleAfterAction: profile === "frontier" }),
+    ...(profile === "frontier" ? { maxWaitMillis: 5_000 } : {}),
   }).pipe(Effect.mapError(asLabError));
 
   const native = <A>(action: (page: Page) => Promise<A>) =>
@@ -135,7 +140,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
       ),
     actionsLayer: Layer.merge(
       Layer.succeed(BrowserUse.BrowserActions, {
-        observe: controller.actions.observe,
+        observe: trace.measure("observation", "Read current controls", controller.actions.observe),
         act: (values) =>
           act(values).pipe(
             Effect.mapError(
@@ -144,7 +149,10 @@ export const makeBrowser = Effect.fnUntraced(function* (
             ),
           ),
       }),
-      Layer.succeed(BrowserUse.BrowserControl, controller.control),
+      Layer.succeed(BrowserUse.BrowserControl, {
+        ...controller.control,
+        scroll: (request) => trace.measure("action", "Scroll", controller.control.scroll(request)),
+      }),
     ),
     inspect: controller.control.inspect,
   };
