@@ -281,8 +281,8 @@ also carries `toolSelection`. Durable recovery, compaction and checkpoints resto
 without searching again for a committed result. A crash before a result is committed follows the
 ordinary readonly recovery contract. Resumed calls retain their original exposure and recheck
 current eligibility before unfinished handlers run; already settled siblings remain canonical.
-Custom durable hooks must stage request snapshots through `noteToolExposure`. Version custom
-search semantics in your registration definitions as with other handler changes.
+Custom durability hooks must persist `RunTurnResponse.toolExposure` with the response. Version
+custom search semantics in your registration definitions as with other handler changes.
 
 This provider-neutral API changes the native toolkit sent on subsequent calls. It does not use
 provider-specific deferred-tool references or promise a latency win: extra discovery rounds and
@@ -353,7 +353,7 @@ values to handlers and encoded values to history.
 Durable responses retain explicit rejection evidence tied to the original arguments. Recovery
 returns that failure without executing the rejected call; other recorded parameters still undergo
 strict validation and unfinished calls still require current authorization. Custom durability hooks
-must persist `RunTurnResponseCommit.toolParameterRejections` with the response and restore it through
+must persist `RunTurnResponse.toolParameterRejections` with the response and restore it through
 `RunTurnResume.toolParameterRejections`. A failed result by itself cannot excuse corrupt parameters.
 
 `Agent.inspectTools` accepts a Definition or Binding and reads its registered native toolkit without
@@ -504,10 +504,17 @@ allowlist. Keep resource access checks inside handlers as appropriate for the ap
 
 ## Handle uncertain external effects
 
-Process loss ends an active tool call in an ephemeral run. Durable hosts persist a prepared
-boundary before ordinary external effects. If the runtime cannot determine whether the effect
-happened, it records an Unknown Outcome and waits for an explicit resolution. It never replays the
-call automatically. See [Persistence & durability](/concepts/durability/).
+Process loss ends an active tool call in an ephemeral run. Durable hosts commit the model response
+and its normalized tool declarations before ordinary external effects. If the runtime cannot
+determine whether the effect happened, it records an Unknown Outcome and waits for an explicit
+resolution. It never replays the call automatically. See [Persistence & durability](/concepts/durability/).
+
+Custom `RunDurabilityHook` implementations capture initial metadata in `initialize` and persist the
+interpreter's `RunTurnCommit` facts through `commitTurn`. Handle `Response`, `Settled`, and `Partial`
+commits directly; partial commits retain closed siblings before child suspension. Public events
+and `onHistory` updates do not define durable commit boundaries. The required `checkpoint` Effect
+must propagate retained infrastructure failures before further execution or commits, including
+when no progress stream is observed.
 
 <a id="mcp"></a>
 

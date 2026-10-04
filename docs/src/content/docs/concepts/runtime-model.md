@@ -22,10 +22,13 @@ flowchart LR
 
 ## Turns and responsiveness
 
-- Use one interpreter for running, streaming, and durable execution. Finish the model response
-  before starting application tools. Validate and authorize executable calls, honor approvals,
-  and commit their bounded results in declaration order before the next turn. Tool concurrency
-  and run budgets are finite; all execution resources belong to a Scope.
+- Use one scoped Effect interpreter for running, streaming, and durable execution. Public streams
+  observe that execution through a bounded producer; headless runs do not transport public events.
+  Finish the model response before starting application tools. Validate and authorize executable
+  calls, honor approvals,
+  and commit their bounded results in declaration order after their streams close, before draining
+  new input or starting the next turn. Tool concurrency and run budgets are finite; all execution
+  resources belong to a Scope.
 - Admit new input ahead of eventual work. In Cloudflare, new native work preempts maintenance;
   publish the lifecycle start promptly after pickup. Reply publication, projection backfills, and memory
   have independent recovery obligations and must not become prerequisites for a model call.
@@ -97,8 +100,11 @@ Wrap CPU-heavy synchronous work inside tracing spans, including hydration and de
 Object clocks may not advance during synchronous work, so elapsed clock samples alone cannot
 establish a CPU budget. Preserve original failure causes where the error contract carries them;
 some storage boundaries retain only diagnostic classifications. Keep scheduling reports content-free.
-Events and disposable drafts help observers follow execution; only canonical records establish
-recovery facts.
+The interpreter supplies validated response and closed tool-result facts directly to the canonical
+journal. Events, history callbacks, and disposable drafts help observers follow execution; they do
+not reconstruct durable commits. Only canonical records establish recovery facts.
+Execution captures its services when it starts; changing a stream consumer's Context between pulls
+does not change the running model, tools, or hooks.
 
 See [Run & stream](/guide/run-agents/), [budgets](/concepts/budgets/), and
 [durability](/concepts/durability/) for options and recovery boundaries.

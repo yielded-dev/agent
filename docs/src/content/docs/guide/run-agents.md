@@ -5,8 +5,8 @@ description: Run an agent, stream its events, or observe it through a scoped han
 
 <a id="run-stream"></a>
 
-The runtime exposes one agent loop through `run`, `stream`, and `start`. All three decode input
-before instructions execute and require native model services. Use `runUnknown`, `streamUnknown`,
+The runtime exposes one scoped Effect execution through `run`, `stream`, and `start`. All three
+decode input before instructions execute and require native model services. Use `runUnknown`, `streamUnknown`,
 or `startUnknown` for external values typed as `unknown`. See
 [Agent definitions](/guide/agents/#typed-and-external-inputs) and the authoritative
 [runtime model](/concepts/runtime-model/).
@@ -133,12 +133,16 @@ Primitive text and reasoning deltas are copied into owned, Schema-validated valu
 fragmentation does not create one ownership tracing span per delta. Complex metadata retains the
 general bounded ownership path.
 
-The stream uses bounded backpressure. Completion, failure, and interruption close its resources.
-Interrupting the only ephemeral consumer interrupts the run.
+Once stream consumption starts, a scoped producer advances until its bounded event buffer fills.
+Slow consumption backpressures publication, but individual pulls do not pace tool execution.
+The producer captures its execution Context at startup: provide services around the whole stream,
+rather than changing them around individual pulls. Completion, failure, and interruption close its
+resources. Interrupting the only ephemeral consumer interrupts the run.
 
 Published `ToolProgress` results are owned JSON snapshots. Their cumulative UTF-8 JSON size is
 limited to 8 MiB per run, shared by application and provider progress. This also bounds progress
-payloads retained for detached replay. Oversized progress fails with `ModelProtocolError` without
+payloads retained for detached replay and applies even when no progress is observed.
+Oversized progress fails with `ModelProtocolError` without
 truncation. Application progress must contain plain JSON data; accessors, custom serialization,
 and non-finite numbers fail with the same error. Terminal tool results use `toolResultBounds`
 separately.
@@ -153,6 +157,11 @@ export const progressBufferLimits: RunBufferLimits = {
   maxToolProgressBytes: 1024 * 1024,
 };
 ```
+
+`maxRunEvents` bounds progress produced by `stream` and `start`. Headless `run` and durable execution
+do not produce a public event sequence. Use Agent policy limits to bound their execution; native
+model-response and tool-result validation and bounds still apply.
+`maxBufferedEvents` lowers the public stream queue capacity from its default of 1,024 events.
 
 ### Observe typed findings
 
@@ -372,7 +381,9 @@ repeat an observation. Nothing here is serialized into thread history.
 
 Observer defects cannot change the tool result, though a slow observer holds a tool permit. Avoid
 calling the broker, running another agent, or interrupting the observer itself. Durable hosts
-accept the same observer through their platform options.
+accept the same observer through their platform options. Call-local telemetry and any applicable
+failure observer finish before the terminal Tool event is published, so stopping observation at
+that event does not skip them.
 
 <a id="interruption-is-ownership"></a>
 
@@ -457,10 +468,11 @@ legacy numeric estimates and estimates without a status remain trusted host esti
 Response records also retain each Turn's missing-call count, so approval and child suspension
 preserve incomplete accounting when a fresh runtime resumes the Run.
 
-Runtime hosts use `AgentRuntime.streamWithUsageAccountingUnknown` with the inward
+Headless runtime hosts use `AgentRuntime.executeWithUsageAccountingUnknown` with the inward
 `ModelUsageAccounting` and `AgentUpdateAcceptance` services from `RunOptions`. These dependencies
 remain visible in `R`. The native durable runtime supplies its canonical Turn accumulator and
 Attempt-bound update acceptance at composition, retaining updates before acknowledging them.
+Hosts that need public progress can use `streamWithUsageAccountingUnknown` with the same services.
 Ordinary `stream`, `run`, and `start` calls provide ephemeral accounting and update acceptance.
 
 Canonical response records own committed per-call usage. Terminal settlement

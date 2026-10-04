@@ -15,6 +15,7 @@ import {
   contextWindowId,
   contextWindowMessage,
 } from "../engine/Compaction.ts";
+import type { RunTurnToolResult } from "../engine/RunOptions.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
 import {
   type JournalCheckpointSeed,
@@ -1379,18 +1380,16 @@ export interface TurnCommitInput {
   readonly toolOperations?: ModelResponseRecorded["toolOperations"] | undefined;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
-  readonly toolSelections?: ReadonlyMap<string, Selection> | undefined;
-  readonly budgetRejectedCalls?: ReadonlySet<string>;
   readonly runId: RunId;
   /** Canonical (Run-relative, Attempt-independent) Turn number; must be positive. */
   readonly turn: number;
   readonly turnId: TurnId;
   /**
-   * The Prompt messages this Turn appended to official history, in order, including the Turn's
-   * Tool message when application Tools ran. Tool messages become `ToolCallSettled` records; the
-   * remaining messages become the Turn's `ModelResponseRecorded.messages`.
+   * Exact response and leading input/instruction messages. Application Tool outcomes
+   * are supplied separately; the journal does not reconstruct them from Prompt history.
    */
-  readonly appended: ReadonlyArray<Prompt.Message>;
+  readonly responseMessages: ReadonlyArray<Prompt.Message>;
+  readonly toolResults: ReadonlyArray<RunTurnToolResult>;
   readonly producerId: ProducerId;
   readonly deploymentId: DeploymentId;
   readonly createdAt: DateTime.Utc;
@@ -1427,35 +1426,16 @@ const requireCanonicalTurn = (turn: number): Effect.Effect<void, RunJournalError
     ? Effect.fail(journalError(`Canonical turn number must be a positive integer: ${turn}`))
     : Effect.void;
 
-interface SplitTurnMessages {
-  readonly promptMessages: ReadonlyArray<Prompt.Message>;
-  readonly toolParts: ReadonlyArray<Prompt.ToolResultPart>;
-}
-
-const splitTurnMessages = (appended: ReadonlyArray<Prompt.Message>): SplitTurnMessages => {
-  const promptMessages: Array<Prompt.Message> = [];
-  const toolParts: Array<Prompt.ToolResultPart> = [];
-
-  for (const message of appended) {
-    if (message.role !== "tool") {
-      promptMessages.push(message);
-      continue;
-    }
-    for (const part of message.content) {
-      if (part.type !== "tool-result") continue;
-      toolParts.push(part);
-    }
-  }
-
-  return { promptMessages, toolParts };
-};
-
 const modelResponseRecord = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-  promptMessages: ReadonlyArray<Prompt.Message>,
 ): Effect.fn.Return<RecordEnvelope, RunJournalError | DigestError, Crypto.Crypto> {
+  const promptMessages = input.responseMessages;
+
   if (promptMessages.length === 0) {
     return yield* journalError(`Turn ${input.turn} appended no model-visible Prompt messages`);
+  }
+  if (promptMessages.some((message) => message.role === "tool")) {
+    return yield* journalError("Application Tool outcomes must be supplied as terminal facts");
   }
   const runScopedPrefixLength = input.runScopedPrefixLength;
 
@@ -1561,20 +1541,19 @@ const modelResponseRecord = Effect.fnUntraced(function* (
 
 const toolSettledRecords = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-  toolParts: ReadonlyArray<Prompt.ToolResultPart>,
 ): Effect.fn.Return<Array<RecordEnvelope>, RunJournalError> {
   const toolRecords: Array<RecordEnvelope> = [];
 
-  for (const part of toolParts) {
+  for (const part of input.toolResults) {
     const result = yield* decodePersistedJson(part.result).pipe(
       Effect.mapError((cause) =>
-        journalError(`Tool result ${part.id} exceeds canonical persistence bounds`, cause),
+        journalError(`Tool result ${part.toolCallId} exceeds canonical persistence bounds`, cause),
       ),
     );
 
     const toolCallId = yield* Effect.try({
-      try: () => decodeToolCallId(part.id),
-      catch: (cause) => journalError(`Invalid Tool Call ID ${part.id}`, cause),
+      try: () => decodeToolCallId(part.toolCallId),
+      catch: (cause) => journalError(`Invalid Tool Call ID ${part.toolCallId}`, cause),
     });
 
     toolRecords.push(
@@ -1585,15 +1564,13 @@ const toolSettledRecords = Effect.fnUntraced(function* (
         createdAt: input.createdAt,
         deploymentId: input.deploymentId,
         payload: ToolCallSettled.make({
-          ...(input.toolSelections?.get(part.id) === undefined
-            ? {}
-            : { toolSelection: input.toolSelections.get(part.id) }),
+          ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
           runId: input.runId,
           toolCallId,
-          toolName: part.name,
+          toolName: part.toolName,
           result,
           isFailure: part.isFailure,
-          ...(input.budgetRejectedCalls?.has(part.id) === true ? { budgetRejected: true } : {}),
+          ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
         }),
       }),
     );
@@ -1635,7 +1612,7 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
 });
 
 /**
- * Pure per-Turn canonical batch builder (TurnCompleted seam fold, D6/D8): one
+ * Build a canonical batch from interpreter-validated Turn facts: one
  * `ModelResponseRecorded` record plus one `ToolCallSettled` record per terminal Tool result, all
  * under the WP0-style deterministic identities, committed as ONE atomic batch. The same input
  * always yields byte-identical content, so an in-Attempt append retry is an honest batch replay.
@@ -1648,9 +1625,8 @@ export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(fun
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { promptMessages, toolParts } = splitTurnMessages(input.appended);
-  const modelResponse = yield* modelResponseRecord(input, promptMessages);
-  const toolRecords = yield* toolSettledRecords(input, toolParts);
+  const modelResponse = yield* modelResponseRecord(input);
+  const toolRecords = yield* toolSettledRecords(input);
   const completionRecord = yield* runCompletionRecord(input);
 
   return CanonicalBatch.make({
@@ -1667,14 +1643,13 @@ export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(fun
  * Commit the normalized response and original operation contracts before application Tools
  * execute. An unsettled application declaration is conservative uncertainty after ownership
  * loss; approvals and the dispatch fence remain separate execution requirements. Provider
- * results stay in assistant content. Tool messages in `appended` belong to the results commit.
+ * results stay in assistant content. Application outcomes belong to the results commit.
  */
 export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { promptMessages } = splitTurnMessages(input.appended);
-  const modelResponse = yield* modelResponseRecord(input, promptMessages);
+  const modelResponse = yield* modelResponseRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnResponseBatchId(input.runId, input.turn),
@@ -1686,24 +1661,31 @@ export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(funct
 /**
  * Commit 5 of a tool-declaring Turn (plan §2.1): the Turn's `ToolCallSettled` records in
  * declaration order under batch identity `turn-results:{runId}:{turn}` — the batch becomes
- * model-visible atomically. Non-tool messages in `appended` are ignored; a Turn without any
- * terminal Tool result has no results batch and fails typed.
+ * model-visible atomically. A completion after already committed Tool results gets its own
+ * terminal batch; it never rewrites or repeats the earlier Tool outcomes.
  */
 export const turnResultsBatch = Effect.fn("RunJournal.turnResultsBatch")(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { toolParts } = splitTurnMessages(input.appended);
-  const toolRecords = yield* toolSettledRecords(input, toolParts);
+  const toolRecords = yield* toolSettledRecords(input);
   const first = toolRecords[0];
+  const completionRecord = yield* runCompletionRecord(input);
 
   if (first === undefined) {
-    return yield* journalError(`Turn ${input.turn} has no terminal Tool results to commit`);
+    if (completionRecord === undefined) {
+      return yield* journalError(`Turn ${input.turn} has no terminal Tool results to commit`);
+    }
+
+    return CanonicalBatch.make({
+      batchId: decodeBatchId(runCompletedRecordId(input.runId)),
+      producerId: input.producerId,
+      records: [completionRecord],
+    });
   }
   if (input.runCompletion !== undefined && toolRecords.length !== 1) {
     return yield* journalError("A terminal Tool completion requires exactly one settled result");
   }
-  const completionRecord = yield* runCompletionRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnResultsBatchId(input.runId, input.turn),

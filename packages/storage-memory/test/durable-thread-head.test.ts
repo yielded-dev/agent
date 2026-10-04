@@ -476,7 +476,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
             producerId: Schema.decodeSync(ProducerId)("head-test"),
             deploymentId: Schema.decodeSync(DeploymentId)("head-test"),
             createdAt: DateTime.toUtc(DateTime.makeUnsafe(1_000)),
-            appended: Prompt.make([
+            responseMessages: Prompt.make([
               { role: "user", content: "OLD RETAINED EVIDENCE" },
               {
                 role: "assistant",
@@ -491,6 +491,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
                 ],
               },
             ]).content,
+            toolResults: [],
             usage: { inputTokens: 100, outputTokens: 10 },
           });
 

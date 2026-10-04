@@ -55,6 +55,12 @@ retains its output, while unresolved ordinary tools remain uncertain. A crash af
 repeats notifications and finalization without choosing another outcome. There is no separate
 settlement reservation or reserved-record recovery phase.
 
+Completion-tool results commit before the runtime drains new input at the turn boundary.
+If a crash occurs before `RunCompleted`, recovery reuses the recorded result without executing
+the handler again. It may reevaluate the completion projection, so keep that function pure and
+deterministic. `RunCompleted` fixes the output and disposition for subsequent recovery. A final
+response with no application tool calls commits atomically with its `RunCompleted` record.
+
 <a id="recovery-checkpoints"></a>
 
 ## Resume through a recovery checkpoint
@@ -215,7 +221,6 @@ consistent canonical prefix before classifying the last committed boundary:
 | initial pending or denied approval                | preserve the blocked batch; no handler started                               |
 | canonical tool or Durable Step result             | reuse the recorded result                                                    |
 | `RunCompleted`                                    | preserve stored output and disposition; validate `resultDigest` when present |
-| reserved settlement                               | append that outcome, then finalize the ledger idempotently                   |
 | canonical settlement without ledger finalization  | finalize from history                                                        |
 
 Joined input follows the same rule. Claimed input without a canonical append returns to ready.
@@ -252,6 +257,10 @@ remain authoritative across later codec or completion-projector changes.
 
 A [durable attached child](/guide/subagents/durable-attached/) owns a separate thread and attempt.
 The waiting parent releases its worker permit; recovery rejoins the existing child.
+
+Completed sibling tools retain their results while a child is suspended. Their failures use the
+Tool's declared encoded failure value, as ordinary settlements do. Decode them with that failure
+Schema rather than expecting an observer diagnostic such as `{ errorTag, message }`.
 
 Recovery preserves child identity and checks the registered tool's delegation classification.
 Missing or conflicting classification fails closed. If admission cannot confirm whether a child

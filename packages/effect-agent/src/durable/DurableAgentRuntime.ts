@@ -51,7 +51,7 @@ import {
 import { IdGenerator } from "../core/IdGenerator.ts";
 import { copyJson } from "../core/internal/json.ts";
 import { Receipt } from "../core/Receipt.ts";
-import { type ExhaustedLimit, type RunEvent } from "../core/RunEvent.ts";
+import type { ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import {
   SubagentBudgetReservation,
@@ -251,6 +251,7 @@ import {
   projectRunJournalStream,
   type JournalBoundary,
   type RunJournalProjection,
+  type TurnCommitInput,
   runCompletedRecordId,
   runCompletionDigest,
   runIdForSubmission,
@@ -4633,20 +4634,16 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /**
-   * Plan step 3 (+6): drive `AgentRuntime.stream` with history rebuilt by the run journal, commit
+   * Drive the shared interpreter Effect with history rebuilt by the run journal, commit
    * each Turn canonically through the fenced append, watch for durable abort intent, and keep the
    * ownership lease renewed. Engine Run failures settle `failed`; coordinator failures abort the
    * Attempt cleanly with the obligation still owed.
    *
-   * Phase 5 commit shape (plan §2.1): a tool-declaring Turn splits into a RESPONSE batch
-   * (committed by the engine's `commitResponse` hook at the finish part — pending steering plus
-   * the response messages, creating the durability §15 provably-safe window), the durable
-   * approval preflight (§2.6 — recorded decisions replay deterministically, unresolved requests
-   * become canonical and suspend the Attempt), an optional PREPARED batch (before any handler
-   * starts), and a RESULTS batch at the next TurnStarted/RunCompleted/RunFailed seam. A completed
-   * no-tool Turn atomically adds its `RunCompleted` marker to the P4 single-batch shape. When the
-   * journal ends mid-batch,
-   * `RunOptions.resume` replays the declared batch without re-invoking the model (§2.4).
+   * The interpreter supplies validated response, closed Tool-result, and completion facts.
+   * Responses precede approval and dispatch; Tool results precede input drains and the next
+   * Turn. A no-tool response and Run completion share one batch. A completion Tool's result
+   * precedes its terminal-only completion batch, so recovery can repeat a pure output projection
+   * without replaying the handler. Pending batches resume from their canonical declarations.
    */
   const runModel = <
     InputSchema extends Schema.Top,
@@ -5014,11 +5011,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         });
       }
 
-      const pending = yield* pendingToolBatchFor(
-        records,
-        runId,
-        agent.definition.completionFromTools?.map((declaration) => declaration.tool),
-      );
+      const completionTools = [
+        ...(agent.definition.completion === undefined ? [] : [agent.definition.completion.tool]),
+        ...(agent.definition.completionFromTools?.map((declaration) => declaration.tool) ?? []),
+      ];
+
+      const pending = yield* pendingToolBatchFor(records, runId, completionTools);
 
       const resumeProjection =
         pending === undefined
@@ -5053,13 +5051,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const applicationCalls = pending?.calls.filter((call) => !call.providerExecuted);
 
-      // Only the original single-call action-completion case may project a reconciled receipt.
-      // Other settled calls are historical outcomes, regardless of their current completion role.
+      // A single successful completion call can have its result committed before the terminal
+      // marker. Reuse that result for either completion mode, after verifying its original
+      // operation contract; no handler or provider call is needed to repeat output projection.
       const completionCandidate =
         applicationCalls?.length === 1 &&
-        agent.definition.completionFromTools?.some(
-          (declaration) => declaration.tool === applicationCalls[0]?.name,
-        ) &&
+        completionTools.some((tool) => tool === applicationCalls[0]?.name) &&
         pending?.settled.some(
           (result) => result.id === applicationCalls[0]?.id && !result.isFailure,
         )
@@ -5149,9 +5146,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       // RUN-023: per-Turn usage staged by the engine's `noteTurnUsage` for the
       // Turn's canonical response record (keyed by CANONICAL turn number).
-      const stagedToolExposure = new Map<number, Snapshot>();
-      const stagedToolSelections = new Map<string, Selection>();
-
       const stagedUsage = new Map<
         number,
         {
@@ -5513,13 +5507,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       /** Joined inputs already handed to the engine during THIS Attempt (never re-deliver). */
       const deliveredJoinInputs = new Set<string>();
       // Canonical encoded parameters per declared call, for the approval request digest: seeded
-      // by `commitResponse` (which the engine invokes before approval preflight) and by the
-      // resumed batch's declared calls.
+      // by the direct response commit before approval preflight and by the resumed batch.
       const encodedParamsByCallId = new Map<string, unknown>();
-      // Declared Tool name per call: the subagent join/sibling-settle appends rebuild exact
-      // `ToolCallSettled` records outside the engine's results commit, so the declared name must
-      // be recoverable per call id (seeded from canonical responses, the resumed batch,
-      // and every `commitResponse`).
+      // Subagent joins append their atomic settlement outside the ordinary results commit.
+      // Their Tool names come from canonical responses or the newly committed declaration.
       const declaredNamesByCallId = new Map<string, string>();
       // Canonical subagent lifecycle state of this Run (SUB-016): seeded from canonical records,
       // advanced by the establish/join hook closures below, and consulted on every replay so an
@@ -5584,15 +5575,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       let currentToolTurn: { readonly turn: number; readonly turnId: TurnId } | undefined =
         pending === undefined ? undefined : { turn: pending.turn, turnId: pending.turnId };
 
-      // Terminal sibling results observed from the Run event stream, keyed by Tool Call id: the
-      // suspension seam commits each settled non-waiting sibling as a per-call late-settle batch
-      // BEFORE the `waitingForChild` suspension so no sibling effect is lost to it (plan §2).
-      const siblingResults = new Map<
-        string,
-        { readonly toolCallId: ToolCallId; readonly result: unknown; readonly isFailure: boolean }
-      >();
-
-      const budgetRejectedCalls = new Set<string>();
       // Step-hook coordinator failures are re-wrapped by the engine as `DurableStepError` in the
       // handler channel; this side channel preserves the original failure so the Attempt aborts
       // (obligation still owed) instead of settling the Run `failed` on an infrastructure fault.
@@ -5607,27 +5589,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           halt,
         );
 
-      interface RunState {
-        readonly baseLen: number | undefined;
-        readonly lastCommitLen: number;
-        readonly history: Prompt.Prompt | undefined;
-        readonly pendingTurn: { readonly turn: number; readonly turnId: TurnId } | undefined;
-        readonly completedOutput: PersistedJson | undefined;
-        readonly completedRunDisposition: PersistedJson | undefined;
-        readonly completedFinishReason: "budget-exhausted" | undefined;
-        readonly completedExhausted: ExhaustedLimit | undefined;
-      }
+      // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
+      // authority before semantic work; progress delivery is not a coordinator checkpoint.
+      const checkpoint = halt(
+        Effect.gen(function* () {
+          const failure = yield* Ref.get(haltRef);
 
-      const stateRef = yield* Ref.make<RunState>({
-        baseLen: undefined,
-        lastCommitLen: 0,
-        history: undefined,
-        pendingTurn: undefined,
-        completedOutput: undefined,
-        completedRunDisposition: undefined,
-        completedFinishReason: undefined,
-        completedExhausted: undefined,
-      });
+          if (failure !== undefined) return yield* failure;
+        }),
+      );
+
+      // Initial instruction metadata supports resumed context and compaction. The engine
+      // owns all subsequent history boundaries and supplies complete commit facts directly.
+      let initialHistoryLength = 0;
+      let initialInstructions: ReadonlyArray<Prompt.Message> = [];
+
+      const completionState: {
+        committed?: NonNullable<TurnCommitInput["runCompletion"]>;
+      } = {};
 
       const turnCounter = yield* Ref.make(
         journal.committedTurns + (journal.policyUsage.modelRestarts ?? 0),
@@ -5638,28 +5617,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         nextRunId: Effect.succeed(runId),
         nextTurnId: Ref.modify(turnCounter, (turn) => [turnIdForRun(runId, turn + 1), turn + 1]),
       };
-
-      // Track live Prompt boundaries only. The journal owns durable per-Turn commits and recovery;
-      // successful-run ThreadHistory retention cannot replace those incremental commits.
-      const onHistory = (history: Prompt.Prompt): Effect.Effect<void> =>
-        Ref.update(stateRef, (state) =>
-          state.baseLen === undefined
-            ? {
-                ...state,
-                baseLen: history.content.length,
-                // A fresh Run's first commit starts at the engine-provided history boundary so
-                // the evaluated instruction + user messages become canonical inside Turn 1 (D8).
-                // A resumed Run's boundary is the engine's re-evaluated initial prompt: those
-                // messages are already canonical inside the original Turn 1 and never re-enter
-                // (a pending batch resume always implies at least one committed Turn).
-                lastCommitLen:
-                  journal.committedTurns === 0
-                    ? journal.historyBefore.content.length
-                    : history.content.length,
-                history,
-              }
-            : { ...state, history },
-        );
 
       // Current instructions govern the continuation; the original user intent, steering and
       // committed history survive. The pending Turn re-enters through the batch continuation,
@@ -5693,28 +5650,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const resumeContext = {
         prepare: ({ source }: { readonly source: Prompt.Prompt }) =>
-          Ref.get(stateRef).pipe(
-            Effect.map((state) => {
-              const view = instructionView(
-                resumeProjection.prompt.content,
-                source.content
-                  .slice(resumeProjection.historyBefore.content.length, state.baseLen)
-                  .filter((message) => message.role === "system"),
-                true,
-                resumeProjection.historyBefore.content.length,
-              );
+          Effect.sync(() => {
+            const view = instructionView(
+              resumeProjection.prompt.content,
+              initialInstructions,
+              true,
+              resumeProjection.historyBefore.content.length,
+            );
 
-              return {
-                prompt: Prompt.fromMessages([
-                  ...view.messages,
-                  ...source.content.slice(state.baseLen ?? source.content.length),
-                ]),
-                priorRunPrefixLength: view.prefixLength(
-                  resumeProjection.historyBefore.content.length,
-                ),
-              };
-            }),
-          ),
+            return {
+              prompt: Prompt.fromMessages([
+                ...view.messages,
+                ...source.content.slice(initialHistoryLength),
+              ]),
+              priorRunPrefixLength: view.prefixLength(
+                resumeProjection.historyBefore.content.length,
+              ),
+            };
+          }),
       } satisfies RunContextHook<never, never>;
 
       const externalContext = runContextPreparation.hook;
@@ -5744,6 +5697,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             };
 
       const durability: RunDurabilityHook<CoordinatorHalt | CompactionError, never> = {
+        checkpoint,
+        initialize: ({ initialHistory, priorHistoryLength }) =>
+          Effect.sync(() => {
+            initialHistoryLength = initialHistory.content.length;
+            initialInstructions = initialHistory.content
+              .slice(priorHistoryLength)
+              .filter((message) => message.role === "system");
+          }),
         commitModelRestart: (restart) =>
           recordHalt(
             Effect.gen(function* () {
@@ -5775,10 +5736,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               knownIds.add(recordId);
             }),
           ),
-        noteToolExposure: (turn, snapshot) =>
-          Effect.sync(() => {
-            stagedToolExposure.set(turn, snapshot);
-          }),
         reservePolicyUsage: (usage) =>
           recordHalt(
             Effect.gen(function* () {
@@ -5806,72 +5763,178 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               yield* hit("policy:after-reservation-append");
             }),
           ),
-        commitResponse: (commit) =>
+        commitTurn: (commit) =>
           recordHalt(
             Effect.gen(function* () {
-              const canonicalTurn = commit.turn;
+              const halted = yield* Ref.get(haltRef);
 
-              currentToolTurn = { turn: canonicalTurn, turnId: commit.turnId };
-              const responseId = modelResponseRecordId(runId, canonicalTurn);
+              if (halted !== undefined) return yield* halted;
+              const responseId = modelResponseRecordId(runId, commit.turn);
+              const suppliedResponse = commit._tag === "Partial" ? undefined : commit.response;
+              const response = knownIds.has(responseId) ? undefined : suppliedResponse;
 
-              if (knownIds.has(responseId)) return;
-              for (const call of commit.calls)
-                if (declaredToolIds.has(call.toolCallId))
+              if (suppliedResponse !== undefined)
+                currentToolTurn = { turn: commit.turn, turnId: commit.turnId };
+              if (commit._tag === "Response" && response === undefined) return;
+
+              const toolOperations: Array<ToolOperation> = [];
+              const responseToolIds = new Set<ToolCallId>();
+
+              for (const call of response?.calls ?? []) {
+                if (declaredToolIds.has(call.toolCallId) || responseToolIds.has(call.toolCallId))
                   return yield* RunJournalError.make({
                     message: "Tool Call identity is reused within a Run",
                   });
-              const state = yield* Ref.get(stateRef);
-              const history = state.history;
+                const replay = currentContracts[call.toolName];
 
-              if (history === undefined) {
-                return yield* RunJournalError.make({
-                  message: `Turn ${canonicalTurn} committed a response before official history advanced`,
-                });
+                if (replay === undefined)
+                  return yield* RunJournalError.make({
+                    message: "Canonical Tool declaration has no original operation contract",
+                  });
+                toolOperations.push(
+                  ToolOperation.make({
+                    toolCallId: call.toolCallId,
+                    toolName: call.toolName,
+                    executionClass: call.executionClass,
+                    executionKind: call.executionKind,
+                    replay,
+                  }),
+                );
+                responseToolIds.add(call.toolCallId);
               }
-              // D8 extension (decision point 6): the pending slice — evaluated instructions +
-              // input for Turn 1, queued steering for later Turns — becomes canonical as the
-              // leading messages of this response batch.
-              const pendingSlice = history.content.slice(state.lastCommitLen);
-              const createdAt = yield* nowUtc;
 
-              const batch = yield* withCrypto(
-                turnResponseBatch({
-                  toolExposure: commit.toolExposure,
-                  toolOperations: commit.calls.map((call) =>
-                    ToolOperation.make({
-                      toolCallId: call.toolCallId,
-                      toolName: call.toolName,
-                      executionClass: call.executionClass,
-                      executionKind: call.executionKind,
-                      replay: currentContracts[call.toolName]!,
+              const toolResults =
+                commit._tag === "Response"
+                  ? []
+                  : commit.results.filter(
+                      (result) =>
+                        !knownIds.has(
+                          toolCallSettledRecordId(runId, commit.turn, result.toolCallId),
+                        ),
+                    );
+
+              let runCompletion: NonNullable<TurnCommitInput["runCompletion"]> | undefined;
+
+              if (commit._tag === "Settled" && commit.completion !== undefined) {
+                const completion = commit.completion;
+
+                const output = yield* decodePersisted(completion.output).pipe(
+                  Effect.mapError((cause) =>
+                    LedgerError.make({
+                      operation: "recordCompleted",
+                      message: "Run output exceeds canonical persistence bounds",
+                      cause,
                     }),
                   ),
-                  toolParameterRejections: commit.toolParameterRejections,
-                  runId,
-                  turn: canonicalTurn,
-                  turnId: commit.turnId,
-                  appended: [...pendingSlice, ...commit.responseMessages.content],
-                  producerId: config.producerId,
-                  deploymentId: config.deploymentId,
-                  createdAt,
-                  ...(canonicalTurn === 1 && pendingSlice.length > 0
-                    ? { runScopedPrefixLength: pendingSlice.length }
+                );
+
+                if (
+                  completion.finishReason === "budget-exhausted" &&
+                  completion.runDisposition !== undefined
+                )
+                  return yield* LedgerError.make({
+                    operation: "recordCompleted",
+                    message: "A budget-exhausted Run cannot declare an application run disposition",
+                  });
+
+                const runDisposition =
+                  completion.runDisposition === undefined
+                    ? undefined
+                    : yield* decodePersisted(completion.runDisposition).pipe(
+                        Effect.mapError((cause) =>
+                          LedgerError.make({
+                            operation: "recordCompleted",
+                            message: "Run disposition exceeds canonical persistence bounds",
+                            cause,
+                          }),
+                        ),
+                      );
+
+                runCompletion = {
+                  output,
+                  ...(runDisposition === undefined ? {} : { runDisposition }),
+                  ...(completion.finishReason === "budget-exhausted"
+                    ? {
+                        finishReason: completion.finishReason,
+                        ...(completion.exhausted === undefined
+                          ? {}
+                          : { exhausted: completion.exhausted }),
+                      }
                     : {}),
-                  usage: usageForCommit(canonicalTurn),
-                  unobservedModelCalls: unobservedForCommit(canonicalTurn),
-                }),
+                };
+              }
+              if (response === undefined && toolResults.length === 0 && runCompletion === undefined)
+                return;
+              if (response === undefined && !knownIds.has(responseId))
+                return yield* RunJournalError.make({
+                  message: "Tool results or completion preceded the canonical response",
+                });
+
+              const input: TurnCommitInput = {
+                runId,
+                turn: commit.turn,
+                turnId: commit.turnId,
+                responseMessages: response?.messages ?? [],
+                toolResults,
+                toolOperations,
+                toolExposure: response?.toolExposure,
+                toolParameterRejections: response?.toolParameterRejections,
+                runScopedPrefixLength: response?.runScopedPrefixLength,
+                producerId: config.producerId,
+                deploymentId: config.deploymentId,
+                createdAt: yield* nowUtc,
+                runCompletion,
+                usage: usageForCommit(commit.turn),
+                unobservedModelCalls: unobservedForCommit(commit.turn),
+              };
+
+              if (commit._tag === "Partial") {
+                // The interpreter supplies only closed siblings, in declaration order.
+                // Per-call identities retain each result before the child suspension.
+                for (const result of toolResults) {
+                  const batch = yield* withCrypto(
+                    turnResultsBatch({ ...input, toolResults: [result] }),
+                  );
+
+                  yield* appendBatch(
+                    ctx,
+                    CanonicalBatch.make({
+                      ...batch,
+                      batchId: toolCallResultBatchId(runId, commit.turn, result.toolCallId),
+                    }),
+                  );
+                  for (const record of batch.records) knownIds.add(record.recordId);
+                  yield* hit("subagent:after-sibling-settle");
+                }
+
+                return;
+              }
+
+              const batch = yield* withCrypto(
+                commit._tag === "Response"
+                  ? turnResponseBatch(input)
+                  : response === undefined
+                    ? turnResultsBatch(input)
+                    : turnCanonicalBatch(input),
               );
 
               yield* appendBatch(ctx, batch);
-              for (const call of commit.calls) {
+              for (const call of response?.calls ?? []) {
                 declaredToolIds.add(call.toolCallId);
                 encodedParamsByCallId.set(call.toolCallId, call.parameters);
                 declaredNamesByCallId.set(call.toolCallId, call.toolName);
               }
-              initialDispatchProofTurns.add(canonicalTurn);
+              if (response !== undefined) initialDispatchProofTurns.add(commit.turn);
               recordCommittedUsage(batch);
               for (const record of batch.records) knownIds.add(record.recordId);
-              yield* hit("turn:after-response-append");
+              if (runCompletion !== undefined) completionState.committed = runCompletion;
+              yield* hit(
+                commit._tag === "Response"
+                  ? "turn:after-response-append"
+                  : response === undefined
+                    ? "turn:after-results-append"
+                    : "turn:after-canonical-append",
+              );
             }),
           ),
         checkToolDispatch: recordHalt(
@@ -5970,7 +6033,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               // Results must be canonical before pruning or rollover can cover them. Newly committed
               // compactions remain overlays on this Attempt's append-only source, so omit those
               // overlays while reconstructing the exact source-to-record mapping.
-              if (commit.kind !== "summarize") yield* recordHalt(commitPendingTurn);
               const tail = yield* ctx.tail;
 
               sourceBoundaries = [];
@@ -6017,13 +6079,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               });
             }
 
-            const state = yield* Ref.get(stateRef);
-
             const comparisonView = instructionView(
               sourceJournal.prompt.content,
-              state.history?.content
-                .slice(resumeProjection.historyBefore.content.length, state.baseLen)
-                .filter((message) => message.role === "system") ?? [],
+              initialInstructions,
               false,
               sourceJournal.historyBefore.content.length,
             );
@@ -6390,18 +6448,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           return yield* renderInputPrompt(inputPrompt, decodedInput, encodedInput);
         });
 
-      // Empty successful drains leave Tool results and RunCompleted in one batch.
-      // A join or interrupted continuation must still retain already returned results.
-      const preserveToolResults = Effect.gen(function* () {
-        const state = yield* Ref.get(stateRef);
-
-        if (
-          state.pendingTurn !== undefined &&
-          knownIds.has(modelResponseRecordId(runId, state.pendingTurn.turn))
-        )
-          yield* commitPendingTurn;
-      });
-
       // Claims are authority, wakes are hints. A cancelled waiter retains every claim
       // for the seam drain; it never appends input while an old response can still commit.
       type PreparedJoin = {
@@ -6546,14 +6592,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                   const payload = existing.record.payload;
 
                   if (payload._tag !== "UserInputRecorded") continue;
-                  yield* preserveToolResults;
                   joinedInputs.push(payload);
                 }
                 const claims = yield* prepareInputs(limit);
 
                 pendingJoinClaims.splice(0, claims.length);
                 for (const { claim, input: payload, rendered } of claims) {
-                  yield* preserveToolResults;
                   const recordId = submissionInputRecordId(claim.submissionId);
                   let sequence: CanonicalSequence;
                   const existing = joinedInputEnvelopes.get(claim.submissionId);
@@ -6598,9 +6642,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 }
 
                 return joinedInputs;
-              }).pipe(
-                Effect.onExit((exit) => (Exit.isFailure(exit) ? preserveToolResults : Effect.void)),
-              ),
+              }),
             );
 
             return yield* Effect.forEach(joinedInputs, (joinedInput) =>
@@ -7215,7 +7257,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         threadId: submission.threadId,
         runId,
         history: pending === undefined ? journal.historyBefore : resumeProjection.historyBefore,
-        onHistory,
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",
@@ -7285,17 +7326,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ...(preparedContext === undefined ? {} : { context: preparedContext }),
         beforeTurn: () =>
           Effect.gen(function* () {
-            // Preparation may resolve the next Model from canonical Tool results or invoke
-            // a compaction Model. Publish the completed Turn before either can observe it.
-            yield* recordHalt(commitPendingTurn);
-
             if (
               yieldAfter !== undefined &&
               (yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(yieldAfter)
             ) {
               yield* Deferred.succeed(yieldSignal, undefined);
 
-              // The successful signal wins the outer race and closes the stream Scope;
+              // The successful signal wins the outer race and closes the execution Scope;
               // no synthetic engine RunFailed event or terminal Settlement is produced.
               return yield* Effect.never;
             }
@@ -7363,432 +7400,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ...(pendingContextToolCallId === undefined ? {} : { pendingContextToolCallId }),
       };
 
-      const commitPendingTurn: Effect.Effect<void, DurableWorkerFailure> = Effect.gen(function* () {
-        const state = yield* Ref.get(stateRef);
-        const history = state.history;
-
-        if (state.pendingTurn === undefined || history === undefined) return;
-        let appended = history.content.slice(state.lastCommitLen);
-
-        if (appended.length === 0) return;
-        const canonicalTurn = state.pendingTurn.turn;
-        const createdAt = yield* nowUtc;
-        let committedLen = history.content.length;
-
-        const completedRun =
-          state.completedOutput === undefined
-            ? undefined
-            : {
-                output: state.completedOutput,
-                ...(state.completedRunDisposition === undefined
-                  ? {}
-                  : { runDisposition: state.completedRunDisposition }),
-                ...(state.completedFinishReason === undefined
-                  ? {}
-                  : { finishReason: state.completedFinishReason }),
-                ...(state.completedExhausted === undefined
-                  ? {}
-                  : { exhausted: state.completedExhausted }),
-              };
-
-        if (knownIds.has(modelResponseRecordId(runId, canonicalTurn))) {
-          // The response is already durable (commit 1 of the split shape): only the results
-          // batch remains. The slice is [response messages…, tool message, trailing input…]:
-          // this commit's canonical coverage ends at the batch's Tool message — messages drained
-          // at the post-batch seam stay pending and become the leading messages of the NEXT
-          // response batch (decision point 6 / D8), never silently dropped.
-          for (let index = appended.length - 1; index >= 0; index -= 1) {
-            if (appended[index]?.role === "tool") {
-              committedLen = state.lastCommitLen + index + 1;
-              appended = appended.slice(0, index + 1);
-              break;
-            }
-          }
-          // Already-canonical per-call settles (late settles from the resolution path, or
-          // resume-injected results) are excluded by record identity.
-          const remaining: Array<Prompt.Message> = [];
-          const resultParts: Array<Prompt.ToolResultPart> = [];
-          let toolParts = 0;
-
-          for (const message of appended) {
-            if (message.role !== "tool") {
-              remaining.push(message);
-              continue;
-            }
-
-            const parts = message.content.filter(
-              (part): part is Prompt.ToolResultPart =>
-                part.type === "tool-result" &&
-                !knownIds.has(`tool-settled:${runId}:${canonicalTurn}:${part.id}`),
-            );
-
-            if (parts.length === 0) continue;
-            toolParts += parts.length;
-            resultParts.push(...parts);
-            remaining.push(Prompt.makeMessage("tool", { content: parts }));
-          }
-
-          const settledCompletionPart =
-            completedRun === undefined || toolParts > 0
-              ? undefined
-              : appended
-                  .flatMap((message) => (message.role === "tool" ? message.content : []))
-                  .find(
-                    (part) =>
-                      part.type === "tool-result" &&
-                      !part.isFailure &&
-                      agent.definition.completionFromTools?.some(
-                        (declaration) => declaration.tool === part.name,
-                      ),
-                  );
-
-          if (settledCompletionPart?.type === "tool-result") {
-            resultParts.push(settledCompletionPart);
-            remaining.push(Prompt.makeMessage("tool", { content: [settledCompletionPart] }));
-          }
-
-          if (toolParts > 0 || settledCompletionPart !== undefined) {
-            const completion = agent.definition.completion;
-            const completionPart = resultParts[0];
-
-            const runCompletion =
-              resultParts.length === 1 &&
-              (completionPart?.name === completion?.tool ||
-                agent.definition.completionFromTools?.some(
-                  (declaration) => declaration.tool === completionPart?.name,
-                )) &&
-              completionPart.isFailure !== true &&
-              completedRun !== undefined
-                ? completedRun
-                : undefined;
-
-            const batch = yield* withCrypto(
-              turnResultsBatch({
-                toolSelections: stagedToolSelections,
-                budgetRejectedCalls,
-                runId,
-                turn: canonicalTurn,
-                turnId: state.pendingTurn.turnId,
-                appended: remaining,
-                producerId: config.producerId,
-                deploymentId: config.deploymentId,
-                createdAt,
-                ...(runCompletion === undefined ? {} : { runCompletion }),
-              }),
-            );
-
-            // A recovered external receipt is already canonical. Commit only the terminal
-            // marker at the same results boundary; never duplicate or rewrite its result.
-            let pendingBatch = batch;
-
-            if (settledCompletionPart !== undefined) {
-              const completionRecord = batch.records.find(
-                (record) => record.payload._tag === "RunCompleted",
-              );
-
-              if (completionRecord === undefined || knownIds.has(completionRecord.recordId)) {
-                return yield* RunJournalError.make({
-                  message: "Recovered action completion has no new terminal record",
-                });
-              }
-              pendingBatch = CanonicalBatch.make({ ...batch, records: [completionRecord] });
-            }
-
-            yield* appendBatch(ctx, pendingBatch);
-            for (const record of pendingBatch.records) knownIds.add(record.recordId);
-            yield* hit("turn:after-results-append");
-          }
-        } else {
-          // No separate response commit: no-tool Turns and rejected application batches
-          // keep their response and synthetic settlements in one atomic append.
-          const toolOperations: Array<ToolOperation> = [];
-          const fallbackToolIds = new Set<ToolCallId>();
-
-          for (const message of appended) {
-            if (message.role !== "assistant") continue;
-            for (const part of message.content) {
-              if (part.type !== "tool-call" || part.providerExecuted) continue;
-
-              const toolCallId = yield* decodeToolCallIdUnknown(part.id).pipe(
-                Effect.mapError((cause) =>
-                  RunJournalError.make({
-                    message: "Rejected Tool declaration has an invalid identity",
-                    cause,
-                  }),
-                ),
-              );
-
-              if (declaredToolIds.has(toolCallId) || fallbackToolIds.has(toolCallId))
-                return yield* RunJournalError.make({
-                  message: "Tool Call identity is reused within a Run",
-                });
-              const tool = agent.definition.toolkit.tools[part.name];
-              const replay = currentContracts[part.name];
-
-              // The engine rejects unknown/unexposed names before retaining a declaration.
-              // Every application call reaching this atomic boundary has an original Tool.
-              if (tool === undefined || replay === undefined)
-                return yield* RunJournalError.make({
-                  message: "Canonical Tool declaration has no original operation contract",
-                });
-              toolOperations.push(
-                ToolOperation.make({
-                  toolCallId,
-                  toolName: part.name,
-                  executionClass: getToolExecutionClass(tool),
-                  executionKind: getToolExecutionKind(tool.annotations),
-                  replay,
-                }),
-              );
-              fallbackToolIds.add(toolCallId);
-            }
-          }
-
-          const runScopedPrefixLength =
-            canonicalTurn === 1
-              ? appended.findIndex((message) => message.role === "assistant")
-              : -1;
-
-          const batch = yield* withCrypto(
-            turnCanonicalBatch({
-              toolOperations,
-              toolExposure: stagedToolExposure.get(canonicalTurn),
-              toolSelections: stagedToolSelections,
-              budgetRejectedCalls,
-              runId,
-              turn: canonicalTurn,
-              turnId: state.pendingTurn.turnId,
-              appended,
-              producerId: config.producerId,
-              deploymentId: config.deploymentId,
-              createdAt,
-              ...(runScopedPrefixLength > 0 ? { runScopedPrefixLength } : {}),
-              ...(completedRun === undefined ? {} : { runCompletion: completedRun }),
-              usage: usageForCommit(canonicalTurn),
-              unobservedModelCalls: unobservedForCommit(canonicalTurn),
-            }),
-          );
-
-          yield* appendBatch(ctx, batch);
-          for (const toolCallId of fallbackToolIds) declaredToolIds.add(toolCallId);
-          recordCommittedUsage(batch);
-          for (const record of batch.records) knownIds.add(record.recordId);
-          yield* hit("turn:after-canonical-append");
-        }
-        yield* Ref.update(stateRef, (current) => ({
-          ...current,
-          lastCommitLen: committedLen,
-          pendingTurn: undefined,
-        }));
-      });
-
-      const recordCompleted = (
-        output: unknown,
-        finishReason: "completed" | "model-stop" | "budget-exhausted",
-        exhausted: ExhaustedLimit | undefined,
-        runDisposition: unknown,
-      ): Effect.Effect<void, DurableWorkerFailure> =>
-        Effect.gen(function* () {
-          const result = yield* Schema.decodeUnknownEffect(PersistedJson)(output).pipe(
-            Effect.mapError((cause): DurableWorkerFailure =>
-              LedgerError.make({
-                operation: "recordCompleted",
-                message: "Run output exceeds canonical persistence bounds",
-                cause,
-              }),
-            ),
-          );
-
-          if (finishReason === "budget-exhausted" && runDisposition !== undefined) {
-            return yield* LedgerError.make({
-              operation: "recordCompleted",
-              message: "A budget-exhausted Run cannot declare an application run disposition",
-            });
-          }
-
-          const persistedRunDisposition =
-            runDisposition === undefined
-              ? undefined
-              : yield* Schema.decodeUnknownEffect(PersistedJson)(runDisposition).pipe(
-                  Effect.mapError((cause): DurableWorkerFailure =>
-                    LedgerError.make({
-                      operation: "recordCompleted",
-                      message: "Run disposition exceeds canonical persistence bounds",
-                      cause,
-                    }),
-                  ),
-                );
-
-          yield* Ref.update(stateRef, (state) => ({
-            ...state,
-            completedOutput: result,
-            completedRunDisposition: persistedRunDisposition,
-            completedFinishReason: finishReason === "budget-exhausted" ? finishReason : undefined,
-            // The pair travels together or not at all (RUN-011 fail-safe): a
-            // divergent event never persists a lone dimension.
-            completedExhausted: finishReason === "budget-exhausted" ? exhausted : undefined,
-          }));
-        });
-
-      const handleEvent = (event: RunEvent): Effect.Effect<void, DurableWorkerFailure> => {
-        switch (event._tag) {
-          case "ModelRestarted": {
-            // A finish part can arrive before the provider stream closes. Its TurnCompleted
-            // only staged this disposable Turn; never let the next seam commit its prefix.
-            return Ref.update(stateRef, (state) => ({ ...state, pendingTurn: undefined }));
-          }
-          case "TurnStarted": {
-            // Suspension owns only this Turn's siblings. Earlier results are already canonical
-            // under their original Turn and must never be re-recorded with a later Turn id.
-            return commitPendingTurn.pipe(
-              Effect.andThen(
-                Effect.sync(() => {
-                  siblingResults.clear();
-                  stagedToolSelections.clear();
-                }),
-              ),
-            );
-          }
-          case "TurnCompleted": {
-            const turnId = event.turnId ?? turnIdForRun(runId, event.turn);
-
-            return Ref.update(stateRef, (state) => ({
-              ...state,
-              pendingTurn: { turn: event.turn, turnId },
-            }));
-          }
-          case "RunCompleted": {
-            return recordCompleted(
-              event.output,
-              event.finishReason,
-              event.exhausted,
-              event.runDisposition,
-            ).pipe(
-              // The terminal state is available while the final canonical
-              // batch is built, so its RunCompleted marker commits atomically
-              // with either the no-tool response or the completion Tool result.
-              Effect.andThen(commitPendingTurn),
-            );
-          }
-          case "RunFailed": {
-            // Preserve a completed-and-advanced final Turn for audit before the Run settles failed.
-            return commitPendingTurn;
-          }
-          case "ToolCallSucceeded": {
-            if (!event.providerExecuted && event.toolSelection !== undefined)
-              stagedToolSelections.set(event.toolCallId, event.toolSelection);
-            // Collected for the waitingForChild suspension seam: a batch that suspends never
-            // reaches its results commit, so each settled sibling result is committed there as
-            // a per-call late-settle batch instead (plan §2 step 2).
-            if (!event.providerExecuted) {
-              siblingResults.set(event.toolCallId, {
-                toolCallId: event.toolCallId,
-                result: event.result,
-                isFailure: false,
-              });
-            }
-
-            return Effect.void;
-          }
-          case "ToolCallFailed": {
-            if (event.budgetRejected === true) budgetRejectedCalls.add(event.toolCallId);
-            // Only the bounded diagnostics survive the event stream for a failed sibling; the
-            // per-call late-settle carries this same bounded `{errorTag, message}` projection.
-            if (!event.providerExecuted) {
-              siblingResults.set(event.toolCallId, {
-                toolCallId: event.toolCallId,
-                result: { errorTag: event.errorTag, message: boundedText(event.message) },
-                isFailure: true,
-              });
-            }
-
-            return Effect.void;
-          }
-          default: {
-            return Effect.void;
-          }
-        }
-      };
-
-      /**
-       * The waitingForChild suspension seam (plan §2 steps 1-4): every non-waiting sibling of
-       * the suspending batch has settled — commit each terminal sibling result as a per-call
-       * late-settle batch (`turn-results:{runId}:{turn}:{toolCallId}`) in the batch's declared
-       * order, so no sibling effect is lost to the suspension and the resumed batch injects
-       * them via `resume.settled`. Record identity dedupes results already canonical (joined
-       * delegation calls, resume-injected siblings).
-       */
-      const commitSiblingLateSettles = (
-        children: AgentChildPending["children"],
-      ): Effect.Effect<void, DurableWorkerFailure> =>
-        Effect.gen(function* () {
-          const turnInfo = currentToolTurn;
-
-          if (turnInfo === undefined) return;
-          const waitingIds = new Set<string>(children.map((child) => child.toolCallId));
-
-          // Declared order first (SUB-013's commit-order rule), then any residue in arrival order.
-          const ordered = [
-            ...[...declaredNamesByCallId.keys()].filter((callId) => siblingResults.has(callId)),
-            ...[...siblingResults.keys()].filter((callId) => !declaredNamesByCallId.has(callId)),
-          ];
-
-          for (const callId of ordered) {
-            if (waitingIds.has(callId)) continue;
-            const settled = siblingResults.get(callId);
-
-            if (settled === undefined) continue;
-            const toolCallId = settled.toolCallId;
-            const recordId = toolCallSettledRecordId(runId, turnInfo.turn, toolCallId);
-
-            if (knownIds.has(recordId)) continue;
-            const toolName = declaredNamesByCallId.get(callId);
-
-            if (toolName === undefined) {
-              return yield* RunJournalError.make({
-                message: `Settled sibling ${toolCallId} has no declared Tool name at the suspension seam`,
-              });
-            }
-
-            const result = yield* decodePersisted(settled.result).pipe(
-              Effect.mapError((cause) =>
-                RunJournalError.make({
-                  message: `Sibling result ${toolCallId} exceeds canonical persistence bounds`,
-                  cause,
-                }),
-              ),
-            );
-
-            const envelope = yield* makeEnvelope(
-              recordId,
-              ToolCallSettled.make({
-                runId,
-                toolCallId,
-                toolName,
-                result,
-                isFailure: settled.isFailure,
-                ...(stagedToolSelections.get(toolCallId) === undefined
-                  ? {}
-                  : { toolSelection: stagedToolSelections.get(toolCallId) }),
-              }),
-            );
-
-            yield* appendBatch(
-              ctx,
-              CanonicalBatch.make({
-                batchId: toolCallResultBatchId(runId, turnInfo.turn, toolCallId),
-                producerId: config.producerId,
-                records: [envelope],
-              }),
-            ).pipe(
-              Effect.catchTag("AppendConflict", () => Effect.void),
-              Effect.asVoid,
-            );
-            knownIds.add(recordId);
-            yield* hit("subagent:after-sibling-settle");
-          }
-        });
-
       // Durability §9: the superseding Attempt records the interruption BEFORE re-invoking the
       // model. A batch resume never re-invokes the model for the pending Turn, so it is exempt.
       if (
@@ -7801,78 +7412,83 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         interruptedUsage = true;
       }
 
-      const consume = Stream.runForEach(
-        AgentRuntime.streamWithUsageAccountingUnknown(agent, submission.inputPayload, options).pipe(
-          Stream.provideService(AgentUpdateAcceptance, {
-            accept: (update) =>
-              updateRuntime
-                .emit({
-                  updateId: update.updateId,
-                  value: update.value,
-                  submission,
-                  runId,
-                  producerEpoch: ctx.producerEpoch,
-                  definitions: submission.agentDigests,
-                })
-                .pipe(
-                  Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
-                    // Preserve the original infrastructure failure at the coordinator boundary;
-                    // the engine's next event must not commit this Tool's failure as an outcome.
-                    Ref.set(haltRef, failure).pipe(
-                      Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
-                    ),
+      const consume = AgentRuntime.executeWithUsageAccountingUnknown(
+        agent,
+        submission.inputPayload,
+        options,
+      ).pipe(
+        Effect.provideService(AgentUpdateAcceptance, {
+          accept: (update) =>
+            updateRuntime
+              .emit({
+                updateId: update.updateId,
+                value: update.value,
+                submission,
+                runId,
+                producerEpoch: ctx.producerEpoch,
+                definitions: submission.agentDigests,
+              })
+              .pipe(
+                Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
+                  // Preserve the original infrastructure failure at the coordinator boundary;
+                  // the next semantic checkpoint must not commit this Tool failure as an outcome.
+                  Ref.set(haltRef, failure).pipe(
+                    Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
                   ),
                 ),
-          }),
-          Stream.provideService(ModelUsageAccounting, {
-            noteIncompleteUsage: (turn) =>
-              Effect.sync(() => {
-                stagedUnobservedCalls.set(turn, (stagedUnobservedCalls.get(turn) ?? 0) + 1);
-              }),
-          }),
-          Stream.provide(ThreadHistory.layer),
-          Stream.provideService(SubagentHost.forTool, (source) =>
-            source.threadId !== submission.threadId ||
-            source.agentId !== submission.agentId ||
-            source.runId !== runId
-              ? SubagentHost.unavailable
-              : workerRuntime.facet(
-                  {
-                    source,
-                    policy: agent.definition.policy,
-                    depth: delegationDepth,
-                    ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
-                  },
-                  submission.principal,
-                  submission.submissionId,
-                ),
-          ),
-          Stream.provideService(MessagingHost.forTool, (source) =>
-            source.threadId !== submission.threadId ||
-            source.agentId !== submission.agentId ||
-            source.runId !== runId
-              ? MessagingHost.unavailable
-              : messagingRuntime.forTool(source, submission.principal),
-          ),
-          Stream.provideService(CurrentToolFailureObserver, toolFailureObserver),
-          Stream.provideService(RunToolVisibility, runToolVisibility),
-          Stream.provideService(RunToolScheduling, runToolScheduling),
-          Stream.provideService(ContextCompactor, compactor),
-          Stream.provideService(RunContextPreparation, runContextPreparation),
-        ),
-        (event) =>
-          halt(
-            Effect.gen(function* () {
-              // A broker reports hook failures as Tool preflight data. The coordinator's recorded
-              // infrastructure halt must win before any subsequent event commits that Tool outcome.
-              const failure = yield* Ref.get(haltRef);
-
-              if (failure !== undefined) return yield* Effect.fail(failure);
-              yield* handleEvent(event);
+              ),
+        }),
+        Effect.provideService(ModelUsageAccounting, {
+          noteIncompleteUsage: (turn) =>
+            Effect.sync(() => {
+              stagedUnobservedCalls.set(turn, (stagedUnobservedCalls.get(turn) ?? 0) + 1);
             }),
+        }),
+        Effect.provide(ThreadHistory.layer),
+        Effect.provideService(SubagentHost.forTool, (source) =>
+          source.threadId !== submission.threadId ||
+          source.agentId !== submission.agentId ||
+          source.runId !== runId
+            ? SubagentHost.unavailable
+            : workerRuntime.facet(
+                {
+                  source,
+                  policy: agent.definition.policy,
+                  depth: delegationDepth,
+                  ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
+                },
+                submission.principal,
+                submission.submissionId,
+              ),
+        ),
+        Effect.provideService(MessagingHost.forTool, (source) =>
+          source.threadId !== submission.threadId ||
+          source.agentId !== submission.agentId ||
+          source.runId !== runId
+            ? MessagingHost.unavailable
+            : messagingRuntime.forTool(source, submission.principal),
+        ),
+        Effect.provideService(CurrentToolFailureObserver, toolFailureObserver),
+        Effect.provideService(RunToolVisibility, runToolVisibility),
+        Effect.provideService(RunToolScheduling, runToolScheduling),
+        Effect.provideService(ContextCompactor, compactor),
+        Effect.provideService(RunContextPreparation, runContextPreparation),
+        Effect.andThen(checkpoint),
+        // A wrapped Tool/approval failure cannot outrank retained infrastructure authority.
+        // Preserve independent defects, interruptions and already-marked coordinator failures.
+        Effect.catchCause((cause) =>
+          Ref.get(haltRef).pipe(
+            Effect.flatMap((failure) =>
+              failure === undefined
+                ? Effect.failCause(cause)
+                : Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error instanceof CoordinatorHalt ? error : new CoordinatorHalt(failure),
+                    ),
+                  ),
+            ),
           ),
-      ).pipe(
-        Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? preserveToolResults : Effect.void)),
+        ),
         // Retain while the Attempt's services, claim renewal and abort watcher are still live.
         // A failed retention halts the coordinator; it is not a failed Tool or a safe suspension.
         Effect.tapCause((cause) =>
@@ -7966,16 +7582,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             const childPending = agentChildPendingOption(error);
 
             if (Option.isSome(childPending)) {
-              // Durable waitingForChild suspension (spec §12 step 10): every non-waiting
-              // sibling settled before the Run terminated; commit their results as per-call
-              // late-settle batches FIRST so no sibling effect is lost, then let `runAttempt`
-              // own the ledger transition.
-              return commitSiblingLateSettles(childPending.value.children).pipe(
-                Effect.map(() => ({
-                  _tag: "suspendedChildRun" as const,
-                  children: childPending.value.children,
-                })),
-              );
+              // The interpreter committed every closed sibling before reporting suspension.
+              // The Attempt now owns only the ledger transition.
+              return Effect.succeed({
+                _tag: "suspendedChildRun" as const,
+                children: childPending.value.children,
+              });
             }
 
             return Effect.gen(function* () {
@@ -8057,27 +7669,27 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
         return failed;
       }
-      const state = yield* Ref.get(stateRef);
+      const committedCompletion = completionState.committed;
 
-      if (state.completedOutput === undefined) {
+      if (committedCompletion === undefined) {
         return yield* LedgerError.make({
           operation: "runModel",
-          message: "Agent Run stream ended without RunCompleted",
+          message: "Agent Run ended without a committed completion",
         });
       }
 
       const completed: RunPhaseOutcome = {
         _tag: "completed",
-        result: state.completedOutput,
-        ...(state.completedRunDisposition === undefined
+        result: committedCompletion.output,
+        ...(committedCompletion.runDisposition === undefined
           ? {}
-          : { runDisposition: state.completedRunDisposition }),
-        ...(state.completedFinishReason === undefined
+          : { runDisposition: committedCompletion.runDisposition }),
+        ...(committedCompletion.finishReason === undefined
           ? {}
-          : { finishReason: state.completedFinishReason }),
-        ...(state.completedFinishReason === undefined || state.completedExhausted === undefined
+          : { finishReason: committedCompletion.finishReason }),
+        ...(committedCompletion.exhausted === undefined
           ? {}
-          : { exhausted: state.completedExhausted }),
+          : { exhausted: committedCompletion.exhausted }),
         usageSummary: yield* currentUsageSummary(),
         uncommittedModelUsage: uncommittedModelUsage(),
       };

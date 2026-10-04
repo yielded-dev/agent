@@ -1319,7 +1319,7 @@ layer(corruptedCompletionTestLayer)("RUN-032 recovered completion validation", (
         { question: "Create a project." },
         submitOptions(thread, "hostile-receipt-completion-1"),
       );
-      yield* armFailpoint("turn:after-results-append");
+      yield* armFailpoint("terminalize:before-publication");
 
       const crashed = yield* Effect.exit(
         runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),

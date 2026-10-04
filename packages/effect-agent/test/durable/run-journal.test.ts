@@ -123,7 +123,7 @@ const finalTurnAppended: ReadonlyArray<Prompt.Message> = [
 ];
 
 const turnInput = (
-  appended: ReadonlyArray<Prompt.Message>,
+  messages: ReadonlyArray<Prompt.Message>,
   turn = 1,
   runId = RUN_ID,
   usage?: { readonly inputTokens: number; readonly outputTokens: number },
@@ -131,8 +131,24 @@ const turnInput = (
   runId,
   turn,
   turnId: turnIdForRun(runId, turn),
-  appended,
-  toolOperations: appended.flatMap((message) =>
+  responseMessages: messages.filter((message) => message.role !== "tool"),
+  toolResults: messages.flatMap((message) =>
+    message.role !== "tool"
+      ? []
+      : message.content.flatMap((part) =>
+          part.type !== "tool-result"
+            ? []
+            : [
+                {
+                  toolCallId: Schema.decodeSync(ToolCallId)(part.id),
+                  toolName: part.name,
+                  result: part.result,
+                  isFailure: part.isFailure,
+                },
+              ],
+        ),
+  ),
+  toolOperations: messages.flatMap((message) =>
     message.role !== "assistant"
       ? []
       : message.content.flatMap((part) =>
@@ -1121,9 +1137,10 @@ layer(NodeCrypto.layer)("Tool exposure journal", (it) => {
       Effect.gen(function* () {
         const initial = Selection.make({ toolNames: ["initial"] });
         const expected = Selection.make({ toolNames: ["last"] });
+        const facts = turnInput(toolTurnAppended);
 
         const response = yield* turnResponseBatch({
-          ...turnInput(toolTurnAppended),
+          ...facts,
           toolExposure: Snapshot.make({
             exposedToolNames: ["book_flight", "book_lodging"],
             selection: initial,
@@ -1131,11 +1148,12 @@ layer(NodeCrypto.layer)("Tool exposure journal", (it) => {
         });
 
         const results = yield* turnResultsBatch({
-          ...turnInput(toolTurnAppended),
-          toolSelections: new Map([
-            [CALL_ONE, Selection.make({ toolNames: ["first"] })],
-            [CALL_TWO, expected],
-          ]),
+          ...facts,
+          toolResults: facts.toolResults.map((result) => ({
+            ...result,
+            toolSelection:
+              result.toolCallId === CALL_ONE ? Selection.make({ toolNames: ["first"] }) : expected,
+          })),
         });
 
         const first = results.records[0]!;
