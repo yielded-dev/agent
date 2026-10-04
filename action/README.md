@@ -330,7 +330,9 @@ validating the response's usage, model, tier, and reserved bounds. Failed, inter
 requests retain their possible charge; the transport does not automatically retry them.
 
 With web search enabled, each response requests a limit of eight hosted web actions. A response
-that exceeds the admitted bounds stops the review as incomplete and retains its reservation.
+with extra hosted output items produces a count-only warning. Token usage, billable searches,
+and total cost must fit the reservation; exceeding those bounds stops the review as incomplete
+and retains its reservation.
 The model may continue searching or opening pages in later turns. Because preflight cannot count
 retrieved text, admission reserves the full 128,000-token search context at the
 cache-write rate, plus eight $0.01 searches and the output allowance. Settlement charges

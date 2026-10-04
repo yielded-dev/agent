@@ -562,7 +562,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
 
     const webCalls = response.output.filter((item) => item.type === "web_search_call");
 
-    // Missing actions are conservatively charged as searches. Page/find actions are free.
+    // Missing or unknown actions are charged as searches, regardless of status.
+    // Page/find actions have no search fee; their tokens remain metered below.
     const webSearchCalls = webCalls.filter(
       (item) =>
         !Option.exists(decodeWebSearchAction(item.action), (action) => action.type !== "search"),
@@ -573,7 +574,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       chargedPricing === undefined ||
       usage.input_tokens > reservation.inputTokens ||
       usage.output_tokens > reservation.outputTokens ||
-      webCalls.length > reservation.webToolCalls
+      webSearchCalls > reservation.webToolCalls ||
+      (reservation.webToolCalls === 0 && webCalls.length > 0)
     ) {
       yield* Effect.logWarning("Review provider accounting mismatch", {
         modelMatches: response.model === options.model,
@@ -602,6 +604,16 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
           100,
       ) +
       webSearchCalls * WEB_SEARCH_COST_MICROUSD;
+
+    if (cost > reservation.microusd)
+      return yield* refuse("Provider cost exceeded its reservation; retain its full reservation.");
+
+    if (webCalls.length > reservation.webToolCalls)
+      yield* Effect.logWarning("Review provider exceeded the requested hosted action cap", {
+        webToolCalls: webCalls.length,
+        webSearchCalls,
+        requestedMaxToolCalls: reservation.webToolCalls,
+      });
 
     const outputLimitReached =
       reservation.outputLimitedByCost &&
