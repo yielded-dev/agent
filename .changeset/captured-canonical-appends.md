@@ -1,9 +1,9 @@
 ---
-"effect-agent": patch
-"@effect-agent/storage-sql": patch
-"@effect-agent/storage-sqlite": patch
-"@effect-agent/storage-postgres": patch
-"@effect-agent/storage-cloudflare": patch
+"effect-agent": minor
+"@effect-agent/storage-sql": minor
+"@effect-agent/storage-sqlite": minor
+"@effect-agent/storage-postgres": minor
+"@effect-agent/storage-cloudflare": minor
 ---
 
 Capture canonical appends before asynchronous work so later caller mutations cannot change the persisted value or invalidate its digest. Reuse captured record JSON across hashing and SQL writes, and commit eligible readonly responses with their completed results.

@@ -20,7 +20,7 @@ import {
 } from "./SubmissionLedger.ts";
 import { FencedAppendRequest, PreparedAppend, type ThreadStoreFailure } from "./ThreadStore.ts";
 
-/** Authority rechecked atomically with the first canonical settlement publication. */
+/** Authority rechecked atomically on every publication attempt, including canonical replay. */
 export const SettlementPublicationAuthority = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Owned"), ownershipToken: OwnershipToken }),
   Schema.Struct({ _tag: Schema.Literal("Joined"), hostSubmissionId: SubmissionId }),
@@ -57,8 +57,11 @@ export type SettlementPublicationFailure =
 /**
  * One storage owner validates publication authority and appends the terminal fact atomically.
  * Wire preparation precedes the writer; no application callback runs inside its transaction.
- * Existing canonical intent wins replay. Adapters may finalize in this transaction when no
- * recoverable delivery remains; external notification runs outside the transaction.
+ * Existing canonical intent wins an authorized replay. Owned publication always requires a
+ * live token, including after a lost acknowledgement; finalization recovers an already settled
+ * publication without that token. Joined and queued-abort replay retain their recorded authority.
+ * Adapters may finalize in this transaction when no recoverable delivery remains; external
+ * notification runs outside the transaction.
  */
 export class SettlementPublisher extends Context.Service<
   SettlementPublisher,

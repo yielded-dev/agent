@@ -2033,18 +2033,8 @@ const makeServices = Effect.fn("DoSubmissionLedger.makeServices")(function* () {
             Effect.mapError(internalFailure(operation)),
           );
 
-          if (existing !== undefined)
-            return SettlementPublicationResult.make({
-              record: existing.record,
-              tailSequence: thread.tail_sequence,
-              tailDigest,
-              replayed: true,
-            });
-          if (submission.state === "settled")
-            return yield* LedgerError.make({
-              operation,
-              message: "Finalized Submission has no canonical settlement.",
-            });
+          // Replay still requires authority: finalization releases Owned tokens, while
+          // retained host linkage or abort intent can authorize tokenless settled replay.
           switch (request.authority._tag) {
             case "Owned":
               yield* requireOwnership(operation, submission, request.authority.ownershipToken);
@@ -2058,7 +2048,8 @@ const makeServices = Effect.fn("DoSubmissionLedger.makeServices")(function* () {
               break;
             case "Joined": {
               if (
-                submission.state !== "joined" ||
+                (submission.state !== "joined" &&
+                  !(submission.state === "settled" && existing !== undefined)) ||
                 submission.joined_host_submission_id !== request.authority.hostSubmissionId
               )
                 return yield* LedgerError.make({
@@ -2084,7 +2075,8 @@ const makeServices = Effect.fn("DoSubmissionLedger.makeServices")(function* () {
             }
             case "QueuedAbort":
               if (
-                submission.state !== "ready" ||
+                (submission.state !== "ready" &&
+                  !(submission.state === "settled" && existing !== undefined)) ||
                 settlement.outcome !== "aborted" ||
                 Option.isNone(yield* readAbortIntent(operation, request.submissionId)) ||
                 Option.isSome(yield* readOwnership(operation, request.submissionId))
@@ -2099,6 +2091,18 @@ const makeServices = Effect.fn("DoSubmissionLedger.makeServices")(function* () {
                 runId: undefined,
               });
           }
+          if (existing !== undefined)
+            return SettlementPublicationResult.make({
+              record: existing.record,
+              tailSequence: thread.tail_sequence,
+              tailDigest,
+              replayed: true,
+            });
+          if (submission.state === "settled")
+            return yield* LedgerError.make({
+              operation,
+              message: "Finalized Submission has no canonical settlement.",
+            });
           const appended = yield* journal.appendPrepared(prepared.raw);
 
           const committedTailDigest = yield* Schema.decodeEffect(Digest)(appended.tailDigest).pipe(

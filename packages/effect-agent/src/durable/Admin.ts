@@ -165,7 +165,7 @@ export const RECOVERY_DECISION_MEANINGS: Readonly<Record<RecoveryDecision["_tag"
   MarkUnknown:
     "Declared ordinary Tool Calls have no canonical outcome: recovery reconciles each open call and marks the remainder Unknown — never an automatic replay (DUR-009/DUR-017).",
   ResumePendingToolBatch:
-    "A committed tool-declaring response has zero prepared and zero settled records: a claiming worker checks unfinished operation contracts and resumes the declared batch without model re-invocation (durability §15).",
+    "A committed tool-declaring response has unfinished calls whose original operation contracts permit replay: a claiming worker resumes those calls without model re-invocation; unresolved ordinary mutating calls require reconciliation.",
   AwaitApprovalDecision:
     "Canonically requested approvals lack decisions: the lane waits durably for the authorized resolveApproval path (recovery repairs a lost suspend transition from history).",
   ResumeSuspended:

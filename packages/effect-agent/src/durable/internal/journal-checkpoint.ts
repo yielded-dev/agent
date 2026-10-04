@@ -7,13 +7,18 @@ import { Selection } from "../../core/ToolExposure.ts";
 import { RunUsageSummary } from "../../core/Usage.ts";
 import { CanonicalRecordEnvelope, CanonicalSequence, Digest, PersistedJson } from "../Records.ts";
 
+/** Run-wide identity evidence stays bounded without discarding duplicate-detection history. */
+export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
+
 /** Retired accounting is additive; the latest Tool batch always remains replayable verbatim. */
 export class JournalCheckpointSeed extends Schema.Class<JournalCheckpointSeed>(
   "@effect-agent/thread/internal/JournalCheckpointSeed",
 )({
   runId: RunId,
   /** Identities whose settled declarations were removed from the sparse checkpoint. */
-  retiredToolCallIds: Schema.Array(ToolCallId).check(Schema.isMaxLength(4_096)),
+  retiredToolCallIds: Schema.Array(ToolCallId).check(
+    Schema.isMaxLength(MAX_RUN_TOOL_CALL_IDENTITIES),
+  ),
   throughSequence: CanonicalSequence,
   firstSequence: Schema.optionalKey(CanonicalSequence),
   toolSelection: Schema.optionalKey(Selection),

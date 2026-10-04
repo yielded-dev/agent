@@ -1,13 +1,13 @@
 ---
-"effect-agent": patch
-"@effect-agent/platform-node": patch
-"@effect-agent/platform-cloudflare": patch
-"@effect-agent/storage-sql": patch
-"@effect-agent/storage-sqlite": patch
-"@effect-agent/storage-postgres": patch
-"@effect-agent/storage-memory": patch
-"@effect-agent/storage-cloudflare": patch
-"@effect-agent/testing": patch
+"effect-agent": minor
+"@effect-agent/platform-node": minor
+"@effect-agent/platform-cloudflare": minor
+"@effect-agent/storage-sql": minor
+"@effect-agent/storage-sqlite": minor
+"@effect-agent/storage-postgres": minor
+"@effect-agent/storage-memory": minor
+"@effect-agent/storage-cloudflare": minor
+"@effect-agent/testing": minor
 ---
 
 Bind durable Attempts to scoped storage sessions and reduce repeated ownership and tail reads in managed Node hosts.

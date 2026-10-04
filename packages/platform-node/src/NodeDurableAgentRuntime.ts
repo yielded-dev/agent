@@ -51,6 +51,7 @@ import { ThreadReader } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { Context, Crypto, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
+import { CurrentTransformer } from "effect/sql/Statement";
 
 import { applicationInvocationContext } from "./internal/application-context.ts";
 import { ExclusiveSqliteHost } from "./internal/exclusive-host.ts";
@@ -304,22 +305,42 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
       ),
     );
 
-    const services = yield* Layer.build(messageDeliveryStoreLayer()).pipe(
-      Effect.setContext(storageContext),
-    );
+    const sql = Context.get(storageContext, SqlClientService.SqlClient);
+
+    const bind = <A, E>(
+      effect: Effect.Effect<
+        A,
+        E,
+        | SqlClientService.SqlClient
+        | Crypto.Crypto
+        | SqliteStorageConfig
+        | SqliteStorageFailpoint
+        | Scope.Scope
+      >,
+    ) =>
+      Effect.contextWith((live: Context.Context<never>) =>
+        Effect.setContext(
+          effect,
+          Context.merge(
+            Context.omit(CurrentTransformer, sql.transactionService)(live),
+            storageContext,
+          ),
+        ),
+      );
+
+    const services = yield* bind(Layer.build(messageDeliveryStoreLayer()));
 
     const store = Context.get(services, MessageDeliveryStore);
 
     return MessageDeliveryStore.of({
       limits: store.limits,
       maxStoredValueBytes: store.maxStoredValueBytes,
-      insert: (record) => store.insert(record).pipe(Effect.setContext(storageContext)),
-      get: (key) => store.get(key).pipe(Effect.setContext(storageContext)),
-      list: (request) => store.list(request).pipe(Effect.setContext(storageContext)),
-      change: (key, change) => store.change(key, change).pipe(Effect.setContext(storageContext)),
-      due: (now, limit, owner) =>
-        store.due(now, limit, owner).pipe(Effect.setContext(storageContext)),
-      nextDeadline: (owner) => store.nextDeadline(owner).pipe(Effect.setContext(storageContext)),
+      insert: (record) => bind(store.insert(record)),
+      get: (key) => bind(store.get(key)),
+      list: (request) => bind(store.list(request)),
+      change: (key, change) => bind(store.change(key, change)),
+      due: (now, limit, owner) => bind(store.due(now, limit, owner)),
+      nextDeadline: (owner) => bind(store.nextDeadline(owner)),
     });
   }),
 );

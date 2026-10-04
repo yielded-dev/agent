@@ -267,208 +267,225 @@ export const make = Effect.gen(function* () {
   const store = yield* ThreadStore;
   const publisher = yield* SettlementPublisher;
 
-  const claim = Effect.fn("RunStorage.claim")(function* (request: ClaimRequest) {
-    const acquiredAt = yield* Clock.currentTimeMillis;
-    const granted = yield* ledger.claim(request);
-
-    if (Option.isNone(granted)) return Option.none();
-    const claimed = granted.value;
-    let token = claimed.ownershipToken;
-    let renewedAt = acquiredAt;
-    let closed = false;
-    let released = false;
-    const gate = yield* Semaphore.make(1);
-
-    const ownership = bindRunOwnership(
-      ledger,
-      request.threadId,
-      claimed.submissionId,
-      Effect.sync(() => token),
-    );
-
-    const release = gate.withPermits(1)(
+  const claim = Effect.fn("RunStorage.claim")((request: ClaimRequest) =>
+    Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        if (released) return;
-        // Stop writes before releasing database authority; a failed acknowledgement still
-        // allows the Scope finalizer to retry the release with the latest token.
-        closed = true;
-        yield* ownership.release;
-        released = true;
-      }).pipe(Effect.uninterruptible),
-    );
+        const acquiredAt = yield* Clock.currentTimeMillis;
+        const granted = yield* ledger.claim(request);
 
-    yield* Effect.addFinalizer(() =>
-      release.pipe(
-        Effect.catchTag("OwnershipLost", () => Effect.void),
-        Effect.catchTag("LedgerError", () =>
-          Effect.logWarning(
-            "Attempt ownership release failed; lease recovery remains required",
-          ).pipe(Effect.annotateLogs({ submissionId: claimed.submissionId })),
-        ),
-        Effect.ensuring(
-          Effect.sync(() => {
-            closed = true;
-          }),
-        ),
-      ),
-    );
-    if (request.handoff !== undefined && request.handoff.submissionId !== claimed.submissionId)
-      return yield* LedgerError.make({
-        operation: "claim handoff",
-        message: "The submission adapter did not honor the requested handoff",
-      });
-    yield* store.materialize(
-      ThreadMaterialization.make({
-        threadId: request.threadId,
-        producerEpoch: claimed.producerEpoch,
-      }),
-    );
-    const writer = yield* makeRunWriter(store, request.threadId, claimed.producerEpoch);
+        if (Option.isNone(granted)) return Option.none();
+        const claimed = granted.value;
+        let token = claimed.ownershipToken;
+        let renewedAt = acquiredAt;
+        let closed = false;
+        let released = false;
+        const gate = yield* Semaphore.make(1);
 
-    const renew = gate.withPermits(1)(
-      Effect.gen(function* () {
-        if (closed)
-          return yield* OwnershipLost.make({
-            submissionId: claimed.submissionId,
-            actualEpoch: claimed.producerEpoch,
-          });
-        const at = yield* Clock.currentTimeMillis;
-
-        const renewal = yield* ledger.renewOwnership(
-          RenewOwnershipRequest.make({ submissionId: claimed.submissionId, ownershipToken: token }),
+        const ownership = bindRunOwnership(
+          ledger,
+          request.threadId,
+          claimed.submissionId,
+          Effect.sync(() => token),
         );
 
-        token = renewal.ownershipToken;
-        renewedAt = at;
-      }).pipe(Effect.uninterruptible),
-    );
-
-    const owned = <A, E>(effect: Effect.Effect<A, E>) =>
-      gate.withPermits(1)(
-        Effect.suspend((): Effect.Effect<A, E | LedgerError> =>
-          closed
-            ? Effect.fail(
-                LedgerError.make({
-                  operation: "run ownership",
-                  message: "Run storage session is closed",
-                }),
-              )
-            : effect,
-        ),
-      );
-
-    const canonical = <A, E>(effect: Effect.Effect<A, E>) =>
-      gate.withPermits(1)(
-        Effect.suspend((): Effect.Effect<A, E | ThreadStoreError> =>
-          closed
-            ? Effect.fail(
-                ThreadStoreError.make({
-                  operation: "run append",
-                  message: "Run storage session is closed",
-                }),
-              )
-            : effect,
-        ),
-      );
-
-    const session: RunStorageSession = {
-      ...writer,
-      claim: claimed,
-      release,
-      renew,
-      append: (batch) => canonical(writer.append(batch)),
-      checkFence: canonical(writer.checkFence),
-      refresh: canonical(writer.refresh),
-      maintain: (interval) =>
-        Effect.forever(
+        const release = gate.withPermits(1)(
           Effect.gen(function* () {
-            const now = yield* Clock.currentTimeMillis;
+            if (released) return;
+            // Stop writes before releasing database authority; a failed acknowledgement still
+            // allows the Scope finalizer to retry the release with the latest token.
+            closed = true;
+            yield* ownership.release;
+            released = true;
+          }).pipe(Effect.uninterruptible),
+        );
 
-            yield* Effect.sleep(Math.max(0, renewedAt + Duration.toMillis(interval) - now));
-            yield* renew;
-          }),
-        ),
-      markInputApplied: (marker) => owned(ownership.markInputApplied(marker)),
-      claimJoining: (maxCount) => owned(ownership.claimJoining(maxCount)),
-      markJoined: (id, marker) => owned(ownership.markJoined(id, marker)),
-      revertJoining: (id) => owned(ownership.revertJoining(id)),
-      suspend: (reason) =>
-        owned(
-          Effect.gen(function* () {
-            const outcome = yield* ownership.suspend(reason);
-
-            if (outcome === "suspended") {
-              closed = true;
-              released = true;
-            }
-
-            return outcome;
-          }).pipe(
-            Effect.onError(() =>
+        yield* Effect.addFinalizer(() =>
+          release.pipe(
+            Effect.catchTag("OwnershipLost", () => Effect.void),
+            Effect.catchTag("LedgerError", () =>
+              Effect.logWarning(
+                "Attempt ownership release failed; lease recovery remains required",
+              ).pipe(Effect.annotateLogs({ submissionId: claimed.submissionId })),
+            ),
+            Effect.ensuring(
               Effect.sync(() => {
                 closed = true;
               }),
             ),
-            Effect.uninterruptible,
           ),
-        ),
-      publishSettlement: (batch) =>
-        owned<SettlementPublicationResult, SettlementPublicationFailure>(
+        );
+
+        // Acquiring authority and registering its release are atomic with respect to
+        // interruption. Storage initialization belongs to the caller's ordinary lifetime.
+        return yield* restore(
           Effect.gen(function* () {
-            let tail = yield* writer.tail;
+            if (
+              request.handoff !== undefined &&
+              request.handoff.submissionId !== claimed.submissionId
+            )
+              return yield* LedgerError.make({
+                operation: "claim handoff",
+                message: "The submission adapter did not honor the requested handoff",
+              });
+            yield* store.materialize(
+              ThreadMaterialization.make({
+                threadId: request.threadId,
+                producerEpoch: claimed.producerEpoch,
+              }),
+            );
+            const writer = yield* makeRunWriter(store, request.threadId, claimed.producerEpoch);
 
-            for (let retries = 0; ; retries++) {
-              const result = yield* publisher
-                .publish(
-                  SettlementPublication.make({
+            const renew = gate.withPermits(1)(
+              Effect.gen(function* () {
+                if (closed)
+                  return yield* OwnershipLost.make({
                     submissionId: claimed.submissionId,
-                    authority: { _tag: "Owned", ownershipToken: token },
-                    append: FencedAppendRequest.make({
-                      threadId: request.threadId,
-                      producerEpoch: claimed.producerEpoch,
-                      expectedTailSequence: tail.sequence,
-                      expectedTailDigest: tail.digest,
-                      batch,
-                    }),
-                  }),
-                )
-                .pipe(
-                  Effect.catchTag("AppendConflict", (conflict) => {
-                    if (
-                      conflict.reason !== "tail" ||
-                      conflict.actualTailSequence === undefined ||
-                      conflict.actualTailDigest === undefined ||
-                      retries >= 8
-                    )
-                      return Effect.fail(conflict);
-                    tail = {
-                      sequence: conflict.actualTailSequence,
-                      digest: conflict.actualTailDigest,
-                    };
+                    actualEpoch: claimed.producerEpoch,
+                  });
+                const at = yield* Clock.currentTimeMillis;
 
-                    return Effect.succeed(undefined);
+                const renewal = yield* ledger.renewOwnership(
+                  RenewOwnershipRequest.make({
+                    submissionId: claimed.submissionId,
+                    ownershipToken: token,
                   }),
                 );
 
-              if (result === undefined) continue;
-              yield* writer.refresh;
+                token = renewal.ownershipToken;
+                renewedAt = at;
+              }).pipe(Effect.uninterruptible),
+            );
 
-              return result;
-            }
-          }).pipe(
-            Effect.onError(() =>
-              Effect.sync(() => {
-                closed = true;
-              }),
-            ),
-          ),
-        ),
-      reserveChildBudget: (value) => owned(ownership.reserveChildBudget(value)),
-      attachChildToReservation: (value) => owned(ownership.attachChildToReservation(value)),
-    };
+            const owned = <A, E>(effect: Effect.Effect<A, E>) =>
+              gate.withPermits(1)(
+                Effect.suspend((): Effect.Effect<A, E | LedgerError> =>
+                  closed
+                    ? Effect.fail(
+                        LedgerError.make({
+                          operation: "run ownership",
+                          message: "Run storage session is closed",
+                        }),
+                      )
+                    : effect,
+                ),
+              );
 
-    return Option.some(session);
-  }, Effect.uninterruptible);
+            const canonical = <A, E>(effect: Effect.Effect<A, E>) =>
+              gate.withPermits(1)(
+                Effect.suspend((): Effect.Effect<A, E | ThreadStoreError> =>
+                  closed
+                    ? Effect.fail(
+                        ThreadStoreError.make({
+                          operation: "run append",
+                          message: "Run storage session is closed",
+                        }),
+                      )
+                    : effect,
+                ),
+              );
+
+            const session: RunStorageSession = {
+              ...writer,
+              claim: claimed,
+              release,
+              renew,
+              append: (batch) => canonical(writer.append(batch)),
+              checkFence: canonical(writer.checkFence),
+              refresh: canonical(writer.refresh),
+              maintain: (interval) =>
+                Effect.forever(
+                  Effect.gen(function* () {
+                    const now = yield* Clock.currentTimeMillis;
+
+                    yield* Effect.sleep(Math.max(0, renewedAt + Duration.toMillis(interval) - now));
+                    yield* renew;
+                  }),
+                ),
+              markInputApplied: (marker) => owned(ownership.markInputApplied(marker)),
+              claimJoining: (maxCount) => owned(ownership.claimJoining(maxCount)),
+              markJoined: (id, marker) => owned(ownership.markJoined(id, marker)),
+              revertJoining: (id) => owned(ownership.revertJoining(id)),
+              suspend: (reason) =>
+                owned(
+                  Effect.gen(function* () {
+                    const outcome = yield* ownership.suspend(reason);
+
+                    if (outcome === "suspended") {
+                      closed = true;
+                      released = true;
+                    }
+
+                    return outcome;
+                  }).pipe(
+                    Effect.onError(() =>
+                      Effect.sync(() => {
+                        closed = true;
+                      }),
+                    ),
+                    Effect.uninterruptible,
+                  ),
+                ),
+              publishSettlement: (batch) =>
+                owned<SettlementPublicationResult, SettlementPublicationFailure>(
+                  Effect.gen(function* () {
+                    let tail = yield* writer.tail;
+
+                    for (let retries = 0; ; retries++) {
+                      const result = yield* publisher
+                        .publish(
+                          SettlementPublication.make({
+                            submissionId: claimed.submissionId,
+                            authority: { _tag: "Owned", ownershipToken: token },
+                            append: FencedAppendRequest.make({
+                              threadId: request.threadId,
+                              producerEpoch: claimed.producerEpoch,
+                              expectedTailSequence: tail.sequence,
+                              expectedTailDigest: tail.digest,
+                              batch,
+                            }),
+                          }),
+                        )
+                        .pipe(
+                          Effect.catchTag("AppendConflict", (conflict) => {
+                            if (
+                              conflict.reason !== "tail" ||
+                              conflict.actualTailSequence === undefined ||
+                              conflict.actualTailDigest === undefined ||
+                              retries >= 8
+                            )
+                              return Effect.fail(conflict);
+                            tail = {
+                              sequence: conflict.actualTailSequence,
+                              digest: conflict.actualTailDigest,
+                            };
+
+                            return Effect.succeed(undefined);
+                          }),
+                        );
+
+                      if (result === undefined) continue;
+                      yield* writer.refresh;
+
+                      return result;
+                    }
+                  }).pipe(
+                    Effect.onError(() =>
+                      Effect.sync(() => {
+                        closed = true;
+                      }),
+                    ),
+                  ),
+                ),
+              reserveChildBudget: (value) => owned(ownership.reserveChildBudget(value)),
+              attachChildToReservation: (value) => owned(ownership.attachChildToReservation(value)),
+            };
+
+            return Option.some(session);
+          }),
+        );
+      }),
+    ),
+  );
 
   return RunStorage.of({ claim, publishSettlement: publisher.publish });
 });

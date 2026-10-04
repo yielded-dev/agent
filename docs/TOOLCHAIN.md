@@ -629,7 +629,7 @@ and caches are not consumed by the review workflow.
 Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
 builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
 always precedes task-cache restoration.
-Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
+Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs on PRs and manually dispatched branch CI. Main runs are not cancelled
 by newer pushes. GitHub scopes PR caches to each PR's merge ref, so another PR cannot reuse them.
 A new release PR can restore the latest main results only after those jobs finish saving their
 caches. Waiting for those caches alone does not prevent version fields from invalidating whole-file

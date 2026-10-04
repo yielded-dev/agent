@@ -14,6 +14,7 @@ import {
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
 import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
+import { CurrentTransformer } from "effect/sql/Statement";
 
 import { CurrentSqliteStorageVersion } from "./internal/migrations.ts";
 import {
@@ -271,17 +272,12 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
     const exclusive = yield* ExclusiveSqliteHost;
 
+    const live = yield* Effect.context<
+      Crypto.Crypto | SqliteStorageConfig | SqliteStorageFailpoint | Scope.Scope
+    >();
+
     const context = Context.add(
-      Context.pick(
-        Crypto.Crypto,
-        SqliteStorageConfig,
-        SqliteStorageFailpoint,
-        Scope.Scope,
-      )(
-        yield* Effect.context<
-          Crypto.Crypto | SqliteStorageConfig | SqliteStorageFailpoint | Scope.Scope
-        >(),
-      ),
+      Context.pick(Crypto.Crypto, SqliteStorageConfig, SqliteStorageFailpoint, Scope.Scope)(live),
       SqlClientService.SqlClient,
       exclusive.sql,
     );
@@ -315,7 +311,10 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
           Context.add(RunStorage, services.runStorage),
         );
       }),
-      context,
+      Context.merge(
+        Context.omit(CurrentTransformer, exclusive.sql.transactionService)(live),
+        context,
+      ),
     );
   }),
 );

@@ -1,5 +1,5 @@
 ---
-"effect-agent": patch
+"effect-agent": minor
 ---
 
 Run agents through one scoped Effect owner and adapt public streams with bounded backpressure. Commit validated Turn facts directly, retaining completion-tool results before input draining and declared failure values for siblings retained during child suspension.

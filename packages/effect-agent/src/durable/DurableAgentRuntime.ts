@@ -158,6 +158,7 @@ import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import {
   JournalCheckpointSeed,
+  MAX_RUN_TOOL_CALL_IDENTITIES,
   RecoveryCheckpointState,
   RecoveryCheckpointContents,
   ThreadContextCheckpoint,
@@ -4828,6 +4829,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
           let frontier = journalSeed?.frontier;
           const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
+          let retiredIdentitiesExceeded = false;
 
           const retained = yield* Stream.runCollect(
             source.pipe(
@@ -4848,8 +4850,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 switch (payload._tag) {
                   case "ModelResponseRecorded":
                     if (protectedTurns.has(payload.turn)) return true;
-                    for (const operation of payload.toolOperations)
-                      retiredToolCallIds.add(operation.toolCallId);
+                    for (const operation of payload.toolOperations) {
+                      if (retiredToolCallIds.has(operation.toolCallId)) continue;
+                      if (retiredToolCallIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                        retiredIdentitiesExceeded = true;
+                      else retiredToolCallIds.add(operation.toolCallId);
+                    }
 
                     return false;
                   case "ToolCallSettled":
@@ -4866,6 +4872,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               }),
             ),
           );
+
+          if (retiredIdentitiesExceeded)
+            return yield* RunJournalError.make({
+              message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+            });
 
           const ids = new Set<SubmissionId>([submissionId]);
 
@@ -5527,6 +5538,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ...subagentState.declaredNames.keys(),
       ]);
 
+      if (declaredToolIds.size > MAX_RUN_TOOL_CALL_IDENTITIES)
+        return yield* RunJournalError.make({
+          message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+        });
+
       for (const [callId, name] of subagentState.declaredNames) {
         declaredNamesByCallId.set(callId, name);
       }
@@ -5859,6 +5875,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 if (declaredToolIds.has(call.toolCallId) || responseToolIds.has(call.toolCallId))
                   return yield* RunJournalError.make({
                     message: "Tool Call identity is reused within a Run",
+                  });
+                // Preserve every prior identity across compaction and recovery. Refuse the
+                // whole response before dispatch instead of overflowing the checkpoint seed.
+                if (declaredToolIds.size + responseToolIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                  return yield* RunJournalError.make({
+                    message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
                   });
                 const replay = currentContracts[call.toolName];
 

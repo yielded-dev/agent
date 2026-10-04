@@ -1119,18 +1119,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           const existing = yield* canonicalSettlement(stored.row);
           const tail = yield* journal.tail(stored.row.threadId);
 
-          if (existing !== undefined)
-            return SettlementPublicationResult.make({
-              record: existing.record,
-              tailSequence: tail.tailSequence,
-              tailDigest: tail.tailDigest,
-              replayed: true,
-            });
-          if (stored.row.state === "settled")
-            return yield* ledgerError(
-              "publish settlement",
-              "Finalized Submission has no canonical settlement",
-            );
+          // Replay still requires authority: finalization releases Owned tokens, while
+          // retained host linkage or abort intent can authorize tokenless settled replay.
           switch (request.authority._tag) {
             case "Owned":
               if (
@@ -1148,7 +1138,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               break;
             case "Joined": {
               if (
-                stored.row.state !== "joined" ||
+                (stored.row.state !== "joined" &&
+                  !(stored.row.state === "settled" && existing !== undefined)) ||
                 stored.joinedHostSubmissionId !== request.authority.hostSubmissionId
               )
                 return yield* ledgerError(
@@ -1172,7 +1163,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             }
             case "QueuedAbort":
               if (
-                stored.row.state !== "ready" ||
+                (stored.row.state !== "ready" &&
+                  !(stored.row.state === "settled" && existing !== undefined)) ||
                 stored.abortIntent === undefined ||
                 stored.ownership !== undefined ||
                 settlement.outcome !== "aborted"
@@ -1188,6 +1180,18 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               });
               break;
           }
+          if (existing !== undefined)
+            return SettlementPublicationResult.make({
+              record: existing.record,
+              tailSequence: tail.tailSequence,
+              tailDigest: tail.tailDigest,
+              replayed: true,
+            });
+          if (stored.row.state === "settled")
+            return yield* ledgerError(
+              "publish settlement",
+              "Finalized Submission has no canonical settlement",
+            );
           const appended = yield* journal.appendPrepared(prepared);
 
           return SettlementPublicationResult.make({

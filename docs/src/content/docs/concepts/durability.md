@@ -232,7 +232,9 @@ resumes. Unknown work releases execution permits while keeping its accepted obli
 Abort preserves evidence and cannot roll back external effects or replace a settlement that won.
 See [Operations](/guide/operations/).
 
-Application tool call IDs must be unique within a Run; a reused ID is rejected before dispatch.
+Application tool call IDs must be unique within a Run. A durable Run permits at most 4,096 distinct
+application call IDs; reuse or a response exceeding that limit fails with `RunJournalError` before
+that response commits or its tools dispatch.
 The committed model response owns each call's normalized arguments and original execution class,
 kind, and replay hash. There is no separate preparation record. Losing ownership immediately
 after that response commits can therefore leave an ordinary mutating call unknown, even if its

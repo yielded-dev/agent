@@ -6,12 +6,14 @@ import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import {
   BatchId,
   CanonicalBatch,
+  type CanonicalRecordPayload,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
   ObservationOffset,
   PersistedJson,
   ProducerEpoch,
+  RecordEnvelope,
   RecordId,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
@@ -183,39 +185,59 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   producerEpoch: ProducerEpoch,
 }) {}
 
-const AppendHeader = FencedAppendRequest.mapFields((fields) => ({
-  threadId: fields.threadId,
-  expectedTailSequence: fields.expectedTailSequence,
-  expectedTailDigest: fields.expectedTailDigest,
-  producerEpoch: fields.producerEpoch,
-}));
-
 const encodeAppend = Schema.encodeSync(FencedAppendRequest);
-const decodeAppendHeader = Schema.decodeSync(AppendHeader);
-const decodeCapturedBatch = Schema.decodeSync(Schema.fromJsonString(CanonicalBatch));
-const utcPrototype: object = Object.getPrototypeOf(DateTime.makeUnsafe(0));
 const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
 
-/** Freeze a newly decoded graph; caller-owned values never enter this traversal. */
-const freezeCaptured = (root: object): void => {
-  const pending: Array<unknown> = [root];
+/** Own only lifecycle graphs consumed after SQL INSERT suspension; keep Schema/Duration prototypes. */
+const capturePayload = (payload: CanonicalRecordPayload): CanonicalRecordPayload => {
+  const captured = { ...payload };
+
+  Object.setPrototypeOf(captured, Object.getPrototypeOf(payload));
+  switch (payload._tag) {
+    case "UserInputRecorded":
+    case "RunStarted":
+    case "AgentUpdateEmitted":
+    case "ToolApprovalRequested":
+    case "ToolApprovalDecided":
+    case "AbortRequested":
+    case "WorkerInputCompleted":
+    case "WorkerInputRequested":
+    case "WorkerStopRequested":
+    case "SubagentRequested":
+    case "SubagentStarted":
+    case "SubagentJoined":
+    case "SubmissionSettled":
+      break;
+    default:
+      return captured;
+  }
+
+  const pending: Array<{ readonly source: object; readonly target: object }> = [
+    { source: payload, target: captured },
+  ];
 
   while (pending.length > 0) {
-    const value = pending.pop();
+    const next = pending.pop()!;
 
-    if (!Predicate.isObject(value)) continue;
-    // Effect's UTC values lazily cache these parts. Initialize that cache before freezing.
-    if (Object.getPrototypeOf(value) === utcPrototype && DateTime.isDateTime(value))
-      Object.freeze(DateTime.toPartsUtc(value));
-    for (const child of Object.values(value)) pending.push(child);
-    Object.freeze(value);
+    for (const [key, value] of Object.entries(next.source)) {
+      if (!Predicate.isObject(value)) continue;
+      const copy: object = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
+
+      Object.assign(copy, value);
+      Reflect.set(next.target, key, copy);
+      pending.push({ source: value, target: copy });
+    }
   }
+
+  return captured;
 };
 
 /**
  * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
- * is serialized once and shared by the digest, batch and record rows. The detached, frozen
- * graph remains safe when a settlement publisher passes this request through another Layer.
+ * is serialized once and shared by the digest, batch and record rows. Owned shallow metadata
+ * keeps row identities and authority stable; lifecycle payloads are detached where storage
+ * consumes them after suspension. Other nested typed values retain their readonly contract:
+ * adapters persist the captured strings rather than reconstructing bytes from those values.
  * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
  */
 export interface PreparedAppend extends FencedAppendRequest {
@@ -240,10 +262,44 @@ export const PreparedAppend = {
           const encoded = encodeAppend(input);
           const recordJson = encoded.batch.records.map(canonicalJson);
           const batchJson = `{"batchId":${JSON.stringify(encoded.batch.batchId)},"producerId":${JSON.stringify(encoded.batch.producerId)},"records":[${recordJson.join(",")}]}`;
-          const batch = decodeCapturedBatch(batchJson);
-          const request = FencedAppendRequest.make({ ...decodeAppendHeader(encoded), batch });
 
-          freezeCaptured(batch);
+          const captureRecord = (record: RecordEnvelope) =>
+            Object.freeze(
+              new RecordEnvelope(
+                {
+                  ...record,
+                  createdAt: DateTime.makeUnsafe(DateTime.toEpochMillis(record.createdAt)),
+                  payload: Object.freeze(capturePayload(record.payload)),
+                },
+                { disableChecks: true },
+              ),
+            );
+
+          // Encoding validated the typed graph. Retain its typed values without parsing and
+          // decoding our own wire representation or traversing every nested value to freeze it.
+          const batch = Object.freeze(
+            new CanonicalBatch(
+              {
+                ...input.batch,
+                records: Object.freeze([
+                  captureRecord(input.batch.records[0]),
+                  ...input.batch.records.slice(1).map(captureRecord),
+                ]),
+              },
+              { disableChecks: true },
+            ),
+          );
+
+          const request = new FencedAppendRequest(
+            {
+              threadId: input.threadId,
+              expectedTailSequence: input.expectedTailSequence,
+              expectedTailDigest: input.expectedTailDigest,
+              producerEpoch: input.producerEpoch,
+              batch,
+            },
+            { disableChecks: true },
+          );
 
           const records = Object.freeze(
             batch.records.map((canonical, index) =>

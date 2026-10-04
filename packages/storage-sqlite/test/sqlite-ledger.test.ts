@@ -1049,7 +1049,8 @@ describe("SqliteSubmissionLedger", () => {
         expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
         yield* select(undefined);
-        expect((yield* publishOnce).replayed).toBe(true);
+        // Cofinalization released the token; recover the committed receipt through finalization.
+        expect(yield* publishOnce.pipe(Effect.flip)).toMatchObject({ _tag: "OwnershipLost" });
 
         const finalizeOnce = failingLedger(
           Effect.gen(function* () {

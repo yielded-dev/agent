@@ -1720,15 +1720,27 @@ const settlementLifecycle = conformanceCase(
           (pending.state === "settled" && pending.settledOutcome === "completed"),
         "Canonical publication may atomically finalize the same outcome",
       );
-      const replayed = yield* publishSettlement(publication);
+      if (pending.state === "settled")
+        yield* ensure(
+          isOwnershipLost(
+            yield* expectFailure(
+              "Owned replay after atomic finalization",
+              publishSettlement(publication),
+            ),
+          ),
+          "Atomic finalization releases authority; recover its acknowledgement through finalization",
+        );
+      else {
+        const replayed = yield* publishSettlement(publication);
 
-      yield* ensure(
-        replayed.replayed &&
-          recordEquivalent(replayed.record, published.record) &&
-          replayed.tailSequence === published.tailSequence &&
-          replayed.tailDigest === published.tailDigest,
-        "Publication replay must return the immutable winner and current canonical tail",
-      );
+        yield* ensure(
+          replayed.replayed &&
+            recordEquivalent(replayed.record, published.record) &&
+            replayed.tailSequence === published.tailSequence &&
+            replayed.tailDigest === published.tailDigest,
+          "Authorized publication replay must return the immutable winner and current canonical tail",
+        );
+      }
       const settlement = yield* ledger.finalizeSettlement(finalization);
 
       yield* ensure(
@@ -1829,35 +1841,55 @@ const settlementConflicts = conformanceCase(
         }),
       );
 
-      const changedOutcome = yield* publishSettlement(
-        yield* settlementPublication({
-          submissionId: admitted.submissionId,
-          authority: { _tag: "Owned", ownershipToken: BOGUS_TOKEN },
-          receiptId: admitted.receiptId,
-          outcome: "failed",
-          result: { errorTag: "ConformanceFailure", message: "A later candidate failed" },
-        }),
+      const changedOutcome = yield* expectFailure(
+        "publication replay with a revoked token",
+        publishSettlement(
+          yield* settlementPublication({
+            submissionId: admitted.submissionId,
+            authority: { _tag: "Owned", ownershipToken: BOGUS_TOKEN },
+            receiptId: admitted.receiptId,
+            outcome: "failed",
+            result: { errorTag: "ConformanceFailure", message: "A later candidate failed" },
+          }),
+        ),
       );
 
       yield* ensure(
-        changedOutcome.replayed && recordEquivalent(changedOutcome.record, original.record),
-        "A later outcome must adopt the actual canonical winner even without a live original token",
+        isOwnershipLost(changedOutcome),
+        "An existing canonical winner does not authorize publication with a revoked token",
       );
 
-      const changedContent = yield* publishSettlement(
-        yield* settlementPublication({
-          submissionId: admitted.submissionId,
-          authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
-          receiptId: admitted.receiptId,
-          outcome: "completed",
-          result: { attempt: 2 },
-        }),
+      const changedPublication = yield* settlementPublication({
+        submissionId: admitted.submissionId,
+        authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
+        receiptId: admitted.receiptId,
+        outcome: "completed",
+        result: { attempt: 2 },
+      });
+
+      const current = yield* expectSome(
+        "the published Submission",
+        yield* lookupById(admitted.submissionId),
       );
 
-      yield* ensure(
-        changedContent.replayed && recordEquivalent(changedContent.record, original.record),
-        "Different candidate content must not replace the immutable canonical record",
-      );
+      if (current.state === "settled")
+        yield* ensure(
+          isOwnershipLost(
+            yield* expectFailure(
+              "changed publication after atomic finalization",
+              publishSettlement(changedPublication),
+            ),
+          ),
+          "The original token must lose authority when publication atomically finalizes",
+        );
+      else {
+        const changedContent = yield* publishSettlement(changedPublication);
+
+        yield* ensure(
+          changedContent.replayed && recordEquivalent(changedContent.record, original.record),
+          "Different authorized candidate content must not replace the immutable canonical record",
+        );
+      }
 
       const wrongFinalization = yield* expectFailure(
         "finalizing another settlement identity",
@@ -3816,8 +3848,8 @@ const childReservationFencing = conformanceCase(
         "A superseded parent token must not create new reservation state",
       );
 
-      // An identical replay creates nothing, so it short-circuits before the fence exactly
-      // like canonical publication: a recovering caller reads the recorded winner.
+      // An identical child reservation replay creates nothing and may return its recorded
+      // winner before checking the current parent fence.
       const staleReplay = yield* ledger.reserveChildBudget(
         ChildBudgetReservationRequest.make({
           ...requestFields,

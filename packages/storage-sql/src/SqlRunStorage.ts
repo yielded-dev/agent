@@ -37,6 +37,7 @@ import {
   ThreadStoreError,
 } from "effect-agent/thread-store";
 import { SqlClient } from "effect/sql/SqlClient";
+import { CurrentTransformer } from "effect/sql/Statement";
 
 import type { makeSqlJournalKernel } from "./SqlJournal.ts";
 import type { Diagnostic } from "./SqlStorage.ts";
@@ -49,8 +50,9 @@ import { makeSqlThreadStoreKernel, type SqlThreadStoreOptions } from "./SqlThrea
 
 /**
  * Required storage owner for a process-exclusive database. Construction and every operation
- * use a private storage Context. Only claim-scoped state is retained; canonical facts, queued
- * followers, aborts, approvals and reservations remain database-authoritative.
+ * pin private storage services while preserving caller diagnostics and Clock. Only claim-scoped
+ * state is retained; canonical facts, queued followers, aborts, approvals and reservations remain
+ * database-authoritative.
  */
 export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
   S extends Diagnostic,
@@ -73,16 +75,30 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
   const ledgerKernel = yield* makeSqlSubmissionLedgerKernel(journalKernel.journal, ledgerOptions);
   const rawStore = storeKernel.store;
   const rawLedger = ledgerKernel.ledger;
-  const bind = <A, E>(effect: Effect.Effect<A, E>) => Effect.setContext(effect, context);
+  const sql = Context.get(context, SqlClient);
+
+  const storageContext = (live: Context.Context<never>, scope?: Scope.Scope) =>
+    Context.merge(
+      Context.omit(CurrentTransformer, sql.transactionService)(live),
+      scope === undefined ? context : Context.add(context, Scope.Scope, scope),
+    );
+
+  const bind = <A, E>(effect: Effect.Effect<A, E>) =>
+    Effect.contextWith((live: Context.Context<never>) =>
+      Effect.setContext(effect, storageContext(live)),
+    );
 
   const bindStream = <A, E>(stream: Stream.Stream<A, E>) =>
     Stream.fromChannel(
       Channel.fromTransform((upstream, scope) => {
-        const scoped = Context.add(context, Scope.Scope, scope);
+        const scoped = <A, E>(effect: Effect.Effect<A, E>) =>
+          Effect.contextWith((live: Context.Context<never>) =>
+            Effect.setContext(effect, storageContext(live, scope)),
+          );
 
         return Effect.map(
-          Effect.setContext(Channel.toTransform(Stream.toChannel(stream))(upstream, scope), scoped),
-          (pull) => Effect.setContext(pull, scoped),
+          scoped(Channel.toTransform(Stream.toChannel(stream))(upstream, scope)),
+          scoped,
         );
       }),
     );
@@ -641,8 +657,8 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
             });
             owned.digest = result.publication.tailDigest;
           },
-          // Finalization ends ownership, but same-epoch publication replay and joined
-          // follow-up records still use this writer until its Scope or epoch ends.
+          // The publisher checks live authority even on replay. Finalization releases
+          // the token; only joined follow-up appends may keep this same-epoch writer.
           false,
         ).pipe(Effect.map((result) => result.publication)),
       reserveChildBudget: (value) => command(ownership.reserveChildBudget(value)),
@@ -656,20 +672,22 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
     publishSettlement: publisher.publish,
     claim: (request) =>
       Effect.flatMap(Effect.scope, (scope) =>
-        Effect.setContext(
-          Effect.gen(function* () {
-            const finalizer: { release: Effect.Effect<void> } = { release: Effect.void };
+        Effect.contextWith((live: Context.Context<never>) =>
+          Effect.setContext(
+            Effect.gen(function* () {
+              const finalizer: { release: Effect.Effect<void> } = { release: Effect.void };
 
-            const result = yield* gate
-              .withPermits(1)(claimImpl(request, finalizer))
-              .pipe(Effect.exit);
+              const result = yield* gate
+                .withPermits(1)(claimImpl(request, finalizer))
+                .pipe(Effect.exit);
 
-            // A closed Scope runs its finalizer immediately: register only after leaving the gate.
-            yield* Effect.addFinalizer(() => finalizer.release);
+              // A closed Scope runs its finalizer immediately: register only after leaving the gate.
+              yield* Effect.addFinalizer(() => finalizer.release);
 
-            return yield* result;
-          }).pipe(Effect.uninterruptible),
-          Context.add(context, Scope.Scope, scope),
+              return yield* result;
+            }).pipe(Effect.uninterruptible),
+            storageContext(live, scope),
+          ),
         ),
       ),
   });

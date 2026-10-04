@@ -7388,11 +7388,22 @@ const makeTurn = <
         Effect.andThen(started),
         Effect.andThen(disposableResponse),
         Effect.andThen(afterResponse),
-        Effect.catchCause((cause) =>
-          (trace.historyAccepted
-            ? settleTurn(context, trace, turn, turnId, options)
-            : Effect.void
-          ).pipe(Effect.asVoid, Effect.andThen(Effect.failCause(cause))),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterrupts(cause),
+          (cause) =>
+            (trace.historyAccepted
+              ? settleTurn(context, trace, turn, turnId, options)
+              : Effect.void
+            ).pipe(
+              Effect.catchCause((settlementCause) =>
+                Effect.failCause(
+                  Cause.hasInterrupts(settlementCause)
+                    ? settlementCause
+                    : Cause.combine(cause, settlementCause),
+                ),
+              ),
+              Effect.andThen(Effect.failCause(cause)),
+            ),
         ),
       );
 
@@ -7631,11 +7642,22 @@ const toolBatchContinuation = <
       return nextTurn(nextPrompt, turn + 1, toolCalls);
     }),
   ).pipe(
-    Effect.catchCause((cause) =>
-      (trace.historyAccepted
-        ? settleTurn(context, trace, turn, turnId, options)
-        : Effect.void
-      ).pipe(Effect.asVoid, Effect.andThen(Effect.failCause(cause))),
+    Effect.catchCauseIf(
+      (cause) => !Cause.hasInterrupts(cause),
+      (cause) =>
+        (trace.historyAccepted
+          ? settleTurn(context, trace, turn, turnId, options)
+          : Effect.void
+        ).pipe(
+          Effect.catchCause((settlementCause) =>
+            Effect.failCause(
+              Cause.hasInterrupts(settlementCause)
+                ? settlementCause
+                : Cause.combine(cause, settlementCause),
+            ),
+          ),
+          Effect.andThen(Effect.failCause(cause)),
+        ),
     ),
   );
 
@@ -9029,25 +9051,30 @@ function executeWithCompletion<
           return started.pipe(
             Effect.andThen(execution),
             Effect.raceFirst(Deferred.await(context.progressFailure)),
-            Effect.catch((error) =>
-              publishEvent(context, () =>
-                Effect.gen(function* () {
-                  if (error instanceof AgentApprovalPending || error instanceof AgentChildPending) {
-                    return RunSuspended.make({
-                      ...(yield* terminalEventBase(context)),
-                      reason: error.message,
-                      ...(yield* usageReportOf(context)),
-                    });
-                  }
+            Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+              Cause.hasInterrupts(cause)
+                ? Effect.failCause(cause)
+                : publishEvent(context, () =>
+                    Effect.gen(function* () {
+                      if (
+                        error instanceof AgentApprovalPending ||
+                        error instanceof AgentChildPending
+                      ) {
+                        return RunSuspended.make({
+                          ...(yield* terminalEventBase(context)),
+                          reason: error.message,
+                          ...(yield* usageReportOf(context)),
+                        });
+                      }
 
-                  return RunFailed.make({
-                    ...(yield* terminalEventBase(context)),
-                    ...(yield* usageReportOf(context)),
-                    errorTag: errorTag(error),
-                    message: errorMessage(error),
-                  });
-                }),
-              ).pipe(Effect.andThen(Effect.fail(error))),
+                      return RunFailed.make({
+                        ...(yield* terminalEventBase(context)),
+                        ...(yield* usageReportOf(context)),
+                        errorTag: errorTag(error),
+                        message: errorMessage(error),
+                      });
+                    }),
+                  ).pipe(Effect.andThen(Effect.failCause(cause))),
             ),
             Effect.withSpan(`invoke_agent ${context.agentId}`, {
               attributes: {
@@ -9108,7 +9135,9 @@ function executeWithCompletion<
 
             return terminal;
           }).pipe(
-            Effect.catch((error) => {
+            Effect.catchCauseFilter(Cause.findError, (error, cause) => {
+              if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+
               const failed =
                 publish === undefined
                   ? Effect.void
@@ -9127,7 +9156,7 @@ function executeWithCompletion<
                       }),
                     );
 
-              return failed.pipe(Effect.andThen(Effect.fail(error)));
+              return failed.pipe(Effect.andThen(Effect.failCause(cause)));
             }),
           ),
         ),

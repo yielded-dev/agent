@@ -1855,6 +1855,68 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
         });
         const existing = yield* readCanonicalSettlement(operation, submission);
 
+        // Replay still requires authority: finalization releases Owned tokens, while
+        // retained host linkage or abort intent can authorize tokenless settled replay.
+        switch (request.authority._tag) {
+          case "Owned": {
+            yield* requireOwnership(operation, submission, request.authority.ownershipToken);
+            yield* validateCanonicalSettlement(record, {
+              submissionId: request.submissionId,
+              receiptId,
+              ...(settlement.outcome === "aborted" && settlement.runId === undefined
+                ? {}
+                : { runId: runIdForSubmission(request.submissionId) }),
+            });
+            break;
+          }
+          case "Joined": {
+            if (
+              (submission.state !== "joined" &&
+                !(submission.state === "settled" && Option.isSome(existing))) ||
+              submission.joined_host_submission_id !== request.authority.hostSubmissionId
+            )
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined settlement requires the current host linkage.",
+              });
+            const host = yield* requireSubmission(operation, request.authority.hostSubmissionId);
+
+            if (host.thread_id !== submission.thread_id)
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined host belongs to another Thread.",
+              });
+            const canonicalHost = yield* readCanonicalSettlement(operation, host);
+
+            if (Option.isNone(canonicalHost))
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined settlement requires the canonical host settlement.",
+              });
+            yield* validateJoinedSettlement(settlement, canonicalHost.value.settlement);
+            break;
+          }
+          case "QueuedAbort": {
+            if (
+              (submission.state !== "ready" &&
+                !(submission.state === "settled" && Option.isSome(existing))) ||
+              settlement.outcome !== "aborted" ||
+              Option.isNone(yield* readAbortIntent(operation, request.submissionId)) ||
+              Option.isSome(yield* readOwnership(operation, request.submissionId))
+            )
+              return yield* LedgerError.make({
+                operation,
+                message: "Queued abort requires ready, unowned work with a durable abort intent.",
+              });
+            yield* validateCanonicalSettlement(record, {
+              submissionId: request.submissionId,
+              receiptId,
+              runId: undefined,
+            });
+            break;
+          }
+        }
+
         if (Option.isSome(existing)) {
           const threads = yield* journal
             .getThread(request.append.threadId)
@@ -1883,63 +1945,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
             operation,
             message: "A finalized Submission has no canonical settlement.",
           });
-        switch (request.authority._tag) {
-          case "Owned": {
-            yield* requireOwnership(operation, submission, request.authority.ownershipToken);
-            yield* validateCanonicalSettlement(record, {
-              submissionId: request.submissionId,
-              receiptId,
-              ...(settlement.outcome === "aborted" && settlement.runId === undefined
-                ? {}
-                : { runId: runIdForSubmission(request.submissionId) }),
-            });
-            break;
-          }
-          case "Joined": {
-            if (
-              submission.state !== "joined" ||
-              submission.joined_host_submission_id !== request.authority.hostSubmissionId
-            )
-              return yield* LedgerError.make({
-                operation,
-                message: "Joined settlement requires the current host linkage.",
-              });
-            const host = yield* requireSubmission(operation, request.authority.hostSubmissionId);
-
-            if (host.thread_id !== submission.thread_id)
-              return yield* LedgerError.make({
-                operation,
-                message: "Joined host belongs to another Thread.",
-              });
-            const canonicalHost = yield* readCanonicalSettlement(operation, host);
-
-            if (Option.isNone(canonicalHost))
-              return yield* LedgerError.make({
-                operation,
-                message: "Joined settlement requires the canonical host settlement.",
-              });
-            yield* validateJoinedSettlement(settlement, canonicalHost.value.settlement);
-            break;
-          }
-          case "QueuedAbort": {
-            if (
-              submission.state !== "ready" ||
-              settlement.outcome !== "aborted" ||
-              Option.isNone(yield* readAbortIntent(operation, request.submissionId)) ||
-              Option.isSome(yield* readOwnership(operation, request.submissionId))
-            )
-              return yield* LedgerError.make({
-                operation,
-                message: "Queued abort requires ready, unowned work with a durable abort intent.",
-              });
-            yield* validateCanonicalSettlement(record, {
-              submissionId: request.submissionId,
-              receiptId,
-              runId: undefined,
-            });
-            break;
-          }
-        }
 
         const appended = yield* journal
           .appendInTransaction(prepared)
@@ -3170,7 +3175,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
             existing.value,
           );
 
-          // Identical replays short-circuit before the fence, mirroring canonical settlement replay: a
+          // Identical replays short-circuit before the fence, retaining the first committed allocation: a
           // replay creates nothing, so a recovering caller resumes rather than duplicates.
           const identical =
             existing.value.parent_submission_id === validated.parentSubmissionId &&
