@@ -48,7 +48,7 @@ export default defineConfig({
         input: [
           { auto: true },
           "*",
-          { pattern: "!.", base: "workspace" },
+          // Excluding the workspace root (".") would drop every file input.
           { pattern: "!examples/browser-speed", base: "workspace" },
           "src/**",
           "!.wrangler",
