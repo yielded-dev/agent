@@ -213,20 +213,20 @@ export const boundedValueFootprint = (
           skipIndexedProperties = true;
           supportedSpecialObject = true;
         }
-        if (!supportedSpecialObject) {
+        // Probe intrinsic storage only for the exact prototypes this walk accepts. Applying
+        // these branded getters to ordinary JSON objects throws even on the common path.
+        if (!supportedSpecialObject && prototype === ArrayBuffer.prototype) {
           const bufferByteLength = intrinsicArrayBufferByteLength(value);
 
           if (bufferByteLength !== undefined) {
-            if (prototype !== ArrayBuffer.prototype) return false;
             if (!add(bufferByteLength)) return false;
             supportedSpecialObject = true;
           }
         }
-        if (!supportedSpecialObject) {
+        if (!supportedSpecialObject && prototype === urlPrototype) {
           const urlByteLength = intrinsicUrlByteLength(value);
 
           if (urlByteLength !== undefined) {
-            if (prototype !== urlPrototype) return false;
             if (!add(urlByteLength)) return false;
             supportedSpecialObject = true;
           }
