@@ -29,6 +29,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
   session: Pick<BrowserSession, "run">,
   screenshots: boolean,
   image: (value: string) => void,
+  optimizedFrontier = false,
 ) {
   const trace = yield* Trace;
 
@@ -39,6 +40,9 @@ export const makeBrowser = Effect.fnUntraced(function* (
     authorize: () => Effect.void,
     maxActions: 100,
     maxReturnedBytes: 256 * 1024,
+    viewportOnly: optimizedFrontier,
+    settleAfterAction: optimizedFrontier,
+    ...(optimizedFrontier ? { maxWaitMillis: 5_000 } : {}),
   }).pipe(Effect.mapError(asLabError));
 
   const native = <A>(action: (page: Page) => Promise<A>) =>

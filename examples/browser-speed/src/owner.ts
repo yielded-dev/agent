@@ -371,9 +371,14 @@ export const makeOwner = (
         );
       });
 
-      const browser = yield* makeBrowser(session, input.screenshots, (value) => {
-        image = value;
-      });
+      const browser = yield* makeBrowser(
+        session,
+        input.screenshots,
+        (value) => {
+          image = value;
+        },
+        input.scenario !== "wikipedia" && input.grounding !== "jev" && input.mode !== "scripted",
+      );
 
       const identity = yield* current.measure(
         "setup",

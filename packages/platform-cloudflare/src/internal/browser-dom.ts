@@ -2,16 +2,109 @@
 
 import type { Control } from "effect-agent/browser-use";
 
+/** Executor-owned input settling, matching jev-ultrafast's frame/option readiness predicate. */
+export const settleInputDom = (ref: string | undefined) =>
+  new Promise<void>((resolve) => {
+    const field: Element | undefined =
+      ref === undefined
+        ? undefined
+        : Reflect.get(globalThis, "@effect-agent/native-browser")?.get(ref);
+
+    const autocomplete = field?.getAttribute("role") === "combobox";
+    let frames = 0;
+    let stopped = false;
+    let animation = 0;
+
+    const finish = () => {
+      if (stopped) return;
+      stopped = true;
+      clearTimeout(deadline);
+      cancelAnimationFrame(animation);
+      resolve();
+    };
+
+    const deadline = setTimeout(finish, autocomplete ? 200 : 50);
+
+    const ready = () => {
+      if (stopped) return;
+
+      const ids = (field?.getAttribute("aria-controls") || field?.getAttribute("aria-owns") || "")
+        .split(/\s+/)
+        .filter(Boolean);
+
+      const roots = ids.length ? ids.map((id) => document.getElementById(id)) : [document];
+
+      const options = roots.flatMap((root) => [
+        ...(root?.querySelectorAll('[role="option"]') ?? []),
+      ]);
+
+      if (
+        ++frames >= 2 &&
+        (!autocomplete ||
+          options.some((element) => {
+            const rect = element.getBoundingClientRect();
+
+            return (
+              rect.width &&
+              rect.height &&
+              rect.bottom > 0 &&
+              rect.top < innerHeight &&
+              element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+            );
+          }))
+      )
+        finish();
+      else animation = requestAnimationFrame(ready);
+    };
+
+    animation = requestAnimationFrame(ready);
+  });
+
+/** Read-only executor settling: 100 ms without a DOM mutation, bounded by one second. */
+export const settleDom = () =>
+  new Promise<boolean>((resolve) => {
+    let quiet: ReturnType<typeof setTimeout>;
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => finish(true), 100);
+    });
+
+    const finish = (settled: boolean) => {
+      observer.disconnect();
+      clearTimeout(quiet);
+      clearTimeout(deadline);
+      resolve(settled);
+    };
+
+    const deadline = setTimeout(() => finish(false), 1_000);
+
+    observer.observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true,
+    });
+    quiet = setTimeout(() => finish(true), 100);
+  });
+
 /** Executed in the isolated page realm; the page cannot forge the reference registry. */
 export const inspectDom = (
   selector: string | undefined,
   prefix: string,
   maximum: number,
   optionFilter: string | undefined,
+  viewportOnly = false,
 ) => {
   const registry = new Map<string, Element>();
 
+  const nameChecks = new Map<
+    string,
+    { name: string; originalName: string; verify: () => boolean }
+  >();
+
   Reflect.set(globalThis, "@effect-agent/native-browser", registry);
+  Reflect.set(globalThis, "@effect-agent/native-browser-name-checks", nameChecks);
   const roots: Array<Document | ShadowRoot> = [document];
   const visited = new Set<Node>();
   let discoveredElements = 0;
@@ -129,15 +222,62 @@ export const inspectDom = (
       const modal = document.querySelector("dialog:modal");
 
       if (modal !== null && !modal.contains(node) && node.getRootNode() === document) continue;
-      if (candidates.length === maximum) {
-        truncated = true;
-        break;
-      }
       candidates.push(node);
     }
   }
 
-  const controls = candidates.map((node, index) => {
+  let retained = candidates;
+
+  // A popup falls back to off-screen controls only when none of its controls
+  // are in view. Do not restore an entire off-screen calendar beside visible days.
+  if (viewportOnly || candidates.length > maximum) {
+    const visible: Array<HTMLElement> = [];
+    const popupControls = new Map<Element, Array<HTMLElement>>();
+    const visiblePopups = new Set<Element>();
+    const offscreen: Array<HTMLElement> = [];
+
+    const popupSelector =
+      'dialog[open],[role="dialog"],[role="listbox"],[role="menu"],:popover-open';
+
+    for (const node of candidates) {
+      const rect = node.getBoundingClientRect();
+      const x = rect.x + rect.width / 2;
+      const y = rect.y + rect.height / 2;
+
+      const inView = x >= 0 && x < innerWidth && y >= 0 && y < innerHeight;
+
+      if (viewportOnly) {
+        let popup = node.closest(popupSelector);
+
+        if (popup?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+          if (!inView) {
+            const group = popupControls.get(popup) ?? [];
+
+            group.push(node);
+            popupControls.set(popup, group);
+            continue;
+          }
+          while (popup !== null) {
+            visiblePopups.add(popup);
+            popup = popup.parentElement?.closest(popupSelector) ?? null;
+          }
+        }
+      }
+      (inView ? visible : offscreen).push(node);
+    }
+
+    const preferred = [
+      ...visible,
+      ...[...popupControls].flatMap(([popup, nodes]) => (visiblePopups.has(popup) ? [] : nodes)),
+    ];
+
+    retained = (
+      viewportOnly ? (preferred.length > 0 ? preferred : offscreen) : [...visible, ...offscreen]
+    ).slice(0, maximum);
+    truncated ||= candidates.length > retained.length;
+  }
+
+  const controls = retained.map((node, index) => {
     const ref = `${prefix}-${index}`;
     const tag = node.tagName.toLowerCase();
     const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
@@ -278,6 +418,93 @@ export const inspectDom = (
     };
   });
 
+  const names = new Map<string, number>();
+
+  for (const control of controls) names.set(control.name, (names.get(control.name) ?? 0) + 1);
+
+  const explicitLabel = (node: Element) => {
+    const root = node.getRootNode();
+
+    return (
+      node.getAttribute("aria-label") ||
+      (node.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .map((id) =>
+          root instanceof Document || root instanceof ShadowRoot
+            ? (root.getElementById(id)?.textContent ?? "")
+            : "",
+        )
+        .join(" ")
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  for (const [index, control] of controls.entries()) {
+    const node = retained[index];
+
+    if (node === undefined || control.name.length === 0 || (names.get(control.name) ?? 0) < 2)
+      continue;
+    let branch: Element = node;
+
+    for (let scope = node.parentElement; scope !== null; scope = scope.parentElement) {
+      let source: Element | undefined = explicitLabel(scope) ? scope : undefined;
+      let read = () => (source === undefined ? "" : explicitLabel(source));
+
+      if (source === undefined) {
+        for (
+          let previous = branch.previousElementSibling;
+          previous !== null;
+          previous = previous.previousElementSibling
+        ) {
+          if (
+            !(previous instanceof HTMLElement) ||
+            !previous.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ||
+            previous.closest('[inert],[aria-hidden="true"]') !== null ||
+            previous.matches(controlSelector) ||
+            previous.querySelector(controlSelector) !== null ||
+            (previous.childElementCount > 0 &&
+              !previous.matches('h1,h2,h3,h4,h5,h6,caption,figcaption,legend,[role="heading"]'))
+          )
+            continue;
+          const caption = previous.innerText.replace(/\s+/g, " ").trim();
+
+          // Short static leaf text also serves as a caption in unlabelled containers.
+          if (caption.length === 0 || caption.length > 120) continue;
+          source = previous;
+          const captionElement = previous;
+
+          read = () => captionElement.innerText.replace(/\s+/g, " ").trim();
+          break;
+        }
+      }
+      const context = read();
+
+      if (source !== undefined && context.length > 0) {
+        const originalName = control.name;
+        const container = scope;
+        const caption = source;
+
+        control.name = `${originalName} (${context})`.slice(0, 300);
+        // Keep raw-name and contextual identity checks in the isolated realm.
+        // Presentation must not weaken the existing native dispatch guard.
+        nameChecks.set(control.ref, {
+          name: control.name,
+          originalName,
+          verify: () =>
+            container.isConnected &&
+            container.contains(node) &&
+            container.contains(caption) &&
+            (caption === container ||
+              (caption.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) &&
+            read() === context,
+        });
+        break;
+      }
+      branch = scope;
+    }
+  }
+
   return {
     text: text.slice(0, 12_000),
     controls,
@@ -296,6 +523,12 @@ export const checkDom = (
   pointer: boolean,
 ) => {
   if (!node.isConnected || !(node instanceof HTMLElement)) return false;
+
+  const nameCheck: { name: string; originalName: string; verify: () => boolean } | undefined =
+    Reflect.get(globalThis, "@effect-agent/native-browser-name-checks")?.get(expected.ref);
+
+  if (nameCheck !== undefined && (nameCheck.name !== expected.name || !nameCheck.verify()))
+    return false;
   if (scroll) node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
   const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
   const type = associated instanceof HTMLInputElement ? associated.type : "";
@@ -359,7 +592,8 @@ export const checkDom = (
     !node.isContentEditable &&
     !node.hasAttribute("aria-label") &&
     !node.hasAttribute("aria-labelledby") &&
-    node.innerText.replace(/\s+/g, " ").trim().slice(0, 300) !== expected.name
+    node.innerText.replace(/\s+/g, " ").trim().slice(0, 300) !==
+      (nameCheck?.originalName ?? expected.name)
   )
     return false;
   if (

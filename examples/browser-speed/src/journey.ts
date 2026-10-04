@@ -4,6 +4,10 @@ import {
 } from "@effect-agent/platform-cloudflare/browser-session";
 import * as NativeBrowser from "@effect-agent/platform-cloudflare/browser-use";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import {
+  OpenAiClient as CompletionsClient,
+  OpenAiLanguageModel as CompletionsModel,
+} from "@effect/ai-openai-compat";
 import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
 import {
   Clock,
@@ -23,17 +27,92 @@ import * as BrowserUse from "effect-agent/browser-use";
 import { ThreadId } from "effect-agent/identifiers";
 import { InteractiveBrowserTargetUrl } from "effect-agent/interactive-browser";
 import { ToolResultBounds } from "effect-agent/tool-result";
-import { Tool, Toolkit } from "effect/unstable/ai";
-import { FetchHttpClient } from "effect/unstable/http";
+import { LanguageModel, Prompt, Tool, Toolkit } from "effect/unstable/ai";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 import puppeteer from "puppeteer-core";
 import { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { workerExecutor } from "./code-executor.ts";
+import { Board, verify } from "./contract.ts";
+import { fixtureHtml } from "./fixture.ts";
+import { jevDecisionLayer, runJevJourney } from "./jev.ts";
 
 class JourneyError extends Schema.TaggedError<JourneyError>()("JourneyError", {
   stage: Schema.String,
 }) {}
+
+class JourneyProviderError extends Schema.TaggedError<JourneyProviderError>()(
+  "JourneyProviderError",
+  {
+    cause: Schema.Defect(),
+  },
+) {}
+
+const ProviderDiagnostic = Schema.fromJsonString(
+  Schema.Struct({
+    elapsedMillis: Schema.Number,
+    nativeCall: Schema.Natural,
+    spanId: Schema.NullOr(Schema.String),
+    name: Schema.String,
+    message: Schema.String,
+    stack: Schema.NullOr(Schema.String),
+  }),
+);
+
+const ContextRequestRecord = Schema.fromJsonString(
+  Schema.Struct({
+    turn: Schema.Natural,
+    sourceCharacters: Schema.Natural,
+    prompt: Schema.Array(Prompt.Message),
+  }),
+);
+
+const NullServiceTierCompletion = Schema.StructWithRest(
+  Schema.Struct({ service_tier: Schema.Null }),
+  [Schema.Record(Schema.String, Schema.Json)],
+);
+
+// OpenRouter returns null for absent tier metadata; the compatibility client expects omission.
+const openRouterChatClient = (client: HttpClient.HttpClient) =>
+  client.pipe(
+    HttpClient.transformResponse(
+      Effect.flatMap((response) =>
+        response.status !== 200
+          ? Effect.succeed(response)
+          : response.json.pipe(
+              Effect.flatMap((body) => {
+                if (
+                  typeof body !== "object" ||
+                  body === null ||
+                  !Schema.is(NullServiceTierCompletion)(body)
+                )
+                  return Effect.succeed(response);
+
+                const completion: Record<string, Schema.Json> = { ...body };
+
+                delete completion.service_tier;
+                const headers = new Headers(response.headers);
+
+                headers.delete("content-length");
+                headers.delete("content-encoding");
+
+                return Effect.annotateCurrentSpan(
+                  "openrouter.null_service_tier_omitted",
+                  true,
+                ).pipe(
+                  Effect.as(
+                    HttpClientResponse.fromWeb(
+                      response.request,
+                      Response.json(completion, { status: response.status, headers }),
+                    ),
+                  ),
+                );
+              }),
+            ),
+      ),
+    ),
+  );
 
 const JourneyRecord = Schema.fromJsonString(
   Schema.Struct({
@@ -47,12 +126,22 @@ const JourneyRecord = Schema.fromJsonString(
     }),
     model: Schema.String,
     reasoning: Schema.String,
-    path: Schema.Literals(["direct", "plan", "code"]),
+    path: Schema.Literals(["direct", "plan", "code", "jev", "delegate"]),
+    textModel: Schema.NullOr(Schema.String),
+    textProvider: Schema.NullOr(Schema.Literals(["openai", "openrouter"])),
+    textReasoning: Schema.NullOr(Schema.Literals(["none", "low"])),
+    frontierModel: Schema.NullOr(Schema.String),
+    frontierReasoning: Schema.NullOr(Schema.Literal("low")),
+    plannerModel: Schema.NullOr(Schema.String),
+    viewportOnly: Schema.Boolean,
+    optimizedFrontier: Schema.Boolean,
+    jevAssistance: Schema.Boolean,
+    stepBudget: Schema.NullOr(Schema.Natural),
     minimumProbability: Schema.NullOr(Schema.Finite),
     setupMillis: Schema.Natural,
-    tokenBudget: Schema.Int.check(Schema.isGreaterThan(0)),
-    contextTokenLimit: Schema.Natural,
-    serviceTier: Schema.Literal("fast"),
+    tokenBudget: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+    contextTokenLimit: Schema.NullOr(Schema.Natural),
+    serviceTier: Schema.NullOr(Schema.Literal("fast")),
     goal: Schema.String,
     traceId: Schema.String,
     elapsedMillis: Schema.Natural,
@@ -83,7 +172,18 @@ const JourneyRecord = Schema.fromJsonString(
       }),
     ),
     independentTabs: Schema.Array(Schema.Struct({ url: Schema.String, text: Schema.String })),
-    verified: Schema.Literal(false),
+    readyAt: Schema.NullOr(Schema.Finite),
+    readyUnixNanos: Schema.NullOr(Schema.String),
+    agentEndedAt: Schema.Finite,
+    agentEndedUnixNanos: Schema.String,
+    independentSnapshotAt: Schema.NullOr(Schema.Finite),
+    independentSnapshotUnixNanos: Schema.NullOr(Schema.String),
+    independentObservedAt: Schema.Finite,
+    independentObservedUnixNanos: Schema.String,
+    verifiedAt: Schema.NullOr(Schema.Finite),
+    verifiedUnixNanos: Schema.NullOr(Schema.String),
+    board: Schema.NullOr(Board),
+    verified: Schema.Boolean,
   }),
 );
 
@@ -162,6 +262,7 @@ const sdk = <A>(stage: string, action: () => Promise<A>) =>
 
 /** Standalone acceptance host. Inputs and site goals stay outside the library and its prompts. */
 export const journey = Effect.gen(function* () {
+  const plannerModel = "gpt-6-sol";
   const goal = yield* Config.String("BROWSER_JOURNEY_GOAL");
   const engine = yield* Config.String("BROWSER_JOURNEY_ENGINE");
   const output = yield* Config.String("BROWSER_JOURNEY_OUTPUT");
@@ -180,7 +281,52 @@ export const journey = Effect.gen(function* () {
 
   const path = yield* Config.String("BROWSER_JOURNEY_PATH").pipe(
     Config.withDefault("direct"),
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["direct", "plan", "code"]))),
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(Schema.Literals(["direct", "plan", "code", "jev", "delegate"])),
+    ),
+  );
+
+  const compactLoop = path === "jev" || path === "delegate";
+
+  const optimizeFrontier = yield* Config.Boolean("BROWSER_JOURNEY_OPTIMIZED").pipe(
+    Config.withDefault(true),
+  );
+
+  const optimizedFrontier = path === "direct" && optimizeFrontier;
+
+  const assistJev = yield* Config.Boolean("BROWSER_JOURNEY_JEV_ASSISTANCE").pipe(
+    Config.withDefault(true),
+  );
+
+  const jevAssistance = path === "jev" && assistJev;
+
+  const textModel = yield* Config.String("BROWSER_JOURNEY_TEXT_MODEL").pipe(
+    Config.withDefault("gpt-6-luna"),
+  );
+
+  const textProvider = yield* Config.String("BROWSER_JOURNEY_TEXT_PROVIDER").pipe(
+    Config.withDefault("openai"),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["openai", "openrouter"]))),
+  );
+
+  const textReasoning = yield* Config.String("BROWSER_JOURNEY_TEXT_REASONING").pipe(
+    Config.withDefault("low"),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["none", "low"]))),
+  );
+
+  const stepBudget = yield* Config.Number("BROWSER_JOURNEY_STEPS").pipe(
+    Config.withDefault(60),
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+    ),
+  );
+
+  // Fixture and independent oracle only; no scenario-specific information enters Jev's policy.
+  const scenario = yield* Config.String("BROWSER_JOURNEY_SCENARIO").pipe(
+    Config.withDefault("custom"),
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(Schema.Literals(["custom", "create", "triage", "batch"])),
+    ),
   );
 
   const minimumProbability = yield* Config.Number("BROWSER_JOURNEY_CONFIDENCE").pipe(
@@ -205,11 +351,42 @@ export const journey = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const headless = yield* Config.Boolean("BROWSER_JOURNEY_HEADLESS").pipe(Config.withDefault(true));
 
+  const viewportDimension = (name: string, fallback: number) =>
+    Config.Number(name).pipe(
+      Config.withDefault(fallback),
+      Effect.flatMap(
+        Schema.decodeUnknownEffect(
+          Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 4096 })),
+        ),
+      ),
+    );
+
+  const viewport = {
+    width: yield* viewportDimension("BROWSER_JOURNEY_WIDTH", scenario === "custom" ? 1280 : 1100),
+    height: yield* viewportDimension("BROWSER_JOURNEY_HEIGHT", scenario === "custom" ? 900 : 740),
+  };
+
+  // Host-owned independent observer, never an executable supplied by either model.
+  const independentSnapshot = yield* Config.option(
+    Config.String("BROWSER_JOURNEY_INDEPENDENT_SNAPSHOT"),
+  ).pipe(
+    Effect.flatMap((file) =>
+      Option.isSome(file)
+        ? fs.readFileString(file.value).pipe(Effect.map(Option.some))
+        : Effect.succeed(Option.none<string>()),
+    ),
+  );
+
   if (!["local-chromium", "chromium", "kitesurf"].includes(engine))
     return yield* new JourneyError({ stage: "invalid-engine" });
   if (yield* fs.exists(output)) return yield* new JourneyError({ stage: "existing-output" });
   yield* fs.makeDirectory(output, { recursive: true });
   const started = yield* Clock.currentTimeMillis;
+  const clock = yield* Clock.Clock;
+  const origin = clock.monotonicTimeNanosUnsafe();
+  const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
+  let readyAt: number | null = null;
+  let readyUnixNanos: string | null = null;
   const trace = yield* Effect.currentSpan;
   let cleanup = "not-started";
 
@@ -271,7 +448,7 @@ export const journey = Effect.gen(function* () {
 
     if ((engine === "kitesurf") !== identity.revision.includes("@kitesurf"))
       return yield* new JourneyError({ stage: "engine-mismatch" });
-    yield* sdk("viewport", () => page.setViewport({ width: 1280, height: 900 }));
+    yield* sdk("viewport", () => page.setViewport(viewport));
     const setupStarted = yield* Clock.currentTimeMillis;
     const setupUrl = yield* Config.option(Config.String("BROWSER_JOURNEY_SETUP_URL"));
 
@@ -308,8 +485,28 @@ export const journey = Effect.gen(function* () {
 
       yield* sdk("fixture", () => page.setContent(source));
     }
+    if (scenario !== "custom") {
+      yield* sdk("fixture", async () => {
+        await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml())}`, {
+          waitUntil: "domcontentloaded",
+        });
+        const ready = await page.waitForSelector("#edit-1", { visible: true, timeout: 5_000 });
+
+        await ready?.dispose();
+      });
+    }
     const lock = yield* Semaphore.make(1);
     let fenced = false;
+    let nativeCall = 0;
+
+    const privateDiagnostic = (value: string) => {
+      const token = Redacted.value(apiToken);
+
+      return (token.length === 0 ? value : value.replaceAll(token, "[redacted-token]"))
+        .replace(/(?:https?|wss?):\/\/[^\s"'<>]+/g, "[redacted-url]")
+        .replace(/Bearer\s+\S+/gi, "Bearer [redacted-token]")
+        .slice(0, 16_384);
+    };
 
     const terminate = sdk("terminate", () => connection.close()).pipe(
       Effect.ignore,
@@ -333,15 +530,45 @@ export const journey = Effect.gen(function* () {
                 cleanup: "not-requested",
               });
 
+            const call = ++nativeCall;
+
+            const spanId = yield* Effect.currentSpan.pipe(
+              Effect.map((span) => span.spanId),
+              Effect.catch(() => Effect.succeed(null)),
+            );
+
             return yield* Effect.tryPromise({
               try: () => action(page),
-              catch: () =>
-                new BrowserSessionError({
-                  reason: "provider",
-                  dispatch: "possibly-dispatched",
-                  cleanup: "not-requested",
-                }),
+              catch: (cause) => new JourneyProviderError({ cause }),
             }).pipe(
+              Effect.tapError(({ cause }) =>
+                fs.writeFileString(
+                  `${output}/provider-errors.jsonl`,
+                  `${Schema.encodeSync(ProviderDiagnostic)({
+                    elapsedMillis: now(),
+                    nativeCall: call,
+                    spanId,
+                    name: cause instanceof Error ? cause.name : "NonErrorRejection",
+                    message: privateDiagnostic(
+                      cause instanceof Error ? cause.message : String(cause),
+                    ),
+                    stack:
+                      cause instanceof Error && cause.stack !== undefined
+                        ? privateDiagnostic(cause.stack)
+                        : null,
+                  })}\n`,
+                  { flag: "a" },
+                ),
+              ),
+              // Provider text stays in private run artifacts, never the model-visible error.
+              Effect.mapError(
+                () =>
+                  new BrowserSessionError({
+                    reason: "provider",
+                    dispatch: "possibly-dispatched",
+                    cleanup: "not-requested",
+                  }),
+              ),
               Effect.timeoutOrElse({
                 duration: options?.timeoutMillis ?? 30_000,
                 orElse: () =>
@@ -380,25 +607,32 @@ export const journey = Effect.gen(function* () {
 
     const controller = yield* NativeBrowser.make(session, {
       authorize: (command, context) =>
-        (allowed(
-          command.kind === "navigate"
-            ? command.request.url
-            : command.kind === "select-tab"
-              ? context.tabUrl
-              : context.pageUrl,
-        ) ||
-          (context.pageUrl === undefined && command.kind === "observe" && allowed(page.url()))) &&
-        (!("frameUrl" in context) || allowed(context.frameUrl))
-          ? Effect.void
-          : Effect.fail(
-              new BrowserUse.BrowserUseError({
-                code: "invalid",
-                message: "Host URL policy refused this browser operation.",
-                dispatch: "not-dispatched",
-              }),
-            ),
+        Effect.gen(function* () {
+          const permitted =
+            (allowed(
+              command.kind === "navigate"
+                ? command.request.url
+                : command.kind === "select-tab"
+                  ? context.tabUrl
+                  : context.pageUrl,
+            ) ||
+              (context.pageUrl === undefined &&
+                command.kind === "observe" &&
+                allowed(page.url()))) &&
+            (!("frameUrl" in context) || allowed(context.frameUrl));
+
+          if (!permitted)
+            return yield* new BrowserUse.BrowserUseError({
+              code: "invalid",
+              message: "Host URL policy refused this browser operation.",
+              dispatch: "not-dispatched",
+            });
+        }),
       maxActions: 200,
       maxReturnedBytes: 128 * 1024,
+      viewportOnly: compactLoop || optimizedFrontier,
+      settleAfterAction: compactLoop ? "input" : optimizedFrontier,
+      ...(optimizedFrontier ? { maxWaitMillis: 5_000 } : {}),
     });
 
     const modelLayer = OpenAiLanguageModel.model(model, {
@@ -414,9 +648,88 @@ export const journey = Effect.gen(function* () {
       Layer.provide(FetchHttpClient.layer),
     );
 
+    const textLayer = (
+      textProvider === "openrouter"
+        ? CompletionsModel.model(textModel, {
+            max_tokens: 1_024,
+            response_format: { type: "json_object" },
+            reasoning: textReasoning === "none" ? { enabled: false } : { effort: textReasoning },
+          }).pipe(
+            Layer.provide(
+              CompletionsClient.layerConfig({
+                apiKey: Config.Redacted("OPENROUTER_API_KEY"),
+                apiUrl: Config.succeed("https://openrouter.ai/api/v1"),
+                transformClient: openRouterChatClient,
+              }),
+            ),
+          )
+        : OpenAiLanguageModel.model(textModel, {
+            max_output_tokens: 1_024,
+            reasoning: { effort: textReasoning },
+          }).pipe(
+            Layer.provide(OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") })),
+          )
+    ).pipe(Layer.provide(FetchHttpClient.layer));
+
     const threadId = ThreadId.make(crypto.randomUUID());
 
     const result = yield* Effect.gen(function* () {
+      if (compactLoop)
+        return yield* Effect.gen(function* () {
+          const frontier = yield* LanguageModel.LanguageModel;
+
+          const planner =
+            path === "delegate" || !jevAssistance
+              ? frontier
+              : yield* LanguageModel.LanguageModel.pipe(
+                  Effect.provide(
+                    OpenAiLanguageModel.model(plannerModel, {
+                      max_output_tokens: 4_096,
+                      reasoning: { effort: "low" },
+                    }).pipe(
+                      Layer.provide(
+                        OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") }),
+                      ),
+                      Layer.provide(FetchHttpClient.layer),
+                    ),
+                  ),
+                );
+
+          return yield* runJevJourney({
+            driver: path === "delegate" ? "delegate" : "jev",
+            assistance: jevAssistance,
+            goal,
+            output,
+            textModel,
+            textProvider,
+            textReasoning,
+            frontier,
+            frontierModel: "gpt-6-luna",
+            frontierReasoning: "low",
+            planner,
+            plannerModel,
+            stepBudget,
+            session,
+            ready: () => {
+              readyAt = now();
+              readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
+            },
+          }).pipe(Effect.provide([controller.layer, jevDecisionLayer(output), textLayer]));
+        }).pipe(
+          Effect.provide(
+            OpenAiLanguageModel.model("gpt-6-luna", {
+              max_output_tokens: 4_096,
+              reasoning: { effort: "low" },
+            }).pipe(
+              Layer.provide(
+                OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") }),
+              ),
+              Layer.provide(FetchHttpClient.layer),
+            ),
+          ),
+          Effect.timeout("8 minutes"),
+          Effect.exit,
+        );
       const store = yield* Thread.Store;
 
       const run =
@@ -440,11 +753,27 @@ export const journey = Effect.gen(function* () {
                 ),
                 Effect.exit,
               )
-            : AgentRuntime.run(agent, goal, { threadId }).pipe(
+            : AgentRuntime.run(agent, goal, {
+                threadId,
+                context: {
+                  prepare: ({ source, turn }) =>
+                    Effect.gen(function* () {
+                      yield* fs.writeFileString(
+                        `${output}/context-requests.jsonl`,
+                        `${Schema.encodeSync(ContextRequestRecord)({ turn, sourceCharacters: JSON.stringify(source).length, prompt: source.content })}\n`,
+                        { flag: "a" },
+                      );
+
+                      return { prompt: source };
+                    }),
+                },
+              }).pipe(
                 Effect.provide(browser.layer().pipe(Layer.provide(controller.layer))),
                 Effect.exit,
               );
 
+      readyAt = now();
+      readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
       const result = yield* run;
 
       yield* store.export(threadId).pipe(
@@ -464,6 +793,24 @@ export const journey = Effect.gen(function* () {
         ),
       ),
     );
+
+    const agentEndedAt = now();
+    const agentEndedUnixNanos = clock.currentTimeNanosUnsafe().toString();
+    let independentSnapshotAt: number | null = null;
+    let independentSnapshotUnixNanos: string | null = null;
+
+    if (Option.isSome(independentSnapshot)) {
+      const snapshot = yield* sdk("independent-snapshot", () =>
+        page.evaluate(independentSnapshot.value),
+      ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.Json)));
+
+      independentSnapshotAt = now();
+      independentSnapshotUnixNanos = clock.currentTimeNanosUnsafe().toString();
+      yield* fs.writeFileString(
+        `${output}/independent-snapshot.json`,
+        Schema.encodeSync(Schema.fromJsonString(Schema.Json))(snapshot),
+      );
+    }
 
     const evidence = yield* sdk("independent-observation", () =>
       page.evaluate(() => ({
@@ -505,6 +852,24 @@ export const journey = Effect.gen(function* () {
       })),
     ).pipe(Effect.result);
 
+    const independentObservedAt = now();
+    const independentObservedUnixNanos = clock.currentTimeNanosUnsafe().toString();
+
+    const board =
+      scenario === "custom"
+        ? null
+        : yield* sdk("independent-board", () =>
+            page.$eval("#board-state", (element) => element.textContent ?? ""),
+          ).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Board))),
+            Effect.option,
+            Effect.map(Option.getOrNull),
+          );
+
+    const verified = board !== null && verify(scenario, board);
+    const verifiedAt = verified ? now() : null;
+    const verifiedUnixNanos = verified ? clock.currentTimeNanosUnsafe().toString() : null;
+
     const tabEvidence = yield* sdk("independent-tabs", async () => {
       const pages = await page.browserContext().pages();
       const values: Array<{ url: string; text: string }> = [];
@@ -530,14 +895,24 @@ export const journey = Effect.gen(function* () {
     const json = Schema.encodeSync(JourneyRecord)({
       engine,
       identity,
-      model,
-      reasoning,
+      model: path === "jev" ? "jev-latest" : path === "delegate" ? "gpt-6-luna" : model,
+      reasoning: path === "jev" ? "none" : path === "delegate" ? "low" : reasoning,
       path,
+      textModel: compactLoop ? textModel : null,
+      textProvider: compactLoop ? textProvider : null,
+      textReasoning: compactLoop ? textReasoning : null,
+      frontierModel: path === "delegate" || jevAssistance ? "gpt-6-luna" : null,
+      frontierReasoning: path === "delegate" || jevAssistance ? "low" : null,
+      plannerModel: jevAssistance ? plannerModel : null,
+      viewportOnly: compactLoop || optimizedFrontier,
+      optimizedFrontier,
+      jevAssistance,
+      stepBudget: compactLoop ? stepBudget : null,
       minimumProbability: path === "plan" ? minimumProbability : null,
       setupMillis,
-      tokenBudget,
-      contextTokenLimit: definition.policy.contextTokenLimit,
-      serviceTier: "fast",
+      tokenBudget: compactLoop ? null : tokenBudget,
+      contextTokenLimit: compactLoop ? null : definition.policy.contextTokenLimit,
+      serviceTier: compactLoop ? null : "fast",
       goal,
       traceId: trace.traceId,
       elapsedMillis: (yield* Clock.currentTimeMillis) - started,
@@ -551,7 +926,18 @@ export const journey = Effect.gen(function* () {
           : null,
       independentObservation: evidence._tag === "Success" ? evidence.success : null,
       independentTabs: tabEvidence._tag === "Success" ? tabEvidence.success : [],
-      verified: false,
+      readyAt,
+      readyUnixNanos,
+      agentEndedAt,
+      agentEndedUnixNanos,
+      independentSnapshotAt,
+      independentSnapshotUnixNanos,
+      independentObservedAt,
+      independentObservedUnixNanos,
+      verifiedAt,
+      verifiedUnixNanos,
+      board,
+      verified,
     });
 
     yield* fs.writeFileString(`${output}/result.json`, json);

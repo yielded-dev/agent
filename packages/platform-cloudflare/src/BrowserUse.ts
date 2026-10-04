@@ -24,7 +24,14 @@ import {
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import type { BrowserSession } from "./BrowserSession.ts";
-import { checkDom, checkFrameDom, inspectDom, waitDom } from "./internal/browser-dom.ts";
+import {
+  checkDom,
+  checkFrameDom,
+  inspectDom,
+  settleDom,
+  settleInputDom,
+  waitDom,
+} from "./internal/browser-dom.ts";
 
 export type Command =
   | { readonly kind: "observe" | "screenshot" }
@@ -47,6 +54,12 @@ export interface Options<R = never> {
   ) => Effect.Effect<void, BrowserUseError, R>;
   readonly maxActions: number;
   readonly maxReturnedBytes: number;
+  /** Prefer viewport controls; retain off-screen popups only if none of their controls are in view. Defaults to false. */
+  readonly viewportOnly?: boolean;
+  /** True waits for 100 ms of DOM quiet (at most 1 s). "input" waits two frames/50 ms, or visible combobox options/200 ms. Defaults to false. */
+  readonly settleAfterAction?: boolean | "input";
+  /** Cap condition waits and return a fresh observation on a condition timeout. Omit to retain timeout errors. */
+  readonly maxWaitMillis?: number;
 }
 
 /** Host-only current SDK metadata. Opaque refs never replace origin or target authority. */
@@ -62,6 +75,9 @@ export interface AuthorizationContext {
 const Limits = Schema.Struct({
   maxActions: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1_000 })),
   maxReturnedBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 * 1024 * 1024 })),
+  viewportOnly: Schema.Boolean,
+  settleAfterAction: Schema.Union([Schema.Boolean, Schema.Literal("input")]),
+  maxWaitMillis: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 15_000 }))),
 });
 
 const invalid = (message: string) =>
@@ -78,7 +94,8 @@ const observedUrl = (url: string): string => {
 };
 
 /** One application-neutral controller over an existing scoped native attachment.
- * No allocation, model, provider choice, automatic retry, or arbitrary page JS is exposed.
+ * No allocation, model, provider choice, input retry, or arbitrary page JS is exposed.
+ * Reads re-authorize at most five times when page/frame URLs change during authorization.
  * References expire on inspection; outstanding native work retains the session's fencing.
  */
 export const make = Effect.fnUntraced(function* <R>(
@@ -93,6 +110,9 @@ export const make = Effect.fnUntraced(function* <R>(
   const limits = yield* Schema.decodeEffect(Limits)({
     maxActions: options.maxActions,
     maxReturnedBytes: options.maxReturnedBytes,
+    viewportOnly: options.viewportOnly ?? false,
+    settleAfterAction: options.settleAfterAction ?? false,
+    maxWaitMillis: options.maxWaitMillis ?? null,
   }).pipe(Effect.mapError(() => invalid("Invalid browser controller limits.")));
 
   const lock = yield* Semaphore.make(1);
@@ -212,7 +232,7 @@ export const make = Effect.fnUntraced(function* <R>(
     command: Command,
     action: (page: Page, stage: (name: string) => void) => Promise<A>,
     timeoutMillis?: number,
-    phase?: "prepare" | "input",
+    phase?: "prepare" | "input" | "settle",
   ) =>
     Effect.gen(function* () {
       if (pendingInput !== undefined && phase !== "input" && command.kind !== "respond-dialog")
@@ -223,82 +243,107 @@ export const make = Effect.fnUntraced(function* <R>(
       let authorizedUrl: string | undefined;
       let authorizedTabUrl: string | undefined;
       let authorizedFrame: { ref: string; url: string | undefined } | undefined;
+      const read = ["observe", "inspect", "wait", "screenshot"].includes(command.kind);
 
-      return yield* session.run(
-        Effect.suspend(() => {
-          const page = activePage ?? lastNativePage;
+      for (let attempt = 0; ; attempt++) {
+        let authorizationChanged = false;
 
-          const target =
-            command.kind === "act"
-              ? targets.get(command.action.ref)
-              : command.kind === "scroll" && command.request.ref !== undefined
-                ? targets.get(command.request.ref)
-                : undefined;
+        const result = yield* session
+          .run(
+            Effect.suspend(() => {
+              const page = activePage ?? lastNativePage;
 
-          authorizedUrl = page?.url();
-          authorizedTabUrl =
-            command.kind === "select-tab" ? tabs.get(command.request.ref)?.url() : undefined;
+              const target =
+                command.kind === "act"
+                  ? targets.get(command.action.ref)
+                  : command.kind === "scroll" && command.request.ref !== undefined
+                    ? targets.get(command.request.ref)
+                    : undefined;
 
-          const frameRef =
-            target?.frame ??
-            (command.kind === "inspect" || command.kind === "wait"
-              ? command.request.frame
-              : undefined);
+              authorizedUrl = page?.url();
+              authorizedTabUrl =
+                command.kind === "select-tab" ? tabs.get(command.request.ref)?.url() : undefined;
 
-          authorizedFrame =
-            frameRef === undefined
-              ? undefined
-              : {
-                  ref: frameRef,
-                  url: page === undefined ? undefined : resolveFrame(page, frameRef)?.url(),
-                };
+              const frameRef =
+                target?.frame ??
+                (command.kind === "inspect" || command.kind === "wait"
+                  ? command.request.frame
+                  : undefined);
 
-          return authorize(command, {
-            ...(authorizedUrl === undefined ? {} : { pageUrl: authorizedUrl }),
-            ...(authorizedTabUrl === undefined ? {} : { tabUrl: authorizedTabUrl }),
-            ...(authorizedFrame === undefined ? {} : { frameUrl: authorizedFrame.url }),
-            ...(target === undefined
-              ? {}
-              : {
-                  target: target.control,
-                }),
-          });
-        }).pipe(
-          Effect.mapError(
-            (error) =>
-              new BrowserUseError({
-                code: error.code,
-                message: error.message,
-                dispatch: "not-dispatched",
-              }),
-          ),
-        ),
-        async (page) => {
-          attach(page);
-          const selected = activePage ?? page;
+              authorizedFrame =
+                frameRef === undefined
+                  ? undefined
+                  : {
+                      ref: frameRef,
+                      url: page === undefined ? undefined : resolveFrame(page, frameRef)?.url(),
+                    };
 
-          lastNativePage = page;
+              return authorize(command, {
+                ...(authorizedUrl === undefined ? {} : { pageUrl: authorizedUrl }),
+                ...(authorizedTabUrl === undefined ? {} : { tabUrl: authorizedTabUrl }),
+                ...(authorizedFrame === undefined ? {} : { frameUrl: authorizedFrame.url }),
+                ...(target === undefined
+                  ? {}
+                  : {
+                      target: target.control,
+                    }),
+              });
+            }).pipe(
+              Effect.mapError(
+                (error) =>
+                  new BrowserUseError({
+                    code: error.code,
+                    message: error.message,
+                    dispatch: "not-dispatched",
+                  }),
+              ),
+            ),
+            async (page) => {
+              attach(page);
+              const selected = activePage ?? page;
 
-          if (selected.isClosed() || selected.browserContext() !== page.browserContext())
-            throw new Error("Observed tab is unavailable");
-          if (authorizedUrl !== undefined && selected.url() !== authorizedUrl)
-            throw new Error("Page changed during authorization");
-          if (
-            authorizedFrame !== undefined &&
-            resolveFrame(selected, authorizedFrame.ref)?.url() !== authorizedFrame.url
+              lastNativePage = page;
+
+              if (selected.isClosed() || selected.browserContext() !== page.browserContext())
+                throw new Error("Observed tab is unavailable");
+              if (authorizedUrl !== undefined && selected.url() !== authorizedUrl) {
+                authorizationChanged = true;
+                throw new Error("Page changed during authorization");
+              }
+              if (
+                authorizedFrame !== undefined &&
+                resolveFrame(selected, authorizedFrame.ref)?.url() !== authorizedFrame.url
+              ) {
+                authorizationChanged = true;
+                throw new Error("Frame changed during authorization");
+              }
+              if (
+                command.kind === "select-tab" &&
+                tabs.get(command.request.ref)?.url() !== authorizedTabUrl
+              )
+                throw new Error("Tab changed during authorization");
+              attach(selected);
+
+              return action(selected, (name) => span.attribute("browser.native.stage", name));
+            },
+            timeoutMillis === undefined ? undefined : { timeoutMillis },
           )
-            throw new Error("Frame changed during authorization");
-          if (
-            command.kind === "select-tab" &&
-            tabs.get(command.request.ref)?.url() !== authorizedTabUrl
-          )
-            throw new Error("Tab changed during authorization");
-          attach(selected);
+          .pipe(Effect.result);
 
-          return action(selected, (name) => span.attribute("browser.native.stage", name));
-        },
-        timeoutMillis === undefined ? undefined : { timeoutMillis },
-      );
+        if (result._tag === "Success") return result.success;
+        if (
+          !read ||
+          !authorizationChanged ||
+          attempt >= 4 ||
+          result.failure._tag !== "BrowserSessionError" ||
+          result.failure.reason !== "provider" ||
+          result.failure.cleanup !== "not-requested"
+        )
+          return yield* result.failure;
+
+        span.attribute("browser.read.authorization_retries", attempt + 1);
+        yield* Effect.sleep("20 millis");
+      }
     }).pipe(
       Effect.mapError((error) => {
         if (error._tag === "BrowserUseError") return error;
@@ -445,6 +490,7 @@ export const make = Effect.fnUntraced(function* <R>(
               `r${scopeId}-${generation}-${controls.length}`,
               256 - controls.length,
               request.optionFilter,
+              limits.viewportOnly,
             );
 
         let result = Schema.decodeUnknownSync(Observation)(await read());
@@ -534,12 +580,46 @@ export const make = Effect.fnUntraced(function* <R>(
     return point;
   };
 
+  // Separate settling from the following read's authorization snapshot.
+  const settle = (input?: { readonly frame: string; readonly ref: string }) =>
+    Effect.suspend(() =>
+      limits.settleAfterAction
+        ? native(
+            { kind: "observe" },
+            async (page) => {
+              const frame =
+                limits.settleAfterAction === "input" && input !== undefined
+                  ? resolveFrame(page, input.frame)
+                  : page.mainFrame();
+
+              if (frame === undefined) return;
+
+              if (limits.settleAfterAction === "input")
+                await frame.isolatedRealm().evaluate(settleInputDom, input?.ref);
+              else await frame.isolatedRealm().evaluate(settleDom);
+            },
+            undefined,
+            "settle",
+          ).pipe(Effect.asVoid)
+        : Effect.void,
+    );
+
   const after = Effect.fnUntraced(function* (
     completed: number,
     error: string | null,
     dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]>,
     frame?: string,
+    alreadySettled = false,
   ) {
+    if (dispatch === "acknowledged" && !alreadySettled)
+      yield* settle().pipe(
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            error ??= failure.message;
+          }),
+        ),
+      );
+
     const observation = yield* inspect(frame === undefined ? {} : { frame }, {
       kind: "observe",
     }).pipe(
@@ -761,8 +841,7 @@ export const make = Effect.fnUntraced(function* <R>(
             }
 
             dispatch = "unknown";
-            await page.keyboard.press("Backspace");
-            await element.type(value.value);
+            await page.keyboard.sendCharacter(value.value);
           }
 
           dispatch = "acknowledged";
@@ -811,6 +890,19 @@ export const make = Effect.fnUntraced(function* <R>(
     if (result.success !== "unknown") clearInput();
     if (result.success === "not-dispatched" && refusal !== undefined)
       return yield* invalid(refusal);
+    if (result.success === "acknowledged")
+      yield* settle(
+        value.kind === "fill" ? { frame: target.frame, ref: value.ref } : undefined,
+      ).pipe(
+        Effect.mapError(
+          (failure) =>
+            new BrowserUseError({
+              code: failure.code,
+              message: failure.message,
+              dispatch: "acknowledged",
+            }),
+        ),
+      );
 
     return result.success;
   });
@@ -854,7 +946,7 @@ export const make = Effect.fnUntraced(function* <R>(
       "browser.dispatch": dispatch,
     });
 
-    return yield* after(completed, error, dispatch, frame);
+    return yield* after(completed, error, dispatch, frame, true);
   });
 
   const navigate = Effect.fnUntraced(function* (request: typeof NavigateRequest.Type) {
@@ -889,11 +981,10 @@ export const make = Effect.fnUntraced(function* <R>(
       { kind: "scroll", request },
       async (page) => {
         if (target === undefined) {
-          await page.evaluate(
-            (x, y) => scrollBy({ left: x, top: y, behavior: "instant" }),
-            request.deltaX,
-            request.deltaY,
-          );
+          const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+
+          await page.mouse.move(viewport.width / 2, viewport.height / 2);
+          await page.mouse.wheel({ deltaX: request.deltaX, deltaY: request.deltaY });
 
           return true;
         }
@@ -958,17 +1049,27 @@ export const make = Effect.fnUntraced(function* <R>(
 
       if (frame === undefined) throw new Error("Frame detached");
 
-      const handle = await frame
-        .isolatedRealm()
-        .waitForFunction(
+      try {
+        const handle = await frame.isolatedRealm().waitForFunction(
           waitDom,
-          { timeout: request.timeoutMillis, polling: "raf" },
+          {
+            timeout: Math.min(request.timeoutMillis, limits.maxWaitMillis ?? request.timeoutMillis),
+            polling: "raf",
+          },
           request.selector,
           request.state,
           request.text,
         );
 
-      await handle.dispose();
+        await handle.dispose();
+      } catch (error) {
+        if (
+          limits.maxWaitMillis === null ||
+          !(error instanceof Error) ||
+          error.name !== "TimeoutError"
+        )
+          throw error;
+      }
     });
 
     return yield* inspect(frameRef === undefined ? {} : { frame: frameRef });
@@ -1000,6 +1101,7 @@ export const make = Effect.fnUntraced(function* <R>(
           : null,
       dispatch,
       frame,
+      true,
     );
   });
 

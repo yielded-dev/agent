@@ -203,7 +203,7 @@ export const App = () => {
   const [wikiStart, setWikiStart] = useState(defaultChallenge.start);
   const [wikiTarget, setWikiTarget] = useState(defaultChallenge.target);
   const [prompt, setPrompt] = useState<string>(scenarios[0].prompt);
-  const [mode, setMode] = useState<typeof Mode.Type>("agent");
+  const [mode, setMode] = useState<typeof Mode.Type>("batched");
   const [model, setModel] = useState<ModelId | "all">("gpt-6-sol");
   const [engine, setEngine] = useState<typeof BrowserEngine.Type | "all">("chromium");
   const [grounding, setGrounding] = useState<typeof Grounding.Type>("direct");
