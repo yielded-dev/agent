@@ -1,14 +1,4 @@
-import {
-  Crypto,
-  Option,
-  Scope,
-  Context,
-  Effect,
-  Layer,
-  References,
-  Schema,
-  Tracer,
-} from "effect";
+import { Crypto, Option, Scope, Context, Effect, Layer, References, Schema, Tracer } from "effect";
 import { Tool } from "effect/ai";
 
 import type * as Agent from "../../core/Agent.ts";

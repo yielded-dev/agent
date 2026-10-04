@@ -5,7 +5,7 @@ import {
   SettlementPublisher,
   type SettlementPublicationResult,
   type SettlementPublicationFailure,
-} from "effect-agent/settlement-publisher";
+} from "@yielded/agent/settlement-publisher";
 import {
   AdmissionIndeterminate,
   AdmissionConflict,

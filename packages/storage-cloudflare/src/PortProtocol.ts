@@ -13,7 +13,7 @@ import { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import {
   SettlementPublication,
   SettlementPublicationResult,
-} from "effect-agent/settlement-publisher";
+} from "@yielded/agent/settlement-publisher";
 import {
   AbortCommand,
   WorkerStopCommand,

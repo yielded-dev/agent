@@ -1,12 +1,12 @@
-import * as NodeHost from "@effect-agent/platform-node/node-durable-host";
+import { Agent } from "@yielded/agent";
+import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
+import { digestDefinitions } from "@yielded/agent/digest";
+import { ThreadId } from "@yielded/agent/identifiers";
+import { DefinitionDigestInput } from "@yielded/agent/records";
+import { runCompletedRecordId, runIdForSubmission } from "@yielded/agent/run-journal";
+import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { getRecord } from "@yielded/agent/thread-store";
 import { Clock, Effect, FileSystem, Layer, Option, References, Schema, Stream } from "effect";
-import { Agent } from "effect-agent";
-import { digestDefinitions } from "effect-agent/digest";
-import { ThreadId } from "effect-agent/identifiers";
-import { DefinitionDigestInput } from "effect-agent/records";
-import { runCompletedRecordId, runIdForSubmission } from "effect-agent/run-journal";
-import { IdempotencyKey, Principal } from "effect-agent/submission-ledger";
-import { getRecord } from "effect-agent/thread-store";
 import { AiError, LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import type { PlatformError } from "effect/PlatformError";
 

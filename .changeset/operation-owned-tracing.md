@@ -1,6 +1,6 @@
 ---
-"effect-agent": patch
-"@effect-agent/storage-sql": patch
+"@yielded/agent": patch
+"@yielded/agent-storage-sql": patch
 ---
 
 Reduce nested runtime and SQL tracing overhead while preserving agent, model, tool, storage and recovery operation spans, attributes and typed failures.

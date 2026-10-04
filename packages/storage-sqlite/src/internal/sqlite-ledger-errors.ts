@@ -1,4 +1,4 @@
-import { LedgerError } from "effect-agent/submission-ledger";
+import { LedgerError } from "@yielded/agent/submission-ledger";
 import type { SqlError } from "effect/sql/SqlError";
 
 import { SqliteLedgerError, SqliteWriteContention } from "../SqliteStorageError.ts";

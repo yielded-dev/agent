@@ -1,6 +1,6 @@
+import type { FencedAppendRequest } from "@yielded/agent/thread-store";
+import { PreparedAppend, ThreadStoreError } from "@yielded/agent/thread-store";
 import { Crypto, Effect } from "effect";
-import type { FencedAppendRequest } from "effect-agent/thread-store";
-import { PreparedAppend, ThreadStoreError } from "effect-agent/thread-store";
 
 import type { RawAppendRequest } from "./do-journal.ts";
 

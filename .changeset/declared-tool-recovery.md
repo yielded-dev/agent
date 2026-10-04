@@ -1,10 +1,10 @@
 ---
-"effect-agent": minor
-"@effect-agent/storage-sql": minor
-"@effect-agent/storage-sqlite": minor
-"@effect-agent/storage-postgres": minor
-"@effect-agent/storage-cloudflare": minor
-"@effect-agent/storage-memory": minor
+"@yielded/agent": minor
+"@yielded/agent-storage-sql": minor
+"@yielded/agent-storage-sqlite": minor
+"@yielded/agent-storage-postgres": minor
+"@yielded/agent-storage-cloudflare": minor
+"@yielded/agent-storage-memory": minor
 ---
 
 Recover unfinished tools from their committed model declarations and remove the separate preparation write and outstanding-operation index.

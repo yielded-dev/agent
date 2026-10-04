@@ -1,13 +1,13 @@
 ---
-"effect-agent": minor
-"@effect-agent/storage-sql": minor
-"@effect-agent/storage-sqlite": minor
-"@effect-agent/storage-postgres": minor
-"@effect-agent/storage-cloudflare": minor
-"@effect-agent/storage-memory": minor
-"@effect-agent/platform-cloudflare": minor
-"@effect-agent/platform-node": minor
-"@effect-agent/testing": minor
+"@yielded/agent": minor
+"@yielded/agent-storage-sql": minor
+"@yielded/agent-storage-sqlite": minor
+"@yielded/agent-storage-postgres": minor
+"@yielded/agent-storage-cloudflare": minor
+"@yielded/agent-storage-memory": minor
+"@yielded/agent-platform-cloudflare": minor
+"@yielded/agent-platform-node": minor
+"@yielded/agent-testing": minor
 ---
 
 Publish settlement intent atomically in the canonical log and remove the separate settlement reservation protocol. Combine eligible SQL receipt finalization with publication and exclusive-session input markers with their canonical append.

@@ -1,9 +1,9 @@
+import { digestJson } from "@yielded/agent/digest";
+import type { SettlementId, SubmissionId } from "@yielded/agent/identifiers";
+import { RecordEnvelope, type Digest, type SettlementOutcome } from "@yielded/agent/records";
+import * as Ledger from "@yielded/agent/submission-ledger";
+import { ThreadStore, type FencedAppendRequest } from "@yielded/agent/thread-store";
 import { Effect, Predicate, Schema } from "effect";
-import { digestJson } from "effect-agent/digest";
-import type { SettlementId, SubmissionId } from "effect-agent/identifiers";
-import { RecordEnvelope, type Digest, type SettlementOutcome } from "effect-agent/records";
-import * as Ledger from "effect-agent/submission-ledger";
-import { ThreadStore, type FencedAppendRequest } from "effect-agent/thread-store";
 
 import { BenchmarkError } from "./contracts.js";
 
@@ -27,7 +27,7 @@ const legacyModule: {
 // Resolution only detects the absent public export. An import failure in an existing
 // publisher is a broken compared build, never permission to substitute older behavior.
 const publisherModule = Effect.try({
-  try: () => import.meta.resolve("effect-agent/settlement-publisher"),
+  try: () => import.meta.resolve("@yielded/agent/settlement-publisher"),
   catch: (cause) => BenchmarkError.make({ message: "Cannot resolve settlement publisher", cause }),
 }).pipe(
   Effect.catchIf(
@@ -40,7 +40,7 @@ const publisherModule = Effect.try({
     resolved === undefined
       ? Effect.succeed(undefined)
       : Effect.tryPromise({
-          try: () => import("effect-agent/settlement-publisher"),
+          try: () => import("@yielded/agent/settlement-publisher"),
           catch: (cause) =>
             BenchmarkError.make({ message: "Cannot import compared settlement publisher", cause }),
         }),

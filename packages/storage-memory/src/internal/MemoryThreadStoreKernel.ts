@@ -1,12 +1,12 @@
-import { Context, type Effect } from "effect";
-import type { ThreadId } from "effect-agent/identifiers";
-import type { Digest, RecordEnvelope, RecordId } from "effect-agent/records";
+import type { ThreadId } from "@yielded/agent/identifiers";
+import type { Digest, RecordEnvelope, RecordId } from "@yielded/agent/records";
 import type {
   AppendResult,
   FencedAppendRequest,
   ThreadStoreFailure,
   ThreadTail,
-} from "effect-agent/thread-store";
+} from "@yielded/agent/thread-store";
+import { Context, type Effect } from "effect";
 
 export interface PreparedMemoryAppend {
   readonly request: FencedAppendRequest;
