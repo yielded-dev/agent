@@ -21,6 +21,13 @@ export const reviewPriority = Config.Literals(["", "default", "fast"], "PR_REVIE
   Config.withDefault(""),
 );
 
+export const reviewWebSearch = Config.Boolean("PR_REVIEW_WEB_SEARCH").pipe(
+  Config.withDefault(false),
+);
+
+/** Bound hosted actions while allowing search, page opens, and finds in one response. */
+export const REVIEW_WEB_SEARCH_MAX_TOOL_CALLS = 8;
+
 const ReviewCostUsd = Schema.Number.check(Schema.isBetween({ minimum: 0.01, maximum: 100 }));
 
 export const reviewBaseCostUsd = Config.schema(ReviewCostUsd, "PR_REVIEW_BASE_COST_USD").pipe(
@@ -57,6 +64,10 @@ export const reviewCostLimitMicrousd = (
 
 const MAX_INPUT_TOKENS = 128_000;
 const MAX_OUTPUT_TOKENS = 32_000;
+// Responses web search has a 128k context and bills $0.01 per search, at either tier.
+// https://developers.openai.com/api/docs/guides/tools-web-search#limitations
+// https://developers.openai.com/api/docs/pricing#built-in-tools
+const WEB_SEARCH_COST_MICROUSD = 10_000;
 const PRICING_VERSION = "openai-2026-09-29";
 
 interface Pricing {
@@ -152,6 +163,10 @@ const ChargedUsage = Schema.Struct({
 
 const decodeReasoningUsage = Schema.decodeUnknownOption(
   Schema.Struct({ reasoning_tokens: Schema.Natural }),
+);
+
+const decodeWebSearchAction = Schema.decodeUnknownOption(
+  Schema.Struct({ type: Schema.Literals(["search", "open_page", "find_in_page"]) }),
 );
 
 type Payload = typeof OpenAiSchema.CreateResponse.Encoded;
@@ -269,6 +284,7 @@ interface Reservation {
   readonly outputTokens: number;
   readonly microusd: number;
   readonly outputLimitedByCost: boolean;
+  readonly webToolCalls: number;
 }
 
 interface Spending {
@@ -281,6 +297,7 @@ interface Spending {
   readonly read: number;
   readonly write: number;
   readonly output: number;
+  readonly webSearchCalls: number;
   readonly cost: number;
 }
 
@@ -328,6 +345,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     read: 0,
     write: 0,
     output: 0,
+    webSearchCalls: 0,
     cost: 0,
   });
 
@@ -394,6 +412,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
   });
 
   const admit = Effect.fn("ReviewOpenAi.admit")(function* (original: Payload) {
+    const hasWebSearch = original.tools?.some((tool) => tool.type === "web_search") === true;
+
     if (
       original.model !== options.model ||
       original.service_tier !== serviceTier ||
@@ -402,7 +422,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       original.previous_response_id !== undefined ||
       original.background === true ||
       original.modalities !== undefined ||
-      original.tools?.some((tool) => tool.type !== "function") ||
+      original.tools?.some((tool) => tool.type !== "function" && tool.type !== "web_search") ||
+      (hasWebSearch && original.max_tool_calls !== REVIEW_WEB_SEARCH_MAX_TOOL_CALLS) ||
       !Number.isSafeInteger(original.max_output_tokens) ||
       (original.max_output_tokens ?? 0) < 16 ||
       (original.max_output_tokens ?? 0) > MAX_OUTPUT_TOKENS
@@ -438,9 +459,23 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     }
     const requestedOutputTokens = original.max_output_tokens ?? MAX_OUTPUT_TOKENS;
 
+    // Finalization selects an exact function and cannot invoke hosted tools.
+    const canSearch =
+      hasWebSearch &&
+      original.tool_choice !== "none" &&
+      !(typeof original.tool_choice === "object" && original.tool_choice.type === "function");
+
+    const webToolCalls = canSearch ? REVIEW_WEB_SEARCH_MAX_TOOL_CALLS : 0;
+    const searchCost = webToolCalls * WEB_SEARCH_COST_MICROUSD;
+    // Preflight cannot count retrieved text. Reserve the entire documented search
+    // context at the cache-write rate, then settle only observed tokens and searches.
+    const reservedInputTokens = canSearch ? MAX_INPUT_TOKENS : inputTokens;
+
     const outputTokens = Math.min(
       requestedOutputTokens,
-      Math.floor((balance * 100 - inputTokens * pricing.write) / pricing.output),
+      Math.floor(
+        ((balance - searchCost) * 100 - reservedInputTokens * pricing.write) / pricing.output,
+      ),
     );
 
     if (outputTokens < 16) {
@@ -449,9 +484,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
         modelCalls: before.modelCalls,
         inputTokens,
         remainingCostMicrousd: balance,
-        minimumRequestCostMicrousd: Math.ceil(
-          (inputTokens * pricing.write + 16 * pricing.output) / 100,
-        ),
+        minimumRequestCostMicrousd:
+          Math.ceil((reservedInputTokens * pricing.write + 16 * pricing.output) / 100) + searchCost,
         costLimitMicrousd,
       });
 
@@ -460,14 +494,18 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     // A smaller output allowance still permits research. Only a refused request or a
     // response truncated by this cost limit stops the review; tool choice stays native.
     const outputLimitedByCost = outputTokens < requestedOutputTokens;
-    const microusd = Math.ceil((inputTokens * pricing.write + outputTokens * pricing.output) / 100);
+
+    const microusd =
+      Math.ceil((reservedInputTokens * pricing.write + outputTokens * pricing.output) / 100) +
+      searchCost;
 
     const reservation: Reservation = {
       id: before.modelCalls + 1,
-      inputTokens,
+      inputTokens: reservedInputTokens,
       outputTokens,
       microusd,
       outputLimitedByCost,
+      webToolCalls,
     };
 
     const current = yield* Ref.get(state);
@@ -486,6 +524,8 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       reasoningEffort: payload.reasoning?.effort,
       toolDefinitions: payload.tools?.length ?? 0,
       inputTokens,
+      reservedInputTokens,
+      webToolCalls,
       requestedMaxOutputTokens: requestedOutputTokens,
       maxOutputTokens: outputTokens,
       outputLimitedByCost,
@@ -520,25 +560,48 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
           ? pricing
           : undefined;
 
+    const webCalls = response.output.filter((item) => item.type === "web_search_call");
+
+    // Missing actions are conservatively charged as searches. Page/find actions are free.
+    const webSearchCalls = webCalls.filter(
+      (item) =>
+        !Option.exists(decodeWebSearchAction(item.action), (action) => action.type !== "search"),
+    ).length;
+
     if (
       response.model !== options.model ||
       chargedPricing === undefined ||
       usage.input_tokens > reservation.inputTokens ||
-      usage.output_tokens > reservation.outputTokens
+      usage.output_tokens > reservation.outputTokens ||
+      webCalls.length > reservation.webToolCalls
     ) {
+      yield* Effect.logWarning("Review provider accounting mismatch", {
+        modelMatches: response.model === options.model,
+        serviceTierRecognized: chargedPricing !== undefined,
+        inputTokens: usage.input_tokens,
+        reservedInputTokens: reservation.inputTokens,
+        outputTokens: usage.output_tokens,
+        reservedOutputTokens: reservation.outputTokens,
+        webToolCalls: webCalls.length,
+        webSearchCalls,
+        reservedWebToolCalls: reservation.webToolCalls,
+      });
+
       return yield* refuse("Provider response violated the counted model and tier price contract.");
     }
     const read = usage.input_tokens_details.cached_tokens;
     const write = usage.input_tokens_details.cache_write_tokens;
     const ordinary = usage.input_tokens - read - write;
 
-    const cost = Math.ceil(
-      (ordinary * chargedPricing.input +
-        read * chargedPricing.read +
-        write * chargedPricing.write +
-        usage.output_tokens * chargedPricing.output) /
-        100,
-    );
+    const cost =
+      Math.ceil(
+        (ordinary * chargedPricing.input +
+          read * chargedPricing.read +
+          write * chargedPricing.write +
+          usage.output_tokens * chargedPricing.output) /
+          100,
+      ) +
+      webSearchCalls * WEB_SEARCH_COST_MICROUSD;
 
     const outputLimitReached =
       reservation.outputLimitedByCost &&
@@ -561,6 +624,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
           read: current.read + read,
           write: current.write + write,
           output: current.output + usage.output_tokens,
+          webSearchCalls: current.webSearchCalls + webSearchCalls,
           cost: current.cost + cost,
         },
       ] as const;
@@ -583,6 +647,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       cachedInputTokens: read,
       cacheWriteInputTokens: write,
       outputTokens: usage.output_tokens,
+      webSearchCalls,
       reasoningTokens: Option.getOrUndefined(
         decodeReasoningUsage(response.usage?.output_tokens_details),
       )?.reasoning_tokens,
@@ -607,6 +672,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
           cachedInputTokens: current.read,
           cacheWriteInputTokens: current.write,
           outputTokens: current.output,
+          webSearchCalls: current.webSearchCalls,
           estimatedCostMicrousd: current.cost,
           reservedCostMicrousd: reservedCost(current),
         }),
