@@ -1,0 +1,3042 @@
+{
+  "version": 1,
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "recordId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "family": {
+        "type": "string",
+        "enum": ["thread"]
+      },
+      "schemaVersion": {
+        "type": "number",
+        "enum": [1]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "deploymentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "payload": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ThreadCreatedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1UserInputRecordedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1RunStartedRecordEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1RunDurationExhaustedEncoded"
+          },
+          {
+            "$ref": "#/$defs/RunPolicyUsageReservedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ModelCompletedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ModelResponseRecordedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolCallSettledEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolCallUnknownEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolCallResolvedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolStepSettledEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolApprovalRequestedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolApprovalDecidedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1ModelResponseInterruptedEncoded"
+          },
+          {
+            "$ref": "#/$defs/ModelCallAbortedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1CompactionCreatedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1RunFailedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1RunCompletedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1AbortRequestedEncoded"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "_tag": {
+                "type": "string",
+                "enum": ["SubmissionSettled"]
+              },
+              "submissionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "settlementId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "receiptId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["completed", "failed", "aborted"]
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "result": {
+                "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+              },
+              "runDisposition": {
+                "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+              },
+              "finishReason": {
+                "type": "string",
+                "enum": ["budget-exhausted"]
+              },
+              "exhausted": {
+                "type": "string",
+                "enum": ["tokens", "tool-calls", "turns"]
+              },
+              "policyLimit": {
+                "type": "string",
+                "enum": [
+                  "turns",
+                  "tool-calls",
+                  "duration",
+                  "usage",
+                  "tokens",
+                  "cost",
+                  "repeated-failures"
+                ]
+              },
+              "usageSummary": {
+                "$ref": "#/$defs/@effect-agent~1core~1RunUsageSummaryEncoded"
+              },
+              "uncommittedModelUsage": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/@effect-agent~1core~1ModelCallUsageEncoded"
+                }
+              }
+            },
+            "required": ["_tag", "submissionId", "settlementId", "receiptId", "outcome"],
+            "additionalProperties": true
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1SubagentRequestedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1SubagentStartedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1SubagentJoinedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1SubagentLineageRecordedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerInputRequestedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerStopRequestedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerOriginRecordedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerInputCompletedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerReportPreparedEncoded"
+          },
+          {
+            "$ref": "#/$defs/AgentUpdateEmittedEncoded"
+          },
+          {
+            "$ref": "#/$defs/WorkerReportRefusedEncoded"
+          },
+          {
+            "$ref": "#/$defs/PeerMessagePreparedEncoded"
+          },
+          {
+            "$ref": "#/$defs/SubtreeBudgetReservedEncoded"
+          },
+          {
+            "$ref": "#/$defs/@effect-agent~1thread~1RepairAnnotatedEncoded"
+          }
+        ]
+      }
+    },
+    "required": ["recordId", "family", "schemaVersion", "createdAt", "deploymentId", "payload"],
+    "additionalProperties": true
+  },
+  "definitions": {
+    "@effect-agent/thread/ReplayContractEncoded": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "agentBehavior": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["agent", "tools"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/DefinitionDigestsEncoded": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "string"
+        },
+        "replay": {
+          "$ref": "#/$defs/@effect-agent~1thread~1ReplayContractEncoded"
+        }
+      },
+      "required": ["agent", "model", "tools"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ThreadCreatedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ThreadCreated"]
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definitions": {
+          "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+        }
+      },
+      "required": ["_tag", "agentId", "definitions"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/PersistedJsonEncoded": {},
+    "@effect-agent/thread/ReceiptEncoded": {
+      "type": "object",
+      "properties": {
+        "receiptId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "queueSequence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["receiptId", "submissionId", "threadId", "queueSequence"],
+      "additionalProperties": true
+    },
+    "SubagentExecutionFailureEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubagentExecutionFailure"]
+        },
+        "delegationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetAgentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "child-failed",
+            "child-aborted",
+            "child-compatibility",
+            "establishment-denied",
+            "declaration-unavailable"
+          ]
+        },
+        "childThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childSubmissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childRunId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "errorTag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "_tag",
+        "delegationId",
+        "targetAgentId",
+        "classification",
+        "errorTag",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/AgentUpdates/UpdateEncoded": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "enum": [1]
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "updateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sequence": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "value": {}
+      },
+      "required": [
+        "schemaVersion",
+        "agentId",
+        "threadId",
+        "runId",
+        "updateId",
+        "sequence",
+        "value"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/UserInputRecordedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["UserInputRecorded"]
+        },
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["user", "steering", "follow-up"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "messageAdmission": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "type": "number",
+                  "enum": [1]
+                },
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "ownerThreadId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  },
+                  "required": ["ownerThreadId", "messageId"],
+                  "additionalProperties": true
+                },
+                "peerName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-zA-Z0-9_-]+$"
+                },
+                "sender": {
+                  "type": "object",
+                  "properties": {
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "agentId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["threadId", "agentId"],
+                  "additionalProperties": true
+                },
+                "returnAddress": {
+                  "type": "object",
+                  "properties": {
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "agentId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["threadId", "agentId"],
+                  "additionalProperties": true
+                },
+                "inReplyTo": {
+                  "type": "object",
+                  "properties": {
+                    "ownerThreadId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  },
+                  "required": ["ownerThreadId", "messageId"],
+                  "additionalProperties": true
+                }
+              },
+              "required": ["schemaVersion", "message", "peerName", "sender", "returnAddress"],
+              "additionalProperties": true
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": ["WorkerCompletion"]
+                    },
+                    "budgetExhausted": {
+                      "type": "boolean"
+                    },
+                    "schemaVersion": {
+                      "type": "number",
+                      "enum": [1]
+                    },
+                    "report": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "_tag": {
+                              "type": "string",
+                              "enum": ["Settled"]
+                            },
+                            "worker": {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "enum": [1]
+                                },
+                                "delegationId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "targetAgentId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "threadId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "delegationId",
+                                "targetAgentId",
+                                "threadId"
+                              ],
+                              "additionalProperties": true
+                            },
+                            "receipt": {
+                              "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                            },
+                            "runId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "settlementId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["completed"]
+                            },
+                            "result": {
+                              "anyOf": [{}]
+                            }
+                          },
+                          "required": [
+                            "_tag",
+                            "worker",
+                            "receipt",
+                            "runId",
+                            "settlementId",
+                            "outcome",
+                            "result"
+                          ],
+                          "additionalProperties": true
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "_tag": {
+                              "type": "string",
+                              "enum": ["Settled"]
+                            },
+                            "worker": {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "enum": [1]
+                                },
+                                "delegationId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "targetAgentId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "threadId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "delegationId",
+                                "targetAgentId",
+                                "threadId"
+                              ],
+                              "additionalProperties": true
+                            },
+                            "receipt": {
+                              "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                            },
+                            "runId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "settlementId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["failed", "aborted"]
+                            },
+                            "failure": {
+                              "$ref": "#/$defs/SubagentExecutionFailureEncoded"
+                            }
+                          },
+                          "required": [
+                            "_tag",
+                            "worker",
+                            "receipt",
+                            "runId",
+                            "settlementId",
+                            "outcome",
+                            "failure"
+                          ],
+                          "additionalProperties": true
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["_tag", "budgetExhausted", "schemaVersion", "report"],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": ["WorkerUpdate"]
+                    },
+                    "schemaVersion": {
+                      "type": "number",
+                      "enum": [1]
+                    },
+                    "worker": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [1]
+                        },
+                        "delegationId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "targetAgentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+                      "additionalProperties": true
+                    },
+                    "update": {
+                      "$ref": "#/$defs/@effect-agent~1core~1AgentUpdates~1UpdateEncoded"
+                    }
+                  },
+                  "required": ["_tag", "schemaVersion", "worker", "update"],
+                  "additionalProperties": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "required": ["_tag", "kind", "input"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/RunStartedRecordEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunStarted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policyAccountingVersion": {
+          "type": "number",
+          "enum": [1]
+        },
+        "maxDurationMillis": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": ["_tag", "runId", "policyAccountingVersion", "maxDurationMillis"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/RunDurationExhaustedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunDurationExhausted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["_tag", "runId"],
+      "additionalProperties": true
+    },
+    "RunPolicyUsageReservedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunPolicyUsageReserved"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "programmaticToolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "finalizationUsed": {
+          "type": "boolean"
+        }
+      },
+      "required": ["_tag", "runId", "programmaticToolCalls", "finalizationUsed"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ModelCompletedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ModelCompleted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "messages": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        }
+      },
+      "required": ["_tag", "runId", "output"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolOperationEncoded": {
+      "type": "object",
+      "properties": {
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "executionClass": {
+          "type": "string",
+          "enum": ["readonly", "idempotent", "uncertain"]
+        },
+        "executionKind": {
+          "type": "string",
+          "enum": ["ordinary", "delegation", "orchestration"]
+        },
+        "replay": {
+          "type": "string"
+        }
+      },
+      "required": ["toolCallId", "toolName", "executionClass", "executionKind", "replay"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/ToolExposure/SelectionEncoded": {
+      "type": "object",
+      "properties": {
+        "toolNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 1024
+        }
+      },
+      "required": ["toolNames"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/ToolExposure/SnapshotEncoded": {
+      "type": "object",
+      "properties": {
+        "exposedToolNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 1024
+        },
+        "selection": {
+          "$ref": "#/$defs/@effect-agent~1core~1ToolExposure~1SelectionEncoded"
+        }
+      },
+      "required": ["exposedToolNames"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/ModelResponseIdentityEncoded": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "additionalProperties": true
+    },
+    "@effect-agent/core/InputTokenUsageEncoded": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uncached": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheRead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheWrite": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["total", "uncached", "cacheRead", "cacheWrite"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/OutputTokenUsageEncoded": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasoning": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["total", "text", "reasoning"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/ModelCallUsageEncoded": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "serviceTier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pricingVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "response": {
+          "$ref": "#/$defs/@effect-agent~1core~1ModelResponseIdentityEncoded"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": ["turn", "summary"]
+        },
+        "usageStatus": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"]
+        },
+        "pricingStatus": {
+          "type": "string",
+          "enum": ["estimated", "unknown"]
+        },
+        "inputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1InputTokenUsageEncoded"
+        },
+        "outputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1OutputTokenUsageEncoded"
+        },
+        "webSearchCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["provider", "model", "inputTokens", "outputTokens", "costMicrousd"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ModelResponseRecordedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ModelResponseRecorded"]
+        },
+        "toolOperations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/@effect-agent~1thread~1ToolOperationEncoded"
+          }
+        },
+        "toolParameterRejections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "toolCallId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parameters": {},
+              "error": {
+                "type": "object",
+                "properties": {
+                  "_tag": {
+                    "type": "string",
+                    "enum": ["AiError"]
+                  },
+                  "module": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": ["ToolParameterValidationError"]
+                      },
+                      "toolName": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["_tag", "toolName", "description"],
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["_tag", "module", "method", "reason"],
+                "additionalProperties": true
+              }
+            },
+            "required": ["toolCallId", "parameters", "error"],
+            "additionalProperties": true
+          }
+        },
+        "toolExposure": {
+          "$ref": "#/$defs/@effect-agent~1core~1ToolExposure~1SnapshotEncoded"
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "messages": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "messagesDigest": {
+          "type": "string"
+        },
+        "runScopedPrefixLength": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "modelUsage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/@effect-agent~1core~1ModelCallUsageEncoded"
+          }
+        },
+        "unobservedModelCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "_tag",
+        "toolOperations",
+        "runId",
+        "turnId",
+        "turn",
+        "messages",
+        "messagesDigest"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolCallSettledEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolCallSettled"]
+        },
+        "toolSelection": {
+          "$ref": "#/$defs/@effect-agent~1core~1ToolExposure~1SelectionEncoded"
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "result": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "isFailure": {
+          "type": "boolean"
+        },
+        "budgetRejected": {
+          "type": "boolean",
+          "enum": [true]
+        }
+      },
+      "required": ["_tag", "runId", "toolCallId", "toolName", "result", "isFailure"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolCallUnknownEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolCallUnknown"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": ["_tag", "runId", "turn", "toolCallId", "toolName", "reason"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolCallResolvedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolCallResolved"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution": {
+          "type": "string",
+          "enum": ["completed-with-result", "failed-with-error", "never-started", "safe-retry"]
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": ["_tag", "runId", "toolCallId", "resolution", "author", "reason"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolStepSettledEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolStepSettled"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stepName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "output": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "outputDigest": {
+          "type": "string"
+        }
+      },
+      "required": ["_tag", "runId", "toolCallId", "stepName", "output", "outputDigest"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolApprovalRequestedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolApprovalRequested"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "parametersDigest": {
+          "type": "string"
+        },
+        "blocksInitialDispatch": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "_tag",
+        "runId",
+        "turnId",
+        "turn",
+        "toolCallId",
+        "toolName",
+        "parametersDigest",
+        "blocksInitialDispatch"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ToolApprovalDecidedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ToolApprovalDecided"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["approved", "denied"]
+        },
+        "resolver": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": ["_tag", "runId", "turn", "toolCallId", "decision", "resolver", "reason"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/ModelResponseInterruptedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ModelResponseInterrupted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supersededEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": ["_tag", "runId", "supersededEpoch", "attemptId", "reason"],
+      "additionalProperties": true
+    },
+    "ModelCallAbortedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["ModelCallAborted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "restart": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["joined-input"]
+        },
+        "modelUsage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/@effect-agent~1core~1ModelCallUsageEncoded"
+          }
+        },
+        "unobservedModelCalls": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "_tag",
+        "runId",
+        "turnId",
+        "turn",
+        "restart",
+        "reason",
+        "modelUsage",
+        "unobservedModelCalls"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/CompactionCreatedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["CompactionCreated"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["clear-tool-results", "summarize", "rollover"]
+        },
+        "coversThrough": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "handoff": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      },
+      "required": ["_tag", "runId", "turn", "kind", "coversThrough"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/RunFailedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunFailed"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        }
+      },
+      "required": ["_tag", "runId", "failure"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/RunCompletedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunCompleted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "resultDigest": {
+          "type": "string"
+        },
+        "runDisposition": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "finishReason": {
+          "type": "string",
+          "enum": ["budget-exhausted"]
+        },
+        "exhausted": {
+          "type": "string",
+          "enum": ["tokens", "tool-calls", "turns"]
+        }
+      },
+      "required": ["_tag", "runId", "output"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/AbortRequestedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["AbortRequested"]
+        },
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": ["_tag", "submissionId", "author", "reason"],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/ModelUsageGroupEncoded": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "responseModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "serviceTier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pricingVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "modelCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 0
+        },
+        "inputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1InputTokenUsageEncoded"
+        },
+        "outputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1OutputTokenUsageEncoded"
+        },
+        "webSearchCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "modelCalls",
+        "inputTokens",
+        "outputTokens",
+        "costMicrousd"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/RunUsageSummaryEncoded": {
+      "type": "object",
+      "properties": {
+        "modelCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1InputTokenUsageEncoded"
+        },
+        "outputTokens": {
+          "$ref": "#/$defs/@effect-agent~1core~1OutputTokenUsageEncoded"
+        },
+        "webSearchCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byModel": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/@effect-agent~1core~1ModelUsageGroupEncoded"
+          }
+        },
+        "usageStatus": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"]
+        },
+        "pricingStatus": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"]
+        },
+        "unobservedModelCalls": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["modelCalls", "inputTokens", "outputTokens", "costMicrousd", "byModel"],
+      "additionalProperties": true
+    },
+    "ToolResultBoundsEncoded": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 256
+        }
+      },
+      "required": ["maxBytes"],
+      "additionalProperties": true
+    },
+    "CompactionPolicyEncoded": {
+      "type": "object",
+      "properties": {
+        "keepRecentTokens": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["prune", "summarize", "prune-then-summarize"]
+        }
+      },
+      "required": ["keepRecentTokens", "mode"],
+      "additionalProperties": true
+    },
+    "AgentPolicyEncoded": {
+      "type": "object",
+      "properties": {
+        "maxTurns": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "maxDuration": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["Infinity"]
+                }
+              },
+              "required": ["_tag"],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["NegativeInfinity"]
+                }
+              },
+              "required": ["_tag"],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["Nanos"]
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^-?\\d+$"
+                }
+              },
+              "required": ["_tag", "value"],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["Millis"]
+                },
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": ["_tag", "value"],
+              "additionalProperties": true
+            }
+          ]
+        },
+        "toolConcurrency": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "repeatedFailureLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "onExhaustion": {
+          "type": "string",
+          "enum": ["final-answer", "fail"]
+        },
+        "tokenBudget": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "completionReserveTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costBudgetMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contextTokenLimit": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "toolResultBounds": {
+          "$ref": "#/$defs/ToolResultBoundsEncoded"
+        },
+        "runStatus": {
+          "type": "string",
+          "enum": ["appended", "off"]
+        },
+        "restartOnJoinedInput": {
+          "type": "boolean"
+        },
+        "modelRetries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "compaction": {
+          "$ref": "#/$defs/CompactionPolicyEncoded"
+        }
+      },
+      "required": [
+        "maxTurns",
+        "maxToolCalls",
+        "maxDuration",
+        "toolConcurrency",
+        "repeatedFailureLimit",
+        "onExhaustion",
+        "completionReserveTokens",
+        "toolResultBounds",
+        "runStatus",
+        "compaction"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/capabilities/SubagentDelegationCapsEncoded": {
+      "type": "object",
+      "properties": {
+        "maxTotalChildInvocations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxConcurrentChildren": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxDurationMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxCostMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxResultBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "@effect-agent/capabilities/SubagentReservationAmountsEncoded": {
+      "type": "object",
+      "properties": {
+        "turns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "toolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "durationMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resultBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "turns",
+        "toolCalls",
+        "durationMillis",
+        "inputTokens",
+        "outputTokens",
+        "costMicrousd",
+        "resultBytes"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/capabilities/SubagentGrantEncoded": {
+      "type": "object",
+      "properties": {
+        "allowedToolNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 128
+        },
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "childLifetimes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["attached", "background"]
+          },
+          "maxItems": 2
+        }
+      },
+      "required": ["allowedToolNames", "maxDepth"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/SubagentRequestedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubagentRequested"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "turn": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delegationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetAgentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetDigests": {
+          "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+        },
+        "childInput": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "childInputDigest": {
+          "type": "string"
+        },
+        "grantDigest": {
+          "type": "string"
+        },
+        "reservationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reservationDigest": {
+          "type": "string"
+        },
+        "childThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childPrincipal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "childIdempotencyKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "toolCallAllowance": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "policy": {
+          "$ref": "#/$defs/AgentPolicyEncoded"
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "caps": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentDelegationCapsEncoded"
+            },
+            "allocation": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentReservationAmountsEncoded"
+            },
+            "descendantInvocations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": ["caps", "allocation"],
+          "additionalProperties": true
+        },
+        "grant": {
+          "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "_tag",
+        "runId",
+        "turnId",
+        "turn",
+        "toolCallId",
+        "delegationId",
+        "targetAgentId",
+        "targetDigests",
+        "childInput",
+        "childInputDigest",
+        "grantDigest",
+        "reservationId",
+        "reservationDigest",
+        "childThreadId",
+        "childPrincipal",
+        "childIdempotencyKey"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/SubagentStartedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubagentStarted"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childSubmissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childReceiptId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childRunId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "_tag",
+        "runId",
+        "toolCallId",
+        "childThreadId",
+        "childSubmissionId",
+        "childReceiptId",
+        "childRunId"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/core/RunTotalsEncoded": {
+      "type": "object",
+      "properties": {
+        "modelCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "webSearchCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costMicrousd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "usageStatus": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"]
+        },
+        "pricingStatus": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"]
+        },
+        "unobservedModelCalls": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["modelCalls", "inputTokens", "outputTokens", "costMicrousd"],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/SubagentJoinedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubagentJoined"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childSubmissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childSettlementId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childOutcome": {
+          "type": "string",
+          "enum": ["completed", "failed", "aborted"]
+        },
+        "childResultDigest": {
+          "type": "string"
+        },
+        "projectedResultDigest": {
+          "type": "string"
+        },
+        "usageSummary": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "usage": {
+          "$ref": "#/$defs/@effect-agent~1core~1RunTotalsEncoded"
+        },
+        "delegatedUsage": {
+          "$ref": "#/$defs/@effect-agent~1core~1RunTotalsEncoded"
+        },
+        "reservationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "finalAccounting": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        }
+      },
+      "required": [
+        "_tag",
+        "runId",
+        "toolCallId",
+        "childSubmissionId",
+        "childSettlementId",
+        "childOutcome",
+        "childResultDigest",
+        "projectedResultDigest",
+        "usageSummary",
+        "reservationId",
+        "finalAccounting"
+      ],
+      "additionalProperties": true
+    },
+    "SubagentParentLinkEncoded": {
+      "type": "object",
+      "properties": {
+        "delegationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentAgentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentRunId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentToolCallId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "delegationId",
+        "parentAgentId",
+        "parentThreadId",
+        "parentRunId",
+        "parentToolCallId",
+        "depth"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/SubagentLineageRecordedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubagentLineageRecorded"]
+        },
+        "parentLink": {
+          "$ref": "#/$defs/SubagentParentLinkEncoded"
+        },
+        "parentSubmissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childDefinitionDigests": {
+          "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+        },
+        "childInputDigest": {
+          "type": "string"
+        },
+        "grantDigest": {
+          "type": "string"
+        },
+        "toolCallAllowance": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "policy": {
+          "$ref": "#/$defs/AgentPolicyEncoded"
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "caps": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentDelegationCapsEncoded"
+            },
+            "allocation": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentReservationAmountsEncoded"
+            },
+            "descendantInvocations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": ["caps", "allocation"],
+          "additionalProperties": true
+        },
+        "grant": {
+          "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+        }
+      },
+      "required": [
+        "_tag",
+        "parentLink",
+        "parentSubmissionId",
+        "childDefinitionDigests",
+        "childInputDigest",
+        "grantDigest"
+      ],
+      "additionalProperties": true
+    },
+    "WorkerInputRequestedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerInputRequested"]
+        },
+        "admission": {
+          "type": "object",
+          "properties": {
+            "origin": {
+              "type": "object",
+              "properties": {
+                "worker": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "number",
+                      "enum": [1]
+                    },
+                    "delegationId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "targetAgentId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+                  "additionalProperties": true
+                },
+                "source": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": ["tool"]
+                        },
+                        "agentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "runId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "toolCallId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["_tag", "agentId", "threadId", "runId", "toolCallId"],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": ["programmatic"]
+                        },
+                        "agentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["_tag", "agentId", "threadId"],
+                      "additionalProperties": true
+                    }
+                  ]
+                },
+                "continuationOf": {
+                  "type": "object",
+                  "properties": {
+                    "worker": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [1]
+                        },
+                        "delegationId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "targetAgentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+                      "additionalProperties": true
+                    },
+                    "receipt": {
+                      "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                    },
+                    "settlementId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["worker", "receipt", "settlementId"],
+                  "additionalProperties": true
+                },
+                "budgetScope": {
+                  "type": "string",
+                  "enum": ["source-subtree", "worker-run"]
+                },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": ["assignment"]
+                },
+                "targetDigests": {
+                  "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+                },
+                "policy": {
+                  "$ref": "#/$defs/AgentPolicyEncoded"
+                },
+                "budget": {
+                  "type": "object",
+                  "properties": {
+                    "caps": {
+                      "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentDelegationCapsEncoded"
+                    },
+                    "allocation": {
+                      "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentReservationAmountsEncoded"
+                    },
+                    "descendantInvocations": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["caps", "allocation"],
+                  "additionalProperties": true
+                },
+                "grant": {
+                  "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+                },
+                "depth": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "toolCallAllowance": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "firstMessageId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "createdAtMillis": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expiresAtMillis": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reporting": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": ["standard"]
+                    },
+                    "sourceDigests": {
+                      "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+                    },
+                    "destinationDelegationId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "returnAddress": {
+                      "type": "object",
+                      "properties": {
+                        "input": {
+                          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+                        },
+                        "principal": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "policy": {
+                          "$ref": "#/$defs/AgentPolicyEncoded"
+                        },
+                        "depth": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "grant": {
+                          "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+                        },
+                        "workerAdmission": {
+                          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+                        }
+                      },
+                      "required": ["input", "principal", "policy", "depth"],
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": ["sourceDigests"],
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "worker",
+                "source",
+                "targetDigests",
+                "policy",
+                "budget",
+                "grant",
+                "depth",
+                "firstMessageId",
+                "createdAtMillis",
+                "expiresAtMillis"
+              ],
+              "additionalProperties": true
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "parameters": {
+              "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+            },
+            "createdAtMillis": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sourceSubmissionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "deliveryPrincipal": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "reportKind": {
+              "type": "string",
+              "enum": ["update"]
+            }
+          },
+          "required": ["origin", "messageId", "parameters", "createdAtMillis"],
+          "additionalProperties": true
+        },
+        "inputDigest": {
+          "type": "string"
+        }
+      },
+      "required": ["_tag", "admission", "inputDigest"],
+      "additionalProperties": true
+    },
+    "WorkerStopRequestedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerStopRequested"]
+        },
+        "command": {
+          "type": "object",
+          "properties": {
+            "worker": {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "type": "number",
+                  "enum": [1]
+                },
+                "delegationId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "targetAgentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+              "additionalProperties": true
+            },
+            "idempotencyKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": ["worker", "idempotencyKey"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["_tag", "command"],
+      "additionalProperties": true
+    },
+    "WorkerOriginRecordedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerOriginRecorded"]
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "worker": {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "type": "number",
+                  "enum": [1]
+                },
+                "delegationId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "targetAgentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+              "additionalProperties": true
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": ["tool"]
+                    },
+                    "agentId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "runId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "toolCallId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["_tag", "agentId", "threadId", "runId", "toolCallId"],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": ["programmatic"]
+                    },
+                    "agentId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["_tag", "agentId", "threadId"],
+                  "additionalProperties": true
+                }
+              ]
+            },
+            "continuationOf": {
+              "type": "object",
+              "properties": {
+                "worker": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "number",
+                      "enum": [1]
+                    },
+                    "delegationId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "targetAgentId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+                  "additionalProperties": true
+                },
+                "receipt": {
+                  "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                },
+                "settlementId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["worker", "receipt", "settlementId"],
+              "additionalProperties": true
+            },
+            "budgetScope": {
+              "type": "string",
+              "enum": ["source-subtree", "worker-run"]
+            },
+            "lifecycle": {
+              "type": "string",
+              "enum": ["assignment"]
+            },
+            "targetDigests": {
+              "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+            },
+            "policy": {
+              "$ref": "#/$defs/AgentPolicyEncoded"
+            },
+            "budget": {
+              "type": "object",
+              "properties": {
+                "caps": {
+                  "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentDelegationCapsEncoded"
+                },
+                "allocation": {
+                  "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentReservationAmountsEncoded"
+                },
+                "descendantInvocations": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": ["caps", "allocation"],
+              "additionalProperties": true
+            },
+            "grant": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "toolCallAllowance": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "firstMessageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "createdAtMillis": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expiresAtMillis": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reporting": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["standard"]
+                },
+                "sourceDigests": {
+                  "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+                },
+                "destinationDelegationId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "returnAddress": {
+                  "type": "object",
+                  "properties": {
+                    "input": {
+                      "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+                    },
+                    "principal": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "policy": {
+                      "$ref": "#/$defs/AgentPolicyEncoded"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "grant": {
+                      "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+                    },
+                    "workerAdmission": {
+                      "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+                    }
+                  },
+                  "required": ["input", "principal", "policy", "depth"],
+                  "additionalProperties": true
+                }
+              },
+              "required": ["sourceDigests"],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "worker",
+            "source",
+            "targetDigests",
+            "policy",
+            "budget",
+            "grant",
+            "depth",
+            "firstMessageId",
+            "createdAtMillis",
+            "expiresAtMillis"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": ["_tag", "origin"],
+      "additionalProperties": true
+    },
+    "WorkerInputCompletedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerInputCompleted"]
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workerThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receiptId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "settlementId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completedAtMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "effectsResolved": {
+          "type": "boolean",
+          "enum": [true]
+        }
+      },
+      "required": [
+        "_tag",
+        "messageId",
+        "workerThreadId",
+        "submissionId",
+        "receiptId",
+        "settlementId",
+        "completedAtMillis"
+      ],
+      "additionalProperties": true
+    },
+    "WorkerReportPreparedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerReportPrepared"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "envelope": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "createdAtMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deadlineAtMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "predecessor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": ["_tag", "runId", "messageId", "envelope", "createdAtMillis", "deadlineAtMillis"],
+      "additionalProperties": true
+    },
+    "AgentUpdateEmittedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["AgentUpdateEmitted"]
+        },
+        "update": {
+          "$ref": "#/$defs/@effect-agent~1core~1AgentUpdates~1UpdateEncoded"
+        },
+        "definitions": {
+          "$ref": "#/$defs/@effect-agent~1thread~1DefinitionDigestsEncoded"
+        },
+        "delivery": {
+          "type": "object",
+          "properties": {
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "envelope": {
+              "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+            },
+            "createdAtMillis": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deadlineAtMillis": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "predecessor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": ["messageId", "envelope", "createdAtMillis", "deadlineAtMillis"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["_tag", "update", "definitions"],
+      "additionalProperties": true
+    },
+    "WorkerReportRefusedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkerReportRefused"]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "filtered",
+            "declaration-unavailable",
+            "destination",
+            "projection",
+            "input",
+            "preparation",
+            "timeout",
+            "defect",
+            "expired",
+            "denied",
+            "capacity"
+          ]
+        }
+      },
+      "required": ["_tag", "runId", "messageId", "reason"],
+      "additionalProperties": true
+    },
+    "PeerMessagePreparedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["PeerMessagePrepared"]
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sourcePrincipal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["send", "reply"]
+        },
+        "deadlineAtMillis": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "encodedEnvelope": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        }
+      },
+      "required": [
+        "_tag",
+        "messageId",
+        "sourcePrincipal",
+        "operation",
+        "deadlineAtMillis",
+        "encodedEnvelope"
+      ],
+      "additionalProperties": true
+    },
+    "SubtreeBudgetReservedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["SubtreeBudgetReserved"]
+        },
+        "reservationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sourceSubmissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "childThreadId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lifetime": {
+          "type": "string",
+          "enum": ["attached", "background"]
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "policy": {
+          "$ref": "#/$defs/AgentPolicyEncoded"
+        },
+        "grant": {
+          "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "caps": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentDelegationCapsEncoded"
+            },
+            "allocation": {
+              "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentReservationAmountsEncoded"
+            },
+            "descendantInvocations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": ["caps", "allocation"],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "_tag",
+        "reservationId",
+        "childThreadId",
+        "lifetime",
+        "depth",
+        "policy",
+        "grant",
+        "budget"
+      ],
+      "additionalProperties": true
+    },
+    "@effect-agent/thread/RepairAnnotatedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RepairAnnotated"]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "details": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        }
+      },
+      "required": ["_tag", "reason", "details"],
+      "additionalProperties": true
+    }
+  }
+}

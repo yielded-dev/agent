@@ -6,14 +6,13 @@ import {
   SelectedReadOwner,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
-import { PREVIOUS_RECORD_FORMAT, ExportBatch, ExportRecord } from "@yielded/agent/record-format";
+import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
 import {
   CanonicalRecord,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
   ObservationOffset,
-  CURRENT_RECORD_FORMAT,
 } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
@@ -1055,7 +1054,7 @@ export const layer = (
     ),
   ).pipe(Layer.provide(storageConfigLayer(options)));
 
-/** Read a quiesced predecessor/current Object without initializing its layout or ownership. */
+/** Read a quiesced layout-16 or current Object without initializing its layout or ownership. */
 export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
   options: Pick<DoStorageOptions, "storage">,
   request: ThreadExportRequest,
@@ -1067,13 +1066,9 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
     return yield* state
       .transaction(
         Effect.gen(function* () {
-          const header = yield* readDoStorageHeader(sql, [
-            CURRENT_RECORD_FORMAT,
-            PREVIOUS_RECORD_FORMAT,
-          ]);
+          yield* readDoStorageHeader(sql);
 
           const transfer = yield* makeSqlThreadImport({
-            format: header.recordFormat,
             offsetPrefix: DO_OFFSET_PREFIX,
             read: (body) => body,
             write: () => Effect.die("A read-only exporter cannot import"),

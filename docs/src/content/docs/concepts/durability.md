@@ -32,10 +32,11 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
-Record-format changes use the same boundary: export the log, apply one pure record upgrade,
-and import into an empty Thread. Archives also retain immutable admission facts that the log
-cannot reconstruct, including receipt identities, principals, keys and queued input. Every fact
-must match a canonical reference. Import rebuilds execution state without transferring ownership;
+Record-format cutovers use the same boundary: export the log, convert the archive explicitly,
+and import into an empty Thread. Import accepts only the current record format. Archives also
+retain immutable admission facts that the log cannot reconstruct, including receipt identities,
+principals, keys and queued input. Every fact must match a canonical reference.
+Import rebuilds execution state without transferring ownership;
 unresolved mutating tools remain Unknown. Table-layout steps are independent of record meaning.
 See [backup and re-encoding](/guide/operations/#adopting-these-contracts) for the procedure and limits.
 

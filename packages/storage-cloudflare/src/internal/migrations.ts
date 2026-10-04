@@ -164,7 +164,6 @@ const normalize = (statement: string) =>
 
 const inspectStorage = Effect.fnUntraced(function* (
   client: SqlClient.SqlClient,
-  acceptedFormats: ReadonlyArray<string>,
 ): Effect.fn.Return<
   DoStorageHeader | undefined,
   DoStorageCompatibilityError | DoStorageCorruptionError | DoStorageError
@@ -230,7 +229,7 @@ const inspectStorage = Effect.fnUntraced(function* (
       return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
     header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
   }
-  if (!acceptedFormats.includes(header.recordFormat))
+  if (header.recordFormat !== CURRENT_RECORD_FORMAT)
     return yield* incompatible(
       header.layoutVersion,
       `Unsupported record format ${header.recordFormat}.`,
@@ -251,11 +250,8 @@ const inspectStorage = Effect.fnUntraced(function* (
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
-export const readDoStorageHeader = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  acceptedFormats: ReadonlyArray<string>,
-) {
-  const header = yield* inspectStorage(sql, acceptedFormats);
+export const readDoStorageHeader = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
+  const header = yield* inspectStorage(sql);
 
   if (header === undefined)
     return yield* incompatible(0, "No initialized Thread storage to export.");
@@ -272,7 +268,7 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(functi
   return yield* sql
     .withTransaction(
       Effect.gen(function* () {
-        const header = yield* inspectStorage(sql, [CURRENT_RECORD_FORMAT]);
+        const header = yield* inspectStorage(sql);
         const version = header?.layoutVersion ?? 0;
 
         for (const step of doLayoutSteps) {
@@ -284,7 +280,7 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(functi
         if (header === undefined)
           yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
 
-        return yield* readDoStorageHeader(sql, [CURRENT_RECORD_FORMAT]);
+        return yield* readDoStorageHeader(sql);
       }),
     )
     .pipe(Effect.catchTag("SqlError", storageError));

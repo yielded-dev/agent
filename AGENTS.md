@@ -164,11 +164,13 @@ packages.
   never by rewriting stored payloads in place. Keep layout versions separate: adapter-owned,
   immutable ordered `{ version, statements }` steps run in one transaction and reject newer
   layouts. Optional/defaulted fields and safely ignorable record kinds need no record-format
-  bump; changes to existing-record meaning do. Retain one decode-only previous record union
-  and one pure `upgradeRecord`, deletable or replaceable next release. Export immutable
-  admission and accepted-command facts bound to canonical references; rebuild ledger execution
-  state, checkpoints, and projections. Recompute the digest chain and import atomically without
-  restoring claims, leases, tokens, or finalization flags. Reject nonempty targets and unsupported
+  bump; changes to existing-record meaning require a format increment and an explicit one-time
+  export/convert/import cutover. Runtime readers and importers accept only the current record
+  format; do not retain predecessor decoders, compatibility shims, or upgrade hooks. Keep the
+  schema baseline in development checks only. Export immutable admission and accepted-command
+  facts bound to canonical references; rebuild ledger execution state, checkpoints, and projections.
+  Recompute the digest chain and import atomically without restoring claims, leases, tokens, or
+  finalization flags. Reject nonempty targets and unsupported
   or ambiguous data without mutation; never silently reset or drop queued work. Do not build
   historical upgrade chains or a general migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only

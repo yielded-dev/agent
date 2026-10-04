@@ -480,12 +480,17 @@ open fresh storage or layouts 16–17 with record format `effect-agent/thread@1`
 adds the separate headers in one transaction without rewriting payloads. Newer layouts, unsupported
 record formats, and ambiguous schemas fail acquisition.
 
-For a record-format change, quiesce the source, retain a backup, export each Thread, and import it
-into an empty destination Thread. `ThreadStore.export` supplies the archive and the local
-`ThreadImport` service installs it. Each adapter also provides `exportThread` to read a predecessor
-store without acquiring execution authority or upgrading its layout. `reencodeThread` composes
-the export Effect with the destination importer. Switch the host only after checking the imported
-tail and resuming retained work with its original Agent bindings.
+For the layout-16 cutover or a backup restore, quiesce the source, retain a backup, export each
+Thread, and import it into an empty destination Thread. Both layouts use record format
+`effect-agent/thread@1`, so this cutover preserves the records and tail digest. `ThreadStore.export`
+supplies the archive and the local `ThreadImport` service installs it. Each adapter also provides
+`exportThread` to read layout 16 without acquiring execution authority or upgrading its layout.
+`reencodeThread` composes the export Effect with the destination importer. Switch the host only
+after checking the imported tail and resuming retained work with its original Agent bindings.
+
+Readers and importers accept only the current record format. A future change to record meaning
+requires a release-specific one-time archive conversion before import; the runtime carries no
+historical decoders or automatic upgrade hooks. Export with the source release before that cutover.
 
 For SQLite, the repository admin CLI uses the same operations:
 

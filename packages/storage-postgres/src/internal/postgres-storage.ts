@@ -5,7 +5,6 @@ import {
   type StorageErrorFields,
   type CorruptionErrorFields,
 } from "@yielded/agent-storage-sql/sql-storage";
-import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { isSqlError, type SqlError } from "effect/sql/SqlError";
@@ -109,7 +108,7 @@ export const initializePostgresStorage = Effect.fn("PostgresStorage.upgradeLayou
     lockTimeout,
   )(
     Effect.gen(function* () {
-      const header = yield* inspectPostgresStorage(schema, [CURRENT_RECORD_FORMAT]);
+      const header = yield* inspectPostgresStorage(schema);
 
       if (header === undefined) yield* ensurePostgresSchema(schema);
       yield* applyPostgresLayout(schema, header);

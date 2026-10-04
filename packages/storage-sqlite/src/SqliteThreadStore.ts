@@ -5,8 +5,7 @@ import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-s
 import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
 import { makeSqlThreadStoreKernel } from "@yielded/agent-storage-sql/sql-thread-store";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { PREVIOUS_RECORD_FORMAT } from "@yielded/agent/record-format";
-import { CURRENT_RECORD_FORMAT, ProducerEpoch } from "@yielded/agent/records";
+import { ProducerEpoch } from "@yielded/agent/records";
 import { RunStorage } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
@@ -388,7 +387,7 @@ export const layer = (
   ).pipe(Layer.provide(storageConfigLayer(options)));
 
 /**
- * Export a quiesced current or predecessor database without initializing layout or retiring
+ * Export a quiesced layout-16 or current database without initializing layout or retiring
  * ownership. Its read-only connection closes before returning; the source remains untouched.
  */
 export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function* (
@@ -400,13 +399,9 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
 
     return yield* makeSqlTransaction(sql, { begin: "BEGIN" })(
       Effect.gen(function* () {
-        const header = yield* readSqliteStorageHeader(sql, [
-          CURRENT_RECORD_FORMAT,
-          PREVIOUS_RECORD_FORMAT,
-        ]);
+        yield* readSqliteStorageHeader(sql);
 
         const transfer = yield* makeSqlThreadImport({
-          format: header.recordFormat,
           offsetPrefix: "effect-agent-sqlite@1:",
           read: (body) => body,
           write: () => Effect.die("A read-only exporter cannot import"),

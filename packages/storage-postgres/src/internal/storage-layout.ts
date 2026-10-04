@@ -538,10 +538,7 @@ export interface PostgresStorageHeader {
 }
 
 /** No DDL or transaction acquisition. The caller owns the snapshot/writer lock across subsequent work. */
-export const inspectPostgresStorage = Effect.fnUntraced(function* (
-  namespace: string,
-  acceptedFormats: ReadonlyArray<string>,
-) {
+export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
@@ -606,7 +603,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
       return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
     header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
   }
-  if (!acceptedFormats.includes(header.recordFormat))
+  if (header.recordFormat !== CURRENT_RECORD_FORMAT)
     return yield* incompatible(
       header.layoutVersion,
       `Unsupported record format ${header.recordFormat}.`,
@@ -689,11 +686,8 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
 });
 
 /** Export opening never creates a schema, runs layout steps, or initializes a journal. */
-export const readPostgresStorageHeader = Effect.fnUntraced(function* (
-  namespace: string,
-  acceptedFormats: ReadonlyArray<string>,
-) {
-  const header = yield* inspectPostgresStorage(namespace, acceptedFormats);
+export const readPostgresStorageHeader = Effect.fnUntraced(function* (namespace: string) {
+  const header = yield* inspectPostgresStorage(namespace);
 
   if (header === undefined)
     return yield* incompatible(0, "No initialized Thread storage to export.");
@@ -724,5 +718,5 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
     );
   }
 
-  return yield* readPostgresStorageHeader(namespace, [CURRENT_RECORD_FORMAT]);
+  return yield* readPostgresStorageHeader(namespace);
 });

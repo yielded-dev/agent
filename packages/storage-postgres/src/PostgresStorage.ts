@@ -15,8 +15,6 @@ import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
-import { PREVIOUS_RECORD_FORMAT } from "@yielded/agent/record-format";
-import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { ScheduleStore } from "@yielded/agent/schedule";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
@@ -173,7 +171,7 @@ export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
     ),
   );
 
-/** Export a quiesced current or predecessor store through a read-only snapshot; never run DDL. */
+/** Export a quiesced layout-16 or current store through a read-only snapshot; never run DDL. */
 export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* (
   request: ThreadExportRequest,
   options: PostgresStorageOptions = {},
@@ -185,14 +183,10 @@ export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* 
     begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
   })(
     Effect.gen(function* () {
-      const header = yield* readPostgresStorageHeader(config.schema, [
-        CURRENT_RECORD_FORMAT,
-        PREVIOUS_RECORD_FORMAT,
-      ]);
+      yield* readPostgresStorageHeader(config.schema);
 
       const transfer = yield* makeSqlThreadImport({
         namespace: config.schema,
-        format: header.recordFormat,
         offsetPrefix: "effect-agent-postgres@1:",
         read: (body) => body,
         write: () => Effect.die("A read-only exporter cannot import"),

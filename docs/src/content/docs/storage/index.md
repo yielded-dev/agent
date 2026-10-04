@@ -52,8 +52,9 @@ The local `ThreadImport` service validates that archive and atomically installs 
 Thread. It rebuilds ledger state from canonical records; projections and checkpoints are disposable.
 No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
 
-Layout upgrades run separately inside each adapter. A change to record meaning instead uses
-export, one pure record upgrade, and import. See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
+Layout upgrades run separately inside each adapter. Import accepts the current record format;
+layout 16 already uses that format. A future change to record meaning requires an explicit
+one-time archive conversion before import. See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 
 ## Build another adapter
 

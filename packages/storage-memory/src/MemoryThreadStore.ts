@@ -718,7 +718,7 @@ const makeThreadStore = Effect.gen(function* () {
         Effect.provideService(Crypto.Crypto, crypto),
       );
 
-      // Decode the destination wire, not the predecessor view retained by the archive decoder.
+      // Rebuild native observation offsets from owned destination batches.
       const records: Array<CanonicalRecordEnvelope> = [];
 
       for (const batch of prepared.batches) {

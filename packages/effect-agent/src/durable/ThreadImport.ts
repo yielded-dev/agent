@@ -3,11 +3,7 @@ import { Context, Effect, Schema } from "effect";
 import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
 import { toolOperationStates, unresolvedToolOperations } from "./internal/tool-operations.ts";
-import {
-  decodeExportRecord,
-  encodeImportedRecord,
-  PREVIOUS_RECORD_FORMAT,
-} from "./RecordFormat.ts";
+import { decodeExportRecord, ExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
@@ -39,7 +35,7 @@ import {
   ThreadExportBatch,
 } from "./ThreadStore.ts";
 
-/** The archive's wire boundary deliberately defers payload decoding to its format's union. */
+/** Keep wire data intact until import has checked the marker against the current record format. */
 export const ThreadArchive = Schema.Struct({
   format: Schema.NonEmptyString,
   threadId: ThreadId,
@@ -157,7 +153,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
 
   const { threadId, format } = archive;
 
-  if (format !== CURRENT_RECORD_FORMAT && format !== PREVIOUS_RECORD_FORMAT)
+  if (format !== CURRENT_RECORD_FORMAT)
     return yield* ThreadImportRejected.make({
       threadId,
       reason: "unsupported-format",
@@ -182,14 +178,12 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   const prepared: Array<PreparedImportBatch> = [];
   const recordIds = new Set<string>();
   const batchIds = new Set<string>();
-  let sourceDigest = EMPTY_TAIL_DIGEST;
-  let targetDigest = EMPTY_TAIL_DIGEST;
+  let tailDigest = EMPTY_TAIL_DIGEST;
   let index = 0;
 
   for (const batch of batches) {
     if (batchIds.has(batch.batchId)) return yield* invalid("Duplicate canonical batch", threadId);
     batchIds.add(batch.batchId);
-    const wireRecords: Array<PersistedJson> = [];
     const currentRecords: Array<RecordEnvelope> = [];
     const encodedRecords: Array<PersistedJson> = [];
     const firstSequence = sequence(index + 1);
@@ -211,11 +205,10 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
         return yield* invalid("Duplicate canonical record identity", threadId);
       recordIds.add(record.recordId);
       records.push(CanonicalRecordEnvelope.make({ ...entry, record }));
-      wireRecords.push(entry.record);
       currentRecords.push(record);
       encodedRecords.push(
-        yield* encodeImportedRecord(format, record).pipe(
-          Effect.mapError(() => invalid("The upgraded record cannot be encoded", threadId)),
+        yield* Schema.encodeEffect(ExportRecord)(record).pipe(
+          Effect.mapError(() => invalid("The record cannot be encoded", threadId)),
         ),
       );
       index++;
@@ -230,14 +223,10 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       Effect.map((fields) => CanonicalBatch.make(fields)),
     );
 
-    sourceDigest = yield* digestJson({
-      previousTailDigest: sourceDigest,
-      batch: { ...batch, records: wireRecords },
-    }).pipe(Effect.mapError(() => invalid("Source digest computation failed", threadId)));
     const encoded = { ...batch, records: encodedRecords };
 
-    targetDigest = yield* digestJson({ previousTailDigest: targetDigest, batch: encoded }).pipe(
-      Effect.mapError(() => invalid("Destination digest computation failed", threadId)),
+    tailDigest = yield* digestJson({ previousTailDigest: tailDigest, batch: encoded }).pipe(
+      Effect.mapError(() => invalid("Canonical digest computation failed", threadId)),
     );
     prepared.push({
       batch: canonical,
@@ -245,13 +234,13 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       recordJson: encodedRecords.map(canonicalJson),
       firstSequence,
       lastSequence: sequence(index),
-      tailDigest: targetDigest,
+      tailDigest,
     });
   }
   if (
     index !== records.length ||
     index !== archive.records.length ||
-    sourceDigest !== archive.tailDigest
+    tailDigest !== archive.tailDigest
   )
     return yield* invalid("The canonical batch chain does not match the exported tail", threadId);
 
@@ -641,7 +630,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       threadId,
       format: CURRENT_RECORD_FORMAT,
       tailSequence: sequence(records.length),
-      tailDigest: targetDigest,
+      tailDigest,
       recordCount: records.length,
       submissionCount: submissions.length,
     }),

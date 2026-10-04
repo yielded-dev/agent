@@ -39,7 +39,6 @@ import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
   readonly offsetPrefix: string;
-  readonly format?: string;
   readonly maxValueBytes?: number;
   readonly afterThreadRead?: Effect.Effect<void, E>;
   readonly afterImport?: (
@@ -159,8 +158,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       Effect.mapError((cause) => failure("read or write archive storage", cause)),
     );
 
-  const format = options.format ?? CURRENT_RECORD_FORMAT;
-
   const exportThread = Effect.fn("SqlThreadImport.export")(function* (input: ThreadExportRequest) {
     const request = yield* Schema.decodeEffect(Schema.toType(ThreadExportRequest))(input).pipe(
       Effect.mapError((cause) => failure("validate Thread export", cause)),
@@ -245,7 +242,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             rows,
             Effect.fnUntraced(function* (row) {
               const record = yield* decodeExportRecord(
-                format,
+                CURRENT_RECORD_FORMAT,
                 yield* json(PersistedJson, row.record_json),
               ).pipe(Effect.mapError((cause) => failure("decode export record", cause)));
 
@@ -394,7 +391,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           ];
 
           return ThreadExport.make({
-            format,
+            format: CURRENT_RECORD_FORMAT,
             threadId: request.threadId,
             tailSequence: header.tail_sequence,
             tailDigest: header.tail_digest,

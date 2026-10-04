@@ -431,7 +431,7 @@ const reencodeCommand = CliCommand.make(
     }),
 ).pipe(
   CliCommand.withDescription(
-    "Export a quiesced source, apply the single record upgrade, and import into an empty destination Thread.",
+    "Export a quiesced source and import its current-format records into an empty destination Thread.",
   ),
 );
 

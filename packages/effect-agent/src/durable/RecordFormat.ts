@@ -1,17 +1,7 @@
 import { Effect, Schema, SchemaGetter } from "effect";
 
 import { canonicalJson } from "./Digest.ts";
-import { PreviousRecord, PREVIOUS_RECORD_VERSION } from "./internal/PreviousRecord.ts";
 import { CanonicalBatch, CURRENT_RECORD_FORMAT, PersistedJson, RecordEnvelope } from "./Records.ts";
-
-/** One release boundary, never a chain. Initially it is the current format's frozen baseline. */
-export const PREVIOUS_RECORD_FORMAT = `effect-agent/thread@${PREVIOUS_RECORD_VERSION}`;
-
-/**
- * The only semantic upgrade. At a format bump, edit this pure function and retain the frozen
- * predecessor decoder for one release. Additive changes leave this identity function alone.
- */
-export const upgradeRecord = (record: PreviousRecord): typeof RecordEnvelope.Encoded => record;
 
 export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
   "RecordFormatError",
@@ -23,7 +13,6 @@ export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
 
 const wire = new WeakMap<RecordEnvelope, PersistedJson>();
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
-const decodePrevious = Schema.decodeUnknownEffect(PreviousRecord);
 const encodeRecord = Schema.encodeEffect(RecordEnvelope);
 const copyJson = Schema.decodeEffect(Schema.fromJsonString(PersistedJson));
 
@@ -32,24 +21,14 @@ export const decodeExportRecord = Effect.fnUntraced(function* (
   format: string,
   input: PersistedJson,
 ) {
+  if (format !== CURRENT_RECORD_FORMAT)
+    return yield* RecordFormatError.make({ format, message: "Unsupported record format" });
+
   const original = yield* copyJson(canonicalJson(input)).pipe(
     Effect.mapError(() => RecordFormatError.make({ format, message: "Invalid record JSON" })),
   );
 
-  const value =
-    format === CURRENT_RECORD_FORMAT
-      ? original
-      : format === PREVIOUS_RECORD_FORMAT
-        ? upgradeRecord(
-            yield* decodePrevious(original).pipe(
-              Effect.mapError(() =>
-                RecordFormatError.make({ format, message: "Invalid predecessor record" }),
-              ),
-            ),
-          )
-        : yield* RecordFormatError.make({ format, message: "Unsupported record format" });
-
-  const record = yield* decodeRecord(value).pipe(
+  const record = yield* decodeRecord(original).pipe(
     Effect.mapError(() => RecordFormatError.make({ format, message: "Invalid canonical record" })),
   );
 
@@ -91,15 +70,3 @@ export const ExportBatch = Schema.Struct({
     encode: SchemaGetter.transform((batch) => batch),
   }),
 );
-
-/** Current wire after the single semantic upgrade; same-format records keep their original fields. */
-export const encodeImportedRecord = Effect.fnUntraced(function* (
-  format: string,
-  record: RecordEnvelope,
-) {
-  const original = wire.get(record);
-
-  if (format === CURRENT_RECORD_FORMAT && original !== undefined) return original;
-
-  return yield* encodeRecord(record);
-});

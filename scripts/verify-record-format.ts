@@ -1,12 +1,6 @@
-import { NodeCrypto, NodeRuntime } from "@effect/platform-node";
-import { Console, Effect, Schema } from "effect";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
 
-import { digestJson } from "../packages/effect-agent/src/durable/Digest.ts";
-import {
-  PREVIOUS_RECORD_SCHEMA_DIGEST,
-  PREVIOUS_RECORD_VERSION,
-  RecordEnvelope as PreviousEnvelope,
-} from "../packages/effect-agent/src/durable/internal/PreviousRecord.ts";
 import {
   CURRENT_RECORD_FORMAT,
   CURRENT_RECORD_VERSION,
@@ -20,6 +14,13 @@ class RecordCompatibilityError extends Schema.TaggedError<RecordCompatibilityErr
     message: Schema.String,
   },
 ) {}
+
+// Build-only wire contract. Refresh it with the approved schema at a record-format cutover.
+const Baseline = Schema.Struct({
+  version: Schema.Int.check(Schema.isGreaterThan(0)),
+  schema: Schema.Json,
+  definitions: Schema.Record(Schema.String, Schema.Json),
+});
 
 const metadata = new Set(["title", "description", "examples", "$comment"]);
 const isObject = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
@@ -69,40 +70,43 @@ const changes = (before: unknown, after: unknown, path: string): ReadonlyArray<s
 
 /** JSON Schema cannot prove behavioral meaning; semantic review must still bump the format. */
 export const verifyRecordFormat = Effect.fnUntraced(function* () {
-  const previous = Schema.toJsonSchemaDocument(Schema.Struct(PreviousEnvelope.fields));
-  const previousJson = yield* Schema.decodeUnknownEffect(Schema.Json)(previous);
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = yield* path.fromFileUrl(new URL("./record-format.schema.json", import.meta.url));
 
-  if ((yield* digestJson(previousJson)) !== PREVIOUS_RECORD_SCHEMA_DIGEST) {
-    return yield* RecordCompatibilityError.make({
-      message:
-        "The frozen previous record union or a transitive wire schema changed. Preserve the predecessor decoder, or replace its snapshot and digest together when retiring that release.",
-    });
-  }
+  const baseline = yield* Schema.decodeEffect(Schema.fromJsonString(Baseline))(
+    yield* fs.readFileString(file),
+  ).pipe(
+    Effect.mapError(() =>
+      RecordCompatibilityError.make({ message: "Invalid build-time record schema baseline." }),
+    ),
+  );
+
   if (
     CURRENT_RECORD_FORMAT !== `effect-agent/thread@${CURRENT_RECORD_VERSION}` ||
-    CURRENT_RECORD_VERSION < PREVIOUS_RECORD_VERSION ||
-    CURRENT_RECORD_VERSION > PREVIOUS_RECORD_VERSION + 1
+    CURRENT_RECORD_VERSION < baseline.version
   ) {
     return yield* RecordCompatibilityError.make({
-      message: "Record formats must name the current version and retain at most one predecessor.",
+      message:
+        "Record format must name the current version and cannot precede its schema baseline.",
     });
   }
-  if (Number(CURRENT_RECORD_VERSION) !== Number(PREVIOUS_RECORD_VERSION)) return;
+  if (CURRENT_RECORD_VERSION > baseline.version) return;
 
   const current = Schema.toJsonSchemaDocument(
     Schema.Struct({ ...RecordEnvelope.fields, payload: KnownRecordPayload }),
   );
 
   const incompatible = [
-    ...changes(previous.schema, current.schema, "record"),
-    ...Object.entries(previous.definitions).flatMap(([name, schema]) =>
+    ...changes(baseline.schema, current.schema, "record"),
+    ...Object.entries(baseline.definitions).flatMap(([name, schema]) =>
       changes(schema, current.definitions[name], name),
     ),
   ];
 
   if (incompatible.length > 0) {
     return yield* RecordCompatibilityError.make({
-      message: `Existing record wire meaning changed at ${incompatible.slice(0, 8).join(", ")}. Bump CURRENT_RECORD_VERSION and CURRENT_RECORD_FORMAT and implement the single pure upgradeRecord; never rewrite stored payloads in place.`,
+      message: `Existing record wire meaning changed at ${incompatible.slice(0, 8).join(", ")}. Bump CURRENT_RECORD_VERSION and CURRENT_RECORD_FORMAT and provide an explicit export/convert/import cutover. Runtime import only accepts the current record format.`,
     });
   }
 });
@@ -112,7 +116,7 @@ if (import.meta.main)
     verifyRecordFormat().pipe(
       Effect.tap(() => Console.log("Record format compatibility verified")),
       Effect.tapError((error) => Console.error(error.message)),
-      Effect.provide(NodeCrypto.layer),
+      Effect.provide(NodeServices.layer),
     ),
     { disableErrorReporting: true },
   );

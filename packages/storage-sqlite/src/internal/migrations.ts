@@ -173,7 +173,6 @@ const normalize = (statement: string) =>
 
 const inspectStorage = Effect.fnUntraced(function* (
   client: SqlClient.SqlClient,
-  acceptedFormats: ReadonlyArray<string>,
 ): Effect.fn.Return<
   SqliteStorageHeader | undefined,
   SqliteStorageCompatibilityError | SqliteStorageCorruptionError | SqliteStorageError
@@ -231,7 +230,7 @@ const inspectStorage = Effect.fnUntraced(function* (
       return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
     header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
   }
-  if (!acceptedFormats.includes(header.recordFormat))
+  if (header.recordFormat !== CURRENT_RECORD_FORMAT)
     return yield* incompatible(
       header.layoutVersion,
       `Unsupported record format ${header.recordFormat}.`,
@@ -252,11 +251,8 @@ const inspectStorage = Effect.fnUntraced(function* (
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
-export const readSqliteStorageHeader = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  acceptedFormats: ReadonlyArray<string>,
-) {
-  const header = yield* inspectStorage(sql, acceptedFormats);
+export const readSqliteStorageHeader = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
+  const header = yield* inspectStorage(sql);
 
   if (header === undefined)
     return yield* incompatible(0, "No initialized Thread storage to export.");
@@ -272,15 +268,15 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout"
 
   // Current storage opens through a read snapshot even while another connection is writing.
   // Only a pending layout acquires the writer lock, then repeats every check under that lock.
-  const current = yield* makeSqlTransaction(sql, { begin: "BEGIN" })(
-    inspectStorage(sql, [CURRENT_RECORD_FORMAT]),
-  ).pipe(Effect.catchTag("SqlError", storageError));
+  const current = yield* makeSqlTransaction(sql, { begin: "BEGIN" })(inspectStorage(sql)).pipe(
+    Effect.catchTag("SqlError", storageError),
+  );
 
   if (current?.layoutVersion === CurrentSqliteStorageVersion) return current;
 
   return yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(
     Effect.gen(function* () {
-      const header = yield* inspectStorage(sql, [CURRENT_RECORD_FORMAT]);
+      const header = yield* inspectStorage(sql);
       const version = header?.layoutVersion ?? 0;
 
       for (const step of sqliteLayoutSteps) {
@@ -292,7 +288,7 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout"
       if (header === undefined)
         yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
 
-      return yield* readSqliteStorageHeader(sql, [CURRENT_RECORD_FORMAT]);
+      return yield* readSqliteStorageHeader(sql);
     }),
   ).pipe(Effect.catchTag("SqlError", storageError));
 });

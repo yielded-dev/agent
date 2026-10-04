@@ -9,4 +9,4 @@
 
 Export complete Thread archives and atomically import them into empty Threads with rebuilt ledger state and preserved admission facts.
 
-BEHAVIOR CHANGE: Quiesce the source and export/import into fresh storage for record-format changes; retain queued or externally linked work when import rejects it, and re-export older archives that lack batch identities.
+BEHAVIOR CHANGE: Quiesce the source and export/import into fresh storage for the layout-16 cutover; import only the current record format and convert archives explicitly for future semantic changes. Retain queued or externally linked work when import rejects it, and re-export older archives that lack batch identities.
