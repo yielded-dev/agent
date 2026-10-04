@@ -277,11 +277,8 @@ export const inspectDom = (
     truncated ||= candidates.length > retained.length;
   }
 
-  const controls = retained.map((node, index) => {
-    const ref = `${prefix}-${index}`;
-    const tag = node.tagName.toLowerCase();
+  const readName = (node: HTMLElement) => {
     const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
-    const type = associated instanceof HTMLInputElement ? associated.type : "";
 
     const nativeField =
       associated instanceof HTMLInputElement ||
@@ -289,27 +286,18 @@ export const inspectDom = (
       associated instanceof HTMLSelectElement;
 
     const labels = nativeField ? associated.labels : null;
+    const root = node.getRootNode();
 
     const labelledBy = (node.getAttribute("aria-labelledby") ?? "")
       .split(/\s+/)
       .map((id) =>
-        node.getRootNode() instanceof Document || node.getRootNode() instanceof ShadowRoot
-          ? (Reflect.get(node.getRootNode(), "getElementById").call(node.getRootNode(), id)
-              ?.textContent ?? "")
+        root instanceof Document || root instanceof ShadowRoot
+          ? (root.getElementById(id)?.textContent ?? "")
           : "",
       )
       .join(" ");
 
-    const role = node.getAttribute("role");
-
-    const kind =
-      tag === "label" &&
-      associated instanceof HTMLInputElement &&
-      ["checkbox", "radio"].includes(type)
-        ? type
-        : (role ?? (type === "checkbox" || type === "radio" ? type : tag === "a" ? "link" : tag));
-
-    const name = (
+    return (
       node.getAttribute("aria-label") ||
       labelledBy.trim() ||
       (labels === null
@@ -327,6 +315,29 @@ export const inspectDom = (
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 300);
+  };
+
+  const controls = retained.map((node, index) => {
+    const ref = `${prefix}-${index}`;
+    const tag = node.tagName.toLowerCase();
+    const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
+    const type = associated instanceof HTMLInputElement ? associated.type : "";
+
+    const nativeField =
+      associated instanceof HTMLInputElement ||
+      associated instanceof HTMLTextAreaElement ||
+      associated instanceof HTMLSelectElement;
+
+    const role = node.getAttribute("role");
+
+    const kind =
+      tag === "label" &&
+      associated instanceof HTMLInputElement &&
+      ["checkbox", "radio"].includes(type)
+        ? type
+        : (role ?? (type === "checkbox" || type === "radio" ? type : tag === "a" ? "link" : tag));
+
+    const name = readName(node);
 
     const allOptions = node instanceof HTMLSelectElement ? Array.from(node.options) : [];
 
@@ -362,6 +373,7 @@ export const inspectDom = (
         "aria-labelledby",
         "aria-expanded",
         "aria-selected",
+        "aria-checked",
         "aria-controls",
         "href",
       ].flatMap((key) => {
@@ -372,6 +384,11 @@ export const inspectDom = (
     );
 
     registry.set(ref, node);
+    nameChecks.set(ref, {
+      name,
+      originalName: name,
+      verify: () => readName(node) === name,
+    });
     const pointerEvents = getComputedStyle(node).pointerEvents?.slice(0, 64);
 
     return {
@@ -492,6 +509,7 @@ export const inspectDom = (
           name: control.name,
           originalName,
           verify: () =>
+            readName(node) === originalName &&
             container.isConnected &&
             container.contains(node) &&
             container.contains(caption) &&

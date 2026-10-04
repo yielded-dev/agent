@@ -1179,6 +1179,12 @@ export const make = Effect.fnUntraced(function* <R>(
         };
       }
 
+      const dialogReady = yield* Deferred.make<void>();
+
+      // Re-arm before answering: the handler may open another dialog before
+      // this response settles. The original input keeps its fiber and deadline.
+      dialogSignal = dialogReady;
+
       const response =
         outstanding.fiber.pollUnsafe() === undefined
           ? // Suspended input owns the session lock. This is its only allowed interleaving;
@@ -1209,8 +1215,18 @@ export const make = Effect.fnUntraced(function* <R>(
 
       if (result._tag === "Failure")
         return yield* after(0, result.failure.message, result.failure.dispatch ?? "not-dispatched");
-      pendingDialogs.delete(page);
-      const settled = yield* Fiber.join(outstanding.fiber).pipe(Effect.result);
+      if (pendingDialogs.get(page) === pending) pendingDialogs.delete(page);
+
+      const settled = yield* Effect.raceFirst(
+        Fiber.join(outstanding.fiber),
+        Deferred.await(dialogReady).pipe(Effect.as("unknown" as const)),
+      ).pipe(
+        Effect.onInterrupt(() => Fiber.interrupt(outstanding.fiber)),
+        Effect.result,
+      );
+
+      if (settled._tag === "Success" && settled.success === "unknown")
+        return yield* after(1, null, "acknowledged", undefined, true);
 
       clearInput();
 
@@ -1245,7 +1261,7 @@ export const make = Effect.fnUntraced(function* <R>(
       if (request.accept) await pending.dialog.accept(request.text);
       else await pending.dialog.dismiss();
       receipt.dispatch = "acknowledged";
-      pendingDialogs.delete(page);
+      if (pendingDialogs.get(page) === pending) pendingDialogs.delete(page);
 
       return true;
     }).pipe(Effect.result);

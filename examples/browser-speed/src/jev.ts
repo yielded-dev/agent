@@ -1,7 +1,7 @@
 import { TypeSafeClient, TypeSafeDecisionModel, TypeSafeSchema } from "@effect/ai-typesafe";
 import type { BrowserSession } from "@yielded/agent-platform-cloudflare/browser-session";
 import * as BrowserUse from "@yielded/agent/browser-use";
-import { Clock, Config, Effect, FileSystem, Layer, Schema } from "effect";
+import { Clock, Config, Context, Effect, FileSystem, Layer, Schema } from "effect";
 import { Decision, DecisionModel, LanguageModel, Prompt } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
@@ -30,6 +30,33 @@ const PageDetails = Schema.Struct({
   height: Schema.Number,
   documentHeight: Schema.Number,
 });
+
+/** Host-provided page metadata beyond the shared browser-control contract. */
+export class JevPage extends Context.Service<
+  JevPage,
+  { readonly read: Effect.Effect<typeof PageDetails.Type, JevJourneyError> }
+>()("browser-speed/JevPage") {
+  static layer(session: Pick<BrowserSession, "run">) {
+    return Layer.succeed(JevPage, {
+      read: session
+        .run(Effect.void, (page) =>
+          page.evaluate(() => ({
+            title: document.title,
+            scrollY,
+            height: innerHeight,
+            documentHeight: document.documentElement.scrollHeight,
+          })),
+        )
+        .pipe(
+          Effect.withSpan("browser.jev.page-details"),
+          Effect.flatMap(Schema.decodeUnknownEffect(PageDetails)),
+          Effect.mapError(
+            () => new JevJourneyError({ message: "Could not read current page dimensions." }),
+          ),
+        ),
+    });
+  }
+}
 
 const IndexedControl = Schema.Struct({
   index: Schema.String,
@@ -327,11 +354,11 @@ export const runJevJourney = Effect.fn("browser.jev.loop")(function* (options: {
   readonly textProvider: "openai" | "openrouter";
   readonly textReasoning: "none" | "low";
   readonly stepBudget: number;
-  readonly session: Pick<BrowserSession, "run">;
   readonly ready: () => void;
 }) {
   const browser = yield* BrowserUse.BrowserActions;
   const control = yield* BrowserUse.BrowserControl;
+  const page = yield* JevPage;
   const clock = yield* Clock.Clock;
   const history: Array<typeof ActionSummary.Type> = [];
   let pendingText: { input: string; value: string } | undefined;
@@ -339,22 +366,7 @@ export const runJevJourney = Effect.fn("browser.jev.loop")(function* (options: {
   let waitingSince: bigint | undefined;
   let observation = yield* browser.observe;
 
-  const readDetails = options.session
-    .run(Effect.void, (page) =>
-      page.evaluate(() => ({
-        title: document.title,
-        scrollY,
-        height: innerHeight,
-        documentHeight: document.documentElement.scrollHeight,
-      })),
-    )
-    .pipe(
-      Effect.withSpan("browser.jev.page-details"),
-      Effect.flatMap(Schema.decodeUnknownEffect(PageDetails)),
-      Effect.mapError(
-        () => new JevJourneyError({ message: "Could not read current page dimensions." }),
-      ),
-    );
+  const readDetails = page.read;
 
   let space = actionSpace(observation, yield* readDetails);
 

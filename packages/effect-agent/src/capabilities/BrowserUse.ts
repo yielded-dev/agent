@@ -83,6 +83,7 @@ export const ActionResult = Schema.Struct({
   observation: Schema.NullOr(Observation),
   /** Input receipt is independent of the next observation and never authorizes replay. */
   dispatch: Schema.optionalKey(Schema.Literals(["not-dispatched", "acknowledged", "unknown"])),
+  /** The same input may remain pending across successive dialog responses. Never replay it. */
   pendingInput: Schema.optionalKey(Schema.Struct({ ref: Ref, reason: Schema.Literal("dialog") })),
   settledInput: Schema.optionalKey(
     Schema.Struct({
@@ -366,7 +367,8 @@ export const selectTargets = Effect.fnUntraced(function* (
             ? control.editable === true ||
               (control.editable === undefined &&
                 (control.kind === "input" || control.kind === "textarea"))
-            : control.kind === "select" && control.options.includes(action.value)),
+            : (control.kind === "select" || control.optionDetails !== undefined) &&
+              control.options.includes(action.value)),
     ),
   );
 

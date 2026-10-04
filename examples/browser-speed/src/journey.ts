@@ -36,7 +36,7 @@ import { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js
 import { workerExecutor } from "./code-executor.ts";
 import { Board, verify } from "./contract.ts";
 import { fixtureHtml } from "./fixture.ts";
-import { jevDecisionLayer, runJevJourney } from "./jev.ts";
+import { JevPage, jevDecisionLayer, runJevJourney } from "./jev.ts";
 
 class JourneyError extends Schema.TaggedError<JourneyError>()("JourneyError", {
   stage: Schema.String,
@@ -674,13 +674,17 @@ export const journey = Effect.gen(function* () {
           textProvider,
           textReasoning,
           stepBudget,
-          session,
           ready: () => {
             readyAt = now();
             readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
           },
         }).pipe(
-          Effect.provide([controller.layer, jevDecisionLayer(output), textLayer]),
+          Effect.provide([
+            controller.layer,
+            JevPage.layer(session),
+            jevDecisionLayer(output),
+            textLayer,
+          ]),
           Effect.timeout("8 minutes"),
           Effect.exit,
         );

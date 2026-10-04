@@ -191,8 +191,8 @@ references; tab selection stays inside the attachment's browser context.
 Frame and tab URL summaries omit `data:` document payloads. Host authorization always
 receives the complete native URL.
 
-Before input, the adapter checks node identity, current state and visibility, including
-iframe parents. Pointer input requires an unobstructed hit; keyboard input verifies native
+Before input, the adapter checks node identity, the observed name including external labels,
+current state and visibility, including iframe parents. Pointer input requires an unobstructed hit; keyboard input verifies native
 focus. Observed `pointerEvents` and `tabindex` distinguish keyboard-only controls; semantic
 click selection excludes `pointerEvents: "none"`. Native input always revalidates these hints.
 Keyboard-only overlays check their containing element for obstruction. Visible native
@@ -204,8 +204,9 @@ by custom hosts must enforce the requested deadline as well.
 `completed` counts acknowledged inputs. `dispatch` distinguishes `not-dispatched`,
 `acknowledged`, and `unknown`, independently of the next observation. An acknowledged
 input is not proof that the site saved the requested state. `pendingInput` identifies
-input suspended by a dialog; answering it returns the original input's `settledInput`
-receipt. Outstanding work belongs to the controller's Scope and retains its native
+input suspended by a dialog. Respond to each newly observed dialog; the same `pendingInput`
+persists until the original input returns a `settledInput` receipt.
+Outstanding work belongs to the controller's Scope and retains its native
 deadline. Observation waits briefly for a loading document to finish parsing; use an
 explicit condition wait for application readiness. A failed read reports that it dispatched no new
 input, without changing earlier input receipts or the session's outstanding-work fencing.
