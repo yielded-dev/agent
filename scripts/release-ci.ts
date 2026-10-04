@@ -2,17 +2,15 @@ import { Buffer } from "node:buffer";
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Config, Console, Effect, FileSystem, Schedule, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { ChildProcess } from "effect/unstable/process";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
+import { ChildProcess } from "effect/process";
 
-const repository = "danieljvdm/effect-agent";
+const repository = "yielded-dev/agent";
 const workflowPath = ".github/workflows/ci.yml";
 
 export const Sha = Schema.String.check(Schema.isPattern(/^[a-f0-9]{40}$/));
 
-const PackageName = Schema.String.check(
-  Schema.isPattern(/^(?:effect-agent|@effect-agent\/[a-z][a-z0-9-]*)$/),
-);
+const PackageName = Schema.String.check(Schema.isPattern(/^@yielded\/agent(?:-[a-z][a-z0-9-]*)?$/));
 
 const Beta = Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)$/));
 
@@ -70,7 +68,11 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
   let expectedLock = lock?.before ?? "";
 
   for (const name of packages) {
-    const directory = `packages/${name.replace("@effect-agent/", "")}`;
+    const directory =
+      name === "@yielded/agent"
+        ? "packages/effect-agent"
+        : `packages/${name.replace("@yielded/agent-", "")}`;
+
     const manifestPath = `${directory}/package.json`;
     const changelogPath = `${directory}/CHANGELOG.md`;
 

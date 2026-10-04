@@ -1,14 +1,13 @@
+import { BrowserCrypto } from "@effect/platform-browser";
+import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   DoScheduleAlarmControl,
   DoScheduleTransaction,
   scheduleStoreLayer,
-} from "@effect-agent/storage-cloudflare/do-schedule-store";
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
-import { Clock, Context, DateTime, Effect, Layer, Schema } from "effect";
-import { type DurableSubmitAgent } from "effect-agent/durable-agent-runtime";
-import { AgentId } from "effect-agent/identifiers";
-import { DefinitionDigests, PersistedJson } from "effect-agent/records";
+} from "@yielded/agent-storage-cloudflare/do-schedule-store";
+import { type DurableSubmitAgent } from "@yielded/agent/durable-agent-runtime";
+import { AgentId } from "@yielded/agent/identifiers";
+import { DefinitionDigests, PersistedJson } from "@yielded/agent/records";
 import {
   ScheduleAuthorizationError,
   type ScheduleAuthorizer,
@@ -28,15 +27,16 @@ import {
   ScheduleTimingRequest,
   ScheduleValidationError,
   defaultSchedulingLimits,
-} from "effect-agent/schedule";
-import { scheduleOwnerKey } from "effect-agent/schedule-transition";
+} from "@yielded/agent/schedule";
+import { scheduleOwnerKey } from "@yielded/agent/schedule-transition";
 import {
   Scheduling,
   ScheduleDriver,
   type ScheduleManagementFailure,
   ScheduleWakeNoop,
-} from "effect-agent/scheduling";
-import { AdmissionFence } from "effect-agent/submission-ledger";
+} from "@yielded/agent/scheduling";
+import { AdmissionFence } from "@yielded/agent/submission-ledger";
+import { Clock, Context, DateTime, Effect, Layer, Schema } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
@@ -620,36 +620,34 @@ const handleScheduleRequest = Effect.fn("ScheduleOwner.handleRequest")(function*
 
 /** @internal The complete native alarm operation, including its event deadline. */
 export const scheduleAlarmHandler = (limits: SchedulingLimits) =>
-  DurableObjectAlarm.processDue(
-    (event) =>
-      Effect.gen(function* () {
-        if (event.tag !== SCHEDULE_ALARM_TAG || event.id !== SCHEDULE_ALARM_ID) {
-          return yield* ScheduleAlarmProtocolError.make({
-            message: `Unsupported Schedule Owner alarm ${event.tag}/${event.id}`,
-          });
-        }
-        yield* Schema.decodeUnknownEffect(ScheduleAlarmPayload)(event.payload).pipe(
-          Effect.mapError(() =>
-            ScheduleAlarmProtocolError.make({
-              message: "Unsupported Schedule Owner alarm payload version",
-            }),
-          ),
-        );
-        const scheduling = yield* ScheduleDriver;
-        const alarmControl = yield* DoScheduleAlarmControl;
-        const { owner } = yield* ScheduleOwnerIdentity;
-        const nowMillis = yield* Clock.currentTimeMillis;
+  DurableObjectAlarm.processDue((event) =>
+    Effect.gen(function* () {
+      if (event.tag !== SCHEDULE_ALARM_TAG || event.id !== SCHEDULE_ALARM_ID) {
+        return yield* ScheduleAlarmProtocolError.make({
+          message: `Unsupported Schedule Owner alarm ${event.tag}/${event.id}`,
+        });
+      }
+      yield* Schema.decodeUnknownEffect(ScheduleAlarmPayload)(event.payload).pipe(
+        Effect.mapError(() =>
+          ScheduleAlarmProtocolError.make({
+            message: "Unsupported Schedule Owner alarm payload version",
+          }),
+        ),
+      );
+      const scheduling = yield* ScheduleDriver;
+      const alarmControl = yield* DoScheduleAlarmControl;
+      const { owner } = yield* ScheduleOwnerIdentity;
+      const nowMillis = yield* Clock.currentTimeMillis;
 
-        yield* alarmControl.prearm(nowMillis + limits.recoveryPollMillis);
-        const pass = yield* scheduling.runDue(owner);
+      yield* alarmControl.prearm(nowMillis + limits.recoveryPollMillis);
+      const pass = yield* scheduling.runDue(owner);
 
-        if (pass.failed > 0) {
-          yield* alarmControl.prearm((yield* Clock.currentTimeMillis) + limits.recoveryPollMillis);
-        } else {
-          yield* alarmControl.reconcile;
-        }
-      }),
-    { mode: "ordered" },
+      if (pass.failed > 0) {
+        yield* alarmControl.prearm((yield* Clock.currentTimeMillis) + limits.recoveryPollMillis);
+      } else {
+        yield* alarmControl.reconcile;
+      }
+    }),
   ).pipe(
     // Bound due acquisition and acknowledgement as well as admission. Prepared occurrences
     // and their replacement alarm survive interruption and retain their idempotency keys.

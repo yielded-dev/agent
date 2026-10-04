@@ -1,20 +1,19 @@
-import { makeReviewer, ReviewChange, ReviewRequest } from "@effect-agent/pr-review/review";
+import type { OpenAiSchema } from "@effect/ai-openai";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { NodeServices } from "@effect/platform-node";
+import { describe, expect, it } from "@effect/vitest";
+import { makeReviewer, ReviewChange, ReviewRequest } from "@yielded/agent-pr-review/review";
 import {
   ReviewContextError,
   ReviewFileList,
   ReviewRepository,
   ReviewSource,
-} from "@effect-agent/pr-review/review-repository";
-import type { OpenAiSchema } from "@effect/ai-openai";
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { NodeServices } from "@effect/platform-node";
-import { describe, expect, it } from "@effect/vitest";
+} from "@yielded/agent-pr-review/review-repository";
 import {
   Cause,
   ConfigProvider,
   Deferred,
   Effect,
-  Encoding,
   Exit,
   Fiber,
   Logger,
@@ -23,8 +22,9 @@ import {
   Schema,
   Stream,
 } from "effect";
-import type { AiError } from "effect/unstable/ai";
-import { HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
+import type { AiError } from "effect/ai";
+import { Base64 } from "effect/encoding";
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 
 import { reviewActionProgram, reviewPublicationFailure } from "../src/action.ts";
 import { makeReviewOpenAi } from "../src/review-openai.ts";
@@ -41,6 +41,7 @@ const WireRequest = Schema.Struct({
   reasoning: Schema.optional(Schema.Json),
   text: Schema.optional(Schema.Json),
   max_output_tokens: Schema.optional(Schema.Natural),
+  max_tool_calls: Schema.optional(Schema.Natural),
   service_tier: Schema.optional(Schema.String),
   store: Schema.optional(Schema.Boolean),
   stream: Schema.optional(Schema.Boolean),
@@ -212,6 +213,158 @@ const payload: OpenAiSchema.CreateResponse = {
 };
 
 describe("review provider boundary", () => {
+  // https://github.com/yielded-dev/agent/commit/65b285991
+  // Charged searches but rejected all hosted outputs above eight.
+  // Control the provider boundary: live inference cannot reliably reproduce that output.
+  it.effect.each([false, true])(
+    "settles nine hosted outputs with two searches and continues (streaming=%s)",
+    (streaming) =>
+      Effect.gen(function* () {
+        const sent: Array<WireRequest> = [];
+
+        const output = [
+          "search",
+          "search",
+          "open_page",
+          "find_in_page",
+          ...Array.from({ length: 5 }, () => "open_page"),
+        ].map((type, index) => ({
+          type: "web_search_call",
+          id: `ws_${index}`,
+          status: "completed",
+          action: { type },
+        }));
+
+        const native = yield* makeNative(
+          HttpClient.make((httpRequest, url) =>
+            Effect.sync(() => {
+              if (url.pathname.endsWith("/input_tokens"))
+                return json(httpRequest, { object: "response.input_tokens", input_tokens: 10_000 });
+              sent.push(decodeWire(httpRequest));
+              const completed = { ...response(rawUsage(10_000, 500, 2_000, 1_000)), output };
+
+              return streaming
+                ? HttpClientResponse.fromWeb(
+                    httpRequest,
+                    new globalThis.Response(
+                      `data: ${JSON.stringify({ type: "response.completed", sequence_number: 0, response: completed })}\n\n`,
+                      { headers: { "content-type": "text/event-stream" } },
+                    ),
+                  )
+                : json(httpRequest, completed);
+            }),
+          ),
+        );
+
+        const provider = yield* makeReviewOpenAi({
+          model: "gpt-6-sol",
+          cacheKey: "hosted-actions",
+          // One $0.0419 settlement leaves exactly the next $0.72 full reservation.
+          costLimitMicrousd: 761_900,
+        }).pipe(Effect.provideService(OpenAiClient.OpenAiClient, native));
+
+        const input: OpenAiSchema.CreateResponse = {
+          ...payload,
+          tools: [{ type: "web_search" }],
+          max_tool_calls: 8,
+        };
+
+        const operation = streaming
+          ? provider.client
+              .createResponseStream(input)
+              .pipe(Effect.flatMap(([, stream]) => Stream.runDrain(stream)))
+          : provider.client.createResponse(input).pipe(Effect.asVoid);
+
+        yield* operation;
+        expect(yield* provider.costControl.snapshot).toMatchObject({
+          stopped: false,
+          modelCalls: 1,
+          usage: { webSearchCalls: 2, estimatedCostMicrousd: 41_900, reservedCostMicrousd: 0 },
+        });
+        yield* operation;
+        expect(sent).toHaveLength(2);
+        for (const wire of sent)
+          expect(wire).toMatchObject({ max_tool_calls: 8, max_output_tokens: 32_000 });
+        expect(yield* provider.costControl.snapshot).toMatchObject({
+          modelCalls: 2,
+          usage: { webSearchCalls: 4, estimatedCostMicrousd: 83_800, reservedCostMicrousd: 0 },
+        });
+      }),
+  );
+
+  // Preserve the spending and tool-authorization bounds while fixing that false refusal.
+  it.effect.each(["failed-search", "missing-action", "unknown-action", "forbidden-page"] as const)(
+    "retains the reservation and refuses further dispatch for %s",
+    (violation) =>
+      Effect.gen(function* () {
+        const forbidden = violation === "forbidden-page";
+        let sends = 0;
+
+        const output = [
+          ...Array.from({ length: forbidden ? 0 : 8 }, (_, index) => ({
+            type: "web_search_call",
+            id: `ws_${index}`,
+            status: "completed",
+            action: { type: "search" },
+          })),
+          {
+            type: "web_search_call",
+            id: "ws_last",
+            status: "failed",
+            ...(violation === "missing-action"
+              ? {}
+              : {
+                  action: {
+                    type: forbidden
+                      ? "open_page"
+                      : violation === "unknown-action"
+                        ? "future_action"
+                        : "search",
+                  },
+                }),
+          },
+        ];
+
+        const native = yield* makeNative(
+          HttpClient.make((httpRequest, url) =>
+            Effect.sync(() => {
+              if (url.pathname.endsWith("/input_tokens"))
+                return json(httpRequest, { object: "response.input_tokens", input_tokens: 10_000 });
+              sends += 1;
+
+              return json(httpRequest, { ...response(rawUsage(10_000, 500)), output });
+            }),
+          ),
+        );
+
+        const provider = yield* makeReviewOpenAi({
+          model: "gpt-6-sol",
+          cacheKey: "hosted-action-bounds",
+          costLimitMicrousd: 1_000_000,
+        }).pipe(Effect.provideService(OpenAiClient.OpenAiClient, native));
+
+        const input: OpenAiSchema.CreateResponse = {
+          ...payload,
+          tools: [{ type: "web_search" }],
+          max_tool_calls: 8,
+          ...(forbidden ? { tool_choice: "none" } : {}),
+        };
+
+        const error = yield* provider.client.createResponse(input).pipe(Effect.flip);
+
+        expect(error.reason._tag).toBe("InvalidRequestError");
+        expect(yield* provider.costControl.snapshot).toMatchObject({
+          modelCalls: 1,
+          usage: {
+            estimatedCostMicrousd: 0,
+            reservedCostMicrousd: forbidden ? 345_000 : 720_000,
+          },
+        });
+        yield* provider.client.createResponse(input).pipe(Effect.flip);
+        expect(sends).toBe(1);
+      }),
+  );
+
   it.effect.each([
     { requested: "fast", serviceTier: "default", streaming: true },
     { requested: "auto", serviceTier: "fast", streaming: false },
@@ -658,7 +811,7 @@ describe("review provider boundary", () => {
                 sha: `${revision}-blob`,
                 encoding: "base64",
                 size: text.length,
-                content: Encoding.encodeBase64(new TextEncoder().encode(text)),
+                content: Base64.encode(new TextEncoder().encode(text)),
               });
             }
             if (httpRequest.method === "POST" && url.pathname.endsWith("/pulls/12/reviews")) {

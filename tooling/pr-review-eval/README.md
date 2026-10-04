@@ -23,6 +23,12 @@ Set `PR_REVIEW_EFFORT` to compare reasoning configurations. Effort accepts
 Set `PR_REVIEW_PRIORITY=fast` for the Fast service tier; the default is `default`.
 The selected tier is recorded in the observation and used by the provider cost ledger.
 Each observation records the effective settings. Use distinct variant IDs for comparisons.
+Set `PR_REVIEW_WEB_SEARCH=true` to expose the Action's native hosted search tool;
+the default is `false`. Compare both settings with the same cases, source exclusions,
+guidance, model, effort, tier, and spending cap. Enabled observations record
+`webSearch.maxToolCalls: 8`, and usage records the actual `webSearchCalls`. An enabled
+tool that was never used does not establish a search effect. Search fees and retrieved
+tokens share each trial's cap, including the Action's conservative input reservation.
 Set `PR_REVIEW_COMPACTION` to `rollover` (default) or `prune`, and
 `PR_REVIEW_CONTEXT_TOKENS` to an integer from 16,000 to 128,000 (default 128,000).
 Rollover uses the engine's native fresh-context strategy without a summarizer call. Both strategies

@@ -1,16 +1,16 @@
-import { upgradeV2Subscriptions } from "@effect-agent/storage-sql/sql-storage-v2-upgrade";
-import { makeSqlSubscriptionStore } from "@effect-agent/storage-sql/sql-subscription-store";
 import { BrowserCrypto } from "@effect/platform-browser";
-import { Context, Effect, Layer, Schema } from "effect";
+import { upgradeV2Subscriptions } from "@yielded/agent-storage-sql/sql-storage-v2-upgrade";
+import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
 import {
   SourcePartition,
   SubscriptionError,
   SubscriptionFailpoint,
   type SubscriptionFailpointError,
   SubscriptionStore,
-} from "effect-agent/subscription";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+} from "@yielded/agent/subscription";
+import { Context, Effect, Layer, Schema } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
 
 const CURRENT_SUBSCRIPTION_STORE_VERSION = 3;
 

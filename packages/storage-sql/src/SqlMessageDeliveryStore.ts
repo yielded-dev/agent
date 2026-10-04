@@ -1,5 +1,4 @@
-import { Cause, DateTime, Effect, Schema } from "effect";
-import { ThreadId } from "effect-agent/identifiers";
+import { ThreadId } from "@yielded/agent/identifiers";
 import {
   applyMessageDeliveryChange,
   defaultMessageDeliveryStoreLimits,
@@ -17,13 +16,14 @@ import {
   messageDeliveryCapacity,
   sameMessageDeliveryIdentity,
   validateMessageDelivery,
-} from "effect-agent/message-delivery";
-import { ScheduleInstant } from "effect-agent/schedule";
-import { SqlStorageOwner } from "effect-agent/sql-memory-store";
-import { IdempotencyKey } from "effect-agent/submission-ledger";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
-import type { Statement } from "effect/unstable/sql/Statement";
+} from "@yielded/agent/message-delivery";
+import { ScheduleInstant } from "@yielded/agent/schedule";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { IdempotencyKey } from "@yielded/agent/submission-ledger";
+import { Cause, DateTime, Effect, Schema } from "effect";
+import * as SqlClient from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
+import type { Statement } from "effect/sql/Statement";
 
 import { sqliteJsonText, queryIdentifier } from "./internal/sql-json.ts";
 import { makeSqlLifecyclePublication } from "./SqlLifecyclePublication.ts";

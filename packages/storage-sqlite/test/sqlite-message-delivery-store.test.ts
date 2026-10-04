@@ -1,8 +1,7 @@
 import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { expect, it } from "@effect/vitest";
-import { DateTime, Effect, FileSystem, Layer, Option } from "effect";
-import { ThreadId } from "effect-agent/identifiers";
+import { ThreadId } from "@yielded/agent/identifiers";
 import {
   drainLifecyclePublications,
   lifecyclePublicationLayer,
@@ -11,13 +10,14 @@ import {
   LifecyclePublicationError,
   LifecyclePublicationHandler,
   type LifecyclePublicationStorage,
-} from "effect-agent/lifecycle-publication";
-import { MessageDeliveryStore, readPending } from "effect-agent/message-delivery";
+} from "@yielded/agent/lifecycle-publication";
+import { MessageDeliveryStore, readPending } from "@yielded/agent/message-delivery";
 import {
   makeMessageDeliveryFixture,
   messageDeliveryStoreConformanceCases,
-} from "effect-agent/testing/message-delivery-store-conformance";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+} from "@yielded/agent/testing/message-delivery-store-conformance";
+import { DateTime, Effect, FileSystem, Layer, Option } from "effect";
+import { SqlClient } from "effect/sql/SqlClient";
 
 import { messageDeliveryStoreLayer } from "../src/SqliteMessageDeliveryStore.ts";
 import { SqliteStorageFailpoint } from "../src/SqliteStorageFailpoint.ts";

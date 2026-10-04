@@ -1,6 +1,6 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 
 class DeploymentCheckError extends Schema.TaggedError<DeploymentCheckError>()(
   "DeploymentCheckError",
@@ -20,7 +20,7 @@ export const checkDeployment = Effect.gen(function* () {
 
   for (const args of [
     ["run", "docs:deploy", "--help"],
-    ["run", "-F", "@effect-agent/example-travel-planner", "deploy", "--help"],
+    ["run", "-F", "@yielded/agent-example-travel-planner", "deploy", "--help"],
     [
       "exec",
       "bun",

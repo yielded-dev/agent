@@ -3,7 +3,7 @@
 This directory contains the GitHub Action contract in `action.yml`. CI builds
 the JavaScript bundle and commits it only on distribution tags.
 
-Use `danieljvdm/effect-agent/action@action-v1` for the latest validated release,
+Use `yielded-dev/agent/action@action-v1` for the latest validated release,
 or pin the distribution commit SHA reported by CI for an immutable version.
 Each release also has an immutable `action-<source-commit-sha>` tag.
 New source commits, including `@main`, do not contain a runnable bundle. Switch
@@ -11,9 +11,9 @@ to a distribution ref to receive updates. Older SHA pins that contain a bundle
 continue to work.
 
 The private
-[`@effect-agent/pr-review-action`](../packages/pr-review-action) workspace
+[`@yielded/agent-pr-review-action`](../packages/pr-review-action) workspace
 owns the source and tests. The public
-[`@effect-agent/pr-review`](../packages/pr-review) package remains provider-
+[`@yielded/agent-pr-review`](../packages/pr-review) package remains provider-
 and transport-neutral.
 
 Build locally with `vp run action:build`. The generated `action/dist/` directory
@@ -173,6 +173,13 @@ mismatched response is marked unavailable. A missing review commit does not excl
 attributable dismissal evidence.
 The source tools read committed Git files and do not install dependencies.
 
+Set `web-search: "true"` (local `PR_REVIEW_WEB_SEARCH=true`) to let the reviewer
+search and open public documentation through OpenAI's hosted web tool. It is off
+by default. Queries should contain public API names and versions, never repository
+source or private values. External evidence remains untrusted, and findings that
+depend on it must cite a public URL. The review footer and `web-search-calls` output
+count billed searches; opening or finding text within a page is not a billed search.
+
 Reviews with findings include a **Copy all findings** dropdown. Expand it and use the code
 block's copy button to copy every finding from that review, including paths, inline line numbers
 when available, and the inspected commit. The block reminds coding agents to verify findings
@@ -288,7 +295,7 @@ Set `priority: default` to force Standard processing, or `priority: fast` (local
 `PR_REVIEW_PRIORITY=fast`) to request [OpenAI Fast mode](https://developers.openai.com/api/docs/guides/fast-mode).
 Fast is supported for the listed models, subject to account and regional availability.
 Fast mode costs twice the standard token rates for the supported models and uses the same
-size-scaled spending cap, so the allowance buys fewer tokens. The effect-agent repository's
+size-scaled spending cap, so the allowance buys fewer tokens. The @yielded/agent repository's
 workflow opts into Fast mode with `base-cost-usd: "20.00"` and `max-cost-usd: "25.00"`;
 its allowance still scales with PR size.
 Requests with omitted priority reserve at Fast rates because the project setting can enable Fast.
@@ -298,7 +305,7 @@ Fast pricing. Unknown response tiers retain their reservation and stop the attem
 requests are not retried at another tier; the selected model and effort stay unchanged.
 
 ```yaml
-- uses: danieljvdm/effect-agent/action@action-v1
+- uses: yielded-dev/agent/action@action-v1
   with:
     openai-api-key: ${{ secrets.OPENAI_API_KEY }}
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -319,8 +326,20 @@ Before each research, compaction, or completion request, the Action uses OpenAI'
 encoded input, tools, reasoning, and output-format settings. It rejects inputs above 128,000 tokens,
 then reserves every input token at the cache-write rate plus the full output allowance, including
 reasoning. Admission never assumes a cache hit. The ledger releases unused reservations only after
-validating the response's usage, model, tier, and counted bounds. Failed, interrupted, or unmetered
+validating the response's usage, model, tier, and reserved bounds. Failed, interrupted, or unmetered
 requests retain their possible charge; the transport does not automatically retry them.
+
+With web search enabled, each response requests a limit of eight hosted web actions. A response
+with extra hosted output items produces a count-only warning. Token usage, billable searches,
+and total cost must fit the reservation; exceeding those bounds stops the review as incomplete
+and retains its reservation.
+The model may continue searching or opening pages in later turns. Because preflight cannot count
+retrieved text, admission reserves the full 128,000-token search context at the
+cache-write rate, plus eight $0.01 searches and the output allowance. Settlement charges
+observed tokens and searches within the same spending cap. This conservative reserve
+can stop a review while some allowance remains. Exact-function finalization uses the
+ordinary counted reservation. Search pricing follows
+[OpenAI's built-in tool rates](https://developers.openai.com/api/docs/pricing#built-in-tools).
 
 Character admission does not guarantee a token fit. If the engine's context estimate or the
 provider's exact count exceeds the input limit, the Action publishes an incomplete token-budget
@@ -403,7 +422,7 @@ The Action uses explicit-only caching with a 30-minute TTL and a stable head-bas
 It marks reusable instructions, the diff, and completed tool batches, retaining earlier boundaries
 as history grows. Cache fields are added only at the native
 Effect OpenAI client boundary; canonical history and provider encoding remain unchanged. This works
-with the pinned Effect `4.0.0-rc.117` client, which serializes the additional request fields unchanged.
+with the pinned Effect `4.0.0` client, which serializes the additional request fields unchanged.
 Required finalization selects `submit_review` through the native exact-tool choice, preserving
 the research tool definitions and their order in the encoded request.
 Compaction can change prefixes, and routing and cache availability still affect hits. See

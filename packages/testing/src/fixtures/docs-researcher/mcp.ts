@@ -1,14 +1,14 @@
-import type { JsonSchema } from "effect";
-import { Effect, JsonPointer, Layer, Schema } from "effect";
 import {
   McpConnectionRequest,
   McpConnector,
   McpServerIdentity,
   McpToolkitMismatch,
   type McpConnection,
-} from "effect-agent/mcp";
-import { Tool } from "effect/unstable/ai";
-import * as McpSchema from "effect/unstable/ai/McpSchema";
+} from "@yielded/agent/mcp";
+import type { JsonSchema } from "effect";
+import { Effect, JsonPointer, Layer, Schema } from "effect";
+import { Tool } from "effect/ai";
+import * as McpSchema from "effect/ai/McpSchema";
 
 import { DocContentToolkit, FetchDocument } from "./definition.ts";
 

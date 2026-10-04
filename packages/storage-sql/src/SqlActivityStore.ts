@@ -1,4 +1,3 @@
-import { Clock, Effect, Schema } from "effect";
 import {
   ActivityBusy,
   ActivityClaim,
@@ -11,9 +10,10 @@ import {
   ActivityStoreError,
   ActivityWorkConflict,
   PreparedActivity,
-} from "effect-agent/activity-store";
-import { Digest } from "effect-agent/records";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
+} from "@yielded/agent/activity-store";
+import { Digest } from "@yielded/agent/records";
+import { Clock, Effect, Schema } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
 
 import { makeSqlQuery, SqlInteger, SqlNumber, type SqlWriteTransaction } from "./SqlStorage.ts";
 

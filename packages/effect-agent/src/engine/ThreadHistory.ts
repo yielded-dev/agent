@@ -1,8 +1,8 @@
+import type { Prompt } from "effect/ai";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import type { Prompt } from "effect/unstable/ai";
 
 import { ThreadId, type RunId } from "../core/Identifiers.ts";
 import { type RunCompleted } from "../core/RunEvent.ts";
@@ -52,7 +52,7 @@ export interface ThreadHistoryRun {
 /**
  * History shared by Runs with the same Thread ID. The default layer retains native messages
  * incrementally in memory for its application Scope, including completed updates before a failure.
- * PersistentHistory.layer from effect-agent/persistent-history instead commits successful
+ * PersistentHistory.layer from @yielded/agent/persistent-history instead commits successful
  * Runs to an explicit ThreadStore. Durable hosts retain history through their journal hooks.
  * No implementation may retry model or Tool execution or claim interrupted-work recovery.
  */

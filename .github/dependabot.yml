@@ -1,0 +1,28 @@
+# Dependabot keeps Actions current and surfaces Bun dependency drift.
+# Bun lockfiles get version updates only; security advisories arrive through
+# Dependabot alerts on the dependency graph and are fixed by hand with `vp install`.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directories: ["/", "/.github/actions/*", "/action"]
+    schedule:
+      interval: "weekly"
+    # Action v2 requires Changesets CLI v3 and a release-workflow migration.
+    ignore:
+      - dependency-name: "changesets/action"
+        update-types: ["version-update:semver-major"]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      effect:
+        patterns: ["effect", "@effect/*"]
+      dependencies:
+        patterns: ["*"]
+        exclude-patterns: ["effect", "@effect/*"]

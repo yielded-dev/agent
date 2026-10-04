@@ -1,12 +1,11 @@
+import { BrowserCrypto } from "@effect/platform-browser";
+import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   DoStorageFailpointError,
   type DoStorageFailpointLocation,
-} from "@effect-agent/storage-cloudflare/do-storage-error";
-import { ledgerLayer } from "@effect-agent/storage-cloudflare/do-submission-ledger";
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
-import { Cause, Effect, Exit, Option, Ref, Schema, type Crypto } from "effect";
-import { digestJson } from "effect-agent/digest";
+} from "@yielded/agent-storage-cloudflare/do-storage-error";
+import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
+import { digestJson } from "@yielded/agent/digest";
 import {
   AbortCommand,
   ApprovalDecisionCommand,
@@ -36,9 +35,10 @@ import {
   WaitingChild,
   WaitingForChildSuspension,
   submissionInputRecordId,
-} from "effect-agent/submission-ledger";
+} from "@yielded/agent/submission-ledger";
+import { Cause, Effect, Exit, Option, Ref, Schema, type Crypto } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

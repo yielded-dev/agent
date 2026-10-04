@@ -8,6 +8,9 @@ export default defineConfig({
         // Wrangler reads its own temporary bundle during validation.
         input: [
           { auto: true },
+          "*",
+          // Excluding the workspace root (".") would drop every file input.
+          { pattern: "!tooling/cloudflare-memory", base: "workspace" },
           "!.wrangler",
           "!.wrangler/**",
           { pattern: "bun.lock", base: "workspace" },

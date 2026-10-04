@@ -1,15 +1,15 @@
-import { dynamicWorkerCodeExecutorLayer } from "@effect-agent/platform-cloudflare/cloudflare-code-mode";
-import { Effect, Layer, Schema, Tracer } from "effect";
+import { dynamicWorkerCodeExecutorLayer } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
 import {
   CodeExecutionHost,
   CodeExecutionProtocolError,
   CodeExecutor,
   CodeHostCall,
   CodeHostCallResult,
-} from "effect-agent/code-executor";
-import { SandboxImplementation } from "effect-agent/sandbox";
-import { FetchHttpClient } from "effect/unstable/http";
-import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
+} from "@yielded/agent/code-executor";
+import { SandboxImplementation } from "@yielded/agent/sandbox";
+import { Effect, Layer, Schema, Tracer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { OtlpSerialization, OtlpTracer } from "effect/observability";
 
 import * as Wire from "./code-executor-wire.ts";
 

@@ -6,7 +6,7 @@ import {
   type ReviewOutcome,
   type ReviewReport,
   type ReviewSeverity,
-} from "@effect-agent/pr-review/review";
+} from "@yielded/agent-pr-review/review";
 import { Schema } from "effect";
 
 import { type GeneratedContentOmission } from "./generated-content.ts";
@@ -216,6 +216,7 @@ export interface ReviewPresentationInput {
   readonly cachedInputTokens: number;
   readonly cacheWriteInputTokens: number;
   readonly outputTokens: number;
+  readonly webSearchCalls?: number;
   readonly estimatedCost?: ReviewCostEstimate | undefined;
   readonly reservedCostMicrousd?: number;
   readonly costLimitMicrousd?: number;
@@ -373,6 +374,11 @@ export const renderReviewBody = (input: ReviewPresentationInput): string => {
       ? ""
       : ` · ≈ ${formatEstimatedUsd(input.estimatedCost.microusd)} at <a href="${input.estimatedCost.url}">${input.estimatedCost.label} rates</a>`;
 
+  const searches =
+    (input.webSearchCalls ?? 0) === 0
+      ? ""
+      : ` · ${String(input.webSearchCalls)} web ${input.webSearchCalls === 1 ? "search" : "searches"}`;
+
   const pendingCost =
     (input.reservedCostMicrousd ?? 0) === 0
       ? ""
@@ -390,7 +396,7 @@ export const renderReviewBody = (input: ReviewPresentationInput): string => {
         ? " · 1 automatic review remains"
         : ` · ${String(input.automaticReviewsRemaining)} automatic reviews remain`;
 
-  const footer = `<sub>${modelLabel}${usage}${estimatedCost}${pendingCost}${costLimit} · inspected at <code>${input.headRevision.slice(0, 7)}</code>${automaticReviewStatus}</sub>`;
+  const footer = `<sub>${modelLabel}${usage}${searches}${estimatedCost}${pendingCost}${costLimit} · inspected at <code>${input.headRevision.slice(0, 7)}</code>${automaticReviewStatus}</sub>`;
 
   parts.push(footer);
 

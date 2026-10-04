@@ -1,5 +1,4 @@
-import { upgradeV2Schedules } from "@effect-agent/storage-sql/sql-storage-v2-upgrade";
-import { Context, Effect, Layer, Result, Schema } from "effect";
+import { upgradeV2Schedules } from "@yielded/agent-storage-sql/sql-storage-v2-upgrade";
 import {
   ScheduleCapacityError,
   ScheduleDueCursor,
@@ -18,13 +17,14 @@ import {
   ScheduleRecord,
   ScheduleStorageError,
   ScheduleStore,
-} from "effect-agent/schedule";
+} from "@yielded/agent/schedule";
 import {
   applyScheduleChange,
   scheduleUsesCapacity,
   scheduleDeadline,
-} from "effect-agent/schedule-transition";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
+} from "@yielded/agent/schedule-transition";
+import { Context, Effect, Layer, Result, Schema } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
 
 const CURRENT_SCHEDULE_STORE_VERSION = 3;
 const MAX_STORED_SCHEDULE_BYTES = 1_900_000;

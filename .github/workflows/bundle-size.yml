@@ -2,6 +2,19 @@ name: Bundle size
 
 on:
   pull_request:
+    paths:
+      - "packages/**"
+      - "!packages/*/README.md"
+      - "!packages/*/CHANGELOG.md"
+      - "scripts/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - "patches/**"
+      - ".github/actions/**"
+      - ".github/workflows/bundle-size.yml"
 
 permissions:
   contents: read
@@ -18,45 +31,77 @@ jobs:
   compare:
     name: Compare consumer bundles
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .bundle-base
           persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
         with:
-          bun-version: 1.4.2
+          task-cache: build
 
-      # Bootstrap the repository-owned vp, as in CI. Each checkout installs its
-      # own lockfile so workspace links and dependency changes are measured too.
-      - name: Install PR dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
+      # Each checkout installs its own lockfile and keeps its task results.
+      # Vite's command fingerprints differ between these checkout paths.
       - name: Install base dependencies
-        working-directory: .bundle-base
-        run: bun install --frozen-lockfile --ignore-scripts
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 3m
+          retry-errors: "true"
+          working-directory: .bundle-base
+          command: vp install --frozen-lockfile --ignore-scripts
 
-      - name: Build PR packages
-        run: |
-          ./node_modules/.bin/vp run patch:tsgo
-          ./node_modules/.bin/vp run -F './packages/*' build
+      - name: Restore base Vite Task cache
+        id: base-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .bundle-base/node_modules/.vite/task-cache
+          key: vite-task-bundle-base-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vite-task-bundle-base-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build base packages
-        working-directory: .bundle-base
-        run: |
-          ./node_modules/.bin/vp run patch:tsgo
-          ./node_modules/.bin/vp run -F './packages/*' build
+        id: base
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          working-directory: .bundle-base
+          command: |
+            vp run --no-cache patch:tsgo
+            vp run -F './packages/*' build
+
+      - name: Build PR packages
+        id: head
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          command: vp run -F './packages/*' build
 
       - name: Compare bundles
-        run: ./node_modules/.bin/vp run bundle:compare -- --base-dir .bundle-base
+        run: vp run bundle:compare -- --base-dir .bundle-base
+
+      - name: Save base Vite Task cache
+        if: ${{ !cancelled() && (steps.base.outcome == 'success' || steps.base.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .bundle-base/node_modules/.vite/task-cache
+          key: ${{ steps.base-cache.outputs.cache-primary-key }}
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.head.outcome == 'success' || steps.head.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
 
       - name: Show comparison
         env:

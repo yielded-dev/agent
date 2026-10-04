@@ -13,7 +13,7 @@ It uses Cloudflare:
   **Dynamic Workers** to serve them.
 - **Email Sending** for email sign-in, alongside GitHub OAuth.
 
-The app consumes published Effect Agent packages and uses Effect Atom for client state.
+The app consumes the repository's Effect Agent workspace packages and uses Effect Atom for client state.
 [alchemy.run.ts](alchemy.run.ts) defines the Cloudflare resources and required configuration.
 
 New trip sites fork an immutable starter identified by its source contents. Updating the
@@ -44,14 +44,17 @@ external actions. Existing current-agent records, saved trips, accounts, and rep
 Scouts already waiting for research-plan approval remain paused. Cancel their active run and
 start fresh research; removing the checkpoint does not approve existing requests.
 
-Authentication uses matching versions of `@yielded/auth` and `@yielded/auth-persistence`.
-The persistence package supplies the Drizzle adapters for the app-owned SQLite tables.
+Authentication uses `@yielded/auth` beta.11 with its compatible crypto, OpenID Client, and
+Drizzle persistence companions. The app owns its SQLite tables and supplies session claims
+through each strategy's `SessionClaims` service. The Atom client uses Fetch transport with
+a 30-second request and response-body deadline; timed-out mutations are not retried automatically.
 GitHub sign-in creates flow IDs on the server; the browser retains the returned ID for the
 callback. Email verification keys are supplied through `ProofKeys` using `AUTH_PROOF_KEY`.
 
-When upgrading from Auth beta.5 to beta.7, keep the existing database, namespaces, and key IDs.
-Users with an email code requested before the upgrade should start a fresh email flow because
-the proof template identifier changed. Existing accounts and sessions are retained.
+Keep the existing database, namespaces, and key IDs when upgrading this demo from Auth beta.7
+to beta.11; its account and stateful-session formats are retained. Users upgrading from beta.5
+should start a fresh email flow for codes requested before the upgrade because the proof template
+identifier changed. Existing accounts and sessions are retained.
 
 The production deployment workflow enables Cloudflare traces after verifying request URL
 query-string redaction, keeping authentication callback parameters out of platform telemetry.
@@ -63,7 +66,7 @@ For a local UI preview without cloud accounts or provider credentials, run:
 
 ```sh
 vp install
-vp run -F @effect-agent/example-travel-planner preview
+vp run -F @yielded/agent-example-travel-planner preview
 ```
 
 Open `https://127.0.0.1:4173` and accept the local certificate. Create an email account;
@@ -80,7 +83,7 @@ A raw `vp preview` does not provision these bindings and its session endpoint re
 503 when `AUTH` is missing.
 
 For the full application, configure [.env.example](.env.example) with development-owned
-credentials and use `vp run -F @effect-agent/example-travel-planner dev` from the repository
+credentials and use `vp run -F @yielded/agent-example-travel-planner dev` from the repository
 root. Alchemy supplies the resources declared in [alchemy.run.ts](alchemy.run.ts), including
 `AUTH` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
 GitHub OAuth callback at `AUTH_ORIGIN/auth/github/callback`, a verified email sender, and
@@ -116,8 +119,7 @@ active work on the worker; an older pending delivery is not reconstructed as a n
 Activity is a recent window, not a complete audit log. Reads never admit, recover, or replay
 work. Diagnostics retain the existing redaction boundary.
 
-These queries use the exact published framework dependencies in this example. They do not
+These queries use the framework workspace dependencies in this example. They do not
 change the framework's general `Subagent.inspect` or `Subagent.observe` contracts. Any future
-framework optimization belongs in a separate library PR, followed by publication and an exact
-consumer dependency upgrade before integration. Local Miniflare checks establish behavior and
+framework optimization belongs in a separate library PR. Local Miniflare checks establish behavior and
 work budgets; deployed latency requires a separately authorized deployment and measurement.

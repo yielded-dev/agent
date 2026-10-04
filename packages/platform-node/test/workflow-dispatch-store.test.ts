@@ -1,13 +1,13 @@
-import { SqlWorkflowDispatchStore } from "@effect-agent/platform-node/node-workflow";
+import { SqliteClient } from "@effect/sql-sqlite-node";
+import { expect, it } from "@effect/vitest";
+import { SqlWorkflowDispatchStore } from "@yielded/agent-platform-node/node-workflow";
 import {
   WorkflowDispatchIntent,
   WorkflowDispatchScan,
   WorkflowDispatchStore,
-} from "@effect-agent/workflow/workflow-dispatch";
-import { SqliteClient } from "@effect/sql-sqlite-node";
-import { expect, it } from "@effect/vitest";
+} from "@yielded/agent-workflow/workflow-dispatch";
 import { Effect, Layer, Schema } from "effect";
-import { DurableDeferred } from "effect/unstable/workflow";
+import { DurableDeferred } from "effect/workflow";
 
 const intent = Schema.decodeSync(WorkflowDispatchIntent)({
   version: 1,

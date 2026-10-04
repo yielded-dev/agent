@@ -1,11 +1,10 @@
 {
-  "name": "@effect-agent/docs",
+  "name": "@yielded/agent-docs",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 astro build",
     "preview": "astro preview",
     "check": "tsc --noEmit -p tsconfig.json"
   },

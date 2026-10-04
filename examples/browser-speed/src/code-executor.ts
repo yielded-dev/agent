@@ -1,12 +1,12 @@
-import { Effect, Fiber, Layer, Schema, type Scope, type Tracer } from "effect";
 import {
   CodeExecutionHost,
   CodeExecutionProtocolError,
   CodeExecutor,
   CodeHostCall,
   CodeHostCallResult,
-} from "effect-agent/code-executor";
-import { SandboxImplementation } from "effect-agent/sandbox";
+} from "@yielded/agent/code-executor";
+import { SandboxImplementation } from "@yielded/agent/sandbox";
+import { Effect, Fiber, Layer, Schema, type Scope, type Tracer } from "effect";
 import { build } from "esbuild";
 import { Miniflare, Response, convertV4MiniflareOptions } from "miniflare";
 

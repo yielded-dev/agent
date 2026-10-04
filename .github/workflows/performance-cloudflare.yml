@@ -50,20 +50,20 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ -z "$REFERENCE_SHA" || "$REFERENCE_SHA" =~ ^[a-f0-9]{40}$ ]]
       - name: Check out candidate and fixture
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.candidate }}
           path: candidate
           persist-credentials: false
       - name: Check out optional reference
         if: inputs.reference != ''
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.reference }}
           path: reference
           persist-credentials: false
       - name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
       - name: Set up Bun

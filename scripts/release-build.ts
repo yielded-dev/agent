@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient } from "effect/http";
 
 import { githubGet, readCommand, requireProof, Sha } from "./release-ci.ts";
 
@@ -80,12 +80,9 @@ export const downloadReleaseBuild = Effect.fn("releaseBuild.download")(function*
   if (artifact === undefined) return yield* requireProof(false, "Missing artifact");
 
   const redirect = yield* client
-    .get(
-      `https://api.github.com/repos/danieljvdm/effect-agent/actions/artifacts/${artifact.id}/zip`,
-      {
-        headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
-      },
-    )
+    .get(`https://api.github.com/repos/yielded-dev/agent/actions/artifacts/${artifact.id}/zip`, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+    })
     .pipe(Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }));
 
   const location = redirect.headers.location;

@@ -1,5 +1,4 @@
-import { Clock, Effect, Result, Schema } from "effect";
-import { Digest } from "effect-agent/records";
+import { Digest } from "@yielded/agent/records";
 import {
   AcceptedEvent,
   DeliveryChange,
@@ -18,7 +17,7 @@ import {
   SubscriptionScanCursors,
   SubscriptionStore,
   subscriptionDeliveryKeyString,
-} from "effect-agent/subscription";
+} from "@yielded/agent/subscription";
 import {
   applySubscriptionDeliveryChange,
   applySubscriptionChange,
@@ -27,10 +26,11 @@ import {
   sameSourcePartition,
   subscriptionCanSelect,
   subscriptionDeliveryCanSelect,
-} from "effect-agent/subscription-transition";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
-import type { Statement } from "effect/unstable/sql/Statement";
+} from "@yielded/agent/subscription-transition";
+import { Clock, Effect, Result, Schema } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
+import type { Statement } from "effect/sql/Statement";
 
 import { sqliteJsonIsTrue, jsonIsValid } from "./internal/sql-json.ts";
 import { makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";

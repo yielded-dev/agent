@@ -1,12 +1,12 @@
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { Agent } from "effect-agent";
+import { Agent } from "@yielded/agent";
 import {
   type AgentInputError,
   type AgentOutputError,
   type AgentRunDispositionError,
-} from "effect-agent/agent-error";
-import { AgentPolicy } from "effect-agent/agent-policy";
-import { type AiError, LanguageModel, Model, Tool, Toolkit } from "effect/unstable/ai";
+} from "@yielded/agent/agent-error";
+import { AgentPolicy } from "@yielded/agent/agent-policy";
+import { Context, Effect, Layer, Schema, Stream } from "effect";
+import { type AiError, LanguageModel, Model, Tool, Toolkit } from "effect/ai";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2

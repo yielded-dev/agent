@@ -1,12 +1,12 @@
 import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import { NodeCrypto } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
+import { Agent, AgentRuntime, InMemory, ThreadHistory, WebSearch } from "@yielded/agent";
+import { compileBindingContracts } from "@yielded/agent/agent-registration";
+import * as ToolDiscovery from "@yielded/agent/tool-discovery";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { Agent, AgentRuntime, InMemory, ThreadHistory, WebSearch } from "effect-agent";
-import { compileBindingContracts } from "effect-agent/agent-registration";
-import * as ToolDiscovery from "effect-agent/tool-discovery";
-import { LanguageModel, Model, Tool, Toolkit } from "effect/unstable/ai";
-import { HttpClient, HttpClientResponse, HttpServerResponse } from "effect/unstable/http";
+import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import { HttpClient, HttpClientResponse, HttpServerResponse } from "effect/http";
 
 const Request = Schema.Struct({
   input: Schema.Array(Schema.Json),

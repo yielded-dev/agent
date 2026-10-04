@@ -1,5 +1,4 @@
-import { Cause, DateTime, Effect, Exit, Option, Schema, Stream } from "effect";
-import { digestJson } from "effect-agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import {
   DefinitionDigests,
   DeploymentId,
@@ -8,7 +7,7 @@ import {
   RecordEnvelope,
   SubmissionSettledRecord,
   type SettlementOutcome,
-} from "effect-agent/records";
+} from "@yielded/agent/records";
 import {
   AbortCommand,
   AdmissionRequest,
@@ -23,9 +22,10 @@ import {
   submissionSettlementId,
   submissionSettlementRecordId,
   type SubmissionSnapshot,
-} from "effect-agent/submission-ledger";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { CurrentTransformer } from "effect/unstable/sql/Statement";
+} from "@yielded/agent/submission-ledger";
+import { Cause, DateTime, Effect, Exit, Option, Schema, Stream } from "effect";
+import * as SqlClient from "effect/sql/SqlClient";
+import { CurrentTransformer } from "effect/sql/Statement";
 import { expect } from "vite-plus/test";
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));

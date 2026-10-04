@@ -1,16 +1,11 @@
 name: PR Review
 
 on:
-  # Run trusted code with repository secrets, including for fork PRs. The
-  # pr-review-forks environment requires maintainer approval before any step.
-  pull_request_target:
-    types: [opened, reopened, ready_for_review, synchronize]
-    # Skip automated review for generated release metadata; ordinary CI still runs.
-    paths-ignore:
-      - ".changeset/**"
-      - "bun.lock"
-      - "packages/*/CHANGELOG.md"
-      - "packages/*/package.json"
+  # CI uses GitHub's native fork approval. Only a completed, admitted CI run
+  # can start an automatic review with repository secrets.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   issue_comment:
     types: [created]
 
@@ -18,31 +13,87 @@ permissions:
   contents: read
   checks: write
 
-concurrency:
-  group: pr-review-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
-  review:
-    # The Action parses the first command line; keep this filter broad enough
-    # for leading whitespace, varied spacing, and explanation below it.
+  resolve:
+    # Comment commands retain their existing maintainer authorization.
     if: >-
-      (github.event_name == 'pull_request_target' && !github.event.pull_request.draft) ||
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.path == '.github/workflows/ci.yml' &&
+        (github.event.workflow_run.conclusion == 'success' ||
+         github.event.workflow_run.conclusion == 'failure')) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
         (github.event.comment.author_association == 'OWNER' ||
          github.event.comment.author_association == 'MEMBER' ||
          github.event.comment.author_association == 'COLLABORATOR') &&
         contains(github.event.comment.body, '@effect-agent'))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      numbers: ${{ steps.pr.outputs.numbers || '[]' }}
+      head: ${{ steps.pr.outputs.head }}
+    steps:
+      - name: Resolve the admitted PR head
+        id: pr
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea9 # v7
+        with:
+          script: |
+            if (context.eventName === 'issue_comment') {
+              core.setOutput('numbers', JSON.stringify([context.payload.issue.number]));
+              return;
+            }
+            const run = context.payload.workflow_run;
+            if (run.repository.id !== context.payload.repository.id || !run.head_repository) return;
+            // Fork runs can omit pull_requests. Resolve through GitHub's API,
+            // never through artifacts or code from the untrusted CI run.
+            const candidates = run.pull_requests.length ? run.pull_requests :
+              await github.paginate(github.rest.pulls.list, {
+                ...context.repo, state: 'open',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+                per_page: 100,
+              });
+            const numbers = [];
+            for (const candidate of candidates) {
+              const { data: pr } = await github.rest.pulls.get({
+                ...context.repo, pull_number: candidate.number,
+              });
+              if (pr.state !== 'open' || pr.draft || pr.head.sha !== run.head_sha ||
+                  pr.head.repo?.id !== run.head_repository.id ||
+                  pr.base.repo.id !== context.payload.repository.id) continue;
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo, pull_number: pr.number, per_page: 100,
+              });
+              // Preserve the generated-release metadata exclusion.
+              const generated = /^(?:\.changeset\/|bun\.lock$|packages\/[^/]+\/(?:CHANGELOG\.md|package\.json)$)/;
+              if (files.length && files.every(file => generated.test(file.filename) &&
+                  (!file.previous_filename || generated.test(file.previous_filename)))) continue;
+              numbers.push(pr.number);
+            }
+            core.setOutput('numbers', JSON.stringify(numbers));
+            core.setOutput('head', run.head_sha);
+
+  review:
+    needs: resolve
+    if: needs.resolve.outputs.numbers != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        number: ${{ fromJSON(needs.resolve.outputs.numbers) }}
+    concurrency:
+      group: pr-review-${{ matrix.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
-      # Configure required reviewers in repository settings before enabling
-      # this workflow. Same-repository PRs and authorized comments need no gate.
-      name: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'pr-review-forks' || 'pr-review' }}
+      name: pr-review
       deployment: false
     steps:
       - name: Check out the trusted review channel
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Never check out or execute PR-head code in this privileged job.
           ref: ${{ github.event.repository.default_branch }}
@@ -50,7 +101,7 @@ jobs:
 
       - name: Mint the Effect Agent GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.EFFECT_AGENT_APP_ID }}
           private-key: ${{ secrets.EFFECT_AGENT_APP_PRIVATE_KEY }}
@@ -59,21 +110,22 @@ jobs:
           permission-pull-requests: write
 
       - name: Review the pull request
-        uses: danieljvdm/effect-agent/action@action-v1
+        uses: yielded-dev/agent/action@action-v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
-          pull-request: ${{ github.event.pull_request.number || github.event.issue.number }}
+          pull-request: ${{ matrix.number }}
           review-author: effect-agent[bot]
           check-name: Effect Agent review
           checks-token: ${{ github.token }}
-          mode: ${{ github.event_name == 'pull_request_target' && 'auto' || 'incremental' }}
+          mode: ${{ github.event_name == 'workflow_run' && 'auto' || 'incremental' }}
           command: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
           comment-id: ${{ github.event.comment.id || 0 }}
           automatic-review-limit: 5
-          expected-head: ${{ github.event.pull_request.head.sha || '' }}
+          expected-head: ${{ needs.resolve.outputs.head || '' }}
           guidance-file: .github/review-guidance.md
           model: gpt-6.1-sol
+          web-search: "true"
           effort: medium
           priority: fast
           base-cost-usd: "20.00"

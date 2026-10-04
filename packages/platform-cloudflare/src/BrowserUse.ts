@@ -1,4 +1,3 @@
-import { Deferred, Effect, Fiber, Layer, Schema, Semaphore } from "effect";
 import {
   type ActionResult,
   type NavigateRequest,
@@ -14,8 +13,9 @@ import {
   DialogRequest,
   PressRequest,
   TabRequest,
-} from "effect-agent/browser-use";
-import { InteractiveBrowserTargetUrl } from "effect-agent/interactive-browser";
+} from "@yielded/agent/browser-use";
+import { InteractiveBrowserTargetUrl } from "@yielded/agent/interactive-browser";
+import { Deferred, Effect, Fiber, Layer, Schema, Semaphore } from "effect";
 import {
   ElementHandle,
   type Frame,

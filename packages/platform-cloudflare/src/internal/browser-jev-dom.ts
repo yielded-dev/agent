@@ -23,7 +23,7 @@
  * SOFTWARE.
  */
 
-import type { Control } from "effect-agent/browser-use";
+import type { Control } from "@yielded/agent/browser-use";
 
 /** Isolated-realm Jev observation. The same private refs and native guards own input. */
 export const inspectJevDom = (

@@ -7,50 +7,55 @@ Framework packages live in `packages/*`; runnable examples live in `examples/*`.
 
 The root [package.json](../package.json) owns shared dependency versions.
 Workspace manifests use `catalog:` for those dependencies and `workspace:*` for internal packages.
-The travel planner is a release consumer: its Effect Agent dependencies and compatible
-`effect-cf` version pin exact npm versions and advance together after publication.
+The travel planner consumes explicit Effect Agent workspace dependencies and the shared
+Effect and `effect-cf` catalog versions, so it validates the current framework.
 `bunfig.toml` disables implicit workspace linking, so only explicit `workspace:` dependencies
 use local source; registry dependencies, including transitive ones, stay on published packages.
 Commit the Bun lockfile; CI installs with `--frozen-lockfile`.
 
-| Tool                                                    | Repository version                                  |
-| ------------------------------------------------------- | --------------------------------------------------- |
-| Bun                                                     | `1.4.2`                                             |
-| Vite+                                                   | `0.3.3`                                             |
-| Alchemy and its Cloudflare runtime                      | `2.0.0-beta.77` with upstream compatibility patches |
-| Effect and its provider/platform/SQL/Atom/test packages | `4.0.0-rc.117`                                      |
-| `effect-cf`                                             | `0.44.1`                                            |
-| TypeScript                                              | `7.0.2`                                             |
-| `@effect/tsgo`                                          | `0.45.0`                                            |
-| Node.js                                                 | `22.18+` or `24.11+`                                |
+| Tool                                                    | Repository version   |
+| ------------------------------------------------------- | -------------------- |
+| Bun                                                     | `1.4.2`              |
+| Vite+                                                   | `0.3.3`              |
+| Alchemy and its Cloudflare runtime                      | `2.0.0-beta.80`      |
+| Effect and its provider/platform/SQL/Atom/test packages | `4.0.0`              |
+| `effect-cf`                                             | `0.53.0`             |
+| TypeScript                                              | `7.0.2`              |
+| `@effect/tsgo`                                          | `0.45.0`             |
+| Node.js                                                 | `22.18+` or `24.11+` |
 
-Public packages require `effect@^4.0.0-rc.117` as a peer. The exact catalog pin supplies the
+Public packages require `effect@^4.0.0` as a peer. The exact catalog pin supplies the
 development version. Raise the peer minimum when code needs a newer API.
 Private examples declare Effect as a regular dependency. Adapters depend on the platform and
 SQL implementations they use.
 
-`platform-cloudflare` requires `effect-cf@^0.44.1` and `effect@^4.0.0-rc.117` as host peers
+`platform-cloudflare` requires `effect-cf@^0.53.0` and `effect@^4.0.0` as host peers
 and uses the exact catalog versions for development. Supply Effect SQL packages compatible with
-rc.117 for `effect-cf`. Consumers provide the shared runtime.
+4.0.0 for `effect-cf`. Consumers provide the shared runtime.
 
 Root overrides keep Effect, its Node/browser platforms, shared SQL adapters, and test packages
-on the catalog versions, including dependencies of published consumers.
+on the catalog versions, including dependencies of published consumers. Published consumers must use Effect's current import paths;
+packages still importing `effect/unstable/*` cannot run on stable Effect.
 The root also installs Alchemy's optional `@effect/platform-bun` peer at the shared Effect
 version so its Bun entry points remain available.
 Vite+ supplies Vitest except in the two Cloudflare packages, whose Workers pool requires a
 direct catalog-pinned Vitest dependency and a Vite task. Run those tasks through `vp run`.
+The repository retains Vitest 4.1.11 for the Workers pool despite `@effect/vitest` declaring
+a Vitest 5 peer minimum, as it did on Effect rc.117. Verify this compatibility with the
+existing suites when either dependency changes.
 Operational harnesses under `tooling/*` also use Vite tasks for Miniflare tests.
 
 Astro uses its own Vite dependency. Keep the root Vite+ core alias required by Vite+;
 do not add a global Vite override.
 
-Alchemy and its Cloudflare runtime advance together. Their published beta.77 packages and
-Distilled rc.9 clients still use Effect APIs renamed in rc.113. The version-specific Bun
-patches backport [Alchemy's compatibility fix](https://github.com/alchemy-run/alchemy/pull/1562)
-and [Distilled's matching fix](https://github.com/alchemy-run/distilled/pull/575), including the
-published JavaScript entry points. The root declares `mime` because the Cloudflare runtime
-imports it without declaring the dependency. Keep these corrections until a published upgrade
-includes them; verify that upgrade with a frozen install and `vp run check:deploy`.
+Alchemy is deployment tooling; framework packages do not depend on it at runtime.
+Alchemy and its Cloudflare runtime advance together. Their published beta.80 packages and
+Distilled rc.13 clients support stable Effect 4 directly, without repository compatibility
+patches. Verify upgrades with a frozen install and `vp run check:deploy`.
+
+The demo uses Auth beta.11 and its compatible Drizzle, GitHub, and crypto companions,
+which support stable Effect directly. Verify auth upgrades with the existing integration checks
+and review their changelogs for API and stored-format changes.
 
 ## Current workspace
 
@@ -75,13 +80,13 @@ Provider integrations come from upstream Effect AI Layers, including `@effect/ai
 `ai-decision` owns thread model selection and consumes Effect's native `Decision` and `DecisionModel`.
 
 ```text
-effect-agent <- storage-sql <- storage-sqlite / storage-postgres / storage-cloudflare
-effect-agent <- storage-memory
-effect-agent <- workflow
-effect-agent + selected adapters <- platform packages
-effect-agent <- sandbox-local
-effect-agent <- testing
-effect-agent <- pr-review
+@yielded/agent <- storage-sql <- storage-sqlite / storage-postgres / storage-cloudflare
+@yielded/agent <- storage-memory
+@yielded/agent <- workflow
+@yielded/agent + selected adapters <- platform packages
+@yielded/agent <- sandbox-local
+@yielded/agent <- testing
+@yielded/agent <- pr-review
 ```
 
 Within `packages/effect-agent/src`, dependencies point inward:
@@ -98,24 +103,24 @@ Shared compiler settings live in `tsconfig.base.json`.
 
 Run `vp help` or `vp <command> --help` for options.
 
-| Command                                              | Use                                                   |
-| ---------------------------------------------------- | ----------------------------------------------------- |
-| `vp install`                                         | Install dependencies and hooks                        |
-| `vp check`                                           | Format, lint, and type checks                         |
-| `vp fmt` / `vp fmt --check`                          | Format files / check formatting                       |
-| `vp lint` / `vp lint --fix`                          | Lint / apply fixes                                    |
-| `vp test`                                            | Root test runner                                      |
-| `vp run check`                                       | All static checks, package types, scripts, and purity |
-| `vp run test`                                        | All workspace suites, including Cloudflare            |
-| `vp run build`                                       | Package, docs, and Action builds                      |
-| `vp run ready`                                       | Full handoff gate: check, test, build                 |
-| `vp run docs:dev`                                    | Docs development server                               |
-| `vp run docs:build`                                  | Build docs and check links                            |
-| `vp run docs:preview`                                | Preview built docs                                    |
-| `vp run docs:deploy --yes`                           | Deploy docs to the existing production stack          |
-| `vp run check:deploy`                                | Load both deployment CLIs without deploying           |
-| `vp run -F @effect-agent/example-travel-planner dev` | Cloudflare travel planner                             |
-| `vp env doctor`                                      | Diagnose toolchain setup                              |
+| Command                                               | Use                                                   |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| `vp install`                                          | Install dependencies and hooks                        |
+| `vp check`                                            | Format, lint, and type checks                         |
+| `vp fmt` / `vp fmt --check`                           | Format files / check formatting                       |
+| `vp lint` / `vp lint --fix`                           | Lint / apply fixes                                    |
+| `vp test`                                             | Root test runner                                      |
+| `vp run check`                                        | All static checks, package types, scripts, and purity |
+| `vp run test`                                         | All workspace suites, including Cloudflare            |
+| `vp run build`                                        | Package, docs, and Action builds                      |
+| `vp run ready`                                        | Full handoff gate: check, test, build                 |
+| `vp run docs:dev`                                     | Docs development server                               |
+| `vp run docs:build`                                   | Build docs and check links                            |
+| `vp run docs:preview`                                 | Preview built docs                                    |
+| `vp run docs:deploy --yes`                            | Deploy docs to the existing production stack          |
+| `vp run check:deploy`                                 | Load both deployment CLIs without deploying           |
+| `vp run -F @yielded/agent-example-travel-planner dev` | Cloudflare travel planner                             |
+| `vp env doctor`                                       | Diagnose toolchain setup                              |
 
 Use `vp run <task>` for other scripts. Do not use `bun run`, `npm run`, `pnpm run`,
 `yarn run`, or invoke the wrapped compiler, formatter, linter, or test runner directly.
@@ -130,14 +135,16 @@ Builds follow dependency order. Process-kill and adapter contract suites are par
 the ordinary test command.
 
 Vite Task caches successful results against their inputs. Vitest's mutable result cache is
-disabled so it does not invalidate task caching. CI transfers `node_modules/.vite/task-cache`.
-Direct Vitest tasks, Node platform and Cloudflare-memory tests, and travel-planner tests and builds
-exclude generated Vite files and dependency directory listings, but track imported dependency files
-and the lockfile. Wrangler dry-run builds exclude their temporary `.wrangler` bundles; the Action
-build excludes its generated bundle from inputs and restores `action/dist/index.mjs` on a cache hit.
-Failed tasks are never cached. Vite Task fingerprints whole files, including package manifests: a version-only change
-can invalidate tests even when their source is unchanged. Keep manifests tracked because exports,
-module type, and dependency declarations also affect execution.
+disabled so it does not invalidate task caching. CI uses `setup-vp` for the pinned toolchain and
+package-manager cache, then restores `node_modules/.vite/task-cache` after installation.
+Task caches are scoped by job, operating system, and architecture; Vite Task fingerprints source,
+manifests, dependency files, and lockfiles itself. Live Postgres checks remain uncached.
+
+Tests and builds exclude generated Vite, Astro, and Wrangler paths from their inputs where those
+paths would prevent reuse on fresh runners. Builds restore their outputs, including the docs site
+and Action bundle. Failed tasks are never cached; successful siblings are saved even when a job
+fails. A version-only manifest change can still invalidate tasks: exports, module type, and
+dependency declarations must remain tracked.
 
 Use `vp run -v test` for cache decisions, `vp run --last-details` for the previous run,
 or `vp run --no-cache test` to rerun every suite.
@@ -196,7 +203,7 @@ Outside a generator, the formatter parses `*` as multiplication and inserts spac
 ## Link previews
 
 The docs config adds Open Graph and Twitter metadata to the built HTML. Each page uses its
-resolved title and description, a canonical URL on `https://effect-agent.com`, and its own
+resolved title and description, a canonical URL on `https://yielded.dev/agent/`, and its own
 1200 × 630 PNG. `docs/integrations/social-renderer.ts` renders the page title, description, and URL
 using the installed IBM Plex fonts and `docs/public/mark.svg`. The build writes images under
 `docs/dist/social/`; no browser, remote font request, or manual screenshot is needed.
@@ -214,6 +221,14 @@ index such as `docs/dist/platforms/index.html`. Open their generated PNGs to che
 must be absolute, and canonical URLs must match the site's clean routes. Existing messages may
 retain a cached preview after a deployment.
 
+## Documentation deployment
+
+`vp run docs:deploy --yes` keeps the existing `effect-agent` production stack and
+`effect-agent-docs` Worker, serving the docs at `yielded.dev/agent/`. The Worker
+route is `yielded.dev/agent*` and the assets base is `/agent/`. The legacy domain
+`effect-agent.com` remains attached and redirects each path to its equivalent
+under `/agent`, preserving query strings. Retain the domain and redirects.
+
 ## Releasing to npm
 
 All thirteen public packages share one Changesets fixed group and publish to `beta`
@@ -222,7 +237,7 @@ The travel planner is a private application with no package version. It does not
 changesets, version bumps, changelogs, package tags, or npm releases. Private-package versioning
 and tagging remain disabled in the Changesets configuration.
 Changesets updates internal dependency ranges only when they use `workspace:`. Exact registry
-pins, including the travel planner's published Effect Agent dependencies, stay unchanged during
+pins stay unchanged during
 versioning. Upgrade those consumers and their import paths separately after publication; otherwise the version task's
 install would request packages that have not been published yet.
 The project is in prerelease mode. Leaving it requires an explicit release decision and
@@ -283,7 +298,12 @@ The publisher temporarily prepares npm-ready manifests:
 source exports point at built files, `workspace:*` dependencies use the current workspace
 versions, and `catalog:` dependencies use the root catalog. All source manifests are restored
 on success, failure, or interruption. npm publishes through OIDC with provenance; each package
-must list `release.yml` in `danieljvdm/effect-agent` as its trusted publisher.
+must list `release.yml` in `yielded-dev/agent` as its trusted publisher.
+New package names need a first authenticated publication before trusted publishing
+can be configured. Install the release GitHub App on `yielded-dev/agent` after
+transferring the repository; preserve its existing repository secrets. Keep the
+old npm packages available and deprecate them only after their replacements are
+published and the migration guide is live.
 
 Changesets defaults packages with no stable release to `latest`. The adapter temporarily marks
 the prerelease state as exiting while running `changeset publish --tag beta`, then restores it.
@@ -311,7 +331,7 @@ All public packages use the MIT license.
 ## Script runners
 
 Package scripts use Bun through `vp run`.
-Scripts that import `@effect-agent/storage-sqlite` continue to use
+Scripts that import `@yielded/agent-storage-sqlite` continue to use
 `node --experimental-transform-types` to exercise the Node host runtime.
 Strip-only execution cannot handle the framework's runtime namespaces.
 This includes `admin:durable` and the Node crash workers.
@@ -377,11 +397,11 @@ defaults, so declare `dts` and `sourcemap` there when needed.
 Follow the pinned Effect package's module layout. Package roots and public groups use namespace
 exports such as `export * as Agent from "./Agent.ts"`; explicit named conveniences are also
 allowed, as Effect does for `pipe` and `flow`. Public namespaces and source filenames use
-PascalCase; public import subpaths use kebab-case. `import { Agent } from "effect-agent"` and
-`import * as Agent from "effect-agent/agent"` select the same module.
+PascalCase; public import subpaths use kebab-case. `import { Agent } from "@yielded/agent"` and
+`import * as Agent from "@yielded/agent/agent"` select the same module.
 
 - Lead documentation examples with named namespace imports from package roots, such as
-  `import { NodeDurableHost } from "@effect-agent/platform-node"`. Use kebab-case subpaths for
+  `import { NodeDurableHost } from "@yielded/agent-platform-node"`. Use kebab-case subpaths for
   individual declarations such as services, schemas, or types; direct module and lazy-loading examples; and specialized
   adapters or runtime-specific helpers. In particular, Node-safe Cloudflare helpers must use
   their dedicated subpaths rather than the Workers package root.
@@ -413,7 +433,7 @@ code. Public forwarding modules need no umbrella-specific exception or file allo
 
 The export check in `vp run check` verifies manifest paths, exact filename casing, namespace
 targets, pack entries, declared workspace dependencies, and the inward-only source layers within
-`effect-agent`. The purity check uses declared testing
+`@yielded/agent`. The purity check uses declared testing
 targets as well as known test-module paths to prevent production entry points from reaching
 test-only code. Choosing supported APIs and useful public groups still requires review.
 
@@ -425,13 +445,17 @@ package remains unmarked because its optional Puppeteer adapters patch globals o
 
 ## Bundle size comparisons
 
-Pull requests run the **Bundle size** workflow against the exact base and head commits.
+Pull requests that change package code, build tooling, or dependencies run the **Bundle size**
+workflow against the exact base and head commits. Prose and site-only changes skip it.
 Like [Effect's bundle check](https://github.com/Effect-TS/effect/tree/main/packages/tools/bundle),
 it bundles small consumer fixtures against built packages. Each checkout installs its own
-lockfile. The comparison uses the PR's esbuild version and the same fixture source for both sides.
+lockfile and keeps its own Vite Task cache: the checkout paths produce different command fingerprints.
+The comparison uses the PR's esbuild version and the same fixture source for both sides.
 Disposable comparison manifests alias historical PascalCase subpaths to their kebab-case names;
 staged modules also expose the former `Ephemeral` assembly as `InMemory`. The published packages
 retain only their canonical exports. Renamed modules remain comparable.
+For Effect prerelease baselines, the analyzer resolves the fixtures' `effect/ai`
+import to that checkout's original `effect/unstable/ai` implementation.
 
 The fixtures in `scripts/bundle` cover agent construction, importing the runtime's `run` function,
 the in-memory assembly, and loading the runtime on demand, through both root and direct module imports. The
@@ -446,8 +470,8 @@ for the base. Build failures fail the report; size increases are informational.
 
 Use direct module paths at lazy-loading boundaries. With the measured esbuild configuration,
 statically importing `Agent` from the root and dynamically importing `AgentRuntime` from the same
-root pulls the runtime into the initial chunk. Direct `effect-agent/agent` and
-`effect-agent/agent-runtime` imports preserve a deferred runtime chunk; shared Effect dependencies
+root pulls the runtime into the initial chunk. Direct `@yielded/agent/agent` and
+`@yielded/agent/agent-runtime` imports preserve a deferred runtime chunk; shared Effect dependencies
 still count toward the initial load.
 
 The comparison also bundles and executes `runtime-smoke.ts` against the PR's staged packages.
@@ -531,7 +555,19 @@ observe and must accompany claims about the exact candidate and configuration it
 
 ## CI and hooks
 
-PR CI runs static checks, tests, and builds, then reports the required `ready` result.
+Every PR runs CI and reports the required `ready` result. CI selects work from the complete PR
+diff, including both paths of a rename:
+
+- Prose, contributor skills, and auxiliary workflows require formatting and workflow validation.
+- Site documentation requires those checks plus docs linting, types, build, and link validation.
+- Source, dependencies, shared tooling, CI execution policy, and unclassified paths require all
+  static checks, test suites, and builds.
+
+Missing, truncated, or stale file listings select the full gate. `ready` accepts only the skips
+selected by a successful classification; a failed or cancelled required job still fails the gate.
+Changesets release PRs retain their complete release checks. Main pushes run the full gate to
+provide release evidence and populate shared caches.
+
 Static checks include `check:deploy`, which invokes both deployment entry points with `--help`
 and imports both stack files using a temporary Alchemy profile. This catches missing dependencies
 and incompatible Effect APIs without credentials or infrastructure changes; it does not verify
@@ -540,10 +576,20 @@ invocation runs and receives its deployment environment.
 Cloudflare storage, Cloudflare platform, Node platform, and testing have dedicated test runners.
 The remaining-workspace job includes every other package and runs one package task at a time.
 
+CI retries individual timeout failures twice, one second apart. Cloudflare suites instead retry
+the entire task once after any failure: their worker pool keeps Object storage between cases, so
+a test retry could inherit a failed attempt's state. Other assertion failures fail immediately.
+Installation gets at most two attempts. Check and build commands, including the test-runner
+process, get one retry after their own deadline or forced termination. The command deadline
+applies to the process group, and the job deadline leaves room for both attempts. Persistent
+failures still fail CI.
+
 The generated Changesets PR uses the release metadata proof below, with ordinary CI as its fallback.
 Explicit `@effect-agent review` comments still request review.
 
-PR Review uses `pull_request_target` and runs only trusted default-branch code.
+PR Review follows completed pull-request CI runs using `workflow_run` and runs only
+trusted default-branch code. It starts after CI succeeds or fails; cancelled runs do
+not start reviews. Drafts and generated release metadata remain excluded.
 It publishes the shared `Effect Agent review` check on the inspected PR head using the workflow
 token's `checks: write` permission. Automatic and manual reviews use the same check name;
 manual retries show progress in the PR checks panel. Published findings and incomplete coverage
@@ -553,32 +599,24 @@ Maintainers and authorized coding agents can clear a fixed or refuted bot review
 the disposition and refreshes the check without inference; other blockers and incomplete coverage
 remain blocking. See [dismissal and CLI usage](../action/README.md#dismissing-a-review).
 See the [Action check configuration](../action/README.md#pr-check-status) for consumer setup.
-Fork reviews wait for approval before checkout, token creation, or model execution.
-Open the PR Review run from the PR's checks, select **Review deployments**, select
-`pr-review-forks`, then **Approve and deploy**. GitHub uses deployment wording for
-this approval gate, but the job does not deploy anything or create deployment records.
-Approving an ordinary fork workflow does not grant it repository secrets.
+For fork PRs that require GitHub workflow approval, click **Approve workflows to run**
+once on the PR. CI runs first, then PR Review starts without a separate environment
+approval. The `pr-review` environment is used for all reviews and must have no required
+reviewers. The old `pr-review-forks` environment is no longer used.
+Approving CI does not give the CI job repository secrets.
 
-Before enabling this workflow, configure **Settings → Environments → pr-review-forks**
-with repository maintainers as required reviewers. The current reviewer is `danieljvdm`;
-update this list when maintainers change. Allow self-review so a maintainer can approve
-their own fork PR. Keep this environment and its required-reviewer rule in place;
-a missing environment is automatically created without protection by GitHub.
-The separate `pr-review` environment has no approval requirement and is used for
-same-repository PRs and authorized review comments. Both environments use
-`deployment: false` to avoid adding review runs to deployment history.
+The workflow resolves the PR through GitHub's API and checks that the CI run belongs to
+this repository and its head still matches the open, non-draft PR. The Action's
+expected-head check also skips a review if the PR changes after that resolution.
+Comment-triggered reviews retain their maintainer authorization and do not wait for CI.
+Never check out, install dependencies from, or execute the PR head in this secret-bearing
+workflow; the reviewer reads untrusted source through GitHub's API instead. CI artifacts
+and caches are not consumed by the review workflow.
 
-Each fork PR update requires approval. The Action's expected-head check skips an
-approved run if its PR head has since changed. Comment-triggered reviews retain their
-existing maintainer authorization and do not require a second approval. Never check
-out, install dependencies from, or execute the PR head in this secret-bearing workflow;
-the reviewer reads untrusted source through GitHub's API instead.
-
-Each test-matrix job has its own task-cache key. The three suites split from the workspace job
-also fall back to its earlier cache, so splitting the matrix does not discard reusable results.
-Static checks, tests, and builds save successful task results even when another task fails.
-Ordinary main pushes run static checks, tests, and builds to populate shared caches
-and validate Action releases. Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
+Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
+builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
+always precedes task-cache restoration.
+Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
 by newer pushes. GitHub scopes PR caches to each PR's merge ref, so another PR cannot reuse them.
 A new release PR can restore the latest main results only after those jobs finish saving their
 caches. Waiting for those caches alone does not prevent version fields from invalidating whole-file
@@ -663,11 +701,11 @@ remain required. Local controlled proofs establish correctness; hosted release l
 matched version-merge run.
 
 The pre-commit hook runs `vp check --fix` on staged JavaScript and TypeScript.
-CI runs the full gate, including package type checks and the Action build.
+The full CI gate includes package type checks and the Action build.
 
 Action bundles use the catalog-pinned esbuild. `vp run action:build` writes ignored
 output to `action/dist/index.mjs` and checks its Node.js syntax. The root build task
-also builds the Action, so every PR validates bundling without committing generated
+also builds the Action, so source PRs validate bundling without committing generated
 JavaScript. There is no bundle freshness check or input-hash manifest.
 
 On successful `main` runs, CI publishes the exact build artifact in a child commit
@@ -678,7 +716,7 @@ code. Superseded source commits are skipped, and a Git lease prevents competing
 publishers from overwriting a newer channel. Failed publication preserves the last
 release and can be retried by rerunning the failed CI job.
 
-Consumers use `danieljvdm/effect-agent/action@action-v1` or pin the distribution
+Consumers use `yielded-dev/agent/action@action-v1` or pin the distribution
 commit SHA printed in the CI summary. New source commits and `@main` no longer
 contain a runnable bundle; older SHA pins still work. Before the initial cutover, seed `action-v1` with the
 last validated source commit that still contains the bundle, then migrate existing

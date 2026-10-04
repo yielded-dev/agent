@@ -1,11 +1,11 @@
 {
-  "name": "@effect-agent/workflow",
-  "version": "0.1.0-beta.165",
+  "name": "@yielded/agent-workflow",
+  "version": "0.1.0-beta.167",
   "description": "Effect Workflow execution for the existing durable Agent runtime.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danieljvdm/effect-agent.git",
+    "url": "git+https://github.com/yielded-dev/agent.git",
     "directory": "packages/workflow"
   },
   "files": [
@@ -30,17 +30,17 @@
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
-    "effect-agent": "workspace:*"
+    "@yielded/agent": "workspace:*"
   },
   "devDependencies": {
-    "@effect-agent/storage-memory": "workspace:*",
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
+    "@yielded/agent-storage-memory": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0-rc.117"
+    "effect": "^4.0.0"
   }
 }

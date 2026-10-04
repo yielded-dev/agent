@@ -1,14 +1,20 @@
-import {
-  BrowserSessionError,
-  type BrowserSession,
-} from "@effect-agent/platform-cloudflare/browser-session";
-import * as NativeBrowser from "@effect-agent/platform-cloudflare/browser-use";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import {
   OpenAiClient as CompletionsClient,
   OpenAiLanguageModel as CompletionsModel,
 } from "@effect/ai-openai-compat";
 import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
+import { Agent, AgentRuntime, CodeMode, InMemory, Thread } from "@yielded/agent";
+import {
+  BrowserSessionError,
+  type BrowserSession,
+} from "@yielded/agent-platform-cloudflare/browser-session";
+import * as NativeBrowser from "@yielded/agent-platform-cloudflare/browser-use";
+import { CompactionPolicy } from "@yielded/agent/agent-policy";
+import * as BrowserUse from "@yielded/agent/browser-use";
+import { ThreadId } from "@yielded/agent/identifiers";
+import { InteractiveBrowserTargetUrl } from "@yielded/agent/interactive-browser";
+import { ToolResultBounds } from "@yielded/agent/tool-result";
 import {
   Clock,
   Cause,
@@ -21,15 +27,9 @@ import {
   Schema,
   Semaphore,
 } from "effect";
-import { Agent, AgentRuntime, CodeMode, InMemory, Thread } from "effect-agent";
-import { CompactionPolicy } from "effect-agent/agent-policy";
-import * as BrowserUse from "effect-agent/browser-use";
-import { ThreadId } from "effect-agent/identifiers";
-import { InteractiveBrowserTargetUrl } from "effect-agent/interactive-browser";
-import { ToolResultBounds } from "effect-agent/tool-result";
-import { Prompt, Tool, Toolkit } from "effect/unstable/ai";
-import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
+import { Prompt, Tool, Toolkit } from "effect/ai";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
+import { OtlpSerialization, OtlpTracer } from "effect/observability";
 import puppeteer from "puppeteer-core";
 import { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 

@@ -1,19 +1,19 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Clock, Context, Deferred, Effect, Fiber, Schema } from "effect";
-import { ThreadId, RunId } from "effect-agent/identifiers";
+import { ThreadId, RunId } from "@yielded/agent/identifiers";
 import {
   type ContextTransformError,
   type ContextTransform,
   prepareModelContext,
-} from "effect-agent/model-context";
+} from "@yielded/agent/model-context";
 import {
   ThreadAppend,
   Thread as ThreadSnapshot,
   Store as ConversationStore,
   layerMemory,
   toPrompt,
-} from "effect-agent/thread";
-import { Prompt } from "effect/unstable/ai";
+} from "@yielded/agent/thread";
+import { Clock, Context, Deferred, Effect, Fiber, Schema } from "effect";
+import { Prompt } from "effect/ai";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 const threadId = Schema.decodeSync(ThreadId)("trip-1");

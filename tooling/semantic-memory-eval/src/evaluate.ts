@@ -1,29 +1,17 @@
-import {
-  InMemorySemanticIndexCapacity,
-  inMemorySemanticIndexLayer,
-} from "@effect-agent/storage-memory/memory-semantic-index";
-import { activityProcessorStoreLayer } from "@effect-agent/storage-sqlite/sqlite-activity-store";
-import { layer as sqliteThreadStoreLayer } from "@effect-agent/storage-sqlite/sqlite-thread-store";
 import { NodeCrypto } from "@effect/platform-node";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import {
-  Clock,
-  Crypto,
-  DateTime,
-  Effect,
-  Encoding,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  Schema,
-} from "effect";
-import { ActivityProcessorKey, type PreparedActivity } from "effect-agent/activity-store";
-import { ActivityPassLimits, processCommittedActivity } from "effect-agent/committed-activity";
-import { ThreadId } from "effect-agent/identifiers";
-import * as Memory from "effect-agent/memory";
-import { MemoryRecallLimits, type MemoryLookup } from "effect-agent/memory-reference";
-import { MemoryAccess } from "effect-agent/memory-revalidation";
+  InMemorySemanticIndexCapacity,
+  inMemorySemanticIndexLayer,
+} from "@yielded/agent-storage-memory/memory-semantic-index";
+import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
+import { layer as sqliteThreadStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
+import { ActivityProcessorKey, type PreparedActivity } from "@yielded/agent/activity-store";
+import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
+import { ThreadId } from "@yielded/agent/identifiers";
+import * as Memory from "@yielded/agent/memory";
+import { MemoryRecallLimits, type MemoryLookup } from "@yielded/agent/memory-reference";
+import { MemoryAccess } from "@yielded/agent/memory-revalidation";
 import {
   MemoryKey,
   MemoryReader,
@@ -31,7 +19,7 @@ import {
   MemoryWriter,
   type ActiveMemoryDocument,
   type MemoryDocument,
-} from "effect-agent/memory-store";
+} from "@yielded/agent/memory-store";
 import {
   BatchId,
   CanonicalBatch,
@@ -42,22 +30,24 @@ import {
   RecordId,
   UserInputRecorded,
   type CanonicalRecordEnvelope,
-} from "effect-agent/records";
+} from "@yielded/agent/records";
 import {
   SemanticIndexLimits,
   SemanticQueryLimits,
   indexMemorySource,
   querySemanticMemory,
-} from "effect-agent/semantic-memory";
-import { SemanticMemoryProfile } from "effect-agent/semantic-memory-index";
-import { memoryStoreLayer } from "effect-agent/sql-memory-store";
+} from "@yielded/agent/semantic-memory";
+import { SemanticMemoryProfile } from "@yielded/agent/semantic-memory-index";
+import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import {
   FencedAppendRequest,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
-} from "effect-agent/thread-store";
-import { AiError, EmbeddingModel } from "effect/unstable/ai";
+} from "@yielded/agent/thread-store";
+import { Clock, Crypto, DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import { AiError, EmbeddingModel } from "effect/ai";
+import { Hex } from "effect/encoding";
 
 import {
   CORPUS_SHA256,
@@ -134,7 +124,7 @@ const PROCESSOR_KEY = ActivityProcessorKey.make({
 });
 
 const ActivityOutput = Schema.Struct({ document: CorpusDocument, recordId: Schema.NonEmptyString });
-const byteLength = (text: string): number => Encoding.encodeHex(text).length / 2;
+const byteLength = (text: string): number => Hex.encode(text).length / 2;
 
 const elapsedMillis = (started: bigint, finished: bigint): number =>
   Number(finished - started) / 1_000_000;
@@ -589,7 +579,7 @@ const loadCorpus = Effect.fn("SemanticMemoryEvaluation.loadCorpus")(function* ()
 
   const digest = yield* crypto
     .digest("SHA-256", new TextEncoder().encode(raw))
-    .pipe(Effect.map(Encoding.encodeHex));
+    .pipe(Effect.map(Hex.encode));
 
   if (digest !== CORPUS_SHA256) return yield* evalError("verify corpus", `SHA-256 ${digest}`);
 

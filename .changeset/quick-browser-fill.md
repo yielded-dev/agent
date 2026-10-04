@@ -1,5 +1,5 @@
 ---
-"@effect-agent/platform-cloudflare": patch
+"@yielded/agent-platform-cloudflare": patch
 ---
 
 Reduce text-fill latency, respect page scroll locks, and offer bounded settling and condition waits with native browser input.

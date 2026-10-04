@@ -1,12 +1,12 @@
-import { SqlLifecycleSource } from "@effect-agent/storage-sql/sql-lifecycle-publication";
-import { makeSqlMessageDeliveryStore } from "@effect-agent/storage-sql/sql-message-delivery-store";
-import { Effect, Layer } from "effect";
+import { SqlLifecycleSource } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
+import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
-} from "effect-agent/message-delivery";
-import { SqlStorageOwner } from "effect-agent/sql-memory-store";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+} from "@yielded/agent/message-delivery";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { Effect, Layer } from "effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { DoStorageConfig } from "./DoStorageConfig.ts";
 import { DoStorageFailpoint } from "./DoStorageFailpoint.ts";

@@ -1,18 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import {
-  Cause,
-  Context,
-  Clock,
-  Duration,
-  Effect,
-  Layer,
-  Redacted,
-  Schema,
-  Semaphore,
-  Scope,
-} from "effect";
-import {
   BrowserActionResult,
   BrowserExpectedTargetState,
   BrowserSelectFileRequest,
@@ -37,9 +25,21 @@ import {
   type InteractiveBrowserError,
   type InteractiveBrowserFailureEvidence,
   type InteractiveBrowserNetworkPolicy,
-} from "effect-agent/interactive-browser";
-import { PageScreenshotResult } from "effect-agent/page-screenshot";
-import { SandboxImplementation } from "effect-agent/sandbox";
+} from "@yielded/agent/interactive-browser";
+import { PageScreenshotResult } from "@yielded/agent/page-screenshot";
+import { SandboxImplementation } from "@yielded/agent/sandbox";
+import {
+  Cause,
+  Context,
+  Clock,
+  Duration,
+  Effect,
+  Layer,
+  Redacted,
+  Schema,
+  Semaphore,
+  Scope,
+} from "effect";
 import {
   type Browser,
   type BrowserContext,
@@ -393,7 +393,7 @@ export class BrowserRunInteractiveBinding extends Context.Service<
   }
 >()("@effect-agent/platform-cloudflare/BrowserRunInteractiveBinding") {
   static layer(options: {
-    readonly browser: BrowserRun;
+    readonly browser: Pick<BrowserRun, "fetch">;
     readonly viewport?: BrowserRunViewport;
   }): Layer.Layer<
     BrowserRunInteractiveBinding,
@@ -3251,7 +3251,7 @@ export const browserRunInteractiveLayer = (): Layer.Layer<
 
 /** Resolved Worker binding, cleanup credentials, and optional initial viewport. */
 export interface CloudflareInteractiveBrowserOptions extends BrowserRunLifecycleOptions {
-  readonly browser: BrowserRun;
+  readonly browser: Pick<BrowserRun, "fetch">;
   readonly viewport?: BrowserRunViewport;
 }
 

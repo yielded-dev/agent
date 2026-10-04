@@ -1,7 +1,6 @@
-import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
-import { EMPTY_TAIL_DIGEST } from "effect-agent/digest";
-import type { LifecyclePublicationFact } from "effect-agent/lifecycle-publication";
-import { InputMessage } from "effect-agent/messaging";
+import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
+import { InputMessage } from "@yielded/agent/messaging";
 import {
   ApprovalDecision,
   CanonicalSequence,
@@ -12,7 +11,7 @@ import {
   ProducerEpoch,
   RecordEnvelope,
   SettlementOutcome,
-} from "effect-agent/records";
+} from "@yielded/agent/records";
 import {
   AbortCommand,
   WorkerStopCommand,
@@ -88,9 +87,10 @@ import {
   submissionAbortRecordId,
   type ChildSettledOutcome,
   type SuspensionOutcome,
-} from "effect-agent/submission-ledger";
-import * as SqlClientService from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+} from "@yielded/agent/submission-ledger";
+import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
 
 import type { SqlJournal } from "./SqlJournal.ts";
 import {

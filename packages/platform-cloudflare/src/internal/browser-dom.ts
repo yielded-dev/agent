@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 
-import type { Control } from "effect-agent/browser-use";
+import type { Control } from "@yielded/agent/browser-use";
 
 /** Executor-owned input settling, matching jev-ultrafast's frame/option readiness predicate. */
 export const settleInputDom = (ref: string | undefined) =>

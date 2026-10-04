@@ -1,10 +1,10 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { describe, expect, it } from "@effect/vitest";
+import { ContextWindow, ContextWindowStatus } from "@yielded/agent/context-window";
+import { ThreadId, RunId } from "@yielded/agent/identifiers";
 import { Effect, Layer, Schema } from "effect";
-import { ContextWindow, ContextWindowStatus } from "effect-agent/context-window";
-import { ThreadId, RunId } from "effect-agent/identifiers";
-import { LanguageModel, Toolkit } from "effect/unstable/ai";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { LanguageModel, Toolkit } from "effect/ai";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as ContextTools from "../../src/capabilities/ContextTools.ts";
 import * as MemoryNotes from "../../src/capabilities/MemoryNotes.ts";

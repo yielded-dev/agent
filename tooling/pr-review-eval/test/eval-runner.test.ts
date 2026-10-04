@@ -1,13 +1,13 @@
+import { OpenAiClient } from "@effect/ai-openai";
+import { NodeServices } from "@effect/platform-node";
+import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewChange,
   ReviewFollowUp,
   ReviewOutcome,
   ReviewReport,
   ReviewRequest,
-} from "@effect-agent/pr-review/review";
-import { OpenAiClient } from "@effect/ai-openai";
-import { NodeServices } from "@effect/platform-node";
-import { describe, expect, it } from "@effect/vitest";
+} from "@yielded/agent-pr-review/review";
 import {
   ConfigProvider,
   Deferred,
@@ -22,7 +22,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 import {
   decodeObservationLines,

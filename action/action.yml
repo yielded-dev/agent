@@ -50,11 +50,15 @@ inputs:
     required: false
     default: "medium"
   max-cost-usd:
-    description: "Maximum model spend per attempt in USD (0.01–100). Allowance is base-cost-usd plus $1 per 100,000 patch/feedback characters, capped at this value."
+    description: "Maximum model and search spend per attempt in USD (0.01–100). Allowance is base-cost-usd plus $1 per 100,000 patch/feedback characters, capped at this value."
     required: false
     default: "2.50"
+  web-search:
+    description: "Allow hosted web search for public dependency and API documentation. Search queries go to OpenAI's web service; search fees and retrieved tokens share the review spending cap."
+    required: false
+    default: "false"
   base-cost-usd:
-    description: "Base model spend allowance per nonempty attempt in USD (0.01–100), before adding $1 per 100,000 patch/feedback characters. The total never exceeds max-cost-usd."
+    description: "Base model and search spend allowance per nonempty attempt in USD (0.01–100), before adding $1 per 100,000 patch/feedback characters. The total never exceeds max-cost-usd."
     required: false
     default: "1.00"
   priority:
@@ -81,8 +85,10 @@ outputs:
     description: "Observed input tokens written to the provider prompt cache."
   output-tokens:
     description: "Observed model output tokens."
+  web-search-calls:
+    description: "Observed billed web searches. Page opens and in-page finds are excluded."
   estimated-cost-usd:
-    description: "Estimated model cost in US dollars from reported usage at the pinned rates for the actual service tier. Excludes unsettled reservations."
+    description: "Estimated model and web-search cost in US dollars from reported usage at the pinned rates for the actual service tier. Excludes unsettled reservations."
   reserved-cost-usd:
     description: "Maximum additional charge in US dollars for dispatched requests whose usage is still unknown."
   cost-limit-usd:

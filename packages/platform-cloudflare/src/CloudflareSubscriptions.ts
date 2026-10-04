@@ -1,14 +1,13 @@
+import { BrowserCrypto } from "@effect/platform-browser";
+import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   DoSubscriptionAlarmControl,
   DoSubscriptionTransaction,
   doSubscriptionStoreLayer,
-} from "@effect-agent/storage-cloudflare/do-subscription-store";
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
-import { Cause, Clock, Context, DateTime, Effect, Layer, Schema, type Scope } from "effect";
-import { type EventSources } from "effect-agent/event-source";
-import { PersistedJson } from "effect-agent/records";
-import { Principal } from "effect-agent/submission-ledger";
+} from "@yielded/agent-storage-cloudflare/do-subscription-store";
+import { type EventSources } from "@yielded/agent/event-source";
+import { PersistedJson } from "@yielded/agent/records";
+import { Principal } from "@yielded/agent/submission-ledger";
 import {
   EventAcknowledgement,
   EventSourceVersion,
@@ -25,9 +24,14 @@ import {
   SubscriptionSnapshot,
   SubscriptionSourceError,
   defaultSubscriptionLimits,
-} from "effect-agent/subscription";
-import { type SubscriptionInputBindings } from "effect-agent/subscription-input";
-import { SubscriptionDriver, SubscriptionIntake, Subscriptions } from "effect-agent/subscriptions";
+} from "@yielded/agent/subscription";
+import { type SubscriptionInputBindings } from "@yielded/agent/subscription-input";
+import {
+  SubscriptionDriver,
+  SubscriptionIntake,
+  Subscriptions,
+} from "@yielded/agent/subscriptions";
+import { Cause, Clock, Context, DateTime, Effect, Layer, Schema, type Scope } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
@@ -897,7 +901,6 @@ const alarmHandler = (limits: SubscriptionLimits) =>
         }
       }),
     {
-      mode: "isolated",
       limit: MAX_ALARMS_PER_INVOCATION,
       retryFailedAfter: limits.retryMillis,
       onFailure: () => Effect.logWarning("Subscription partition alarm retained for retry"),

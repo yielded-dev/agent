@@ -1,9 +1,9 @@
-import { Schema } from "effect";
 import {
   CodeExecutionError,
   CodeExecutionRequest,
   CodeExecutionResult,
-} from "effect-agent/code-executor";
+} from "@yielded/agent/code-executor";
+import { Schema } from "effect";
 
 export const Request = Schema.fromJsonString(
   Schema.toCodecJson(

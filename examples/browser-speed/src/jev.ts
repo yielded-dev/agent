@@ -1,9 +1,9 @@
-import type { BrowserSession } from "@effect-agent/platform-cloudflare/browser-session";
 import { TypeSafeClient, TypeSafeDecisionModel, TypeSafeSchema } from "@effect/ai-typesafe";
+import type { BrowserSession } from "@yielded/agent-platform-cloudflare/browser-session";
+import * as BrowserUse from "@yielded/agent/browser-use";
 import { Clock, Config, Effect, FileSystem, Layer, Schema } from "effect";
-import * as BrowserUse from "effect-agent/browser-use";
-import { Decision, DecisionModel, LanguageModel, Prompt } from "effect/unstable/ai";
-import { FetchHttpClient } from "effect/unstable/http";
+import { Decision, DecisionModel, LanguageModel, Prompt } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import { routeProbabilities } from "./route-probabilities.ts";
 

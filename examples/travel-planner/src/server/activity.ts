@@ -1,8 +1,8 @@
+import { SettlementFailureDiagnostic } from "@yielded/agent/records";
+import type { ThreadExport } from "@yielded/agent/thread-store";
+import { FrameworkMessage } from "@yielded/agent/worker";
 import { DateTime, Schema } from "effect";
-import { SettlementFailureDiagnostic } from "effect-agent/records";
-import type { ThreadExport } from "effect-agent/thread-store";
-import { FrameworkMessage } from "effect-agent/worker";
-import { Prompt } from "effect/unstable/ai";
+import { Prompt } from "effect/ai";
 
 import { PlannerInput, type PlannerActivity } from "../domain.ts";
 import {
