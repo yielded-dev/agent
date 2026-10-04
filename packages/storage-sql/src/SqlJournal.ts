@@ -1,18 +1,13 @@
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
-import {
-  BatchId,
-  CanonicalRecord,
-  CanonicalSequence,
-  Digest,
-  ProducerEpoch,
-} from "@yielded/agent/records";
+import { CanonicalSequence, Digest, ProducerEpoch } from "@yielded/agent/records";
 import {
   MAX_THREAD_EXPORT_RECORDS,
   AppendConflict,
   CheckpointRejected,
   FenceRejected,
+  type PreparedAppend,
   ThreadNotMaterialized,
   type SaveRecoveryCheckpointRequest,
 } from "@yielded/agent/thread-store";
@@ -86,24 +81,22 @@ class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
   through_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
-export class RawRecord extends Schema.Class<RawRecord>("@effect-agent/storage-sql/RawRecord")({
-  recordId: BoundedIdentifier,
-  recordJson: BoundedStoredText,
-}) {}
-
-export class RawAppendRequest extends Schema.Class<RawAppendRequest>(
-  "@effect-agent/storage-sql/RawAppendRequest",
-)({
-  batchDigest: BoundedStoredText,
-  batchId: BatchId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
-  batchJson: BoundedStoredText,
-  threadId: ThreadId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
-  expectedTailDigest: BoundedStoredText,
-  expectedTailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
-  records: Schema.NonEmptyArray(RawRecord).check(Schema.isMaxLength(256)),
-  tailDigest: BoundedStoredText,
-}) {}
+/**
+ * Trusted adapter SPI produced by prepareSqlAppend, never a wire or caller-data boundary.
+ * The prepared canonical values and exact strings must remain paired; ThreadStore owns capture
+ * and validation before entering this journal, whose caller already holds SQL storage authority.
+ */
+export interface RawAppendRequest {
+  readonly batchDigest: Digest;
+  readonly batchId: PreparedAppend["batch"]["batchId"];
+  readonly batchJson: string;
+  readonly threadId: PreparedAppend["threadId"];
+  readonly expectedTailDigest: Digest;
+  readonly expectedTailSequence: CanonicalSequence;
+  readonly producerEpoch: ProducerEpoch;
+  readonly records: PreparedAppend["records"];
+  readonly tailDigest: Digest;
+}
 
 export class RawAppendResult extends Schema.Class<RawAppendResult>(
   "@effect-agent/storage-sql/RawAppendResult",
@@ -161,7 +154,6 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
   const failpoint = options.hitFailpoint;
   const { withReadTransaction, withWriteTransaction } = options.transactions;
   const { decodeRows, decodeSingleRow } = makeRowDecoder(options.errors.corruption);
-  const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(CanonicalRecord));
 
   const storageError =
     (operation: string) =>
@@ -474,15 +466,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
       request.records,
       (record, index) =>
         Effect.gen(function* () {
-          const canonical = yield* decodeRecordJson(record.recordJson).pipe(
-            Effect.mapError((error) =>
-              options.errors.corruption({
-                table: "effect_agent_canonical_records",
-                rowKey: record.recordId,
-                message: error.message,
-              }),
-            ),
-          );
+          const canonical = record.canonical;
 
           yield* sql`
                 INSERT INTO ${relation("effect_agent_canonical_records")} (
@@ -1001,6 +985,9 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     journal,
     appendWithThread: (request: RawAppendRequest, thread: ThreadRow) =>
       appendKernel(request, Effect.succeed(thread)),
+    /** Exclusive Run owner only; the caller already holds this journal's writer. */
+    appendWithThreadInTransaction: (request: RawAppendRequest, thread: ThreadRow) =>
+      appendInTransaction(request, Effect.succeed(thread)),
   };
 });
 

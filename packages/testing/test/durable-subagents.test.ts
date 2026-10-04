@@ -579,7 +579,8 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
   it.effect("retains selected replay contracts when restoring a shared-ID child's policy", () =>
     Effect.gen(function* () {
       let lookups = 0;
-      const lookup = Lookup.annotate(ToolExecutionClass, "readonly");
+      // Preserve the pending declaration so recovery must select its original replay contract.
+      const lookup = Lookup.setNeedsApproval(() => false).annotate(ToolExecutionClass, "readonly");
       const toolkit = Toolkit.make(lookup);
 
       const child = Agent.make("shared-contract-child", {

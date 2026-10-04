@@ -12,7 +12,8 @@ export class DigestError extends Schema.TaggedError<DigestError>()("DigestError"
 
 const utf8 = new TextEncoder();
 
-const canonicalJson = (value: Schema.Json): string => {
+/** Serialize schema-encoded JSON with the canonical digest's locale-independent key order. */
+export const canonicalJson = (value: Schema.Json): string => {
   if (
     value === null ||
     typeof value === "boolean" ||
@@ -34,13 +35,12 @@ const canonicalJson = (value: Schema.Json): string => {
     .join(",")}}`;
 };
 
-/** Digest a JSON value using a stable, locale-independent object-key ordering (UTF-16 code units, RFC 8785 style). */
-export const digestJson = Effect.fnUntraced(function* (
-  value: Schema.Json,
+const digestText = Effect.fnUntraced(function* (
+  value: string,
 ): Effect.fn.Return<Digest, DigestError, Crypto.Crypto> {
   const crypto = yield* Crypto.Crypto;
 
-  const bytes = utf8.encode(canonicalJson(value));
+  const bytes = utf8.encode(value);
 
   const digest = yield* crypto
     .digest("SHA-256", bytes)
@@ -54,6 +54,14 @@ export const digestJson = Effect.fnUntraced(function* (
     Effect.mapError(() => DigestError.make({ message: "SHA-256 returned an invalid digest" })),
   );
 });
+
+/** Digest a JSON value using a stable, locale-independent object-key ordering (UTF-16 code units, RFC 8785 style). */
+export const digestJson = (value: Schema.Json): Effect.Effect<Digest, DigestError, Crypto.Crypto> =>
+  Effect.suspend(() => digestText(canonicalJson(value)));
+
+/** Hash a privately captured, schema-encoded canonical batch without serializing it again. */
+export const digestCanonicalBatchJson = (previousTailDigest: Digest, batchJson: string) =>
+  digestText(`{"batch":${batchJson},"previousTailDigest":${JSON.stringify(previousTailDigest)}}`);
 
 /** Digest a canonical batch together with the prior tail to form an append-only hash chain. */
 export const digestCanonicalBatch = (

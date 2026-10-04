@@ -247,7 +247,7 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
         durability: {
           checkpoint: Effect.void,
           initialize: () => Effect.void,
-          commitTurn: () => Effect.void,
+          commitTurn: () => Effect.succeed("committed"),
           checkToolDispatch: Effect.void,
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,
@@ -289,7 +289,7 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
           durability: {
             checkpoint: Effect.void,
             initialize: () => Effect.void,
-            commitTurn: () => Effect.void,
+            commitTurn: () => Effect.succeed("committed"),
             checkToolDispatch: Effect.void,
             commitCompaction: () => Effect.void,
             noteTurnUsage: () => Effect.void,

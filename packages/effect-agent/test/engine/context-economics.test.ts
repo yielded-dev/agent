@@ -235,7 +235,7 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
         const durability: RunDurabilityHook = {
           checkpoint: Effect.void,
           initialize: () => Effect.void,
-          commitTurn: () => Effect.void,
+          commitTurn: () => Effect.succeed("committed"),
           checkToolDispatch: Effect.void,
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,

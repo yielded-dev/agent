@@ -543,13 +543,23 @@ interface RunTurnIdentity {
 
 /**
  * The interpreter owns Turn progress; observations do not drive durable state.
- * Response commits precede Tool dispatch. Settled commits contain closed outcomes;
+ * Response acceptance precedes Tool dispatch. Settled commits contain closed outcomes;
  * an omitted response was already committed or restored. Partial commits preserve
  * closed siblings before child suspension, without declaring the whole Turn settled.
  */
 export type RunTurnCommit = RunTurnIdentity &
   (
-    | { readonly _tag: "Response"; readonly response: RunTurnResponse }
+    | {
+        readonly _tag: "Response";
+        readonly response: RunTurnResponse;
+        /**
+         * The interpreter proved that the model's hosted Tools and every declared ordinary
+         * application call are readonly, with no approval preflight. The coordinator may retain
+         * an owned response until settlement, but must promote it before any persisted call-scoped
+         * capability.
+         */
+        readonly defer?: true | undefined;
+      }
     | {
         readonly _tag: "Settled";
         readonly response?: RunTurnResponse | undefined;
@@ -620,8 +630,8 @@ export class AgentUpdateAcceptance extends Context.Service<
  *
  * Invocation ordering inside one Tool-declaring Turn is normative:
  * The Response commit fires after the provider stream closes and continuation validates,
- * but before approval preflight (making the response
- * canonical before any Tool work and conservatively recording possible execution);
+ * but before approval preflight. Unless the interpreter permits deferral, the response becomes
+ * canonical before any Tool work and conservatively records possible execution;
  * `checkToolDispatch` checks the writer fence after every approval and host authorization resolved
  * allowed and before any handler acquires a scheduler permit. It is skipped when no unfinished
  * call is a delegation or non-`readonly` ordinary call; `step` persists Durable Step
@@ -655,8 +665,14 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
         usage: Pick<RunPolicyUsage, "programmaticToolCalls" | "finalizationUsed">,
       ) => Effect.Effect<void, Error, Requirements>)
     | undefined;
-  /** Commit validated facts before the next semantic action; progress is not a commit receipt. */
-  readonly commitTurn: (commit: RunTurnCommit) => Effect.Effect<void, Error, Requirements>;
+  /**
+   * `committed` accepts the supplied facts canonically. `deferred` is valid only for a Response
+   * with `defer: true`: validation and ownership succeeded, but no canonical acceptance occurred.
+   * The interpreter retains its response and inputs until the Settled commit is accepted.
+   */
+  readonly commitTurn: (
+    commit: RunTurnCommit,
+  ) => Effect.Effect<"committed" | "deferred", Error, Requirements>;
   /** Check the writer fence after approval/authorization and before handler permits; no write. */
   readonly checkToolDispatch: Effect.Effect<void, Error, Requirements>;
   readonly step: RunStepHook<Error, Requirements>;

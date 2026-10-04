@@ -490,7 +490,7 @@ const admissionGroupRace = conformanceCase(
 );
 
 const admissionGroupSettlement = conformanceCase(
-  "retains group capacity through canonical publication and permits exact replay",
+  "retains group capacity until finalization and permits exact replay",
   ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const ledger = yield* SubmissionLedger;
@@ -524,7 +524,14 @@ const admissionGroupSettlement = conformanceCase(
           outcome: "completed",
         }),
       );
-      yield* expectFailure("published but unfinalized group", ledger.admit(successor));
+
+      const published = yield* expectSome(
+        "group snapshot after publication",
+        yield* lookupById(first.submissionId),
+      );
+
+      if (published.state !== "settled")
+        yield* expectFailure("published but unfinalized group", ledger.admit(successor));
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: first.submissionId,
@@ -1709,8 +1716,9 @@ const settlementLifecycle = conformanceCase(
       );
 
       yield* ensure(
-        pending.state === "running",
-        "Canonical publication must leave ledger finalization pending",
+        pending.state === "running" ||
+          (pending.state === "settled" && pending.settledOutcome === "completed"),
+        "Canonical publication may atomically finalize the same outcome",
       );
       const replayed = yield* publishSettlement(publication);
 
@@ -2225,9 +2233,11 @@ const recoverySnapshotConsistency = conformanceCase(
       );
 
       yield* ensure(
-        published.submission.state === "input-applied" &&
+        (published.submission.state === "input-applied" ||
+          (published.submission.state === "settled" &&
+            published.submission.settledOutcome === "aborted")) &&
           recordEquivalent(canonical.record, publication.append.batch.records[0]),
-        "Recovery must combine unchanged ledger state with the canonical terminal fact",
+        "Recovery must retain input and abort facts whether publication also finalized",
       );
 
       yield* ledger.finalizeSettlement(
@@ -3120,7 +3130,23 @@ const unknownAbortClaim = conformanceCase(
         });
 
         yield* publishSettlement(publication);
-        yield* ledger.requestAbort(command);
+
+        const afterPublication = yield* expectSome(
+          "aborted submission after publication",
+          yield* lookupById(head.submissionId),
+        );
+
+        if (afterPublication.state === "settled") {
+          const duplicate = yield* expectFailure(
+            "abort after atomic finalization",
+            ledger.requestAbort(command),
+          );
+
+          yield* ensure(
+            isSettlementConflict(duplicate) && duplicate.existingOutcome === "aborted",
+            "Atomic finalization must retain the aborted outcome",
+          );
+        } else yield* ledger.requestAbort(command);
 
         const settled = yield* ledger.finalizeSettlement(
           SettlementFinalization.make({

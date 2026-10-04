@@ -10,6 +10,6 @@
 "@effect-agent/testing": patch
 ---
 
-Publish settlement intent atomically in the canonical log and remove the separate settlement reservation protocol.
+Publish settlement intent atomically in the canonical log and remove the separate settlement reservation protocol. Combine eligible SQL receipt finalization with publication and exclusive-session input markers with their canonical append.
 
 BEHAVIOR CHANGE: custom durable assemblies must provide a co-owned `SettlementPublisher`; pair Memory ledger and thread layers with `Layer.provideMerge`, and use fresh thread storage or format 16.

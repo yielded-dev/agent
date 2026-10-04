@@ -1,6 +1,7 @@
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Context, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 
 import { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { canonicalJson, digestCanonicalBatchJson } from "./Digest.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import {
   BatchId,
@@ -181,6 +182,102 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   expectedTailDigest: Digest,
   producerEpoch: ProducerEpoch,
 }) {}
+
+const AppendHeader = FencedAppendRequest.mapFields((fields) => ({
+  threadId: fields.threadId,
+  expectedTailSequence: fields.expectedTailSequence,
+  expectedTailDigest: fields.expectedTailDigest,
+  producerEpoch: fields.producerEpoch,
+}));
+
+const encodeAppend = Schema.encodeSync(FencedAppendRequest);
+const decodeAppendHeader = Schema.decodeSync(AppendHeader);
+const decodeCapturedBatch = Schema.decodeSync(Schema.fromJsonString(CanonicalBatch));
+const utcPrototype: object = Object.getPrototypeOf(DateTime.makeUnsafe(0));
+const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
+
+/** Freeze a newly decoded graph; caller-owned values never enter this traversal. */
+const freezeCaptured = (root: object): void => {
+  const pending: Array<unknown> = [root];
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+
+    if (!Predicate.isObject(value)) continue;
+    // Effect's UTC values lazily cache these parts. Initialize that cache before freezing.
+    if (Object.getPrototypeOf(value) === utcPrototype && DateTime.isDateTime(value))
+      Object.freeze(DateTime.toPartsUtc(value));
+    for (const child of Object.values(value)) pending.push(child);
+    Object.freeze(value);
+  }
+};
+
+/**
+ * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
+ * is serialized once and shared by the digest, batch and record rows. The detached, frozen
+ * graph remains safe when a settlement publisher passes this request through another Layer.
+ * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
+ */
+export interface PreparedAppend extends FencedAppendRequest {
+  readonly batchJson: string;
+  readonly records: ReadonlyArray<{
+    readonly recordId: RecordId;
+    readonly recordJson: string;
+    readonly canonical: CanonicalBatch["records"][number];
+  }>;
+  readonly digest: () => ReturnType<typeof digestCanonicalBatchJson>;
+}
+
+export const PreparedAppend = {
+  capture: (input: FencedAppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
+    Effect.suspend(() => {
+      const existing = capturedAppends.get(input);
+
+      if (existing !== undefined) return Effect.succeed(existing);
+
+      return Effect.try({
+        try: () => {
+          const encoded = encodeAppend(input);
+          const recordJson = encoded.batch.records.map(canonicalJson);
+          const batchJson = `{"batchId":${JSON.stringify(encoded.batch.batchId)},"producerId":${JSON.stringify(encoded.batch.producerId)},"records":[${recordJson.join(",")}]}`;
+          const batch = decodeCapturedBatch(batchJson);
+          const request = FencedAppendRequest.make({ ...decodeAppendHeader(encoded), batch });
+
+          freezeCaptured(batch);
+
+          const records = Object.freeze(
+            batch.records.map((canonical, index) =>
+              Object.freeze({
+                recordId: canonical.recordId,
+                recordJson: recordJson[index],
+                canonical,
+              }),
+            ),
+          );
+
+          const captured = Object.freeze(
+            Object.assign(request, {
+              batchJson,
+              records,
+              digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
+            }),
+          );
+
+          capturedAppends.set(captured, captured);
+
+          return captured;
+        },
+        catch: (cause) =>
+          ThreadStoreError.make({
+            operation: "prepare canonical append",
+            message: Schema.isSchemaError(cause)
+              ? cause.message
+              : "Canonical append capture failed",
+            cause,
+          }),
+      });
+    }),
+};
 
 export class AppendResult extends Schema.Class<AppendResult>("@effect-agent/thread/AppendResult")({
   firstSequence: CanonicalSequence,

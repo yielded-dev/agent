@@ -205,7 +205,7 @@ const driveRun = (setup: RunSetup) =>
         : {
             checkpoint: Effect.void,
             initialize: () => Effect.void,
-            commitTurn: () => Effect.void,
+            commitTurn: () => Effect.succeed("committed"),
             checkToolDispatch: Effect.void,
             step: {
               lookup: () => Effect.succeed(Option.none()),

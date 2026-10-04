@@ -17,6 +17,7 @@ import * as SqlClientService from "effect/sql/SqlClient";
 
 import { CurrentSqliteStorageVersion } from "./internal/migrations.ts";
 import {
+  configureSqliteSynchronous,
   initializeSqliteJournal,
   initializeSqliteJournalKernel,
   sqliteErrors,
@@ -38,6 +39,12 @@ export interface SqliteStorageOptions {
   readonly observationPollInterval?: number | undefined;
   /** Bounded SQLITE_BUSY retry window for write-lock acquisition, in milliseconds. */
   readonly busyTimeout?: number | undefined;
+  /**
+   * SQLite WAL synchronization for this store's connection. Defaults to FULL. NORMAL can lose
+   * acknowledged commits after power loss or an OS crash, potentially repeating external effects.
+   * All stores sharing a client must select the same mode when constructed.
+   */
+  readonly synchronous?: "FULL" | "NORMAL" | undefined;
   /**
    * Submission ownership lease duration in milliseconds (D5). Defaults to
    * `DEFAULT_OWNERSHIP_LEASE_DURATION` from `@yielded/agent/submission-ledger`.
@@ -143,6 +150,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
         }
         yield* sql`PRAGMA journal_mode = WAL`;
       }
+      yield* configureSqliteSynchronous();
       // A mode setting alone is not authority. Acquire the write lock now; EXCLUSIVE mode
       // retains it after commit/rollback until this client's enclosing Scope closes.
       yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(Effect.void);
@@ -324,6 +332,7 @@ export const storageConfigLayer = (
     Schema.decodeEffect(SqliteStorageConfigValue)({
       observationPollInterval: options.observationPollInterval ?? 25,
       busyTimeout: options.busyTimeout ?? 5_000,
+      synchronous: options.synchronous ?? "FULL",
       ownershipLeaseDuration:
         options.ownershipLeaseDuration ?? Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
       verifyOnOpen: options.verifyOnOpen ?? false,

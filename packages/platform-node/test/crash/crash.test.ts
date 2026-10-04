@@ -320,7 +320,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill at input:after-canonical-append: the marker is repaired and FIFO holds for the queued Submission",
+      "kill at input:after-canonical-append: the applied input survives and FIFO holds for the queued Submission",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -602,7 +602,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill at terminalize:after-canonical-append: the ledger is finalized from history, the record never rewritten",
+      "kill at terminalize:after-canonical-append: atomic finalization survives and the record is never rewritten",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -620,13 +620,13 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
             expectKilled(result);
 
-            // Before any recovery: the canonical outcome exists, the ledger row is nonterminal.
+            // The SQL publisher commits the outcome and plain-root finalization together.
             const before = yield* withRuntime(
               site.db,
               Effect.gen(function* () {
                 const snapshot = yield* lookupByKey(thread, key);
 
-                expect(snapshot.state).not.toBe("settled");
+                expect(snapshot.state).toBe("settled");
                 const records = yield* readLog(thread);
 
                 const settled = records.filter(

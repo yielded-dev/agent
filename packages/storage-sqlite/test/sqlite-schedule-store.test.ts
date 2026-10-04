@@ -19,6 +19,7 @@ const testLayer = (filename: string) =>
           SqliteStorageConfigValue.make({
             observationPollInterval: 1,
             busyTimeout: 5_000,
+            synchronous: "FULL",
             ownershipLeaseDuration: 30_000,
             verifyOnOpen: false,
           }),

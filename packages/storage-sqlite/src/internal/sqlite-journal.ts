@@ -1,8 +1,9 @@
 import { SqliteMigrator } from "@effect/sql-sqlite-node";
 import { makeSqlJournalKernel } from "@yielded/agent-storage-sql/sql-journal";
 import { makeRowDecoder, makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
+import type { Connection } from "effect/sql/SqlConnection";
 import { isSqlError, type SqlError } from "effect/sql/SqlError";
 
 import { SqliteStorageConfig } from "../SqliteStorageConfig.ts";
@@ -47,11 +48,61 @@ export const sqliteErrors = {
 
 const { decodeRows, decodeSingleRow } = makeRowDecoder(SqliteStorageCorruptionError.make);
 
+const SynchronousRow = Schema.Tuple([Schema.Struct({ synchronous: Schema.Int })]);
+const connectionModes = new WeakMap<Connection, "FULL" | "NORMAL">();
+
+/** Select once per actual connection, including aliases with different SQL transformations. */
+export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const { synchronous } = yield* SqliteStorageConfig;
+  const operation = "configure SQLite synchronization";
+
+  if (Option.isSome(yield* Effect.serviceOption(sql.transactionService)))
+    return yield* SqliteStorageError.make({
+      operation,
+      message: "SQLite storage must be constructed outside an existing SQL transaction.",
+    });
+  yield* Effect.scoped(
+    Effect.gen(function* () {
+      const connection = yield* sql.reserve;
+      const selected = connectionModes.get(connection);
+
+      if (selected !== undefined && selected !== synchronous)
+        return yield* SqliteStorageError.make({
+          operation,
+          message: `This SQLite connection already uses ${selected}; stores sharing a client must use the same synchronous option.`,
+        });
+      if (selected === undefined)
+        yield* connection.executeUnprepared(
+          synchronous === "FULL" ? "PRAGMA synchronous = FULL" : "PRAGMA synchronous = NORMAL",
+          [],
+          undefined,
+        );
+
+      const [actual] = yield* Schema.decodeUnknownEffect(SynchronousRow)(
+        yield* connection.executeUnprepared("PRAGMA synchronous", [], undefined),
+      ).pipe(
+        Effect.mapError((cause) =>
+          SqliteStorageError.make({ operation, message: cause.message, cause }),
+        ),
+      );
+
+      if (actual.synchronous !== (synchronous === "FULL" ? 2 : 1))
+        return yield* SqliteStorageError.make({
+          operation,
+          message: `SQLite synchronization changed after construction or could not be configured as ${synchronous}.`,
+        });
+      connectionModes.set(connection, synchronous);
+    }),
+  ).pipe(Effect.catchTag("SqlError", (cause) => storageError(operation)(cause)));
+});
+
 export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { hit: failpoint } = yield* SqliteStorageFailpoint;
   const { busyTimeout } = yield* SqliteStorageConfig;
 
+  yield* configureSqliteSynchronous();
   yield* sql`PRAGMA foreign_keys = ON`.pipe(Effect.mapError(storageError("enable foreign keys")));
   // PRAGMA statements do not accept bound parameters; the value is a schema-validated
   // non-negative integer, never caller-controlled text.

@@ -14,14 +14,18 @@ import {
   Stream,
 } from "effect";
 import { Digest } from "effect-agent/records";
+import { runIdForSubmission } from "effect-agent/run-journal";
 import { bindRunOwnership, RunStorage, type RunStorageSession } from "effect-agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "effect-agent/settlement-publisher";
 import {
   type SubmissionLedger,
   LedgerError,
+  MarkInputAppliedRequest,
   OwnershipLost,
   ReleaseOwnershipRequest,
   RenewOwnershipRequest,
+  submissionInputBatchId,
+  submissionInputRecordId,
   type ClaimRequest,
   type OwnershipToken,
 } from "effect-agent/submission-ledger";
@@ -377,12 +381,16 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       Effect.sync(() => owned.token),
     );
 
-    const command = <A, E>(effect: Effect.Effect<A, E>, publish: (value: A) => void = () => {}) =>
+    const command = <A, E>(
+      effect: Effect.Effect<A, E>,
+      publish: (value: A) => void = () => {},
+      requiresOwnership = true,
+    ) =>
       bind(
         gate.withPermits(1)(
           Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
-              if (owned.closed || !authority.owned)
+              if (owned.closed || (requiresOwnership && !authority.owned))
                 return yield* LedgerError.make({
                   operation: "Run ownership",
                   message: "Run storage session is closed",
@@ -456,9 +464,65 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
                 batch,
               });
 
+              let inputPoststate: SqlRunAuthority["submission"] | undefined;
+
               const result = yield* restore(
                 storeKernel.appendOwned(request, (raw) =>
-                  journalKernel.appendWithThread(raw, authority.thread),
+                  Effect.gen(function* () {
+                    const record = raw.records[0]?.canonical;
+
+                    if (
+                      !authority.owned ||
+                      authority.submission.input_applied_record_id !== null ||
+                      raw.records.length !== 1 ||
+                      raw.batchId !== submissionInputBatchId(submissionId) ||
+                      record?.recordId !== submissionInputRecordId(submissionId) ||
+                      record.payload._tag !== "UserInputRecorded" ||
+                      record.payload.kind !== "user" ||
+                      record.payload.submissionId !== submissionId ||
+                      record.payload.runId !== runIdForSubmission(submissionId)
+                    )
+                      return yield* journalKernel.appendWithThread(raw, authority.thread);
+
+                    const committed = yield* journalKernel.journal.withWriteTransaction(
+                      "append applied input transaction",
+                    )(
+                      Effect.gen(function* () {
+                        yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:before");
+
+                        const appended = yield* journalKernel.appendWithThreadInTransaction(
+                          raw,
+                          authority.thread,
+                        );
+
+                        const submission = yield* commands
+                          .markInputAppliedInTransaction(
+                            MarkInputAppliedRequest.make({
+                              submissionId,
+                              ownershipToken: owned.token,
+                              recordId: record.recordId,
+                              sequence: appended.firstSequence,
+                            }),
+                          )
+                          .pipe(
+                            Effect.mapError((cause) =>
+                              storeOptions.errors.storage({
+                                operation: "append applied input",
+                                message: cause.message,
+                                cause,
+                              }),
+                            ),
+                          );
+
+                        return { appended, submission };
+                      }),
+                    );
+
+                    yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:after");
+                    inputPoststate = committed.submission;
+
+                    return committed.appended;
+                  }),
                 ),
               ).pipe(Effect.exit);
 
@@ -467,6 +531,8 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
 
                 return yield* result;
               }
+              if (inputPoststate !== undefined)
+                authority.submission = Object.freeze(inputPoststate);
               if (!result.value.replayed) {
                 authority.thread = Object.freeze({
                   ...authority.thread,
@@ -548,7 +614,7 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       publishSettlement: (batch) =>
         command(
           Effect.suspend(() =>
-            ledgerKernel.publisher.publish(
+            ledgerKernel.publishWithState(
               SettlementPublication.make({
                 submissionId,
                 authority: { _tag: "Owned", ownershipToken: owned.token },
@@ -563,14 +629,22 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
             ),
           ),
           (result) => {
+            authority.submission = Object.freeze(result.submission);
+            if (result.submission.state === "settled") {
+              authority.owned = false;
+              owned.releaseNeeded = false;
+            }
             authority.thread = Object.freeze({
               ...authority.thread,
-              tail_sequence: result.tailSequence,
-              tail_digest: result.tailDigest,
+              tail_sequence: result.publication.tailSequence,
+              tail_digest: result.publication.tailDigest,
             });
-            owned.digest = result.tailDigest;
+            owned.digest = result.publication.tailDigest;
           },
-        ),
+          // Finalization ends ownership, but same-epoch publication replay and joined
+          // follow-up records still use this writer until its Scope or epoch ends.
+          false,
+        ).pipe(Effect.map((result) => result.publication)),
       reserveChildBudget: (value) => command(ownership.reserveChildBudget(value)),
       attachChildToReservation: (value) => command(ownership.attachChildToReservation(value)),
     };

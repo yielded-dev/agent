@@ -33,6 +33,9 @@ The automatic host holds SQLite's exclusive connection lock for its entire Scope
 fails startup, and independent readers cannot access the database while that connection is alive.
 Use a local filesystem with working SQLite locks; do not replace or unlink a live database file.
 New files are initialized in WAL mode; existing files must already use WAL mode.
+The host option `synchronous: "NORMAL"` opts its connection into WAL `NORMAL`; the default
+is `FULL`. `NORMAL` survives process crashes, but power loss or an OS crash can lose
+acknowledged commits and cause external effects to repeat during recovery.
 Managed storage rejects custom SQLite triggers because the host owns all journal and ownership mutations.
 `workerConcurrency` limits concurrently processed threads and defaults to one.
 The managed host dispatches wake hints through one bounded queue, coalescing repeated hints

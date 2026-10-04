@@ -77,14 +77,15 @@ export const runDurationBatchId = (runId: RunId): BatchId => decodeBatchId(`run-
 export const turnIdForRun = (runId: RunId, turn: number): TurnId =>
   decodeTurnId(`turn:${runId}:${turn}`);
 
-/** Deterministic batch identity of one committed canonical no-tool Turn (P4 single-batch shape). */
+/** Deterministic batch identity of a response committed atomically with its closed Turn outcomes. */
 export const turnBatchId = (runId: RunId, turn: number): BatchId =>
   decodeBatchId(`turn:${runId}:${turn}`);
 
 /**
  * Deterministic batch identity of a tool-declaring Turn's RESPONSE commit (plan §2.1 commit 1):
- * the assistant response plus pending steering becomes canonical BEFORE approval preflight and
- * dispatch fencing. Unsettled declarations conservatively record possible execution.
+ * the assistant response plus pending steering becomes canonical before approval preflight and
+ * dispatch fencing, or when readonly execution first requires a persisted call-scoped capability.
+ * Unsettled declarations conservatively record possible execution.
  */
 export const turnResponseBatchId = (runId: RunId, turn: number): BatchId =>
   decodeBatchId(`turn-response:${runId}:${turn}`);
@@ -553,9 +554,8 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
  * Pure projection: rebuild one Run's resume state from canonical records (DUR-015). Canonical
  * order is authoritative; the fold projects each `ModelResponseRecorded` Turn and the
  * owning Run's resumable incomplete Tool Turn. It flushes each contiguous group of valid `ToolCallSettled` records into one Tool message,
- * exactly mirroring the per-Turn commit shape produced by `turnCanonicalBatch` (no-tool Turns) and
- * by the
- * `turnResponseBatch`/`turnResultsBatch` split (tool-declaring Turns). The Phase 5 audit tags
+ * exactly mirroring the per-Turn commit shape produced by `turnCanonicalBatch` and the
+ * `turnResponseBatch`/`turnResultsBatch` split. The Phase 5 audit tags
  * are skipped transparently, so split-batch commits replay to the same prompt as P4 single-batch
  * commits.
  *
@@ -1617,9 +1617,9 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
  * under the WP0-style deterministic identities, committed as ONE atomic batch. The same input
  * always yields byte-identical content, so an in-Attempt append retry is an honest batch replay.
  *
- * Phase 5 keeps this shape for Turns that declare no application Tool calls; their terminal
- * `RunCompleted` marker joins the response in this same atomic batch. Tool-declaring Turns split
- * into `turnResponseBatch` + `turnResultsBatch`.
+ * No-tool Turns and eligible readonly Turns use this shape; a terminal `RunCompleted` marker
+ * joins the response in the same atomic batch. Other application Turns split into
+ * `turnResponseBatch` + `turnResultsBatch` before execution.
  */
 export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(function* (
   input: TurnCommitInput,
@@ -1641,7 +1641,8 @@ export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(fun
 
 /**
  * Commit the normalized response and original operation contracts before application Tools
- * execute. An unsettled application declaration is conservative uncertainty after ownership
+ * execute, or promote a deferred readonly response before a persisted call-scoped capability.
+ * An unsettled application declaration is conservative uncertainty after ownership
  * loss; approvals and the dispatch fence remain separate execution requirements. Provider
  * results stay in assistant content. Application outcomes belong to the results commit.
  */

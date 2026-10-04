@@ -556,7 +556,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
   }
 
   {
-    const location = "turn:after-results-append" as const;
+    const location = "turn:after-canonical-append" as const;
 
     it.effect(`rejects a prior Turn's reused call ID before dispatch after ${location}`, () =>
       Effect.gen(function* () {
@@ -696,6 +696,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
           const discover = Tool.make("discover_tools", {
             parameters: Schema.Struct({}),
+            needsApproval: () => false,
             success: Schema.Struct({
               toolNames: Schema.Array(Schema.String),
               padding: Schema.String,
@@ -926,7 +927,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
             submitOptions("retired-selection", "one"),
           );
 
-          yield* armFailpoint("turn:after-results-append");
+          yield* armFailpoint("turn:after-canonical-append");
           expect(failureTag(yield* Effect.exit(runtime.processThreadHead(receipt.threadId)))).toBe(
             "DurableRuntimeFailpointError",
           );

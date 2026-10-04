@@ -18,7 +18,7 @@ import {
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "./SubmissionLedger.ts";
-import { FencedAppendRequest, type ThreadStoreFailure } from "./ThreadStore.ts";
+import { FencedAppendRequest, PreparedAppend, type ThreadStoreFailure } from "./ThreadStore.ts";
 
 /** Authority rechecked atomically with the first canonical settlement publication. */
 export const SettlementPublicationAuthority = Schema.Union([
@@ -57,7 +57,8 @@ export type SettlementPublicationFailure =
 /**
  * One storage owner validates publication authority and appends the terminal fact atomically.
  * Wire preparation precedes the writer; no application callback runs inside its transaction.
- * Existing canonical intent wins replay. Finalization and external notification remain separate.
+ * Existing canonical intent wins replay. Adapters may finalize in this transaction when no
+ * recoverable delivery remains; external notification runs outside the transaction.
  */
 export class SettlementPublisher extends Context.Service<
   SettlementPublisher,
@@ -68,15 +69,23 @@ export class SettlementPublisher extends Context.Service<
   }
 >()("@effect-agent/thread/SettlementPublisher") {}
 
-const publicationJson = Schema.fromJsonString(SettlementPublication);
+const PublicationHeader = SettlementPublication.mapFields((fields) => ({
+  submissionId: fields.submissionId,
+  authority: fields.authority,
+}));
+
+const decodePublicationHeader = Schema.decodeEffect(PublicationHeader);
 
 /** Own the bounded request before Crypto, callbacks, or mutation authority can suspend it. */
 export const validatePublication = Effect.fnUntraced(function* (input: SettlementPublication) {
-  const request = yield* Schema.encodeEffect(publicationJson)(input).pipe(
-    Effect.flatMap(Schema.decodeEffect(publicationJson)),
-    Effect.mapError((cause) =>
-      LedgerError.make({ operation: "publish settlement", message: cause.message, cause }),
-    ),
+  const invalid = (cause: { readonly message: string }) =>
+    LedgerError.make({ operation: "publish settlement", message: cause.message, cause });
+
+  const header = yield* decodePublicationHeader(input).pipe(Effect.mapError(invalid));
+  const append = yield* PreparedAppend.capture(input.append).pipe(Effect.mapError(invalid));
+
+  const request = Object.freeze(
+    SettlementPublication.make({ ...header, authority: Object.freeze(header.authority), append }),
   );
 
   const record = request.append.batch.records[0];

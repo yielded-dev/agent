@@ -504,8 +504,8 @@ describe("PostgresSubmissionLedger faults", () => {
         expect(publishedRows[0]?.record_id).toBe(
           submissionSettlementRecordId(admitted.submissionId),
         );
-        expect((yield* submissionStates)[0]?.finalized_at).toBeNull();
-        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
+        expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
+        expect((yield* submissionStates)[0]?.state).toBe("settled");
         yield* select(undefined);
         expect((yield* publishOnce).replayed).toBe(true);
 

@@ -41,6 +41,12 @@ Keep the database file on persistent storage. Save the returned `threadId` and p
 it to later runs to continue the conversation, including after a process restart.
 Provide the history Layer around the complete program or application runtime.
 
+`SqliteThreadStore.layer({ filename, synchronous: "NORMAL" })` opts this store's connection
+into WAL `NORMAL` synchronization; the default is `FULL`. Choose the mode when constructing
+the store, and use the same choice for storage Layers sharing one SQL client.
+WAL `NORMAL` survives process crashes, but power loss or an OS crash can lose acknowledged
+commits and cause external effects to repeat during durable recovery.
+
 ## What is retained
 
 `PersistentHistory.layer` commits each successful run's input and native messages
@@ -62,6 +68,6 @@ For custom durable assemblies, `SqliteSubmissionLedger.ledgerLayer(options)`
 provides the separate accepted-work ledger. Point it at the same database file as
 `SqliteThreadStore.layer(options)` so ownership claims fence the same thread log.
 
-SQLite upgrades supported predecessor formats atomically and rejects incompatible
-stored versions. Check the [supported storage upgrades](/guide/operations/#adopting-these-contracts)
-before adopting a new release.
+SQLite accepts fresh storage or Thread format 16 and rejects earlier formats without mutation.
+Check the [storage requirements](/guide/operations/#adopting-these-contracts) before adopting a
+new release.

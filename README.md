@@ -38,8 +38,9 @@ Prefer named namespace imports from package roots, such as `import { Agent } fro
 Direct module paths use kebab-case, such as `@yielded/agent/agent-runtime`; see the
 [import guide](docs/src/content/docs/reference/packages.md#public-imports) for direct imports and lazy loading.
 
-Public beta: APIs and stored data may change before 1.0. Persistent adapters support a
-[data-preserving beta49/beta50 storage upgrade](docs/src/content/docs/guide/operations.md#adopting-these-contracts).
+Public beta: APIs and stored data may change before 1.0. Check the
+[storage requirements](docs/src/content/docs/guide/operations.md#adopting-these-contracts)
+before adopting a new release.
 
 ## A basic agent
 

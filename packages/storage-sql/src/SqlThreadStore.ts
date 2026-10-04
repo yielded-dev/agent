@@ -25,6 +25,7 @@ import {
   ThreadTailRequest,
   FenceRejected,
   FencedAppendRequest,
+  PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   SaveRecoveryCheckpointRequest,
@@ -33,7 +34,12 @@ import {
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 
-import { RawAppendRequest, RawCheckpoint, RawReadRequest, type SqlJournal } from "./SqlJournal.ts";
+import {
+  type RawAppendRequest,
+  RawCheckpoint,
+  RawReadRequest,
+  type SqlJournal,
+} from "./SqlJournal.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 import { makeSelectedReads } from "./SqlThreadNativeReads.ts";
@@ -55,10 +61,9 @@ export interface SqlThreadStoreOptions<
 export const prepareSqlAppend = Effect.fnUntraced(function* (
   request: FencedAppendRequest,
   crypto: Crypto.Crypto,
-  requireMaterialized: Effect.Effect<
-    unknown,
-    ThreadStoreError | ThreadNotMaterialized
-  > = Effect.void,
+  requireMaterialized: (
+    request: PreparedAppend,
+  ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized> = () => Effect.void,
 ) {
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
     ThreadStoreError.make({ operation, message: cause.message, cause });
@@ -67,38 +72,28 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     Effect.mapError(invalid("validate canonical append")),
   );
 
-  yield* requireMaterialized;
+  const captured = yield* PreparedAppend.capture(validated);
 
-  const tailDigest = yield* digestCanonicalBatch(
-    validated.expectedTailDigest,
-    validated.batch,
-  ).pipe(
-    Effect.provideService(Crypto.Crypto, crypto),
-    Effect.mapError(invalid("digest canonical append")),
-  );
+  yield* requireMaterialized(captured);
 
-  const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(
-    validated.batch,
-  ).pipe(Effect.mapError(invalid("encode canonical batch")));
+  const tailDigest = yield* captured
+    .digest()
+    .pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError(invalid("digest canonical append")),
+    );
 
-  const records = yield* Effect.forEach(validated.batch.records, (record) =>
-    Schema.encodeEffect(Schema.fromJsonString(CanonicalRecord))(record).pipe(
-      Effect.mapError(invalid("encode canonical record")),
-      Effect.map((recordJson) => ({ recordId: record.recordId, recordJson })),
-    ),
-  );
-
-  return yield* Schema.decodeEffect(RawAppendRequest)({
-    threadId: validated.threadId,
-    batchId: validated.batch.batchId,
+  return {
+    threadId: captured.threadId,
+    batchId: captured.batch.batchId,
     batchDigest: tailDigest,
-    batchJson,
-    expectedTailSequence: validated.expectedTailSequence,
-    expectedTailDigest: validated.expectedTailDigest,
-    producerEpoch: validated.producerEpoch,
-    records,
+    batchJson: captured.batchJson,
+    expectedTailSequence: captured.expectedTailSequence,
+    expectedTailDigest: captured.expectedTailDigest,
+    producerEpoch: captured.producerEpoch,
+    records: captured.records,
     tailDigest,
-  }).pipe(Effect.mapError(invalid("encode canonical append")));
+  } satisfies RawAppendRequest;
 });
 
 /** Canonical ThreadStore behavior over an adapter-initialized SQL journal. */
@@ -520,7 +515,9 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
 
   const appendKernel = Effect.fn("SqlThreadStore.append")(function* (
     request: FencedAppendRequest,
-    requireMaterialized: Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
+    requireMaterialized: (
+      request: PreparedAppend,
+    ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
     commit: SqlJournal<S, C, W, F>["append"],
   ) {
     const rawRequest = yield* prepareSqlAppend(request, crypto, requireMaterialized);
@@ -860,7 +857,7 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
     append: (request) =>
       appendKernel(
         request,
-        Effect.suspend(() => requireThread(journal, request.threadId)),
+        (captured) => requireThread(journal, captured.threadId),
         journal.append,
       ),
     export: exportThread,
@@ -875,7 +872,7 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
   return {
     store,
     appendOwned: (request: FencedAppendRequest, commit: SqlJournal<S, C, W, F>["append"]) =>
-      appendKernel(request, Effect.void, commit),
+      appendKernel(request, () => Effect.void, commit),
   };
 });
 

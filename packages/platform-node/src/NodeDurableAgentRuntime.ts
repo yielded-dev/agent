@@ -99,6 +99,8 @@ export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurable
   abortPollInterval: PositiveMillis,
   /** Bounded SQLITE_BUSY retry window for write-lock acquisition. */
   busyTimeout: NonNegativeMillis,
+  /** SQLite WAL synchronization selected for this host's connection at construction. */
+  synchronous: SqliteStorageConfigValue.fields.synchronous,
   /** Canonical observation poll cadence of the SQLite store. */
   observationPollInterval: NonNegativeMillis,
   /** Opt-in full payload/digest-chain audit while opening the store. */
@@ -145,6 +147,11 @@ export interface NodeDurableAgentRuntimeOptions<
   readonly toolFailureObserver?: RunToolFailureObserver | undefined;
   /** Milliseconds; default 5000. */
   readonly busyTimeout?: number | undefined;
+  /**
+   * Defaults to FULL. NORMAL can lose acknowledged commits after power loss or an OS crash,
+   * potentially repeating external effects. The choice belongs to this host's SQLite connection.
+   */
+  readonly synchronous?: "FULL" | "NORMAL" | undefined;
   /** Milliseconds; default 25. */
   readonly observationPollInterval?: number | undefined;
   /** Default false. */
@@ -215,6 +222,7 @@ const configFromOptions = (
     leaseRenewalInterval: options.leaseRenewalInterval ?? 10_000,
     abortPollInterval: options.abortPollInterval ?? 500,
     busyTimeout: options.busyTimeout ?? 5_000,
+    synchronous: options.synchronous ?? "FULL",
     observationPollInterval: options.observationPollInterval ?? 25,
     verifyOnOpen: options.verifyOnOpen ?? false,
   }).pipe(
@@ -238,6 +246,7 @@ const sqliteStorageConfigLayer: Layer.Layer<
     return SqliteStorageConfigValue.make({
       observationPollInterval: config.observationPollInterval,
       busyTimeout: config.busyTimeout,
+      synchronous: config.synchronous,
       ownershipLeaseDuration: config.ownershipLeaseDuration,
       verifyOnOpen: config.verifyOnOpen,
     });

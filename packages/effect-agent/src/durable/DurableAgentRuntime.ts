@@ -64,7 +64,8 @@ import {
 import { Selection, Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
 import {
-  type ModelCallUsage,
+  ModelCallUsage,
+  ModelResponseIdentity,
   InputTokenUsage,
   ModelUsageGroup,
   RunUsageSummary,
@@ -134,7 +135,7 @@ import {
   type ObligationBlockedOn,
   type ObligationThresholds,
 } from "./Admin.ts";
-import { digestJson, type DigestError } from "./Digest.ts";
+import { canonicalJson, digestJson, type DigestError } from "./Digest.ts";
 import {
   DurableRuntimeFailpoint,
   type DurableRuntimeFailpointError,
@@ -280,6 +281,7 @@ import {
   turnCanonicalBatch,
   turnIdForRun,
   turnResponseBatch,
+  turnResponseBatchId,
   turnResultsBatch,
 } from "./RunJournal.ts";
 import {
@@ -1115,6 +1117,8 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
 
 const decodePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
 const decodePersisted = Schema.decodeUnknownEffect(PersistedJson);
+const encodeCompactionMessageJson = Schema.encodeEffect(Schema.fromJsonString(Prompt.Message));
+const decodeCompactionMessageJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
 
 /** One application Tool Call declared inside a canonical `ModelResponseRecorded`'s messages. */
 interface DeclaredApplicationCall {
@@ -4640,8 +4644,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * Attempt cleanly with the obligation still owed.
    *
    * The interpreter supplies validated response, closed Tool-result, and completion facts.
-   * Responses precede approval and dispatch; Tool results precede input drains and the next
-   * Turn. A no-tool response and Run completion share one batch. A completion Tool's result
+   * Responses precede approval and effectful dispatch; readonly responses may join their closed
+   * results. Tool results precede input drains and the next Turn. A no-tool response and Run
+   * completion share one batch. A completion Tool's result
    * precedes its terminal-only completion batch, so recovery can repeat a pure output projection
    * without replaying the handler. Pending batches resume from their canonical declarations.
    */
@@ -5599,6 +5604,58 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         }),
       );
 
+      // One readonly Turn may own its response without publishing it. Promotion and settlement
+      // share this gate so concurrent Steps or updates cannot publish the response twice.
+      const responseGate = yield* Semaphore.make(1);
+
+      let deferredResponse:
+        | { readonly turn: number; readonly turnId: TurnId; readonly batch: CanonicalBatch }
+        | undefined;
+
+      const acceptResponseDeclarations = (batch: CanonicalBatch) => {
+        for (const record of batch.records) {
+          if (record.payload._tag !== "ModelResponseRecorded") continue;
+          for (const call of record.payload.toolOperations) {
+            declaredToolIds.add(call.toolCallId);
+            declaredNamesByCallId.set(call.toolCallId, call.toolName);
+          }
+        }
+      };
+
+      const promoteResponse = Effect.gen(function* () {
+        const halted = yield* Ref.get(haltRef);
+
+        if (halted !== undefined) return yield* halted;
+        const deferred = deferredResponse;
+
+        if (deferred === undefined) return;
+        const record = deferred.batch.records[0];
+
+        if (record?.payload._tag !== "ModelResponseRecorded")
+          return yield* RunJournalError.make({ message: "Deferred Turn has no owned response" });
+        const calls = yield* declaredToolCalls(record.payload.messages);
+
+        const batch = CanonicalBatch.make({
+          ...deferred.batch,
+          batchId: turnResponseBatchId(runId, deferred.turn),
+        });
+
+        yield* appendBatch(ctx, batch);
+        acceptResponseDeclarations(batch);
+        for (const call of calls.application) encodedParamsByCallId.set(call.id, call.params);
+        recordCommittedUsage(batch);
+        for (const entry of batch.records) knownIds.add(entry.recordId);
+        deferredResponse = undefined;
+        // Readonly handlers may already have started; promotion does not prove initial dispatch.
+        yield* hit("turn:after-response-append");
+      });
+
+      const flushDeferredResponse = promoteResponse.pipe(
+        // Retain failure before releasing the permit; a waiting capability must not retry it.
+        Effect.tapError((failure) => Ref.set(haltRef, failure)),
+        responseGate.withPermits(1),
+      );
+
       // Initial instruction metadata supports resumed context and compaction. The engine
       // owns all subsequent history boundaries and supplies complete commit facts directly.
       let initialHistoryLength = 0;
@@ -5739,6 +5796,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         reservePolicyUsage: (usage) =>
           recordHalt(
             Effect.gen(function* () {
+              yield* flushDeferredResponse;
+
               const recordId = decodeRecordIdSync(
                 `policy:${runId}:${usage.programmaticToolCalls}:${usage.finalizationUsed}`,
               );
@@ -5769,13 +5828,29 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const halted = yield* Ref.get(haltRef);
 
               if (halted !== undefined) return yield* halted;
+              if (
+                deferredResponse !== undefined &&
+                (deferredResponse.turn !== commit.turn || deferredResponse.turnId !== commit.turnId)
+              )
+                return yield* RunJournalError.make({
+                  message: "A new Turn preceded settlement of its deferred response",
+                });
+              if (commit._tag === "Partial") yield* promoteResponse;
+              const deferred = deferredResponse;
+
+              if (commit._tag === "Response" && deferred !== undefined)
+                return yield* RunJournalError.make({
+                  message: "Turn response was already deferred",
+                });
               const responseId = modelResponseRecordId(runId, commit.turn);
               const suppliedResponse = commit._tag === "Partial" ? undefined : commit.response;
-              const response = knownIds.has(responseId) ? undefined : suppliedResponse;
+
+              const response =
+                knownIds.has(responseId) || deferred !== undefined ? undefined : suppliedResponse;
 
               if (suppliedResponse !== undefined)
                 currentToolTurn = { turn: commit.turn, turnId: commit.turnId };
-              if (commit._tag === "Response" && response === undefined) return;
+              if (commit._tag === "Response" && response === undefined) return "committed" as const;
 
               const toolOperations: Array<ToolOperation> = [];
               const responseToolIds = new Set<ToolCallId>();
@@ -5863,9 +5938,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                     : {}),
                 };
               }
-              if (response === undefined && toolResults.length === 0 && runCompletion === undefined)
-                return;
-              if (response === undefined && !knownIds.has(responseId))
+              if (
+                response === undefined &&
+                deferred === undefined &&
+                toolResults.length === 0 &&
+                runCompletion === undefined
+              )
+                return "committed" as const;
+              if (response === undefined && deferred === undefined && !knownIds.has(responseId))
                 return yield* RunJournalError.make({
                   message: "Tool results or completion preceded the canonical response",
                 });
@@ -5907,16 +5987,91 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                   yield* hit("subagent:after-sibling-settle");
                 }
 
-                return;
+                return "committed" as const;
               }
 
-              const batch = yield* withCrypto(
-                commit._tag === "Response"
-                  ? turnResponseBatch(input)
-                  : response === undefined
-                    ? turnResultsBatch(input)
-                    : turnCanonicalBatch(input),
-              );
+              if (commit._tag === "Response" && commit.defer === true) {
+                if (
+                  toolOperations.length === 0 ||
+                  toolOperations.some(
+                    (call) =>
+                      call.executionClass !== "readonly" || call.executionKind !== "ordinary",
+                  )
+                )
+                  return yield* RunJournalError.make({
+                    message: "Only ordinary readonly Tool responses may be deferred",
+                  });
+                deferredResponse = {
+                  turn: commit.turn,
+                  turnId: commit.turnId,
+                  // The journal owns encoded messages. Detach the remaining small metadata
+                  // trees too: Schema validation alone is not an ownership transfer.
+                  batch: yield* withCrypto(
+                    turnCanonicalBatch({
+                      ...input,
+                      toolParameterRejections: input.toolParameterRejections?.map((rejection) => ({
+                        ...rejection,
+                        parameters: copyJson(rejection.parameters),
+                        error: { ...rejection.error, reason: { ...rejection.error.reason } },
+                      })),
+                      toolExposure:
+                        input.toolExposure === undefined
+                          ? undefined
+                          : Snapshot.make({
+                              exposedToolNames: [...input.toolExposure.exposedToolNames],
+                              ...(input.toolExposure.selection === undefined
+                                ? {}
+                                : {
+                                    selection: Selection.make({
+                                      toolNames: [...input.toolExposure.selection.toolNames],
+                                    }),
+                                  }),
+                            }),
+                      usage:
+                        input.usage === undefined
+                          ? undefined
+                          : {
+                              ...input.usage,
+                              modelUsage: input.usage.modelUsage?.map((usage) =>
+                                ModelCallUsage.make({
+                                  ...usage,
+                                  ...(usage.response === undefined
+                                    ? {}
+                                    : {
+                                        response: ModelResponseIdentity.make({ ...usage.response }),
+                                      }),
+                                  inputTokens: InputTokenUsage.make({ ...usage.inputTokens }),
+                                  outputTokens: OutputTokenUsage.make({ ...usage.outputTokens }),
+                                }),
+                              ),
+                            },
+                    }),
+                  ),
+                };
+
+                return "deferred" as const;
+              }
+
+              let batch: CanonicalBatch;
+
+              if (deferred === undefined) {
+                batch = yield* withCrypto(
+                  commit._tag === "Response"
+                    ? turnResponseBatch(input)
+                    : response === undefined
+                      ? turnResultsBatch(input)
+                      : turnCanonicalBatch(input),
+                );
+              } else if (toolResults.length === 0 && runCompletion === undefined) {
+                batch = deferred.batch;
+              } else {
+                const results = yield* withCrypto(turnResultsBatch(input));
+
+                batch = CanonicalBatch.make({
+                  ...deferred.batch,
+                  records: [...deferred.batch.records, ...results.records],
+                });
+              }
 
               yield* appendBatch(ctx, batch);
               for (const call of response?.calls ?? []) {
@@ -5924,18 +6079,27 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 encodedParamsByCallId.set(call.toolCallId, call.parameters);
                 declaredNamesByCallId.set(call.toolCallId, call.toolName);
               }
-              if (response !== undefined) initialDispatchProofTurns.add(commit.turn);
+              if (deferred !== undefined) {
+                acceptResponseDeclarations(batch);
+                deferredResponse = undefined;
+              }
+              if (commit._tag === "Response") initialDispatchProofTurns.add(commit.turn);
               recordCommittedUsage(batch);
               for (const record of batch.records) knownIds.add(record.recordId);
               if (runCompletion !== undefined) completionState.committed = runCompletion;
               yield* hit(
                 commit._tag === "Response"
                   ? "turn:after-response-append"
-                  : response === undefined
+                  : response === undefined && deferred === undefined
                     ? "turn:after-results-append"
                     : "turn:after-canonical-append",
               );
-            }),
+
+              return "committed" as const;
+            }).pipe(
+              Effect.tapError((failure) => Ref.set(haltRef, failure)),
+              responseGate.withPermits(1),
+            ),
           ),
         checkToolDispatch: recordHalt(
           Effect.gen(function* () {
@@ -5951,16 +6115,23 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ),
         step: {
           lookup: (key) =>
-            Effect.sync(() => {
-              const output = stepOutputs.get(
-                toolStepSettledRecordId(runId, key.toolCallId, key.stepName),
-              );
+            recordHalt(
+              Effect.gen(function* () {
+                yield* flushDeferredResponse;
 
-              return output === undefined ? Option.none() : Option.some({ encodedOutput: output });
-            }),
+                const output = stepOutputs.get(
+                  toolStepSettledRecordId(runId, key.toolCallId, key.stepName),
+                );
+
+                return output === undefined
+                  ? Option.none()
+                  : Option.some({ encodedOutput: output });
+              }),
+            ),
           commit: (key, encodedOutput) =>
             recordHalt(
               Effect.gen(function* () {
+                yield* flushDeferredResponse;
                 const recordId = toolStepSettledRecordId(runId, key.toolCallId, key.stepName);
 
                 if (knownIds.has(recordId)) return;
@@ -6108,8 +6279,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
               if (canonicalMessage === undefined) continue;
 
+              // Preserve Prompt's JSON projection while ignoring persisted object-key order.
               const encode = (entry: Prompt.Message) =>
-                Schema.encodeEffect(Prompt.Message)(entry).pipe(
+                encodeCompactionMessageJson(entry).pipe(
+                  Effect.flatMap(decodeCompactionMessageJson),
+                  Effect.map(canonicalJson),
                   Effect.mapError((cause) =>
                     CompactionError.make({
                       message: "Could not encode the canonical compaction prefix",
@@ -6121,7 +6295,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const left = yield* encode(canonicalMessage);
               const right = yield* encode(message);
 
-              if (JSON.stringify(left) === JSON.stringify(right)) matchingPrefix += 1;
+              if (left === right) matchingPrefix += 1;
             }
 
             let lastCovered: JournalBoundary | undefined;
@@ -7419,24 +7593,30 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       ).pipe(
         Effect.provideService(AgentUpdateAcceptance, {
           accept: (update) =>
-            updateRuntime
-              .emit({
-                updateId: update.updateId,
-                value: update.value,
-                submission,
-                runId,
-                producerEpoch: ctx.producerEpoch,
-                definitions: submission.agentDigests,
-              })
-              .pipe(
-                Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
-                  // Preserve the original infrastructure failure at the coordinator boundary;
-                  // the next semantic checkpoint must not commit this Tool failure as an outcome.
-                  Ref.set(haltRef, failure).pipe(
-                    Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
-                  ),
+            flushDeferredResponse.pipe(
+              Effect.catch((failure) =>
+                Ref.set(haltRef, failure).pipe(
+                  Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
                 ),
               ),
+              Effect.andThen(() =>
+                updateRuntime.emit({
+                  updateId: update.updateId,
+                  value: update.value,
+                  submission,
+                  runId,
+                  producerEpoch: ctx.producerEpoch,
+                  definitions: submission.agentDigests,
+                }),
+              ),
+              Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
+                // Preserve the original infrastructure failure at the coordinator boundary;
+                // the next semantic checkpoint must not commit this Tool failure as an outcome.
+                Ref.set(haltRef, failure).pipe(
+                  Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
+                ),
+              ),
+            ),
         }),
         Effect.provideService(ModelUsageAccounting, {
           noteIncompleteUsage: (turn) =>
@@ -7599,6 +7779,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               if (halted !== undefined) {
                 return yield* halted;
               }
+              // A semantic failure retains the validated response and its usage. Ownership loss
+              // and coordinator faults escape above without retrying a failed canonical append.
+              yield* flushDeferredResponse;
 
               // Host authorization can observe cancellation before the abort watcher ticks.
               // Only an authorization denial with this Submission's durable intent is an abort.
@@ -7655,6 +7838,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       if (result._tag === "suspendedRun") return approvalSuspension(result.toolCallId);
       if (result._tag === "suspendedChildRun") return childSuspension(result.children);
       if (result._tag === "aborted") {
+        yield* flushDeferredResponse;
+
         return {
           ...abortedRunPhase(yield* currentUsageSummary()),
           uncommittedModelUsage: uncommittedModelUsage(),

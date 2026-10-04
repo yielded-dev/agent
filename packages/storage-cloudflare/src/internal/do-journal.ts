@@ -1,4 +1,5 @@
 import { SqliteMigrator } from "@effect/sql-sqlite-do";
+import type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 import {
   makeSqlLifecyclePublication,
   type SqlLifecycleRetainMany,
@@ -224,26 +225,7 @@ const lifecycleCursorRows = ownedRows(
 
 const initializedLifecycleSources = new WeakSet<OwnedState>();
 
-export class RawRecord extends Schema.Class<RawRecord>(
-  "@effect-agent/storage-cloudflare/RawRecord",
-)({
-  recordId: BoundedIdentifier,
-  recordJson: BoundedStoredText,
-}) {}
-
-export class RawAppendRequest extends Schema.Class<RawAppendRequest>(
-  "@effect-agent/storage-cloudflare/RawAppendRequest",
-)({
-  batchDigest: BoundedStoredText,
-  batchId: BoundedIdentifier,
-  batchJson: BoundedStoredText,
-  threadId: BoundedIdentifier,
-  expectedTailDigest: BoundedStoredText,
-  expectedTailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
-  records: Schema.NonEmptyArray(RawRecord).check(Schema.isMaxLength(256)),
-  tailDigest: BoundedStoredText,
-}) {}
+export type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 
 export class RawAppendResult extends Schema.Class<RawAppendResult>(
   "@effect-agent/storage-cloudflare/RawAppendResult",
@@ -772,7 +754,7 @@ const makeJournal = (
         { discard: true },
       );
 
-      const recordIds = request.records.map((record) => record.recordId);
+      const recordIds: Array<string> = request.records.map((record) => record.recordId);
 
       if (new Set(recordIds).size !== recordIds.length) {
         return yield* DoAppendConflict.make({
@@ -787,7 +769,7 @@ const makeJournal = (
     const appendPrepared = Effect.fnUntraced(function* (
       request: RawAppendRequest,
     ): Effect.fn.Return<RawAppendResult, AppendError> {
-      const recordIds = request.records.map((record) => record.recordId);
+      const recordIds: Array<string> = request.records.map((record) => record.recordId);
       const threadRows = yield* getThread(request.threadId);
 
       const thread = yield* decodeSingleRow(
@@ -958,33 +940,17 @@ const makeJournal = (
         `.pipe(Effect.mapError(storageError("insert canonical batch")));
       yield* failpoint("append:after-batch-insert");
 
-      const records = yield* Effect.forEach(request.records, (record, index) =>
-        Effect.gen(function* () {
-          const canonical = yield* Schema.decodeEffect(Schema.fromJsonString(CanonicalRecord))(
-            record.recordJson,
-          ).pipe(
-            Effect.mapError((error) =>
-              DoStorageCorruptionError.make({
-                table: "effect_agent_canonical_records",
-                rowKey: record.recordId,
-                message: error.message,
-              }),
-            ),
-          );
-
-          return {
-            record,
-            canonical,
-            row: {
-              thread_id: request.threadId,
-              sequence: firstSequence + index,
-              record_id: record.recordId,
-              batch_id: request.batchId,
-              record_json: record.recordJson,
-            },
-          };
-        }),
-      );
+      const records = request.records.map((record, index) => ({
+        record,
+        canonical: record.canonical,
+        row: {
+          thread_id: request.threadId,
+          sequence: firstSequence + index,
+          record_id: record.recordId,
+          batch_id: request.batchId,
+          record_json: record.recordJson,
+        },
+      }));
 
       // Five bound columns per row; preserve the logical batch and every append barrier.
       for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 5))) {

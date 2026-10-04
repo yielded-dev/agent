@@ -49,6 +49,9 @@ The storage owner publishes one canonical `SubmissionSettled` record after check
 claim, joined host, or queued abort authority in the same transaction. Delivery and parent
 acknowledgements complete before ledger finalization releases the lane. Finalization derives the
 outcome from that record and preserves its first finalization timestamp on every retry.
+SQL adapters finalize plain-root submissions in the publication transaction; submissions with
+delivery or parent obligations retain recoverable finalization after those obligations complete.
+SQLite's opt-in WAL `synchronous: "NORMAL"` survives process crashes, but power loss or an OS crash can lose acknowledged commits and cause external effects to repeat during recovery.
 
 A crash before publication resumes from existing execution facts: a committed `RunCompleted`
 retains its output, while unresolved ordinary tools remain uncertain. A crash after publication
@@ -235,6 +238,11 @@ kind, and replay hash. There is no separate preparation record. Losing ownership
 after that response commits can therefore leave an ordinary mutating call unknown, even if its
 handler had not started. Execution still validates arguments, resolves the whole batch's approvals,
 checks host authorization, and rechecks the writer fence before granting handler permits.
+
+A turn containing only ordinary readonly calls without approval can commit its response and
+results together. If interrupted before that commit, recovery may ask the model again. Using a
+Durable Step, reserving durable policy capacity, or accepting an update first commits the saved
+response. Idempotent calls retain the earlier declaration so retries keep the original call.
 
 A pending or denied approval recorded before the original dispatch proves that the whole batch
 never started. An initially blocked approval flow retains this proof across resumes until dispatch;

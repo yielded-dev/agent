@@ -29,6 +29,9 @@ flowchart LR
   and commit their bounded results in declaration order after their streams close, before draining
   new input or starting the next turn. Tool concurrency and run budgets are finite; all execution
   resources belong to a Scope.
+- Ordinary readonly turns without approval may commit response and results together. Persist the
+  response before a Durable Step, durable policy reservation, or accepted update. Idempotent and
+  mutating calls keep their declaration before dispatch, preserving the original recovery decision.
 - Admit new input ahead of eventual work. In Cloudflare, new native work preempts maintenance;
   publish the lifecycle start promptly after pickup. Reply publication, projection backfills, and memory
   have independent recovery obligations and must not become prerequisites for a model call.
@@ -63,8 +66,9 @@ flowchart LR
   a wake hint is never proof of completion. See [messaging](/guide/messaging/).
 - Canonical `SubmissionSettled` is the single terminal intent. Its publisher checks live authority
   and appends the record in one storage transaction. Delivery and parent acknowledgements follow
-  that publication; ledger finalization then records a stable receipt timestamp and releases the
-  lane. Recovery completes those obligations from the same canonical record.
+  that publication; ledger finalization records a stable receipt timestamp and releases the
+  lane. An adapter may finalize inside publication when no recoverable delivery remains.
+  Recovery completes outstanding obligations from the same canonical record.
 - The append-only journal owns execution facts; the ledger owns what is still owed and who may
   advance it. Projections and checkpoints are disposable. Current bindings select queued and
   resumed work; each committed model response owns its normalized tool arguments and original

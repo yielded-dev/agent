@@ -754,12 +754,21 @@ const acceptTurnCommit = <E, R>(
     if (trace.commitFailed) return Effect.void;
 
     const accepted = checkpointExecution(context, durability).pipe(
-      Effect.andThen(() => durability?.commitTurn(commit) ?? Effect.void),
+      Effect.andThen(() => durability?.commitTurn(commit) ?? Effect.succeed("committed" as const)),
     );
 
     return accepted.pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
+      Effect.flatMap((receipt) => {
+        if (receipt === "deferred")
+          return commit._tag === "Response" && commit.defer === true
+            ? Effect.void
+            : Effect.fail(
+                ModelProtocolError.make({
+                  message: "Durability deferred an ineligible Turn commit",
+                }),
+              );
+
+        return Effect.sync(() => {
           if (commit._tag !== "Partial") {
             if (commit.response !== undefined) {
               context.pendingCommitInputs.splice(0, trace.commitInputCount ?? 0);
@@ -767,8 +776,8 @@ const acceptTurnCommit = <E, R>(
             }
             if (commit._tag === "Settled") trace.resultsCommitted = true;
           }
-        }),
-      ),
+        });
+      }),
       Effect.onExit((exit) =>
         Effect.sync(() => {
           if (Exit.isFailure(exit)) trace.commitFailed = true;
@@ -7234,11 +7243,26 @@ const makeTurn = <
                     return yield* ModelProtocolError.make({
                       message: "Tool dispatch has no validated response facts",
                     });
+                  // Idempotency only permits replay of the original operation. Re-asking the
+                  // model could choose different arguments or a new key, so it keeps the barrier.
                   yield* acceptTurnCommit(context, trace, options.durability, {
                     _tag: "Response",
                     turn,
                     turnId,
                     response,
+                    ...(canRepeatModelCall &&
+                    response.calls.every((call) => {
+                      const tool = toolkit.tools[call.toolName];
+
+                      return (
+                        call.executionClass === "readonly" &&
+                        call.executionKind === "ordinary" &&
+                        tool !== undefined &&
+                        (tool.needsApproval === undefined || tool.needsApproval === false)
+                      );
+                    })
+                      ? { defer: true as const }
+                      : {}),
                   });
                 }
 

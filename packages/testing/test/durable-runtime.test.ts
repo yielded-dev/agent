@@ -915,7 +915,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
       yield* runtime.submit(agent, { question: "First" }, submitOptions(threadId, "first"));
       expect((yield* process).map((settlement) => settlement.outcome)).toEqual(["completed"]);
       yield* runtime.submit(agent, { question: "Second" }, submitOptions(threadId, "second"));
-      yield* armFailpoint("turn:after-results-append");
+      yield* armFailpoint("turn:after-canonical-append");
       const crashed = yield* process.pipe(Effect.exit, Effect.ensuring(clearFailpoint));
 
       expect(failureTag(crashed)).toBe("DurableRuntimeFailpointError");
@@ -1624,6 +1624,8 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
             parameters: Schema.Struct({}),
             success: Schema.String,
             dependencies: [ContextWindow],
+            // Retain a response boundary before dispatch for pending-batch recovery.
+            needsApproval: () => false,
           }).annotate(ToolExecutionClass, "readonly"),
         );
 
@@ -1997,7 +1999,8 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         input: Schema.Struct({ question: Schema.String }),
         output: Schema.Struct({ answer: Schema.String }),
         instructions: "Search before answering.",
-        toolkit: searchTools,
+        // Re-seed usage from a declared pending call, before its handler has run.
+        toolkit: Toolkit.make(Search.setNeedsApproval(() => false)),
         policy: AgentPolicy.make({
           maxTurns: 3,
           maxToolCalls: 2,
