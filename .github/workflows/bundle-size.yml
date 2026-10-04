@@ -33,12 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .bundle-base
@@ -62,7 +62,7 @@ jobs:
 
       - name: Restore base Vite Task cache
         id: base-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .bundle-base/node_modules/.vite/task-cache
           key: vite-task-bundle-base-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -91,14 +91,14 @@ jobs:
 
       - name: Save base Vite Task cache
         if: ${{ !cancelled() && (steps.base.outcome == 'success' || steps.base.outcome == 'failure') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .bundle-base/node_modules/.vite/task-cache
           key: ${{ steps.base-cache.outputs.cache-primary-key }}
 
       - name: Save Vite Task cache
         if: ${{ !cancelled() && (steps.head.outcome == 'success' || steps.head.outcome == 'failure') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.setup.outputs.cache-key }}

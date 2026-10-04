@@ -120,7 +120,7 @@ jobs:
       head: ${{ steps.proof.outputs.head }}
     steps:
       - name: Check out trusted base verifier
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha || github.event.before }}
           persist-credentials: false
@@ -156,7 +156,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up CI
         id: setup
@@ -187,7 +187,7 @@ jobs:
 
       - name: Save Vite Task cache
         if: ${{ !cancelled() && (steps.checks.outcome == 'success' || steps.checks.outcome == 'failure' || steps.format.outcome == 'success') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.setup.outputs.cache-key }}
@@ -261,7 +261,7 @@ jobs:
           --health-retries 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up CI
         id: setup
@@ -290,7 +290,7 @@ jobs:
       # fixing one failure does not force the entire suite to run cold again.
       - name: Save Vite Task cache
         if: ${{ !cancelled() && steps.setup.outputs.cache-key != '' && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.setup.outputs.cache-key }}
@@ -306,7 +306,7 @@ jobs:
       actions: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
@@ -370,7 +370,7 @@ jobs:
 
       - name: Save Vite Task cache
         if: ${{ !cancelled() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.setup.outputs.cache-key }}
@@ -383,7 +383,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up CI
         id: setup
@@ -401,7 +401,7 @@ jobs:
 
       - name: Save Vite Task cache
         if: ${{ !cancelled() && (steps.docs.outcome == 'success' || steps.docs.outcome == 'failure') }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.setup.outputs.cache-key }}
@@ -434,7 +434,7 @@ jobs:
       contents: write
     steps:
       - name: Check out the validated source commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
 
