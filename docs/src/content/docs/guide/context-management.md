@@ -103,7 +103,8 @@ its pinned adapter retains grouped systems. Place native Anthropic cache markers
 transient context rather than relying on automatic placement after that suffix. See
 [provider cache settings](/guide/run-agents/#prompt-caching) for the release limitation and xAI routing configuration.
 
-Prepared prompts receive fresh context estimates, including replacement content. For nondurable
+Prepared prompts receive context estimates for their current messages. The default estimator
+reuses counts by immutable message identity; return new messages when changing content. For nondurable
 compaction, retain the original instruction/input messages or an unambiguous, content-equivalent
 ordering of them. The engine rejects compaction with `CompactionError` when that block cannot be
 mapped safely. Original message identities disambiguate repeated instructions or input text.
