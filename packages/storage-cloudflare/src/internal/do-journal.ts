@@ -1,4 +1,3 @@
-import { SqliteMigrator } from "@effect/sql-sqlite-do";
 import type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 import {
   makeSqlLifecyclePublication,
@@ -32,13 +31,12 @@ import {
   DoAppendConflict,
   DoCheckpointConflict,
   DoFenceRejected,
-  DoStorageCompatibilityError,
   DoStorageCorruptionError,
   DoStorageError,
   DoValueBoundExceeded,
   type DoStorageFailpointLocation,
 } from "../DoStorageError.ts";
-import { CurrentDoStorageVersion, doMigrations } from "./migrations.ts";
+import { ensureDoStorageLayout } from "./migrations.ts";
 import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
 import {
   isAppendContention,
@@ -56,7 +54,6 @@ import {
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(2_000_000));
 const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const MAX_RECORDS_PER_THREAD = MAX_THREAD_EXPORT_RECORDS;
-const ZERO_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const MAX_IDENTIFIER_LENGTH = 1_024;
 const MAX_READ_PAGE_JSON_BYTES = 4 * 1024 * 1024;
 // A shared isolate budget permits multi-page hydration without multiplying its
@@ -78,14 +75,6 @@ const chunked = <A>(values: ReadonlyArray<A>, size: number): Array<ReadonlyArray
 
   return chunks;
 };
-
-class DoMetaRow extends Schema.Class<DoMetaRow>("DoMetaRow")({
-  value: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
-}) {}
-
-class DoNameRow extends Schema.Class<DoNameRow>("DoNameRow")({
-  name: BoundedIdentifier,
-}) {}
 
 class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
@@ -253,13 +242,6 @@ export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
   throughSequence: CanonicalSequence,
 }) {}
 
-export class RawThreadExport extends Schema.Class<RawThreadExport>(
-  "@effect-agent/storage-cloudflare/RawThreadExport",
-)({
-  thread: ThreadRow,
-  records: Schema.Array(RecordRow),
-}) {}
-
 type AppendError =
   | DoAppendConflict
   | DoFenceRejected
@@ -347,148 +329,13 @@ export const decodeSingleRow = <A, I>(
     ),
   );
 
-const REQUIRED_TABLES = [
-  "effect_agent_abort_intents",
-  "effect_agent_approval_decisions",
-  "effect_agent_attempts",
-  "effect_agent_canonical_batches",
-  "effect_agent_canonical_records",
-  "effect_agent_checkpoints",
-  "effect_agent_child_reservations",
-  "effect_agent_child_settlements",
-  "effect_agent_threads",
-  "effect_agent_meta",
-  "effect_agent_submission_ownership",
-  "effect_agent_submissions",
-  "effect_agent_unknown_resolutions",
-] as const;
-
-/**
- * Current-format or fresh storage gate (DEPLOY-008) over `effect_agent_meta` instead of
- * `PRAGMA user_version` (unverified on Durable Object SQL storage; a meta table is portable
- * regardless). No WAL check (Durable Object storage owns durability and confirms writes
- * through output gates) and no busy timeout (a Durable Object has exactly one writer): the
- * Node machinery those served has no DC analogue and is deliberately absent.
- */
+/** Open a validated layout and bind this Object's storage owner. */
 const ensureCurrentStorage = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   failpoint: DoJournalFailpoint = noFailpoint,
   maxStoredValueBytes: number,
 ) {
-  const verifyCurrentStorage = Effect.fnUntraced(function* () {
-    const requiredRows = yield* sql<Record<string, unknown>>`
-    SELECT name
-    FROM sqlite_master
-    WHERE (type = 'table'
-      AND name IN ${sql.in([...REQUIRED_TABLES, "effect_agent_message_deliveries", "effect_agent_recovery_checkpoints"])}
-    ) OR (type = 'index' AND name IN ('effect_agent_submissions_nonterminal', 'effect_agent_records_subtree', 'effect_agent_message_deliveries_pending', 'effect_agent_records_call', 'effect_agent_records_run_input', 'effect_agent_records_worker_input'))
-    OR (name IN ('effect_agent_worker_stops', 'effect_agent_worker_starts', 'effect_agent_worker_pending', 'effect_agent_worker_execution'))
-    ORDER BY name
-  `.pipe(Effect.mapError(storageError("verify storage tables")));
-
-    const required = yield* decodeRows(
-      Schema.Array(DoNameRow),
-      "sqlite_master",
-      "required_tables",
-      requiredRows,
-    );
-
-    if (required.length !== REQUIRED_TABLES.length + 12) {
-      return yield* DoStorageCompatibilityError.make({
-        actualVersion: CurrentDoStorageVersion,
-        supportedVersion: CurrentDoStorageVersion,
-        message:
-          "The Durable Object claims the current format but is missing required tables or its nonterminal index. Retain the original store for inspection.",
-      });
-    }
-  });
-
-  const metaTableRows = yield* sql<Record<string, unknown>>`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table'
-      AND name = 'effect_agent_meta'
-  `.pipe(Effect.mapError(storageError("read storage version table")));
-
-  const metaTables = yield* decodeRows(
-    Schema.Array(DoNameRow),
-    "sqlite_master",
-    "effect_agent_meta",
-    metaTableRows,
-  );
-
-  if (metaTables.length === 0) {
-    const existingRows = yield* sql<Record<string, unknown>>`
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table'
-        AND name LIKE 'effect_agent_%'
-      ORDER BY name
-    `.pipe(Effect.mapError(storageError("inspect unversioned storage")));
-
-    const existing = yield* decodeRows(
-      Schema.Array(DoNameRow),
-      "sqlite_master",
-      "effect_agent_%",
-      existingRows,
-    );
-
-    if (existing.length > 0) {
-      return yield* DoStorageCompatibilityError.make({
-        actualVersion: 0,
-        supportedVersion: CurrentDoStorageVersion,
-        message:
-          "The Durable Object contains unversioned Effect Agent tables. Refusing to mutate ambiguous stored data; retain it for inspection with its original writer.",
-      });
-    }
-
-    yield* SqliteMigrator.run({
-      loader: doMigrations,
-      // An application can share this SQL client and own its own migration history.
-      // Keep bookkeeping outside effect_agent_% so interrupted unversioned schemas
-      // still fail the ambiguity check above.
-      table: "effect_sql_migrations_agent_threads",
-    }).pipe(
-      // SqliteMigrator depends on the generic client supplied by this adapter. The concrete
-      // Durable Object client is kept at the outer Layer boundary.
-      Effect.provideService(SqlClient.SqlClient, sql),
-      Effect.mapError((error) =>
-        DoStorageError.make({
-          cause: error,
-          operation: "initialize current storage",
-          message: error.message,
-        }),
-      ),
-    );
-  } else {
-    const versionRows = yield* sql<Record<string, unknown>>`
-      SELECT value
-      FROM effect_agent_meta
-      WHERE key = 'storage_version'
-    `.pipe(Effect.mapError(storageError("read storage version")));
-
-    const version = yield* decodeSingleRow(
-      Schema.Array(DoMetaRow),
-      "effect_agent_meta",
-      "storage_version",
-      versionRows,
-    );
-
-    if (version.value !== String(CurrentDoStorageVersion)) {
-      const actualVersion = Number.parseInt(version.value, 10);
-
-      return yield* DoStorageCompatibilityError.make({
-        actualVersion: Number.isSafeInteger(actualVersion) ? actualVersion : -1,
-        supportedVersion: CurrentDoStorageVersion,
-        message:
-          `The Durable Object uses unsupported storage version ${version.value}; ` +
-          `this build supports exactly version ${CurrentDoStorageVersion}. ` +
-          "Keep the original store and use a compatible library version.",
-      });
-    }
-  }
-
-  yield* verifyCurrentStorage();
+  yield* ensureDoStorageLayout(sql);
 
   const state = yield* ownedState(sql);
   const owner = (yield* SqlStorageOwner) ?? state;
@@ -1177,78 +1024,6 @@ const makeJournal = (
       };
     });
 
-    const exportThread = (threadId: string) =>
-      state
-        .transaction(
-          Effect.gen(function* () {
-            const threadRows = yield* getThread(threadId);
-
-            const thread = yield* decodeSingleRow(
-              Schema.Array(ThreadRow),
-              "effect_agent_threads",
-              threadId,
-              threadRows,
-            );
-
-            yield* failpoint("export:after-thread-read");
-
-            if (thread.tail_sequence > MAX_RECORDS_PER_THREAD)
-              return yield* DoStorageError.make({
-                operation: "export thread",
-                message: "The thread exceeds the current export record limit.",
-              });
-            const records: Array<RecordRow> = [];
-            let afterSequence = ZERO_SEQUENCE;
-
-            while (afterSequence < thread.tail_sequence) {
-              const limit = Math.min(1_024, thread.tail_sequence - afterSequence);
-
-              const request = RawReadRequest.make({
-                threadId,
-                fromSequenceExclusive: afterSequence,
-                limit,
-              });
-
-              const plan = yield* read(request);
-              const page = yield* Stream.runCollect(plan.records);
-
-              if (
-                page.length !== limit ||
-                page.some((record, index) => record.sequence !== afterSequence + index + 1)
-              ) {
-                return yield* DoStorageCorruptionError.make({
-                  table: "effect_agent_canonical_records",
-                  rowKey: threadId,
-                  message:
-                    "The exported canonical prefix is not contiguous through its captured tail.",
-                });
-              }
-              records.push(...page);
-              afterSequence = page[page.length - 1].sequence;
-            }
-
-            const beyondTail =
-              yield* sql`SELECT sequence FROM effect_agent_canonical_records WHERE thread_id=${threadId} AND sequence > ${thread.tail_sequence} LIMIT 1`.pipe(
-                Effect.mapError(storageError("verify export tail")),
-              );
-
-            if (beyondTail.length !== 0)
-              return yield* DoStorageCorruptionError.make({
-                table: "effect_agent_canonical_records",
-                rowKey: threadId,
-                message: "Canonical records exist beyond the captured thread tail.",
-              });
-
-            return RawThreadExport.make({ thread, records });
-          }),
-        )
-        .pipe(
-          Effect.provideService(SqlClient.SqlClient, sql),
-          Effect.catchTag("SqlError", (error) =>
-            Effect.fail(storageError("export transaction")(error)),
-          ),
-        );
-
     const saveCheckpoint = Effect.fnUntraced(function* (
       checkpoint: RawCheckpoint,
     ): Effect.fn.Return<void, CheckpointError> {
@@ -1738,7 +1513,6 @@ const makeJournal = (
       prepareAppend,
       appendPrepared,
       checkValueBound,
-      exportThread,
       getThread,
       hasRecord,
       getTailDigestAt,

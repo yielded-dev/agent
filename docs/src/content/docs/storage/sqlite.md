@@ -68,6 +68,7 @@ For custom durable assemblies, `SqliteSubmissionLedger.ledgerLayer(options)`
 provides the separate accepted-work ledger. Point it at the same database file as
 `SqliteThreadStore.layer(options)` so ownership claims fence the same thread log.
 
-SQLite accepts fresh storage or Thread format 16 and rejects earlier formats without mutation.
-Check the [storage requirements](/guide/operations/#adopting-these-contracts) before adopting a
-new release.
+SQLite tracks table layout separately from `effect-agent/thread@1` records. Layout 16 opens
+through a transactional layout-only step to 17. Record-format changes use a read-only export
+and import into an empty Thread. Check the [operator procedure](/guide/operations/#adopting-these-contracts)
+before adopting a new release.

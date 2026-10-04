@@ -14,6 +14,7 @@ import {
   type ClaimRequest,
   type OwnershipToken,
 } from "@yielded/agent/submission-ledger";
+import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import {
   FenceRejected,
@@ -687,5 +688,10 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       ),
   });
 
-  return { store, ledger, publisher, runStorage, reader: ThreadReader.fromStore(store) };
+  const importer = ThreadImport.of({
+    // Empty-target validation makes a successful import disjoint from every live claim.
+    import: (request) => bind(gate.withPermits(1)(storeKernel.importer.import(request))),
+  });
+
+  return { store, importer, ledger, publisher, runStorage, reader: ThreadReader.fromStore(store) };
 });

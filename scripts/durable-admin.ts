@@ -1,5 +1,6 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
+import * as SqliteThreadStore from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import {
   ObligationThresholds,
   RecoveryExplanation,
@@ -10,7 +11,16 @@ import {
 } from "@yielded/agent/admin";
 import { DurableAgentRuntime, type RecoveryReport } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId, SubmissionId } from "@yielded/agent/identifiers";
-import { Console, Effect, Schema } from "effect";
+import {
+  reencodeThread,
+  ThreadArchive,
+  ThreadImport,
+  ThreadImportRejected,
+  ThreadImportRequest,
+  ThreadImportResult,
+} from "@yielded/agent/thread-import";
+import { ThreadExport, ThreadExportRequest } from "@yielded/agent/thread-store";
+import { Console, Effect, FileSystem, Option, Schema } from "effect";
 import { Command as CliCommand, Flag } from "effect/cli";
 
 /**
@@ -312,6 +322,119 @@ const obligationsCommand = CliCommand.make(
   ),
 );
 
+const exportCommand = CliCommand.make(
+  "export",
+  {
+    thread: Flag.String("thread"),
+    output: Flag.String("output").pipe(
+      Flag.withDescription("New archive file; existing files are refused."),
+    ),
+  },
+  ({ thread, output }) =>
+    Effect.gen(function* () {
+      const { database: filename } = yield* admin;
+      const fs = yield* FileSystem.FileSystem;
+      const threadId = yield* decodeThreadId(thread);
+
+      const exported = yield* SqliteThreadStore.exportThread(
+        { filename },
+        ThreadExportRequest.make({ threadId }),
+      );
+
+      const text = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(exported);
+
+      yield* fs.writeFileString(output, text, { flag: "wx" });
+      yield* Console.log(`Exported ${exported.records.length} records to ${output}`);
+    }),
+).pipe(
+  CliCommand.withDescription(
+    "Back up one quiesced Thread, including immutable admission facts; never change the source.",
+  ),
+);
+
+const importCommand = CliCommand.make(
+  "import",
+  {
+    input: Flag.File("input").pipe(
+      Flag.withDescription("Thread archive to restore into --database."),
+    ),
+  },
+  ({ input }) =>
+    Effect.gen(function* () {
+      const { database: filename } = yield* admin;
+      const fs = yield* FileSystem.FileSystem;
+
+      const archive = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(
+        yield* fs.readFileString(input),
+      );
+
+      const result = yield* Effect.flatMap(ThreadImport, (target) =>
+        target.import(ThreadImportRequest.make({ archive })),
+      ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
+
+      yield* Console.log(
+        yield* Schema.encodeEffect(Schema.fromJsonString(ThreadImportResult))(result),
+      );
+    }),
+).pipe(
+  CliCommand.withDescription(
+    "Restore an archive into an empty Thread and rebuild its ledger; refuse existing work.",
+  ),
+);
+
+const reencodeCommand = CliCommand.make(
+  "reencode",
+  {
+    thread: Flag.String("thread"),
+    target: Flag.String("target").pipe(
+      Flag.withDescription("Destination SQLite file containing no work for this Thread."),
+    ),
+  },
+  ({ thread, target: filename }) =>
+    Effect.gen(function* () {
+      const { database: source } = yield* admin;
+      const threadId = yield* decodeThreadId(thread);
+      const fs = yield* FileSystem.FileSystem;
+
+      if (yield* fs.exists(filename)) {
+        const from = yield* fs.stat(source);
+        const to = yield* fs.stat(filename);
+
+        if (
+          (yield* fs.realPath(source)) === (yield* fs.realPath(filename)) ||
+          (from.dev === to.dev &&
+            Option.isSome(from.ino) &&
+            Option.isSome(to.ino) &&
+            from.ino.value === to.ino.value)
+        ) {
+          return yield* ThreadImportRejected.make({
+            threadId,
+            reason: "target-not-empty",
+            message: "Source and destination name the same database",
+          });
+        }
+      }
+
+      // Close the read-only source before opening the destination, including when paths alias.
+      const exported = yield* SqliteThreadStore.exportThread(
+        { filename: source },
+        ThreadExportRequest.make({ threadId }),
+      );
+
+      const result = yield* Effect.flatMap(ThreadImport, (target) =>
+        reencodeThread(Effect.succeed(exported), target),
+      ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
+
+      yield* Console.log(
+        yield* Schema.encodeEffect(Schema.fromJsonString(ThreadImportResult))(result),
+      );
+    }),
+).pipe(
+  CliCommand.withDescription(
+    "Export a quiesced source, apply the single record upgrade, and import into an empty destination Thread.",
+  ),
+);
+
 const command = admin.pipe(
   CliCommand.withSubcommands([
     explainCommand,
@@ -319,6 +442,9 @@ const command = admin.pipe(
     retryCommand,
     wakeCommand,
     obligationsCommand,
+    exportCommand,
+    importCommand,
+    reencodeCommand,
   ]),
 );
 

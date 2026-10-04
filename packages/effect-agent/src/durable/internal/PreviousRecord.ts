@@ -1,11 +1,12 @@
+/** Frozen format-1 decoder. Replace this one snapshot after the next semantic upgrade ships. */
 import { Option, Schema, SchemaGetter } from "effect";
 import { Prompt } from "effect/ai";
 
-import { InputMessage } from "../capabilities/Messaging.ts";
-import { PolicyLimit } from "../core/AgentError.ts";
-import { AgentPolicy } from "../core/AgentPolicy.ts";
-import { Update } from "../core/AgentUpdates.ts";
-import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
+import { InputMessage } from "../../capabilities/Messaging.ts";
+import { PolicyLimit } from "../../core/AgentError.ts";
+import { AgentPolicy } from "../../core/AgentPolicy.ts";
+import { Update } from "../../core/AgentUpdates.ts";
+import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import {
   AgentId,
   AttemptId,
@@ -17,23 +18,23 @@ import {
   SubmissionId,
   ToolCallId,
   TurnId,
-} from "../core/Identifiers.ts";
-import { utf8ByteLength } from "../core/internal/utf8.ts";
-import { IdempotencyKey, Principal, Receipt } from "../core/Receipt.ts";
-import { ExhaustedLimit } from "../core/RunEvent.ts";
-import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
+} from "../../core/Identifiers.ts";
+import { utf8ByteLength } from "../../core/internal/utf8.ts";
+import { IdempotencyKey, Principal, Receipt } from "../../core/Receipt.ts";
+import { ExhaustedLimit } from "../../core/RunEvent.ts";
+import { RunPolicyUsage } from "../../core/RunPolicyUsage.ts";
 import {
   DelegationDepth,
   SubagentBudgetReservation,
   SubagentGrant,
   SubagentParentLink,
   ToolExecutionKind,
-} from "../core/SubagentContract.ts";
-import { Selection, Snapshot } from "../core/ToolExposure.ts";
-import { ToolParameterRejection } from "../core/ToolResult.ts";
-import { ModelCallUsage, RunUsageSummary, RunTotals } from "../core/Usage.ts";
-import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../core/Worker.ts";
-import { ContextHandoff } from "../engine/ContextWindow.ts";
+} from "../../core/SubagentContract.ts";
+import { Selection, Snapshot } from "../../core/ToolExposure.ts";
+import { ToolParameterRejection } from "../../core/ToolResult.ts";
+import { ModelCallUsage, RunUsageSummary, RunTotals } from "../../core/Usage.ts";
+import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../../core/Worker.ts";
+import { ContextHandoff } from "../../engine/ContextWindow.ts";
 
 /** Stable identity of one canonical record. */
 export const RecordId = Schema.NonEmptyString.pipe(Schema.brand("@effect-agent/thread/RecordId"));
@@ -1052,12 +1053,8 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 1;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@1";
-
-/** Known record kinds. New kinds must be safe for older readers to ignore. */
-export const KnownRecordPayload = Schema.Union([
+/** Current canonical payload family. Storage adapters reject unsupported predecessor formats. */
+export const CanonicalRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
   RunStartedRecord,
@@ -1094,36 +1091,6 @@ export const KnownRecordPayload = Schema.Union([
   RepairAnnotated,
 ]);
 
-const knownRecordTags = new Set(
-  KnownRecordPayload.members.map(
-    (member) => ("fields" in member ? member.fields : member.schema.fields)._tag.ast.literal,
-  ),
-);
-
-const IgnorablePayload = Schema.StructWithRest(
-  Schema.Struct({
-    _tag: Schema.NonEmptyString.check(
-      Schema.makeFilter((tag) => !knownRecordTags.has(tag) && tag !== "UnknownRecord"),
-    ),
-  }),
-  [Schema.Record(Schema.String, PersistedJson)],
-);
-
-/** An unfamiliar, ignorable fact. Its original wire value survives export and re-encoding. */
-export class UnknownRecord extends Schema.TaggedClass<UnknownRecord>()("UnknownRecord", {
-  value: IgnorablePayload,
-}) {}
-
-export const CanonicalRecordPayload = Schema.Union([
-  KnownRecordPayload,
-  IgnorablePayload.pipe(
-    Schema.decodeTo(UnknownRecord, {
-      decode: SchemaGetter.transform((value) => ({ _tag: "UnknownRecord" as const, value })),
-      encode: SchemaGetter.transform((record) => record.value),
-    }),
-  ),
-]);
-
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;
 
 /**
@@ -1145,26 +1112,16 @@ export class RecordEnvelope extends Schema.Class<RecordEnvelope>(
 export const CanonicalRecord = RecordEnvelope;
 export type CanonicalRecord = RecordEnvelope;
 
-/** One non-empty, bounded, idempotent atomic append unit. */
-export class CanonicalBatch extends Schema.Class<CanonicalBatch>(
-  "@effect-agent/thread/CanonicalBatch",
-)({
-  batchId: BatchId,
-  producerId: ProducerId,
-  records: Schema.NonEmptyArray(RecordEnvelope).check(Schema.isMaxLength(256)),
-}) {}
+export const PreviousRecord = Schema.toEncoded(RecordEnvelope).pipe(
+  Schema.decodeTo(Schema.toEncoded(RecordEnvelope), {
+    decode: SchemaGetter.passthrough(),
+    encode: SchemaGetter.forbiddenEncoding,
+  }),
+);
 
-/**
- * A committed record with its Thread ordering and opaque resumable observation cursor.
- */
-export class CanonicalRecordEnvelope extends Schema.Class<CanonicalRecordEnvelope>(
-  "@effect-agent/thread/CanonicalRecordEnvelope",
-)({
-  threadId: ThreadId,
-  batchId: BatchId,
-  sequence: CanonicalSequence,
-  offset: ObservationOffset,
-  record: RecordEnvelope,
-}) {}
+export type PreviousRecord = typeof PreviousRecord.Type;
+export const PREVIOUS_RECORD_VERSION = 1;
 
-export const CURRENT_CANONICAL_SCHEMA_VERSION = 1 as const;
+// The static boundary check also freezes transitive wire schemas used by this snapshot.
+export const PREVIOUS_RECORD_SCHEMA_DIGEST =
+  "17ce8a0f038c8f44b5eac1ec50a09525ecea681857857721bfdb1a37ff387364";

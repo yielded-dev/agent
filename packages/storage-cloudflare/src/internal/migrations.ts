@@ -1,290 +1,291 @@
-import { SqliteMigrator } from "@effect/sql-sqlite-do";
-import { createMessageDeliveryPendingIndex } from "@yielded/agent-storage-sql/sql-message-delivery-store";
-import { createNativeReadIndexes } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { Effect } from "effect";
-import * as SqlClient from "effect/sql/SqlClient";
+import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
+import { Effect, Schema } from "effect";
+import type * as SqlClient from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
 
-import { createMessageDeliveryTables } from "./message-delivery-schema.ts";
-import { createRecoveryCheckpointTable } from "./recovery-checkpoint-schema.ts";
+import {
+  DoStorageCompatibilityError,
+  DoStorageCorruptionError,
+  DoStorageError,
+} from "../DoStorageError.ts";
 
-/** The current storage version recorded in `effect_agent_meta`. */
-export const CurrentDoStorageVersion = 16;
+export const CurrentDoStorageVersion = 17;
+// Frozen legacy record format: never replace this with a future CURRENT_RECORD_FORMAT.
+const LEGACY_RECORD_FORMAT = "effect-agent/thread@1";
 
-/** One permanent destination inbox fence, including workers stopped before admission. */
-export const createWorkerStops = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
+// Captured from the shipped layout16 initializer. Historical statements never call current DDL helpers.
+const baseline16 = [
+  "CREATE TABLE effect_agent_threads ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )",
+  "CREATE TABLE effect_agent_canonical_batches ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_canonical_records ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT )",
+  "CREATE INDEX effect_agent_canonical_records_batch ON effect_agent_canonical_records (thread_id, batch_id, sequence)",
+  "CREATE TABLE effect_agent_checkpoints ( thread_id TEXT NOT NULL, through_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_submissions ( submission_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, principal TEXT NOT NULL, idempotency_key TEXT NOT NULL, agent_id TEXT NOT NULL, agent_digests_json TEXT NOT NULL, deployment_id TEXT NOT NULL, input_json TEXT NOT NULL, input_digest TEXT NOT NULL, receipt_id TEXT NOT NULL, state TEXT NOT NULL, settled_outcome TEXT, settled_record_id TEXT, finalized_at TEXT, created_at TEXT NOT NULL, ready_at TEXT, input_applied_record_id TEXT, input_applied_sequence INTEGER, joined_host_submission_id TEXT, suspended_reason_json TEXT, suspended_at TEXT, unknown_reason TEXT, unknown_tool_call_ids_json TEXT, parent_submission_id TEXT, parent_tool_call_id TEXT, admission_group TEXT, admission_fence_json TEXT, worker_admission_json TEXT, message_admission_json TEXT, UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )",
+  "CREATE INDEX effect_agent_submissions_joined_host ON effect_agent_submissions (joined_host_submission_id)",
+  "CREATE INDEX effect_agent_submissions_parent ON effect_agent_submissions (parent_submission_id)",
+  "CREATE INDEX effect_agent_submissions_group ON effect_agent_submissions (thread_id, admission_group, state)",
+  "CREATE TABLE effect_agent_submission_ownership ( submission_id TEXT PRIMARY KEY NOT NULL, attempt_id TEXT NOT NULL, ownership_token TEXT NOT NULL, producer_epoch INTEGER NOT NULL, owner_producer_id TEXT NOT NULL, lease_expires_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_attempts ( attempt_id TEXT PRIMARY KEY NOT NULL, submission_id TEXT NOT NULL, thread_id TEXT NOT NULL, owner_producer_id TEXT NOT NULL, producer_epoch INTEGER NOT NULL, claimed_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_abort_intents ( submission_id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, requested_at TEXT NOT NULL, canonical_record_id TEXT, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_approval_decisions ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, decision TEXT NOT NULL, resolver TEXT NOT NULL, reason TEXT NOT NULL, decided_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_unknown_resolutions ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, resolution_json TEXT NOT NULL, resolved_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_child_reservations ( reservation_id TEXT PRIMARY KEY NOT NULL, parent_submission_id TEXT NOT NULL, parent_tool_call_id TEXT NOT NULL, child_submission_id TEXT, status TEXT NOT NULL, allocation_json TEXT NOT NULL, allocation_digest TEXT NOT NULL, accounting_json TEXT, reserved_at TEXT NOT NULL, release_began_at TEXT, released_at TEXT, UNIQUE (parent_submission_id, parent_tool_call_id), FOREIGN KEY (parent_submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_child_settlements ( parent_submission_id TEXT NOT NULL, child_submission_id TEXT NOT NULL, child_outcome TEXT, recorded_at TEXT NOT NULL, PRIMARY KEY (parent_submission_id, child_submission_id) )",
+  "CREATE INDEX effect_agent_records_call ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload._tag'), json_extract(record_json, '$.payload.runId'), json_extract(record_json, '$.payload.toolCallId'))",
+  "CREATE INDEX effect_agent_records_run_input ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload.runId')) WHERE json_extract(record_json, '$.payload._tag') = 'UserInputRecorded' AND json_extract(record_json, '$.payload.kind') = 'user'",
+  "CREATE INDEX effect_agent_records_subtree ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload.sourceSubmissionId'), sequence) WHERE json_extract(record_json, '$.payload._tag') = 'SubtreeBudgetReserved'",
+  "CREATE INDEX effect_agent_records_worker_input ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload.admission.messageId')) WHERE json_extract(record_json, '$.payload._tag') = 'WorkerInputRequested'",
+  "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'",
+  "CREATE TABLE effect_agent_message_deliveries ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )",
+  "CREATE INDEX effect_agent_message_deliveries_due ON effect_agent_message_deliveries (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL",
+  "CREATE INDEX effect_agent_message_deliveries_pending ON \"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
+  "CREATE TABLE effect_agent_recovery_checkpoints ( thread_id TEXT PRIMARY KEY NOT NULL, through_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, checkpoint_json TEXT NOT NULL, FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_worker_stops (thread_id TEXT PRIMARY KEY NOT NULL, terminal TEXT)",
+  "CREATE INDEX effect_agent_worker_starts ON effect_agent_message_deliveries(owner_thread_id, json_extract(record_json, '$.envelope.workerAdmission.origin.worker.delegationId'), json_extract(record_json, '$.envelope.workerAdmission.origin.worker.targetAgentId'), message_id) WHERE message_id = json_extract(record_json, '$.envelope.workerAdmission.origin.firstMessageId')",
+  "CREATE INDEX effect_agent_worker_pending ON effect_agent_message_deliveries(owner_thread_id, json_extract(record_json, '$.envelope.workerAdmission.origin.worker.threadId'), message_id) WHERE state IN ('pending', 'parked') AND json_extract(record_json, '$.receipt') IS NULL",
+  "CREATE INDEX effect_agent_worker_execution ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload._tag'), sequence) WHERE json_extract(record_json, '$.payload.runId') IS NOT NULL",
+  "CREATE TABLE effect_agent_meta ( key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL )",
+] as const;
 
-  yield* sql`CREATE TABLE effect_agent_worker_stops (thread_id TEXT PRIMARY KEY NOT NULL, terminal TEXT)`;
-  yield* sql`CREATE INDEX effect_agent_worker_starts ON effect_agent_message_deliveries(owner_thread_id,
-    json_extract(record_json, '$.envelope.workerAdmission.origin.worker.delegationId'),
-    json_extract(record_json, '$.envelope.workerAdmission.origin.worker.targetAgentId'), message_id)
-    WHERE message_id = json_extract(record_json, '$.envelope.workerAdmission.origin.firstMessageId')`;
-  yield* sql`CREATE INDEX effect_agent_worker_pending ON effect_agent_message_deliveries(owner_thread_id,
-    json_extract(record_json, '$.envelope.workerAdmission.origin.worker.threadId'), message_id)
-    WHERE state IN ('pending', 'parked') AND json_extract(record_json, '$.receipt') IS NULL`;
-  yield* sql`CREATE INDEX effect_agent_worker_execution ON effect_agent_canonical_records(thread_id,
-    json_extract(record_json, '$.payload._tag'), sequence) WHERE json_extract(record_json, '$.payload.runId') IS NOT NULL`;
+const baselineObjects = [
+  ["table", "effect_agent_abort_intents", 11],
+  ["table", "effect_agent_approval_decisions", 12],
+  ["table", "effect_agent_attempts", 10],
+  ["table", "effect_agent_canonical_batches", 1],
+  ["table", "effect_agent_canonical_records", 2],
+  ["index", "effect_agent_canonical_records_batch", 3],
+  ["table", "effect_agent_checkpoints", 4],
+  ["table", "effect_agent_child_reservations", 14],
+  ["table", "effect_agent_child_settlements", 15],
+  ["table", "effect_agent_message_deliveries", 21],
+  ["index", "effect_agent_message_deliveries_due", 22],
+  ["index", "effect_agent_message_deliveries_pending", 23],
+  ["table", "effect_agent_meta", 29],
+  ["index", "effect_agent_records_call", 16],
+  ["index", "effect_agent_records_run_input", 17],
+  ["index", "effect_agent_records_subtree", 18],
+  ["index", "effect_agent_records_worker_input", 19],
+  ["table", "effect_agent_recovery_checkpoints", 24],
+  ["table", "effect_agent_submission_ownership", 9],
+  ["table", "effect_agent_submissions", 5],
+  ["index", "effect_agent_submissions_group", 8],
+  ["index", "effect_agent_submissions_joined_host", 6],
+  ["index", "effect_agent_submissions_nonterminal", 20],
+  ["index", "effect_agent_submissions_parent", 7],
+  ["table", "effect_agent_threads", 0],
+  ["table", "effect_agent_unknown_resolutions", 13],
+  ["index", "effect_agent_worker_execution", 28],
+  ["index", "effect_agent_worker_pending", 27],
+  ["index", "effect_agent_worker_starts", 26],
+  ["table", "effect_agent_worker_stops", 25],
+] as const;
+
+const headerStatement =
+  "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
+
+/** Ordered, immutable adapter layout steps. Record payloads are never rewritten. */
+export const doLayoutSteps = [
+  {
+    version: 16,
+    statements: [
+      ...baseline16,
+      "INSERT INTO effect_agent_meta (key, value) VALUES ('storage_version', '16')",
+    ],
+  },
+  {
+    version: 17,
+    statements: [
+      headerStatement,
+      "INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 17, 'effect-agent/thread@1')",
+      "UPDATE effect_agent_meta SET value = '17' WHERE key = 'storage_version'",
+    ],
+  },
+] as const;
+
+const Header = Schema.Struct({
+  singleton: Schema.Literal(1),
+  layout_version: Schema.Int.check(Schema.isGreaterThan(0)),
+  record_format: Schema.NonEmptyString,
 });
 
-/** Index only outstanding obligations, ordered by the recovery scan's stable cursor. */
-export const createNonterminalIndex = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
-
-  yield* sql`CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'`
-    .withoutTransform;
-});
-
-/**
- * The Thread Durable Object schema shares its thread and ledger tables with Node/SQLite.
- * Schedules and subscriptions use separate Durable Objects. Two DC-specific additions:
- *
- * 1. `effect_agent_meta` replaces `PRAGMA user_version` as the exact-or-fresh version gate —
- *    a meta table is portable regardless of which PRAGMAs Durable Object SQL storage allows.
- * 2. `effect_agent_child_settlements` is the durable cross-store notification marker the
- *    SubmissionLedger port contract mandates for cross-store adapters (`suspend`'s covering
- *    check and `recordChildSettled`'s wake both consult it): parent and child Threads
- *    live in different Durable Objects, so a child settlement reported before the parent's
- *    suspend commits must be observable from the PARENT's own storage.
- */
-export const doMigrations = SqliteMigrator.fromRecord({
-  "1_current_cloudflare_thread_object": Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-
-    yield* sql`
-      CREATE TABLE effect_agent_threads (
-        thread_id TEXT PRIMARY KEY NOT NULL,
-        created_at TEXT NOT NULL,
-        tail_sequence INTEGER NOT NULL,
-        tail_digest TEXT NOT NULL,
-        producer_epoch INTEGER NOT NULL
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_canonical_batches (
-        thread_id TEXT NOT NULL,
-        batch_id TEXT NOT NULL,
-        first_sequence INTEGER NOT NULL,
-        last_sequence INTEGER NOT NULL,
-        batch_digest TEXT NOT NULL,
-        tail_digest TEXT NOT NULL,
-        batch_json TEXT NOT NULL,
-        PRIMARY KEY (thread_id, batch_id),
-        FOREIGN KEY (thread_id)
-          REFERENCES effect_agent_threads(thread_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_canonical_records (
-        thread_id TEXT NOT NULL,
-        sequence INTEGER NOT NULL,
-        record_id TEXT NOT NULL,
-        batch_id TEXT NOT NULL,
-        record_json TEXT NOT NULL,
-        PRIMARY KEY (thread_id, sequence),
-        UNIQUE (thread_id, record_id),
-        FOREIGN KEY (thread_id, batch_id)
-          REFERENCES effect_agent_canonical_batches(thread_id, batch_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE INDEX effect_agent_canonical_records_batch
-        ON effect_agent_canonical_records (thread_id, batch_id, sequence)
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_checkpoints (
-        thread_id TEXT NOT NULL,
-        through_sequence INTEGER NOT NULL,
-        tail_digest TEXT NOT NULL,
-        checkpoint_json TEXT NOT NULL,
-        PRIMARY KEY (thread_id, through_sequence),
-        FOREIGN KEY (thread_id)
-          REFERENCES effect_agent_threads(thread_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    // Admission rows exist before Thread materialization (durability §4), so
-    // thread_id intentionally carries no foreign key into effect_agent_threads.
-    yield* sql`
-      CREATE TABLE effect_agent_submissions (
-        submission_id TEXT PRIMARY KEY NOT NULL,
-        thread_id TEXT NOT NULL,
-        queue_sequence INTEGER NOT NULL,
-        principal TEXT NOT NULL,
-        idempotency_key TEXT NOT NULL,
-        agent_id TEXT NOT NULL,
-        agent_digests_json TEXT NOT NULL,
-        deployment_id TEXT NOT NULL,
-        input_json TEXT NOT NULL,
-        input_digest TEXT NOT NULL,
-        receipt_id TEXT NOT NULL,
-        state TEXT NOT NULL,
-        settled_outcome TEXT,
-        settled_record_id TEXT,
-        finalized_at TEXT,
-        created_at TEXT NOT NULL,
-        ready_at TEXT,
-        input_applied_record_id TEXT,
-        input_applied_sequence INTEGER,
-        joined_host_submission_id TEXT,
-        suspended_reason_json TEXT,
-        suspended_at TEXT,
-        unknown_reason TEXT,
-        unknown_tool_call_ids_json TEXT,
-        parent_submission_id TEXT,
-        parent_tool_call_id TEXT,
-        admission_group TEXT,
-        admission_fence_json TEXT,
-        worker_admission_json TEXT,
-        message_admission_json TEXT,
-        UNIQUE (thread_id, principal, idempotency_key),
-        UNIQUE (thread_id, queue_sequence)
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE INDEX effect_agent_submissions_joined_host
-        ON effect_agent_submissions (joined_host_submission_id)
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE INDEX effect_agent_submissions_parent
-        ON effect_agent_submissions (parent_submission_id)
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE INDEX effect_agent_submissions_group
-        ON effect_agent_submissions (thread_id, admission_group, state)
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_submission_ownership (
-        submission_id TEXT PRIMARY KEY NOT NULL,
-        attempt_id TEXT NOT NULL,
-        ownership_token TEXT NOT NULL,
-        producer_epoch INTEGER NOT NULL,
-        owner_producer_id TEXT NOT NULL,
-        lease_expires_at TEXT NOT NULL,
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_attempts (
-        attempt_id TEXT PRIMARY KEY NOT NULL,
-        submission_id TEXT NOT NULL,
-        thread_id TEXT NOT NULL,
-        owner_producer_id TEXT NOT NULL,
-        producer_epoch INTEGER NOT NULL,
-        claimed_at TEXT NOT NULL,
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_abort_intents (
-        submission_id TEXT PRIMARY KEY NOT NULL,
-        author TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        requested_at TEXT NOT NULL,
-        canonical_record_id TEXT,
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_approval_decisions (
-        submission_id TEXT NOT NULL,
-        tool_call_id TEXT NOT NULL,
-        decision TEXT NOT NULL,
-        resolver TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        decided_at TEXT NOT NULL,
-        PRIMARY KEY (submission_id, tool_call_id),
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_unknown_resolutions (
-        submission_id TEXT NOT NULL,
-        tool_call_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        resolution_json TEXT NOT NULL,
-        resolved_at TEXT NOT NULL,
-        PRIMARY KEY (submission_id, tool_call_id),
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_child_reservations (
-        reservation_id TEXT PRIMARY KEY NOT NULL,
-        parent_submission_id TEXT NOT NULL,
-        parent_tool_call_id TEXT NOT NULL,
-        child_submission_id TEXT,
-        status TEXT NOT NULL,
-        allocation_json TEXT NOT NULL,
-        allocation_digest TEXT NOT NULL,
-        accounting_json TEXT,
-        reserved_at TEXT NOT NULL,
-        release_began_at TEXT,
-        released_at TEXT,
-        UNIQUE (parent_submission_id, parent_tool_call_id),
-        FOREIGN KEY (parent_submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    // Durable cross-store child-settlement notification marker (parent-side; the child's row
-    // lives in ANOTHER Durable Object). child_outcome is nullable: the notification command
-    // carries identities only, and the child's canonical Settlement stays the outcome
-    // authority (DUR-015). No foreign keys: the parent row is checked by the operation, and
-    // the child row is intentionally foreign.
-    yield* sql`
-      CREATE TABLE effect_agent_child_settlements (
-        parent_submission_id TEXT NOT NULL,
-        child_submission_id TEXT NOT NULL,
-        child_outcome TEXT,
-        recorded_at TEXT NOT NULL,
-        PRIMARY KEY (parent_submission_id, child_submission_id)
-      )
-    `.withoutTransform;
-
-    yield* createNativeReadIndexes();
-    yield* createNonterminalIndex;
-    yield* createMessageDeliveryTables;
-    yield* createMessageDeliveryPendingIndex();
-    yield* createRecoveryCheckpointTable;
-    yield* createWorkerStops;
-    yield* sql`
-      CREATE TABLE effect_agent_meta (
-        key TEXT PRIMARY KEY NOT NULL,
-        value TEXT NOT NULL
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      INSERT INTO effect_agent_meta (key, value)
-      VALUES ('storage_version', ${String(CurrentDoStorageVersion)})
-    `.withoutTransform;
+const Objects = Schema.Array(
+  Schema.Struct({
+    name: Schema.String,
+    type: Schema.String,
+    sql: Schema.NullOr(Schema.String),
   }),
+);
+
+const Legacy = Schema.Tuple([
+  Schema.Struct({
+    key: Schema.Literal("storage_version"),
+    value: Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]*)$/)).pipe(
+      Schema.decodeTo(Schema.FiniteFromString),
+      Schema.decodeTo(Schema.Int),
+    ),
+  }),
+]);
+
+export interface DoStorageHeader {
+  readonly layoutVersion: number;
+  readonly recordFormat: string;
+}
+
+const incompatible = (actualVersion: number, message: string) =>
+  DoStorageCompatibilityError.make({
+    actualVersion,
+    supportedVersion: CurrentDoStorageVersion,
+    message: `${message} Keep the original store; no layout upgrade was committed.`,
+  });
+
+const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown, table: string) =>
+  Schema.decodeUnknownEffect(schema)(value, { onExcessProperty: "error" }).pipe(
+    Effect.mapError(() =>
+      DoStorageCorruptionError.make({
+        table,
+        rowKey: "schema",
+        message: "Malformed storage layout or version header.",
+      }),
+    ),
+  );
+
+const storageError = (cause: SqlError) =>
+  DoStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
+
+// SQLite preserves CREATE SQL. Ignore identifier quotes/formatting, never payload or predicate spelling.
+const normalize = (statement: string) =>
+  statement.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"|\s+/g, (token) =>
+    token.startsWith("'")
+      ? token
+      : token.startsWith('"')
+        ? token.slice(1, -1).replaceAll('""', '"')
+        : "",
+  );
+
+const inspectStorage = Effect.fnUntraced(function* (
+  client: SqlClient.SqlClient,
+  acceptedFormats: ReadonlyArray<string>,
+): Effect.fn.Return<
+  DoStorageHeader | undefined,
+  DoStorageCompatibilityError | DoStorageCorruptionError | DoStorageError
+> {
+  const sql = client.withoutTransforms();
+
+  const objects = yield* decode(
+    Objects,
+    yield* sql<Record<string, unknown>>`
+    SELECT name, type, sql FROM sqlite_master WHERE name GLOB 'effect_agent_*' ORDER BY name
+  `.pipe(Effect.mapError(storageError)),
+    "sqlite_master",
+  );
+
+  const schema = objects.find((row) => row.name === "effect_agent_schema");
+  const meta = objects.find((row) => row.name === "effect_agent_meta");
+
+  if (meta === undefined) {
+    if (objects.length === 0) return undefined;
+
+    return yield* incompatible(0, "Unversioned or incomplete Effect Agent storage.");
+  }
+
+  const [legacy] = yield* decode(
+    Legacy,
+    yield* sql<Record<string, unknown>>`
+    SELECT * FROM effect_agent_meta
+  `.pipe(Effect.mapError(storageError)),
+    "effect_agent_meta",
+  );
+
+  const version = legacy.value;
+
+  if (!doLayoutSteps.some((step) => step.version === version))
+    return yield* incompatible(version, `Unsupported storage version ${version}.`);
+
+  let header: DoStorageHeader;
+
+  if (schema === undefined) {
+    if (version !== 16) return yield* incompatible(version, "Missing singleton schema header.");
+    header = { layoutVersion: 16, recordFormat: LEGACY_RECORD_FORMAT };
+  } else {
+    if (
+      schema.type !== "table" ||
+      schema.sql === null ||
+      normalize(schema.sql) !== normalize(headerStatement)
+    )
+      return yield* incompatible(version, "Malformed singleton schema table.");
+
+    const [row] = yield* decode(
+      Schema.Tuple([Header]),
+      yield* sql<Record<string, unknown>>`
+      SELECT * FROM effect_agent_schema
+    `.pipe(Effect.mapError(storageError)),
+      "effect_agent_schema",
+    );
+
+    if (
+      row.layout_version < 17 ||
+      !doLayoutSteps.some((step) => step.version === row.layout_version) ||
+      row.layout_version !== version
+    )
+      return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
+    header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
+  }
+  if (!acceptedFormats.includes(header.recordFormat))
+    return yield* incompatible(
+      header.layoutVersion,
+      `Unsupported record format ${header.recordFormat}.`,
+    );
+
+  for (const [type, name, index] of baselineObjects) {
+    const actual = objects.find((row) => row.name === name);
+
+    if (
+      actual?.type !== type ||
+      actual.sql === null ||
+      normalize(actual.sql) !== normalize(baseline16[index])
+    )
+      return yield* incompatible(version, `Missing or incompatible layout object ${name}.`);
+  }
+
+  return header;
+});
+
+/** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
+export const readDoStorageHeader = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  acceptedFormats: ReadonlyArray<string>,
+) {
+  const header = yield* inspectStorage(sql, acceptedFormats);
+
+  if (header === undefined)
+    return yield* incompatible(0, "No initialized Thread storage to export.");
+
+  return header;
+});
+
+/** Validate under the writer transaction before any DDL; commit every pending step together. */
+export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(function* (
+  client: SqlClient.SqlClient,
+) {
+  const sql = client.withoutTransforms();
+
+  return yield* sql
+    .withTransaction(
+      Effect.gen(function* () {
+        const header = yield* inspectStorage(sql, [CURRENT_RECORD_FORMAT]);
+        const version = header?.layoutVersion ?? 0;
+
+        for (const step of doLayoutSteps) {
+          if (step.version <= version) continue;
+          for (const statement of step.statements) yield* sql.unsafe(statement).withoutTransform;
+        }
+
+        // Fresh storage uses today's record format; frozen steps retain the legacy format.
+        if (header === undefined)
+          yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
+
+        return yield* readDoStorageHeader(sql, [CURRENT_RECORD_FORMAT]);
+      }),
+    )
+    .pipe(Effect.catchTag("SqlError", storageError));
 });

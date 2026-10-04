@@ -50,6 +50,17 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
   "packages/effect-agent/src/durable/RunStorage.ts": ["RunStorage.claim"],
   "packages/effect-agent/src/durable/Scheduling.ts": ["Scheduling.recover"],
   "packages/effect-agent/src/durable/Subscriptions.ts": ["Subscriptions.recoverDelivery"],
+  "packages/effect-agent/src/durable/ThreadImport.ts": ["ThreadImport.reencodeThread"],
+  "packages/storage-sql/src/SqlThreadImport.ts": [
+    "SqlThreadImport.export",
+    "SqlThreadImport.import",
+  ],
+  "packages/storage-sqlite/src/SqliteThreadStore.ts": ["SqliteThreadStore.exportThread"],
+  "packages/storage-sqlite/src/internal/migrations.ts": ["SqliteStorage.upgradeLayout"],
+  "packages/storage-postgres/src/PostgresStorage.ts": ["PostgresStorage.exportThread"],
+  "packages/storage-postgres/src/internal/postgres-storage.ts": ["PostgresStorage.upgradeLayout"],
+  "packages/storage-cloudflare/src/DoThreadStore.ts": ["DoThreadStore.exportThread"],
+  "packages/storage-cloudflare/src/internal/migrations.ts": ["DoStorage.upgradeLayout"],
   "packages/storage-sql/src/SqlRunStorage.ts": ["SqlRunStorage.claim"],
   "packages/storage-sql/src/SqlThreadStore.ts": ["SqlThreadStore.append"],
   "packages/storage-sql/src/SqlSubmissionLedger.ts": [
@@ -63,7 +74,10 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "SqlActivityStore.claim",
     "SqlActivityStore.release",
   ],
-  "packages/storage-memory/src/MemoryThreadStore.ts": ["MemoryThreadStore.append"],
+  "packages/storage-memory/src/MemoryThreadStore.ts": [
+    "MemoryThreadStore.append",
+    "MemoryThreadStore.import",
+  ],
   "packages/storage-memory/src/MemorySubmissionLedger.ts": [
     "MemorySubmissionLedger.claim",
     "MemorySubmissionLedger.renewOwnership",

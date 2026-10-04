@@ -1,9 +1,11 @@
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
+import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-submission-ledger";
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
-import { makeSqlThreadStore } from "@yielded/agent-storage-sql/sql-thread-store";
+import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
+import { makeSqlThreadStoreKernel } from "@yielded/agent-storage-sql/sql-thread-store";
 import {
   ActivityMutationFailpoint,
   ActivityProcessorStore,
@@ -13,6 +15,8 @@ import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
+import { PREVIOUS_RECORD_FORMAT } from "@yielded/agent/record-format";
+import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { ScheduleStore } from "@yielded/agent/schedule";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
@@ -21,6 +25,8 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import { SubscriptionError, SubscriptionStore, SourcePartition } from "@yielded/agent/subscription";
+import { ThreadImport } from "@yielded/agent/thread-import";
+import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
 import { Context, Duration, Effect, Layer, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -31,6 +37,7 @@ import {
   initializePostgresStorage,
   makePostgresJournal,
   postgresStorageErrors,
+  readPostgresStorageHeader,
   withWriterLockTransaction,
 } from "./internal/postgres-storage.ts";
 import {
@@ -108,7 +115,7 @@ const openJournal = Effect.fnUntraced(function* (options: PostgresStorageOptions
 type Journal = Effect.Success<ReturnType<typeof openJournal>>;
 
 const makeThreadStore = ({ config, journal, hitFailpoint }: Journal) =>
-  makeSqlThreadStore(journal, {
+  makeSqlThreadStoreKernel(journal, {
     ...config,
     namespace: config.schema,
     errors: postgresStorageErrors,
@@ -139,7 +146,8 @@ export const layerWith = (options: PostgresStorageOptions) =>
           const threadStore = yield* makeThreadStore(journal);
           const submissionLedger = yield* makeSubmissionLedger(journal);
 
-          return Context.make(ThreadStore, threadStore).pipe(
+          return Context.make(ThreadStore, threadStore.store).pipe(
+            Context.add(ThreadImport, threadStore.importer),
             Context.add(SubmissionLedger, submissionLedger.ledger),
             Context.add(SettlementPublisher, submissionLedger.publisher),
           );
@@ -155,9 +163,53 @@ export const layer = layerWith({});
 export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
   ThreadReader.layer().pipe(
     Layer.provideMerge(
-      Layer.effect(ThreadStore, Effect.flatMap(openJournal(options), makeThreadStore)),
+      Layer.effectContext(
+        Effect.flatMap(openJournal(options), makeThreadStore).pipe(
+          Effect.map(({ store, importer }) =>
+            Context.make(ThreadStore, store).pipe(Context.add(ThreadImport, importer)),
+          ),
+        ),
+      ),
     ),
   );
+
+/** Export a quiesced current or predecessor store through a read-only snapshot; never run DDL. */
+export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* (
+  request: ThreadExportRequest,
+  options: PostgresStorageOptions = {},
+) {
+  const config = yield* settings(options);
+  const sql = yield* SqlClient.SqlClient;
+
+  return yield* makeSqlTransaction(sql, {
+    begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+  })(
+    Effect.gen(function* () {
+      const header = yield* readPostgresStorageHeader(config.schema, [
+        CURRENT_RECORD_FORMAT,
+        PREVIOUS_RECORD_FORMAT,
+      ]);
+
+      const transfer = yield* makeSqlThreadImport({
+        namespace: config.schema,
+        format: header.recordFormat,
+        offsetPrefix: "effect-agent-postgres@1:",
+        read: (body) => body,
+        write: () => Effect.die("A read-only exporter cannot import"),
+      });
+
+      return yield* transfer.export(request);
+    }),
+  ).pipe(
+    Effect.catchTag("SqlError", (cause) =>
+      PostgresStorageError.make({
+        operation: "export Thread snapshot",
+        message: cause.message,
+        cause,
+      }),
+    ),
+  );
+});
 
 /** Submissions and canonical settlement publication over the application's SqlClient and Crypto. */
 export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>

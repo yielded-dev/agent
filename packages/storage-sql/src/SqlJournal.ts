@@ -42,7 +42,6 @@ export interface SqlJournalOptions<
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
 const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const MAX_RECORDS_PER_THREAD = MAX_THREAD_EXPORT_RECORDS;
-const ZERO_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const MAX_STORED_TEXT_BYTES = 16 * 1024 * 1024;
 const MAX_IDENTIFIER_LENGTH = 1_024;
 
@@ -122,13 +121,6 @@ export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
   threadId: ThreadId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
   tailDigest: BoundedStoredText,
   throughSequence: CanonicalSequence,
-}) {}
-
-export class RawThreadExport extends Schema.Class<RawThreadExport>(
-  "@effect-agent/storage-sql/RawThreadExport",
-)({
-  thread: ThreadRow,
-  records: Schema.Array(RecordRow),
 }) {}
 
 /** Construct journal operations over an already initialized database. */
@@ -549,74 +541,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const exportThread = (threadId: ThreadId) =>
-    withReadTransaction("export transaction")(
-      Effect.gen(function* () {
-        const threadRows = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              created_at,
-              tail_sequence,
-              tail_digest,
-              producer_epoch
-            FROM ${relation("effect_agent_threads")}
-            WHERE thread_id = ${threadId}
-          `.pipe(execute, Effect.mapError(storageError("export thread")));
-
-        const thread = yield* decodeThreadRow("effect_agent_threads", threadId, threadRows);
-
-        yield* failpoint("export:after-thread-read");
-
-        if (thread.tail_sequence > MAX_RECORDS_PER_THREAD)
-          return yield* options.errors.storage({
-            operation: "export thread",
-            message: "The thread exceeds the current export record limit.",
-          });
-        const records: Array<RecordRow> = [];
-        let afterSequence = ZERO_SEQUENCE;
-
-        while (afterSequence < thread.tail_sequence) {
-          const limit = Math.min(1_024, thread.tail_sequence - afterSequence);
-
-          const request = RawReadRequest.make({
-            threadId,
-            fromSequenceExclusive: afterSequence,
-            limit,
-          });
-
-          const page = yield* read(request);
-
-          if (
-            page.length !== limit ||
-            page.some((record, index) => record.sequence !== afterSequence + index + 1)
-          ) {
-            return yield* options.errors.corruption({
-              table: "effect_agent_canonical_records",
-              rowKey: threadId,
-              message: "The exported canonical prefix is not contiguous through its captured tail.",
-            });
-          }
-          records.push(...page);
-          afterSequence = page[page.length - 1].sequence;
-        }
-
-        const beyondTail =
-          yield* sql`SELECT sequence FROM ${relation("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND sequence > ${thread.tail_sequence} LIMIT 1`.pipe(
-            execute,
-            Effect.mapError(storageError("verify export tail")),
-          );
-
-        if (beyondTail.length !== 0)
-          return yield* options.errors.corruption({
-            table: "effect_agent_canonical_records",
-            rowKey: threadId,
-            message: "Canonical records exist beyond the captured thread tail.",
-          });
-
-        return RawThreadExport.make({ thread, records });
-      }),
-    );
-
   const saveCheckpoint = Effect.fnUntraced(function* (
     checkpoint: RawCheckpoint,
   ): Effect.fn.Return<void, CheckpointRejected | C | S | W> {
@@ -929,7 +853,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         request,
         Effect.suspend(() => readAppendThread(request.threadId)),
       ),
-    exportThread,
     getThread,
     getTailDigestAt,
     loadCheckpoint,

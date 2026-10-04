@@ -104,6 +104,8 @@ import {
   type SuspensionOutcome,
   type SuspensionReason,
 } from "@yielded/agent/submission-ledger";
+import { RebuiltSubmission, ThreadImportRejected } from "@yielded/agent/thread-import";
+import { ThreadAdmission } from "@yielded/agent/thread-store";
 import {
   Clock,
   Context,
@@ -114,6 +116,7 @@ import {
   Duration,
   Effect,
   Layer,
+  MutableRef,
   Option,
   Ref,
   Schema,
@@ -2842,6 +2845,258 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       scanNonterminal,
       loadRecoverySnapshot,
       readAbortIntent,
+    });
+
+    yield* journal.registerLedgerTransfer({
+      export: Effect.fnUntraced(function* (threadId) {
+        const current = yield* Ref.get(state);
+
+        const stored = [...current.submissions.values()]
+          .filter((entry) => entry.row.threadId === threadId)
+          .sort((left, right) => left.row.queueSequence - right.row.queueSequence);
+
+        const ids = new Set(stored.map((entry) => entry.row.submissionId));
+
+        const hasChildren = [...current.childReservations.values()].some(
+          (reservation) =>
+            ids.has(reservation.parentSubmissionId) ||
+            (reservation.childSubmissionId !== undefined && ids.has(reservation.childSubmissionId)),
+        );
+
+        const externalObligations = [
+          ...(current.stoppedWorkers.has(threadId) ? ["worker" as const] : []),
+          ...(hasChildren ? ["child" as const] : []),
+        ];
+
+        return {
+          ...(externalObligations.length === 0 ? {} : { externalObligations }),
+          // Include every admission, including unreferenced queued work. Import validates binding.
+          admissions: stored.map(({ row }) =>
+            ThreadAdmission.make({
+              threadId: row.threadId,
+              submissionId: row.submissionId,
+              receiptId: row.receiptId,
+              queueSequence: row.queueSequence,
+              principal: row.principal,
+              idempotencyKey: row.idempotencyKey,
+              agentId: row.agentId,
+              agentDigests: row.agentDigests,
+              deploymentId: row.deploymentId,
+              inputPayload: row.inputPayload,
+              inputDigest: row.inputDigest,
+              createdAt: utc(row.createdAtMillis),
+              ...(row.parentLinkage === undefined ? {} : { parentLinkage: row.parentLinkage }),
+              ...(row.admissionGroup === undefined ? {} : { admissionGroup: row.admissionGroup }),
+              ...(row.admissionFence === undefined ? {} : { admissionFence: row.admissionFence }),
+              ...(row.workerAdmissionJson === undefined
+                ? {}
+                : {
+                    workerAdmission: Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
+                      row.workerAdmissionJson,
+                    ),
+                  }),
+              ...(row.messageAdmissionJson === undefined
+                ? {}
+                : {
+                    messageAdmission: Schema.decodeSync(Schema.fromJsonString(InputMessage))(
+                      row.messageAdmissionJson,
+                    ),
+                  }),
+            }),
+          ),
+          commands: {
+            aborts: stored.flatMap(({ abortIntent }) => {
+              if (abortIntent === undefined) return [];
+              const { canonicalRecordId: _, ...fact } = abortIntent;
+
+              return [fact];
+            }),
+            approvals: stored.flatMap(({ approvalDecisions }) =>
+              [...approvalDecisions.values()].map((intent) => {
+                const { canonicalRecordId: _, ...fact } = intent;
+
+                return fact;
+              }),
+            ),
+            resolutions: stored.flatMap(({ unknownResolutions }) =>
+              [...unknownResolutions.values()].map(({ intent }) => {
+                const { canonicalRecordId: _, ...fact } = intent;
+
+                return fact;
+              }),
+            ),
+          },
+        };
+      }),
+      prepareImport: Effect.fnUntraced(function* (prepared, producerEpoch) {
+        const current = yield* Ref.get(state);
+        const threadId = prepared.result.threadId;
+
+        if (
+          current.lanes.has(threadId) ||
+          current.stoppedWorkers.has(threadId) ||
+          [...current.submissions.values()].some(({ row }) => row.threadId === threadId)
+        )
+          return yield* ThreadImportRejected.make({
+            threadId,
+            reason: "target-not-empty",
+            message: "The destination ledger already contains Thread data",
+          });
+        if (current.submissions.size + prepared.submissions.length > MAX_SUBMISSIONS)
+          return yield* ThreadImportRejected.make({
+            threadId,
+            reason: "unsupported-obligations",
+            message: `In-memory Submission limit ${MAX_SUBMISSIONS} exceeded`,
+          });
+        const submissions = new Map(current.submissions);
+        const admissionIndex = new Map(current.admissionIndex);
+        const lanes = new Map(current.lanes);
+        const latestByThread = new Map(current.latestByThread);
+        const activeByThread = new Map(current.activeByThread);
+        const active = new Set<SubmissionId>();
+        const receipts = new Set([...current.submissions.values()].map(({ row }) => row.receiptId));
+        let mintCounter = current.mintCounter;
+        let lastQueue = 0;
+
+        const retainMint = (id: string | undefined) => {
+          const match =
+            id === undefined ? null : /^(?:submission|receipt|attempt)-memory-(\d+)$/.exec(id);
+
+          if (match !== null) mintCounter = Math.max(mintCounter, Number(match[1]));
+        };
+
+        const codec = Schema.fromJsonString(RebuiltSubmission);
+
+        for (const unvalidated of prepared.submissions) {
+          // Own the immutable facts, so caller-owned JSON cannot mutate the installed ledger.
+          const rebuilt = yield* Schema.encodeEffect(codec)(unvalidated).pipe(
+            Effect.flatMap(Schema.decodeEffect(codec)),
+            Effect.mapError(() =>
+              ThreadImportRejected.make({
+                threadId,
+                reason: "invalid-archive",
+                message: "Invalid rebuilt Submission",
+              }),
+            ),
+          );
+
+          const admission = rebuilt.admission;
+          const key = admissionKey(threadId, admission.principal, admission.idempotencyKey);
+
+          if (
+            submissions.has(admission.submissionId) ||
+            receipts.has(admission.receiptId) ||
+            admissionIndex.has(key)
+          )
+            return yield* ThreadImportRejected.make({
+              threadId,
+              reason: "target-not-empty",
+              message: "An imported Submission, Receipt, or admission key already exists",
+            });
+          const canonicalSettlement = rebuilt.settlement?.payload;
+
+          const settlement =
+            canonicalSettlement?._tag === "SubmissionSettled" ? canonicalSettlement : undefined;
+
+          const stored: StoredSubmission = {
+            row: {
+              submissionId: admission.submissionId,
+              threadId,
+              queueSequence: admission.queueSequence,
+              principal: admission.principal,
+              idempotencyKey: admission.idempotencyKey,
+              agentId: admission.agentId,
+              agentDigests: admission.agentDigests,
+              deploymentId: admission.deploymentId,
+              inputPayload: admission.inputPayload,
+              inputDigest: admission.inputDigest,
+              receiptId: admission.receiptId,
+              state: rebuilt.state,
+              settledOutcome: settlement?.outcome,
+              createdAtMillis: DateTime.toEpochMillis(admission.createdAt),
+              readyAtMillis:
+                rebuilt.state === "ready" ? DateTime.toEpochMillis(admission.createdAt) : undefined,
+              parentLinkage: undefined,
+              ...(admission.admissionGroup === undefined
+                ? {}
+                : { admissionGroup: admission.admissionGroup }),
+              ...(admission.admissionFence === undefined
+                ? {}
+                : { admissionFence: admission.admissionFence }),
+            },
+            ownership: undefined,
+            inputApplied: rebuilt.inputApplied,
+            finalization:
+              settlement === undefined || rebuilt.settlement === undefined
+                ? undefined
+                : {
+                    settlementId: settlement.settlementId,
+                    recordId: rebuilt.settlement.recordId,
+                    finalizedAtMillis: DateTime.toEpochMillis(rebuilt.settlement.createdAt),
+                  },
+            abortIntent: rebuilt.abort,
+            joinedHostSubmissionId: rebuilt.joinedHostSubmissionId,
+            suspension:
+              rebuilt.suspension === undefined
+                ? undefined
+                : {
+                    reason: rebuilt.suspension.reason,
+                    suspendedAtMillis: DateTime.toEpochMillis(rebuilt.suspension.suspendedAt),
+                  },
+            unknownMark:
+              rebuilt.state !== "unknown" || rebuilt.unknownToolCallIds.length === 0
+                ? undefined
+                : {
+                    reason: "Unresolved Tool execution recovered from the canonical log",
+                    toolCallIds: rebuilt.unknownToolCallIds,
+                  },
+            approvalDecisions: new Map(
+              rebuilt.approvals.map((intent) => [intent.toolCallId, intent]),
+            ),
+            unknownResolutions: new Map(
+              rebuilt.resolutions.map((intent) => [intent.toolCallId, { intent }]),
+            ),
+          };
+
+          submissions.set(admission.submissionId, stored);
+          receipts.add(admission.receiptId);
+          admissionIndex.set(key, admission.submissionId);
+          if (rebuilt.state !== "settled") active.add(admission.submissionId);
+          if (admission.queueSequence > lastQueue) {
+            lastQueue = admission.queueSequence;
+            latestByThread.set(threadId, admission.submissionId);
+          }
+          retainMint(admission.submissionId);
+          retainMint(admission.receiptId);
+        }
+        for (const { record } of prepared.records) {
+          if (record.payload._tag === "ModelResponseInterrupted")
+            retainMint(record.payload.attemptId);
+          retainMint(settlementFailureFromRecord(record)?.context?.attemptId);
+        }
+        if (!Number.isSafeInteger(mintCounter + 1) || !Number.isSafeInteger(lastQueue + 1))
+          return yield* ThreadImportRejected.make({
+            threadId,
+            reason: "unsupported-obligations",
+            message: "Imported identities exhaust the in-memory allocator",
+          });
+        lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
+        activeByThread.set(threadId, active);
+
+        const next: LedgerState = {
+          ...current,
+          submissions,
+          admissionIndex,
+          lanes,
+          mintCounter,
+          latestByThread,
+          activeByThread,
+        };
+
+        return () => {
+          MutableRef.set(state.ref, next);
+        };
+      }),
     });
 
     return Context.make(SubmissionLedger, ledger).pipe(

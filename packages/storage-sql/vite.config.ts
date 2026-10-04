@@ -4,6 +4,7 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
+      "src/SqlThreadImport.ts",
       "src/SqlStorage.ts",
       "src/SqlRunStorage.ts",
       "src/SqlStorageFailpoint.ts",

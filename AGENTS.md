@@ -160,10 +160,17 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Do not build persisted-format upgrades unless compatibility is explicitly required. When an
-  upgrade is required, keep it narrow, adapter-owned, atomic, and data-preserving. Reject
-  unsupported or ambiguous data clearly; do not silently reset it. Do not introduce a general
-  migration framework.
+- Change canonical record formats by exporting and re-encoding the log into an empty Thread,
+  never by rewriting stored payloads in place. Keep layout versions separate: adapter-owned,
+  immutable ordered `{ version, statements }` steps run in one transaction and reject newer
+  layouts. Optional/defaulted fields and safely ignorable record kinds need no record-format
+  bump; changes to existing-record meaning do. Retain one decode-only previous record union
+  and one pure `upgradeRecord`, deletable or replaceable next release. Export immutable
+  admission and accepted-command facts bound to canonical references; rebuild ledger execution
+  state, checkpoints, and projections. Recompute the digest chain and import atomically without
+  restoring claims, leases, tokens, or finalization flags. Reject nonempty targets and unsupported
+  or ambiguous data without mutation; never silently reset or drop queued work. Do not build
+  historical upgrade chains or a general migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

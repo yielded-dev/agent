@@ -62,6 +62,22 @@ const encodeMetadata = Schema.encodeSync(
 export const canonicalRecordMetadata = (record: CanonicalRecord): string => {
   const payload = record.payload;
 
+  if (payload._tag === "UnknownRecord") {
+    const value = payload.value;
+
+    return encodeMetadata({
+      tag: value._tag,
+      runId: typeof value.runId === "string" ? JSON.stringify(value.runId) : null,
+      toolCallId: typeof value.toolCallId === "string" ? JSON.stringify(value.toolCallId) : null,
+      kind: typeof value.kind === "string" ? value.kind : null,
+      sourceSubmissionId:
+        typeof value.sourceSubmissionId === "string"
+          ? JSON.stringify(value.sourceSubmissionId)
+          : null,
+      messageId: null,
+    });
+  }
+
   return encodeMetadata({
     tag: payload._tag,
     runId: "runId" in payload ? JSON.stringify(payload.runId) : null,

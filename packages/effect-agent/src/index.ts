@@ -98,3 +98,5 @@ export * as ThreadContextHistory from "./durable/ThreadContextHistory.ts";
 export * as ThreadContextHistoryProjection from "./durable/ThreadContextHistoryProjection.ts";
 export * as LifecyclePublication from "./durable/LifecyclePublication.ts";
 export * as WorkerAdmission from "./durable/WorkerAdmission.ts";
+export * as RecordFormat from "./durable/RecordFormat.ts";
+export * as ThreadImport from "./durable/ThreadImport.ts";

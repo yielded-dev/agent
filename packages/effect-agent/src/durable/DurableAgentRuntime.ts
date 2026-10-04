@@ -11188,11 +11188,9 @@ export class DurableAgentRuntime extends Context.Service<
      * Read-only integrity verification of one Thread (P7 plan §3): Schema round-trips,
      * record-identity uniqueness, sequence contiguity, FIFO input/settlement order,
      * ledger-terminal vs canonical-settlement agreement (DUR-015), and checkpoint binding —
-     * typed per-check results, never a repair. The digest-chain check reports `skipped` with
-     * the honest reason: full chain recomputation needs per-batch producer identity, which the
-     * ThreadStore port deliberately does not export (supply it to
-     * `verifyThreadInvariants` directly; adapter-level `verifyOnOpen` is the
-     * storage-side audit).
+     * typed per-check results, never a repair. Current exports carry the batch identities and
+     * original record wire needed to recompute the digest chain. Older exports without those
+     * identities report `skipped`; adapter-level `verifyOnOpen` audits storage directly.
      */
     readonly verify: (threadId: ThreadId) => Effect.Effect<IntegrityReport, DurableVerifyFailure>;
     /**
