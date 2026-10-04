@@ -125,6 +125,7 @@ jobs:
           expected-head: ${{ needs.resolve.outputs.head || '' }}
           guidance-file: .github/review-guidance.md
           model: gpt-6.1-sol
+          web-search: "true"
           effort: medium
           priority: fast
           base-cost-usd: "20.00"
