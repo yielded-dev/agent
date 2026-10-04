@@ -200,6 +200,11 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
   const sql = yield* SqlClient.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
+  const decodeRowArray = Schema.decodeUnknownEffect(Schema.Array(Row));
+  const decodeCountRows = Schema.decodeUnknownEffect(Schema.Array(Count));
+  const decodePendingSizeRows = Schema.decodeUnknownEffect(Schema.Array(PendingSize));
+  const decodeDeadlineRows = Schema.decodeUnknownEffect(Schema.Array(Deadline));
+  const decodeRecordJson = Schema.decodeEffect(codec);
 
   const query = <A extends object>(operation: string, statement: Statement<A>) =>
     execute(statement).pipe(Effect.mapError((cause) => storage(operation, cause)));
@@ -299,7 +304,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   const decode = Effect.fnUntraced(function* (row: typeof Row.Type) {
     if (bytes(row.record_json) > maxStoredValueBytes) return yield* corrupt("stored-value-bytes");
 
-    const record = yield* Schema.decodeEffect(codec)(row.record_json).pipe(
+    const record = yield* decodeRecordJson(row.record_json).pipe(
       Effect.mapError((cause) => corrupt("decode", cause)),
     );
 
@@ -317,7 +322,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   });
 
   const decodeRows = (rows: unknown) =>
-    Schema.decodeUnknownEffect(Schema.Array(Row))(rows).pipe(
+    decodeRowArray(rows).pipe(
       Effect.mapError((cause) => corrupt("rows", cause)),
       Effect.flatMap((rows) => Effect.forEach(rows, decode)),
     );
@@ -336,7 +341,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(function* (record) {
     const text = yield* encode(record);
 
-    const input = yield* Schema.decodeEffect(codec)(text).pipe(
+    const input = yield* decodeRecordJson(text).pipe(
       Effect.mapError((cause) => corrupt("insert", cause)),
     );
 
@@ -377,7 +382,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           sql`SELECT COUNT(*) AS retained, COALESCE(SUM(CASE WHEN state IN ('pending', 'accepted', 'parked') THEN 1 ELSE 0 END), 0) AS pending FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.key.ownerThreadId} AND ${sql.onDialectOrElse({ orElse: () => sql`COALESCE(${sqliteJsonText(sql, "record_json", ["envelope", "messageAdmission", "_tag"])}, '') ${update ? sql`= 'WorkerUpdate'` : sql`<> 'WorkerUpdate'`}`, pg: () => sql`(read_metadata ->> 'workerUpdate') = ${String(update)}` })}`,
         );
 
-        const count = (yield* Schema.decodeUnknownEffect(Schema.Array(Count))(counts).pipe(
+        const count = (yield* decodeCountRows(counts).pipe(
           Effect.mapError((cause) => corrupt("count", cause)),
         ))[0];
 
@@ -518,7 +523,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
             sql`SELECT COUNT(*) AS count, COALESCE(SUM(record_bytes), 0) AS total_bytes, COALESCE(MAX(record_bytes), 0) AS max_bytes FROM (SELECT ${sql.onDialectOrElse({ orElse: () => sql`length(CAST(record_json AS BLOB))`, pg: () => sql`octet_length(record_json)` })} AS record_bytes FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND state NOT IN ('processed', 'refused') LIMIT ${pendingRowLimit + 1}) AS pending_sizes`,
           );
 
-          const size = (yield* Schema.decodeUnknownEffect(Schema.Array(PendingSize))(sizes).pipe(
+          const size = (yield* decodePendingSizeRows(sizes).pipe(
             Effect.mapError((cause) => corrupt("pending-view-size", cause)),
           ))[0];
 
@@ -533,7 +538,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
               sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND state NOT IN ('processed', 'refused') ORDER BY message_id LIMIT ${pendingRowLimit + 1}`,
             );
 
-            const records = yield* Schema.decodeUnknownEffect(Schema.Array(Row))(rows).pipe(
+            const records = yield* decodeRowArray(rows).pipe(
               Effect.mapError((cause) => corrupt("rows", cause)),
               Effect.flatMap((rows) =>
                 Effect.forEach(rows, (row) =>
@@ -639,7 +644,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
         sql`SELECT MIN(deadline_at_millis) AS deadline FROM ${relation("effect_agent_message_deliveries")} ${ownerThreadId === undefined ? sql`` : sql`WHERE owner_thread_id = ${ownerThreadId}`}`,
       );
 
-      const decoded = yield* Schema.decodeUnknownEffect(Schema.Array(Deadline))(rows).pipe(
+      const decoded = yield* decodeDeadlineRows(rows).pipe(
         Effect.mapError((cause) => corrupt("next-deadline", cause)),
       );
 

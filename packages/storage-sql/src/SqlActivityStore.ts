@@ -43,21 +43,23 @@ class ActivityChangeCountRow extends Schema.Class<ActivityChangeCountRow>(
 }) {}
 
 const StoredVersionHeader = Schema.Struct({ version: Schema.Int });
+const decodeVersionHeader = Schema.decodeEffect(Schema.fromJsonString(StoredVersionHeader));
+const decodeProgressJson = Schema.decodeEffect(Schema.fromJsonString(ActivityProgress));
 
 const storeError = (
   operation: string,
   reason: ActivityStoreError["reason"] = "unavailable",
 ): ActivityStoreError => ActivityStoreError.make({ operation, reason });
 
-const decodeRows = Effect.fnUntraced(function* <A, I>(
-  schema: Schema.Codec<A, I, never>,
-  rows: ReadonlyArray<unknown>,
-  operation: string,
-): Effect.fn.Return<ReadonlyArray<A>, ActivityStoreError> {
-  return yield* Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
-    Effect.mapError(() => storeError(operation, "corrupt")),
-  );
-});
+const decodeRows = <A, I>(schema: Schema.Codec<A, I, never>) => {
+  const decode = Schema.decodeUnknownEffect(Schema.Array(schema));
+
+  return (
+    rows: ReadonlyArray<unknown>,
+    operation: string,
+  ): Effect.Effect<ReadonlyArray<A>, ActivityStoreError> =>
+    decode(rows).pipe(Effect.mapError(() => storeError(operation, "corrupt")));
+};
 
 const decodeInput = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
@@ -87,7 +89,7 @@ const decodeProgress = Effect.fnUntraced(function* (
   value: string,
   operation: string,
 ): Effect.fn.Return<ActivityProgress, ActivityStoreError> {
-  const header = yield* Schema.decodeEffect(Schema.fromJsonString(StoredVersionHeader))(value).pipe(
+  const header = yield* decodeVersionHeader(value).pipe(
     Effect.mapError(() => storeError(operation, "corrupt")),
   );
 
@@ -95,7 +97,7 @@ const decodeProgress = Effect.fnUntraced(function* (
     return yield* storeError(operation, "incompatible");
   }
 
-  const progress = yield* Schema.decodeEffect(Schema.fromJsonString(ActivityProgress))(value).pipe(
+  const progress = yield* decodeProgressJson(value).pipe(
     Effect.mapError(() => storeError(operation, "corrupt")),
   );
 
@@ -154,6 +156,10 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
   const sql = yield* SqlClientService.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const failpoint = yield* ActivityMutationFailpoint;
+  const decodeMetadataRows = decodeRows(Schema.Struct({ version: SqlInteger }));
+  const decodeTableRows = decodeRows(Schema.Struct({ name: Schema.NonEmptyString }));
+  const decodeStateRows = decodeRows(ActivityStateRow);
+  const decodeChangeCountRows = decodeRows(ActivityChangeCountRow);
 
   yield* failpoint.hit("activity:initialize:before");
   yield* withWriteTransaction(
@@ -180,11 +186,7 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
         WHERE component = ${"activity"}
       `.pipe(execute);
 
-      const metadata = yield* decodeRows(
-        Schema.Struct({ version: SqlInteger }),
-        metadataRows,
-        "decode activity schema version",
-      );
+      const metadata = yield* decodeMetadataRows(metadataRows, "decode activity schema version");
 
       if (metadata.length > 1) {
         return yield* storeError("decode activity schema version", "corrupt");
@@ -211,11 +213,7 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
           `.pipe(execute),
         });
 
-        const existing = yield* decodeRows(
-          Schema.Struct({ name: Schema.NonEmptyString }),
-          tableRows,
-          "inspect activity schema",
-        );
+        const existing = yield* decodeTableRows(tableRows, "inspect activity schema");
 
         if (existing.length > 0) {
           return yield* storeError("initialize activity schema", "incompatible");
@@ -265,7 +263,7 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
       Effect.mapError(() => storeError(operation)),
     );
 
-    const rows = yield* decodeRows(ActivityStateRow, rawRows, operation);
+    const rows = yield* decodeStateRows(rawRows, operation);
 
     if (rows.length === 0) return null;
     if (rows.length !== 1) return yield* storeError(operation, "corrupt");
@@ -297,7 +295,7 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
     rawRows: ReadonlyArray<Record<string, unknown>>,
     operation: string,
   ): Effect.fn.Return<void, ActivityStoreError> {
-    const rows = yield* decodeRows(ActivityChangeCountRow, rawRows, operation);
+    const rows = yield* decodeChangeCountRows(rawRows, operation);
 
     if (rows.length !== 1 || rows[0].changed !== 1) {
       return yield* storeError(operation, "corrupt");

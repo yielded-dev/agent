@@ -119,6 +119,40 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
   const retries = table("effect_agent_lifecycle_publication_retries");
   const owner = yield* SqlStorageOwner;
   const source = yield* SqlLifecycleSource;
+  const decodePublicationRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+  const decodeHeadRows = Schema.decodeUnknownEffect(Schema.Array(HeadRow));
+  const decodePendingRows = Schema.decodeUnknownEffect(Schema.Array(PendingRow));
+
+  const decodeOrdinalRows = Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ ordinal: SqlInteger })),
+  );
+
+  const decodeOwnerRows = Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ owner_thread_id: Schema.String })),
+  );
+
+  const decodePayloadSizeRows = Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ ordinal: SqlInteger, payload_bytes: SqlInteger })),
+  );
+
+  const decodeAttemptRows = Schema.decodeUnknownEffect(
+    Schema.Array(
+      Schema.Struct({
+        attempts: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(Attempts))),
+      }),
+    ),
+  );
+
+  const decodeDeadlineRows = Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ deadline: Schema.NullOr(SqlInteger) })),
+  );
+
+  const decodePublicationJson = Schema.decodeEffect(codec);
+
+  const decodePublicationBatch = Schema.decodeUnknownEffect(
+    Schema.toType(LifecyclePublicationBatch),
+  );
+
   let owned: OwnedView | undefined;
 
   if (owner !== undefined) {
@@ -254,7 +288,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
       ORDER BY p.owner_thread_id LIMIT 129`.pipe(
       execute,
       Effect.mapError(failure),
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(HeadRow))),
+      Effect.flatMap(decodeHeadRows),
       Effect.mapError(failure),
     );
 
@@ -314,8 +348,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
   const fingerprint = (text: string) =>
     digestJson(text).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(failure));
 
-  const decodeRows = (rows: unknown) =>
-    Schema.decodeUnknownEffect(Schema.Array(Row))(rows).pipe(Effect.mapError(failure));
+  const decodeRows = (rows: unknown) => decodePublicationRows(rows).pipe(Effect.mapError(failure));
 
   const retainMany: SqlLifecycleRetainMany = Effect.fnUntraced(function* (inputs) {
     const existing = new Map<string, typeof Row.Type>();
@@ -356,9 +389,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
           yield* sql`SELECT COALESCE(MAX(ordinal), 0) AS ordinal FROM ${relation} WHERE owner_thread_id = ${input.ownerThreadId}`.pipe(
             execute,
             Effect.mapError(failure),
-            Effect.flatMap(
-              Schema.decodeUnknownEffect(Schema.Array(Schema.Struct({ ordinal: SqlInteger }))),
-            ),
+            Effect.flatMap(decodeOrdinalRows),
             Effect.mapError(failure),
           );
 
@@ -618,11 +649,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
           ORDER BY p.due_at_millis, p.owner_thread_id LIMIT ${limit}`.pipe(
                 execute,
                 Effect.mapError(failure),
-                Effect.flatMap(
-                  Schema.decodeUnknownEffect(
-                    Schema.Array(Schema.Struct({ owner_thread_id: Schema.String })),
-                  ),
-                ),
+                Effect.flatMap(decodeOwnerRows),
                 Effect.mapError(failure),
               )
             : [...heads.values()]
@@ -654,13 +681,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
             ORDER BY ordinal LIMIT ${lifecyclePublicationBatchMaxFacts}`.pipe(
                   execute,
                   Effect.mapError(failure),
-                  Effect.flatMap(
-                    Schema.decodeUnknownEffect(
-                      Schema.Array(
-                        Schema.Struct({ ordinal: SqlInteger, payload_bytes: SqlInteger }),
-                      ),
-                    ),
-                  ),
+                  Effect.flatMap(decodePayloadSizeRows),
                   Effect.mapError(failure),
                 )
               : cachedRows.map((row) => ({
@@ -689,7 +710,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
             AND p.ordinal <= ${lastOrdinal} AND p.payload_json IS NOT NULL ORDER BY p.ordinal`.pipe(
                   execute,
                   Effect.mapError(failure),
-                  Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(PendingRow))),
+                  Effect.flatMap(decodePendingRows),
                   Effect.mapError(failure),
                 )
               : cachedRows.filter((row) => row.ordinal <= lastOrdinal);
@@ -701,7 +722,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
               if (row.payload_json === null)
                 return yield* LifecyclePublicationError.make({ reason: "corrupt" });
 
-              const publication = yield* Schema.decodeEffect(codec)(row.payload_json).pipe(
+              const publication = yield* decodePublicationJson(row.payload_json).pipe(
                 Effect.mapError(failure),
               );
 
@@ -719,9 +740,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
             }),
           );
 
-          const batch = yield* Schema.decodeUnknownEffect(Schema.toType(LifecyclePublicationBatch))(
-            facts,
-          ).pipe(Effect.mapError(failure));
+          const batch = yield* decodePublicationBatch(facts).pipe(Effect.mapError(failure));
 
           rememberBatch(batch, rows);
           const retained = owned?.owners.get(owner.owner_thread_id);
@@ -775,15 +794,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
                   .pipe(
                     execute,
                     Effect.mapError(failure),
-                    Effect.flatMap(
-                      Schema.decodeUnknownEffect(
-                        Schema.Array(
-                          Schema.Struct({
-                            attempts: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(Attempts))),
-                          }),
-                        ),
-                      ),
-                    ),
+                    Effect.flatMap(decodeAttemptRows),
                     Effect.mapError(failure),
                   )
               : [{ attempts: cachedAttempt.count }];
@@ -860,11 +871,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
         return yield* sql`SELECT MIN(due_at_millis) AS deadline FROM ${relation} p WHERE p.due_at_millis IS NOT NULL AND p.payload_json IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${relation} before_p WHERE before_p.owner_thread_id = p.owner_thread_id AND before_p.ordinal < p.ordinal AND before_p.payload_json IS NOT NULL)`.pipe(
           execute,
           Effect.mapError(failure),
-          Effect.flatMap(
-            Schema.decodeUnknownEffect(
-              Schema.Array(Schema.Struct({ deadline: Schema.NullOr(SqlInteger) })),
-            ),
-          ),
+          Effect.flatMap(decodeDeadlineRows),
           Effect.mapError(failure),
           Effect.map((rows) => Option.fromNullishOr(rows[0]?.deadline)),
           Effect.tap((deadline) =>

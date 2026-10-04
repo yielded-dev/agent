@@ -331,6 +331,7 @@ const decodeSuspensionSnapshot = Schema.decodeUnknownEffect(SuspensionSnapshot);
 const decodeApprovalDecisionIntent = Schema.decodeUnknownEffect(ApprovalDecisionIntent);
 const decodeUnknownResolutionIntent = Schema.decodeUnknownEffect(UnknownResolutionIntent);
 const decodeParentLinkage = Schema.decodeUnknownEffect(ParentLinkage);
+const decodeWorkerLedgerState = Schema.decodeUnknownEffect(Schema.toType(WorkerLedgerState));
 
 const decodeChildReservationSnapshotUnknown = Schema.decodeUnknownEffect(
   ChildBudgetReservationSnapshot,
@@ -387,6 +388,28 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   F extends Diagnostic,
 >(journal: SqlJournal<S, C, W, F>, options: SqlSubmissionLedgerOptions<S, C, F>) {
   const { decodeRows } = makeRowDecoder(options.errors.corruption);
+  const decodeStoredSubmissionRows = decodeRows(Schema.Array(SubmissionRow));
+  const decodeOwnershipRows = decodeRows(Schema.Array(OwnershipRow));
+  const decodeAbortIntentRows = decodeRows(Schema.Array(AbortIntentRow));
+  const decodeStoredChildReservationRows = decodeRows(Schema.Array(ChildReservationRow));
+  const decodeApprovalDecisionRows = decodeRows(Schema.Array(ApprovalDecisionRow));
+  const decodeUnknownResolutionRows = decodeRows(Schema.Array(UnknownResolutionRow));
+  const decodeCanonicalRecordIdRows = decodeRows(Schema.Array(CanonicalRecordIdRow));
+  const decodeMaxQueueSequenceRows = decodeRows(Schema.Array(MaxQueueSequenceRow));
+  const decodeSubmissionWorkItemRows = decodeRows(Schema.Array(SubmissionWorkItemRow));
+  const decodeAbortIntentLookupRows = decodeRows(Schema.Array(AbortIntentLookupRow));
+  const decodeReadySubmissionRows = decodeRows(ReadySubmissionRows);
+  const decodeClaimSubmissionRows = decodeRows(ClaimSubmissionRows);
+  const decodeOwnershipLeaseRows = decodeRows(OwnershipLeaseRows);
+
+  const decodeWorkerAdmissionRows = Schema.decodeUnknownEffect(
+    Schema.Array(
+      Schema.Struct({
+        worker_admission_json: Schema.NullOr(BoundedStoredText),
+      }),
+    ),
+  );
+
   const sqlFailure = options.sqlFailure;
 
   const corruptionFailure = (operation: string, table: string, rowKey: string, message: string) =>
@@ -512,7 +535,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     );
 
   const decodeSubmissionRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(Schema.Array(SubmissionRow), "effect_agent_submissions", rowKey, rows).pipe(
+    decodeStoredSubmissionRows("effect_agent_submissions", rowKey, rows).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -572,8 +595,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       WHERE submission_id = ${submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    const decoded = yield* decodeRows(
-      Schema.Array(OwnershipRow),
+    const decoded = yield* decodeOwnershipRows(
       "effect_agent_submission_ownership",
       submissionId,
       rows,
@@ -761,8 +783,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       WHERE submission_id = ${submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    const decoded = yield* decodeRows(
-      Schema.Array(AbortIntentRow),
+    const decoded = yield* decodeAbortIntentRows(
       "effect_agent_abort_intents",
       submissionId,
       rows,
@@ -781,12 +802,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   });
 
   const decodeChildReservationRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(
-      Schema.Array(ChildReservationRow),
-      "effect_agent_child_reservations",
-      rowKey,
-      rows,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    decodeStoredChildReservationRows("effect_agent_child_reservations", rowKey, rows).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
   const readChildReservation = Effect.fnUntraced(function* (
     operation: string,
@@ -895,8 +913,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         ORDER BY tool_call_id ASC
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    return yield* decodeRows(
-      Schema.Array(ApprovalDecisionRow),
+    return yield* decodeApprovalDecisionRows(
       "effect_agent_approval_decisions",
       submissionId,
       rows,
@@ -943,8 +960,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         ORDER BY tool_call_id ASC
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    return yield* decodeRows(
-      Schema.Array(UnknownResolutionRow),
+    return yield* decodeUnknownResolutionRows(
       "effect_agent_unknown_resolutions",
       submissionId,
       rows,
@@ -1023,8 +1039,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           AND record_id = ${recordId}
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    const decoded = yield* decodeRows(
-      Schema.Array(CanonicalRecordIdRow),
+    const decoded = yield* decodeCanonicalRecordIdRows(
       "effect_agent_canonical_records",
       `${threadId}/${recordId}`,
       rows,
@@ -1233,13 +1248,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             WHERE thread_id=${validated.threadId} ORDER BY queue_sequence LIMIT 1
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-        const first = yield* Schema.decodeUnknownEffect(
-          Schema.Array(
-            Schema.Struct({
-              worker_admission_json: Schema.NullOr(BoundedStoredText),
-            }),
-          ),
-        )(firstRows).pipe(Effect.mapError(internalFailure(operation)));
+        const first = yield* decodeWorkerAdmissionRows(firstRows).pipe(
+          Effect.mapError(internalFailure(operation)),
+        );
 
         if (first[0] !== undefined) {
           const previous =
@@ -1281,8 +1292,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             WHERE thread_id = ${validated.threadId}
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-        const decodedMax = yield* decodeRows(
-          Schema.Array(MaxQueueSequenceRow),
+        const decodedMax = yield* decodeMaxQueueSequenceRows(
           "effect_agent_submissions",
           validated.threadId,
           maxRows,
@@ -1371,8 +1381,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           WHERE submission_id = ${validated.submissionId}
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-        const decoded = yield* decodeRows(
-          ReadySubmissionRows,
+        const decoded = yield* decodeReadySubmissionRows(
           "effect_agent_submissions",
           validated.submissionId,
           rows,
@@ -1529,8 +1538,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             LIMIT 1
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const ownership = yield* decodeRows(
-            OwnershipLeaseRows,
+          const ownership = yield* decodeOwnershipLeaseRows(
             "effect_agent_submission_ownership",
             validated.threadId,
             ownershipRows,
@@ -1560,8 +1568,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             LIMIT ${validated.handoff === undefined ? 1 : validated.handoff.deferredSubmissionIds.length + 1}
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const heads = yield* decodeRows(
-            ClaimSubmissionRows,
+          const heads = yield* decodeClaimSubmissionRows(
             "effect_agent_submissions",
             validated.threadId,
             headRows,
@@ -1835,14 +1842,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       WHERE submission_id = ${validated.submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    return SubmissionRow.make({
+    return {
       ...submission,
       input_applied_record_id: validated.recordId,
       input_applied_sequence: validated.sequence,
       state: ["admitted", "ready", "running"].includes(submission.state)
         ? "input-applied"
         : submission.state,
-    });
+    };
   });
 
   const markInputAppliedKernel = Effect.fnUntraced(function* (
@@ -2166,16 +2173,15 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       settledAt: now.iso,
     }).pipe(Effect.mapError(internalFailure(operation)));
 
-    return {
-      settlement: finalized,
-      submission: SubmissionRow.make({
-        ...submission,
-        state: "settled",
-        settled_outcome: settlement.outcome,
-        settled_record_id: record.recordId,
-        finalized_at: now.iso,
-      }),
+    const poststate: SubmissionRow = {
+      ...submission,
+      state: "settled",
+      settled_outcome: settlement.outcome,
+      settled_record_id: record.recordId,
+      finalized_at: now.iso,
     };
+
+    return { settlement: finalized, submission: poststate };
   });
 
   const finalizePublication = Effect.fnUntraced(function* (
@@ -2281,7 +2287,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               Effect.mapError(sqlFailure(operation)),
             );
 
-          return yield* Schema.decodeUnknownEffect(Schema.toType(WorkerLedgerState))({
+          return yield* decodeWorkerLedgerState({
             latest,
             active,
             stopped: stops.length > 0,
@@ -3561,8 +3567,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         `.pipe(execute)
     ).pipe(Effect.mapError(sqlFailure(operation)));
 
-    const decoded = yield* decodeRows(
-      Schema.Array(SubmissionWorkItemRow),
+    const decoded = yield* decodeSubmissionWorkItemRows(
       "effect_agent_submissions",
       "nonterminal_scan",
       rows,
@@ -3614,8 +3619,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       WHERE submission.submission_id = ${validated.submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-      const decoded = yield* decodeRows(
-        Schema.Array(AbortIntentLookupRow),
+      const decoded = yield* decodeAbortIntentLookupRows(
         "effect_agent_abort_intents",
         validated.submissionId,
         rows,

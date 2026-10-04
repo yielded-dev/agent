@@ -1085,22 +1085,31 @@ const encodedToolParameterToolkit = (toolkit: Toolkit.Any): Toolkit.Any =>
     ),
   );
 
-const makeModelResponseCodec = (toolkit: Toolkit.Any) =>
-  Schema.toCodecJson(Response.StreamPart(encodedToolParameterToolkit(toolkit)));
+const makeModelResponseParsers = (toolkit: Toolkit.Any) => {
+  const codec = Schema.toCodecJson(Response.StreamPart(encodedToolParameterToolkit(toolkit)));
+
+  return {
+    encode: Schema.encodeUnknownEffect(codec),
+    decode: Schema.decodeUnknownEffect(codec),
+  };
+};
 
 // Native Toolkits are immutable. Weak keys let discarded definitions and handler Toolkits go
-// away while each live Toolkit shares its canonical codec across response parts and Turns.
-const modelResponseCodecs = new WeakMap<Toolkit.Any, ReturnType<typeof makeModelResponseCodec>>();
+// away while each live Toolkit shares compiled parsers across response parts and Turns.
+const modelResponseParsers = new WeakMap<
+  Toolkit.Any,
+  ReturnType<typeof makeModelResponseParsers>
+>();
 
-const modelResponseCodecFor = (toolkit: Toolkit.Any) => {
-  const cached = modelResponseCodecs.get(toolkit);
+const modelResponseParsersFor = (toolkit: Toolkit.Any) => {
+  const cached = modelResponseParsers.get(toolkit);
 
   if (cached !== undefined) return cached;
-  const codec = makeModelResponseCodec(toolkit);
+  const parsers = makeModelResponseParsers(toolkit);
 
-  modelResponseCodecs.set(toolkit, codec);
+  modelResponseParsers.set(toolkit, parsers);
 
-  return codec;
+  return parsers;
 };
 
 const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
@@ -1132,13 +1141,15 @@ const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
 
     yield* inspectModelResponsePartCapacity(usage, preflight ?? part, limits);
   }
-  const codec = modelResponseCodecFor(toolkit);
+  const parsers = modelResponseParsersFor(toolkit);
 
-  const encoded = yield* Schema.encodeUnknownEffect(codec)(part).pipe(
-    Effect.mapError(() =>
-      ModelProtocolError.make({ message: "Model response part failed canonical encoding" }),
-    ),
-  );
+  const encoded = yield* parsers
+    .encode(part)
+    .pipe(
+      Effect.mapError(() =>
+        ModelProtocolError.make({ message: "Model response part failed canonical encoding" }),
+      ),
+    );
 
   const retainedBytes = yield* inspectModelResponsePartCapacity(usage, encoded, limits);
 
@@ -1157,11 +1168,13 @@ const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
       }),
   });
 
-  const ownedPart = yield* Schema.decodeUnknownEffect(codec)(ownedEncoded).pipe(
-    Effect.mapError(() =>
-      ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
-    ),
-  );
+  const ownedPart = yield* parsers
+    .decode(ownedEncoded)
+    .pipe(
+      Effect.mapError(() =>
+        ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
+      ),
+    );
 
   return { ownedPart, retainedBytes };
 });
@@ -2242,7 +2255,9 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
     failureMode: prepared.tool.failureMode,
   };
 
-  const toolSpanFailure = ToolSpanFailure.marker();
+  let toolSpanFailure: ToolSpanFailure | undefined;
+  // Successful attempts need no private failure value or Schema class construction.
+  const failureMarker = () => (toolSpanFailure ??= ToolSpanFailure.marker());
   let terminal = false;
   let terminalResultCommitted = false;
 
@@ -2257,7 +2272,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       terminalToolTelemetry(
         telemetryDescriptor,
         outcome,
-        outcome === "failure" ? toolSpanFailure : undefined,
+        outcome === "failure" ? failureMarker() : undefined,
         handling,
       ),
     );
@@ -2446,7 +2461,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         });
       }),
     );
-    if (result.isFailure) return yield* toolSpanFailure;
+    if (result.isFailure) return yield* failureMarker();
   });
 
   const failTerminalResult = (cause: Cause.Cause<ToolExecutionError>) =>
@@ -2463,7 +2478,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         makeToolFailedEvent(context, turnId, call, Cause.squash(cause), "propagated"),
       );
 
-      return yield* toolSpanFailure;
+      return yield* failureMarker();
     });
 
   const measured = started.pipe(
@@ -9635,14 +9650,14 @@ class ProgrammaticToolAuthorization extends Context.Service<
  */
 const stripProgrammaticToolSpanFailure = (
   cause: Cause.Cause<ToolSpanFailure>,
-  marker: ToolSpanFailure,
+  marker: ToolSpanFailure | undefined,
 ): { readonly found: boolean; readonly residual: Cause.Cause<never> } => {
   let found = false;
   const residual: Array<Cause.Reason<never>> = [];
 
   for (const reason of cause.reasons) {
     if (Cause.isFailReason(reason)) {
-      if (reason.error === marker) {
+      if (marker !== undefined && reason.error === marker) {
         found = true;
       } else {
         // This Effect's only typed failure is its fresh marker. Preserve a future invariant break
@@ -9663,7 +9678,8 @@ const measureProgrammaticToolCall = <R>(
   effect: Effect.Effect<ProgrammaticCallOutcome, never, R>,
 ): Effect.Effect<ProgrammaticCallOutcome, never, R> =>
   Effect.suspend(() => {
-    const marker = ToolSpanFailure.marker();
+    let marker: ToolSpanFailure | undefined;
+    const failureMarker = () => (marker ??= ToolSpanFailure.marker());
     let terminalResult: ProgrammaticCallOutcome | undefined;
     let propagatedFailure: Cause.Cause<never> | undefined;
 
@@ -9678,8 +9694,8 @@ const measureProgrammaticToolCall = <R>(
           propagatedFailure = exit.cause;
 
           return isolateToolDerivative(
-            terminalToolTelemetry(descriptor, "failure", marker, "propagated"),
-          ).pipe(Effect.andThen(Effect.fail(marker)));
+            terminalToolTelemetry(descriptor, "failure", failureMarker(), "propagated"),
+          ).pipe(Effect.andThen(Effect.fail(failureMarker())));
         }
 
         terminalResult = exit.value;
@@ -9691,11 +9707,13 @@ const measureProgrammaticToolCall = <R>(
           terminalToolTelemetry(
             descriptor,
             outcome,
-            outcome === "failure" ? marker : undefined,
+            outcome === "failure" ? failureMarker() : undefined,
             outcome === "failure" ? "returned-to-caller" : undefined,
           ),
         ).pipe(
-          Effect.andThen(outcome === "failure" ? Effect.fail(marker) : Effect.succeed(exit.value)),
+          Effect.andThen(
+            outcome === "failure" ? Effect.fail(failureMarker()) : Effect.succeed(exit.value),
+          ),
         );
       }),
       Effect.withSpan(`execute_tool ${descriptor.toolName}`, {

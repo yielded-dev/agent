@@ -154,6 +154,17 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const failpoint = options.hitFailpoint;
   const { withReadTransaction, withWriteTransaction } = options.transactions;
   const { decodeRows, decodeSingleRow } = makeRowDecoder(options.errors.corruption);
+  const decodeThreadRows = decodeRows(Schema.Array(ThreadRow));
+  const decodeThreadRow = decodeSingleRow(Schema.Array(ThreadRow));
+  const decodeBatchRows = decodeRows(Schema.Array(BatchRow));
+  const decodeRecordRows = decodeRows(Schema.Array(RecordRow));
+  const decodeCheckpointRows = decodeRows(Schema.Array(CheckpointRow));
+  const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
+  const isDigest = Schema.is(Digest);
+
+  const decodeLifecyclePublicationFact = Schema.decodeUnknownEffect(
+    Schema.toType(LifecyclePublicationFact),
+  );
 
   const storageError =
     (operation: string) =>
@@ -188,12 +199,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           WHERE thread_id = ${threadId}
         `.pipe(execute, Effect.mapError(storageError("read materialized thread")));
 
-        const existing = yield* decodeRows(
-          Schema.Array(ThreadRow),
-          "effect_agent_threads",
-          threadId,
-          existingRows,
-        );
+        const existing = yield* decodeThreadRows("effect_agent_threads", threadId, existingRows);
 
         if (existing.length > 1) {
           return yield* options.errors.corruption({
@@ -251,7 +257,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       WHERE thread_id = ${threadId}
     `.pipe(execute, Effect.mapError(storageError("read thread")));
 
-    return yield* decodeRows(Schema.Array(ThreadRow), "effect_agent_threads", threadId, rows);
+    return yield* decodeThreadRows("effect_agent_threads", threadId, rows);
   });
 
   const readAppendThread = Effect.fnUntraced(function* (threadId: string) {
@@ -266,12 +272,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           WHERE thread_id = ${threadId}
         `.pipe(execute, Effect.mapError(storageError("read append tail")));
 
-    return yield* decodeSingleRow(
-      Schema.Array(ThreadRow),
-      "effect_agent_threads",
-      threadId,
-      threadRows,
-    );
+    return yield* decodeThreadRow("effect_agent_threads", threadId, threadRows);
   });
 
   const appendInTransaction = Effect.fnUntraced(function* (
@@ -336,8 +337,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           AND batch_id = ${request.batchId}
       `.pipe(execute, Effect.mapError(storageError("read idempotent batch")));
 
-    const batches = yield* decodeRows(
-      Schema.Array(BatchRow),
+    const batches = yield* decodeBatchRows(
       "effect_agent_canonical_batches",
       `${request.threadId}/${request.batchId}`,
       batchRows,
@@ -377,7 +377,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         threadId: request.threadId,
         batchId: request.batchId,
         reason: "tail",
-        ...(Schema.is(Digest)(thread.tail_digest)
+        ...(isDigest(thread.tail_digest)
           ? { actualTailSequence: thread.tail_sequence, actualTailDigest: thread.tail_digest }
           : {}),
       });
@@ -402,8 +402,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         ORDER BY sequence
       `.pipe(execute, Effect.mapError(storageError("check canonical record identities")));
 
-    const existingRecords = yield* decodeRows(
-      Schema.Array(RecordRow),
+    const existingRecords = yield* decodeRecordRows(
       "effect_agent_canonical_records",
       `${request.threadId}/record_ids`,
       existingRecordRows,
@@ -417,9 +416,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       });
     }
 
-    const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-      thread.tail_sequence + 1,
-    ).pipe(
+    const firstSequence = yield* decodeCanonicalSequence(thread.tail_sequence + 1).pipe(
       Effect.mapError((error) =>
         options.errors.storage({
           cause: error,
@@ -429,7 +426,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       ),
     );
 
-    const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
+    const lastSequence = yield* decodeCanonicalSequence(
       firstSequence + request.records.length - 1,
     ).pipe(
       Effect.mapError((error) =>
@@ -484,27 +481,32 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
                 )
               `.pipe(execute, Effect.mapError(storageError("insert canonical record")));
 
-          if (
-            lifecycle !== undefined &&
-            Schema.is(Schema.toType(LifecyclePublicationFact))(canonical.payload)
-          )
-            yield* lifecycle
-              .retain({
-                id: JSON.stringify([request.threadId, "record", record.recordId]),
-                ownerThreadId: request.threadId,
-                canonicalSequence: Schema.decodeSync(CanonicalSequence)(firstSequence + index),
-                createdAt: canonical.createdAt,
-                fact: canonical.payload,
-              })
-              .pipe(
-                Effect.mapError((cause) =>
-                  options.errors.storage({
-                    operation: "retain lifecycle publication",
-                    message: "Native publication storage unavailable",
-                    cause,
-                  }),
-                ),
-              );
+          if (lifecycle !== undefined) {
+            const fact = yield* decodeLifecyclePublicationFact(canonical.payload).pipe(
+              Effect.option,
+            );
+
+            if (Option.isSome(fact))
+              yield* lifecycle
+                .retain({
+                  id: JSON.stringify([request.threadId, "record", record.recordId]),
+                  ownerThreadId: request.threadId,
+                  canonicalSequence: yield* decodeCanonicalSequence(firstSequence + index).pipe(
+                    Effect.orDie,
+                  ),
+                  createdAt: canonical.createdAt,
+                  fact: fact.value,
+                })
+                .pipe(
+                  Effect.mapError((cause) =>
+                    options.errors.storage({
+                      operation: "retain lifecycle publication",
+                      message: "Native publication storage unavailable",
+                      cause,
+                    }),
+                  ),
+                );
+          }
           yield* failpoint("append:after-record-insert");
         }),
       { discard: true },
@@ -552,8 +554,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       LIMIT ${request.limit}
     `.pipe(execute, Effect.mapError(storageError("read canonical records")));
 
-    return yield* decodeRows(
-      Schema.Array(RecordRow),
+    return yield* decodeRecordRows(
       "effect_agent_canonical_records",
       `${request.threadId}>${request.fromSequenceExclusive}`,
       rows,
@@ -574,12 +575,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             WHERE thread_id = ${threadId}
           `.pipe(execute, Effect.mapError(storageError("export thread")));
 
-        const thread = yield* decodeSingleRow(
-          Schema.Array(ThreadRow),
-          "effect_agent_threads",
-          threadId,
-          threadRows,
-        );
+        const thread = yield* decodeThreadRow("effect_agent_threads", threadId, threadRows);
 
         yield* failpoint("export:after-thread-read");
 
@@ -659,8 +655,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           WHERE thread_id = ${checkpoint.threadId}
         `.pipe(execute, Effect.mapError(storageError("read checkpoint tail")));
 
-        const thread = yield* decodeSingleRow(
-          Schema.Array(ThreadRow),
+        const thread = yield* decodeThreadRow(
           "effect_agent_threads",
           checkpoint.threadId,
           threadRows,
@@ -684,8 +679,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             AND through_sequence = ${checkpoint.throughSequence}
         `.pipe(execute, Effect.mapError(storageError("read idempotent checkpoint")));
 
-        const existing = yield* decodeRows(
-          Schema.Array(CheckpointRow),
+        const existing = yield* decodeCheckpointRows(
           "effect_agent_checkpoints",
           `${checkpoint.threadId}/${checkpoint.throughSequence}`,
           checkpointRows,
@@ -796,12 +790,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       WHERE thread_id = ${threadId}
     `.pipe(execute, Effect.mapError(storageError("load recovery checkpoint")));
 
-    return yield* decodeRows(
-      Schema.Array(CheckpointRow),
-      "effect_agent_recovery_checkpoints",
-      threadId,
-      rows,
-    );
+    return yield* decodeCheckpointRows("effect_agent_recovery_checkpoints", threadId, rows);
   });
 
   const loadCheckpoint = Effect.fnUntraced(function* (
@@ -821,8 +810,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       LIMIT 1
     `.pipe(execute, Effect.mapError(storageError("load checkpoint")));
 
-    return yield* decodeRows(
-      Schema.Array(CheckpointRow),
+    return yield* decodeCheckpointRows(
       "effect_agent_checkpoints",
       `${threadId}<=${atOrBeforeSequence}`,
       rows,
@@ -863,8 +851,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         AND last_sequence = ${sequence}
     `.pipe(execute, Effect.mapError(storageError("read canonical digest at sequence")));
 
-    const batches = yield* decodeRows(
-      Schema.Array(BatchRow),
+    const batches = yield* decodeBatchRows(
       "effect_agent_canonical_batches",
       `${threadId}/${sequence}`,
       rows,
@@ -922,26 +909,18 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           `.pipe(execute, Effect.mapError(storageError("scan checkpoints")));
 
         return {
-          threads: yield* decodeRows(
-            Schema.Array(ThreadRow),
-            "effect_agent_threads",
-            "startup_scan",
-            threads,
-          ),
-          batches: yield* decodeRows(
-            Schema.Array(BatchRow),
+          threads: yield* decodeThreadRows("effect_agent_threads", "startup_scan", threads),
+          batches: yield* decodeBatchRows(
             "effect_agent_canonical_batches",
             "startup_scan",
             batches,
           ),
-          records: yield* decodeRows(
-            Schema.Array(RecordRow),
+          records: yield* decodeRecordRows(
             "effect_agent_canonical_records",
             "startup_scan",
             records,
           ),
-          checkpoints: yield* decodeRows(
-            Schema.Array(CheckpointRow),
+          checkpoints: yield* decodeCheckpointRows(
             "effect_agent_checkpoints",
             "startup_scan",
             checkpoints,

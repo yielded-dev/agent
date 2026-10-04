@@ -65,22 +65,24 @@ const unavailable = (operation: string): ScheduleStorageError =>
 const corrupt = (operation: string): ScheduleStorageError =>
   ScheduleStorageError.make({ operation, reason: "corrupt" });
 
-const decodeRows = Effect.fnUntraced(function* <A, I>(
-  schema: Schema.Codec<A, I, never>,
-  rows: ReadonlyArray<unknown>,
-  operation: string,
-): Effect.fn.Return<A, ScheduleStorageError> {
-  return yield* Schema.decodeUnknownEffect(schema)(rows).pipe(
-    Effect.mapError(() => corrupt(operation)),
-  );
-});
+const decodeRows = <A, I>(schema: Schema.Codec<A, I, never>) => {
+  const decode = Schema.decodeUnknownEffect(schema);
+
+  return (
+    rows: ReadonlyArray<unknown>,
+    operation: string,
+  ): Effect.Effect<A, ScheduleStorageError> =>
+    decode(rows).pipe(Effect.mapError(() => corrupt(operation)));
+};
+
+const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord));
 
 const decodeRecord = Effect.fnUntraced(function* (
   row: ScheduleRow,
 ): Effect.fn.Return<ScheduleRecord, ScheduleStorageError> {
-  const record = yield* Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord))(
-    row.record_json,
-  ).pipe(Effect.mapError(() => corrupt("decode schedule")));
+  const record = yield* decodeRecordJson(row.record_json).pipe(
+    Effect.mapError(() => corrupt("decode schedule")),
+  );
 
   if (
     record.owner.tenantId !== row.tenant_id ||
@@ -119,6 +121,10 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
   const sql = yield* SqlClientService.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const scheduleFailpoint = yield* ScheduleFailpoint;
+  const decodeScheduleRows = decodeRows(Schema.Array(ScheduleRow));
+  const decodeCountRows = decodeRows(Schema.Array(ScheduleCountRow));
+  const decodeDueRows = decodeRows(Schema.Array(ScheduleDueRow));
+  const decodeDeadlineRows = decodeRows(Schema.Array(ScheduleDeadlineRow));
 
   const usesCapacity = sql.onDialectOrElse({
     pg: () => sql`uses_capacity`,
@@ -141,7 +147,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
       Effect.mapError(() => unavailable(operation)),
     );
 
-    return yield* decodeRows(Schema.Array(ScheduleRow), rows, operation);
+    return yield* decodeScheduleRows(rows, operation);
   });
 
   const readOne = Effect.fnUntraced(function* (
@@ -188,7 +194,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-          const counts = yield* decodeRows(Schema.Array(ScheduleCountRow), rawCounts, operation);
+          const counts = yield* decodeCountRows(rawCounts, operation);
 
           if (counts.length !== 1) return yield* corrupt(operation);
           if (counts[0].schedule_count >= ownerLimit) {
@@ -258,7 +264,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-    const decoded = yield* decodeRows(Schema.Array(ScheduleRow), rows, operation);
+    const decoded = yield* decodeScheduleRows(rows, operation);
     const records = yield* Effect.forEach(decoded, decodeRecord);
     const hasNext = records.length > decodedRequest.limit;
     const items = hasNext ? records.slice(0, decodedRequest.limit) : records;
@@ -295,7 +301,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-          const counts = yield* decodeRows(Schema.Array(ScheduleCountRow), rawCounts, operation);
+          const counts = yield* decodeCountRows(rawCounts, operation);
 
           if (counts.length !== 1) return yield* corrupt(operation);
           if (counts[0].schedule_count >= ownerLimit)
@@ -377,7 +383,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-    const decoded = yield* decodeRows(Schema.Array(ScheduleDueRow), rows, operation);
+    const decoded = yield* decodeDueRows(rows, operation);
 
     return decoded.map((row) => ({
       owner: { tenantId: row.tenant_id, ownerId: row.owner_id },
@@ -415,7 +421,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-    const decoded = yield* decodeRows(Schema.Array(ScheduleDeadlineRow), rows, operation);
+    const decoded = yield* decodeDeadlineRows(rows, operation);
 
     if (decoded.length !== 1) return yield* corrupt(operation);
 

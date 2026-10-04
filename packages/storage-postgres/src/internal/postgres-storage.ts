@@ -153,6 +153,8 @@ export const postgresStorageErrors = {
 };
 
 const { decodeRows, decodeSingleRow } = makeRowDecoder(postgresStorageErrors.corruption);
+const decodeNameRows = decodeRows(Schema.Array(PostgresNameRow));
+const decodeVersionRow = decodeSingleRow(Schema.Array(PostgresVersionRow));
 
 const isTransactionFailure = Schema.is(
   Schema.Union([PostgresStorageError, PostgresWriteContention]),
@@ -185,12 +187,7 @@ export const initializePostgresStorage = Effect.fnUntraced(function* ({
         ORDER BY c.relname
       `).pipe(Effect.mapError(storageError("inspect storage schema")));
 
-      const existing = yield* decodeRows(
-        Schema.Array(PostgresNameRow),
-        "pg_class",
-        "effect_agent_%",
-        existingRows,
-      );
+      const existing = yield* decodeNameRows("pg_class", "effect_agent_%", existingRows);
 
       if (existing.every((relation) => relation.name !== VERSION_TABLE)) {
         if (existing.length > 0) {
@@ -213,12 +210,7 @@ export const initializePostgresStorage = Effect.fnUntraced(function* ({
           WHERE id
         `).pipe(Effect.mapError(storageError("read storage version")));
 
-        const version = yield* decodeSingleRow(
-          Schema.Array(PostgresVersionRow),
-          VERSION_TABLE,
-          "singleton",
-          versionRows,
-        );
+        const version = yield* decodeVersionRow(VERSION_TABLE, "singleton", versionRows);
 
         // One adapter, one format: there is no predecessor layout to upgrade from.
         if (version.version !== CurrentPostgresStorageVersion) {
@@ -243,12 +235,7 @@ export const initializePostgresStorage = Effect.fnUntraced(function* ({
     ORDER BY c.relname
   `).pipe(Effect.mapError(storageError("verify storage tables")));
 
-      const required = yield* decodeRows(
-        Schema.Array(PostgresNameRow),
-        "pg_class",
-        "required_tables",
-        requiredRows,
-      );
+      const required = yield* decodeNameRows("pg_class", "required_tables", requiredRows);
 
       if (required.length !== REQUIRED_OBJECTS.length) {
         return yield* PostgresStorageCompatibilityError.make({
