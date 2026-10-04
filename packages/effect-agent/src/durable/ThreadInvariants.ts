@@ -4,13 +4,7 @@ import { Effect, Schema } from "effect";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
 import { digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
 import { ExportBatch } from "./RecordFormat.ts";
-import {
-  CanonicalBatch,
-  CanonicalRecordEnvelope,
-  type BatchId,
-  type ProducerId,
-  type RecordEnvelope,
-} from "./Records.ts";
+import { type CanonicalRecordEnvelope, type BatchId, type ProducerId } from "./Records.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import {
   submissionInputRecordId,
@@ -18,6 +12,7 @@ import {
   type SubmissionSnapshot,
 } from "./SubmissionLedger.ts";
 import type { ThreadCheckpoint, ThreadExport } from "./ThreadStore.ts";
+import { ThreadExportRecord } from "./ThreadStore.ts";
 
 /**
  * The production thread invariant checker, shared by the durable coordinator, admin
@@ -56,8 +51,8 @@ export interface ThreadInvariantInput {
   readonly requireAllSettled?: boolean | undefined;
 }
 
-const encodeEnvelope = Schema.encodeEffect(CanonicalRecordEnvelope);
-const decodeEnvelope = Schema.decodeUnknownEffect(CanonicalRecordEnvelope);
+const encodeEnvelope = Schema.encodeEffect(ThreadExportRecord);
+const decodeEnvelope = Schema.decodeUnknownEffect(ThreadExportRecord);
 
 const check = (
   name: IntegrityCheckName,
@@ -72,12 +67,12 @@ const check = (
 
 interface BatchRun {
   readonly batchId: BatchId;
-  readonly records: Array<RecordEnvelope>;
+  readonly records: Array<ThreadExport["records"][number]["record"]>;
   readonly lastSequence: number;
 }
 
 /** Group the export's records into their atomic append runs (batches append contiguously). */
-const batchRunsOf = (records: ReadonlyArray<CanonicalRecordEnvelope>): Array<BatchRun> => {
+const batchRunsOf = (records: ThreadExport["records"]): Array<BatchRun> => {
   const runs: Array<BatchRun> = [];
 
   for (const envelope of records) {
@@ -232,9 +227,11 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
         break;
       }
 
-      const digest = yield* Schema.encodeEffect(ExportBatch)(
-        CanonicalBatch.make({ batchId: run.batchId, producerId, records: [first, ...rest] }),
-      ).pipe(
+      const digest = yield* Schema.encodeUnknownEffect(ExportBatch)({
+        batchId: run.batchId,
+        producerId,
+        records: [first, ...rest],
+      }).pipe(
         Effect.flatMap((batch) => digestJson({ previousTailDigest: chain, batch })),
         Effect.exit,
       );

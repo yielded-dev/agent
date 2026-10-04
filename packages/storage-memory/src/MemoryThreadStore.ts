@@ -4,7 +4,7 @@ import { ExportBatch } from "@yielded/agent/record-format";
 import {
   ProducerEpoch,
   CURRENT_RECORD_FORMAT,
-  type CanonicalBatch,
+  CanonicalBatch,
   type RecordId,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -32,6 +32,7 @@ import {
   CheckpointRejected,
   ThreadExportRequest,
   ThreadExport,
+  ThreadExportRecord,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
@@ -367,7 +368,7 @@ const makeThreadStore = Effect.gen(function* () {
       Effect.mapError((error) => storeError("append", error.message, error)),
     );
 
-    const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(ExportBatch))(
+    const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(
       request.batch,
     ).pipe(
       Effect.mapError((cause) => storeError("append", "Unable to encode canonical batch", cause)),
@@ -680,20 +681,34 @@ const makeThreadStore = Effect.gen(function* () {
   const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (unvalidated) {
     const request = yield* validate(ThreadExportRequest, "export", unvalidated);
 
-    const thread = yield* Ref.get(state).pipe(
-      Effect.flatMap((current) => findThread(current, request.threadId)),
-    );
+    const thread = (yield* Ref.get(state)).threads.get(request.threadId);
 
     const facts =
-      ledgerTransfer === undefined ? {} : yield* ledgerTransfer.export(request.threadId);
+      ledgerTransfer === undefined
+        ? { admissions: [] }
+        : yield* ledgerTransfer.export(request.threadId);
 
-    const records: Array<CanonicalRecordEnvelope> = [];
+    if (thread === undefined && (facts.admissions?.length ?? 0) === 0)
+      return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
+    const records: Array<typeof ThreadExportRecord.Type> = [];
     const batches: Array<Pick<CanonicalBatch, "batchId" | "producerId">> = [];
 
-    for (const stored of thread.batches.values()) {
+    for (const stored of thread?.batches.values() ?? []) {
       const batch = yield* decodeStoredBatch(stored.batchJson, "export");
 
-      records.push(...batchEnvelopes(request.threadId, batch, stored.result.firstSequence));
+      records.push(
+        ...batch.records.map((record, index) => {
+          const sequence = decodeCanonicalSequence(stored.result.firstSequence + index);
+
+          return ThreadExportRecord.make({
+            threadId: request.threadId,
+            batchId: batch.batchId,
+            sequence,
+            offset: observationOffset(request.threadId, sequence),
+            record,
+          });
+        }),
+      );
       batches.push({ batchId: batch.batchId, producerId: batch.producerId });
     }
 
@@ -703,8 +718,8 @@ const makeThreadStore = Effect.gen(function* () {
       ThreadExport.make({
         format: CURRENT_RECORD_FORMAT,
         threadId: request.threadId,
-        tailSequence: thread.tailSequence,
-        tailDigest: thread.tailDigest,
+        tailSequence: thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE,
+        tailDigest: thread?.tailDigest ?? EMPTY_TAIL_DIGEST,
         records,
         batches,
         ...facts,
@@ -743,7 +758,8 @@ const makeThreadStore = Effect.gen(function* () {
             return yield* ThreadImportRejected.make({
               threadId,
               reason: "target-not-empty",
-              message: "The destination Thread already contains canonical or checkpoint data",
+              message:
+                "The destination Thread already contains canonical or checkpoint data; import into a fresh destination store",
             });
           if (existing === undefined && current.threads.size >= maxThreads)
             return yield* storeError("import", `In-memory Thread limit ${maxThreads} exceeded`);
@@ -751,7 +767,8 @@ const makeThreadStore = Effect.gen(function* () {
             return yield* ThreadImportRejected.make({
               threadId,
               reason: "unsupported-obligations",
-              message: "Admission import requires the paired MemorySubmissionLedger",
+              message:
+                "Provide the paired MemorySubmissionLedger layer before importing admissions",
             });
 
           const producerEpoch = yield* Schema.decodeEffect(

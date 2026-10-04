@@ -167,8 +167,10 @@ packages.
   bump; changes to existing-record meaning require a format increment and an explicit one-time
   export/convert/import cutover. Runtime readers and importers accept only the current record
   format; do not retain predecessor decoders, compatibility shims, or upgrade hooks. Keep the
-  schema baseline in development checks only. Export immutable admission and accepted-command
-  facts bound to canonical references; rebuild ledger execution state, checkpoints, and projections.
+  schema baseline in development checks only. Export immutable admissions, including inputs not yet
+  recorded, and accepted-command facts. Bind every canonical reference to its admission; preserve
+  queue order, admission time, and opaque fences/groups. Apply destination admission constraints
+  without importing execution authority. Rebuild ledger execution state, checkpoints, and projections.
   Recompute the digest chain and import atomically without restoring claims, leases, tokens, or
   finalization flags. Reject nonempty targets and unsupported
   or ambiguous data without mutation; never silently reset or drop queued work. Do not build

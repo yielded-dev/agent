@@ -1,7 +1,6 @@
 import { EMPTY_TAIL_DIGEST, canonicalJson } from "@yielded/agent/digest";
 import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
-  CanonicalRecordEnvelope,
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
   Digest,
@@ -12,6 +11,7 @@ import {
   ApprovalDecisionIntent,
   AbortIntent,
   SuspensionSnapshot,
+  SubmissionAdmissionFence,
   UnknownResolutionIntent,
 } from "@yielded/agent/submission-ledger";
 import {
@@ -26,6 +26,7 @@ import {
   ThreadAdmission,
   ThreadExport,
   ThreadExportBatch,
+  ThreadExportRecord,
   ThreadNotMaterialized,
   ThreadStoreError,
   ThreadExportRequest,
@@ -33,6 +34,12 @@ import {
 import { Clock, Crypto, DateTime, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
+import {
+  decodeAdmissionFact,
+  decodeAbortFact,
+  decodeApprovalFact,
+  decodeResolutionFact,
+} from "./SqlAdmissionFacts.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 
@@ -151,6 +158,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 >(options: SqlThreadImportOptions<E>) {
   const sql = yield* SqlClient;
   const crypto = yield* Crypto.Crypto;
+  const admissionFence = yield* SubmissionAdmissionFence;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
 
   const query = <A extends object>(statement: ReturnType<typeof sql<A>>) =>
@@ -173,91 +181,117 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             ),
           );
 
-          if (headers.length === 0)
-            return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
-          const header = headers[0];
+          // Admission can commit before canonical Thread materialization. Its facts still
+          // belong in an export, with an empty log and no invented ThreadCreated record.
+          const header = headers[0] ?? {
+            tail_sequence: 0,
+            tail_digest: EMPTY_TAIL_DIGEST,
+          };
 
-          if (headers.length !== 1 || header.tail_sequence > MAX_THREAD_EXPORT_RECORDS)
+          if (headers.length > 1 || header.tail_sequence > MAX_THREAD_EXPORT_RECORDS)
             return yield* failure("export bounded Thread", "Invalid Thread header");
           if (options.afterThreadRead !== undefined)
             yield* options.afterThreadRead.pipe(
               Effect.mapError((cause) => failure("capture export tail", cause)),
             );
 
-          const rows = yield* decode(
-            Schema.Array(Row),
-            yield* query(
-              sql`SELECT batch_id, sequence, record_json FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} ORDER BY sequence LIMIT ${MAX_THREAD_EXPORT_RECORDS + 1}`,
-            ),
-          );
+          // Keep only one record page and a small batch page beside the resulting archive.
+          // Parsing a record row once supplies both the cross-table check and its wire owner.
+          let rows: ReadonlyArray<typeof Row.Type> = [];
+          let rowIndex = 0;
+          let afterRow: number | undefined;
 
-          if (rows.some((row) => row.sequence > header.tail_sequence))
-            return yield* failure(
-              "export complete Thread",
-              "Canonical records exist beyond the captured thread tail.",
-            );
-          if (
-            rows.length !== header.tail_sequence ||
-            rows.some((row, index) => row.sequence !== index + 1)
-          )
-            return yield* failure("export complete Thread", "Non-contiguous canonical prefix");
+          const nextRow = Effect.fnUntraced(function* () {
+            if (rowIndex === rows.length) {
+              rows = yield* decode(
+                Schema.Array(Row),
+                yield* query(
+                  sql`SELECT batch_id, sequence, record_json FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} ${afterRow === undefined ? sql`` : sql`AND sequence>${afterRow}`} ORDER BY sequence LIMIT 256`,
+                ),
+              );
+              rowIndex = 0;
+              afterRow = rows.at(-1)?.sequence ?? afterRow;
+            }
 
-          const storedBatches = yield* decode(
-            Schema.Array(Batch),
-            yield* query(
-              sql`SELECT batch_id, batch_json, first_sequence, last_sequence FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${request.threadId} ORDER BY first_sequence LIMIT ${MAX_THREAD_EXPORT_RECORDS + 1}`,
-            ),
-          );
+            return rows[rowIndex++];
+          });
 
+          const records: Array<typeof ThreadExportRecord.Type> = [];
           const batches: Array<typeof ThreadExportBatch.Type> = [];
           let cursor = 0;
+          let afterBatch: number | undefined;
 
-          for (const stored of storedBatches) {
-            const batch = yield* json(WireBatch, stored.batch_json);
+          while (true) {
+            const page = yield* decode(
+              Schema.Array(Batch),
+              yield* query(
+                sql`SELECT batch_id, batch_json, first_sequence, last_sequence FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${request.threadId} ${afterBatch === undefined ? sql`` : sql`AND first_sequence>${afterBatch}`} ORDER BY first_sequence LIMIT 16`,
+              ),
+            );
 
-            if (
-              stored.batch_id !== batch.batchId ||
-              stored.first_sequence !== cursor + 1 ||
-              stored.last_sequence !== cursor + batch.records.length
-            )
-              return yield* failure("export canonical batches", "Batch identity or order mismatch");
-            for (const record of batch.records) {
-              const row = rows[cursor++];
+            if (page.length === 0) break;
+            for (const stored of page) {
+              const batch = yield* json(WireBatch, stored.batch_json);
 
               if (
-                row === undefined ||
-                row.batch_id !== batch.batchId ||
-                canonicalJson(yield* json(PersistedJson, row.record_json)) !== canonicalJson(record)
+                stored.batch_id !== batch.batchId ||
+                stored.first_sequence !== cursor + 1 ||
+                stored.last_sequence !== cursor + batch.records.length ||
+                stored.last_sequence > header.tail_sequence
               )
-                return yield* failure("export canonical batches", "Batch and record rows disagree");
+                return yield* failure(
+                  "export canonical batches",
+                  "Batch identity or order mismatch",
+                );
+              for (const wire of batch.records) {
+                const row = yield* nextRow();
+
+                if (
+                  row === undefined ||
+                  row.sequence !== cursor + 1 ||
+                  row.batch_id !== batch.batchId
+                )
+                  return yield* failure(
+                    "export complete Thread",
+                    "Non-contiguous canonical prefix",
+                  );
+                const encoded = yield* json(PersistedJson, row.record_json);
+
+                if (canonicalJson(encoded) !== canonicalJson(wire))
+                  return yield* failure(
+                    "export canonical batches",
+                    "Batch and record rows disagree",
+                  );
+
+                const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, encoded).pipe(
+                  Effect.mapError((cause) => failure("decode export record", cause)),
+                );
+
+                records.push(
+                  ThreadExportRecord.make({
+                    threadId: request.threadId,
+                    batchId: batch.batchId,
+                    sequence: row.sequence,
+                    offset: yield* decode(
+                      ObservationOffset,
+                      `${options.offsetPrefix}${encodeURIComponent(request.threadId)}:${row.sequence}`,
+                    ),
+                    record,
+                  }),
+                );
+                cursor++;
+              }
+              batches.push(
+                ThreadExportBatch.make({ batchId: batch.batchId, producerId: batch.producerId }),
+              );
             }
-            batches.push(
-              ThreadExportBatch.make({ batchId: batch.batchId, producerId: batch.producerId }),
-            );
+            afterBatch = page.at(-1)?.first_sequence;
           }
-          if (cursor !== rows.length)
-            return yield* failure("export canonical batches", "Missing batch metadata");
-
-          const records = yield* Effect.forEach(
-            rows,
-            Effect.fnUntraced(function* (row) {
-              const record = yield* decodeExportRecord(
-                CURRENT_RECORD_FORMAT,
-                yield* json(PersistedJson, row.record_json),
-              ).pipe(Effect.mapError((cause) => failure("decode export record", cause)));
-
-              return CanonicalRecordEnvelope.make({
-                threadId: request.threadId,
-                batchId: yield* decode(CanonicalRecordEnvelope.fields.batchId, row.batch_id),
-                sequence: row.sequence,
-                offset: yield* decode(
-                  ObservationOffset,
-                  `${options.offsetPrefix}${encodeURIComponent(request.threadId)}:${row.sequence}`,
-                ),
-                record,
-              });
-            }),
-          );
+          if (cursor !== header.tail_sequence || (yield* nextRow()) !== undefined)
+            return yield* failure(
+              "export complete Thread",
+              "Records or batches disagree with the captured tail",
+            );
 
           const admissionRows = yield* decode(
             Schema.Array(AdmissionRow),
@@ -269,46 +303,14 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           if (admissionRows.length > MAX_THREAD_EXPORT_RECORDS)
             return yield* failure("export admissions", "Admission bound exceeded");
 
-          const admissions = yield* Effect.forEach(
-            admissionRows,
-            Effect.fnUntraced(function* (row) {
-              if ((row.parent_submission_id === null) !== (row.parent_tool_call_id === null))
-                return yield* failure("export admission", "Incomplete parent identity");
-
-              return yield* decode(ThreadAdmission, {
-                submissionId: row.submission_id,
-                threadId: row.thread_id,
-                receiptId: row.receipt_id,
-                queueSequence: row.queue_sequence,
-                principal: row.principal,
-                idempotencyKey: row.idempotency_key,
-                agentId: row.agent_id,
-                agentDigests: yield* json(PersistedJson, row.agent_digests_json),
-                deploymentId: row.deployment_id,
-                inputPayload: yield* json(PersistedJson, row.input_json),
-                inputDigest: row.input_digest,
-                createdAt: row.created_at,
-                ...(row.parent_submission_id === null
-                  ? {}
-                  : {
-                      parentLinkage: {
-                        parentSubmissionId: row.parent_submission_id,
-                        parentToolCallId: row.parent_tool_call_id,
-                      },
-                    }),
-                ...(row.worker_admission_json === null
-                  ? {}
-                  : { workerAdmission: yield* json(PersistedJson, row.worker_admission_json) }),
-                ...(row.message_admission_json === null
-                  ? {}
-                  : { messageAdmission: yield* json(PersistedJson, row.message_admission_json) }),
-                ...(row.admission_group === null ? {} : { admissionGroup: row.admission_group }),
-                ...(row.admission_fence_json === null
-                  ? {}
-                  : { admissionFence: yield* json(PersistedJson, row.admission_fence_json) }),
-              });
-            }),
+          const admissions = yield* Effect.forEach(admissionRows, (row) =>
+            decodeAdmissionFact(row).pipe(
+              Effect.mapError((cause) => failure("export admission", cause)),
+            ),
           );
+
+          if (headers.length === 0 && admissions.length === 0)
+            return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
 
           const abortRows = yield* decode(
             Schema.Array(AbortRow),
@@ -340,35 +342,17 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
           const commands = {
             aborts: yield* Effect.forEach(abortRows, (row) =>
-              decode(AbortIntent, {
-                submissionId: row.submission_id,
-                author: row.author,
-                reason: row.reason,
-                requestedAt: row.requested_at,
-              }),
+              decodeAbortFact(row).pipe(Effect.mapError((cause) => failure("export abort", cause))),
             ),
             approvals: yield* Effect.forEach(approvalRows, (row) =>
-              decode(ApprovalDecisionIntent, {
-                submissionId: row.submission_id,
-                toolCallId: row.tool_call_id,
-                decision: row.decision,
-                resolver: row.resolver,
-                reason: row.reason,
-                decidedAt: row.decided_at,
-              }),
+              decodeApprovalFact(row).pipe(
+                Effect.mapError((cause) => failure("export approval", cause)),
+              ),
             ),
-            resolutions: yield* Effect.forEach(
-              resolutionRows,
-              Effect.fnUntraced(function* (row) {
-                return yield* decode(UnknownResolutionIntent, {
-                  submissionId: row.submission_id,
-                  toolCallId: row.tool_call_id,
-                  author: row.author,
-                  reason: row.reason,
-                  resolution: yield* json(PersistedJson, row.resolution_json),
-                  resolvedAt: row.resolved_at,
-                });
-              }),
+            resolutions: yield* Effect.forEach(resolutionRows, (row) =>
+              decodeResolutionFact(row).pipe(
+                Effect.mapError((cause) => failure("export resolution", cause)),
+              ),
             ),
           };
 
@@ -432,8 +416,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       )
         return yield* ThreadImportRejected.make({
           threadId,
-          reason: "invalid-archive",
-          message: "A canonical value exceeds this adapter's storage bound",
+          reason: "unsupported-capacity",
+          message:
+            "A canonical value exceeds this adapter's storage bound; import into an adapter with a sufficient value limit",
         });
     }
     const now = yield* Clock.currentTimeMillis;
@@ -466,7 +451,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 threadId,
                 reason: "target-not-empty",
                 message:
-                  "The destination Thread already contains records, admissions, or derivatives",
+                  "The destination Thread already contains records, admissions, or derivatives; import into a fresh Thread store",
               });
           }
           if (
@@ -477,7 +462,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             return yield* ThreadImportRejected.make({
               threadId,
               reason: "target-not-empty",
-              message: "The destination Thread already owns message deliveries",
+              message:
+                "The destination Thread already owns message deliveries; finish those deliveries or use a fresh destination store",
             });
           if (
             headers.length > 1 ||
@@ -488,19 +474,20 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             return yield* ThreadImportRejected.make({
               threadId,
               reason: "target-not-empty",
-              message: "The destination Thread has a committed tail",
+              message:
+                "The destination Thread has a committed tail; import into a fresh destination store",
             });
           for (const { admission } of prepared.submissions) {
             const existing = yield* query(
-              sql`SELECT submission_id FROM ${table("effect_agent_submissions")} WHERE submission_id=${admission.submissionId} OR receipt_id=${admission.receiptId} LIMIT 1`,
+              sql`SELECT submission_id FROM ${table("effect_agent_submissions")} WHERE submission_id=${admission.submissionId} OR receipt_id=${admission.receiptId} OR (principal=${admission.principal} AND idempotency_key=${admission.idempotencyKey}) LIMIT 1`,
             );
 
             if (existing.length > 0)
               return yield* ThreadImportRejected.make({
                 threadId,
-                reason: "target-not-empty",
+                reason: "destination-conflict",
                 message:
-                  "The destination store already retains an imported Submission or Receipt identity",
+                  "The destination ledger retains a Submission, Receipt, or principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
               });
           }
           // The write itself arbitrates concurrent fresh imports on PostgreSQL. Conflicts roll back.
@@ -509,8 +496,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           if (!Number.isSafeInteger(epoch) || epoch >= Number.MAX_SAFE_INTEGER)
             return yield* ThreadImportRejected.make({
               threadId,
-              reason: "invalid-archive",
-              message: "No fresh producer generation is available",
+              reason: "unsupported-capacity",
+              message: "No fresh producer generation is available; import into a fresh ledger",
             });
           if (headers.length === 0)
             yield* query(
@@ -530,6 +517,34 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               );
           }
           for (const rebuilt of prepared.submissions) {
+            // Preserve the accepted fact; destination policy interprets its opaque coordinates.
+            // Terminal history no longer competes for an active admission slot.
+            if (rebuilt.state !== "settled") {
+              yield* admissionFence.check(rebuilt.admission).pipe(
+                Effect.mapError((error) =>
+                  ThreadImportRejected.make({
+                    threadId,
+                    reason:
+                      error.reason === "occupied"
+                        ? "admission-policy-conflict"
+                        : "admission-policy-unavailable",
+                    message: `Destination admission policy ${error.code} ${error.reason}; resolve the destination policy or occupied admission, then retry with the unchanged archive`,
+                  }),
+                ),
+              );
+              if (
+                rebuilt.admission.admissionGroup !== undefined &&
+                (yield* query(
+                  sql`SELECT submission_id FROM ${table("effect_agent_submissions")} WHERE thread_id=${threadId} AND admission_group=${rebuilt.admission.admissionGroup} AND state<>'settled' LIMIT 1`,
+                )).length > 0
+              )
+                return yield* ThreadImportRejected.make({
+                  threadId,
+                  reason: "admission-policy-conflict",
+                  message:
+                    "An active destination admission occupies this admission group; settle or reconcile the occupying admission before retrying",
+                });
+            }
             const admission = yield* encode(ThreadAdmission, rebuilt.admission);
             const settled = rebuilt.settlement?.payload;
             const settlement = settled?._tag === "SubmissionSettled" ? settled : undefined;
@@ -540,16 +555,16 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 : DateTime.formatIso(rebuilt.settlement.createdAt);
 
             const suspension =
-              rebuilt.suspension === undefined
+              rebuilt.state !== "suspended" || rebuilt.suspension === undefined
                 ? null
                 : yield* encode(SuspensionSnapshot, rebuilt.suspension);
 
             const unknown =
-              rebuilt.unknownToolCallIds.length === 0
+              rebuilt.state !== "unknown" || rebuilt.unknownToolCallIds.length === 0
                 ? null
                 : canonicalJson(rebuilt.unknownToolCallIds);
 
-            const readyAt = rebuilt.state === "admitted" ? null : admission.createdAt;
+            const readyAt = rebuilt.state === "ready" ? admission.createdAt : null;
 
             const fence =
               admission.admissionFence === undefined

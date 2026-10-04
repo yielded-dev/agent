@@ -91,7 +91,11 @@ export const verifyRecordFormat = Effect.fnUntraced(function* () {
         "Record format must name the current version and cannot precede its schema baseline.",
     });
   }
-  if (CURRENT_RECORD_VERSION > baseline.version) return;
+  if (CURRENT_RECORD_VERSION > baseline.version) {
+    return yield* RecordCompatibilityError.make({
+      message: `Stale record schema baseline: scripts/record-format.schema.json is at version ${baseline.version}, but CURRENT_RECORD_VERSION is ${CURRENT_RECORD_VERSION}. Regenerate the checked-in baseline from the approved schema for current record version ${CURRENT_RECORD_VERSION} as part of the explicit export/convert/import cutover, then rerun vp run check:record-format.`,
+    });
+  }
 
   const current = Schema.toJsonSchemaDocument(
     Schema.Struct({ ...RecordEnvelope.fields, payload: KnownRecordPayload }),

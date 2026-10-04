@@ -502,17 +502,25 @@ vp run admin:durable reencode --database source.sqlite --thread THREAD --target 
 ```
 
 Archives retain batch identities, immutable admission facts, and accepted operator commands.
-Import validates the complete digest chain and binds every admission to canonical references
-before writing. Same-format imports preserve the tail digest. Receipts, principals, keys and inputs
-survive; execution ownership does not. Ledger state is rebuilt from the log, projections replay,
-and both checkpoint caches start empty. Unresolved ordinary tool effects remain Unknown.
+Import validates the complete digest chain and every canonical admission reference before writing.
+Same-format imports preserve the tail digest. Receipts, principals, keys, input, queue sequence,
+and admission time survive, including admitted inputs that have not reached the log. Import
+preserves opaque admission fences and groups and applies the destination ledger's admission
+policy and active-group constraints. Provide that policy when acquiring the destination storage;
+policy conflicts and unavailable policy checks have distinct, actionable import errors.
 
-An unreferenced admission is rejected, including queued format-16 work that has no canonical
-reference yet. Finish or retain that work in the source; import never drops it. Single-Thread
-archives mark retained child, worker or message-delivery obligations owned by other stores;
-those imports are rejected, while the exported history remains readable. Exports are bounded at 131,072 records. Earlier archives lacking
-batch producer identities must be exported again from the original store. Keep the source when
-any validation fails; importing into an existing nonempty Thread never replaces its work.
+Execution ownership is never transferred. Ledger state is rebuilt from the log, projections
+replay, and both checkpoint caches start empty. Unresolved ordinary tool effects in an unfinished
+Run remain Unknown; settled submissions do not acquire new pending work.
+
+Single-Thread archives mark retained child, worker or message-delivery obligations owned by other
+stores; transfer those through their owning workflow before importing. Exports are bounded at
+131,072 records and read SQL history in pages. Archive records own their original wire JSON:
+copy them through the archive codec to preserve additive fields. Normalizing a record through the
+ordinary record schema discards that wire, so archive encoding rejects the copy.
+Earlier archives lacking batch producer identities must be exported again from the original store.
+Keep the source when validation fails. Import never replaces a nonempty Thread or an existing
+Submission, Receipt, or principal/idempotency key in the destination ledger.
 
 Cloudflare's separate Schedule and Subscription stores still upgrade supported version 2 layouts to
 version 3. Each upgrade runs in one native transaction and advances its version marker last;

@@ -49,7 +49,9 @@ Storage alone does not start workers or recover unfinished Runs.
 
 `ThreadStore.export` captures one complete, bounded Thread and its immutable admission facts.
 The local `ThreadImport` service validates that archive and atomically installs it into an empty
-Thread. It rebuilds ledger state from canonical records; projections and checkpoints are disposable.
+Thread. Queued admissions keep their order, timestamps, and opaque policy facts. The destination
+checks its admission constraints. Import rebuilds ledger state from canonical records; projections
+and checkpoints are disposable.
 No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
 
 Layout upgrades run separately inside each adapter. Import accepts the current record format;

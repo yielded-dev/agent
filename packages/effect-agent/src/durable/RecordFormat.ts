@@ -1,6 +1,5 @@
-import { Effect, Schema, SchemaGetter } from "effect";
+import { Effect, Schema, SchemaGetter, SchemaIssue } from "effect";
 
-import { canonicalJson } from "./Digest.ts";
 import { CanonicalBatch, CURRENT_RECORD_FORMAT, PersistedJson, RecordEnvelope } from "./Records.ts";
 
 export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
@@ -11,10 +10,13 @@ export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
   },
 ) {}
 
-const wire = new WeakMap<RecordEnvelope, PersistedJson>();
+/** An archive owns its wire JSON explicitly; the typed fields are only a read view. */
+export class ExportedRecord extends RecordEnvelope.extend<ExportedRecord>(
+  "@effect-agent/thread/ExportedRecord",
+)({ wire: PersistedJson }) {}
+
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
-const encodeRecord = Schema.encodeEffect(RecordEnvelope);
-const copyJson = Schema.decodeEffect(Schema.fromJsonString(PersistedJson));
+const sameRecord = Schema.toEquivalence(RecordEnvelope);
 
 /** Decode at the archive boundary, retaining unknown additive fields for a lossless backup. */
 export const decodeExportRecord = Effect.fnUntraced(function* (
@@ -24,39 +26,39 @@ export const decodeExportRecord = Effect.fnUntraced(function* (
   if (format !== CURRENT_RECORD_FORMAT)
     return yield* RecordFormatError.make({ format, message: "Unsupported record format" });
 
-  const original = yield* copyJson(canonicalJson(input)).pipe(
-    Effect.mapError(() => RecordFormatError.make({ format, message: "Invalid record JSON" })),
-  );
-
-  const record = yield* decodeRecord(original).pipe(
+  return yield* Schema.decodeEffect(ExportRecord)(input).pipe(
     Effect.mapError(() => RecordFormatError.make({ format, message: "Invalid canonical record" })),
   );
-
-  wire.set(record, original);
-
-  return record;
 });
 
-/** A same-format archive preserves validated wire fields that this reader does not interpret. */
+/**
+ * Preserve additive fields without process-local side state. Copy with ExportedRecord.make
+ * or this codec. Normalizing through RecordEnvelope discards the wire and cannot be encoded
+ * as an archive record. Editing the typed view also fails rather than silently changing a log.
+ */
 export const ExportRecord = PersistedJson.pipe(
-  Schema.decodeTo(Schema.toType(RecordEnvelope), {
+  Schema.decodeTo(Schema.toType(ExportedRecord), {
     decode: SchemaGetter.transformEffect((value) =>
       decodeRecord(value).pipe(
-        Effect.tap((record) =>
-          Effect.sync(() => {
-            wire.set(record, value);
-          }),
-        ),
+        Effect.map((record) => ExportedRecord.make({ ...record, wire: value })),
         Effect.mapError((error) => error.issue),
       ),
     ),
-    encode: SchemaGetter.transformEffect((record) => {
-      const original = wire.get(record);
-
-      return original === undefined
-        ? encodeRecord(record).pipe(Effect.mapError((error) => error.issue))
-        : Effect.succeed(original);
-    }),
+    encode: SchemaGetter.transformEffect((record) =>
+      decodeRecord(record.wire).pipe(
+        Effect.mapError((error) => error.issue),
+        Effect.flatMap((view) =>
+          sameRecord(view, record)
+            ? Effect.succeed(record.wire)
+            : Effect.fail(
+                new SchemaIssue.InvalidValue({
+                  message:
+                    "Archive record view differs from its wire JSON; export the source again",
+                }),
+              ),
+        ),
+      ),
+    ),
   }),
 );
 
@@ -64,9 +66,4 @@ export const ExportRecord = PersistedJson.pipe(
 export const ExportBatch = Schema.Struct({
   ...CanonicalBatch.fields,
   records: Schema.NonEmptyArray(ExportRecord).check(Schema.isMaxLength(256)),
-}).pipe(
-  Schema.decodeTo(Schema.toType(CanonicalBatch), {
-    decode: SchemaGetter.transform((fields) => CanonicalBatch.make(fields)),
-    encode: SchemaGetter.transform((batch) => batch),
-  }),
-);
+});

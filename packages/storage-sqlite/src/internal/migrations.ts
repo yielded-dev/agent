@@ -1,4 +1,5 @@
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
+import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
 import type * as SqlClient from "effect/sql/SqlClient";
@@ -119,20 +120,6 @@ export const sqliteLayoutSteps = [
   },
 ] as const;
 
-const Header = Schema.Struct({
-  singleton: Schema.Literal(1),
-  layout_version: Schema.Int.check(Schema.isGreaterThan(0)),
-  record_format: Schema.NonEmptyString,
-});
-
-const Objects = Schema.Array(
-  Schema.Struct({
-    name: Schema.String,
-    type: Schema.String,
-    sql: Schema.NullOr(Schema.String),
-  }),
-);
-
 const Legacy = Schema.Tuple([Schema.Struct({ user_version: Schema.Int })]);
 
 export interface SqliteStorageHeader {
@@ -147,29 +134,27 @@ const incompatible = (actualVersion: number, message: string) =>
     message: `${message} Keep the original file; no layout upgrade was committed.`,
   });
 
-const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown, table: string) =>
-  Schema.decodeUnknownEffect(schema)(value, { onExcessProperty: "error" }).pipe(
-    Effect.mapError(() =>
-      SqliteStorageCorruptionError.make({
-        table,
-        rowKey: "schema",
-        message: "Malformed storage layout or version header.",
-      }),
-    ),
-  );
-
 const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
-// SQLite preserves CREATE SQL. Ignore identifier quotes/formatting, never payload or predicate spelling.
-const normalize = (statement: string) =>
-  statement.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"|\s+/g, (token) =>
-    token.startsWith("'")
-      ? token
-      : token.startsWith('"')
-        ? token.slice(1, -1).replaceAll('""', '"')
-        : "",
-  );
+const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
+  baseline: {
+    version: 16,
+    recordFormat: LEGACY_RECORD_FORMAT,
+    statements: baseline16,
+    objects: baselineObjects,
+  },
+  steps: sqliteLayoutSteps,
+  headerStatement,
+  incompatible,
+  storageError,
+  corruption: (table) =>
+    SqliteStorageCorruptionError.make({
+      table,
+      rowKey: "schema",
+      message: "Malformed storage layout or version header.",
+    }),
+});
 
 const inspectStorage = Effect.fnUntraced(function* (
   client: SqlClient.SqlClient,
@@ -179,15 +164,7 @@ const inspectStorage = Effect.fnUntraced(function* (
 > {
   const sql = client.withoutTransforms();
 
-  const objects = yield* decode(
-    Objects,
-    yield* sql<Record<string, unknown>>`
-    SELECT name, type, sql FROM sqlite_master WHERE name GLOB 'effect_agent_*' ORDER BY name
-  `.pipe(Effect.mapError(storageError)),
-    "sqlite_master",
-  );
-
-  const schema = objects.find((row) => row.name === "effect_agent_schema");
+  const objects = yield* readObjects(sql);
 
   const [legacy] = yield* decode(
     Legacy,
@@ -198,56 +175,8 @@ const inspectStorage = Effect.fnUntraced(function* (
   const version = legacy.user_version;
 
   if (version === 0 && objects.length === 0) return undefined;
-  if (!sqliteLayoutSteps.some((step) => step.version === version))
-    return yield* incompatible(version, `Unsupported storage version ${version}.`);
 
-  let header: SqliteStorageHeader;
-
-  if (schema === undefined) {
-    if (version !== 16) return yield* incompatible(version, "Missing singleton schema header.");
-    header = { layoutVersion: 16, recordFormat: LEGACY_RECORD_FORMAT };
-  } else {
-    if (
-      schema.type !== "table" ||
-      schema.sql === null ||
-      normalize(schema.sql) !== normalize(headerStatement)
-    )
-      return yield* incompatible(version, "Malformed singleton schema table.");
-
-    const [row] = yield* decode(
-      Schema.Tuple([Header]),
-      yield* sql<Record<string, unknown>>`
-      SELECT * FROM effect_agent_schema
-    `.pipe(Effect.mapError(storageError)),
-      "effect_agent_schema",
-    );
-
-    if (
-      row.layout_version < 17 ||
-      !sqliteLayoutSteps.some((step) => step.version === row.layout_version) ||
-      row.layout_version !== version
-    )
-      return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
-    header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
-  }
-  if (header.recordFormat !== CURRENT_RECORD_FORMAT)
-    return yield* incompatible(
-      header.layoutVersion,
-      `Unsupported record format ${header.recordFormat}.`,
-    );
-
-  for (const [type, name, index] of baselineObjects) {
-    const actual = objects.find((row) => row.name === name);
-
-    if (
-      actual?.type !== type ||
-      actual.sql === null ||
-      normalize(actual.sql) !== normalize(baseline16[index])
-    )
-      return yield* incompatible(version, `Missing or incompatible layout object ${name}.`);
-  }
-
-  return header;
+  return yield* readHeader(sql, objects, version);
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */

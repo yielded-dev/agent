@@ -511,10 +511,16 @@ export const ThreadExternalObligation = Schema.Literals(["child", "worker", "mes
 const ExportEnvelope = Schema.Struct({
   ...CanonicalRecordEnvelope.fields,
   record: ExportRecord,
-}).pipe(
+});
+
+export const ThreadExportRecord = ExportEnvelope.pipe(
   Schema.decodeTo(Schema.toType(CanonicalRecordEnvelope), {
     decode: SchemaGetter.transform((fields) => CanonicalRecordEnvelope.make(fields)),
-    encode: SchemaGetter.transform((record) => record),
+    encode: SchemaGetter.transformEffect((envelope) =>
+      Schema.decodeUnknownEffect(Schema.toType(ExportEnvelope))(envelope).pipe(
+        Effect.mapError((error) => error.issue),
+      ),
+    ),
   }),
 );
 
@@ -523,7 +529,7 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
   tailDigest: Digest,
-  records: Schema.Array(ExportEnvelope).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  records: Schema.Array(ThreadExportRecord).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
   /** Required for import of a non-empty log; earlier exports must be taken again. */
   batches: Schema.optionalKey(
     Schema.Array(ThreadExportBatch).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),

@@ -2940,13 +2940,14 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           return yield* ThreadImportRejected.make({
             threadId,
             reason: "target-not-empty",
-            message: "The destination ledger already contains Thread data",
+            message:
+              "The destination ledger already contains Thread data; import into a fresh destination store",
           });
         if (current.submissions.size + prepared.submissions.length > MAX_SUBMISSIONS)
           return yield* ThreadImportRejected.make({
             threadId,
-            reason: "unsupported-obligations",
-            message: `In-memory Submission limit ${MAX_SUBMISSIONS} exceeded`,
+            reason: "unsupported-capacity",
+            message: `In-memory Submission limit ${MAX_SUBMISSIONS} exceeded; use an adapter with sufficient capacity`,
           });
         const submissions = new Map(current.submissions);
         const admissionIndex = new Map(current.admissionIndex);
@@ -2966,6 +2967,15 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         };
 
         const codec = Schema.fromJsonString(RebuiltSubmission);
+        const services = yield* Effect.context<never>();
+
+        const admissionKeys = new Set(
+          [...current.submissions.values()].map(({ row }) =>
+            JSON.stringify([row.principal, row.idempotencyKey]),
+          ),
+        );
+
+        const activeGroups = new Set<string>();
 
         for (const unvalidated of prepared.submissions) {
           // Own the immutable facts, so caller-owned JSON cannot mutate the installed ledger.
@@ -2986,13 +2996,57 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           if (
             submissions.has(admission.submissionId) ||
             receipts.has(admission.receiptId) ||
-            admissionIndex.has(key)
+            admissionIndex.has(key) ||
+            admissionKeys.has(JSON.stringify([admission.principal, admission.idempotencyKey]))
           )
             return yield* ThreadImportRejected.make({
               threadId,
-              reason: "target-not-empty",
-              message: "An imported Submission, Receipt, or admission key already exists",
+              reason: "destination-conflict",
+              message:
+                "The destination ledger retains a Submission, Receipt, or principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
             });
+          if (rebuilt.state !== "settled") {
+            // Match normal memory admission: the policy must finish in this critical section.
+            const checked = Effect.runSyncExitWith(services)(admissionFence.check(admission));
+
+            if (Exit.isFailure(checked)) {
+              for (const reason of checked.cause.reasons) {
+                if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect)) {
+                  yield* Fiber.interrupt(reason.defect.fiber);
+
+                  return yield* ThreadImportRejected.make({
+                    threadId,
+                    reason: "admission-policy-unavailable",
+                    message:
+                      "Install a synchronous memory admission policy before retrying the unchanged archive",
+                  });
+                }
+              }
+
+              return yield* Effect.failCause(checked.cause).pipe(
+                Effect.mapError((error) =>
+                  ThreadImportRejected.make({
+                    threadId,
+                    reason:
+                      error.reason === "occupied"
+                        ? "admission-policy-conflict"
+                        : "admission-policy-unavailable",
+                    message: `Destination admission policy ${error.code} ${error.reason}; resolve the destination policy or occupied admission, then retry with the unchanged archive`,
+                  }),
+                ),
+              );
+            }
+            if (admission.admissionGroup !== undefined) {
+              if (activeGroups.has(admission.admissionGroup))
+                return yield* ThreadImportRejected.make({
+                  threadId,
+                  reason: "admission-policy-conflict",
+                  message:
+                    "An active destination admission occupies this admission group; settle or reconcile the occupying admission before retrying",
+                });
+              activeGroups.add(admission.admissionGroup);
+            }
+          }
           const canonicalSettlement = rebuilt.settlement?.payload;
 
           const settlement =
@@ -3077,8 +3131,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (!Number.isSafeInteger(mintCounter + 1) || !Number.isSafeInteger(lastQueue + 1))
           return yield* ThreadImportRejected.make({
             threadId,
-            reason: "unsupported-obligations",
-            message: "Imported identities exhaust the in-memory allocator",
+            reason: "unsupported-capacity",
+            message:
+              "Imported identities exhaust the in-memory allocator; use a persistent adapter with fresh identity allocation",
           });
         lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
         activeByThread.set(threadId, active);

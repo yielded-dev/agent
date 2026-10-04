@@ -1,9 +1,9 @@
 import { Context, Effect, Schema } from "effect";
 
-import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
+import { SubmissionId, ThreadId, ToolCallId, type RunId } from "../core/Identifiers.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import { toolOperationStates, unresolvedToolOperations } from "./internal/tool-operations.ts";
-import { decodeExportRecord, ExportRecord } from "./RecordFormat.ts";
+import { toolOperationStates } from "./internal/tool-operations.ts";
+import { decodeExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
@@ -83,6 +83,10 @@ export class ThreadImportRejected extends Schema.TaggedError<ThreadImportRejecte
       "invalid-archive",
       "target-not-empty",
       "unsupported-obligations",
+      "destination-conflict",
+      "admission-policy-conflict",
+      "admission-policy-unavailable",
+      "unsupported-capacity",
     ]),
     message: Schema.String,
   },
@@ -136,7 +140,7 @@ const sequence = Schema.decodeSync(CanonicalSequence);
 const invalid = (message: string, threadId?: ThreadId) =>
   ThreadImportRejected.make({
     reason: "invalid-archive",
-    message,
+    message: `${message}; verify the source log and export it again with the matching release before retrying`,
     ...(threadId === undefined ? {} : { threadId }),
   });
 
@@ -157,13 +161,14 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     return yield* ThreadImportRejected.make({
       threadId,
       reason: "unsupported-format",
-      message: `Unsupported record format ${format}`,
+      message: `Unsupported record format ${format}; run the matching release exporter and the release-specific archive conversion before importing`,
     });
   if ((archive.externalObligations?.length ?? 0) > 0)
     return yield* ThreadImportRejected.make({
       threadId,
       reason: "unsupported-obligations",
-      message: "The source retains child, worker, or delivery obligations in other owning stores",
+      message:
+        "Complete or transfer the source child, worker, and delivery obligations with their owning stores before importing this Thread",
     });
   if (archive.tailSequence !== archive.records.length)
     return yield* invalid("The archive is not a complete canonical prefix", threadId);
@@ -206,11 +211,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       recordIds.add(record.recordId);
       records.push(CanonicalRecordEnvelope.make({ ...entry, record }));
       currentRecords.push(record);
-      encodedRecords.push(
-        yield* Schema.encodeEffect(ExportRecord)(record).pipe(
-          Effect.mapError(() => invalid("The record cannot be encoded", threadId)),
-        ),
-      );
+      encodedRecords.push(entry.record);
       index++;
     }
 
@@ -258,7 +259,14 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   const producerEpoch = yield* Schema.decodeEffect(
     ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER)),
   )(generation).pipe(
-    Effect.mapError(() => invalid("No fresh producer generation is available", threadId)),
+    Effect.mapError(() =>
+      ThreadImportRejected.make({
+        threadId,
+        reason: "unsupported-capacity",
+        message:
+          "The canonical producer generation is exhausted; retain the source and use a release with sufficient generation capacity",
+      }),
+    ),
   );
 
   const admissions = archive.admissions ?? [];
@@ -271,7 +279,9 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   const receipts = new Set<string>();
   const queues = new Set<number>();
   const keys = new Set<string>();
-  const referenced = new Set<SubmissionId>();
+  const recordsByRun = new Map<RunId, Array<CanonicalRecordEnvelope>>();
+  const canonicalAborts = new Map<SubmissionId, CanonicalRecordEnvelope>();
+  const materializedAgents = new Set<string>();
   const inputs = new Map<SubmissionId, CanonicalRecordEnvelope>();
   const settlements = new Map<SubmissionId, CanonicalRecordEnvelope>();
   const commands = archive.commands ?? { aborts: [], approvals: [], resolutions: [] };
@@ -300,7 +310,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
         threadId,
         reason: "unsupported-obligations",
         message:
-          "Linked Threads and message deliveries require their owning stores; a single-Thread import cannot restore them",
+          "Complete or transfer linked Threads and message deliveries with their owning stores before importing this Thread",
       });
 
     const inputDigest = yield* digestJson(admission.inputPayload).pipe(
@@ -312,6 +322,19 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   }
   for (const entry of records) {
     const payload = entry.record.payload;
+
+    if ("runId" in payload && payload.runId !== undefined) {
+      const runRecords = recordsByRun.get(payload.runId);
+
+      if (runRecords === undefined) recordsByRun.set(payload.runId, [entry]);
+      else runRecords.push(entry);
+    }
+    if (payload._tag === "ThreadCreated") materializedAgents.add(payload.agentId);
+    if (payload._tag === "AbortRequested") {
+      if (canonicalAborts.has(payload.submissionId))
+        return yield* invalid("Duplicate canonical abort", threadId);
+      canonicalAborts.set(payload.submissionId, entry);
+    }
 
     if (
       [
@@ -332,14 +355,14 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       return yield* ThreadImportRejected.make({
         threadId,
         reason: "unsupported-obligations",
-        message: "The log references external child, worker, or delivery obligations",
+        message:
+          "Transfer the child, worker, or delivery stores referenced by this log through their owning workflow before importing this Thread",
       });
     if ("submissionId" in payload && payload.submissionId !== undefined) {
       const admission = byId.get(payload.submissionId);
 
       if (admission === undefined)
         return yield* invalid("Canonical Submission reference has no admission fact", threadId);
-      referenced.add(payload.submissionId);
       if (payload._tag === "UserInputRecorded") {
         if (
           payload.kind !== "user" ||
@@ -361,11 +384,6 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       }
     }
   }
-  if (admissions.some((admission) => !referenced.has(admission.submissionId)))
-    return yield* invalid(
-      "An admission has no canonical reference; retain queued work in the source store",
-      threadId,
-    );
   for (const intents of [commands.aborts, commands.approvals, commands.resolutions]) {
     const seen = new Set<string>();
 
@@ -381,6 +399,25 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     }
   }
 
+  const approvalsBySubmission = new Map<SubmissionId, Array<ApprovalDecisionIntent>>();
+  const resolutionsBySubmission = new Map<SubmissionId, Array<UnknownResolutionIntent>>();
+
+  const abortsBySubmission = new Map(
+    commands.aborts.map((intent) => [intent.submissionId, intent]),
+  );
+
+  for (const intent of commands.approvals) {
+    const entries = approvalsBySubmission.get(intent.submissionId) ?? [];
+
+    entries.push(ApprovalDecisionIntent.make(intent));
+    approvalsBySubmission.set(intent.submissionId, entries);
+  }
+  for (const intent of commands.resolutions) {
+    const entries = resolutionsBySubmission.get(intent.submissionId) ?? [];
+
+    entries.push(UnknownResolutionIntent.make(intent));
+    resolutionsBySubmission.set(intent.submissionId, entries);
+  }
   const submissions: Array<RebuiltSubmission> = [];
 
   for (const admission of admissions) {
@@ -419,28 +456,30 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     }
     const ownRun = runIdForSubmission(admission.submissionId);
 
-    const runRecords = records.filter(
-      ({ record: { payload } }) => "runId" in payload && payload.runId === ownRun,
-    );
-
+    const runRecords = recordsByRun.get(ownRun) ?? [];
     const operations = toolOperationStates(runRecords, ownRun);
+    const operationCounts = new Map<ToolCallId, number>();
 
-    const approvals = commands.approvals
-      .filter((intent) => intent.submissionId === admission.submissionId)
-      .map((intent) => ApprovalDecisionIntent.make(intent));
+    for (const state of operations)
+      operationCounts.set(
+        state.operation.toolCallId,
+        (operationCounts.get(state.operation.toolCallId) ?? 0) + 1,
+      );
+    const toolRecords = new Map<ToolCallId, Array<CanonicalRecordEnvelope>>();
 
-    const resolutions = commands.resolutions
-      .filter((intent) => intent.submissionId === admission.submissionId)
-      .map((intent) => UnknownResolutionIntent.make(intent));
+    for (const entry of runRecords) {
+      const payload = entry.record.payload;
 
-    const acceptedAbort = commands.aborts.find(
-      (intent) => intent.submissionId === admission.submissionId,
-    );
+      if (!("toolCallId" in payload)) continue;
+      const entries = toolRecords.get(payload.toolCallId) ?? [];
 
-    const canonicalAbort = records.find(
-      ({ record: { payload } }) =>
-        payload._tag === "AbortRequested" && payload.submissionId === admission.submissionId,
-    );
+      entries.push(entry);
+      toolRecords.set(payload.toolCallId, entries);
+    }
+    const approvals = approvalsBySubmission.get(admission.submissionId) ?? [];
+    const resolutions = resolutionsBySubmission.get(admission.submissionId) ?? [];
+    const acceptedAbort = abortsBySubmission.get(admission.submissionId);
+    const canonicalAbort = canonicalAborts.get(admission.submissionId);
 
     const abort =
       canonicalAbort?.record.payload._tag === "AbortRequested"
@@ -460,21 +499,19 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     )
       return yield* invalid("Accepted abort conflicts with the canonical command", threadId);
     for (const command of [...approvals, ...resolutions]) {
-      if (
-        operations.filter((state) => state.operation.toolCallId === command.toolCallId).length !== 1
-      )
+      if (operationCounts.get(command.toolCallId) !== 1)
         return yield* invalid(
           "Accepted tool command has no unambiguous canonical declaration",
           threadId,
         );
     }
     for (const command of approvals) {
-      const requested = runRecords.filter(
+      const requested = (toolRecords.get(command.toolCallId) ?? []).filter(
         ({ record: { payload } }) =>
           payload._tag === "ToolApprovalRequested" && payload.toolCallId === command.toolCallId,
       );
 
-      const decided = runRecords.filter(
+      const decided = (toolRecords.get(command.toolCallId) ?? []).filter(
         ({ record: { payload } }) =>
           payload._tag === "ToolApprovalDecided" && payload.toolCallId === command.toolCallId,
       );
@@ -502,7 +539,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
           threadId,
         );
 
-      const resolved = runRecords.filter(
+      const resolved = (toolRecords.get(command.toolCallId) ?? []).filter(
         ({ record: { payload } }) =>
           payload._tag === "ToolCallResolved" && payload.toolCallId === command.toolCallId,
       );
@@ -532,7 +569,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       if (command.resolution._tag === "CompletedWithResult") {
         const result = command.resolution;
 
-        const outcomes = runRecords.filter(
+        const outcomes = (toolRecords.get(command.toolCallId) ?? []).filter(
           ({ record: { payload } }) =>
             payload._tag === "ToolCallSettled" && payload.toolCallId === command.toolCallId,
         );
@@ -553,9 +590,19 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       }
     }
 
-    const unknown = unresolvedToolOperations(runRecords, ownRun)
-      .filter((state) => state.unknown || state.operation.executionKind === "ordinary")
+    const unknown = operations
+      .filter(
+        (state) =>
+          !state.settled &&
+          !state.resolved &&
+          (state.unknown ||
+            (!state.dispatchBlocked &&
+              state.operation.executionKind === "ordinary" &&
+              state.operation.executionClass !== "readonly")),
+      )
       .map((state) => state.operation.toolCallId);
+
+    const acceptedApprovals = new Set(approvals.map((intent) => intent.toolCallId));
 
     const pendingApprovals = runRecords
       .filter(({ record: { payload } }) => payload._tag === "ToolApprovalRequested")
@@ -563,8 +610,8 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
         if (record.payload._tag !== "ToolApprovalRequested") return [];
         const id = record.payload.toolCallId;
 
-        return approvals.some((decision) => decision.toolCallId === id) ||
-          runRecords.some(
+        return acceptedApprovals.has(id) ||
+          (toolRecords.get(id) ?? []).some(
             ({ record: { payload } }) =>
               payload._tag === "ToolApprovalDecided" && payload.toolCallId === id,
           )
@@ -582,30 +629,27 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
             suspendedAt: records.at(-1)?.record.createdAt ?? admission.createdAt,
           });
 
-    if (
-      inputEntry === undefined &&
-      settlement === undefined &&
-      !records.some(
-        ({ record: { payload } }) =>
-          payload._tag === "ThreadCreated" && payload.agentId === admission.agentId,
-      )
-    )
-      return yield* invalid("Pending input has no canonical Thread materialization", threadId);
+    // An admitted input need not have reached the log. Its immutable fact is the work;
+    // recovery materializes an admitted Thread before it becomes ready.
+    const state =
+      settlement !== undefined
+        ? "settled"
+        : joined !== undefined
+          ? "joined"
+          : unknown.length > 0
+            ? "unknown"
+            : suspension !== undefined
+              ? "suspended"
+              : inputEntry !== undefined
+                ? "input-applied"
+                : materializedAgents.has(admission.agentId)
+                  ? "ready"
+                  : "admitted";
+
     submissions.push(
       RebuiltSubmission.make({
         admission,
-        state:
-          settlement !== undefined
-            ? "settled"
-            : joined !== undefined
-              ? "joined"
-              : unknown.length > 0
-                ? "unknown"
-                : suspension !== undefined
-                  ? "suspended"
-                  : inputEntry !== undefined
-                    ? "input-applied"
-                    : "ready",
+        state,
         ...(inputEntry === undefined
           ? {}
           : {
@@ -616,8 +660,8 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
             }),
         ...(joined === undefined ? {} : { joinedHostSubmissionId: joined }),
         ...(settlement === undefined ? {} : { settlement }),
-        ...(suspension === undefined ? {} : { suspension }),
-        unknownToolCallIds: unknown,
+        ...(state !== "suspended" || suspension === undefined ? {} : { suspension }),
+        unknownToolCallIds: state === "unknown" ? unknown : [],
         ...(abort === undefined ? {} : { abort }),
         approvals,
         resolutions,

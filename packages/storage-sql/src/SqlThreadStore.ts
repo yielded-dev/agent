@@ -100,7 +100,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const canonicalRecordJson = Schema.fromJsonString(CanonicalRecord);
   const decodeRecordJson = Schema.decodeEffect(canonicalRecordJson);
 
-  const encodeRecordJson = (record: CanonicalRecord) =>
+  const encodeRecordJson = (record: typeof ExportRecord.Type) =>
     Schema.encodeEffect(ExportRecord)(record).pipe(Effect.map(canonicalJson));
 
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
