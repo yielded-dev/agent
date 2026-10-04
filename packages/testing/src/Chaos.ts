@@ -50,8 +50,7 @@ import {
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
 import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
-import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream } from "effect";
-import { Arbitrary } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream, Arbitrary } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
 
 /**

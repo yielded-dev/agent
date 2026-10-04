@@ -63,6 +63,10 @@ export default defineConfig({
         untrackedEnv: ["WRANGLER_LOG_PATH"],
         output: ["dist/**"],
       },
+      journey: {
+        command: "bun src/journey-main.ts",
+        cache: false,
+      },
       worker: {
         command: "wrangler dev --port 8791",
         cache: false,
