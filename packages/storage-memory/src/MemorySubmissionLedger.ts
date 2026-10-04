@@ -261,17 +261,16 @@ const ledgerError = (operation: string, message: string, cause?: unknown): Ledge
     ? LedgerError.make({ operation, message })
     : LedgerError.make({ operation, message, cause });
 
-const validate = Effect.fn("MemorySubmissionLedger.validate")(
-  <A, I>(
-    schema: Schema.Codec<A, I>,
-    operation: string,
-    value: unknown,
-  ): Effect.Effect<A, LedgerError> =>
-    Schema.encodeUnknownEffect(schema)(value).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(schema)),
-      Effect.mapError((error) => ledgerError(operation, `Invalid ${operation} request`, error)),
-    ),
-);
+const validate = Effect.fnUntraced(function* <A, I>(
+  schema: Schema.Codec<A, I>,
+  operation: string,
+  value: unknown,
+): Effect.fn.Return<A, LedgerError> {
+  return yield* Schema.encodeUnknownEffect(schema)(value).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(schema)),
+    Effect.mapError((error) => ledgerError(operation, `Invalid ${operation} request`, error)),
+  );
+});
 
 const decodeSubmissionId = Schema.decodeSync(SubmissionId);
 const decodeReceiptId = Schema.decodeSync(ReceiptId);
@@ -464,289 +463,279 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
     const capabilities = Effect.succeed(LedgerCapabilities.make({ durability: "non-durable" }));
 
-    const admit: SubmissionLedger["Service"]["admit"] = Effect.fn("MemorySubmissionLedger.admit")(
-      (unvalidated) =>
-        Effect.gen(function* () {
-          const request = yield* validate(AdmissionRequest, "admit", unvalidated);
+    const admit: SubmissionLedger["Service"]["admit"] = Effect.fnUntraced(function* (unvalidated) {
+      const request = yield* validate(AdmissionRequest, "admit", unvalidated);
 
-          const workerAdmissionJson =
-            request.workerAdmission === undefined
-              ? undefined
-              : yield* Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission))(
-                  request.workerAdmission,
-                ).pipe(
-                  Effect.mapError(() => ledgerError("admit", "Invalid worker admission metadata")),
-                );
+      const workerAdmissionJson =
+        request.workerAdmission === undefined
+          ? undefined
+          : yield* Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission))(
+              request.workerAdmission,
+            ).pipe(
+              Effect.mapError(() => ledgerError("admit", "Invalid worker admission metadata")),
+            );
 
-          const messageAdmissionJson =
-            request.messageAdmission === undefined
-              ? undefined
-              : yield* Schema.encodeEffect(Schema.fromJsonString(InputMessage))(
-                  request.messageAdmission,
-                ).pipe(
-                  Effect.mapError(() => ledgerError("admit", "Invalid message admission metadata")),
-                );
+      const messageAdmissionJson =
+        request.messageAdmission === undefined
+          ? undefined
+          : yield* Schema.encodeEffect(Schema.fromJsonString(InputMessage))(
+              request.messageAdmission,
+            ).pipe(
+              Effect.mapError(() => ledgerError("admit", "Invalid message admission metadata")),
+            );
 
-          const nowMillis = yield* Clock.currentTimeMillis;
-          const services = yield* Effect.context<never>();
+      const nowMillis = yield* Clock.currentTimeMillis;
+      const services = yield* Effect.context<never>();
 
-          const decision = yield* Ref.modify(
-            state,
-            (
-              current,
-            ): readonly [
-              (
-                | Decision<AdmissionResult, AdmissionConflict | AdmissionPolicyError | LedgerError>
-                | { readonly _tag: "cause"; readonly cause: Cause.Cause<AdmissionPolicyError> }
-              ),
-              LedgerState,
-            ] => {
-              const key = admissionKey(request.threadId, request.principal, request.idempotencyKey);
-              const existingId = current.admissionIndex.get(key);
+      const decision = yield* Ref.modify(
+        state,
+        (
+          current,
+        ): readonly [
+          (
+            | Decision<AdmissionResult, AdmissionConflict | AdmissionPolicyError | LedgerError>
+            | { readonly _tag: "cause"; readonly cause: Cause.Cause<AdmissionPolicyError> }
+          ),
+          LedgerState,
+        ] => {
+          const key = admissionKey(request.threadId, request.principal, request.idempotencyKey);
+          const existingId = current.admissionIndex.get(key);
 
-              if (existingId !== undefined) {
-                const existing = current.submissions.get(existingId);
+          if (existingId !== undefined) {
+            const existing = current.submissions.get(existingId);
 
-                if (existing === undefined) {
-                  return [
-                    failure(
-                      ledgerError("admit", "Admission index references a missing Submission"),
-                    ),
-                    current,
-                  ];
-                }
-                // A replay must repeat the exact canonical input AND the exact parent linkage
-                // (or its absence): linkage is immutable lineage (spec §12 step 5, SUB-016).
-                if (
-                  existing.row.inputDigest !== request.inputDigest ||
-                  !sameParentLinkage(existing.row.parentLinkage, request.parentLinkage) ||
-                  existing.row.admissionGroup !== request.admissionGroup ||
-                  !Schema.toEquivalence(Schema.optional(WorkerAdmission))(
-                    existing.row.workerAdmissionJson === undefined
-                      ? undefined
-                      : Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
-                          existing.row.workerAdmissionJson,
-                        ),
-                    request.workerAdmission,
-                  ) ||
-                  !Schema.toEquivalence(Schema.optional(InputMessage))(
-                    existing.row.messageAdmissionJson === undefined
-                      ? undefined
-                      : Schema.decodeSync(Schema.fromJsonString(InputMessage))(
-                          existing.row.messageAdmissionJson,
-                        ),
-                    request.messageAdmission,
-                  ) ||
-                  !Schema.toEquivalence(Schema.optional(Schema.Json))(
-                    existing.row.admissionFence,
-                    request.admissionFence,
-                  )
-                ) {
-                  return [
-                    failure(
-                      AdmissionConflict.make({
-                        threadId: request.threadId,
-                        principal: request.principal,
-                        idempotencyKey: request.idempotencyKey,
-                        existingInputDigest: existing.row.inputDigest,
-                        attemptedInputDigest: request.inputDigest,
-                      }),
-                    ),
-                    current,
-                  ];
-                }
-
-                return [
-                  success(
-                    AdmissionResult.make({
-                      submissionId: existing.row.submissionId,
-                      receiptId: existing.row.receiptId,
-                      queueSequence: existing.row.queueSequence,
-                      state: existing.row.state,
-                      replayed: true,
-                    }),
-                  ),
-                  current,
-                ];
-              }
-
-              if (current.stoppedWorkers.has(request.threadId))
-                return [
-                  failure(AdmissionPolicyError.make({ reason: "refused", code: "worker-stopped" })),
-                  current,
-                ];
-
-              // A Thread's first admission fixes its worker origin before canonical materialization.
-              const first = [...current.submissions.values()].find(
-                ({ row }) => row.threadId === request.threadId,
-              );
-
-              if (first !== undefined) {
-                const previous =
-                  first.row.workerAdmissionJson === undefined
-                    ? undefined
-                    : Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
-                        first.row.workerAdmissionJson,
-                      );
-
-                if (
-                  !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
-                    previous?.origin,
-                    request.workerAdmission?.origin,
-                  )
-                )
-                  return [
-                    failure(
-                      AdmissionPolicyError.make({
-                        reason: "refused",
-                        code: "worker-origin-conflict",
-                      }),
-                    ),
-                    current,
-                  ];
-              }
-              // A memory policy and the ledger mutation share one synchronous critical section.
-              // An asynchronous policy cannot fence this Ref and therefore fails closed.
-              const checked = Effect.runSyncExitWith(services)(admissionFence.check(request));
-
-              if (Exit.isFailure(checked)) {
-                return [{ _tag: "cause", cause: checked.cause }, current];
-              }
-              if (
-                request.admissionGroup !== undefined &&
-                [...current.submissions.values()].some(
-                  ({ row }) =>
-                    row.threadId === request.threadId &&
-                    row.admissionGroup === request.admissionGroup &&
-                    row.state !== "settled",
-                )
-              )
-                return [
-                  failure(
-                    AdmissionPolicyError.make({ reason: "occupied", code: "admission-group" }),
-                  ),
-                  current,
-                ];
-              if (current.submissions.size >= MAX_SUBMISSIONS) {
-                return [
-                  failure(
-                    ledgerError("admit", `In-memory submission limit ${MAX_SUBMISSIONS} exceeded`),
-                  ),
-                  current,
-                ];
-              }
-
-              const lane = current.lanes.get(request.threadId) ?? {
-                nextQueueSequence: 1,
-                producerEpoch: 0,
-              };
-
-              const mintCounter = current.mintCounter + 1;
-
-              const row: SubmissionRow = {
-                submissionId: decodeSubmissionId(`submission-memory-${mintCounter}`),
-                threadId: request.threadId,
-                queueSequence: decodeQueueSequence(lane.nextQueueSequence),
-                principal: request.principal,
-                idempotencyKey: request.idempotencyKey,
-                agentId: request.agentId,
-                agentDigests: request.agentDigests,
-                deploymentId: request.deploymentId,
-                inputPayload: request.inputPayload,
-                inputDigest: request.inputDigest,
-                receiptId: decodeReceiptId(`receipt-memory-${mintCounter}`),
-                state: "admitted",
-                settledOutcome: undefined,
-                createdAtMillis: nowMillis,
-                readyAtMillis: undefined,
-                parentLinkage: request.parentLinkage,
-                ...(workerAdmissionJson === undefined ? {} : { workerAdmissionJson }),
-                ...(messageAdmissionJson === undefined ? {} : { messageAdmissionJson }),
-                ...(request.admissionGroup === undefined
-                  ? {}
-                  : { admissionGroup: request.admissionGroup }),
-                ...(request.admissionFence === undefined
-                  ? {}
-                  : { admissionFence: request.admissionFence }),
-              };
-
-              const submissions = new Map(current.submissions).set(row.submissionId, {
-                row,
-                ownership: undefined,
-                inputApplied: undefined,
-                finalization: undefined,
-                abortIntent: undefined,
-                joinedHostSubmissionId: undefined,
-                suspension: undefined,
-                unknownMark: undefined,
-                approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
-                unknownResolutions: new Map<ToolCallId, StoredUnknownResolution>(),
-              });
-
-              const admissionIndex = new Map(current.admissionIndex).set(key, row.submissionId);
-
-              const lanes = new Map(current.lanes).set(request.threadId, {
-                nextQueueSequence: lane.nextQueueSequence + 1,
-                producerEpoch: lane.producerEpoch,
-              });
-
+            if (existing === undefined) {
               return [
-                success(
-                  AdmissionResult.make({
-                    submissionId: row.submissionId,
-                    receiptId: row.receiptId,
-                    queueSequence: row.queueSequence,
-                    state: row.state,
-                    replayed: false,
+                failure(ledgerError("admit", "Admission index references a missing Submission")),
+                current,
+              ];
+            }
+            // A replay must repeat the exact canonical input AND the exact parent linkage
+            // (or its absence): linkage is immutable lineage (spec §12 step 5, SUB-016).
+            if (
+              existing.row.inputDigest !== request.inputDigest ||
+              !sameParentLinkage(existing.row.parentLinkage, request.parentLinkage) ||
+              existing.row.admissionGroup !== request.admissionGroup ||
+              !Schema.toEquivalence(Schema.optional(WorkerAdmission))(
+                existing.row.workerAdmissionJson === undefined
+                  ? undefined
+                  : Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
+                      existing.row.workerAdmissionJson,
+                    ),
+                request.workerAdmission,
+              ) ||
+              !Schema.toEquivalence(Schema.optional(InputMessage))(
+                existing.row.messageAdmissionJson === undefined
+                  ? undefined
+                  : Schema.decodeSync(Schema.fromJsonString(InputMessage))(
+                      existing.row.messageAdmissionJson,
+                    ),
+                request.messageAdmission,
+              ) ||
+              !Schema.toEquivalence(Schema.optional(Schema.Json))(
+                existing.row.admissionFence,
+                request.admissionFence,
+              )
+            ) {
+              return [
+                failure(
+                  AdmissionConflict.make({
+                    threadId: request.threadId,
+                    principal: request.principal,
+                    idempotencyKey: request.idempotencyKey,
+                    existingInputDigest: existing.row.inputDigest,
+                    attemptedInputDigest: request.inputDigest,
                   }),
                 ),
-                {
-                  ...current,
-                  submissions,
-                  admissionIndex,
-                  lanes,
-                  mintCounter,
-                  latestByThread: new Map(current.latestByThread).set(
-                    request.threadId,
-                    row.submissionId,
-                  ),
-                  activeByThread: new Map(current.activeByThread).set(
-                    request.threadId,
-                    new Set([
-                      ...(current.activeByThread.get(request.threadId) ?? []),
-                      row.submissionId,
-                    ]),
-                  ),
-                },
+                current,
               ];
-            },
-          );
-
-          if (decision._tag === "failure") return yield* decision.error;
-          if (decision._tag === "cause") {
-            for (const reason of decision.cause.reasons) {
-              if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect)) {
-                yield* Fiber.interrupt(reason.defect.fiber);
-
-                return yield* AdmissionPolicyError.make({
-                  reason: "unavailable",
-                  code: "synchronous-memory-policy-required",
-                });
-              }
             }
 
-            return yield* Effect.failCause(decision.cause);
+            return [
+              success(
+                AdmissionResult.make({
+                  submissionId: existing.row.submissionId,
+                  receiptId: existing.row.receiptId,
+                  queueSequence: existing.row.queueSequence,
+                  state: existing.row.state,
+                  replayed: true,
+                }),
+              ),
+              current,
+            ];
           }
 
-          return decision.value;
-        }),
-      Effect.uninterruptible,
-    );
+          if (current.stoppedWorkers.has(request.threadId))
+            return [
+              failure(AdmissionPolicyError.make({ reason: "refused", code: "worker-stopped" })),
+              current,
+            ];
 
-    const markReady: SubmissionLedger["Service"]["markReady"] = Effect.fn(
-      "MemorySubmissionLedger.markReady",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+          // A Thread's first admission fixes its worker origin before canonical materialization.
+          const first = [...current.submissions.values()].find(
+            ({ row }) => row.threadId === request.threadId,
+          );
+
+          if (first !== undefined) {
+            const previous =
+              first.row.workerAdmissionJson === undefined
+                ? undefined
+                : Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
+                    first.row.workerAdmissionJson,
+                  );
+
+            if (
+              !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
+                previous?.origin,
+                request.workerAdmission?.origin,
+              )
+            )
+              return [
+                failure(
+                  AdmissionPolicyError.make({
+                    reason: "refused",
+                    code: "worker-origin-conflict",
+                  }),
+                ),
+                current,
+              ];
+          }
+          // A memory policy and the ledger mutation share one synchronous critical section.
+          // An asynchronous policy cannot fence this Ref and therefore fails closed.
+          const checked = Effect.runSyncExitWith(services)(admissionFence.check(request));
+
+          if (Exit.isFailure(checked)) {
+            return [{ _tag: "cause", cause: checked.cause }, current];
+          }
+          if (
+            request.admissionGroup !== undefined &&
+            [...current.submissions.values()].some(
+              ({ row }) =>
+                row.threadId === request.threadId &&
+                row.admissionGroup === request.admissionGroup &&
+                row.state !== "settled",
+            )
+          )
+            return [
+              failure(AdmissionPolicyError.make({ reason: "occupied", code: "admission-group" })),
+              current,
+            ];
+          if (current.submissions.size >= MAX_SUBMISSIONS) {
+            return [
+              failure(
+                ledgerError("admit", `In-memory submission limit ${MAX_SUBMISSIONS} exceeded`),
+              ),
+              current,
+            ];
+          }
+
+          const lane = current.lanes.get(request.threadId) ?? {
+            nextQueueSequence: 1,
+            producerEpoch: 0,
+          };
+
+          const mintCounter = current.mintCounter + 1;
+
+          const row: SubmissionRow = {
+            submissionId: decodeSubmissionId(`submission-memory-${mintCounter}`),
+            threadId: request.threadId,
+            queueSequence: decodeQueueSequence(lane.nextQueueSequence),
+            principal: request.principal,
+            idempotencyKey: request.idempotencyKey,
+            agentId: request.agentId,
+            agentDigests: request.agentDigests,
+            deploymentId: request.deploymentId,
+            inputPayload: request.inputPayload,
+            inputDigest: request.inputDigest,
+            receiptId: decodeReceiptId(`receipt-memory-${mintCounter}`),
+            state: "admitted",
+            settledOutcome: undefined,
+            createdAtMillis: nowMillis,
+            readyAtMillis: undefined,
+            parentLinkage: request.parentLinkage,
+            ...(workerAdmissionJson === undefined ? {} : { workerAdmissionJson }),
+            ...(messageAdmissionJson === undefined ? {} : { messageAdmissionJson }),
+            ...(request.admissionGroup === undefined
+              ? {}
+              : { admissionGroup: request.admissionGroup }),
+            ...(request.admissionFence === undefined
+              ? {}
+              : { admissionFence: request.admissionFence }),
+          };
+
+          const submissions = new Map(current.submissions).set(row.submissionId, {
+            row,
+            ownership: undefined,
+            inputApplied: undefined,
+            finalization: undefined,
+            abortIntent: undefined,
+            joinedHostSubmissionId: undefined,
+            suspension: undefined,
+            unknownMark: undefined,
+            approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
+            unknownResolutions: new Map<ToolCallId, StoredUnknownResolution>(),
+          });
+
+          const admissionIndex = new Map(current.admissionIndex).set(key, row.submissionId);
+
+          const lanes = new Map(current.lanes).set(request.threadId, {
+            nextQueueSequence: lane.nextQueueSequence + 1,
+            producerEpoch: lane.producerEpoch,
+          });
+
+          return [
+            success(
+              AdmissionResult.make({
+                submissionId: row.submissionId,
+                receiptId: row.receiptId,
+                queueSequence: row.queueSequence,
+                state: row.state,
+                replayed: false,
+              }),
+            ),
+            {
+              ...current,
+              submissions,
+              admissionIndex,
+              lanes,
+              mintCounter,
+              latestByThread: new Map(current.latestByThread).set(
+                request.threadId,
+                row.submissionId,
+              ),
+              activeByThread: new Map(current.activeByThread).set(
+                request.threadId,
+                new Set([
+                  ...(current.activeByThread.get(request.threadId) ?? []),
+                  row.submissionId,
+                ]),
+              ),
+            },
+          ];
+        },
+      );
+
+      if (decision._tag === "failure") return yield* decision.error;
+      if (decision._tag === "cause") {
+        for (const reason of decision.cause.reasons) {
+          if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect)) {
+            yield* Fiber.interrupt(reason.defect.fiber);
+
+            return yield* AdmissionPolicyError.make({
+              reason: "unavailable",
+              code: "synchronous-memory-policy-required",
+            });
+          }
+        }
+
+        return yield* Effect.failCause(decision.cause);
+      }
+
+      return decision.value;
+    }, Effect.uninterruptible);
+
+    const markReady: SubmissionLedger["Service"]["markReady"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(MarkReadyRequest, "markReady", unvalidated);
         const nowMillis = yield* Clock.currentTimeMillis;
 
@@ -774,13 +763,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
-      }),
+      },
     );
 
-    const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fn(
-      "MemorySubmissionLedger.lookup",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(SubmissionLookup, "lookup", unvalidated);
         const current = yield* Ref.get(state);
 
@@ -795,13 +782,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           submissionId === undefined ? undefined : current.submissions.get(submissionId);
 
         return stored === undefined ? Option.none() : Option.some(toSnapshot(stored.row));
-      }),
+      },
     );
 
-    const resolveAdmission: SubmissionLedger["Service"]["resolveAdmission"] = Effect.fn(
-      "MemorySubmissionLedger.resolveAdmission",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const resolveAdmission: SubmissionLedger["Service"]["resolveAdmission"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(SubmissionLookupByKey, "resolveAdmission", unvalidated);
 
         // Test-only fault seam: lets suites exercise the Indeterminate classification that a
@@ -825,7 +810,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         return stored === undefined
           ? AdmissionNotAdmitted.make()
           : AdmissionAdmitted.make({ submission: toSnapshot(stored.row) });
-      }),
+      },
     );
 
     const claim: SubmissionLedger["Service"]["claim"] = Effect.fn("MemorySubmissionLedger.claim")(
@@ -1025,10 +1010,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       }),
     );
 
-    const markInputApplied: SubmissionLedger["Service"]["markInputApplied"] = Effect.fn(
-      "MemorySubmissionLedger.markInputApplied",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const markInputApplied: SubmissionLedger["Service"]["markInputApplied"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(MarkInputAppliedRequest, "markInputApplied", unvalidated);
 
         const decision = yield* Ref.modify(
@@ -1085,7 +1068,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
-      }),
+      },
     );
 
     const canonicalSettlement = Effect.fnUntraced(function* (submission: SubmissionRow) {
@@ -1371,9 +1354,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       }),
     );
 
-    const inspectWorker = Effect.fn("MemorySubmissionLedger.inspectWorker")(function* (
-      threadId: ThreadId,
-    ) {
+    const inspectWorker = Effect.fnUntraced(function* (threadId: ThreadId) {
       const current = yield* Ref.get(state);
       const latestId = current.latestByThread.get(threadId);
       const latest = latestId === undefined ? undefined : current.submissions.get(latestId);
@@ -1396,9 +1377,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       });
     });
 
-    const stopWorker = Effect.fn("MemorySubmissionLedger.stopWorker")(function* (
-      unvalidated: WorkerStopCommand,
-    ) {
+    const stopWorker = Effect.fnUntraced(function* (unvalidated: WorkerStopCommand) {
       const request = yield* validate(WorkerStopCommand, "stopWorker", unvalidated);
       const now = yield* Clock.currentTimeMillis;
 
@@ -1436,10 +1415,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       });
     });
 
-    const requestAbort: SubmissionLedger["Service"]["requestAbort"] = Effect.fn(
-      "MemorySubmissionLedger.requestAbort",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const requestAbort: SubmissionLedger["Service"]["requestAbort"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(AbortCommand, "requestAbort", unvalidated);
         const nowMillis = yield* Clock.currentTimeMillis;
 
@@ -1524,13 +1501,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
-    const claimJoining: SubmissionLedger["Service"]["claimJoining"] = Effect.fn(
-      "MemorySubmissionLedger.claimJoining",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const claimJoining: SubmissionLedger["Service"]["claimJoining"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(ClaimJoiningRequest, "claimJoining", unvalidated);
         const published = new Map<SubmissionId, Settlement["outcome"]>();
 
@@ -1632,13 +1607,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
-    const markJoined: SubmissionLedger["Service"]["markJoined"] = Effect.fn(
-      "MemorySubmissionLedger.markJoined",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const markJoined: SubmissionLedger["Service"]["markJoined"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(MarkJoinedRequest, "markJoined", unvalidated);
 
         const decision = yield* Ref.modify(
@@ -1728,13 +1701,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
-      }),
+      },
     );
 
-    const revertJoining: SubmissionLedger["Service"]["revertJoining"] = Effect.fn(
-      "MemorySubmissionLedger.revertJoining",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const revertJoining: SubmissionLedger["Service"]["revertJoining"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(RevertJoiningRequest, "revertJoining", unvalidated);
 
         const decision = yield* Ref.modify(
@@ -1805,13 +1776,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
-      }),
+      },
     );
 
-    const suspend: SubmissionLedger["Service"]["suspend"] = Effect.fn(
-      "MemorySubmissionLedger.suspend",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const suspend: SubmissionLedger["Service"]["suspend"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(SuspendRequest, "suspend", unvalidated);
         const nowMillis = yield* Clock.currentTimeMillis;
 
@@ -1916,13 +1885,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
-    const recordApprovalDecision: SubmissionLedger["Service"]["recordApprovalDecision"] = Effect.fn(
-      "MemorySubmissionLedger.recordApprovalDecision",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const recordApprovalDecision: SubmissionLedger["Service"]["recordApprovalDecision"] =
+      Effect.fnUntraced(function* (unvalidated) {
         const command = yield* validate(
           ApprovalDecisionCommand,
           "recordApprovalDecision",
@@ -2034,13 +2001,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
-    );
+      });
 
-    const markUnknown: SubmissionLedger["Service"]["markUnknown"] = Effect.fn(
-      "MemorySubmissionLedger.markUnknown",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const markUnknown: SubmissionLedger["Service"]["markUnknown"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(MarkUnknownRequest, "markUnknown", unvalidated);
 
         const target = (yield* Ref.get(state)).submissions.get(request.submissionId);
@@ -2115,134 +2079,130 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
-      }),
+      },
     );
 
     const recordUnknownResolution: SubmissionLedger["Service"]["recordUnknownResolution"] =
-      Effect.fn("MemorySubmissionLedger.recordUnknownResolution")((unvalidated) =>
-        Effect.gen(function* () {
-          const command = yield* validate(
-            UnknownResolutionCommand,
-            "recordUnknownResolution",
-            unvalidated,
-          );
+      Effect.fnUntraced(function* (unvalidated) {
+        const command = yield* validate(
+          UnknownResolutionCommand,
+          "recordUnknownResolution",
+          unvalidated,
+        );
 
-          const nowMillis = yield* Clock.currentTimeMillis;
+        const nowMillis = yield* Clock.currentTimeMillis;
 
-          const decision = yield* Ref.modify(
-            state,
-            (
-              current,
-            ): readonly [
-              Decision<
-                UnknownResolutionIntent,
-                UnknownResolutionConflict | SettlementConflict | LedgerError
-              >,
-              LedgerState,
-            ] => {
-              const stored = current.submissions.get(command.submissionId);
+        const decision = yield* Ref.modify(
+          state,
+          (
+            current,
+          ): readonly [
+            Decision<
+              UnknownResolutionIntent,
+              UnknownResolutionConflict | SettlementConflict | LedgerError
+            >,
+            LedgerState,
+          ] => {
+            const stored = current.submissions.get(command.submissionId);
 
-              if (stored === undefined) {
+            if (stored === undefined) {
+              return [
+                failure(
+                  ledgerError(
+                    "recordUnknownResolution",
+                    `Unknown Submission ${command.submissionId}`,
+                  ),
+                ),
+                current,
+              ];
+            }
+            if (stored.row.state === "settled") {
+              if (stored.row.settledOutcome === undefined) {
                 return [
                   failure(
                     ledgerError(
                       "recordUnknownResolution",
-                      `Unknown Submission ${command.submissionId}`,
+                      `Settled Submission ${command.submissionId} is missing its outcome`,
                     ),
                   ),
                   current,
                 ];
               }
-              if (stored.row.state === "settled") {
-                if (stored.row.settledOutcome === undefined) {
-                  return [
-                    failure(
-                      ledgerError(
-                        "recordUnknownResolution",
-                        `Settled Submission ${command.submissionId} is missing its outcome`,
-                      ),
-                    ),
-                    current,
-                  ];
-                }
-
-                return [
-                  failure(
-                    SettlementConflict.make({
-                      submissionId: command.submissionId,
-                      existingOutcome: stored.row.settledOutcome,
-                    }),
-                  ),
-                  current,
-                ];
-              }
-              const existing = stored.unknownResolutions.get(command.toolCallId);
-
-              if (
-                existing !== undefined &&
-                !equivalentUnknownResolution(existing.intent.resolution, command.resolution)
-              ) {
-                return [
-                  failure(
-                    UnknownResolutionConflict.make({
-                      submissionId: command.submissionId,
-                      toolCallId: command.toolCallId,
-                    }),
-                  ),
-                  current,
-                ];
-              }
-
-              const intent =
-                existing?.intent ??
-                UnknownResolutionIntent.make({
-                  submissionId: command.submissionId,
-                  toolCallId: command.toolCallId,
-                  author: command.author,
-                  reason: command.reason,
-                  resolution: command.resolution,
-                  resolvedAt: utc(nowMillis),
-                });
-
-              const unknownResolutions =
-                existing !== undefined
-                  ? stored.unknownResolutions
-                  : new Map(stored.unknownResolutions).set(command.toolCallId, {
-                      intent,
-                    });
-
-              // The lane reopens only when EVERY marked open call has a durable resolution
-              // intent: unknown → input-applied (DUR-017). Replays re-run the coverage check so
-              // a recovering caller can wake the lane idempotently.
-              const wakes =
-                stored.row.state === "unknown" &&
-                stored.unknownMark !== undefined &&
-                stored.unknownMark.toolCallIds.every((toolCallId) =>
-                  unknownResolutions.has(toolCallId),
-                );
 
               return [
-                success(intent),
-                withSubmission(current, {
-                  ...stored,
-                  row: wakes ? { ...stored.row, state: "input-applied" } : stored.row,
-                  unknownMark: wakes ? undefined : stored.unknownMark,
-                  unknownResolutions,
-                }),
+                failure(
+                  SettlementConflict.make({
+                    submissionId: command.submissionId,
+                    existingOutcome: stored.row.settledOutcome,
+                  }),
+                ),
+                current,
               ];
-            },
-          );
+            }
+            const existing = stored.unknownResolutions.get(command.toolCallId);
 
-          if (decision._tag === "failure") return yield* decision.error;
+            if (
+              existing !== undefined &&
+              !equivalentUnknownResolution(existing.intent.resolution, command.resolution)
+            ) {
+              return [
+                failure(
+                  UnknownResolutionConflict.make({
+                    submissionId: command.submissionId,
+                    toolCallId: command.toolCallId,
+                  }),
+                ),
+                current,
+              ];
+            }
 
-          return decision.value;
-        }),
-      );
+            const intent =
+              existing?.intent ??
+              UnknownResolutionIntent.make({
+                submissionId: command.submissionId,
+                toolCallId: command.toolCallId,
+                author: command.author,
+                reason: command.reason,
+                resolution: command.resolution,
+                resolvedAt: utc(nowMillis),
+              });
 
-    const recordChildSettled: SubmissionLedger["Service"]["recordChildSettled"] = Effect.fn(
-      "MemorySubmissionLedger.recordChildSettled",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+            const unknownResolutions =
+              existing !== undefined
+                ? stored.unknownResolutions
+                : new Map(stored.unknownResolutions).set(command.toolCallId, {
+                    intent,
+                  });
+
+            // The lane reopens only when EVERY marked open call has a durable resolution
+            // intent: unknown → input-applied (DUR-017). Replays re-run the coverage check so
+            // a recovering caller can wake the lane idempotently.
+            const wakes =
+              stored.row.state === "unknown" &&
+              stored.unknownMark !== undefined &&
+              stored.unknownMark.toolCallIds.every((toolCallId) =>
+                unknownResolutions.has(toolCallId),
+              );
+
+            return [
+              success(intent),
+              withSubmission(current, {
+                ...stored,
+                row: wakes ? { ...stored.row, state: "input-applied" } : stored.row,
+                unknownMark: wakes ? undefined : stored.unknownMark,
+                unknownResolutions,
+              }),
+            ];
+          },
+        );
+
+        if (decision._tag === "failure") return yield* decision.error;
+
+        return decision.value;
+      });
+
+    const recordChildSettled: SubmissionLedger["Service"]["recordChildSettled"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(
           ChildSettledNotification,
           "recordChildSettled",
@@ -2331,13 +2291,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
-    const reserveChildBudget: SubmissionLedger["Service"]["reserveChildBudget"] = Effect.fn(
-      "MemorySubmissionLedger.reserveChildBudget",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const reserveChildBudget: SubmissionLedger["Service"]["reserveChildBudget"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(
           ChildBudgetReservationRequest,
           "reserveChildBudget",
@@ -2454,198 +2412,189 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
     const attachChildToReservation: SubmissionLedger["Service"]["attachChildToReservation"] =
-      Effect.fn("MemorySubmissionLedger.attachChildToReservation")((unvalidated) =>
-        Effect.gen(function* () {
-          const request = yield* validate(
-            AttachChildToReservationRequest,
-            "attachChildToReservation",
-            unvalidated,
-          );
+      Effect.fnUntraced(function* (unvalidated) {
+        const request = yield* validate(
+          AttachChildToReservationRequest,
+          "attachChildToReservation",
+          unvalidated,
+        );
 
-          const decision = yield* Ref.modify(
-            state,
-            (
-              current,
-            ): readonly [
-              Decision<
-                ChildBudgetReservationSnapshot,
-                ChildReservationConflict | OwnershipLost | LedgerError
-              >,
-              LedgerState,
-            ] => {
-              const reservation = current.childReservations.get(request.reservationId);
+        const decision = yield* Ref.modify(
+          state,
+          (
+            current,
+          ): readonly [
+            Decision<
+              ChildBudgetReservationSnapshot,
+              ChildReservationConflict | OwnershipLost | LedgerError
+            >,
+            LedgerState,
+          ] => {
+            const reservation = current.childReservations.get(request.reservationId);
 
-              if (reservation === undefined) {
-                return [
-                  failure(
-                    ledgerError(
-                      "attachChildToReservation",
-                      `Unknown child reservation ${request.reservationId}`,
-                    ),
+            if (reservation === undefined) {
+              return [
+                failure(
+                  ledgerError(
+                    "attachChildToReservation",
+                    `Unknown child reservation ${request.reservationId}`,
                   ),
-                  current,
-                ];
+                ),
+                current,
+              ];
+            }
+            if (reservation.childSubmissionId !== undefined) {
+              // Idempotent replay of the recorded attachment (unfenced — it mutates nothing).
+              if (reservation.childSubmissionId === request.childSubmissionId) {
+                return [success(toReservationSnapshot(reservation)), current];
               }
-              if (reservation.childSubmissionId !== undefined) {
-                // Idempotent replay of the recorded attachment (unfenced — it mutates nothing).
-                if (reservation.childSubmissionId === request.childSubmissionId) {
-                  return [success(toReservationSnapshot(reservation)), current];
-                }
-
-                return [
-                  failure(
-                    ChildReservationConflict.make({
-                      reservationId: request.reservationId,
-                      status: reservation.status,
-                      message: `Reservation ${request.reservationId} already records child ${reservation.childSubmissionId}.`,
-                    }),
-                  ),
-                  current,
-                ];
-              }
-              const parent = current.submissions.get(reservation.parentSubmissionId);
-
-              if (parent === undefined) {
-                return [
-                  failure(
-                    ledgerError(
-                      "attachChildToReservation",
-                      `Unknown Submission ${reservation.parentSubmissionId}`,
-                    ),
-                  ),
-                  current,
-                ];
-              }
-              if (!ownsLane(current, parent, request.ownershipToken)) {
-                return [failure(ownershipLost(current, parent)), current];
-              }
-              if (reservation.status !== "reserved") {
-                return [
-                  failure(
-                    ChildReservationConflict.make({
-                      reservationId: request.reservationId,
-                      status: reservation.status,
-                      message: `Cannot attach a child to a ${reservation.status} reservation.`,
-                    }),
-                  ),
-                  current,
-                ];
-              }
-              // Single-store latitude: the admitted child must exist here, so a dangling
-              // attachment can never enter the recovery view.
-              if (!current.submissions.has(request.childSubmissionId)) {
-                return [
-                  failure(
-                    ledgerError(
-                      "attachChildToReservation",
-                      `Unknown child Submission ${request.childSubmissionId}`,
-                    ),
-                  ),
-                  current,
-                ];
-              }
-
-              const attached: StoredChildReservation = {
-                ...reservation,
-                childSubmissionId: request.childSubmissionId,
-              };
 
               return [
-                success(toReservationSnapshot(attached)),
-                withChildReservation(current, attached),
+                failure(
+                  ChildReservationConflict.make({
+                    reservationId: request.reservationId,
+                    status: reservation.status,
+                    message: `Reservation ${request.reservationId} already records child ${reservation.childSubmissionId}.`,
+                  }),
+                ),
+                current,
               ];
-            },
-          );
+            }
+            const parent = current.submissions.get(reservation.parentSubmissionId);
 
-          if (decision._tag === "failure") return yield* decision.error;
+            if (parent === undefined) {
+              return [
+                failure(
+                  ledgerError(
+                    "attachChildToReservation",
+                    `Unknown Submission ${reservation.parentSubmissionId}`,
+                  ),
+                ),
+                current,
+              ];
+            }
+            if (!ownsLane(current, parent, request.ownershipToken)) {
+              return [failure(ownershipLost(current, parent)), current];
+            }
+            if (reservation.status !== "reserved") {
+              return [
+                failure(
+                  ChildReservationConflict.make({
+                    reservationId: request.reservationId,
+                    status: reservation.status,
+                    message: `Cannot attach a child to a ${reservation.status} reservation.`,
+                  }),
+                ),
+                current,
+              ];
+            }
+            // Single-store latitude: the admitted child must exist here, so a dangling
+            // attachment can never enter the recovery view.
+            if (!current.submissions.has(request.childSubmissionId)) {
+              return [
+                failure(
+                  ledgerError(
+                    "attachChildToReservation",
+                    `Unknown child Submission ${request.childSubmissionId}`,
+                  ),
+                ),
+                current,
+              ];
+            }
 
-          return decision.value;
-        }),
-      );
+            const attached: StoredChildReservation = {
+              ...reservation,
+              childSubmissionId: request.childSubmissionId,
+            };
+
+            return [
+              success(toReservationSnapshot(attached)),
+              withChildReservation(current, attached),
+            ];
+          },
+        );
+
+        if (decision._tag === "failure") return yield* decision.error;
+
+        return decision.value;
+      });
 
     const beginChildBudgetRelease: SubmissionLedger["Service"]["beginChildBudgetRelease"] =
-      Effect.fn("MemorySubmissionLedger.beginChildBudgetRelease")((unvalidated) =>
-        Effect.gen(function* () {
-          const request = yield* validate(
-            BeginChildBudgetReleaseRequest,
-            "beginChildBudgetRelease",
-            unvalidated,
-          );
+      Effect.fnUntraced(function* (unvalidated) {
+        const request = yield* validate(
+          BeginChildBudgetReleaseRequest,
+          "beginChildBudgetRelease",
+          unvalidated,
+        );
 
-          const nowMillis = yield* Clock.currentTimeMillis;
+        const nowMillis = yield* Clock.currentTimeMillis;
 
-          const decision = yield* Ref.modify(
-            state,
-            (
-              current,
-            ): readonly [
-              Decision<ChildBudgetReservationSnapshot, ChildReservationConflict | LedgerError>,
-              LedgerState,
-            ] => {
-              const reservation = current.childReservations.get(request.reservationId);
+        const decision = yield* Ref.modify(
+          state,
+          (
+            current,
+          ): readonly [
+            Decision<ChildBudgetReservationSnapshot, ChildReservationConflict | LedgerError>,
+            LedgerState,
+          ] => {
+            const reservation = current.childReservations.get(request.reservationId);
 
-              if (reservation === undefined) {
-                return [
-                  failure(
-                    ledgerError(
-                      "beginChildBudgetRelease",
-                      `Unknown child reservation ${request.reservationId}`,
-                    ),
+            if (reservation === undefined) {
+              return [
+                failure(
+                  ledgerError(
+                    "beginChildBudgetRelease",
+                    `Unknown child reservation ${request.reservationId}`,
                   ),
-                  current,
-                ];
+                ),
+                current,
+              ];
+            }
+            if (reservation.status !== "reserved") {
+              // The accounting decision was already frozen exactly once; an identical replay is
+              // a no-op and a divergent decision conflicts (spec §12 join step 6).
+              if (
+                reservation.accounting !== undefined &&
+                equivalentPersistedJson(reservation.accounting, request.accounting)
+              ) {
+                return [success(toReservationSnapshot(reservation)), current];
               }
-              if (reservation.status !== "reserved") {
-                // The accounting decision was already frozen exactly once; an identical replay is
-                // a no-op and a divergent decision conflicts (spec §12 join step 6).
-                if (
-                  reservation.accounting !== undefined &&
-                  equivalentPersistedJson(reservation.accounting, request.accounting)
-                ) {
-                  return [success(toReservationSnapshot(reservation)), current];
-                }
-
-                return [
-                  failure(
-                    ChildReservationConflict.make({
-                      reservationId: request.reservationId,
-                      status: reservation.status,
-                      message:
-                        "A different accounting decision is already frozen for this reservation.",
-                    }),
-                  ),
-                  current,
-                ];
-              }
-
-              const frozen: StoredChildReservation = {
-                ...reservation,
-                status: "releasePending",
-                accounting: request.accounting,
-                releaseBeganAtMillis: nowMillis,
-              };
 
               return [
-                success(toReservationSnapshot(frozen)),
-                withChildReservation(current, frozen),
+                failure(
+                  ChildReservationConflict.make({
+                    reservationId: request.reservationId,
+                    status: reservation.status,
+                    message:
+                      "A different accounting decision is already frozen for this reservation.",
+                  }),
+                ),
+                current,
               ];
-            },
-          );
+            }
 
-          if (decision._tag === "failure") return yield* decision.error;
+            const frozen: StoredChildReservation = {
+              ...reservation,
+              status: "releasePending",
+              accounting: request.accounting,
+              releaseBeganAtMillis: nowMillis,
+            };
 
-          return decision.value;
-        }),
-      );
+            return [success(toReservationSnapshot(frozen)), withChildReservation(current, frozen)];
+          },
+        );
 
-    const releaseChildBudget: SubmissionLedger["Service"]["releaseChildBudget"] = Effect.fn(
-      "MemorySubmissionLedger.releaseChildBudget",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+        if (decision._tag === "failure") return yield* decision.error;
+
+        return decision.value;
+      });
+
+    const releaseChildBudget: SubmissionLedger["Service"]["releaseChildBudget"] = Effect.fnUntraced(
+      function* (unvalidated) {
         const request = yield* validate(
           ReleaseChildBudgetRequest,
           "releaseChildBudget",
@@ -2710,7 +2659,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
+      },
     );
 
     const scanNonterminal: SubmissionLedger["Service"]["scanNonterminal"] = Stream.unwrap(
@@ -2743,23 +2692,24 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       ),
     );
 
-    const readAbortIntent: SubmissionLedger["Service"]["readAbortIntent"] = Effect.fn(
-      "MemorySubmissionLedger.readAbortIntent",
-    )(function* (unvalidated) {
-      const request = yield* validate(AbortIntentRequest, "readAbortIntent", unvalidated);
-      const stored = (yield* Ref.get(state)).submissions.get(request.submissionId);
+    const readAbortIntent: SubmissionLedger["Service"]["readAbortIntent"] = Effect.fnUntraced(
+      function* (unvalidated) {
+        const request = yield* validate(AbortIntentRequest, "readAbortIntent", unvalidated);
+        const stored = (yield* Ref.get(state)).submissions.get(request.submissionId);
 
-      if (stored === undefined) {
-        return yield* ledgerError("readAbortIntent", `Unknown Submission ${request.submissionId}`);
-      }
+        if (stored === undefined) {
+          return yield* ledgerError(
+            "readAbortIntent",
+            `Unknown Submission ${request.submissionId}`,
+          );
+        }
 
-      return stored.abortIntent;
-    });
+        return stored.abortIntent;
+      },
+    );
 
-    const loadRecoverySnapshot: SubmissionLedger["Service"]["loadRecoverySnapshot"] = Effect.fn(
-      "MemorySubmissionLedger.loadRecoverySnapshot",
-    )((unvalidated) =>
-      Effect.gen(function* () {
+    const loadRecoverySnapshot: SubmissionLedger["Service"]["loadRecoverySnapshot"] =
+      Effect.fnUntraced(function* (unvalidated) {
         const request = yield* validate(
           RecoverySnapshotRequest,
           "loadRecoverySnapshot",
@@ -2861,8 +2811,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           ...(stored.inputApplied === undefined ? {} : { inputApplied: stored.inputApplied }),
           ...(stored.abortIntent === undefined ? {} : { abortIntent: stored.abortIntent }),
         });
-      }),
-    );
+      });
 
     const ledger = SubmissionLedger.of({
       capabilities,

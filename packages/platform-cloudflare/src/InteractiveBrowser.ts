@@ -1546,7 +1546,7 @@ const inputMayStillRun = (cause: unknown): boolean =>
   (cause instanceof Error && cause.name === "TimeoutError") ||
   (cause instanceof BrowserRunFailure && cause.reason === "timeout");
 
-const snapshotPolicy = Effect.fn("BrowserRunInteractive.snapshotPolicy")(function* (
+const snapshotPolicy = Effect.fnUntraced(function* (
   input: InteractiveBrowserPolicy,
 ): Effect.fn.Return<
   InteractiveBrowserPolicySnapshot,
@@ -1635,7 +1635,7 @@ const closeWithWarning = (close: () => Promise<void>, warning: string): Effect.E
     ),
   );
 
-const deadlineError = Effect.fn("BrowserRunInteractive.deadlineError")(function* (
+const deadlineError = Effect.fnUntraced(function* (
   policy: InteractiveBrowserPolicySnapshot,
   startedAt: number,
 ) {
@@ -1650,7 +1650,7 @@ const deadlineError = Effect.fn("BrowserRunInteractive.deadlineError")(function*
   });
 });
 
-const withinDeadline = Effect.fn("BrowserRunInteractive.withinDeadline")(function* <A, E, R>(
+const withinDeadline = Effect.fnUntraced(function* <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   policy: InteractiveBrowserPolicySnapshot,
   startedAt: number,
@@ -1758,7 +1758,7 @@ const awaitPendingRequests = (state: HandleState): Effect.Effect<void> =>
         );
   });
 
-const decodeNavigationResult = Effect.fn("BrowserRunInteractive.decodeNavigationResult")(function* (
+const decodeNavigationResult = Effect.fnUntraced(function* (
   page: BrowserRunInteractivePage,
   policy: InteractiveBrowserPolicySnapshot,
 ) {
@@ -1782,7 +1782,7 @@ const decodeNavigationResult = Effect.fn("BrowserRunInteractive.decodeNavigation
   return result;
 });
 
-const decodeActionResult = Effect.fn("BrowserRunInteractive.decodeActionResult")(function* (
+const decodeActionResult = Effect.fnUntraced(function* (
   page: BrowserRunInteractivePage,
   policy: InteractiveBrowserPolicySnapshot,
 ) {
@@ -1846,7 +1846,7 @@ const makeRequestListener =
     state.pendingRequests.add(observed);
   };
 
-const makeHandle = Effect.fn("BrowserRunInteractive.makeHandle")(function* (
+const makeHandle = Effect.fnUntraced(function* (
   page: BrowserRunInteractivePage,
   policy: InteractiveBrowserPolicySnapshot,
   startedAt: number,
@@ -1980,15 +1980,13 @@ const makeHandle = Effect.fn("BrowserRunInteractive.makeHandle")(function* (
       ),
     );
 
-  const decodeActionObservation = Effect.fn("BrowserRunInteractive.decodeActionObservation")(
-    function* (raw: unknown) {
-      return yield* Schema.decodeUnknownEffect(ActionObservation)(raw).pipe(
-        Effect.mapError((cause) =>
-          protocolError("The browser returned a malformed action observation", cause),
-        ),
-      );
-    },
-  );
+  const decodeActionObservation = Effect.fnUntraced(function* (raw: unknown) {
+    return yield* Schema.decodeUnknownEffect(ActionObservation)(raw).pipe(
+      Effect.mapError((cause) =>
+        protocolError("The browser returned a malformed action observation", cause),
+      ),
+    );
+  });
 
   const logActionObservation = (
     operation: "fill" | "click" | "select-file",
@@ -2365,7 +2363,7 @@ const makeHandle = Effect.fn("BrowserRunInteractive.makeHandle")(function* (
   return { handle, run };
 });
 
-const remainingMillis = Effect.fn("BrowserRunInteractive.remainingMillis")(function* (
+const remainingMillis = Effect.fnUntraced(function* (
   policy: InteractiveBrowserPolicySnapshot,
   startedAt: number,
 ) {
@@ -2496,7 +2494,7 @@ const makeHostService = (
       ),
     );
 
-  const terminate = Effect.fn("BrowserRunInteractiveHost.terminate")(function* (
+  const terminate = Effect.fnUntraced(function* (
     sessionId: Redacted.Redacted<string>,
     entries: ReadonlyArray<CloseEntry>,
   ) {
@@ -2541,9 +2539,7 @@ const makeHostService = (
     );
   });
 
-  const closeAcquired = Effect.fn("BrowserRunInteractiveHost.closeAcquired")(function* (
-    browser: BrowserRunInteractiveBrowser,
-  ) {
+  const closeAcquired = Effect.fnUntraced(function* (browser: BrowserRunInteractiveBrowser) {
     const sessionId = yield* Effect.try({
       try: browser.sessionId,
       catch: (cause) => actionError("close", cause),
@@ -2560,7 +2556,7 @@ const makeHostService = (
     ]);
   });
 
-  const acquire = Effect.fn("BrowserRunInteractiveHost.acquire")(function* (
+  const acquire = Effect.fnUntraced(function* (
     policy: InteractiveBrowserPolicy,
     resume?: BrowserRunInteractiveCheckpoint,
     pendingInput = false,

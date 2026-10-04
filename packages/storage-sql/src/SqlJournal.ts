@@ -132,7 +132,7 @@ export class RawThreadExport extends Schema.Class<RawThreadExport>(
 }) {}
 
 /** Construct journal operations over an already initialized database. */
-export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
+export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -160,7 +160,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     (error: SqlError): S =>
       options.errors.storage({ operation, message: error.message, cause: error });
 
-  const materialize = Effect.fn("SqlJournal.materialize")(function* (
+  const materialize = Effect.fnUntraced(function* (
     threadId: ThreadId,
     createdAt: string,
     emptyTailDigest: string,
@@ -239,7 +239,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const getThread = Effect.fn("SqlJournal.getThread")(function* (threadId: string) {
+  const getThread = Effect.fnUntraced(function* (threadId: string) {
     const rows = yield* sql<Record<string, unknown>>`
       SELECT
         thread_id,
@@ -528,7 +528,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     });
   });
 
-  const appendKernel = Effect.fn("SqlJournal.append")(function* (
+  const appendKernel = Effect.fnUntraced(function* (
     request: RawAppendRequest,
     readThread: Effect.Effect<ThreadRow, C | S>,
   ) {
@@ -537,7 +537,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const read = Effect.fn("SqlJournal.read")(function* (request: RawReadRequest) {
+  const read = Effect.fnUntraced(function* (request: RawReadRequest) {
     const rows = yield* sql<Record<string, unknown>>`
       SELECT
         thread_id,
@@ -560,7 +560,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const exportThread = Effect.fn("SqlJournal.exportThread")(function* (threadId: ThreadId) {
+  const exportThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     return yield* withReadTransaction("export transaction")(
       Effect.gen(function* () {
         const threadRows = yield* sql<Record<string, unknown>>`
@@ -634,7 +634,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const saveCheckpoint = Effect.fn("SqlJournal.saveCheckpoint")(function* (
+  const saveCheckpoint = Effect.fnUntraced(function* (
     checkpoint: RawCheckpoint,
   ): Effect.fn.Return<void, CheckpointRejected | C | S | W> {
     if (
@@ -729,7 +729,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const saveRecoveryCheckpoint = Effect.fn("SqlJournal.saveRecoveryCheckpoint")(function* (
+  const saveRecoveryCheckpoint = Effect.fnUntraced(function* (
     request: SaveRecoveryCheckpointRequest,
     checkpointJson: string,
   ) {
@@ -789,9 +789,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     yield* failpoint("save-recovery-checkpoint:after");
   });
 
-  const loadRecoveryCheckpoint = Effect.fn("SqlJournal.loadRecoveryCheckpoint")(function* (
-    threadId: string,
-  ) {
+  const loadRecoveryCheckpoint = Effect.fnUntraced(function* (threadId: string) {
     const rows = yield* sql<Record<string, unknown>>`
       SELECT thread_id, through_sequence, tail_digest, checkpoint_json
       FROM ${relation("effect_agent_recovery_checkpoints")}
@@ -806,7 +804,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const loadCheckpoint = Effect.fn("SqlJournal.loadCheckpoint")(function* (
+  const loadCheckpoint = Effect.fnUntraced(function* (
     threadId: string,
     atOrBeforeSequence: CanonicalSequence,
   ) {
@@ -831,7 +829,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     );
   });
 
-  const getTailDigestAt = Effect.fn("SqlJournal.getTailDigestAt")(function* (
+  const getTailDigestAt = Effect.fnUntraced(function* (
     threadId: string,
     sequence: CanonicalSequence,
   ) {
@@ -875,7 +873,7 @@ export const makeSqlJournalKernel = Effect.fn("SqlJournal.make")(function* <
     return batches.map((batch) => batch.tail_digest);
   });
 
-  const scanStoredPayloads = Effect.fn("SqlJournal.scanStoredPayloads")(function* () {
+  const scanStoredPayloads = Effect.fnUntraced(function* () {
     return yield* withReadTransaction("startup scan transaction")(
       Effect.gen(function* () {
         const threads = yield* sql<Record<string, unknown>>`

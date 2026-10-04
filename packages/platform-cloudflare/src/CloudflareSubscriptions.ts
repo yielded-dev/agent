@@ -90,9 +90,10 @@ export const SubscriptionPartitionAlarmExtension = Context.Reference<{
  * Callback failures stay typed. Defects and interruption reach the native alarm multiplexer.
  * The host owns durable idempotency, prearming and external-effect uncertainty.
  */
-export const makeSubscriptionPartitionAlarmHandler = Effect.fn(
-  "makeSubscriptionPartitionAlarmHandler",
-)(function* <Payload extends Schema.Top, R>(options: {
+export const makeSubscriptionPartitionAlarmHandler = Effect.fnUntraced(function* <
+  Payload extends Schema.Top,
+  R,
+>(options: {
   readonly tag: string;
   readonly payload: Payload;
   readonly timeoutMillis: number;
@@ -367,7 +368,7 @@ export class CloudflareSubscriptionsClient {
       Effect.gen(function* () {
         const { namespace } = yield* SubscriptionPartitionNamespace;
 
-        const call = Effect.fn("CloudflareSubscriptionsClient.call")(function* (
+        const call = Effect.fnUntraced(function* (
           addressedPartition: SourcePartition,
           request: SubscriptionPartitionRequest,
         ) {
@@ -402,7 +403,7 @@ export class CloudflareSubscriptionsClient {
         const asProtocolError = (): SubscriptionError =>
           corruptFailure("subscription-partition-protocol");
 
-        const changeState = Effect.fn("CloudflareSubscriptions.changeState")(function* (
+        const changeState = Effect.fnUntraced(function* (
           scope: typeof SubscriptionScope.Type,
           key: typeof SubscriptionKey.Type,
           expectedRevision: number,
@@ -620,9 +621,7 @@ export class SubscriptionPartitionIdentity extends Context.Service<
   { readonly partition: SourcePartition }
 >()("@effect-agent/platform-cloudflare/SubscriptionPartitionIdentity") {}
 
-const decodePartitionName = Effect.fn("decodeSubscriptionPartitionName")(function* (
-  name: string | null | undefined,
-) {
+const decodePartitionName = Effect.fnUntraced(function* (name: string | null | undefined) {
   if (name === null || name === undefined) {
     return yield* SubscriptionPartitionProtocolError.make({
       message: "Subscription Partition objects require an idFromName identity",
@@ -658,9 +657,7 @@ const requestPartition = (request: SubscriptionPartitionRequest): SourcePartitio
     ? request.partition
     : request.scope.partition;
 
-const handleRequest = Effect.fn("SubscriptionPartition.handleRequest")(function* (
-  encoded: unknown,
-) {
+const handleRequest = Effect.fnUntraced(function* (encoded: unknown) {
   const decoded = yield* decodeRequest(encoded).pipe(Effect.result);
 
   if (decoded._tag === "Failure") {

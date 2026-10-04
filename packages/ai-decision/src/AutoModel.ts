@@ -302,7 +302,7 @@ export const make = <const Requirements extends Readonly<Record<string, unknown>
     return { model: selected, record };
   });
 
-  const select = Effect.fn("AutoModel.select")(function* ({
+  const select = Effect.fnUntraced(function* ({
     threadId,
     state,
   }: {

@@ -148,7 +148,7 @@ const schemaStoreError = (operation: string, error: Schema.SchemaError) =>
     }),
   });
 
-const makeOffset = Effect.fn(function* (
+const makeOffset = Effect.fnUntraced(function* (
   threadId: ThreadMaterialization["threadId"],
   sequence: number,
 ): Effect.fn.Return<ObservationOffset, ThreadStoreError> {
@@ -162,7 +162,7 @@ const makeOffset = Effect.fn(function* (
   );
 });
 
-const parseOffset = Effect.fn(function* (
+const parseOffset = Effect.fnUntraced(function* (
   threadId: ThreadMaterialization["threadId"],
   offset: ObservationOffset | undefined,
 ): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
@@ -201,7 +201,7 @@ const mapFence = (threadId: ThreadMaterialization["threadId"], error: DoFenceRej
     attemptedEpoch: error.producerEpoch,
   });
 
-const encodeCheckpoint = Effect.fn(function* (
+const encodeCheckpoint = Effect.fnUntraced(function* (
   checkpoint: ThreadCheckpoint,
 ): Effect.fn.Return<string, ThreadStoreError> {
   return yield* Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
@@ -269,7 +269,7 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
   return envelope;
 });
 
-const decodeCheckpoint = Effect.fn(function* (
+const decodeCheckpoint = Effect.fnUntraced(function* (
   checkpointJson: string,
 ): Effect.fn.Return<ThreadCheckpoint, ThreadStoreError> {
   return yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
@@ -277,7 +277,7 @@ const decodeCheckpoint = Effect.fn(function* (
   );
 });
 
-const requireThread = Effect.fn("DoThreadStore.requireThread")(function* (
+const requireThread = Effect.fnUntraced(function* (
   journal: DoJournal,
   threadId: ThreadMaterialization["threadId"],
 ) {
@@ -292,7 +292,7 @@ const requireThread = Effect.fn("DoThreadStore.requireThread")(function* (
   return rows[0];
 });
 
-const tailDigestAt = Effect.fn("DoThreadStore.tailDigestAt")(function* (
+const tailDigestAt = Effect.fnUntraced(function* (
   journal: DoJournal,
   threadId: ThreadMaterialization["threadId"],
   sequence: CanonicalSequence,
@@ -339,7 +339,7 @@ const groupByKey = <A>(
  * projection checkpoints. Disposable recovery checkpoints are validated when loaded. Routine opens
  * skip this scan: per-operation Schema decoding fails clearly on corrupt canonical rows.
  */
-const decodeStartupPayloads = Effect.fn("DoThreadStore.decodeStartupPayloads")(function* (
+const decodeStartupPayloads = Effect.fnUntraced(function* (
   journal: DoJournal,
   crypto: Crypto.Crypto,
 ) {
@@ -528,7 +528,7 @@ const decodeStartupPayloads = Effect.fn("DoThreadStore.decodeStartupPayloads")(f
   }
 });
 
-const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
+const makeServices = Effect.fnUntraced(function* () {
   const config = yield* DoStorageConfig;
   const failpoint = yield* DoStorageFailpoint;
   const sql = yield* SqlClientService.SqlClient;
@@ -539,12 +539,13 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
     yield* decodeStartupPayloads(journal, crypto);
   }
 
-  const hitFailpoint = Effect.fn(
-    (location: DoStorageFailpointLocation): Effect.Effect<void, ThreadStoreError> =>
-      failpoint
-        .hit(location)
-        .pipe(Effect.mapError((error) => storeError(`storage failpoint ${location}`, error))),
-  );
+  const hitFailpoint = Effect.fnUntraced(function* (
+    location: DoStorageFailpointLocation,
+  ): Effect.fn.Return<void, ThreadStoreError> {
+    return yield* failpoint
+      .hit(location)
+      .pipe(Effect.mapError((error) => storeError(`storage failpoint ${location}`, error)));
+  });
 
   const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(
     function* (request: ThreadMaterialization) {
@@ -640,7 +641,7 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
     };
   });
 
-  const readEffect = Effect.fn("DoThreadStore.read")(function* (request: ThreadReadRequest) {
+  const readEffect = Effect.fnUntraced(function* (request: ThreadReadRequest) {
     const validated = yield* Schema.decodeEffect(Schema.toType(ThreadReadRequest))(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate thread read", error)),
     );
@@ -718,232 +719,147 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
   const observe: ThreadStore["Service"]["observe"] = (request) =>
     Stream.unwrap(observeEffect(request)).pipe(Stream.withSpan("DoThreadStore.observe"));
 
-  const exportThread: ThreadStore["Service"]["export"] = Effect.fn("DoThreadStore.export")(
-    function* (request: ThreadExportRequest) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(ThreadExportRequest))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate thread export", error)));
+  const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (
+    request: ThreadExportRequest,
+  ) {
+    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadExportRequest))(request).pipe(
+      Effect.mapError((error) => schemaStoreError("validate thread export", error)),
+    );
 
-      yield* requireThread(journal, validated.threadId);
+    yield* requireThread(journal, validated.threadId);
 
-      const exported = yield* journal
-        .exportThread(validated.threadId)
-        .pipe(Effect.mapError((error) => storeError("export thread", error)));
+    const exported = yield* journal
+      .exportThread(validated.threadId)
+      .pipe(Effect.mapError((error) => storeError("export thread", error)));
 
-      const records = yield* Effect.forEach(exported.records, decodeEnvelope);
+    const records = yield* Effect.forEach(exported.records, decodeEnvelope);
 
-      if (records.length > MAX_THREAD_EXPORT_RECORDS) {
-        return yield* ThreadStoreError.make({
-          operation: "decode thread export",
-          message: "The thread exceeds the current export record limit.",
-        });
-      }
-
-      const tailDigest = yield* Schema.decodeEffect(Digest)(exported.thread.tail_digest).pipe(
-        Effect.mapError((error) => schemaStoreError("decode export tail digest", error)),
-      );
-
-      return ThreadExport.make({
-        format: "effect-agent/thread@1",
-        threadId: validated.threadId,
-        tailSequence: exported.thread.tail_sequence,
-        tailDigest,
-        records,
+    if (records.length > MAX_THREAD_EXPORT_RECORDS) {
+      return yield* ThreadStoreError.make({
+        operation: "decode thread export",
+        message: "The thread exceeds the current export record limit.",
       });
-    },
-  );
+    }
 
-  const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fn("DoThreadStore.inspectTail")(
-    function* (request: ThreadTailRequest) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(ThreadTailRequest))(request).pipe(
-        Effect.mapError((error) => schemaStoreError("validate tail inspection", error)),
-      );
+    const tailDigest = yield* Schema.decodeEffect(Digest)(exported.thread.tail_digest).pipe(
+      Effect.mapError((error) => schemaStoreError("decode export tail digest", error)),
+    );
 
-      const thread = yield* requireThread(journal, validated.threadId);
-
-      const tailDigest = yield* Schema.decodeEffect(Digest)(thread.tail_digest).pipe(
-        Effect.mapError((error) => schemaStoreError("decode tail digest", error)),
-      );
-
-      return ThreadTail.make({
-        threadId: validated.threadId,
-        tailSequence: thread.tail_sequence,
-        tailDigest,
-        producerEpoch: thread.producer_epoch,
-      });
-    },
-  );
-
-  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fn("DoThreadStore.saveCheckpoint")(
-    function* (request: SaveCheckpointRequest) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(SaveCheckpointRequest))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint", error)));
-
-      const thread = yield* requireThread(journal, validated.checkpoint.threadId);
-
-      if (validated.checkpoint.throughSequence > thread.tail_sequence) {
-        return yield* CheckpointRejected.make({
-          threadId: validated.checkpoint.threadId,
-          reason: "ahead-of-tail",
-        });
-      }
-
-      const canonicalDigest = yield* tailDigestAt(
-        journal,
-        validated.checkpoint.threadId,
-        validated.checkpoint.throughSequence,
-      );
-
-      if (canonicalDigest !== validated.checkpoint.tailDigest) {
-        return yield* CheckpointRejected.make({
-          threadId: validated.checkpoint.threadId,
-          reason: "digest-mismatch",
-        });
-      }
-      const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
-
-      const raw = RawCheckpoint.make({
-        threadId: validated.checkpoint.threadId,
-        throughSequence: validated.checkpoint.throughSequence,
-        tailDigest: validated.checkpoint.tailDigest,
-        checkpointJson,
-      });
-
-      yield* hitFailpoint("save-checkpoint:before");
-      yield* journal.saveCheckpoint(raw).pipe(
-        Effect.mapError((error) =>
-          isDoCheckpointConflict(error)
-            ? CheckpointRejected.make({
-                threadId: validated.checkpoint.threadId,
-                reason: "digest-mismatch",
-              })
-            : storeError("save checkpoint", error),
-        ),
-      );
-      yield* hitFailpoint("save-checkpoint:after");
-    },
-  );
-
-  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fn("DoThreadStore.loadCheckpoint")(
-    function* (request: LoadCheckpointRequest) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint lookup", error)));
-
-      const thread = yield* requireThread(journal, validated.threadId);
-
-      const rows = yield* journal
-        .loadCheckpoint(validated.threadId, validated.atOrBeforeSequence ?? thread.tail_sequence)
-        .pipe(Effect.mapError((error) => storeError("load checkpoint", error)));
-
-      if (rows.length === 0) return Option.none();
-      if (rows.length !== 1) {
-        return yield* ThreadStoreError.make({
-          operation: "load checkpoint",
-          message: `Expected at most one checkpoint row but found ${rows.length}.`,
-        });
-      }
-      const row = rows[0];
-      const checkpoint = yield* decodeCheckpoint(row.checkpoint_json);
-
-      if (
-        row.thread_id !== validated.threadId ||
-        checkpoint.threadId !== row.thread_id ||
-        checkpoint.throughSequence !== row.through_sequence ||
-        checkpoint.tailDigest !== row.tail_digest
-      ) {
-        return yield* ThreadStoreError.make({
-          operation: "load checkpoint",
-          message: "Stored checkpoint metadata does not match its canonical row.",
-        });
-      }
-
-      const canonicalDigest = yield* tailDigestAt(
-        journal,
-        checkpoint.threadId,
-        checkpoint.throughSequence,
-      );
-
-      if (canonicalDigest !== checkpoint.tailDigest) {
-        return yield* CheckpointRejected.make({
-          threadId: checkpoint.threadId,
-          reason: "digest-mismatch",
-        });
-      }
-
-      return Option.some(checkpoint);
-    },
-  );
-
-  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fn(
-    "DoThreadStore.saveRecoveryCheckpoint",
-  )(function* (request) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(SaveRecoveryCheckpointRequest))(
-      request,
-    ).pipe(Effect.mapError((error) => schemaStoreError("validate recovery checkpoint", error)));
-
-    const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
-
-    yield* journal
-      .saveRecoveryCheckpoint(validated, checkpointJson)
-      .pipe(
-        Effect.mapError((error) =>
-          error._tag === "CheckpointRejected" ||
-          error._tag === "FenceRejected" ||
-          error._tag === "ThreadNotMaterialized"
-            ? error
-            : storeError("save recovery checkpoint", error),
-        ),
-      );
+    return ThreadExport.make({
+      format: "effect-agent/thread@1",
+      threadId: validated.threadId,
+      tailSequence: exported.thread.tail_sequence,
+      tailDigest,
+      records,
+    });
   });
 
-  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fn(
-    "DoThreadStore.loadRecoveryCheckpoint",
-  )(function* (request) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
-      request,
-    ).pipe(
-      Effect.mapError((error) => schemaStoreError("validate recovery checkpoint lookup", error)),
+  const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
+    request: ThreadTailRequest,
+  ) {
+    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadTailRequest))(request).pipe(
+      Effect.mapError((error) => schemaStoreError("validate tail inspection", error)),
     );
 
     const thread = yield* requireThread(journal, validated.threadId);
 
-    const corrupt = () =>
-      CheckpointRejected.make({ threadId: validated.threadId, reason: "corrupt" });
+    const tailDigest = yield* Schema.decodeEffect(Digest)(thread.tail_digest).pipe(
+      Effect.mapError((error) => schemaStoreError("decode tail digest", error)),
+    );
+
+    return ThreadTail.make({
+      threadId: validated.threadId,
+      tailSequence: thread.tail_sequence,
+      tailDigest,
+      producerEpoch: thread.producer_epoch,
+    });
+  });
+
+  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fnUntraced(function* (
+    request: SaveCheckpointRequest,
+  ) {
+    const validated = yield* Schema.decodeEffect(Schema.toType(SaveCheckpointRequest))(
+      request,
+    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint", error)));
+
+    const thread = yield* requireThread(journal, validated.checkpoint.threadId);
+
+    if (validated.checkpoint.throughSequence > thread.tail_sequence) {
+      return yield* CheckpointRejected.make({
+        threadId: validated.checkpoint.threadId,
+        reason: "ahead-of-tail",
+      });
+    }
+
+    const canonicalDigest = yield* tailDigestAt(
+      journal,
+      validated.checkpoint.threadId,
+      validated.checkpoint.throughSequence,
+    );
+
+    if (canonicalDigest !== validated.checkpoint.tailDigest) {
+      return yield* CheckpointRejected.make({
+        threadId: validated.checkpoint.threadId,
+        reason: "digest-mismatch",
+      });
+    }
+    const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
+
+    const raw = RawCheckpoint.make({
+      threadId: validated.checkpoint.threadId,
+      throughSequence: validated.checkpoint.throughSequence,
+      tailDigest: validated.checkpoint.tailDigest,
+      checkpointJson,
+    });
+
+    yield* hitFailpoint("save-checkpoint:before");
+    yield* journal.saveCheckpoint(raw).pipe(
+      Effect.mapError((error) =>
+        isDoCheckpointConflict(error)
+          ? CheckpointRejected.make({
+              threadId: validated.checkpoint.threadId,
+              reason: "digest-mismatch",
+            })
+          : storeError("save checkpoint", error),
+      ),
+    );
+    yield* hitFailpoint("save-checkpoint:after");
+  });
+
+  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fnUntraced(function* (
+    request: LoadCheckpointRequest,
+  ) {
+    const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
+      request,
+    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint lookup", error)));
+
+    const thread = yield* requireThread(journal, validated.threadId);
 
     const rows = yield* journal
-      .loadRecoveryCheckpoint(validated.threadId)
-      .pipe(
-        Effect.mapError((error) =>
-          error._tag === "DoStorageCorruptionError"
-            ? corrupt()
-            : storeError("load recovery checkpoint", error),
-        ),
-      );
+      .loadCheckpoint(validated.threadId, validated.atOrBeforeSequence ?? thread.tail_sequence)
+      .pipe(Effect.mapError((error) => storeError("load checkpoint", error)));
 
     if (rows.length === 0) return Option.none();
-    if (rows.length !== 1) return yield* corrupt();
+    if (rows.length !== 1) {
+      return yield* ThreadStoreError.make({
+        operation: "load checkpoint",
+        message: `Expected at most one checkpoint row but found ${rows.length}.`,
+      });
+    }
     const row = rows[0];
-
-    const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
-      row.checkpoint_json,
-    ).pipe(Effect.mapError(corrupt));
+    const checkpoint = yield* decodeCheckpoint(row.checkpoint_json);
 
     if (
       row.thread_id !== validated.threadId ||
       checkpoint.threadId !== row.thread_id ||
       checkpoint.throughSequence !== row.through_sequence ||
       checkpoint.tailDigest !== row.tail_digest
-    )
-      return yield* corrupt();
-    if (checkpoint.throughSequence > thread.tail_sequence)
-      return yield* CheckpointRejected.make({
-        threadId: validated.threadId,
-        reason: "ahead-of-tail",
+    ) {
+      return yield* ThreadStoreError.make({
+        operation: "load checkpoint",
+        message: "Stored checkpoint metadata does not match its canonical row.",
       });
-    if (checkpoint.throughSequence > (validated.atOrBeforeSequence ?? thread.tail_sequence))
-      return Option.none();
+    }
 
     const canonicalDigest = yield* tailDigestAt(
       journal,
@@ -951,14 +867,99 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
       checkpoint.throughSequence,
     );
 
-    if (canonicalDigest !== checkpoint.tailDigest)
+    if (canonicalDigest !== checkpoint.tailDigest) {
       return yield* CheckpointRejected.make({
-        threadId: validated.threadId,
+        threadId: checkpoint.threadId,
         reason: "digest-mismatch",
       });
+    }
 
     return Option.some(checkpoint);
   });
+
+  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fnUntraced(
+    function* (request) {
+      const validated = yield* Schema.decodeEffect(Schema.toType(SaveRecoveryCheckpointRequest))(
+        request,
+      ).pipe(Effect.mapError((error) => schemaStoreError("validate recovery checkpoint", error)));
+
+      const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
+
+      yield* journal
+        .saveRecoveryCheckpoint(validated, checkpointJson)
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "CheckpointRejected" ||
+            error._tag === "FenceRejected" ||
+            error._tag === "ThreadNotMaterialized"
+              ? error
+              : storeError("save recovery checkpoint", error),
+          ),
+        );
+    },
+  );
+
+  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fnUntraced(
+    function* (request) {
+      const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
+        request,
+      ).pipe(
+        Effect.mapError((error) => schemaStoreError("validate recovery checkpoint lookup", error)),
+      );
+
+      const thread = yield* requireThread(journal, validated.threadId);
+
+      const corrupt = () =>
+        CheckpointRejected.make({ threadId: validated.threadId, reason: "corrupt" });
+
+      const rows = yield* journal
+        .loadRecoveryCheckpoint(validated.threadId)
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "DoStorageCorruptionError"
+              ? corrupt()
+              : storeError("load recovery checkpoint", error),
+          ),
+        );
+
+      if (rows.length === 0) return Option.none();
+      if (rows.length !== 1) return yield* corrupt();
+      const row = rows[0];
+
+      const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
+        row.checkpoint_json,
+      ).pipe(Effect.mapError(corrupt));
+
+      if (
+        row.thread_id !== validated.threadId ||
+        checkpoint.threadId !== row.thread_id ||
+        checkpoint.throughSequence !== row.through_sequence ||
+        checkpoint.tailDigest !== row.tail_digest
+      )
+        return yield* corrupt();
+      if (checkpoint.throughSequence > thread.tail_sequence)
+        return yield* CheckpointRejected.make({
+          threadId: validated.threadId,
+          reason: "ahead-of-tail",
+        });
+      if (checkpoint.throughSequence > (validated.atOrBeforeSequence ?? thread.tail_sequence))
+        return Option.none();
+
+      const canonicalDigest = yield* tailDigestAt(
+        journal,
+        checkpoint.threadId,
+        checkpoint.throughSequence,
+      );
+
+      if (canonicalDigest !== checkpoint.tailDigest)
+        return yield* CheckpointRejected.make({
+          threadId: validated.threadId,
+          reason: "digest-mismatch",
+        });
+
+      return Option.some(checkpoint);
+    },
+  );
 
   const selectedReads = yield* makeSelectedReads(decodeEnvelope).pipe(
     Effect.provideService(SelectedReadOwner, {

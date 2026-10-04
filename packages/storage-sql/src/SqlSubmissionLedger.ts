@@ -358,7 +358,7 @@ export interface SqlSubmissionLedgerOptions<
 }
 
 /** Durable submission transitions shared by relational adapters. */
-export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make")(function* <
+export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -763,7 +763,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
       rows,
     ).pipe(Effect.mapError(internalFailure(operation)));
 
-  const readChildReservation = Effect.fn("SqlSubmissionLedger.readChildReservation")(function* (
+  const readChildReservation = Effect.fnUntraced(function* (
     operation: string,
     reservationId: string,
   ): Effect.fn.Return<Option.Option<ChildReservationRow>, LedgerError> {
@@ -787,41 +787,37 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
   });
 
-  const readChildReservationForCall = Effect.fn("SqlSubmissionLedger.readChildReservationForCall")(
-    function* (
-      operation: string,
-      parentSubmissionId: string,
-      parentToolCallId: string,
-    ): Effect.fn.Return<Option.Option<ChildReservationRow>, LedgerError> {
-      const rows = yield* sql<Record<string, unknown>>`
+  const readChildReservationForCall = Effect.fnUntraced(function* (
+    operation: string,
+    parentSubmissionId: string,
+    parentToolCallId: string,
+  ): Effect.fn.Return<Option.Option<ChildReservationRow>, LedgerError> {
+    const rows = yield* sql<Record<string, unknown>>`
       SELECT ${sql.literal(CHILD_RESERVATION_COLUMNS)}
       FROM ${relation("effect_agent_child_reservations")}
       WHERE parent_submission_id = ${parentSubmissionId}
         AND parent_tool_call_id = ${parentToolCallId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-      const decoded = yield* decodeChildReservationRows(
+    const decoded = yield* decodeChildReservationRows(
+      operation,
+      `${parentSubmissionId}/${parentToolCallId}`,
+      rows,
+    );
+
+    if (decoded.length > 1) {
+      return yield* corruptionFailure(
         operation,
+        "effect_agent_child_reservations",
         `${parentSubmissionId}/${parentToolCallId}`,
-        rows,
+        "A parent Tool Call returned more than one child reservation.",
       );
+    }
 
-      if (decoded.length > 1) {
-        return yield* corruptionFailure(
-          operation,
-          "effect_agent_child_reservations",
-          `${parentSubmissionId}/${parentToolCallId}`,
-          "A parent Tool Call returned more than one child reservation.",
-        );
-      }
+    return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
+  });
 
-      return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
-    },
-  );
-
-  const childReservationSnapshotFromRow = Effect.fn(
-    "SqlSubmissionLedger.childReservationSnapshotFromRow",
-  )(function* (
+  const childReservationSnapshotFromRow = Effect.fnUntraced(function* (
     operation: string,
     row: ChildReservationRow,
   ): Effect.fn.Return<ChildBudgetReservationSnapshot, LedgerError> {
@@ -882,7 +878,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     ).pipe(Effect.mapError(internalFailure(operation)));
   });
 
-  const approvalIntentFromRow = Effect.fn("SqlSubmissionLedger.approvalIntentFromRow")(function* (
+  const approvalIntentFromRow = Effect.fnUntraced(function* (
     operation: string,
     row: ApprovalDecisionRow,
   ): Effect.fn.Return<ApprovalDecisionIntent, LedgerError> {
@@ -930,9 +926,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     ).pipe(Effect.mapError(internalFailure(operation)));
   });
 
-  const unknownResolutionIntentFromRow = Effect.fn(
-    "SqlSubmissionLedger.unknownResolutionIntentFromRow",
-  )(function* (
+  const unknownResolutionIntentFromRow = Effect.fnUntraced(function* (
     operation: string,
     row: UnknownResolutionRow,
   ): Effect.fn.Return<UnknownResolutionIntent, LedgerError> {
@@ -967,32 +961,30 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
   });
 
   /** The Submission's marked-unknown open Tool Call identities, empty when never marked. */
-  const storedUnknownToolCallIds = Effect.fn("SqlSubmissionLedger.storedUnknownToolCallIds")(
-    function* (
-      operation: string,
-      submission: SubmissionRow,
-    ): Effect.fn.Return<ReadonlyArray<typeof ToolCallIdSchema.Type>, LedgerError> {
-      if (submission.unknown_tool_call_ids_json === null) return [];
+  const storedUnknownToolCallIds = Effect.fnUntraced(function* (
+    operation: string,
+    submission: SubmissionRow,
+  ): Effect.fn.Return<ReadonlyArray<typeof ToolCallIdSchema.Type>, LedgerError> {
+    if (submission.unknown_tool_call_ids_json === null) return [];
 
-      return yield* decodeToolCallIdsText(submission.unknown_tool_call_ids_json).pipe(
-        Effect.mapError((error) =>
-          corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            submission.submission_id,
-            error.message,
-          ),
+    return yield* decodeToolCallIdsText(submission.unknown_tool_call_ids_json).pipe(
+      Effect.mapError((error) =>
+        corruptionFailure(
+          operation,
+          "effect_agent_submissions",
+          submission.submission_id,
+          error.message,
         ),
-      );
-    },
-  );
+      ),
+    );
+  });
 
   /**
    * Canonical history is the abort authority (DUR-015): the intent's canonicalRecordId is
    * derived from the shared canonical-records table using the deterministic abort record
    * identity, never from a cached ledger marker.
    */
-  const canonicalAbortRecordId = Effect.fn("SqlSubmissionLedger.canonicalAbortRecordId")(function* (
+  const canonicalAbortRecordId = Effect.fnUntraced(function* (
     operation: string,
     threadId: string,
     submissionId: SubmissionId,
@@ -1016,7 +1008,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return decoded.length === 0 ? undefined : recordId;
   });
 
-  const abortIntentFromRow = Effect.fn("SqlSubmissionLedger.abortIntentFromRow")(function* (
+  const abortIntentFromRow = Effect.fnUntraced(function* (
     operation: string,
     submission: SubmissionRow,
     submissionId: SubmissionId,
@@ -1048,67 +1040,68 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
 
   const capabilities = Effect.succeed(LedgerCapabilities.make({ durability: "durable-node" }));
 
-  const admit: SubmissionLedger["Service"]["admit"] = Effect.fn("SqlSubmissionLedger.admit")(
-    function* (request: AdmissionRequest) {
-      const operation = "ledger admit";
+  const admit: SubmissionLedger["Service"]["admit"] = Effect.fnUntraced(function* (
+    request: AdmissionRequest,
+  ) {
+    const operation = "ledger admit";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(AdmissionRequest))(request).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
+    const validated = yield* Schema.decodeEffect(Schema.toType(AdmissionRequest))(request).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
-      const inputJson = yield* encodePersistedJsonText(validated.inputPayload).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
+    const inputJson = yield* encodePersistedJsonText(validated.inputPayload).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
-      const workerAdmissionJson =
-        validated.workerAdmission === undefined
-          ? null
-          : yield* Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission))(
-              validated.workerAdmission,
-            ).pipe(Effect.mapError(internalFailure(operation)));
+    const workerAdmissionJson =
+      validated.workerAdmission === undefined
+        ? null
+        : yield* Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission))(
+            validated.workerAdmission,
+          ).pipe(Effect.mapError(internalFailure(operation)));
 
-      if (
-        workerAdmissionJson !== null &&
-        new TextEncoder().encode(workerAdmissionJson).byteLength > 16 * 1024 * 1024
-      ) {
-        return yield* LedgerError.make({
-          operation,
-          message: "Worker admission metadata exceeds the stored value bound",
-        });
-      }
-
-      const messageAdmissionJson =
-        validated.messageAdmission === undefined
-          ? null
-          : yield* Schema.encodeEffect(Schema.fromJsonString(InputMessage))(
-              validated.messageAdmission,
-            ).pipe(Effect.mapError(internalFailure(operation)));
-
-      if (
-        messageAdmissionJson !== null &&
-        new TextEncoder().encode(messageAdmissionJson).byteLength > 16 * 1024 * 1024
-      ) {
-        return yield* LedgerError.make({
-          operation,
-          message: "Message admission metadata exceeds the stored value bound",
-        });
-      }
-
-      const agentDigestsJson = yield* encodeDefinitionDigestsText(validated.agentDigests).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
-
-      const mintedSubmissionId = yield* mintIdentifier("submission", operation);
-      const mintedReceiptId = yield* mintIdentifier("receipt", operation);
-
-      yield* hitFailpoint("ledger:admit:before", operation);
-
-      const result = yield* inWriteTransaction(
+    if (
+      workerAdmissionJson !== null &&
+      new TextEncoder().encode(workerAdmissionJson).byteLength > 16 * 1024 * 1024
+    ) {
+      return yield* LedgerError.make({
         operation,
-        Effect.gen(function* () {
-          const keyRowKey = `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`;
+        message: "Worker admission metadata exceeds the stored value bound",
+      });
+    }
 
-          const existingRows = yield* sql<Record<string, unknown>>`
+    const messageAdmissionJson =
+      validated.messageAdmission === undefined
+        ? null
+        : yield* Schema.encodeEffect(Schema.fromJsonString(InputMessage))(
+            validated.messageAdmission,
+          ).pipe(Effect.mapError(internalFailure(operation)));
+
+    if (
+      messageAdmissionJson !== null &&
+      new TextEncoder().encode(messageAdmissionJson).byteLength > 16 * 1024 * 1024
+    ) {
+      return yield* LedgerError.make({
+        operation,
+        message: "Message admission metadata exceeds the stored value bound",
+      });
+    }
+
+    const agentDigestsJson = yield* encodeDefinitionDigestsText(validated.agentDigests).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
+
+    const mintedSubmissionId = yield* mintIdentifier("submission", operation);
+    const mintedReceiptId = yield* mintIdentifier("receipt", operation);
+
+    yield* hitFailpoint("ledger:admit:before", operation);
+
+    const result = yield* inWriteTransaction(
+      operation,
+      Effect.gen(function* () {
+        const keyRowKey = `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`;
+
+        const existingRows = yield* sql<Record<string, unknown>>`
             SELECT ${sql.literal(SUBMISSION_COLUMNS)}
             FROM ${relation("effect_agent_submissions")}
             WHERE thread_id = ${validated.threadId}
@@ -1116,167 +1109,167 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
               AND idempotency_key = ${validated.idempotencyKey}
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const existing = yield* decodeSubmissionRows(operation, keyRowKey, existingRows);
+        const existing = yield* decodeSubmissionRows(operation, keyRowKey, existingRows);
 
-          if (existing.length > 1) {
-            return yield* corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              keyRowKey,
-              "An admission idempotency key returned more than one row.",
-            );
+        if (existing.length > 1) {
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_submissions",
+            keyRowKey,
+            "An admission idempotency key returned more than one row.",
+          );
+        }
+        if (existing.length === 1) {
+          // A replay must repeat the exact canonical input AND the exact parent linkage (or
+          // its absence): linkage is immutable child lineage (spec §12 step 5, SUB-016).
+          const sameLinkage =
+            validated.parentLinkage === undefined
+              ? existing[0].parent_submission_id === null &&
+                existing[0].parent_tool_call_id === null
+              : existing[0].parent_submission_id === validated.parentLinkage.parentSubmissionId &&
+                existing[0].parent_tool_call_id === validated.parentLinkage.parentToolCallId;
+
+          if (existing[0].input_digest !== validated.inputDigest || !sameLinkage) {
+            return yield* AdmissionConflict.make({
+              threadId: validated.threadId,
+              principal: validated.principal,
+              idempotencyKey: validated.idempotencyKey,
+              existingInputDigest: existing[0].input_digest,
+              attemptedInputDigest: validated.inputDigest,
+            });
           }
-          if (existing.length === 1) {
-            // A replay must repeat the exact canonical input AND the exact parent linkage (or
-            // its absence): linkage is immutable child lineage (spec §12 step 5, SUB-016).
-            const sameLinkage =
-              validated.parentLinkage === undefined
-                ? existing[0].parent_submission_id === null &&
-                  existing[0].parent_tool_call_id === null
-                : existing[0].parent_submission_id === validated.parentLinkage.parentSubmissionId &&
-                  existing[0].parent_tool_call_id === validated.parentLinkage.parentToolCallId;
 
-            if (existing[0].input_digest !== validated.inputDigest || !sameLinkage) {
-              return yield* AdmissionConflict.make({
-                threadId: validated.threadId,
-                principal: validated.principal,
-                idempotencyKey: validated.idempotencyKey,
-                existingInputDigest: existing[0].input_digest,
-                attemptedInputDigest: validated.inputDigest,
-              });
-            }
+          const retainedWorkerAdmission =
+            existing[0].worker_admission_json === null
+              ? undefined
+              : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
+                  existing[0].worker_admission_json,
+                ).pipe(Effect.mapError(internalFailure(operation)));
 
-            const retainedWorkerAdmission =
-              existing[0].worker_admission_json === null
-                ? undefined
-                : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
-                    existing[0].worker_admission_json,
-                  ).pipe(Effect.mapError(internalFailure(operation)));
+          const retainedInputMessage =
+            existing[0].message_admission_json === null
+              ? undefined
+              : yield* Schema.decodeEffect(Schema.fromJsonString(InputMessage))(
+                  existing[0].message_admission_json,
+                ).pipe(Effect.mapError(internalFailure(operation)));
 
-            const retainedInputMessage =
-              existing[0].message_admission_json === null
-                ? undefined
-                : yield* Schema.decodeEffect(Schema.fromJsonString(InputMessage))(
-                    existing[0].message_admission_json,
-                  ).pipe(Effect.mapError(internalFailure(operation)));
+          const retainedFence =
+            existing[0].admission_fence_json === null
+              ? undefined
+              : yield* Schema.decodeEffect(Schema.fromJsonString(AdmissionFence))(
+                  existing[0].admission_fence_json,
+                ).pipe(Effect.mapError(internalFailure(operation)));
 
-            const retainedFence =
-              existing[0].admission_fence_json === null
-                ? undefined
-                : yield* Schema.decodeEffect(Schema.fromJsonString(AdmissionFence))(
-                    existing[0].admission_fence_json,
-                  ).pipe(Effect.mapError(internalFailure(operation)));
-
-            if (
-              (existing[0].admission_group ?? undefined) !== validated.admissionGroup ||
-              !Schema.toEquivalence(Schema.optional(WorkerAdmission))(
-                retainedWorkerAdmission,
-                validated.workerAdmission,
-              ) ||
-              !Schema.toEquivalence(Schema.optional(InputMessage))(
-                retainedInputMessage,
-                validated.messageAdmission,
-              ) ||
-              !Schema.toEquivalence(Schema.optional(AdmissionFence))(
-                retainedFence,
-                validated.admissionFence,
-              )
+          if (
+            (existing[0].admission_group ?? undefined) !== validated.admissionGroup ||
+            !Schema.toEquivalence(Schema.optional(WorkerAdmission))(
+              retainedWorkerAdmission,
+              validated.workerAdmission,
+            ) ||
+            !Schema.toEquivalence(Schema.optional(InputMessage))(
+              retainedInputMessage,
+              validated.messageAdmission,
+            ) ||
+            !Schema.toEquivalence(Schema.optional(AdmissionFence))(
+              retainedFence,
+              validated.admissionFence,
             )
-              return yield* AdmissionConflict.make({
-                threadId: validated.threadId,
-                principal: validated.principal,
-                idempotencyKey: validated.idempotencyKey,
-                existingInputDigest: existing[0].input_digest,
-                attemptedInputDigest: validated.inputDigest,
-              });
+          )
+            return yield* AdmissionConflict.make({
+              threadId: validated.threadId,
+              principal: validated.principal,
+              idempotencyKey: validated.idempotencyKey,
+              existingInputDigest: existing[0].input_digest,
+              attemptedInputDigest: validated.inputDigest,
+            });
 
-            return yield* decodeAdmissionResult({
-              submissionId: existing[0].submission_id,
-              receiptId: existing[0].receipt_id,
-              queueSequence: existing[0].queue_sequence,
-              state: existing[0].state,
-              replayed: true,
-            }).pipe(Effect.mapError(internalFailure(operation)));
-          }
+          return yield* decodeAdmissionResult({
+            submissionId: existing[0].submission_id,
+            receiptId: existing[0].receipt_id,
+            queueSequence: existing[0].queue_sequence,
+            state: existing[0].state,
+            replayed: true,
+          }).pipe(Effect.mapError(internalFailure(operation)));
+        }
 
-          const stopped =
-            yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id = ${validated.threadId}`.pipe(
-              execute,
-              Effect.mapError(sqlFailure(operation)),
-            );
+        const stopped =
+          yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id = ${validated.threadId}`.pipe(
+            execute,
+            Effect.mapError(sqlFailure(operation)),
+          );
 
-          if (stopped.length > 0)
-            return yield* AdmissionPolicyError.make({ reason: "refused", code: "worker-stopped" });
+        if (stopped.length > 0)
+          return yield* AdmissionPolicyError.make({ reason: "refused", code: "worker-stopped" });
 
-          // The first accepted input fixes ordinary/worker lane identity atomically with admission.
-          // Canonical origin materialization can lag admission; a log scan cannot fence that race.
-          const firstRows = yield* sql<Record<string, unknown>>`
+        // The first accepted input fixes ordinary/worker lane identity atomically with admission.
+        // Canonical origin materialization can lag admission; a log scan cannot fence that race.
+        const firstRows = yield* sql<Record<string, unknown>>`
             SELECT worker_admission_json FROM ${relation("effect_agent_submissions")}
             WHERE thread_id=${validated.threadId} ORDER BY queue_sequence LIMIT 1
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const first = yield* Schema.decodeUnknownEffect(
-            Schema.Array(
-              Schema.Struct({
-                worker_admission_json: Schema.NullOr(BoundedStoredText),
-              }),
-            ),
-          )(firstRows).pipe(Effect.mapError(internalFailure(operation)));
+        const first = yield* Schema.decodeUnknownEffect(
+          Schema.Array(
+            Schema.Struct({
+              worker_admission_json: Schema.NullOr(BoundedStoredText),
+            }),
+          ),
+        )(firstRows).pipe(Effect.mapError(internalFailure(operation)));
 
-          if (first[0] !== undefined) {
-            const previous =
-              first[0].worker_admission_json === null
-                ? undefined
-                : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
-                    first[0].worker_admission_json,
-                  ).pipe(Effect.mapError(internalFailure(operation)));
+        if (first[0] !== undefined) {
+          const previous =
+            first[0].worker_admission_json === null
+              ? undefined
+              : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
+                  first[0].worker_admission_json,
+                ).pipe(Effect.mapError(internalFailure(operation)));
 
-            if (
-              !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
-                previous?.origin,
-                validated.workerAdmission?.origin,
-              )
+          if (
+            !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
+              previous?.origin,
+              validated.workerAdmission?.origin,
             )
-              return yield* AdmissionPolicyError.make({
-                reason: "refused",
-                code: "worker-origin-conflict",
-              });
-          }
+          )
+            return yield* AdmissionPolicyError.make({
+              reason: "refused",
+              code: "worker-origin-conflict",
+            });
+        }
 
-          yield* admissionFence.check(validated);
-          if (validated.admissionGroup !== undefined) {
-            const occupied = yield* sql<Record<string, unknown>>`
+        yield* admissionFence.check(validated);
+        if (validated.admissionGroup !== undefined) {
+          const occupied = yield* sql<Record<string, unknown>>`
               SELECT submission_id FROM ${relation("effect_agent_submissions")}
               WHERE thread_id=${validated.threadId} AND admission_group=${validated.admissionGroup} AND state<>'settled' LIMIT 1
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-            if (occupied.length > 0)
-              return yield* AdmissionPolicyError.make({
-                reason: "occupied",
-                code: "admission-group",
-              });
-          }
+          if (occupied.length > 0)
+            return yield* AdmissionPolicyError.make({
+              reason: "occupied",
+              code: "admission-group",
+            });
+        }
 
-          const maxRows = yield* sql<Record<string, unknown>>`
+        const maxRows = yield* sql<Record<string, unknown>>`
             SELECT COALESCE(MAX(queue_sequence), 0) AS max_queue_sequence
             FROM ${relation("effect_agent_submissions")}
             WHERE thread_id = ${validated.threadId}
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const decodedMax = yield* decodeRows(
-            Schema.Array(MaxQueueSequenceRow),
-            "effect_agent_submissions",
-            validated.threadId,
-            maxRows,
-          ).pipe(Effect.mapError(internalFailure(operation)));
+        const decodedMax = yield* decodeRows(
+          Schema.Array(MaxQueueSequenceRow),
+          "effect_agent_submissions",
+          validated.threadId,
+          maxRows,
+        ).pipe(Effect.mapError(internalFailure(operation)));
 
-          const queueSequence = yield* decodeQueueSequence(
-            (decodedMax[0]?.max_queue_sequence ?? 0) + 1,
-          ).pipe(Effect.mapError(internalFailure(operation)));
+        const queueSequence = yield* decodeQueueSequence(
+          (decodedMax[0]?.max_queue_sequence ?? 0) + 1,
+        ).pipe(Effect.mapError(internalFailure(operation)));
 
-          const now = yield* currentInstant;
+        const now = yield* currentInstant;
 
-          yield* sql`
+        yield* sql`
             INSERT INTO ${relation("effect_agent_submissions")} (
               submission_id,
               thread_id,
@@ -1320,25 +1313,24 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
             )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          return yield* decodeAdmissionResult({
-            submissionId: mintedSubmissionId,
-            receiptId: mintedReceiptId,
-            queueSequence,
-            state: "admitted",
-            replayed: false,
-          }).pipe(Effect.mapError(internalFailure(operation)));
-        }),
-      );
+        return yield* decodeAdmissionResult({
+          submissionId: mintedSubmissionId,
+          receiptId: mintedReceiptId,
+          queueSequence,
+          state: "admitted",
+          replayed: false,
+        }).pipe(Effect.mapError(internalFailure(operation)));
+      }),
+    );
 
-      yield* hitFailpoint("ledger:admit:after", operation);
+    yield* hitFailpoint("ledger:admit:after", operation);
 
-      return result;
-    },
-  );
+    return result;
+  });
 
-  const markReady: SubmissionLedger["Service"]["markReady"] = Effect.fn(
-    "SqlSubmissionLedger.markReady",
-  )(function* (request: MarkReadyRequest) {
+  const markReady: SubmissionLedger["Service"]["markReady"] = Effect.fnUntraced(function* (
+    request: MarkReadyRequest,
+  ) {
     const operation = "ledger mark ready";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(MarkReadyRequest))(request).pipe(
@@ -1368,61 +1360,22 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     yield* hitFailpoint("ledger:mark-ready:after", operation);
   });
 
-  const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fn("SqlSubmissionLedger.lookup")(
-    function* (request: SubmissionLookup) {
-      const operation = "ledger lookup";
+  const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fnUntraced(function* (
+    request: SubmissionLookup,
+  ) {
+    const operation = "ledger lookup";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookup))(request).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
+    const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookup))(request).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
-      if (validated._tag === "SubmissionLookupById") {
-        const row = yield* readSubmission(operation, validated.submissionId);
+    if (validated._tag === "SubmissionLookupById") {
+      const row = yield* readSubmission(operation, validated.submissionId);
 
-        if (Option.isNone(row)) return Option.none();
+      if (Option.isNone(row)) return Option.none();
 
-        return Option.some(yield* decodeSubmissionSnapshot(operation, row.value));
-      }
-
-      const rows = yield* sql<Record<string, unknown>>`
-      SELECT ${sql.literal(SUBMISSION_COLUMNS)}
-      FROM ${relation("effect_agent_submissions")}
-      WHERE thread_id = ${validated.threadId}
-        AND principal = ${validated.principal}
-        AND idempotency_key = ${validated.idempotencyKey}
-    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-
-      const decoded = yield* decodeSubmissionRows(
-        operation,
-        `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
-        rows,
-      );
-
-      if (decoded.length > 1) {
-        return yield* corruptionFailure(
-          operation,
-          "effect_agent_submissions",
-          `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
-          "An admission idempotency key returned more than one row.",
-        );
-      }
-      if (decoded.length === 0) return Option.none();
-
-      return Option.some(yield* decodeSubmissionSnapshot(operation, decoded[0]));
-    },
-  );
-
-  // A single strongly consistent SQL database always answers authoritatively (SUB-031): the
-  // key-scoped read IS the admission truth, so the tri-state degenerates to NotAdmitted or
-  // Admitted here — Indeterminate exists for adapters that can fail to reach the owner.
-  const resolveAdmission: SubmissionLedger["Service"]["resolveAdmission"] = Effect.fn(
-    "SqlSubmissionLedger.resolveAdmission",
-  )(function* (request: SubmissionLookupByKey) {
-    const operation = "ledger resolve admission";
-
-    const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookupByKey))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+      return Option.some(yield* decodeSubmissionSnapshot(operation, row.value));
+    }
 
     const rows = yield* sql<Record<string, unknown>>`
       SELECT ${sql.literal(SUBMISSION_COLUMNS)}
@@ -1446,12 +1399,51 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
         "An admission idempotency key returned more than one row.",
       );
     }
-    if (decoded.length === 0) return AdmissionNotAdmitted.make();
+    if (decoded.length === 0) return Option.none();
 
-    return AdmissionAdmitted.make({
-      submission: yield* decodeSubmissionSnapshot(operation, decoded[0]),
-    });
+    return Option.some(yield* decodeSubmissionSnapshot(operation, decoded[0]));
   });
+
+  // A single strongly consistent SQL database always answers authoritatively (SUB-031): the
+  // key-scoped read IS the admission truth, so the tri-state degenerates to NotAdmitted or
+  // Admitted here — Indeterminate exists for adapters that can fail to reach the owner.
+  const resolveAdmission: SubmissionLedger["Service"]["resolveAdmission"] = Effect.fnUntraced(
+    function* (request: SubmissionLookupByKey) {
+      const operation = "ledger resolve admission";
+
+      const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookupByKey))(
+        request,
+      ).pipe(Effect.mapError(internalFailure(operation)));
+
+      const rows = yield* sql<Record<string, unknown>>`
+      SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+      FROM ${relation("effect_agent_submissions")}
+      WHERE thread_id = ${validated.threadId}
+        AND principal = ${validated.principal}
+        AND idempotency_key = ${validated.idempotencyKey}
+    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+      const decoded = yield* decodeSubmissionRows(
+        operation,
+        `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
+        rows,
+      );
+
+      if (decoded.length > 1) {
+        return yield* corruptionFailure(
+          operation,
+          "effect_agent_submissions",
+          `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
+          "An admission idempotency key returned more than one row.",
+        );
+      }
+      if (decoded.length === 0) return AdmissionNotAdmitted.make();
+
+      return AdmissionAdmitted.make({
+        submission: yield* decodeSubmissionSnapshot(operation, decoded[0]),
+      });
+    },
+  );
 
   const claim: SubmissionLedger["Service"]["claim"] = Effect.fn("SqlSubmissionLedger.claim")(
     function* (request: ClaimRequest) {
@@ -1799,7 +1791,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     });
   });
 
-  const markInputAppliedKernel = Effect.fn("SqlSubmissionLedger.markInputApplied")(function* (
+  const markInputAppliedKernel = Effect.fnUntraced(function* (
     request: MarkInputAppliedRequest,
     authority: SqlAuthorityReader,
     cached = false,
@@ -2204,9 +2196,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return settlement;
   });
 
-  const inspectWorker = Effect.fn("SqlSubmissionLedger.inspectWorker")(function* (
-    threadId: SubmissionSnapshot["threadId"],
-  ) {
+  const inspectWorker = Effect.fnUntraced(function* (threadId: SubmissionSnapshot["threadId"]) {
     const operation = "inspect worker";
 
     return yield* journal
@@ -2254,9 +2244,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
       );
   });
 
-  const stopWorker = Effect.fn("SqlSubmissionLedger.stopWorker")(function* (
-    request: WorkerStopCommand,
-  ) {
+  const stopWorker = Effect.fnUntraced(function* (request: WorkerStopCommand) {
     const operation = "ledger stop worker";
 
     const validated = yield* Schema.decodeEffect(WorkerStopCommand)(request).pipe(
@@ -2296,9 +2284,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     );
   });
 
-  const requestAbort: SubmissionLedger["Service"]["requestAbort"] = Effect.fn(
-    "SqlSubmissionLedger.requestAbort",
-  )(function* (request: AbortCommand) {
+  const requestAbort: SubmissionLedger["Service"]["requestAbort"] = Effect.fnUntraced(function* (
+    request: AbortCommand,
+  ) {
     const operation = "ledger request abort";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(AbortCommand))(request).pipe(
@@ -2400,7 +2388,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return intent;
   });
 
-  const claimJoiningKernel = Effect.fn("SqlSubmissionLedger.claimJoining")(function* (
+  const claimJoiningKernel = Effect.fnUntraced(function* (
     request: ClaimJoiningRequest,
     authority: SqlAuthorityReader,
   ) {
@@ -2503,7 +2491,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return claims;
   });
 
-  const markJoinedKernel = Effect.fn("SqlSubmissionLedger.markJoined")(function* (
+  const markJoinedKernel = Effect.fnUntraced(function* (
     request: MarkJoinedRequest,
     authority: SqlAuthorityReader,
   ) {
@@ -2568,7 +2556,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     yield* hitFailpoint("ledger:mark-joined:after", operation);
   });
 
-  const revertJoiningKernel = Effect.fn("SqlSubmissionLedger.revertJoining")(function* (
+  const revertJoiningKernel = Effect.fnUntraced(function* (
     request: RevertJoiningRequest,
     authority: SqlAuthorityReader,
   ) {
@@ -2630,7 +2618,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     yield* hitFailpoint("ledger:revert-joining:after", operation);
   });
 
-  const suspendKernel = Effect.fn("SqlSubmissionLedger.suspend")(function* (
+  const suspendKernel = Effect.fnUntraced(function* (
     request: SuspendRequest,
     authority: SqlAuthorityReader,
   ) {
@@ -2742,7 +2730,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
    * WaitingForChild suspension wakes only through recordChildSettled. Runs inside the caller's
    * write transaction.
    */
-  const wakeSuspendedIfCovered = Effect.fn("SqlSubmissionLedger.wakeSuspendedIfCovered")(function* (
+  const wakeSuspendedIfCovered = Effect.fnUntraced(function* (
     operation: string,
     submission: SubmissionRow,
   ): Effect.fn.Return<void, LedgerError> {
@@ -2782,56 +2770,55 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     });
   });
 
-  const recordApprovalDecision: SubmissionLedger["Service"]["recordApprovalDecision"] = Effect.fn(
-    "SqlSubmissionLedger.recordApprovalDecision",
-  )(function* (command: ApprovalDecisionCommand) {
-    const operation = "ledger record approval decision";
+  const recordApprovalDecision: SubmissionLedger["Service"]["recordApprovalDecision"] =
+    Effect.fnUntraced(function* (command: ApprovalDecisionCommand) {
+      const operation = "ledger record approval decision";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(ApprovalDecisionCommand))(
-      command,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* Schema.decodeEffect(Schema.toType(ApprovalDecisionCommand))(
+        command,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-    yield* hitFailpoint("ledger:approval-decision:before", operation);
+      yield* hitFailpoint("ledger:approval-decision:before", operation);
 
-    const intent = yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+      const intent = yield* inWriteTransaction(
+        operation,
+        Effect.gen(function* () {
+          const submission = yield* requireSubmission(operation, validated.submissionId);
 
-        if (submission.state === "settled") {
-          if (submission.settled_outcome === null) {
-            return yield* corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              validated.submissionId,
-              "A settled Submission carries no terminal outcome.",
-            );
-          }
+          if (submission.state === "settled") {
+            if (submission.settled_outcome === null) {
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_submissions",
+                validated.submissionId,
+                "A settled Submission carries no terminal outcome.",
+              );
+            }
 
-          return yield* SettlementConflict.make({
-            submissionId: validated.submissionId,
-            existingOutcome: submission.settled_outcome,
-          });
-        }
-        const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
-        const existing = decisions.find((row) => row.tool_call_id === validated.toolCallId);
-
-        if (existing !== undefined) {
-          // Idempotent per (submissionId, toolCallId): repeating the SAME decision replays
-          // the recorded intent unchanged; a divergent re-decision conflicts.
-          if (existing.decision !== validated.decision) {
-            return yield* ApprovalConflict.make({
+            return yield* SettlementConflict.make({
               submissionId: validated.submissionId,
-              toolCallId: validated.toolCallId,
-              existingDecision: existing.decision,
+              existingOutcome: submission.settled_outcome,
             });
           }
+          const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
+          const existing = decisions.find((row) => row.tool_call_id === validated.toolCallId);
 
-          return yield* approvalIntentFromRow(operation, existing);
-        }
-        const now = yield* currentInstant;
+          if (existing !== undefined) {
+            // Idempotent per (submissionId, toolCallId): repeating the SAME decision replays
+            // the recorded intent unchanged; a divergent re-decision conflicts.
+            if (existing.decision !== validated.decision) {
+              return yield* ApprovalConflict.make({
+                submissionId: validated.submissionId,
+                toolCallId: validated.toolCallId,
+                existingDecision: existing.decision,
+              });
+            }
 
-        yield* sql`
+            return yield* approvalIntentFromRow(operation, existing);
+          }
+          const now = yield* currentInstant;
+
+          yield* sql`
           INSERT INTO ${relation("effect_agent_approval_decisions")} (
             submission_id,
             tool_call_id,
@@ -2848,27 +2835,27 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
             ${now.iso}
           )
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        yield* wakeSuspendedIfCovered(operation, submission);
+          yield* wakeSuspendedIfCovered(operation, submission);
 
-        return yield* decodeApprovalDecisionIntent({
-          submissionId: validated.submissionId,
-          toolCallId: validated.toolCallId,
-          decision: validated.decision,
-          resolver: validated.resolver,
-          reason: validated.reason,
-          decidedAt: now.iso,
-        }).pipe(Effect.mapError(internalFailure(operation)));
-      }),
-    );
+          return yield* decodeApprovalDecisionIntent({
+            submissionId: validated.submissionId,
+            toolCallId: validated.toolCallId,
+            decision: validated.decision,
+            resolver: validated.resolver,
+            reason: validated.reason,
+            decidedAt: now.iso,
+          }).pipe(Effect.mapError(internalFailure(operation)));
+        }),
+      );
 
-    yield* hitFailpoint("ledger:approval-decision:after", operation);
+      yield* hitFailpoint("ledger:approval-decision:after", operation);
 
-    return intent;
-  });
+      return intent;
+    });
 
-  const markUnknown: SubmissionLedger["Service"]["markUnknown"] = Effect.fn(
-    "SqlSubmissionLedger.markUnknown",
-  )(function* (request: MarkUnknownRequest) {
+  const markUnknown: SubmissionLedger["Service"]["markUnknown"] = Effect.fnUntraced(function* (
+    request: MarkUnknownRequest,
+  ) {
     const operation = "ledger mark unknown";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(MarkUnknownRequest))(request).pipe(
@@ -2937,68 +2924,67 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     yield* hitFailpoint("ledger:mark-unknown:after", operation);
   });
 
-  const recordUnknownResolution: SubmissionLedger["Service"]["recordUnknownResolution"] = Effect.fn(
-    "SqlSubmissionLedger.recordUnknownResolution",
-  )(function* (command: UnknownResolutionCommand) {
-    const operation = "ledger record unknown resolution";
+  const recordUnknownResolution: SubmissionLedger["Service"]["recordUnknownResolution"] =
+    Effect.fnUntraced(function* (command: UnknownResolutionCommand) {
+      const operation = "ledger record unknown resolution";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(UnknownResolutionCommand))(
-      command,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* Schema.decodeEffect(Schema.toType(UnknownResolutionCommand))(
+        command,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-    const resolutionJson = yield* encodeUnknownResolutionText(validated.resolution).pipe(
-      Effect.mapError(internalFailure(operation)),
-    );
+      const resolutionJson = yield* encodeUnknownResolutionText(validated.resolution).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
-    yield* hitFailpoint("ledger:unknown-resolution:before", operation);
+      yield* hitFailpoint("ledger:unknown-resolution:before", operation);
 
-    const intent = yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+      const intent = yield* inWriteTransaction(
+        operation,
+        Effect.gen(function* () {
+          const submission = yield* requireSubmission(operation, validated.submissionId);
 
-        if (submission.state === "settled") {
-          if (submission.settled_outcome === null) {
-            return yield* corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              validated.submissionId,
-              "A settled Submission carries no terminal outcome.",
-            );
+          if (submission.state === "settled") {
+            if (submission.settled_outcome === null) {
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_submissions",
+                validated.submissionId,
+                "A settled Submission carries no terminal outcome.",
+              );
+            }
+
+            return yield* SettlementConflict.make({
+              submissionId: validated.submissionId,
+              existingOutcome: submission.settled_outcome,
+            });
           }
+          const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
+          const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);
 
-          return yield* SettlementConflict.make({
-            submissionId: validated.submissionId,
-            existingOutcome: submission.settled_outcome,
-          });
-        }
-        const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
-        const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);
+          const existingIntent =
+            existing === undefined
+              ? undefined
+              : yield* unknownResolutionIntentFromRow(operation, existing);
 
-        const existingIntent =
-          existing === undefined
-            ? undefined
-            : yield* unknownResolutionIntentFromRow(operation, existing);
+          if (
+            existingIntent !== undefined &&
+            !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)
+          ) {
+            return yield* UnknownResolutionConflict.make({
+              submissionId: validated.submissionId,
+              toolCallId: validated.toolCallId,
+            });
+          }
+          let resolved: UnknownResolutionIntent;
 
-        if (
-          existingIntent !== undefined &&
-          !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)
-        ) {
-          return yield* UnknownResolutionConflict.make({
-            submissionId: validated.submissionId,
-            toolCallId: validated.toolCallId,
-          });
-        }
-        let resolved: UnknownResolutionIntent;
+          if (existingIntent !== undefined) {
+            // Idempotent replay of the recorded intent (author/reason may differ; the stored
+            // audit fields win, exactly like requestAbort).
+            resolved = existingIntent;
+          } else {
+            const now = yield* currentInstant;
 
-        if (existingIntent !== undefined) {
-          // Idempotent replay of the recorded intent (author/reason may differ; the stored
-          // audit fields win, exactly like requestAbort).
-          resolved = existingIntent;
-        } else {
-          const now = yield* currentInstant;
-
-          yield* sql`
+            yield* sql`
             INSERT INTO ${relation("effect_agent_unknown_resolutions")} (
               submission_id,
               tool_call_id,
@@ -3016,29 +3002,29 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
             )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const resolution = yield* parseStoredJsonText(resolutionJson).pipe(
-            Effect.mapError(internalFailure(operation)),
-          );
+            const resolution = yield* parseStoredJsonText(resolutionJson).pipe(
+              Effect.mapError(internalFailure(operation)),
+            );
 
-          resolved = yield* decodeUnknownResolutionIntent({
-            submissionId: validated.submissionId,
-            toolCallId: validated.toolCallId,
-            author: validated.author,
-            reason: validated.reason,
-            resolution,
-            resolvedAt: now.iso,
-          }).pipe(Effect.mapError(internalFailure(operation)));
-        }
-        // The lane reopens only when EVERY marked open call has a durable resolution intent:
-        // unknown → input-applied (DUR-017). Replays re-run the coverage check so a
-        // recovering caller can wake the lane idempotently.
-        if (submission.state === "unknown" && submission.unknown_tool_call_ids_json !== null) {
-          const markedIds = yield* storedUnknownToolCallIds(operation, submission);
-          const covering = yield* readUnknownResolutions(operation, validated.submissionId);
-          const coveredIds = new Set(covering.map((row) => row.tool_call_id));
+            resolved = yield* decodeUnknownResolutionIntent({
+              submissionId: validated.submissionId,
+              toolCallId: validated.toolCallId,
+              author: validated.author,
+              reason: validated.reason,
+              resolution,
+              resolvedAt: now.iso,
+            }).pipe(Effect.mapError(internalFailure(operation)));
+          }
+          // The lane reopens only when EVERY marked open call has a durable resolution intent:
+          // unknown → input-applied (DUR-017). Replays re-run the coverage check so a
+          // recovering caller can wake the lane idempotently.
+          if (submission.state === "unknown" && submission.unknown_tool_call_ids_json !== null) {
+            const markedIds = yield* storedUnknownToolCallIds(operation, submission);
+            const covering = yield* readUnknownResolutions(operation, validated.submissionId);
+            const coveredIds = new Set(covering.map((row) => row.tool_call_id));
 
-          if (markedIds.every((toolCallId) => coveredIds.has(toolCallId))) {
-            yield* sql`
+            if (markedIds.every((toolCallId) => coveredIds.has(toolCallId))) {
+              yield* sql`
               UPDATE ${relation("effect_agent_submissions")}
               SET
                 state = 'input-applied',
@@ -3046,88 +3032,89 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
                 unknown_tool_call_ids_json = NULL
               WHERE submission_id = ${validated.submissionId}
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-            yield* retainLifecycle(submission, {
-              _tag: "SubmissionResumed",
-              submissionId: validated.submissionId,
+              yield* retainLifecycle(submission, {
+                _tag: "SubmissionResumed",
+                submissionId: validated.submissionId,
+              });
+            }
+          }
+
+          return resolved;
+        }),
+      );
+
+      yield* hitFailpoint("ledger:unknown-resolution:after", operation);
+
+      return intent;
+    });
+
+  const recordChildSettled: SubmissionLedger["Service"]["recordChildSettled"] = Effect.fnUntraced(
+    function* (request: ChildSettledNotification) {
+      const operation = "ledger record child settled";
+
+      const validated = yield* Schema.decodeEffect(Schema.toType(ChildSettledNotification))(
+        request,
+      ).pipe(Effect.mapError(internalFailure(operation)));
+
+      yield* hitFailpoint("ledger:child-settled:before", operation);
+
+      const outcome = yield* inWriteTransaction(
+        operation,
+        Effect.gen(function* () {
+          const parent = yield* requireSubmission(operation, validated.parentSubmissionId);
+          // Canonical publication precedes parent notification and ledger finalization.
+          const child = yield* readSubmission(operation, validated.childSubmissionId);
+
+          const announced =
+            Option.isSome(child) &&
+            Option.isSome(yield* readCanonicalSettlement(operation, child.value));
+
+          if (!announced) {
+            return yield* LedgerError.make({
+              operation,
+              message: `Child submission ${validated.childSubmissionId} has no recorded settlement.`,
             });
           }
-        }
-
-        return resolved;
-      }),
-    );
-
-    yield* hitFailpoint("ledger:unknown-resolution:after", operation);
-
-    return intent;
-  });
-
-  const recordChildSettled: SubmissionLedger["Service"]["recordChildSettled"] = Effect.fn(
-    "SqlSubmissionLedger.recordChildSettled",
-  )(function* (request: ChildSettledNotification) {
-    const operation = "ledger record child settled";
-
-    const validated = yield* Schema.decodeEffect(Schema.toType(ChildSettledNotification))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
-
-    yield* hitFailpoint("ledger:child-settled:before", operation);
-
-    const outcome = yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const parent = yield* requireSubmission(operation, validated.parentSubmissionId);
-        // Canonical publication precedes parent notification and ledger finalization.
-        const child = yield* readSubmission(operation, validated.childSubmissionId);
-
-        const announced =
-          Option.isSome(child) &&
-          Option.isSome(yield* readCanonicalSettlement(operation, child.value));
-
-        if (!announced) {
-          return yield* LedgerError.make({
-            operation,
-            message: `Child submission ${validated.childSubmissionId} has no recorded settlement.`,
-          });
-        }
-        if (parent.state !== "suspended" || parent.suspended_reason_json === null) {
-          return NOT_WAITING;
-        }
-
-        const reason = yield* Schema.decodeEffect(Schema.fromJsonString(SuspensionReason))(
-          parent.suspended_reason_json,
-        ).pipe(
-          Effect.mapError((error) =>
-            corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              parent.submission_id,
-              error.message,
-            ),
-          ),
-        );
-
-        if (reason._tag !== "WaitingForChild") {
-          return NOT_WAITING;
-        }
-        if (
-          !reason.children.some((entry) => entry.childSubmissionId === validated.childSubmissionId)
-        ) {
-          return NOT_WAITING;
-        }
-        // Every listed child must have canonical terminal intent; finalization may follow.
-        for (const entry of reason.children) {
-          const listed = yield* readSubmission(operation, entry.childSubmissionId);
-
-          const covered =
-            Option.isSome(listed) &&
-            Option.isSome(yield* readCanonicalSettlement(operation, listed.value));
-
-          if (!covered) {
-            return STILL_WAITING;
+          if (parent.state !== "suspended" || parent.suspended_reason_json === null) {
+            return NOT_WAITING;
           }
-        }
-        yield* sql`
+
+          const reason = yield* Schema.decodeEffect(Schema.fromJsonString(SuspensionReason))(
+            parent.suspended_reason_json,
+          ).pipe(
+            Effect.mapError((error) =>
+              corruptionFailure(
+                operation,
+                "effect_agent_submissions",
+                parent.submission_id,
+                error.message,
+              ),
+            ),
+          );
+
+          if (reason._tag !== "WaitingForChild") {
+            return NOT_WAITING;
+          }
+          if (
+            !reason.children.some(
+              (entry) => entry.childSubmissionId === validated.childSubmissionId,
+            )
+          ) {
+            return NOT_WAITING;
+          }
+          // Every listed child must have canonical terminal intent; finalization may follow.
+          for (const entry of reason.children) {
+            const listed = yield* readSubmission(operation, entry.childSubmissionId);
+
+            const covered =
+              Option.isSome(listed) &&
+              Option.isSome(yield* readCanonicalSettlement(operation, listed.value));
+
+            if (!covered) {
+              return STILL_WAITING;
+            }
+          }
+          yield* sql`
           UPDATE ${relation("effect_agent_submissions")}
           SET
             state = 'input-applied',
@@ -3136,21 +3123,22 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
           WHERE submission_id = ${validated.parentSubmissionId}
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-        yield* retainLifecycle(parent, {
-          _tag: "SubmissionResumed",
-          submissionId: validated.parentSubmissionId,
-        });
+          yield* retainLifecycle(parent, {
+            _tag: "SubmissionResumed",
+            submissionId: validated.parentSubmissionId,
+          });
 
-        return WOKEN;
-      }),
-    );
+          return WOKEN;
+        }),
+      );
 
-    yield* hitFailpoint("ledger:child-settled:after", operation);
+      yield* hitFailpoint("ledger:child-settled:after", operation);
 
-    return outcome;
-  });
+      return outcome;
+    },
+  );
 
-  const reserveChildBudgetKernel = Effect.fn("SqlSubmissionLedger.reserveChildBudget")(function* (
+  const reserveChildBudgetKernel = Effect.fnUntraced(function* (
     request: ChildBudgetReservationRequest,
     authority: SqlAuthorityReader,
   ) {
@@ -3262,17 +3250,105 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     return reserved;
   });
 
-  const attachChildToReservationKernel = Effect.fn("SqlSubmissionLedger.attachChildToReservation")(
-    function* (request: AttachChildToReservationRequest, authority: SqlAuthorityReader) {
-      const operation = "ledger attach child to reservation";
+  const attachChildToReservationKernel = Effect.fnUntraced(function* (
+    request: AttachChildToReservationRequest,
+    authority: SqlAuthorityReader,
+  ) {
+    const operation = "ledger attach child to reservation";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(AttachChildToReservationRequest))(
+    const validated = yield* Schema.decodeEffect(Schema.toType(AttachChildToReservationRequest))(
+      request,
+    ).pipe(Effect.mapError(internalFailure(operation)));
+
+    yield* hitFailpoint("ledger:child-attach:before", operation);
+
+    const attached = yield* inWriteTransaction(
+      operation,
+      Effect.gen(function* () {
+        const existing = yield* readChildReservation(operation, validated.reservationId);
+
+        if (Option.isNone(existing)) {
+          return yield* LedgerError.make({
+            operation,
+            message: `Unknown child reservation ${validated.reservationId}.`,
+          });
+        }
+        if (existing.value.child_submission_id !== null) {
+          // Idempotent replay of the recorded attachment (unfenced — it mutates nothing).
+          if (existing.value.child_submission_id === validated.childSubmissionId) {
+            return yield* childReservationSnapshotFromRow(operation, existing.value);
+          }
+
+          return yield* ChildReservationConflict.make({
+            reservationId: validated.reservationId,
+            status: existing.value.status,
+            message: `Reservation ${validated.reservationId} already records child ${existing.value.child_submission_id}.`,
+          });
+        }
+
+        const parent = yield* authority.requireSubmission(
+          operation,
+          existing.value.parent_submission_id,
+        );
+
+        yield* authority.requireOwnership(operation, parent, validated.ownershipToken);
+        if (existing.value.status !== "reserved") {
+          return yield* ChildReservationConflict.make({
+            reservationId: validated.reservationId,
+            status: existing.value.status,
+            message: `Cannot attach a child to a ${existing.value.status} reservation.`,
+          });
+        }
+        // Single-store latitude: the admitted child must exist here, so a dangling
+        // attachment can never enter the recovery view.
+        const child = yield* readSubmission(operation, validated.childSubmissionId);
+
+        if (Option.isNone(child)) {
+          return yield* LedgerError.make({
+            operation,
+            message: `Unknown child submission ${validated.childSubmissionId}.`,
+          });
+        }
+        yield* sql`
+            UPDATE ${relation("effect_agent_child_reservations")}
+            SET child_submission_id = ${validated.childSubmissionId}
+            WHERE reservation_id = ${validated.reservationId}
+          `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+        const updated = yield* readChildReservation(operation, validated.reservationId);
+
+        if (Option.isNone(updated)) {
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_child_reservations",
+            validated.reservationId,
+            "An updated child reservation row is missing inside its own transaction.",
+          );
+        }
+
+        return yield* childReservationSnapshotFromRow(operation, updated.value);
+      }),
+    );
+
+    yield* hitFailpoint("ledger:child-attach:after", operation);
+
+    return attached;
+  });
+
+  const beginChildBudgetRelease: SubmissionLedger["Service"]["beginChildBudgetRelease"] =
+    Effect.fnUntraced(function* (request: BeginChildBudgetReleaseRequest) {
+      const operation = "ledger begin child budget release";
+
+      const validated = yield* Schema.decodeEffect(Schema.toType(BeginChildBudgetReleaseRequest))(
         request,
       ).pipe(Effect.mapError(internalFailure(operation)));
 
-      yield* hitFailpoint("ledger:child-attach:before", operation);
+      const accountingJson = yield* encodePersistedJsonText(validated.accounting).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
-      const attached = yield* inWriteTransaction(
+      yield* hitFailpoint("ledger:child-release-pending:before", operation);
+
+      const frozen = yield* inWriteTransaction(
         operation,
         Effect.gen(function* () {
           const existing = yield* readChildReservation(operation, validated.reservationId);
@@ -3283,47 +3359,37 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
               message: `Unknown child reservation ${validated.reservationId}.`,
             });
           }
-          if (existing.value.child_submission_id !== null) {
-            // Idempotent replay of the recorded attachment (unfenced — it mutates nothing).
-            if (existing.value.child_submission_id === validated.childSubmissionId) {
-              return yield* childReservationSnapshotFromRow(operation, existing.value);
+          if (existing.value.status !== "reserved") {
+            const existingSnapshot = yield* childReservationSnapshotFromRow(
+              operation,
+              existing.value,
+            );
+
+            // The accounting decision was already frozen exactly once; an identical replay is a
+            // no-op and a divergent decision conflicts (spec §12 join step 6).
+            if (
+              existingSnapshot.accounting !== undefined &&
+              equivalentPersistedJson(existingSnapshot.accounting, validated.accounting)
+            ) {
+              return existingSnapshot;
             }
 
             return yield* ChildReservationConflict.make({
               reservationId: validated.reservationId,
               status: existing.value.status,
-              message: `Reservation ${validated.reservationId} already records child ${existing.value.child_submission_id}.`,
+              message: "A different accounting decision is already frozen for this reservation.",
             });
           }
+          const now = yield* currentInstant;
 
-          const parent = yield* authority.requireSubmission(
-            operation,
-            existing.value.parent_submission_id,
-          );
-
-          yield* authority.requireOwnership(operation, parent, validated.ownershipToken);
-          if (existing.value.status !== "reserved") {
-            return yield* ChildReservationConflict.make({
-              reservationId: validated.reservationId,
-              status: existing.value.status,
-              message: `Cannot attach a child to a ${existing.value.status} reservation.`,
-            });
-          }
-          // Single-store latitude: the admitted child must exist here, so a dangling
-          // attachment can never enter the recovery view.
-          const child = yield* readSubmission(operation, validated.childSubmissionId);
-
-          if (Option.isNone(child)) {
-            return yield* LedgerError.make({
-              operation,
-              message: `Unknown child submission ${validated.childSubmissionId}.`,
-            });
-          }
           yield* sql`
-            UPDATE ${relation("effect_agent_child_reservations")}
-            SET child_submission_id = ${validated.childSubmissionId}
-            WHERE reservation_id = ${validated.reservationId}
-          `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+          UPDATE ${relation("effect_agent_child_reservations")}
+          SET
+            status = 'releasePending',
+            accounting_json = ${accountingJson},
+            release_began_at = ${now.iso}
+          WHERE reservation_id = ${validated.reservationId}
+        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
           const updated = yield* readChildReservation(operation, validated.reservationId);
 
           if (Option.isNone(updated)) {
@@ -3339,156 +3405,78 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
         }),
       );
 
-      yield* hitFailpoint("ledger:child-attach:after", operation);
+      yield* hitFailpoint("ledger:child-release-pending:after", operation);
 
-      return attached;
-    },
-  );
+      return frozen;
+    });
 
-  const beginChildBudgetRelease: SubmissionLedger["Service"]["beginChildBudgetRelease"] = Effect.fn(
-    "SqlSubmissionLedger.beginChildBudgetRelease",
-  )(function* (request: BeginChildBudgetReleaseRequest) {
-    const operation = "ledger begin child budget release";
+  const releaseChildBudget: SubmissionLedger["Service"]["releaseChildBudget"] = Effect.fnUntraced(
+    function* (request: ReleaseChildBudgetRequest) {
+      const operation = "ledger release child budget";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(BeginChildBudgetReleaseRequest))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* Schema.decodeEffect(Schema.toType(ReleaseChildBudgetRequest))(
+        request,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-    const accountingJson = yield* encodePersistedJsonText(validated.accounting).pipe(
-      Effect.mapError(internalFailure(operation)),
-    );
+      yield* hitFailpoint("ledger:child-release:before", operation);
 
-    yield* hitFailpoint("ledger:child-release-pending:before", operation);
+      const released = yield* inWriteTransaction(
+        operation,
+        Effect.gen(function* () {
+          const existing = yield* readChildReservation(operation, validated.reservationId);
 
-    const frozen = yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const existing = yield* readChildReservation(operation, validated.reservationId);
-
-        if (Option.isNone(existing)) {
-          return yield* LedgerError.make({
-            operation,
-            message: `Unknown child reservation ${validated.reservationId}.`,
-          });
-        }
-        if (existing.value.status !== "reserved") {
-          const existingSnapshot = yield* childReservationSnapshotFromRow(
-            operation,
-            existing.value,
-          );
-
-          // The accounting decision was already frozen exactly once; an identical replay is a
-          // no-op and a divergent decision conflicts (spec §12 join step 6).
-          if (
-            existingSnapshot.accounting !== undefined &&
-            equivalentPersistedJson(existingSnapshot.accounting, validated.accounting)
-          ) {
-            return existingSnapshot;
+          if (Option.isNone(existing)) {
+            return yield* LedgerError.make({
+              operation,
+              message: `Unknown child reservation ${validated.reservationId}.`,
+            });
           }
+          // Applied exactly once: replaying a released reservation returns the stored row
+          // unchanged (spec §12: "never available twice").
+          if (existing.value.status === "released") {
+            return yield* childReservationSnapshotFromRow(operation, existing.value);
+          }
+          if (existing.value.status !== "releasePending") {
+            return yield* ChildReservationConflict.make({
+              reservationId: validated.reservationId,
+              status: existing.value.status,
+              message: "Cannot release a reservation whose accounting decision is not frozen.",
+            });
+          }
+          const now = yield* currentInstant;
 
-          return yield* ChildReservationConflict.make({
-            reservationId: validated.reservationId,
-            status: existing.value.status,
-            message: "A different accounting decision is already frozen for this reservation.",
-          });
-        }
-        const now = yield* currentInstant;
-
-        yield* sql`
-          UPDATE ${relation("effect_agent_child_reservations")}
-          SET
-            status = 'releasePending',
-            accounting_json = ${accountingJson},
-            release_began_at = ${now.iso}
-          WHERE reservation_id = ${validated.reservationId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        const updated = yield* readChildReservation(operation, validated.reservationId);
-
-        if (Option.isNone(updated)) {
-          return yield* corruptionFailure(
-            operation,
-            "effect_agent_child_reservations",
-            validated.reservationId,
-            "An updated child reservation row is missing inside its own transaction.",
-          );
-        }
-
-        return yield* childReservationSnapshotFromRow(operation, updated.value);
-      }),
-    );
-
-    yield* hitFailpoint("ledger:child-release-pending:after", operation);
-
-    return frozen;
-  });
-
-  const releaseChildBudget: SubmissionLedger["Service"]["releaseChildBudget"] = Effect.fn(
-    "SqlSubmissionLedger.releaseChildBudget",
-  )(function* (request: ReleaseChildBudgetRequest) {
-    const operation = "ledger release child budget";
-
-    const validated = yield* Schema.decodeEffect(Schema.toType(ReleaseChildBudgetRequest))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
-
-    yield* hitFailpoint("ledger:child-release:before", operation);
-
-    const released = yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const existing = yield* readChildReservation(operation, validated.reservationId);
-
-        if (Option.isNone(existing)) {
-          return yield* LedgerError.make({
-            operation,
-            message: `Unknown child reservation ${validated.reservationId}.`,
-          });
-        }
-        // Applied exactly once: replaying a released reservation returns the stored row
-        // unchanged (spec §12: "never available twice").
-        if (existing.value.status === "released") {
-          return yield* childReservationSnapshotFromRow(operation, existing.value);
-        }
-        if (existing.value.status !== "releasePending") {
-          return yield* ChildReservationConflict.make({
-            reservationId: validated.reservationId,
-            status: existing.value.status,
-            message: "Cannot release a reservation whose accounting decision is not frozen.",
-          });
-        }
-        const now = yield* currentInstant;
-
-        yield* sql`
+          yield* sql`
           UPDATE ${relation("effect_agent_child_reservations")}
           SET status = 'released', released_at = ${now.iso}
           WHERE reservation_id = ${validated.reservationId}
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        const updated = yield* readChildReservation(operation, validated.reservationId);
+          const updated = yield* readChildReservation(operation, validated.reservationId);
 
-        if (Option.isNone(updated)) {
-          return yield* corruptionFailure(
-            operation,
-            "effect_agent_child_reservations",
-            validated.reservationId,
-            "An updated child reservation row is missing inside its own transaction.",
-          );
-        }
+          if (Option.isNone(updated)) {
+            return yield* corruptionFailure(
+              operation,
+              "effect_agent_child_reservations",
+              validated.reservationId,
+              "An updated child reservation row is missing inside its own transaction.",
+            );
+          }
 
-        return yield* childReservationSnapshotFromRow(operation, updated.value);
-      }),
-    );
+          return yield* childReservationSnapshotFromRow(operation, updated.value);
+        }),
+      );
 
-    yield* hitFailpoint("ledger:child-release:after", operation);
+      yield* hitFailpoint("ledger:child-release:after", operation);
 
-    return released;
-  });
+      return released;
+    },
+  );
 
   interface ScanCursor {
     readonly threadId: string;
     readonly queueSequence: number;
   }
 
-  const scanPage = Effect.fn("SqlSubmissionLedger.scanPage")(function* (
+  const scanPage = Effect.fnUntraced(function* (
     cursor: ScanCursor | undefined,
   ): Effect.fn.Return<
     readonly [ReadonlyArray<SubmissionWorkItem>, Option.Option<ScanCursor | undefined>],
@@ -3545,18 +3533,17 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     LedgerError
   >(undefined, scanPage);
 
-  const readAbortIntentForSubmission: SubmissionLedger["Service"]["readAbortIntent"] = Effect.fn(
-    "SqlSubmissionLedger.readAbortIntentForSubmission",
-  )(function* (request) {
-    const operation = "ledger read abort intent";
+  const readAbortIntentForSubmission: SubmissionLedger["Service"]["readAbortIntent"] =
+    Effect.fnUntraced(function* (request) {
+      const operation = "ledger read abort intent";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(AbortIntentRequest))(request).pipe(
-      Effect.mapError(internalFailure(operation)),
-    );
+      const validated = yield* Schema.decodeEffect(Schema.toType(AbortIntentRequest))(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
-    const recordId = submissionAbortRecordId(validated.submissionId);
+      const recordId = submissionAbortRecordId(validated.submissionId);
 
-    const rows = yield* sql<Record<string, unknown>>`
+      const rows = yield* sql<Record<string, unknown>>`
       SELECT
         submission.submission_id,
         abort.submission_id AS abort_submission_id,
@@ -3573,245 +3560,247 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
       WHERE submission.submission_id = ${validated.submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    const decoded = yield* decodeRows(
-      Schema.Array(AbortIntentLookupRow),
-      "effect_agent_abort_intents",
-      validated.submissionId,
-      rows,
-    ).pipe(Effect.mapError(internalFailure(operation)));
-
-    if (decoded.length === 0) {
-      return yield* LedgerError.make({
-        operation,
-        message: `Unknown submission ${validated.submissionId}.`,
-      });
-    }
-    if (decoded.length !== 1) {
-      return yield* corruptionFailure(
-        operation,
+      const decoded = yield* decodeRows(
+        Schema.Array(AbortIntentLookupRow),
         "effect_agent_abort_intents",
         validated.submissionId,
-        "An abort intent lookup returned more than one row.",
-      );
-    }
-    const row = decoded[0];
+        rows,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-    if (row.abort_submission_id === null) return undefined;
-
-    return yield* decodeAbortIntent({
-      submissionId: row.abort_submission_id,
-      author: row.author,
-      reason: row.reason,
-      requestedAt: row.requested_at,
-      ...(row.canonical_record_id === null ? {} : { canonicalRecordId: row.canonical_record_id }),
-    }).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(
+      if (decoded.length === 0) {
+        return yield* LedgerError.make({
+          operation,
+          message: `Unknown submission ${validated.submissionId}.`,
+        });
+      }
+      if (decoded.length !== 1) {
+        return yield* corruptionFailure(
           operation,
           "effect_agent_abort_intents",
           validated.submissionId,
-          error.message,
+          "An abort intent lookup returned more than one row.",
+        );
+      }
+      const row = decoded[0];
+
+      if (row.abort_submission_id === null) return undefined;
+
+      return yield* decodeAbortIntent({
+        submissionId: row.abort_submission_id,
+        author: row.author,
+        reason: row.reason,
+        requestedAt: row.requested_at,
+        ...(row.canonical_record_id === null ? {} : { canonicalRecordId: row.canonical_record_id }),
+      }).pipe(
+        Effect.mapError((error) =>
+          corruptionFailure(
+            operation,
+            "effect_agent_abort_intents",
+            validated.submissionId,
+            error.message,
+          ),
         ),
-      ),
-    );
-  });
+      );
+    });
 
-  const loadRecoverySnapshot: SubmissionLedger["Service"]["loadRecoverySnapshot"] = Effect.fn(
-    "SqlSubmissionLedger.loadRecoverySnapshot",
-  )(function* (request: RecoverySnapshotRequest) {
-    const operation = "ledger load recovery snapshot";
+  const loadRecoverySnapshot: SubmissionLedger["Service"]["loadRecoverySnapshot"] =
+    Effect.fnUntraced(function* (request: RecoverySnapshotRequest) {
+      const operation = "ledger load recovery snapshot";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(RecoverySnapshotRequest))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* Schema.decodeEffect(Schema.toType(RecoverySnapshotRequest))(
+        request,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-    return yield* journal
-      .withReadTransaction(operation)(
-        Effect.gen(function* () {
-          const submissionRow = yield* requireSubmission(operation, validated.submissionId);
-          const submission = yield* decodeSubmissionSnapshot(operation, submissionRow);
+      return yield* journal
+        .withReadTransaction(operation)(
+          Effect.gen(function* () {
+            const submissionRow = yield* requireSubmission(operation, validated.submissionId);
+            const submission = yield* decodeSubmissionSnapshot(operation, submissionRow);
 
-          let ownership: OwnershipSnapshot | undefined;
-          const ownershipRow = yield* readOwnership(operation, validated.submissionId);
+            let ownership: OwnershipSnapshot | undefined;
+            const ownershipRow = yield* readOwnership(operation, validated.submissionId);
 
-          if (Option.isSome(ownershipRow)) {
-            ownership = yield* decodeOwnershipSnapshot({
-              attemptId: ownershipRow.value.attempt_id,
-              ownerProducerId: ownershipRow.value.owner_producer_id,
-              producerEpoch: ownershipRow.value.producer_epoch,
-              leaseExpiresAt: ownershipRow.value.lease_expires_at,
-            }).pipe(Effect.mapError(internalFailure(operation)));
-          }
+            if (Option.isSome(ownershipRow)) {
+              ownership = yield* decodeOwnershipSnapshot({
+                attemptId: ownershipRow.value.attempt_id,
+                ownerProducerId: ownershipRow.value.owner_producer_id,
+                producerEpoch: ownershipRow.value.producer_epoch,
+                leaseExpiresAt: ownershipRow.value.lease_expires_at,
+              }).pipe(Effect.mapError(internalFailure(operation)));
+            }
 
-          let inputApplied: InputAppliedMarker | undefined;
+            let inputApplied: InputAppliedMarker | undefined;
 
-          if (
-            submissionRow.input_applied_record_id !== null &&
-            submissionRow.input_applied_sequence !== null
-          ) {
-            inputApplied = yield* decodeInputAppliedMarker({
-              recordId: submissionRow.input_applied_record_id,
-              sequence: submissionRow.input_applied_sequence,
-            }).pipe(Effect.mapError(internalFailure(operation)));
-          }
+            if (
+              submissionRow.input_applied_record_id !== null &&
+              submissionRow.input_applied_sequence !== null
+            ) {
+              inputApplied = yield* decodeInputAppliedMarker({
+                recordId: submissionRow.input_applied_record_id,
+                sequence: submissionRow.input_applied_sequence,
+              }).pipe(Effect.mapError(internalFailure(operation)));
+            }
 
-          let abortIntent: AbortIntent | undefined;
-          const abortRow = yield* readAbortIntent(operation, validated.submissionId);
+            let abortIntent: AbortIntent | undefined;
+            const abortRow = yield* readAbortIntent(operation, validated.submissionId);
 
-          if (Option.isSome(abortRow)) {
-            abortIntent = yield* abortIntentFromRow(
-              operation,
-              submissionRow,
-              validated.submissionId,
-              abortRow.value,
-            );
-          }
+            if (Option.isSome(abortRow)) {
+              abortIntent = yield* abortIntentFromRow(
+                operation,
+                submissionRow,
+                validated.submissionId,
+                abortRow.value,
+              );
+            }
 
-          // Host-side view: every Submission whose host linkage points here, in queue order
-          // (the terminalize loop settles them with the host outcome, DUR-002).
-          const joinRows = yield* sql<Record<string, unknown>>`
+            // Host-side view: every Submission whose host linkage points here, in queue order
+            // (the terminalize loop settles them with the host outcome, DUR-002).
+            const joinRows = yield* sql<Record<string, unknown>>`
             SELECT ${sql.literal(SUBMISSION_COLUMNS)}
             FROM ${relation("effect_agent_submissions")}
             WHERE joined_host_submission_id = ${validated.submissionId}
             ORDER BY queue_sequence ASC
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const joinSubmissions = yield* decodeSubmissionRows(
-            operation,
-            validated.submissionId,
-            joinRows,
-          );
-
-          const joins = yield* Effect.forEach(joinSubmissions, (row) =>
-            decodeJoinSnapshot({
-              submissionId: row.submission_id,
-              state: row.state,
-              hostSubmissionId: validated.submissionId,
-            }).pipe(Effect.mapError(internalFailure(operation))),
-          );
-
-          let hostSubmissionId: RecoverySnapshot["hostSubmissionId"];
-
-          if (submissionRow.joined_host_submission_id !== null) {
-            hostSubmissionId = yield* decodeSubmissionId(
-              submissionRow.joined_host_submission_id,
-            ).pipe(Effect.mapError(internalFailure(operation)));
-          }
-
-          let suspension: SuspensionSnapshot | undefined;
-
-          if (submissionRow.suspended_reason_json !== null && submissionRow.suspended_at !== null) {
-            const reason = yield* parseStoredJsonText(submissionRow.suspended_reason_json).pipe(
-              Effect.mapError((error) =>
-                corruptionFailure(
-                  operation,
-                  "effect_agent_submissions",
-                  validated.submissionId,
-                  error.message,
-                ),
-              ),
+            const joinSubmissions = yield* decodeSubmissionRows(
+              operation,
+              validated.submissionId,
+              joinRows,
             );
 
-            suspension = yield* decodeSuspensionSnapshot({
-              reason,
-              suspendedAt: submissionRow.suspended_at,
-            }).pipe(
-              Effect.mapError((error) =>
-                corruptionFailure(
-                  operation,
-                  "effect_agent_submissions",
-                  validated.submissionId,
-                  error.message,
-                ),
-              ),
+            const joins = yield* Effect.forEach(joinSubmissions, (row) =>
+              decodeJoinSnapshot({
+                submissionId: row.submission_id,
+                state: row.state,
+                hostSubmissionId: validated.submissionId,
+              }).pipe(Effect.mapError(internalFailure(operation))),
             );
-          }
 
-          const decisionRows = yield* readApprovalDecisions(operation, validated.submissionId);
+            let hostSubmissionId: RecoverySnapshot["hostSubmissionId"];
 
-          const approvalDecisions = yield* Effect.forEach(decisionRows, (row) =>
-            approvalIntentFromRow(operation, row),
-          );
+            if (submissionRow.joined_host_submission_id !== null) {
+              hostSubmissionId = yield* decodeSubmissionId(
+                submissionRow.joined_host_submission_id,
+              ).pipe(Effect.mapError(internalFailure(operation)));
+            }
 
-          const resolutionRows = yield* readUnknownResolutions(operation, validated.submissionId);
+            let suspension: SuspensionSnapshot | undefined;
 
-          const unknownResolutions = yield* Effect.forEach(resolutionRows, (row) =>
-            unknownResolutionIntentFromRow(operation, row),
-          );
+            if (
+              submissionRow.suspended_reason_json !== null &&
+              submissionRow.suspended_at !== null
+            ) {
+              const reason = yield* parseStoredJsonText(submissionRow.suspended_reason_json).pipe(
+                Effect.mapError((error) =>
+                  corruptionFailure(
+                    operation,
+                    "effect_agent_submissions",
+                    validated.submissionId,
+                    error.message,
+                  ),
+                ),
+              );
 
-          // Parent-side subagent view: this Submission's child budget reservations in parent
-          // Tool Call order, plus each attached child's current lane state (a disposable
-          // derived view; canonical records stay the recovery truth, DUR-015).
-          const childReservationRows = yield* sql<Record<string, unknown>>`
+              suspension = yield* decodeSuspensionSnapshot({
+                reason,
+                suspendedAt: submissionRow.suspended_at,
+              }).pipe(
+                Effect.mapError((error) =>
+                  corruptionFailure(
+                    operation,
+                    "effect_agent_submissions",
+                    validated.submissionId,
+                    error.message,
+                  ),
+                ),
+              );
+            }
+
+            const decisionRows = yield* readApprovalDecisions(operation, validated.submissionId);
+
+            const approvalDecisions = yield* Effect.forEach(decisionRows, (row) =>
+              approvalIntentFromRow(operation, row),
+            );
+
+            const resolutionRows = yield* readUnknownResolutions(operation, validated.submissionId);
+
+            const unknownResolutions = yield* Effect.forEach(resolutionRows, (row) =>
+              unknownResolutionIntentFromRow(operation, row),
+            );
+
+            // Parent-side subagent view: this Submission's child budget reservations in parent
+            // Tool Call order, plus each attached child's current lane state (a disposable
+            // derived view; canonical records stay the recovery truth, DUR-015).
+            const childReservationRows = yield* sql<Record<string, unknown>>`
             SELECT ${sql.literal(CHILD_RESERVATION_COLUMNS)}
             FROM ${relation("effect_agent_child_reservations")}
             WHERE parent_submission_id = ${validated.submissionId}
             ORDER BY parent_tool_call_id ASC
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          const decodedChildReservations = yield* decodeChildReservationRows(
-            operation,
-            validated.submissionId,
-            childReservationRows,
-          );
-
-          const childReservations = yield* Effect.forEach(decodedChildReservations, (row) =>
-            childReservationSnapshotFromRow(operation, row),
-          );
-
-          const childAttachments: Array<ChildAttachmentSnapshot> = [];
-
-          for (const row of decodedChildReservations) {
-            if (row.child_submission_id === null) continue;
-            const child = yield* readSubmission(operation, row.child_submission_id);
-
-            if (Option.isNone(child)) continue;
-            childAttachments.push(
-              yield* decodeChildAttachmentSnapshot({
-                toolCallId: row.parent_tool_call_id,
-                childSubmissionId: row.child_submission_id,
-                childState: child.value.state,
-                ...(child.value.settled_outcome === null
-                  ? {}
-                  : { childOutcome: child.value.settled_outcome }),
-              }).pipe(Effect.mapError(internalFailure(operation))),
+            const decodedChildReservations = yield* decodeChildReservationRows(
+              operation,
+              validated.submissionId,
+              childReservationRows,
             );
-          }
 
-          let parentLinkage: ParentLinkage | undefined;
+            const childReservations = yield* Effect.forEach(decodedChildReservations, (row) =>
+              childReservationSnapshotFromRow(operation, row),
+            );
 
-          if (
-            submissionRow.parent_submission_id !== null &&
-            submissionRow.parent_tool_call_id !== null
-          ) {
-            parentLinkage = yield* decodeParentLinkage({
-              parentSubmissionId: submissionRow.parent_submission_id,
-              parentToolCallId: submissionRow.parent_tool_call_id,
-            }).pipe(Effect.mapError(internalFailure(operation)));
-          }
+            const childAttachments: Array<ChildAttachmentSnapshot> = [];
 
-          return RecoverySnapshot.make({
-            submission,
-            joins,
-            approvalDecisions,
-            unknownResolutions,
-            childReservations,
-            childAttachments,
-            ...(parentLinkage === undefined ? {} : { parentLinkage }),
-            ...(hostSubmissionId === undefined ? {} : { hostSubmissionId }),
-            ...(suspension === undefined ? {} : { suspension }),
-            ...(ownership === undefined ? {} : { ownership }),
-            ...(inputApplied === undefined ? {} : { inputApplied }),
-            ...(abortIntent === undefined ? {} : { abortIntent }),
-          });
-        }),
-      )
-      .pipe(
-        Effect.mapError((error) =>
-          journal.isTransactionFailure(error) ? internalFailure(operation)(error) : error,
-        ),
-      );
-  });
+            for (const row of decodedChildReservations) {
+              if (row.child_submission_id === null) continue;
+              const child = yield* readSubmission(operation, row.child_submission_id);
+
+              if (Option.isNone(child)) continue;
+              childAttachments.push(
+                yield* decodeChildAttachmentSnapshot({
+                  toolCallId: row.parent_tool_call_id,
+                  childSubmissionId: row.child_submission_id,
+                  childState: child.value.state,
+                  ...(child.value.settled_outcome === null
+                    ? {}
+                    : { childOutcome: child.value.settled_outcome }),
+                }).pipe(Effect.mapError(internalFailure(operation))),
+              );
+            }
+
+            let parentLinkage: ParentLinkage | undefined;
+
+            if (
+              submissionRow.parent_submission_id !== null &&
+              submissionRow.parent_tool_call_id !== null
+            ) {
+              parentLinkage = yield* decodeParentLinkage({
+                parentSubmissionId: submissionRow.parent_submission_id,
+                parentToolCallId: submissionRow.parent_tool_call_id,
+              }).pipe(Effect.mapError(internalFailure(operation)));
+            }
+
+            return RecoverySnapshot.make({
+              submission,
+              joins,
+              approvalDecisions,
+              unknownResolutions,
+              childReservations,
+              childAttachments,
+              ...(parentLinkage === undefined ? {} : { parentLinkage }),
+              ...(hostSubmissionId === undefined ? {} : { hostSubmissionId }),
+              ...(suspension === undefined ? {} : { suspension }),
+              ...(ownership === undefined ? {} : { ownership }),
+              ...(inputApplied === undefined ? {} : { inputApplied }),
+              ...(abortIntent === undefined ? {} : { abortIntent }),
+            });
+          }),
+        )
+        .pipe(
+          Effect.mapError((error) =>
+            journal.isTransactionFailure(error) ? internalFailure(operation)(error) : error,
+          ),
+        );
+    });
 
   const ledger = SubmissionLedger.of({
     capabilities,

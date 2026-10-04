@@ -197,7 +197,7 @@ const operations = <
       ),
     );
 
-  const validateDelivery = Effect.fn("Subagent.validateWorkerDelivery")(function* (
+  const validateDelivery = Effect.fnUntraced(function* (
     worker: WorkerRef,
     delivery: MessageStatus,
     operation: WorkerError["operation"],
@@ -221,7 +221,7 @@ const operations = <
     ),
   );
 
-  const prepare = Effect.fn("Subagent.prepareWorkerInput")(function* (
+  const prepare = Effect.fnUntraced(function* (
     parameters: Parameters["Type"],
     caller: WorkerContext,
   ) {
@@ -257,7 +257,7 @@ const operations = <
       ),
     );
 
-  const start = Effect.fn("Subagent.start")(function* (
+  const start = Effect.fnUntraced(function* (
     parameters: Parameters["Type"],
     options: {
       readonly idempotencyKey: IdempotencyKey;
@@ -362,7 +362,7 @@ const operations = <
     };
   });
 
-  const followUp = Effect.fn("Subagent.followUp")(function* (
+  const followUp = Effect.fnUntraced(function* (
     worker: Worker<Name>,
     parameters: Parameters["Type"],
     options: { readonly idempotencyKey: IdempotencyKey },
@@ -394,10 +394,7 @@ const operations = <
     return delivery;
   });
 
-  const inspectMessage = Effect.fn("Subagent.inspectWorkerMessage")(function* (
-    worker: Worker<Name>,
-    message: MessageRef,
-  ) {
+  const inspectMessage = Effect.fnUntraced(function* (worker: Worker<Name>, message: MessageRef) {
     const service = yield* host;
     const validated = yield* validateWorker(worker, "inspect");
 
@@ -423,7 +420,7 @@ const operations = <
     return delivery;
   });
 
-  const observe = Effect.fn("Subagent.observeWorker")(function* (
+  const observe = Effect.fnUntraced(function* (
     operation: "inspect" | "await",
     worker: Worker<Name>,
     receipt: Receipt,
@@ -545,7 +542,7 @@ const operations = <
     ).pipe(Effect.mapError((cause) => projectionFailure("result", cause)));
   });
 
-  const list = Effect.fn("Subagent.list")(function* (
+  const list = Effect.fnUntraced(function* (
     options: { readonly limit?: number; readonly after?: ThreadId } = {},
   ) {
     const service = yield* host;
@@ -585,7 +582,7 @@ const operations = <
     return { items, next: validated.next };
   });
 
-  const cancel = Effect.fn("Subagent.cancel")(function* (worker: Worker<Name>, receipt: Receipt) {
+  const cancel = Effect.fnUntraced(function* (worker: Worker<Name>, receipt: Receipt) {
     const service = yield* host;
     const validated = yield* validateWorker(worker, "cancel");
     const requested = yield* validateReceipt(validated, receipt, "cancel");
@@ -1039,7 +1036,7 @@ export type BackgroundTools<
   ]: BackgroundToolMap<Name, Parameters, Success, Failure>[Op];
 };
 
-const modelKey = Effect.fn("Subagent.workerToolKey")(function* (operation: "start" | "followUp") {
+const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   const service = yield* host;
   const caller = yield* service.context;
 

@@ -100,7 +100,7 @@ export class BrowserQuickActionBrowserBinding extends Context.Service<
   ): Layer.Layer<BrowserQuickActionBrowserBinding> {
     const browser = options.browser;
 
-    const invoke = Effect.fn("BrowserQuickActionBrowserBinding.invoke")(function* (
+    const invoke = Effect.fnUntraced(function* (
       action: "screenshot" | "content" | "markdown" | "links" | "scrape" | "json",
       evaluate: () => Promise<Response>,
     ): Effect.fn.Return<Response, BrowserQuickActionRpcError> {
@@ -333,7 +333,7 @@ const releaseResponseReader = (
     ),
   );
 
-const readBoundedResponse = Effect.fn("BrowserQuickActionCapture.readResponse")(function* (
+const readBoundedResponse = Effect.fnUntraced(function* (
   response: Response,
   request: PageCaptureRequest,
 ) {
@@ -494,7 +494,7 @@ const makeCapture = (
   browser: BrowserQuickActionClient,
   workersAi?: BrowserQuickActionWorkersAiPolicy,
 ): PageCaptureCapture =>
-  Effect.fn("BrowserQuickActionCapture.capture")(function* (
+  Effect.fnUntraced(function* (
     request: PageCaptureRequest,
   ): Effect.fn.Return<PageCaptureResult, PageCaptureError> {
     if (request.engine !== "chromium") {
@@ -727,7 +727,7 @@ const declaredLength = (response: Response): number | undefined => {
   return Number.isSafeInteger(length) ? length : undefined;
 };
 
-const readScreenshot = Effect.fn("BrowserQuickActionScreenshot.read")(function* (
+const readScreenshot = Effect.fnUntraced(function* (
   response: Response,
   request: PageScreenshotRequest,
 ) {
@@ -793,7 +793,7 @@ const readScreenshot = Effect.fn("BrowserQuickActionScreenshot.read")(function* 
 }, Effect.scoped);
 
 const makeScreenshot = (browser: BrowserQuickActionClient): PageScreenshotCapture =>
-  Effect.fn("BrowserQuickActionScreenshot.capture")(function* (
+  Effect.fnUntraced(function* (
     request: PageScreenshotRequest,
   ): Effect.fn.Return<PageScreenshotResult, PageScreenshotError> {
     if (request.engine !== "chromium") {

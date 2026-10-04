@@ -154,7 +154,7 @@ export const peerMessageRecordId = (messageId: IdempotencyKey): RecordId =>
   decodeRecordId(messageId);
 
 /** Same immutable tuple used by native update admission; callers never parse its hash. */
-export const agentUpdateRecordId = Effect.fn("RunJournal.agentUpdateRecordId")(function* (
+export const agentUpdateRecordId = Effect.fnUntraced(function* (
   threadId: ThreadId,
   runId: RunId,
   updateId: IdempotencyKey,
@@ -590,10 +590,7 @@ export interface JournalBoundary {
  * it skips only the metadata scan, never covered-Tool validation or the canonical fold.
  * @internal
  */
-export const projectRunJournalStream = Effect.fn("RunJournal.projectRunJournalStream")(function* <
-  E,
-  R,
->(
+export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   records: Stream.Stream<CanonicalRecordEnvelope, E, R>,
   ownerRunId: RunId | undefined,
   onBoundary?: (boundary: JournalBoundary) => void,
@@ -1341,27 +1338,25 @@ export const projectRunJournalStream = Effect.fn("RunJournal.projectRunJournalSt
 });
 
 /** Pure projection of one Run's durable recovery state from canonical records. */
-export const projectRunJournal = Effect.fn("RunJournal.projectRunJournal")(
-  (
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-    runId: RunId,
-  ): Effect.Effect<RunJournalProjection, RunJournalError> =>
-    projectRunJournalStream(Stream.fromIterable(records), runId),
-);
+export const projectRunJournal = Effect.fnUntraced(function* (
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+  runId: RunId,
+): Effect.fn.Return<RunJournalProjection, RunJournalError> {
+  return yield* projectRunJournalStream(Stream.fromIterable(records), runId);
+});
 
 /**
  * Pure valid-prompt projection from canonical records: `UserInputRecorded` +
  * `ModelResponseRecorded` + complete `ToolCallSettled` batches → the deterministic model-visible
  * Prompt (plan §Coordinator flow step 3).
  */
-export const promptFromCanonicalRecords = Effect.fn("RunJournal.promptFromCanonicalRecords")(
-  (
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-  ): Effect.Effect<Prompt.Prompt, RunJournalError> =>
-    projectRunJournalStream(Stream.fromIterable(records), undefined).pipe(
-      Effect.map((projection) => projection.prompt),
-    ),
-);
+export const promptFromCanonicalRecords = Effect.fnUntraced(function* (
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+): Effect.fn.Return<Prompt.Prompt, RunJournalError> {
+  return yield* projectRunJournalStream(Stream.fromIterable(records), undefined).pipe(
+    Effect.map((projection) => projection.prompt),
+  );
+});
 
 /** Everything one committed Turn contributes to its canonical batch. */
 /**
@@ -1621,7 +1616,7 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
  * joins the response in the same atomic batch. Other application Turns split into
  * `turnResponseBatch` + `turnResultsBatch` before execution.
  */
-export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(function* (
+export const turnCanonicalBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
@@ -1646,7 +1641,7 @@ export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(fun
  * loss; approvals and the dispatch fence remain separate execution requirements. Provider
  * results stay in assistant content. Application outcomes belong to the results commit.
  */
-export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(function* (
+export const turnResponseBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
@@ -1665,7 +1660,7 @@ export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(funct
  * model-visible atomically. A completion after already committed Tool results gets its own
  * terminal batch; it never rewrites or repeats the earlier Tool outcomes.
  */
-export const turnResultsBatch = Effect.fn("RunJournal.turnResultsBatch")(function* (
+export const turnResultsBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);

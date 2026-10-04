@@ -104,7 +104,7 @@ export class ThreadHistory extends Context.Service<
         memoryStore: threads,
         load: (threadId) =>
           threads.snapshot(threadId).pipe(Effect.map(toPrompt), Effect.mapError(historyError)),
-        open: Effect.fn("ThreadHistory.open")(function* ({ threadId, runId }) {
+        open: Effect.fnUntraced(function* ({ threadId, runId }) {
           const snapshot = yield* threads.create(threadId).pipe(Effect.mapError(historyError));
 
           return {

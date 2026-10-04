@@ -8,9 +8,7 @@ import type { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
 import type { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import type { SqliteStorageInitializationError } from "./SqliteThreadStore.ts";
 
-const makeSubscriptionStore = Effect.fn("SqliteSubscriptionStore.make")(function* (
-  owned: SourcePartition,
-) {
+const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartition) {
   const partition = yield* Schema.decodeEffect(SourcePartition)(owned).pipe(
     Effect.mapError(() => SubscriptionError.make({ reason: "validation", code: "partition" })),
   );

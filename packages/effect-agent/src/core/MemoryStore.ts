@@ -113,7 +113,7 @@ export type MemoryDocument<Namespace extends MemoryNamespace.Any = MemoryNamespa
 
 export const MemoryDocument = {
   Wire: Schema.Union([ActiveMemoryDocument.Wire, WithdrawnMemoryDocument.Wire]),
-  restore: Effect.fn("MemoryDocument.restore")(function* <Namespace extends MemoryNamespace.Any>(
+  restore: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
     namespace: Namespace,
     input: unknown,
   ): Effect.fn.Return<MemoryDocument<Namespace>, MemoryStorageError> {
@@ -253,7 +253,7 @@ export class MemoryReader extends Context.Service<
     readonly get: (key: MemoryKey) => Effect.Effect<MemoryDocument | null, MemoryStorageError>;
   }): MemoryReader["Service"] {
     return {
-      get: Effect.fn("MemoryReader.get")(function* <Namespace extends MemoryNamespace.Any>(
+      get: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
         key: MemoryKey<Namespace>,
       ) {
         const document = yield* adapter.get(key);
@@ -287,7 +287,7 @@ export class MemoryWriter extends Context.Service<
     readonly change: (write: MemoryWrite) => Effect.Effect<MemoryDocument, MemoryWriteError>;
   }): MemoryWriter["Service"] {
     return {
-      change: Effect.fn("MemoryWriter.change")(function* <Namespace extends MemoryNamespace.Any>(
+      change: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
         write: MemoryWrite<Namespace>,
       ) {
         const document = yield* adapter.change(write);
@@ -303,9 +303,7 @@ export class MemoryWriter extends Context.Service<
  * source, not the original activity from which a consumer extracted it. The adapter reconciles
  * receipts first and owns atomicity and the clock. Original evidence belongs in provenance.
  */
-export const applyMemoryWrite = Effect.fn("applyMemoryWrite")(function* <
-  Namespace extends MemoryNamespace.Any,
->(
+export const applyMemoryWrite = Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
   current: MemoryDocument<NoInfer<Namespace>> | null,
   write: MemoryWrite<Namespace>,
   modifiedAt: number,

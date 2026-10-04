@@ -101,7 +101,7 @@ const nativeOperation = <A, E, R>(operation: string, effect: Effect.Effect<A, E,
     ),
   );
 
-const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: WorkflowAgentHostOptions) {
+const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions) {
   const config = yield* Schema.decodeEffect(WorkflowHostConfig)({
     deploymentId: options.deploymentId,
     principal: options.principal,
@@ -151,9 +151,7 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
       ),
     );
 
-  const validateReceipt = Effect.fn("WorkflowAgentHost.validateReceipt")(function* (
-    receipt: Receipt,
-  ) {
+  const validateReceipt = Effect.fnUntraced(function* (receipt: Receipt) {
     const found = yield* ledger.lookup(
       SubmissionLookupById.make({ submissionId: receipt.submissionId }),
     );
@@ -176,7 +174,7 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
   // failure annotation suspends infrastructure failures and defects instead of settling them.
   yield* engine.register(
     workflow,
-    Effect.fn("WorkflowAgentHost.execute")(function* (payload, executionId) {
+    Effect.fnUntraced(function* (payload, executionId) {
       yield* Effect.annotateCurrentSpan({
         "workflow.execution.id": executionId,
         "agent.submission.id": payload.receipt.submissionId,
@@ -240,7 +238,7 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
     }),
   );
 
-  const intentFor = Effect.fn("WorkflowAgentHost.intentFor")(function* (receipt: Receipt) {
+  const intentFor = Effect.fnUntraced(function* (receipt: Receipt) {
     const payload = new WorkflowSubmission({
       version: 1,
       deploymentId: config.deploymentId,
@@ -256,7 +254,7 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
     });
   });
 
-  const dispatchIntent = Effect.fn("WorkflowAgentHost.dispatch")(
+  const dispatchIntent = Effect.fnUntraced(
     function* (
       requested: WorkflowDispatchIntent,
     ): Effect.fn.Return<boolean, WorkflowRepairFailure> {
@@ -424,7 +422,7 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
   );
   yield* Effect.addFinalizer(() => Ref.set(admission, false));
 
-  const submit = Effect.fn("WorkflowAgentHost.submit")(function* <InputSchema extends Schema.Top>(
+  const submit = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
     agent: DurableSubmitAgent<InputSchema>,
     input: InputSchema["Type"],
     options: DurableSubmitOptions,
@@ -443,10 +441,11 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
     return receipt;
   });
 
-  const execute = Effect.fn("AgentWorkflow.execute")(function* <
-    Input extends Schema.Top,
-    Output extends Schema.Top,
-  >(agent: WorkflowAgent<Input, Output>, input: Input["Type"], options: WorkflowExecuteOptions) {
+  const execute = Effect.fnUntraced(function* <Input extends Schema.Top, Output extends Schema.Top>(
+    agent: WorkflowAgent<Input, Output>,
+    input: Input["Type"],
+    options: WorkflowExecuteOptions,
+  ) {
     const parentEngine = yield* WorkflowEngine.WorkflowEngine;
 
     if (parentEngine !== engine) {
@@ -555,9 +554,9 @@ const makeHost = Effect.fn("WorkflowAgentHost.make")(function* (options: Workflo
     resolveUnknown: runtime.resolveUnknown,
     submissionStatus: runtime.submissionStatus,
     repair,
-    executionId: Effect.fn("WorkflowAgentHost.executionId")((receipt: Receipt) =>
-      intentFor(receipt).pipe(Effect.map((intent) => intent.executionId)),
-    ),
+    executionId: Effect.fnUntraced(function* (receipt: Receipt) {
+      return yield* intentFor(receipt).pipe(Effect.map((intent) => intent.executionId));
+    }),
   });
 });
 

@@ -80,7 +80,7 @@ const contiguous = () =>
   });
 
 /** Stable work identity independent of worker claims, retry count, extraction, and clocks. */
-export const activityWorkId = Effect.fn("activityWorkId")(function* (
+export const activityWorkId = Effect.fnUntraced(function* (
   key: ActivityProcessorKey,
   sequence: CanonicalSequence,
 ) {
@@ -105,7 +105,7 @@ export const activityWorkId = Effect.fn("activityWorkId")(function* (
  * a timeout and a longer lease. Claim release has a separate 500ms deadline; failure leaves
  * the bounded lease to expire.
  */
-export const processCommittedActivity = Effect.fn("processCommittedActivity")(function* <
+export const processCommittedActivity = Effect.fnUntraced(function* <
   E = never,
   R = never,
   EApply = never,

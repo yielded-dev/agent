@@ -84,7 +84,7 @@ export class ThreadObjectNamespace extends Context.Service<
 }
 
 /** Invoke a placed Thread using the current invocation's native RPC channel. */
-export const callThreadObject = Effect.fn("callThreadObject")(function* <A, E>(
+export const callThreadObject = Effect.fnUntraced(function* <A, E>(
   threadId: ThreadId,
   invoke: (target: ThreadObjectClient) => Promise<A>,
   onError: (cause: unknown) => E,
@@ -106,7 +106,7 @@ export const callThreadObject = Effect.fn("callThreadObject")(function* <A, E>(
  * narrowest-boundary check (structural probe for the namespace surface the transport uses);
  * a missing or misshaped binding fails typed before any Layer is built.
  */
-export const threadNamespaceFromEnv = Effect.fn("threadNamespaceFromEnv")(function* (
+export const threadNamespaceFromEnv = Effect.fnUntraced(function* (
   env: unknown,
   binding: string,
 ): Effect.fn.Return<DurableObjectNamespace<ThreadObjectRpc>, CloudflareBindingError> {

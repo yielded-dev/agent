@@ -57,7 +57,7 @@ export const MemoryAccess = {
  * successful withdrawal or access revocation exclude that source; an in-flight snapshot can
  * finish, including its same-Turn overflow retry. Original history and prior outputs remain.
  */
-export const revalidateMemoryLookup = Effect.fn("revalidateMemoryLookup")(function* (
+export const revalidateMemoryLookup = Effect.fnUntraced(function* (
   lookup: MemoryLookup,
   access: MemoryAccess,
   limits: Pick<MemoryRecallLimits, "maxInputBytes"> & { readonly maxSourceBytes?: number } = {},

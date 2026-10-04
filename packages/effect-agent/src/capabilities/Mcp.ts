@@ -204,7 +204,7 @@ const toolkitOutputSchema = (tool: Tool.Any): JsonSchema.JsonSchema | undefined 
   return derived.type === "object" ? derived : undefined;
 };
 
-const digestJson = Effect.fn("digestMcpSchema")(function* (serverId: string, value: unknown) {
+const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown) {
   const json = yield* Schema.decodeUnknownEffect(Schema.Json)(value).pipe(
     Effect.mapError((error) =>
       McpToolkitMismatch.make({
@@ -243,7 +243,7 @@ const digestJson = Effect.fn("digestMcpSchema")(function* (serverId: string, val
 });
 
 /** Validate native discovery data before it enters Agent Tool context. */
-export const validateMcpDiscovery = Effect.fn("validateMcpDiscovery")(function* (
+export const validateMcpDiscovery = Effect.fnUntraced(function* (
   request: McpConnectionRequest,
   server: McpConnectedServer,
 ) {
@@ -400,7 +400,7 @@ export const validateMcpDiscovery = Effect.fn("validateMcpDiscovery")(function* 
  * Acquire a native connection in Scope, enforce a Clock-controlled timeout,
  * then validate discovery before exposing its Toolkit.
  */
-export const connectMcp = Effect.fn("connectMcp")(function* (request: McpConnectionRequest) {
+export const connectMcp = Effect.fnUntraced(function* (request: McpConnectionRequest) {
   const connector = yield* McpConnector;
 
   const server = yield* connector.connect(request).pipe(

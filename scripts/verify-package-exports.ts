@@ -30,6 +30,111 @@ const frameworkLayers: Readonly<Record<string, ReadonlyArray<string>>> = {
   durable: ["core", "engine", "sandbox", "capabilities", "durable"],
 };
 
+// Tracing belongs to operations, never to per-part, per-record, per-tool batch
+// orchestration or row-decoding helpers. Pin names to their owning boundary so a
+// helper cannot gain a span simply by reusing an allowed name from another module.
+const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "packages/effect-agent/src/engine/internal/agent-runtime.ts": [
+    "AgentRuntime.run",
+    "AgentRuntime.start",
+  ],
+  "packages/effect-agent/src/durable/DurableAgentRuntime.ts": [
+    "DurableAgentRuntime.recoverSubmission",
+    "DurableAgentRuntime.runRecovery",
+    "DurableAgentRuntime.retry",
+    "DurableAgentRuntime.resolveUnknown",
+    "DurableAgentRuntime.resolveApproval",
+  ],
+  "packages/effect-agent/src/durable/RunStorage.ts": ["RunStorage.claim"],
+  "packages/effect-agent/src/durable/Scheduling.ts": ["Scheduling.recover"],
+  "packages/effect-agent/src/durable/Subscriptions.ts": ["Subscriptions.recoverDelivery"],
+  "packages/storage-sql/src/SqlRunStorage.ts": ["SqlRunStorage.claim"],
+  "packages/storage-sql/src/SqlThreadStore.ts": ["SqlThreadStore.append"],
+  "packages/storage-sql/src/SqlSubmissionLedger.ts": [
+    "SqlSubmissionLedger.claim",
+    "SqlSubmissionLedger.renewOwnership",
+    "SqlSubmissionLedger.releaseOwnership",
+    "SqlSubmissionLedger.publishSettlement",
+    "SqlSubmissionLedger.finalizeSettlement",
+  ],
+  "packages/storage-sql/src/SqlActivityStore.ts": [
+    "SqlActivityStore.claim",
+    "SqlActivityStore.release",
+  ],
+  "packages/storage-memory/src/MemoryThreadStore.ts": ["MemoryThreadStore.append"],
+  "packages/storage-memory/src/MemorySubmissionLedger.ts": [
+    "MemorySubmissionLedger.claim",
+    "MemorySubmissionLedger.renewOwnership",
+    "MemorySubmissionLedger.releaseOwnership",
+    "MemorySettlementPublisher.publish",
+    "MemorySubmissionLedger.finalizeSettlement",
+  ],
+  "packages/storage-cloudflare/src/DoSubmissionLedger.ts": [
+    "DoSubmissionLedger.claim",
+    "DoSubmissionLedger.renewOwnership",
+    "DoSubmissionLedger.publishSettlement",
+    "DoSubmissionLedger.finalizeSettlement",
+  ],
+};
+
+const checkOperationSpans = (
+  source: ts.SourceFile,
+  report: (file: string, message: string) => void,
+): void => {
+  const namespaces = new Set<string>();
+  const functions = new Set<string>();
+
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+      continue;
+    const module = statement.moduleSpecifier.text;
+    const bindings = statement.importClause?.namedBindings;
+
+    if (bindings === undefined) continue;
+    if (module === "effect" && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements)
+        if ((binding.propertyName ?? binding.name).text === "Effect")
+          namespaces.add(binding.name.text);
+    } else if (module === "effect/Effect") {
+      if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+      else
+        for (const binding of bindings.elements)
+          if ((binding.propertyName ?? binding.name).text === "fn")
+            functions.add(binding.name.text);
+    }
+  }
+
+  walk(source, (node) => {
+    if (!ts.isCallExpression(node)) return;
+    const callee = node.expression;
+
+    if (
+      !(
+        (ts.isPropertyAccessExpression(callee) &&
+          ts.isIdentifier(callee.expression) &&
+          namespaces.has(callee.expression.text) &&
+          callee.name.text === "fn") ||
+        (ts.isIdentifier(callee) && functions.has(callee.text))
+      )
+    )
+      return;
+    const name = node.arguments[0];
+
+    if (
+      name !== undefined &&
+      ts.isStringLiteralLike(name) &&
+      operationSpans[source.fileName]?.includes(name.text)
+    )
+      return;
+    const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+
+    report(
+      source.fileName,
+      `Line ${line}: use Effect.fnUntraced; Effect.fn requires an allowlisted operation boundary`,
+    );
+  });
+};
+
 const walk = (node: ts.Node, visit: (node: ts.Node) => void): void => {
   visit(node);
   ts.forEachChild(node, (child) => walk(child, visit));
@@ -263,6 +368,8 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
                 (key === "./testing" || key.startsWith("./testing/")) &&
                 target === `./${relative}/${filename}`,
             );
+
+          if (!testOnly) checkOperationSpans(source, report);
 
           const dependencies = {
             ...manifest.dependencies,

@@ -159,7 +159,7 @@ const isTransactionFailure = Schema.is(
 );
 
 /** PostgreSQL owns schema/version checks; relational state transitions belong to storage-sql. */
-export const initializePostgresStorage = Effect.fn("PostgresStorage.initialize")(function* ({
+export const initializePostgresStorage = Effect.fnUntraced(function* ({
   lockTimeout,
   schema,
 }: {

@@ -56,89 +56,87 @@ export const resolveSubscriptionInput = (
  * Each operation owns a fresh Scope for its callbacks and codecs; captured host services
  * retain their host lifetime. Operation resources finalize on success, failure, or interruption.
  */
-export const makeSubscriptionInputBinding = Effect.fn("Thread.makeSubscriptionInputBinding")(
-  function* <
-    Event extends Schema.Top,
-    Parameters extends Schema.Top,
-    Continuation extends Schema.Top,
-    Input extends Schema.Top,
-    R,
-  >(options: {
-    readonly source: EventSourceVersion;
-    readonly agentId: AgentId;
-    readonly definitions: DefinitionDigests;
-    readonly event: Event;
-    readonly parameters: Parameters;
-    readonly context: Continuation;
-    readonly input: Input;
-    readonly prepare: (
-      event: Event["Type"],
-      parameters: Parameters["Type"],
-      context: Continuation["Type"],
-    ) => Effect.Effect<Input["Type"], SubscriptionSourceError, R>;
-  }): Effect.fn.Return<
-    SubscriptionInputBinding,
-    never,
-    Exclude<
-      | R
-      | Event["DecodingServices"]
-      | Parameters["DecodingServices"]
-      | Continuation["DecodingServices"]
-      | Continuation["EncodingServices"]
-      | Input["EncodingServices"],
-      Scope.Scope
-    >
-  > {
-    const services =
-      yield* Effect.context<
-        Exclude<
-          | R
-          | Event["DecodingServices"]
-          | Parameters["DecodingServices"]
-          | Continuation["DecodingServices"]
-          | Continuation["EncodingServices"]
-          | Input["EncodingServices"],
-          Scope.Scope
-        >
-      >();
+export const makeSubscriptionInputBinding = Effect.fnUntraced(function* <
+  Event extends Schema.Top,
+  Parameters extends Schema.Top,
+  Continuation extends Schema.Top,
+  Input extends Schema.Top,
+  R,
+>(options: {
+  readonly source: EventSourceVersion;
+  readonly agentId: AgentId;
+  readonly definitions: DefinitionDigests;
+  readonly event: Event;
+  readonly parameters: Parameters;
+  readonly context: Continuation;
+  readonly input: Input;
+  readonly prepare: (
+    event: Event["Type"],
+    parameters: Parameters["Type"],
+    context: Continuation["Type"],
+  ) => Effect.Effect<Input["Type"], SubscriptionSourceError, R>;
+}): Effect.fn.Return<
+  SubscriptionInputBinding,
+  never,
+  Exclude<
+    | R
+    | Event["DecodingServices"]
+    | Parameters["DecodingServices"]
+    | Continuation["DecodingServices"]
+    | Continuation["EncodingServices"]
+    | Input["EncodingServices"],
+    Scope.Scope
+  >
+> {
+  const services =
+    yield* Effect.context<
+      Exclude<
+        | R
+        | Event["DecodingServices"]
+        | Parameters["DecodingServices"]
+        | Continuation["DecodingServices"]
+        | Continuation["EncodingServices"]
+        | Input["EncodingServices"],
+        Scope.Scope
+      >
+    >();
 
-    const invalid = () =>
-      SubscriptionSourceError.make({ code: "input-binding-schema", retryable: false });
+  const invalid = () =>
+    SubscriptionSourceError.make({ code: "input-binding-schema", retryable: false });
 
-    const encode = <S extends Schema.Top>(schema: S, value: S["Type"]) =>
-      Schema.encodeEffect(schema)(value).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(PersistedJson)),
+  const encode = <S extends Schema.Top>(schema: S, value: S["Type"]) =>
+    Schema.encodeEffect(schema)(value).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(PersistedJson)),
+      Effect.mapError(invalid),
+    );
+
+  return {
+    source: options.source,
+    agentId: options.agentId,
+    definitions: options.definitions,
+    context: (value) =>
+      Schema.decodeUnknownEffect(PersistedJson)(value).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(options.context)),
         Effect.mapError(invalid),
-      );
-
-    return {
-      source: options.source,
-      agentId: options.agentId,
-      definitions: options.definitions,
-      context: (value) =>
-        Schema.decodeUnknownEffect(PersistedJson)(value).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(options.context)),
+        Effect.flatMap((decoded) => encode(options.context, decoded)),
+        Effect.scoped,
+        Effect.provideContext(services),
+      ),
+    prepare: (event, subscription) =>
+      Effect.gen(function* () {
+        const e = yield* Schema.decodeEffect(options.event)(event.payload).pipe(
           Effect.mapError(invalid),
-          Effect.flatMap((decoded) => encode(options.context, decoded)),
-          Effect.scoped,
-          Effect.provideContext(services),
-        ),
-      prepare: (event, subscription) =>
-        Effect.gen(function* () {
-          const e = yield* Schema.decodeEffect(options.event)(event.payload).pipe(
-            Effect.mapError(invalid),
-          );
+        );
 
-          const p = yield* Schema.decodeEffect(options.parameters)(
-            subscription.configuration.parameters,
-          ).pipe(Effect.mapError(invalid));
+        const p = yield* Schema.decodeEffect(options.parameters)(
+          subscription.configuration.parameters,
+        ).pipe(Effect.mapError(invalid));
 
-          const c = yield* Schema.decodeEffect(options.context)(
-            subscription.configuration.context,
-          ).pipe(Effect.mapError(invalid));
+        const c = yield* Schema.decodeEffect(options.context)(
+          subscription.configuration.context,
+        ).pipe(Effect.mapError(invalid));
 
-          return yield* encode(options.input, yield* options.prepare(e, p, c));
-        }).pipe(Effect.scoped, Effect.provideContext(services)),
-    };
-  },
-);
+        return yield* encode(options.input, yield* options.prepare(e, p, c));
+      }).pipe(Effect.scoped, Effect.provideContext(services)),
+  };
+});

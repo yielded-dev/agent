@@ -168,7 +168,7 @@ export class MemoryOwnerIdentity extends Context.Service<
 
 export const memoryWireBytes = (text: string): number => new TextEncoder().encode(text).byteLength;
 
-export const decodeMemoryWire = Effect.fn("decodeMemoryWire")(function* <A, I>(
+export const decodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
   raw: unknown,
   maxBytes: number,
@@ -185,7 +185,7 @@ export const decodeMemoryWire = Effect.fn("decodeMemoryWire")(function* <A, I>(
   );
 });
 
-export const encodeMemoryWire = Effect.fn("encodeMemoryWire")(function* <A, I>(
+export const encodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never, never>,
   value: A,
   maxBytes: number,
@@ -201,7 +201,7 @@ export const encodeMemoryWire = Effect.fn("encodeMemoryWire")(function* <A, I>(
 });
 
 /** One local read for Get, or per distinct candidate source. No discovery or background work. */
-export const handleMemoryOwnerRequest = Effect.fn("MemoryOwner.handleRequest")(function* (
+export const handleMemoryOwnerRequest = Effect.fnUntraced(function* (
   raw: unknown,
   limits: MemoryRpcLimits = defaultMemoryRpcLimits,
 ): Effect.fn.Return<

@@ -255,7 +255,7 @@ const utf8Bytes = (value: PersistedJson): number =>
  * exempt: its accepted-work obligation already exists, and returning the original Receipt
  * consumes no new quota. Refusals are typed `AdmissionLimitExceeded` and nothing is written.
  */
-const gateAdmissionLimits = Effect.fn("ThreadObject.gateAdmissionLimits")(function* (
+const gateAdmissionLimits = Effect.fnUntraced(function* (
   threadId: ThreadId,
   request: {
     readonly principal: SubmissionLookupByKey["principal"];
@@ -325,9 +325,7 @@ const passthroughSubmitAgent = (agentId: AgentId): DurableSubmitAgent<typeof Per
 });
 
 /** A physical owner may hold other Threads; an addressed request cannot act on their IDs. */
-const lookupAddressedSubmission = Effect.fn("ThreadObject.lookupAddressedSubmission")(function* (
-  submissionId: SubmissionId,
-) {
+const lookupAddressedSubmission = Effect.fnUntraced(function* (submissionId: SubmissionId) {
   const { threadId } = yield* ThreadObjectIdentity;
   const ports = yield* ThreadObjectPorts;
   const submission = yield* ports.lookupSubmission(submissionId);
@@ -338,9 +336,7 @@ const lookupAddressedSubmission = Effect.fn("ThreadObject.lookupAddressedSubmiss
   return submission;
 });
 
-const requireSubmissionThread = Effect.fn("ThreadObject.requireSubmissionThread")(function* (
-  submissionId: SubmissionId,
-) {
+const requireSubmissionThread = Effect.fnUntraced(function* (submissionId: SubmissionId) {
   const submission = yield* lookupAddressedSubmission(submissionId);
 
   if (Option.isNone(submission))
@@ -350,9 +346,7 @@ const requireSubmissionThread = Effect.fn("ThreadObject.requireSubmissionThread"
     });
 });
 
-const requireReceiptThread = Effect.fn("ThreadObject.requireReceiptThread")(function* (
-  threadId: ThreadId,
-) {
+const requireReceiptThread = Effect.fnUntraced(function* (threadId: ThreadId) {
   const identity = yield* ThreadObjectIdentity;
 
   if (threadId !== identity.threadId)
@@ -401,10 +395,7 @@ const requirePortThread = (request: PortRequest) => {
  * runtime/maintenance instances. The native endpoint uses this path too: queue limits,
  * idempotent receipts and the pre-admission generation/alarm commit have one owner.
  */
-export const submit = Effect.fn("ThreadObject.submit")(function* (
-  threadId: ThreadId,
-  request: SubmitRequest,
-) {
+export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: SubmitRequest) {
   const placement = yield* ThreadObjectPlacement;
 
   if (!placement.ownsThread(threadId))
@@ -1011,7 +1002,7 @@ const threadRpc = {
  * The producer comes from the actual runtime configuration, never from caller input. These
  * guards supplement the existing current model/Tool and operation authorization policies.
  */
-export const handleRpc = Effect.fn("ThreadObject.handleRpc")(function* (
+export const handleRpc = Effect.fnUntraced(function* (
   threadId: ThreadId,
   operation: ThreadRpcOperation,
   encoded: unknown,

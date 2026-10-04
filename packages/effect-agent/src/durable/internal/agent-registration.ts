@@ -91,7 +91,7 @@ type CachedFallbackContracts = {
 const fallbackContracts = new WeakMap<Crypto.Crypto, WeakMap<object, CachedFallbackContracts>>();
 
 /** Hash current operation contracts; no historical definitions or schemas are retained. */
-export const toolReplayContracts = Effect.fn("AgentRegistration.toolReplayContracts")(function* (
+export const toolReplayContracts = Effect.fnUntraced(function* (
   definition: Agent.AnyDefinition,
   versions?: ReplayVersions,
   fallbackVersion: PersistedJson = null,
@@ -223,23 +223,21 @@ export const toolReplayContracts = Effect.fn("AgentRegistration.toolReplayContra
 });
 
 /** Compile current metadata without acquiring executable services. */
-export const compileBindingContracts = Effect.fn("AgentRegistration.compileBindingContracts")(
-  function* (
-    definition: Agent.AnyDefinition,
-    definitions: DefinitionDigestInput,
-    versions?: ReplayVersions,
-  ): Effect.fn.Return<Pick<ResolvedBinding, "digests">, DigestError, Crypto.Crypto> {
-    const digests = yield* digestDefinitions(definitions);
-    const tools = yield* toolReplayContracts(definition, versions, definitions.tools);
+export const compileBindingContracts = Effect.fnUntraced(function* (
+  definition: Agent.AnyDefinition,
+  definitions: DefinitionDigestInput,
+  versions?: ReplayVersions,
+): Effect.fn.Return<Pick<ResolvedBinding, "digests">, DigestError, Crypto.Crypto> {
+  const digests = yield* digestDefinitions(definitions);
+  const tools = yield* toolReplayContracts(definition, versions, definitions.tools);
 
-    return {
-      digests: DefinitionDigests.make({
-        ...digests,
-        replay: ReplayContract.make({ agent: digests.agent, tools }),
-      }),
-    };
-  },
-);
+  return {
+    digests: DefinitionDigests.make({
+      ...digests,
+      replay: ReplayContract.make({ agent: digests.agent, tools }),
+    }),
+  };
+});
 
 type ExecutableDefinition = Agent.AnyDefinition & {
   readonly instructions: InstructionSource<never, unknown, unknown>;

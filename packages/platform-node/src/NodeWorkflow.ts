@@ -28,7 +28,7 @@ const dispatchError = (operation: string) => (cause: unknown) =>
         cause,
       });
 
-const decodeRow = Effect.fn("SqlWorkflowDispatchStore.decodeRow")(function* (value: unknown) {
+const decodeRow = Effect.fnUntraced(function* (value: unknown) {
   const row = yield* Schema.decodeUnknownEffect(StoredIntent, { onExcessProperty: "error" })(value);
   const intent = yield* decodeIntent(row.intent_json);
 
@@ -76,7 +76,7 @@ export class SqlWorkflowDispatchStore {
         ON effect_agent_workflow_dispatch (deployment_id, workflow_name, execution_id)
       `;
 
-      const put = Effect.fn("SqlWorkflowDispatchStore.put")(
+      const put = Effect.fnUntraced(
         function* (input: WorkflowDispatchIntent) {
           const intent = yield* Schema.decodeEffect(WorkflowDispatchIntent)(input);
           const encoded = yield* encodeIntent(intent);
@@ -146,7 +146,7 @@ export class SqlWorkflowDispatchStore {
         Effect.mapError(dispatchError("put")),
       );
 
-      const scan = Effect.fn("SqlWorkflowDispatchStore.scan")(
+      const scan = Effect.fnUntraced(
         function* (input: WorkflowDispatchScan) {
           const request = yield* Schema.decodeEffect(WorkflowDispatchScan)(input);
 
@@ -165,7 +165,7 @@ export class SqlWorkflowDispatchStore {
         Effect.mapError(dispatchError("scan")),
       );
 
-      const remove = Effect.fn("SqlWorkflowDispatchStore.remove")(
+      const remove = Effect.fnUntraced(
         function* (input: WorkflowDispatchIntent) {
           const intent = yield* Schema.decodeEffect(WorkflowDispatchIntent)(input);
 
@@ -234,7 +234,7 @@ export class NodeWorkflowRepairTrigger {
         const delay = interval.value;
 
         return WorkflowRepairTrigger.of({
-          register: Effect.fn("NodeWorkflowRepairTrigger.register")(function* (repair) {
+          register: Effect.fnUntraced(function* (repair) {
             const attempt = repair.pipe(
               Effect.catchCauseIf(
                 (cause) => !Cause.hasInterruptsOnly(cause),

@@ -57,7 +57,7 @@ export type Error = typeof Error.Type;
  * Pass the exact Agent Definition instance used in runtime registration; a same-ID copy fails
  * with BindingUnavailable before input encoding or admission.
  */
-export const execute = Effect.fn("AgentWorkflow.execute")(function* <
+export const execute = Effect.fnUntraced(function* <
   Input extends Schema.Top,
   Output extends Schema.Top,
 >(agent: WorkflowAgent<Input, Output>, input: Input["Type"], options: WorkflowExecuteOptions) {

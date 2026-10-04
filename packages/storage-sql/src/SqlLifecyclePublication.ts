@@ -104,7 +104,7 @@ const failure = (cause: unknown) =>
  * Acknowledgement enrolls maintenance unless a complete summary proves no timed head remains.
  * Producer retention continues to enroll newly committed source facts.
  */
-export const makeSqlLifecyclePublication = Effect.fn("SqlLifecyclePublication.make")(function* (
+export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
   namespace?: string,
   maxStoredValueBytes = 16 * 1024 * 1024,
 ) {
@@ -317,136 +317,131 @@ export const makeSqlLifecyclePublication = Effect.fn("SqlLifecyclePublication.ma
   const decodeRows = (rows: unknown) =>
     Schema.decodeUnknownEffect(Schema.Array(Row))(rows).pipe(Effect.mapError(failure));
 
-  const retainMany: SqlLifecycleRetainMany = Effect.fn("SqlLifecyclePublication.retainMany")(
-    function* (inputs) {
-      const existing = new Map<string, typeof Row.Type>();
-      const missing: Array<string> = [];
+  const retainMany: SqlLifecycleRetainMany = Effect.fnUntraced(function* (inputs) {
+    const existing = new Map<string, typeof Row.Type>();
+    const missing: Array<string> = [];
 
-      for (const input of inputs) {
-        if (input.id === undefined) continue;
-        const row = owned?.owners.get(input.ownerThreadId)?.rows.get(input.id);
+    for (const input of inputs) {
+      if (input.id === undefined) continue;
+      const row = owned?.owners.get(input.ownerThreadId)?.rows.get(input.id);
 
-        if (row === undefined) missing.push(input.id);
-        else existing.set(row.id, row);
-      }
-      // Six bound parameters per inserted row; identity reads leave the same 100-parameter
-      // ceiling intact. Existing fingerprints remain authoritative after acknowledgement.
-      for (let index = 0; index < missing.length; index += 100) {
-        const rows =
-          yield* sql`SELECT id, owner_thread_id, ordinal, fingerprint, payload_json, due_at_millis FROM ${relation} WHERE id IN ${sql.in(missing.slice(index, index + 100))}`.pipe(
-            execute,
-            Effect.mapError(failure),
-            Effect.flatMap(decodeRows),
-          );
-
-        for (const row of rows) existing.set(row.id, row);
-        remember(rows);
-      }
-
-      const counters = new Map<string, number>();
-      const insert: Array<typeof Row.Type> = [];
-
-      for (const input of inputs) {
-        const previous = input.id === undefined ? undefined : existing.get(input.id);
-
-        let current =
-          counters.get(input.ownerThreadId) ?? owned?.owners.get(input.ownerThreadId)?.ordinal;
-
-        if (previous === undefined && current === undefined) {
-          const rows =
-            yield* sql`SELECT COALESCE(MAX(ordinal), 0) AS ordinal FROM ${relation} WHERE owner_thread_id = ${input.ownerThreadId}`.pipe(
-              execute,
-              Effect.mapError(failure),
-              Effect.flatMap(
-                Schema.decodeUnknownEffect(Schema.Array(Schema.Struct({ ordinal: SqlInteger }))),
-              ),
-              Effect.mapError(failure),
-            );
-
-          current = rows[0]?.ordinal ?? 0;
-          const view = viewFor(input.ownerThreadId);
-
-          if (view !== undefined) {
-            view.ordinal = current;
-            if (current === 0) {
-              view.complete = true;
-              view.headKnown = true;
-            }
-          }
-        }
-        const ordinal = previous?.ordinal ?? (current ?? 0) + 1;
-
-        const publication = yield* LifecyclePublication.makeEffect({
-          ...input,
-          id: input.id ?? JSON.stringify([input.ownerThreadId, "lifecycle", ordinal]),
-          ordinal,
-        }).pipe(Effect.mapError(failure));
-
-        const text = yield* encode(publication);
-
-        if (new TextEncoder().encode(text).byteLength > maxStoredValueBytes || ordinal > 1_000_000)
-          return yield* LifecyclePublicationError.make({ reason: "capacity" });
-        const digest = yield* fingerprint(text);
-
-        if (previous !== undefined) {
-          if (previous.fingerprint !== digest)
-            return yield* LifecyclePublicationError.make({ reason: "conflict" });
-          continue;
-        }
-
-        const row: typeof Row.Type = {
-          id: publication.id,
-          owner_thread_id: input.ownerThreadId,
-          ordinal,
-          fingerprint: digest,
-          payload_json: text,
-          due_at_millis: DateTime.toEpochMillis(input.createdAt),
-        };
-
-        counters.set(input.ownerThreadId, ordinal);
-        existing.set(row.id, row);
-        insert.push(row);
-      }
-      for (let index = 0; index < insert.length; index += 16) {
-        const rows = insert.slice(index, index + 16);
-
-        yield* sql`INSERT INTO ${relation} ${sql.insert(rows)}`.pipe(
+      if (row === undefined) missing.push(input.id);
+      else existing.set(row.id, row);
+    }
+    // Six bound parameters per inserted row; identity reads leave the same 100-parameter
+    // ceiling intact. Existing fingerprints remain authoritative after acknowledgement.
+    for (let index = 0; index < missing.length; index += 100) {
+      const rows =
+        yield* sql`SELECT id, owner_thread_id, ordinal, fingerprint, payload_json, due_at_millis FROM ${relation} WHERE id IN ${sql.in(missing.slice(index, index + 100))}`.pipe(
           execute,
           Effect.mapError(failure),
+          Effect.flatMap(decodeRows),
         );
-        for (const row of rows) {
-          const heads = owned?.heads;
 
-          if (heads !== undefined && heads !== null && !heads.has(row.owner_thread_id)) {
-            heads.set(row.owner_thread_id, {
-              owner_thread_id: row.owner_thread_id,
-              ordinal: row.ordinal,
-              due_at_millis: row.due_at_millis,
-            });
-            if (heads.size > 128 && owned !== undefined) owned.heads = null;
+      for (const row of rows) existing.set(row.id, row);
+      remember(rows);
+    }
+
+    const counters = new Map<string, number>();
+    const insert: Array<typeof Row.Type> = [];
+
+    for (const input of inputs) {
+      const previous = input.id === undefined ? undefined : existing.get(input.id);
+
+      let current =
+        counters.get(input.ownerThreadId) ?? owned?.owners.get(input.ownerThreadId)?.ordinal;
+
+      if (previous === undefined && current === undefined) {
+        const rows =
+          yield* sql`SELECT COALESCE(MAX(ordinal), 0) AS ordinal FROM ${relation} WHERE owner_thread_id = ${input.ownerThreadId}`.pipe(
+            execute,
+            Effect.mapError(failure),
+            Effect.flatMap(
+              Schema.decodeUnknownEffect(Schema.Array(Schema.Struct({ ordinal: SqlInteger }))),
+            ),
+            Effect.mapError(failure),
+          );
+
+        current = rows[0]?.ordinal ?? 0;
+        const view = viewFor(input.ownerThreadId);
+
+        if (view !== undefined) {
+          view.ordinal = current;
+          if (current === 0) {
+            view.complete = true;
+            view.headKnown = true;
           }
-          const view = viewFor(row.owner_thread_id);
-
-          if (view === undefined) continue;
-          view.ordinal = row.ordinal;
-          view.attempts.set(row.id, { count: 0, persisted: false });
-          if (view.headKnown && view.head === undefined) view.head = row.ordinal;
         }
-        remember(rows);
       }
-      if (insert.length > 0) {
-        yield* progress
-          .committed("lifecycle")
-          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))));
-        invalidateDeadline();
-      }
-    },
-    read,
-  );
+      const ordinal = previous?.ordinal ?? (current ?? 0) + 1;
 
-  const retain = Effect.fn("SqlLifecyclePublication.retain")(function* (
-    input: SqlLifecyclePublicationInput,
-  ) {
+      const publication = yield* LifecyclePublication.makeEffect({
+        ...input,
+        id: input.id ?? JSON.stringify([input.ownerThreadId, "lifecycle", ordinal]),
+        ordinal,
+      }).pipe(Effect.mapError(failure));
+
+      const text = yield* encode(publication);
+
+      if (new TextEncoder().encode(text).byteLength > maxStoredValueBytes || ordinal > 1_000_000)
+        return yield* LifecyclePublicationError.make({ reason: "capacity" });
+      const digest = yield* fingerprint(text);
+
+      if (previous !== undefined) {
+        if (previous.fingerprint !== digest)
+          return yield* LifecyclePublicationError.make({ reason: "conflict" });
+        continue;
+      }
+
+      const row: typeof Row.Type = {
+        id: publication.id,
+        owner_thread_id: input.ownerThreadId,
+        ordinal,
+        fingerprint: digest,
+        payload_json: text,
+        due_at_millis: DateTime.toEpochMillis(input.createdAt),
+      };
+
+      counters.set(input.ownerThreadId, ordinal);
+      existing.set(row.id, row);
+      insert.push(row);
+    }
+    for (let index = 0; index < insert.length; index += 16) {
+      const rows = insert.slice(index, index + 16);
+
+      yield* sql`INSERT INTO ${relation} ${sql.insert(rows)}`.pipe(
+        execute,
+        Effect.mapError(failure),
+      );
+      for (const row of rows) {
+        const heads = owned?.heads;
+
+        if (heads !== undefined && heads !== null && !heads.has(row.owner_thread_id)) {
+          heads.set(row.owner_thread_id, {
+            owner_thread_id: row.owner_thread_id,
+            ordinal: row.ordinal,
+            due_at_millis: row.due_at_millis,
+          });
+          if (heads.size > 128 && owned !== undefined) owned.heads = null;
+        }
+        const view = viewFor(row.owner_thread_id);
+
+        if (view === undefined) continue;
+        view.ordinal = row.ordinal;
+        view.attempts.set(row.id, { count: 0, persisted: false });
+        if (view.headKnown && view.head === undefined) view.head = row.ordinal;
+      }
+      remember(rows);
+    }
+    if (insert.length > 0) {
+      yield* progress
+        .committed("lifecycle")
+        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))));
+      invalidateDeadline();
+    }
+  }, read);
+
+  const retain = Effect.fnUntraced(function* (input: SqlLifecyclePublicationInput) {
     yield* (source?.beforeRetain(input.ownerThreadId) ?? Effect.void).pipe(
       Effect.provideService(SqlLifecycleRetainer, { retainMany }),
     );
@@ -505,7 +500,7 @@ export const makeSqlLifecyclePublication = Effect.fn("SqlLifecyclePublication.ma
     return head;
   });
 
-  const acknowledgeMany = Effect.fn("SqlLifecyclePublication.acknowledgeMany")(function* (
+  const acknowledgeMany = Effect.fnUntraced(function* (
     input: ReadonlyArray<LifecyclePublicationBatch>,
   ) {
     const batches = yield* Schema.decodeEffect(

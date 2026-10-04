@@ -216,9 +216,9 @@ export class SemanticMemoryIndex extends Context.Service<
   }): SemanticMemoryIndex["Service"] {
     return {
       ...adapter,
-      search: Effect.fn("SemanticMemoryIndex.search")(function* <
-        Namespace extends MemoryNamespace.Any,
-      >(query: MemoryIndexQuery<Namespace>) {
+      search: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
+        query: MemoryIndexQuery<Namespace>,
+      ) {
         const result = yield* adapter.search(query);
 
         const checked = yield* Schema.decodeEffect(MemoryIndexSearch.Wire)(result).pipe(

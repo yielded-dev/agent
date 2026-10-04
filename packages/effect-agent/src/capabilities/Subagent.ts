@@ -1649,7 +1649,7 @@ export function layer<
         >
       >();
 
-    const invoke = Effect.fn(`SubagentRuntime.${delegation.name}`)(function* (
+    const invoke = Effect.fnUntraced(function* (
       parameters: Parameters["Type"],
       handlerContext: Toolkit.HandlerContext<
         SubagentTool<Name, Parameters, Success, Failure, Mode>
@@ -2009,7 +2009,7 @@ export function layer<
      * child keeps running; durable budget lives in the coordinator's fenced
      * ledger reservation built from `encodedAllocation`.
      */
-    const invokeDurable = Effect.fn(`SubagentRuntime.${delegation.name}.durable`)(function* (
+    const invokeDurable = Effect.fnUntraced(function* (
       parameters: Parameters["Type"],
       handlerContext: Toolkit.HandlerContext<
         SubagentTool<Name, Parameters, Success, Failure, Mode>

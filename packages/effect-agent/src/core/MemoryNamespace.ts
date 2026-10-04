@@ -113,7 +113,7 @@ export const define = <
   const name = options.name;
   const version = options.version;
 
-  const create = Effect.fn("MemoryNamespace.create")(
+  const create = Effect.fnUntraced(
     function* (input: Identity) {
       const encoded = yield* Schema.encodeEffect(identityCodec)(input);
       const normalized = yield* Schema.decodeUnknownEffect(identityCodec)(encoded);
@@ -149,7 +149,7 @@ export const define = <
     Effect.mapError(() => MemoryNamespaceError.make({ reason: "invalid-identity" })),
   );
 
-  const decode = Effect.fn("MemoryNamespace.decode")(function* (input: unknown) {
+  const decode = Effect.fnUntraced(function* (input: unknown) {
     const identity = yield* Schema.decodeUnknownEffect(identityCodec)(input).pipe(
       Effect.mapError(() => MemoryNamespaceError.make({ reason: "invalid-identity" })),
     );
@@ -157,7 +157,7 @@ export const define = <
     return yield* create(identity);
   });
 
-  const restore = Effect.fn("MemoryNamespace.restore")(function* (input: unknown) {
+  const restore = Effect.fnUntraced(function* (input: unknown) {
     const bounded = yield* Schema.decodeUnknownEffect(BoundedAddress)(input).pipe(
       Effect.mapError(() => MemoryNamespaceError.make({ reason: "invalid-address" })),
     );

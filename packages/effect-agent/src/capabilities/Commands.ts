@@ -51,7 +51,7 @@ export interface RunCommandQueue {
  * Construct a bounded queue in the current Scope. `shutdown` is registered as
  * a finalizer so awaiting producers are interrupted with their parent Run.
  */
-export const makeRunCommandQueue = Effect.fn("makeRunCommandQueue")(function* (
+export const makeRunCommandQueue = Effect.fnUntraced(function* (
   runId: RunId,
   config: RunCommandQueueConfig,
 ) {

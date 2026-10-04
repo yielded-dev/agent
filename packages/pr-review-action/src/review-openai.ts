@@ -305,7 +305,7 @@ const reservedCost = (state: Spending) =>
   [...state.pending.values()].reduce((total, item) => total + item.microusd, 0);
 
 /** Capture the provided client for one review's spending ledger. Never share it between attempts. */
-export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options: {
+export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
   readonly model: string;
   readonly serviceTier?: "default" | "fast" | "auto";
   readonly cacheKey: string;
@@ -360,7 +360,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     return yield* admissionError(message);
   });
 
-  const countAttempt = Effect.fn("ReviewOpenAi.countAttempt")(function* (payload: Payload) {
+  const countAttempt = Effect.fnUntraced(function* (payload: Payload) {
     // This endpoint does no inference. Count the exact outgoing token-affecting
     // fields, without truncation or mutable server-side conversation.
     const response = yield* native.client.post("/responses/input_tokens", {
@@ -385,7 +385,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       (error.reason._tag === "TransportError" ||
         [408, 429, 500, 502, 503, 504].includes(error.response?.status ?? 0)));
 
-  const count = Effect.fn("ReviewOpenAi.count")(function* (payload: Payload) {
+  const count = Effect.fnUntraced(function* (payload: Payload) {
     let attempt = 0;
 
     return yield* Effect.suspend(() => {
@@ -411,7 +411,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     }).pipe(Effect.retry({ times: 1, while: transientCountFailure }));
   });
 
-  const admit = Effect.fn("ReviewOpenAi.admit")(function* (original: Payload) {
+  const admit = Effect.fnUntraced(function* (original: Payload) {
     const hasWebSearch = original.tools?.some((tool) => tool.type === "web_search") === true;
 
     if (
@@ -541,7 +541,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
     return { payload: { ...payload, max_output_tokens: outputTokens }, reservation };
   }, admissions.withPermit);
 
-  const settle = Effect.fn("ReviewOpenAi.settle")(function* (
+  const settle = Effect.fnUntraced(function* (
     reservation: Reservation,
     response: OpenAiSchema.Response,
   ) {
@@ -694,7 +694,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
 
   const client = OpenAiClient.OpenAiClient.of({
     ...native,
-    createResponse: Effect.fn("ReviewOpenAi.createResponse")(
+    createResponse: Effect.fnUntraced(
       function* (original) {
         const { payload, reservation } = yield* admit(original);
 
@@ -709,7 +709,7 @@ export const makeReviewOpenAi = Effect.fn("makeReviewOpenAi")(function* (options
       },
       Effect.onExit((exit) => (Exit.isFailure(exit) ? close : Effect.void)),
     ),
-    createResponseStream: Effect.fn("ReviewOpenAi.createResponseStream")(
+    createResponseStream: Effect.fnUntraced(
       function* (original) {
         const { payload, reservation } = yield* admit(original);
 

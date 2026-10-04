@@ -76,9 +76,7 @@ const sameAdmission = Schema.toEquivalence(MessageAdmission);
 const sameJson = Schema.toEquivalence(PersistedJson);
 
 /** Thread-owned durable peer delivery. Source proof and the independent due index survive Run settlement. */
-export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
-  options: MessagingRuntimeOptions,
-) {
+export const makeMessagingRuntime = Effect.fnUntraced(function* (options: MessagingRuntimeOptions) {
   const deps = {
     ...options,
     store: yield* ThreadStore,
@@ -98,7 +96,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
       Effect.mapError(() => failure("send", "storage")),
     );
 
-  const exactRecord = Effect.fn("MessagingHost.exactRecord")(function* (
+  const exactRecord = Effect.fnUntraced(function* (
     threadId: ThreadId,
     recordId: RecordEnvelope["recordId"],
   ) {
@@ -109,7 +107,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     )?.record;
   });
 
-  const sourceOf = Effect.fn("MessagingHost.source")(function* (threadId: ThreadId) {
+  const sourceOf = Effect.fnUntraced(function* (threadId: ThreadId) {
     const log = yield* deps.store
       .inspectTail(ThreadTailRequest.make({ threadId }))
       .pipe(Effect.mapError(() => failure("context", "storage")));
@@ -130,7 +128,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     return { log, address: { threadId, agentId: created.agentId } };
   });
 
-  const decodeProof = Effect.fn("MessagingHost.decodeProof")(function* (record: RecordEnvelope) {
+  const decodeProof = Effect.fnUntraced(function* (record: RecordEnvelope) {
     if (record.payload._tag !== "PeerMessagePrepared") return yield* failure("send", "corrupt");
 
     const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(
@@ -152,7 +150,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     };
   });
 
-  const proof = Effect.fn("MessagingHost.proof")(function* (message: MessageRef) {
+  const proof = Effect.fnUntraced(function* (message: MessageRef) {
     const source = yield* sourceOf(message.ownerThreadId);
 
     const record = yield* exactRecord(
@@ -173,7 +171,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     return saved;
   });
 
-  const authorizeEnvelope = Effect.fn("MessagingHost.authorizeEnvelope")(function* (
+  const authorizeEnvelope = Effect.fnUntraced(function* (
     saved: Effect.Success<ReturnType<typeof proof>>,
     operation: "send" | "reply",
   ) {
@@ -226,7 +224,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     principal: Principal,
     toolSource?: WorkerSource,
   ): MessagingHost["Service"] => {
-    const authorize = Effect.fn("MessagingHost.authorize")(function* (
+    const authorize = Effect.fnUntraced(function* (
       operation: MessagingError["operation"],
       access: "context" | "read" | "send" | "control",
       peer?: PeerTarget,
@@ -256,7 +254,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
       return { ...source, deliveryPrincipal };
     });
 
-    const send = Effect.fn("MessagingHost.send")(function* (
+    const send = Effect.fnUntraced(function* (
       request: SendPeerMessage,
       operation: "send" | "reply",
     ) {
@@ -495,7 +493,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
       return yield* failure(operation, "capacity");
     });
 
-    const lookup = Effect.fn("MessagingHost.lookup")(function* (
+    const lookup = Effect.fnUntraced(function* (
       request: PeerTarget & { readonly message: MessageRef },
       operation: "inspect" | "retry",
     ) {
@@ -534,7 +532,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
       reply: (request) => send(request, "reply"),
       inspect: (request) =>
         lookup(request, "inspect").pipe(Effect.flatMap(({ row }) => status(row, "inspect"))),
-      retry: Effect.fn("MessagingHost.retry")(function* (request) {
+      retry: Effect.fnUntraced(function* (request) {
         const { row, store } = yield* lookup(request, "retry");
 
         yield* authorizeEnvelope(yield* proof(row.key), "send");
@@ -552,7 +550,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
           "retry",
         );
       }),
-      inbox: Effect.fn("MessagingHost.inbox")(function* (request) {
+      inbox: Effect.fnUntraced(function* (request) {
         const current = yield* authorize("inbox", "read", request);
 
         const limit = yield* Schema.decodeEffect(
@@ -594,7 +592,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
   };
 
   return {
-    acquire: Effect.fn("MessagingHost.acquire")(function* (request: {
+    acquire: Effect.fnUntraced(function* (request: {
       readonly sourceThreadId: ThreadId;
       readonly principal: Principal;
     }) {
@@ -606,7 +604,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
     }),
     forTool: (source: WorkerSource, principal: Principal) =>
       facet(source.threadId, principal, source),
-    validateAdmission: Effect.fn("MessagingHost.validateAdmission")(function* (
+    validateAdmission: Effect.fnUntraced(function* (
       unvalidated: MessageAdmission,
       options: DurableSubmitOptions,
       agentId: AgentId,

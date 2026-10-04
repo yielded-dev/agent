@@ -129,7 +129,7 @@ const batchRunsOf = (records: ReadonlyArray<CanonicalRecordEnvelope>): Array<Bat
  * admin operation, certification runners, and chaos properties feed it whatever copies they
  * hold.
  */
-export const verifyThreadInvariants = Effect.fn("Thread.verifyThreadInvariants")(function* (
+export const verifyThreadInvariants = Effect.fnUntraced(function* (
   input: ThreadInvariantInput,
 ): Effect.fn.Return<IntegrityReport, never, Crypto.Crypto> {
   const exported = input.export;

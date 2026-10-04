@@ -209,7 +209,7 @@ const LOCAL: RouteTarget = { _tag: "local" };
 const routableSubmissionTarget = (
   ownsThread: RoutedPortOptions["ownsThread"],
 ): ((operation: string, submissionId: string) => Effect.Effect<RouteTarget, LedgerError>) =>
-  Effect.fn("DoPortRouting.routableSubmissionTarget")(function* (
+  Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<RouteTarget, LedgerError> {
@@ -248,7 +248,7 @@ export const makeLocalSubmissionLookup = (
 ) => Effect.Effect<Option.Option<SubmissionSnapshot>, LedgerError, SubmissionLedger>) => {
   const submissionTarget = routableSubmissionTarget(options.ownsThread);
 
-  return Effect.fn("DoPortRouting.lookupLocalSubmission")(function* (submissionId: SubmissionId) {
+  return Effect.fnUntraced(function* (submissionId: SubmissionId) {
     const operation = "local Submission lookup";
     const target = yield* submissionTarget(operation, submissionId);
 
@@ -300,7 +300,7 @@ const crossThreadStoreError = (operation: string, target: string): ThreadStoreEr
   });
 
 const makeTransportCall = (transport: ThreadPortTransport["Service"]) =>
-  Effect.fn("DoPortRouting.transportCall")(function* (target: ThreadId, call: PortRequest) {
+  Effect.fnUntraced(function* (target: ThreadId, call: PortRequest) {
     const encoded = yield* encodePortRequest(call).pipe(
       Effect.mapError((error) =>
         PortProtocolError.make({
@@ -322,9 +322,7 @@ const makeTransportCall = (transport: ThreadPortTransport["Service"]) =>
 
 type TransportCall = ReturnType<typeof makeTransportCall>;
 
-const makeRoutedLedgerServices = Effect.fn("DoPortRouting.makeRoutedLedgerServices")(function* (
-  options: RoutedPortOptions,
-) {
+const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPortOptions) {
   const local = yield* SubmissionLedger;
   const transport = yield* ThreadPortTransport;
   const transportCall: TransportCall = makeTransportCall(transport);
@@ -489,7 +487,7 @@ const makeRoutedLedgerServices = Effect.fn("DoPortRouting.makeRoutedLedgerServic
    * local nor marker-settled. A transport failure surfaces as `LedgerError` so the alarm
    * pass retries; the child's canonical Settlement remains the only authority (DUR-015).
    */
-  const enrichChildAttachments = Effect.fn("DoPortRouting.enrichChildAttachments")(function* (
+  const enrichChildAttachments = Effect.fnUntraced(function* (
     snapshot: RecoverySnapshot,
   ): Effect.fn.Return<RecoverySnapshot, LedgerError> {
     const operation = "ledger load recovery snapshot";
@@ -868,9 +866,7 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
     }),
   );
 
-const makeRoutedStoreServices = Effect.fn("DoPortRouting.makeRoutedStoreServices")(function* (
-  options: RoutedPortOptions,
-) {
+const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPortOptions) {
   const local = yield* ThreadStore;
   const checkpoints = local.checkpoints;
   const recoveryCheckpoints = local.recoveryCheckpoints;
@@ -1287,7 +1283,7 @@ const capture = <Failure extends PortFailure, R>(
  * Failures never escape — every typed port failure becomes a `PortFailed` envelope that
  * re-decodes on the caller side.
  */
-export const executePortRequest = Effect.fn("DoPortRouting.executePortRequest")(function* (
+export const executePortRequest = Effect.fnUntraced(function* (
   request: PortRequest,
 ): Effect.fn.Return<
   PortResponse,
@@ -1508,40 +1504,36 @@ const encodedProtocolFailure = (message: string): unknown => ({
  * cannot be encoded, answers `PortFailed(PortProtocolError)` instead of throwing, so the
  * transport never has to interpret exceptions as protocol answers.
  */
-export const handleEncodedPortRequest = Effect.fn("DoPortRouting.handleEncodedPortRequest")(
-  function* (
-    encoded: unknown,
-  ): Effect.fn.Return<
-    unknown,
-    never,
-    | SubmissionLedger
-    | SettlementPublisher
-    | ThreadStore
-    | MessageDeliveryStore
-    | WakeScheduler
-    | DurableRuntimeFailpoint
-  > {
-    const response = yield* decodePortRequest(encoded).pipe(
-      Effect.flatMap(executePortRequest),
-      Effect.catch((error) =>
-        Effect.succeed<PortResponse>(
-          PortFailed.make({
-            failure: PortProtocolError.make({
-              message: boundPortDiagnostic(
-                `The port request could not be decoded: ${error.message}`,
-              ),
-            }),
+export const handleEncodedPortRequest = Effect.fnUntraced(function* (
+  encoded: unknown,
+): Effect.fn.Return<
+  unknown,
+  never,
+  | SubmissionLedger
+  | SettlementPublisher
+  | ThreadStore
+  | MessageDeliveryStore
+  | WakeScheduler
+  | DurableRuntimeFailpoint
+> {
+  const response = yield* decodePortRequest(encoded).pipe(
+    Effect.flatMap(executePortRequest),
+    Effect.catch((error) =>
+      Effect.succeed<PortResponse>(
+        PortFailed.make({
+          failure: PortProtocolError.make({
+            message: boundPortDiagnostic(`The port request could not be decoded: ${error.message}`),
           }),
-        ),
+        }),
       ),
-    );
+    ),
+  );
 
-    return yield* encodePortResponse(response).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(
-          encodedProtocolFailure(`The port response could not be encoded: ${error.message}`),
-        ),
+  return yield* encodePortResponse(response).pipe(
+    Effect.catch((error) =>
+      Effect.succeed(
+        encodedProtocolFailure(`The port response could not be encoded: ${error.message}`),
       ),
-    );
-  },
-);
+    ),
+  );
+});

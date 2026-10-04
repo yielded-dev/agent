@@ -236,7 +236,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
   }),
 );
 
-const makeServices = Effect.fn("SqliteThreadStore.makeServices")(function* () {
+const makeServices = Effect.fnUntraced(function* () {
   const config = yield* SqliteStorageConfig;
   const failpoint = yield* SqliteStorageFailpoint;
   const journal = yield* initializeSqliteJournal();

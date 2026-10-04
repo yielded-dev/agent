@@ -49,7 +49,7 @@ const storeError = (
   reason: ActivityStoreError["reason"] = "unavailable",
 ): ActivityStoreError => ActivityStoreError.make({ operation, reason });
 
-const decodeRows = Effect.fn("SqlActivityStore.decodeRows")(function* <A, I>(
+const decodeRows = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
   rows: ReadonlyArray<unknown>,
   operation: string,
@@ -59,7 +59,7 @@ const decodeRows = Effect.fn("SqlActivityStore.decodeRows")(function* <A, I>(
   );
 });
 
-const decodeInput = Effect.fn("SqlActivityStore.decodeInput")(function* <A, I>(
+const decodeInput = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: unknown,
   operation: string,
@@ -69,7 +69,7 @@ const decodeInput = Effect.fn("SqlActivityStore.decodeInput")(function* <A, I>(
   );
 });
 
-const encodeProgress = Effect.fn("SqlActivityStore.encodeProgress")(function* (
+const encodeProgress = Effect.fnUntraced(function* (
   progress: ActivityProgress,
   operation: string,
 ): Effect.fn.Return<string, ActivityStoreError> {
@@ -83,7 +83,7 @@ const encodeProgress = Effect.fn("SqlActivityStore.encodeProgress")(function* (
   );
 });
 
-const decodeProgress = Effect.fn("SqlActivityStore.decodeProgress")(function* (
+const decodeProgress = Effect.fnUntraced(function* (
   value: string,
   operation: string,
 ): Effect.fn.Return<ActivityProgress, ActivityStoreError> {
@@ -106,7 +106,7 @@ const decodeProgress = Effect.fn("SqlActivityStore.decodeProgress")(function* (
   return progress;
 });
 
-const validateProgress = Effect.fn("SqlActivityStore.validateProgress")(function* (
+const validateProgress = Effect.fnUntraced(function* (
   progress: ActivityProgress,
   operation: string,
 ): Effect.fn.Return<ActivityProgress, ActivityStoreError> {
@@ -142,7 +142,7 @@ const ownershipLost = (claim: ActivityClaim) =>
  * Initialize standalone activity progress and provide its transitions. The adapter supplies
  * its transaction semantics and optional namespace setup, which runs in the initialization transaction.
  */
-export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function* (
+export const makeSqlActivityStore = Effect.fnUntraced(function* (
   withWriteTransaction: SqlWriteTransaction,
   initializeNamespace: Effect.Effect<
     void,
@@ -249,7 +249,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
   ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError("initialize activity schema"))));
   yield* failpoint.hit("activity:initialize:after");
 
-  const readProgress = Effect.fn("SqlActivityStore.readProgress")(function* (
+  const readProgress = Effect.fnUntraced(function* (
     key: ActivityProcessorKey,
     operation: string,
   ): Effect.fn.Return<ActivityProgress | null, ActivityStoreError> {
@@ -293,7 +293,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     return progress;
   });
 
-  const checkChanged = Effect.fn("SqlActivityStore.checkChanged")(function* (
+  const checkChanged = Effect.fnUntraced(function* (
     rawRows: ReadonlyArray<Record<string, unknown>>,
     operation: string,
   ): Effect.fn.Return<void, ActivityStoreError> {
@@ -304,7 +304,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     }
   });
 
-  const insertProgress = Effect.fn("SqlActivityStore.insertProgress")(function* (
+  const insertProgress = Effect.fnUntraced(function* (
     progress: ActivityProgress,
     operation: string,
   ) {
@@ -325,7 +325,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     yield* checkChanged(changed, operation);
   });
 
-  const updateProgress = Effect.fn("SqlActivityStore.updateProgress")(function* (
+  const updateProgress = Effect.fnUntraced(function* (
     current: ActivityProgress,
     next: ActivityProgress,
     operation: string,
@@ -351,7 +351,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     yield* checkChanged(changed, operation);
   });
 
-  const requireLive = Effect.fn("SqlActivityStore.requireLive")(function* (
+  const requireLive = Effect.fnUntraced(function* (
     progress: ActivityProgress | null,
     claim: ActivityClaim,
     requireSequence: boolean,
@@ -372,9 +372,7 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     return progress;
   });
 
-  const inspect: ActivityProcessorStore["Service"]["inspect"] = Effect.fn(
-    "SqlActivityStore.inspect",
-  )(function* (key) {
+  const inspect: ActivityProcessorStore["Service"]["inspect"] = Effect.fnUntraced(function* (key) {
     const decodedKey = yield* decodeInput(ActivityProcessorKey, key, "inspect activity progress");
 
     return yield* readProgress(decodedKey, "inspect activity progress");
@@ -427,81 +425,89 @@ export const makeSqlActivityStore = Effect.fn("SqlActivityStore.make")(function*
     },
   );
 
-  const prepare: ActivityProcessorStore["Service"]["prepare"] = Effect.fn(
-    "SqlActivityStore.prepare",
-  )(function* (request) {
-    const operation = "prepare activity output";
-    const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
-    const work = yield* decodeInput(PreparedActivity, request.work, operation);
+  const prepare: ActivityProcessorStore["Service"]["prepare"] = Effect.fnUntraced(
+    function* (request) {
+      const operation = "prepare activity output";
+      const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
+      const work = yield* decodeInput(PreparedActivity, request.work, operation);
 
-    yield* failpoint.hit("activity:prepare:before");
+      yield* failpoint.hit("activity:prepare:before");
 
-    const result = yield* withWriteTransaction(
-      Effect.gen(function* () {
-        const current = yield* requireLive(yield* readProgress(claim.key, operation), claim, true);
+      const result = yield* withWriteTransaction(
+        Effect.gen(function* () {
+          const current = yield* requireLive(
+            yield* readProgress(claim.key, operation),
+            claim,
+            true,
+          );
 
-        if (current.pending !== null) {
-          if (sameWork(current.pending, work)) {
-            return { work: current.pending, changed: false } as const;
+          if (current.pending !== null) {
+            if (sameWork(current.pending, work)) {
+              return { work: current.pending, changed: false } as const;
+            }
+
+            return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
+          }
+          if (!sameKey(work.key, claim.key) || work.sequence !== current.throughSequence + 1) {
+            return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
+          }
+          const next = ActivityProgress.make({ ...current, pending: work });
+
+          yield* updateProgress(current, next, operation);
+          yield* failpoint.hit("activity:prepare:after-state");
+
+          return { work, changed: true } as const;
+        }),
+      ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
+
+      if (result.changed) yield* failpoint.hit("activity:prepare:after");
+
+      return result.work;
+    },
+  );
+
+  const advance: ActivityProcessorStore["Service"]["advance"] = Effect.fnUntraced(
+    function* (request) {
+      const operation = "advance activity progress";
+      const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
+      const workId = yield* decodeInput(Digest, request.workId, operation);
+
+      yield* failpoint.hit("activity:advance:before");
+
+      const nextClaim = yield* withWriteTransaction(
+        Effect.gen(function* () {
+          const current = yield* requireLive(
+            yield* readProgress(claim.key, operation),
+            claim,
+            true,
+          );
+
+          if (current.pending === null || current.pending.workId !== workId) {
+            return yield* ActivityWorkConflict.make({ key: claim.key, workId });
           }
 
-          return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
-        }
-        if (!sameKey(work.key, claim.key) || work.sequence !== current.throughSequence + 1) {
-          return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
-        }
-        const next = ActivityProgress.make({ ...current, pending: work });
+          const next = ActivityProgress.make({
+            ...current,
+            throughSequence: current.pending.sequence,
+            pending: null,
+            advancedAt: yield* Clock.currentTimeMillis,
+          });
 
-        yield* updateProgress(current, next, operation);
-        yield* failpoint.hit("activity:prepare:after-state");
+          yield* updateProgress(current, next, operation);
+          yield* failpoint.hit("activity:advance:after-state");
+          const result = makeClaim(next);
 
-        return { work, changed: true } as const;
-      }),
-    ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
+          if (result === null) return yield* storeError(operation, "corrupt");
 
-    if (result.changed) yield* failpoint.hit("activity:prepare:after");
+          return result;
+        }),
+      ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
 
-    return result.work;
-  });
+      yield* failpoint.hit("activity:advance:after");
 
-  const advance: ActivityProcessorStore["Service"]["advance"] = Effect.fn(
-    "SqlActivityStore.advance",
-  )(function* (request) {
-    const operation = "advance activity progress";
-    const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
-    const workId = yield* decodeInput(Digest, request.workId, operation);
-
-    yield* failpoint.hit("activity:advance:before");
-
-    const nextClaim = yield* withWriteTransaction(
-      Effect.gen(function* () {
-        const current = yield* requireLive(yield* readProgress(claim.key, operation), claim, true);
-
-        if (current.pending === null || current.pending.workId !== workId) {
-          return yield* ActivityWorkConflict.make({ key: claim.key, workId });
-        }
-
-        const next = ActivityProgress.make({
-          ...current,
-          throughSequence: current.pending.sequence,
-          pending: null,
-          advancedAt: yield* Clock.currentTimeMillis,
-        });
-
-        yield* updateProgress(current, next, operation);
-        yield* failpoint.hit("activity:advance:after-state");
-        const result = makeClaim(next);
-
-        if (result === null) return yield* storeError(operation, "corrupt");
-
-        return result;
-      }),
-    ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
-
-    yield* failpoint.hit("activity:advance:after");
-
-    return nextClaim;
-  });
+      return nextClaim;
+    },
+  );
 
   const release: ActivityProcessorStore["Service"]["release"] = Effect.fn(
     "SqlActivityStore.release",

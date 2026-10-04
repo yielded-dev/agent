@@ -222,7 +222,7 @@ export const lifecyclePublicationLayer = Layer.effect(LifecyclePublicationConfig
 );
 
 /** Resolve immutable evidence by its exact native identity, never by scanning execution history. */
-const withSource = Effect.fn("LifecyclePublication.withSource")(
+const withSource = Effect.fnUntraced(
   function* (publication: LifecyclePublication) {
     if (
       publication.source !== undefined ||
@@ -277,7 +277,7 @@ const withSource = Effect.fn("LifecyclePublication.withSource")(
  * completed batches in groups of up to 100, including when a later dispatch is interrupted. No producer or
  * external Tool is re-executed here.
  */
-export const drainLifecyclePublications = Effect.fn("LifecyclePublication.drain")(function* (
+export const drainLifecyclePublications = Effect.fnUntraced(function* (
   storage: LifecyclePublicationStorage,
   timeoutMillis = 10_000,
   limit = 4,

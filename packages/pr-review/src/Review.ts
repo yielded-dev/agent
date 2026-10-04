@@ -642,7 +642,7 @@ const reviewSummary = (request: ReviewRequest, findings: ReadonlyArray<ReviewFin
   return `${summary}${request.scope === "incremental" ? " Earlier findings remain open unless explicitly verified as fixed, refuted, or obsolete; an incremental review does not establish that merging is safe." : ""}${request.unreviewedPaths.length > 0 ? " Coverage is incomplete because some changed paths were excluded from review input." : ""}`;
 };
 
-const validatedResolutions = Effect.fn("validatedResolutions")(function* (
+const validatedResolutions = Effect.fnUntraced(function* (
   request: ReviewRequest,
   resolutions: ReadonlyArray<ReviewResolution>,
 ) {
@@ -660,7 +660,7 @@ const validatedResolutions = Effect.fn("validatedResolutions")(function* (
 });
 
 /** Fail on unknown paths and demote invalid anchors before recording the finding. */
-const validatedFinding = Effect.fn("validatedFinding")(function* (
+const validatedFinding = Effect.fnUntraced(function* (
   request: ReviewRequest,
   finding: typeof RecordedFinding.Type,
 ) {
@@ -692,7 +692,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
   const webToolkit =
     options.webSearch === undefined ? Toolkit.empty : WebSearch.native({ tool: options.webSearch });
 
-  const review = Effect.fn("Reviewer.review")(
+  const review = Effect.fnUntraced(
     function* (request: ReviewRequest) {
       const configuration = yield* Schema.decodeEffect(ReviewContextOptions)({
         compaction: options.compaction ?? "rollover",
@@ -753,7 +753,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
 
       const navigationLayer = reviewNavigation.toLayer({
         new_context: (input) => Effect.succeed(input),
-        read_diff: Effect.fn("Reviewer.readDiff")(function* ({ offset }) {
+        read_diff: Effect.fnUntraced(function* ({ offset }) {
           if (offset >= diff.text.length)
             return yield* ReviewVerificationError.make({
               message: "Select an offset within the diff artifact.",
@@ -780,7 +780,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
             totalChars: diff.text.length,
           };
         }),
-        review_status: Effect.fn("Reviewer.status")(function* ({ cursor, notes: update }) {
+        review_status: Effect.fnUntraced(function* ({ cursor, notes: update }) {
           statusReads += 1;
           if (update !== undefined) {
             const accepted = yield* Ref.modify(notes, (current) =>
@@ -808,7 +808,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
       });
 
       const recordingLayer = reviewRecording.toLayer({
-        record_finding: Effect.fn("Reviewer.recordFinding")(function* (finding) {
+        record_finding: Effect.fnUntraced(function* (finding) {
           const validated = yield* validatedFinding(request, finding);
 
           const accepted = yield* Ref.modify(recorded, (current) => {
@@ -835,7 +835,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
       });
 
       const completionLayer = reviewCompletion.toLayer({
-        submit_review: Effect.fn("Reviewer.submitReview")(function* () {
+        submit_review: Effect.fnUntraced(function* () {
           const pending = pendingRanges();
           const next = pending[0];
 
@@ -853,7 +853,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
       const runOptions = {
         budget: {
           ...accounting,
-          consume: Effect.fn("Reviewer.consumeUsage")(function* (delta: RunUsageDelta) {
+          consume: Effect.fnUntraced(function* (delta: RunUsageDelta) {
             yield* accounting.consume(delta);
             yield* Ref.update(modelCalls, (count) => count + delta.modelCalls);
             // Usage for a completed response arrives before its tools run. Only
@@ -914,7 +914,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         success: ResearchResult,
         failure: ReviewVerificationError,
         failureMode: "return",
-        prepareInput: Effect.fn("Reviewer.prepareResearch")(function* ({ question, paths }) {
+        prepareInput: Effect.fnUntraced(function* ({ question, paths }) {
           const changes = request.changes.filter(({ path }) => paths.includes(path));
 
           if (
@@ -935,7 +935,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
             ...(request.discussion === undefined ? {} : { discussion: request.discussion }),
           };
         }),
-        projectResult: Effect.fn("Reviewer.completeResearch")(function* (output, context) {
+        projectResult: Effect.fnUntraced(function* (output, context) {
           const incomplete = output.incomplete || context.budgetExhausted;
 
           if (incomplete) yield* Ref.update(incompleteResearch, (count) => count + 1);

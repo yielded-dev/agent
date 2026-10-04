@@ -185,7 +185,7 @@ const corrupt = (operation: string, cause?: unknown) =>
  * by (deadline_at_millis, owner_thread_id, message_id). No source/receiver ledger joins.
  * Before failpoints precede the atomic transaction; after failpoints run after its commit.
  */
-export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.make")(function* (
+export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   limits: MessageDeliveryStoreLimits = defaultMessageDeliveryStoreLimits,
   options: SqlMessageDeliveryStoreOptions = {},
 ) {
@@ -282,9 +282,7 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
 
   const failpoint = yield* MessageDeliveryFailpoint;
 
-  const encode = Effect.fn("SqlMessageDeliveryStore.encode")(function* (
-    record: MessageDeliveryRecord,
-  ) {
+  const encode = Effect.fnUntraced(function* (record: MessageDeliveryRecord) {
     const text = yield* Schema.encodeEffect(codec)(record).pipe(
       Effect.mapError((cause) => corrupt("encode", cause)),
     );
@@ -298,7 +296,7 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
     return text;
   });
 
-  const decode = Effect.fn("SqlMessageDeliveryStore.decode")(function* (row: typeof Row.Type) {
+  const decode = Effect.fnUntraced(function* (row: typeof Row.Type) {
     if (bytes(row.record_json) > maxStoredValueBytes) return yield* corrupt("stored-value-bytes");
 
     const record = yield* Schema.decodeEffect(codec)(row.record_json).pipe(
@@ -324,22 +322,18 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
       Effect.flatMap((rows) => Effect.forEach(rows, decode)),
     );
 
-  const get: MessageDeliveryStore["Service"]["get"] = Effect.fn("SqlMessageDeliveryStore.get")(
-    function* (key) {
-      const input = yield* validateMessageDelivery(MessageDeliveryKey, key, "get");
+  const get: MessageDeliveryStore["Service"]["get"] = Effect.fnUntraced(function* (key) {
+    const input = yield* validateMessageDelivery(MessageDeliveryKey, key, "get");
 
-      const rows = yield* query(
-        "get",
-        sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND message_id = ${input.messageId}`,
-      );
+    const rows = yield* query(
+      "get",
+      sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND message_id = ${input.messageId}`,
+    );
 
-      return (yield* decodeRows(rows))[0] ?? null;
-    },
-  );
+    return (yield* decodeRows(rows))[0] ?? null;
+  });
 
-  const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fn(
-    "SqlMessageDeliveryStore.insert",
-  )(function* (record) {
+  const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(function* (record) {
     const text = yield* encode(record);
 
     const input = yield* Schema.decodeEffect(codec)(text).pipe(
@@ -426,82 +420,82 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
     return result;
   });
 
-  const change: MessageDeliveryStore["Service"]["change"] = Effect.fn(
-    "SqlMessageDeliveryStore.change",
-  )(function* (key, change) {
-    const decodedKey = yield* validateMessageDelivery(MessageDeliveryKey, key, "change");
-    const input = yield* validateMessageDelivery(MessageDeliveryChange, change, "change");
-    const point = `message-delivery:${input._tag.toLowerCase()}`;
+  const change: MessageDeliveryStore["Service"]["change"] = Effect.fnUntraced(
+    function* (key, change) {
+      const decodedKey = yield* validateMessageDelivery(MessageDeliveryKey, key, "change");
+      const input = yield* validateMessageDelivery(MessageDeliveryChange, change, "change");
+      const point = `message-delivery:${input._tag.toLowerCase()}`;
 
-    yield* failpoint.hit(`${point}:before`);
+      yield* failpoint.hit(`${point}:before`);
 
-    const result = yield* transaction(
-      Effect.gen(function* () {
-        const current = yield* get(decodedKey);
+      const result = yield* transaction(
+        Effect.gen(function* () {
+          const current = yield* get(decodedKey);
 
-        if (current === null)
-          return yield* MessageDeliveryError.make({ reason: "not-found", operation: "change" });
-        const next = yield* Effect.fromResult(applyMessageDeliveryChange(current, input));
+          if (current === null)
+            return yield* MessageDeliveryError.make({ reason: "not-found", operation: "change" });
+          const next = yield* Effect.fromResult(applyMessageDeliveryChange(current, input));
 
-        if (next === current) return current;
-        const text = yield* encode(next);
+          if (next === current) return current;
+          const text = yield* encode(next);
 
-        const updated = yield* query(
-          "change",
-          sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${deliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, record_json`,
-        );
+          const updated = yield* query(
+            "change",
+            sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${deliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, record_json`,
+          );
 
-        const rows = yield* decodeRows(updated);
+          const rows = yield* decodeRows(updated);
 
-        if (rows.length !== 1 || rows[0] === undefined)
-          return yield* MessageDeliveryError.make({ reason: "conflict", operation: "change" });
-        updatePending(rows[0], bytes(text));
+          if (rows.length !== 1 || rows[0] === undefined)
+            return yield* MessageDeliveryError.make({ reason: "conflict", operation: "change" });
+          updatePending(rows[0], bytes(text));
 
-        if (
-          lifecycle !== undefined &&
-          (current.status !== next.status ||
-            current.receipt !== next.receipt ||
-            current.settlement !== next.settlement)
-        )
-          yield* lifecycle
-            .retain({
-              id: JSON.stringify([
-                next.key.ownerThreadId,
-                "delivery",
-                next.key.messageId,
-                next.version,
-              ]),
-              ownerThreadId: next.key.ownerThreadId,
-              createdAt: yield* DateTime.now,
-              fact: {
-                _tag: "DeliveryChanged",
-                key: next.key,
-                envelope: next.envelope,
-                status: next.status,
-                receipt: next.receipt,
-                settlement: next.settlement,
-                version: next.version,
-              },
-            })
-            .pipe(Effect.mapError((cause) => storage("retain lifecycle", cause)));
+          if (
+            lifecycle !== undefined &&
+            (current.status !== next.status ||
+              current.receipt !== next.receipt ||
+              current.settlement !== next.settlement)
+          )
+            yield* lifecycle
+              .retain({
+                id: JSON.stringify([
+                  next.key.ownerThreadId,
+                  "delivery",
+                  next.key.messageId,
+                  next.version,
+                ]),
+                ownerThreadId: next.key.ownerThreadId,
+                createdAt: yield* DateTime.now,
+                fact: {
+                  _tag: "DeliveryChanged",
+                  key: next.key,
+                  envelope: next.envelope,
+                  status: next.status,
+                  receipt: next.receipt,
+                  settlement: next.settlement,
+                  version: next.version,
+                },
+              })
+              .pipe(Effect.mapError((cause) => storage("retain lifecycle", cause)));
 
-        if (
-          input._tag === "Accept" ||
-          input._tag === "Process" ||
-          input._tag === "Refuse" ||
-          input._tag === "Complete" ||
-          input._tag === "Recover"
-        )
-          yield* recordProgress;
+          if (
+            input._tag === "Accept" ||
+            input._tag === "Process" ||
+            input._tag === "Refuse" ||
+            input._tag === "Complete" ||
+            input._tag === "Recover"
+          )
+            yield* recordProgress;
 
-        return rows[0];
-      }),
-    );
+          return rows[0];
+        }),
+      );
 
-    yield* failpoint.hit(`${point}:after`);
+      yield* failpoint.hit(`${point}:after`);
 
-    return result;
-  });
+      return result;
+    },
+  );
 
   return MessageDeliveryStore.of({
     ...(lifecycle === undefined ? {} : { lifecyclePublications: lifecycle.storage }),
@@ -510,7 +504,7 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
     insert,
     get,
     change,
-    list: Effect.fn("SqlMessageDeliveryStore.list")(function* (request) {
+    list: Effect.fnUntraced(function* (request) {
       const input = yield* validateMessageDelivery(MessageDeliveryPageRequest, request, "list");
 
       if (pending !== undefined && input.pendingOnly) {
@@ -622,7 +616,7 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
         next: records.length > input.limit ? (items.at(-1)?.key.messageId ?? null) : null,
       };
     }, read),
-    due: Effect.fn("SqlMessageDeliveryStore.due")(function* (nowMillis, limit, ownerThreadId) {
+    due: Effect.fnUntraced(function* (nowMillis, limit, ownerThreadId) {
       const input = yield* validateMessageDelivery(
         Scan,
         { nowMillis, limit, ...(ownerThreadId === undefined ? {} : { ownerThreadId }) },
@@ -636,7 +630,7 @@ export const makeSqlMessageDeliveryStore = Effect.fn("SqlMessageDeliveryStore.ma
 
       return (yield* decodeRows(rows)).map((record) => record.key);
     }),
-    nextDeadline: Effect.fn("SqlMessageDeliveryStore.nextDeadline")(function* (ownerThreadId) {
+    nextDeadline: Effect.fnUntraced(function* (ownerThreadId) {
       if (ownerThreadId !== undefined)
         yield* validateMessageDelivery(ThreadId, ownerThreadId, "nextDeadline");
 

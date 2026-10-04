@@ -130,7 +130,7 @@ export const retry = <Name extends string, Input extends Schema.Top>(
     return yield* service.retry({ ...declaration, message });
   });
 
-const modelKey = Effect.fn("Messaging.modelKey")(function* () {
+const modelKey = Effect.fnUntraced(function* () {
   const source = yield* (yield* host).context;
 
   if (source._tag !== "tool")
@@ -168,7 +168,7 @@ const native = <
   const build = Effect.gen(function* () {
     const captured = yield* Effect.context<Exclude<R, MessagingHost | Crypto.Crypto>>();
 
-    const invoke = Effect.fn("Messaging.tool")(function* (value: Parameters["Type"]) {
+    const invoke = Effect.fnUntraced(function* (value: Parameters["Type"]) {
       const service = yield* host;
       const crypto = yield* Crypto.Crypto;
 

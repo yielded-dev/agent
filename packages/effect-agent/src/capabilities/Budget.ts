@@ -360,7 +360,7 @@ const makeNode = (
       );
     });
 
-  const child = Effect.fn("UsageBudgetNode.child")(function* (childConfig: UsageBudgetNodeConfig) {
+  const child = Effect.fnUntraced(function* (childConfig: UsageBudgetNodeConfig) {
     const childKey = `${key}/${nodeKeyComponent(childConfig)}`;
     const childHandleId = Symbol(`usage-budget:${childConfig.level}:${childConfig.id}`);
     const now = yield* Clock.currentTimeMillis;
@@ -501,9 +501,7 @@ const makeNode = (
 };
 
 /** Create the outermost node of a hierarchy. Child nodes share its atomic ledger. */
-export const makeUsageBudgetRoot = Effect.fn("makeUsageBudgetRoot")(function* (
-  config: UsageBudgetNodeConfig,
-) {
+export const makeUsageBudgetRoot = Effect.fnUntraced(function* (config: UsageBudgetNodeConfig) {
   const startedAt = yield* Clock.currentTimeMillis;
   const key = nodeKeyComponent(config);
   const handleId = Symbol(`usage-budget:${config.level}:${config.id}`);

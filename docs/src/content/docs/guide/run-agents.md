@@ -417,6 +417,7 @@ With an Effect tracer installed, filter `gen_ai.operation.name` to find agent wo
 All three carry `gen_ai.agent.name` (the definition ID), `gen_ai.agent.id` (the
 Thread-backed instance), and `gen_ai.conversation.id` (the Thread ID). Existing
 `agentId`, `threadId`, `runId`, and applicable `turnId` attributes remain available.
+The `invoke_agent`, `chat`, and `execute_tool` spans retain their identity and outcome attributes.
 Agent span names replace `AgentRuntime.run`; update filters using that old name.
 
 Successful tool executions log at Debug; failures log at Warning. The default logger omits
@@ -428,8 +429,12 @@ creating a second model-call span. The configured model and provider are recorde
 and token-usage annotations. Each retry and compaction summary has its own model span.
 These labels add identifiers, not prompts, instructions, or tool payloads.
 
-Use operation spans for timing and failure diagnostics. Internal helpers may share the enclosing
-operation's span without adding separate spans or Effect call frames.
+Library helpers use `Effect.fnUntraced` by default. Named `Effect.fn` is reserved for agent run/turn,
+model call, tool call, adapter storage append/claim/renew/release/publish/finalize, and recovery
+operation boundaries. Helpers for stream parts, individual records, per-tool batch orchestration,
+and decoded rows are always untraced; actual tool calls retain their `execute_tool` spans.
+Use the enclosing operation spans for timing and failure diagnostics, and adjust filters that
+relied on private-helper span names.
 
 An agent span covers one active execution Scope. A durable Run resumed by another
 Attempt can produce another span with the same Run ID; the span is not the entire

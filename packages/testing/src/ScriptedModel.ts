@@ -127,54 +127,53 @@ const scriptedError = (method: string, description: string): AiError.AiError =>
     reason: AiError.UnknownError.make({ description }),
   });
 
-const runAssertion = Effect.fn("ScriptedModel.runAssertion")((
+const runAssertion = Effect.fnUntraced(function* (
   assertion: ScriptedTurnHooks["assertRequest"],
   request: LanguageModel.ProviderOptions,
-): Effect.Effect<void, AiError.AiError> => {
+): Effect.fn.Return<void, AiError.AiError> {
   if (assertion === undefined) {
-    return Effect.void;
+    return yield* Effect.void;
   }
 
-  return Effect.suspend(() => {
+  return yield* Effect.suspend(() => {
     const result = assertion(request);
 
     return Effect.isEffect(result) ? result : Effect.void;
   });
 });
 
-const takeTurn = Effect.fn("ScriptedModel.takeTurn")(
-  (
-    state: Ref.Ref<ScriptState>,
-    kind: ScriptedRequestKind,
-    options: LanguageModel.ProviderOptions,
-  ): Effect.Effect<ScriptedTurnInput, AiError.AiError> =>
-    Ref.modify(state, (current) => {
-      const turn = current.remaining[0];
+const takeTurn = Effect.fnUntraced(function* (
+  state: Ref.Ref<ScriptState>,
+  kind: ScriptedRequestKind,
+  options: LanguageModel.ProviderOptions,
+): Effect.fn.Return<ScriptedTurnInput, AiError.AiError> {
+  return yield* Ref.modify(state, (current) => {
+    const turn = current.remaining[0];
 
-      if (turn === undefined) {
-        return [
-          undefined,
-          {
-            ...current,
-            requests: [...current.requests, { kind, options }],
-          },
-        ] as const;
-      }
-
+    if (turn === undefined) {
       return [
-        turn,
+        undefined,
         {
-          remaining: current.remaining.slice(1),
+          ...current,
           requests: [...current.requests, { kind, options }],
         },
       ] as const;
-    }).pipe(
-      Effect.filterOrFail(
-        (turn) => turn !== undefined,
-        () => scriptedError(kind, `Script exhausted before the ${kind} request`),
-      ),
+    }
+
+    return [
+      turn,
+      {
+        remaining: current.remaining.slice(1),
+        requests: [...current.requests, { kind, options }],
+      },
+    ] as const;
+  }).pipe(
+    Effect.filterOrFail(
+      (turn) => turn !== undefined,
+      () => scriptedError(kind, `Script exhausted before the ${kind} request`),
     ),
-);
+  );
+});
 
 const requireGenerateTurn = (
   turn: ScriptedTurnInput,

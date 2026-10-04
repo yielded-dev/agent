@@ -243,7 +243,7 @@ const dependencies = Effect.gen(function* () {
       : Effect.fail(failure("unsupported-source", "source-version"));
   };
 
-  const scope = Effect.fn("Subscriptions.scope")(function* (value: SubscriptionScope) {
+  const scope = Effect.fnUntraced(function* (value: SubscriptionScope) {
     const decoded = yield* validate(SubscriptionScope, value);
 
     if (!samePartition(decoded.partition, store.partition))
@@ -252,7 +252,7 @@ const dependencies = Effect.gen(function* () {
     return decoded;
   });
 
-  const acceptNormalized = Effect.fn("Subscriptions.acceptNormalized")(function* (
+  const acceptNormalized = Effect.fnUntraced(function* (
     version: EventSourceVersion,
     event: NormalizedEvent,
     limits: SubscriptionLimits,
@@ -290,12 +290,12 @@ const dependencies = Effect.gen(function* () {
 const pageLimit = (value: number) =>
   validate(Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(100)), value);
 
-const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: SubscriptionLimits) {
+const makeManagement = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
   const limits = yield* validate(SubscriptionLimits, requested);
   const { bindings } = yield* SubscriptionInputBindings;
   const { store, authorizer, source, digest, scope } = yield* dependencies;
 
-  const subscribe: Subscriptions["Service"]["subscribe"] = Effect.fn("Subscriptions.subscribe")(
+  const subscribe: Subscriptions["Service"]["subscribe"] = Effect.fnUntraced(
     function* (scopeValue, options) {
       const owner = yield* scope(scopeValue);
 
@@ -404,28 +404,25 @@ const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: Sub
     },
   );
 
-  const listSubscriptions: Subscriptions["Service"]["listSubscriptions"] = Effect.fn(
-    "Subscriptions.listSubscriptions",
-  )(function* (scopeValue, after = 0, requestedLimit = 50) {
-    const owner = yield* scope(scopeValue);
+  const listSubscriptions: Subscriptions["Service"]["listSubscriptions"] = Effect.fnUntraced(
+    function* (scopeValue, after = 0, requestedLimit = 50) {
+      const owner = yield* scope(scopeValue);
 
-    yield* authorizer.manage("list", owner);
-    const limit = yield* pageLimit(requestedLimit);
+      yield* authorizer.manage("list", owner);
+      const limit = yield* pageLimit(requestedLimit);
 
-    yield* validate(Schema.Natural, after);
-    const records = yield* store.list(owner.ownerId, after, limit);
-    const time = yield* now;
+      yield* validate(Schema.Natural, after);
+      const records = yield* store.list(owner.ownerId, after, limit);
+      const time = yield* now;
 
-    return {
-      items: records.map((record) => snapshot(record, time)),
-      next: records.length === limit ? (records.at(-1)?.ordinal ?? null) : null,
-    };
-  });
+      return {
+        items: records.map((record) => snapshot(record, time)),
+        next: records.length === limit ? (records.at(-1)?.ordinal ?? null) : null,
+      };
+    },
+  );
 
-  const ownedKey = Effect.fn("Subscriptions.ownedKey")(function* (
-    owner: SubscriptionScope,
-    key: SubscriptionKey,
-  ) {
+  const ownedKey = Effect.fnUntraced(function* (owner: SubscriptionScope, key: SubscriptionKey) {
     yield* validate(SubscriptionKey, key);
     if (!samePartition(owner.partition, key.partition) || owner.ownerId !== key.ownerId)
       return yield* failure("unauthorized", "owner");
@@ -433,68 +430,68 @@ const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: Sub
     return key;
   });
 
-  const updateSubscription: Subscriptions["Service"]["updateSubscription"] = Effect.fn(
-    "Subscriptions.updateSubscription",
-  )(function* (scopeValue, key, expectedRevision, options) {
-    const owner = yield* scope(scopeValue);
+  const updateSubscription: Subscriptions["Service"]["updateSubscription"] = Effect.fnUntraced(
+    function* (scopeValue, key, expectedRevision, options) {
+      const owner = yield* scope(scopeValue);
 
-    yield* authorizer.manage("update", owner);
-    yield* ownedKey(owner, key);
-    const behavior = yield* source(options.source);
-    const parameters = yield* behavior.parameters(options.parameters);
-    const binding = yield* resolveSubscriptionInput(bindings, options);
-    const context = yield* binding.context(options.context);
+      yield* authorizer.manage("update", owner);
+      yield* ownedKey(owner, key);
+      const behavior = yield* source(options.source);
+      const parameters = yield* behavior.parameters(options.parameters);
+      const binding = yield* resolveSubscriptionInput(bindings, options);
+      const context = yield* binding.context(options.context);
 
-    const configuration = yield* validate(SubscriptionConfiguration, {
-      ...options,
-      ...parameters,
-      context,
-    });
+      const configuration = yield* validate(SubscriptionConfiguration, {
+        ...options,
+        ...parameters,
+        context,
+      });
 
-    yield* authorizer.manage("update", owner, configuration);
-    const time = yield* now;
+      yield* authorizer.manage("update", owner, configuration);
+      const time = yield* now;
 
-    if (
-      bytes(parameters.parameters) > limits.maxPayloadBytes ||
-      bytes(context) > limits.maxContextBytes
-    )
-      return yield* failure("validation", "registration-bounds");
-    if (
-      configuration.expiresAtMillis !== null &&
-      (configuration.expiresAtMillis <= time ||
-        configuration.expiresAtMillis - time > limits.maxLifetimeMillis)
-    )
-      return yield* failure("validation", "lifetime");
-    if (behavior.reconcile !== undefined && configuration.mode !== "once")
-      return yield* failure("validation", "reconciliation-requires-once");
-    const existing = yield* store.get(key);
+      if (
+        bytes(parameters.parameters) > limits.maxPayloadBytes ||
+        bytes(context) > limits.maxContextBytes
+      )
+        return yield* failure("validation", "registration-bounds");
+      if (
+        configuration.expiresAtMillis !== null &&
+        (configuration.expiresAtMillis <= time ||
+          configuration.expiresAtMillis - time > limits.maxLifetimeMillis)
+      )
+        return yield* failure("validation", "lifetime");
+      if (behavior.reconcile !== undefined && configuration.mode !== "once")
+        return yield* failure("validation", "reconciliation-requires-once");
+      const existing = yield* store.get(key);
 
-    if (existing === null) return yield* failure("not-found", "subscription");
+      if (existing === null) return yield* failure("not-found", "subscription");
 
-    const encoded = yield* Schema.encodeEffect(SubscriptionConfiguration)(configuration).pipe(
-      Effect.mapError(() => failure("validation", "configuration")),
-    );
+      const encoded = yield* Schema.encodeEffect(SubscriptionConfiguration)(configuration).pipe(
+        Effect.mapError(() => failure("validation", "configuration")),
+      );
 
-    const configurationFingerprint = yield* digest({
-      key,
-      createdBy: existing.createdBy,
-      configuration: encoded,
-    });
+      const configurationFingerprint = yield* digest({
+        key,
+        createdBy: existing.createdBy,
+        configuration: encoded,
+      });
 
-    const updated = yield* store.change(key, expectedRevision, {
-      _tag: "Update",
-      configuration,
-      configurationFingerprint,
-      recovery:
-        behavior.reconcile === undefined
-          ? null
-          : { attempts: 0, nextAttemptAtMillis: time, lastFailure: null },
-    });
+      const updated = yield* store.change(key, expectedRevision, {
+        _tag: "Update",
+        configuration,
+        configurationFingerprint,
+        recovery:
+          behavior.reconcile === undefined
+            ? null
+            : { attempts: 0, nextAttemptAtMillis: time, lastFailure: null },
+      });
 
-    return snapshot(updated, time);
-  });
+      return snapshot(updated, time);
+    },
+  );
 
-  const changeState = Effect.fn("Subscriptions.changeState")(function* (
+  const changeState = Effect.fnUntraced(function* (
     scopeValue: SubscriptionScope,
     key: SubscriptionKey,
     expectedRevision: number,
@@ -508,20 +505,23 @@ const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: Sub
     return snapshot(updated, yield* now);
   });
 
-  const cancelSubscription: Subscriptions["Service"]["cancelSubscription"] = Effect.fn(
-    "Subscriptions.cancelSubscription",
-  )(function* (scopeValue, key, expectedRevision) {
-    const owner = yield* scope(scopeValue);
+  const cancelSubscription: Subscriptions["Service"]["cancelSubscription"] = Effect.fnUntraced(
+    function* (scopeValue, key, expectedRevision) {
+      const owner = yield* scope(scopeValue);
 
-    yield* authorizer.manage("cancel", owner);
-    const record = yield* store.cancel(yield* ownedKey(owner, key), expectedRevision);
+      yield* authorizer.manage("cancel", owner);
+      const record = yield* store.cancel(yield* ownedKey(owner, key), expectedRevision);
 
-    return snapshot(record, yield* now);
-  });
+      return snapshot(record, yield* now);
+    },
+  );
 
-  const listDeliveries: Subscriptions["Service"]["listDeliveries"] = Effect.fn(
-    "Subscriptions.listDeliveries",
-  )(function* (scopeValue, key, after = "", requestedLimit = 50) {
+  const listDeliveries: Subscriptions["Service"]["listDeliveries"] = Effect.fnUntraced(function* (
+    scopeValue,
+    key,
+    after = "",
+    requestedLimit = 50,
+  ) {
     const owner = yield* scope(scopeValue);
 
     yield* authorizer.manage("deliveries", owner);
@@ -558,18 +558,18 @@ const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: Sub
     return deliverySnapshot(recovered);
   });
 
-  const getSubscription: Subscriptions["Service"]["getSubscription"] = Effect.fn(
-    "Subscriptions.getSubscription",
-  )(function* (scopeValue, key) {
-    const owner = yield* scope(scopeValue);
+  const getSubscription: Subscriptions["Service"]["getSubscription"] = Effect.fnUntraced(
+    function* (scopeValue, key) {
+      const owner = yield* scope(scopeValue);
 
-    yield* authorizer.manage("get", owner);
-    const record = yield* store.get(yield* ownedKey(owner, key));
+      yield* authorizer.manage("get", owner);
+      const record = yield* store.get(yield* ownedKey(owner, key));
 
-    if (record === null) return yield* failure("not-found", "subscription");
+      if (record === null) return yield* failure("not-found", "subscription");
 
-    return snapshot(record, yield* now);
-  });
+      return snapshot(record, yield* now);
+    },
+  );
 
   return Subscriptions.of({
     getSubscription,
@@ -600,11 +600,11 @@ const makeManagement = Effect.fn("Subscriptions.make")(function* (requested: Sub
   });
 });
 
-const makeIntake = Effect.fn("SubscriptionIntake.make")(function* (requested: SubscriptionLimits) {
+const makeIntake = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
   const limits = yield* validate(SubscriptionLimits, requested);
   const { store, authorizer, source, acceptNormalized } = yield* dependencies;
 
-  const accept: SubscriptionIntake["Service"]["accept"] = Effect.fn("SubscriptionIntake.accept")(
+  const accept: SubscriptionIntake["Service"]["accept"] = Effect.fnUntraced(
     function* (principal, version, payload) {
       yield* authorizer.intake(store.partition, version, principal);
       const behavior = yield* source(version);
@@ -619,7 +619,7 @@ const makeIntake = Effect.fn("SubscriptionIntake.make")(function* (requested: Su
     },
   );
 
-  const status: SubscriptionIntake["Service"]["status"] = Effect.fn("SubscriptionIntake.status")(
+  const status: SubscriptionIntake["Service"]["status"] = Effect.fnUntraced(
     function* (principal, version, eventId) {
       yield* authorizer.intake(store.partition, version, principal);
       const event = yield* store.event(eventId);
@@ -641,7 +641,7 @@ const makeIntake = Effect.fn("SubscriptionIntake.make")(function* (requested: Su
   return SubscriptionIntake.of({ accept, status });
 });
 
-const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: SubscriptionLimits) {
+const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
   const limits = yield* validate(SubscriptionLimits, requested);
   const { bindings } = yield* SubscriptionInputBindings;
   const { store, authorizer, source, digest, acceptNormalized } = yield* dependencies;
@@ -655,7 +655,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
   const definitionEquals = Schema.toEquivalence(DefinitionDigests);
   const nextAttempt = (time: number) => Math.min(time + limits.retryMillis, 8_640_000_000_000_000);
 
-  const selected = Effect.fn("Subscriptions.selected")(function* (
+  const selected = Effect.fnUntraced(function* (
     event: AcceptedEvent,
     subscription: SubscriptionRecord,
   ) {
@@ -700,7 +700,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
     });
   });
 
-  const route = Effect.fn("Subscriptions.route")(function* (event: AcceptedEvent) {
+  const route = Effect.fnUntraced(function* (event: AcceptedEvent) {
     const behavior = yield* source(event.source);
     const normalized = yield* behavior.normalize(event.payload);
 
@@ -792,9 +792,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
       Effect.asVoid,
     );
 
-  const verifySelected = Effect.fn("Subscriptions.verifySelected")(function* (
-    delivery: SubscriptionDelivery,
-  ) {
+  const verifySelected = Effect.fnUntraced(function* (delivery: SubscriptionDelivery) {
     const current = yield* store.get(delivery.key.subscription);
 
     const subscription =
@@ -851,7 +849,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
     return { subscription, event };
   });
 
-  const envelopeDigest = Effect.fn("Subscriptions.envelopeDigest")(function* (
+  const envelopeDigest = Effect.fnUntraced(function* (
     delivery: SubscriptionDelivery,
     envelope: PreparedInput,
   ) {
@@ -867,7 +865,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
     });
   });
 
-  const prepare = Effect.fn("Subscriptions.prepare")(function* (delivery: SubscriptionDelivery) {
+  const prepare = Effect.fnUntraced(function* (delivery: SubscriptionDelivery) {
     const { subscription, event } = yield* verifySelected(delivery);
     const time = yield* now;
 
@@ -920,9 +918,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
     });
   });
 
-  const process = Effect.fn("Subscriptions.processDelivery")(function* (
-    key: SubscriptionDeliveryKey,
-  ) {
+  const process = Effect.fnUntraced(function* (key: SubscriptionDeliveryKey) {
     let delivery = yield* store.delivery(key);
 
     if (delivery === null) return yield* failure("not-found", "delivery");
@@ -1024,9 +1020,7 @@ const makeDriver = Effect.fn("SubscriptionDriver.make")(function* (requested: Su
   const processDelivery: SubscriptionDriver["Service"]["processDelivery"] = (key) =>
     semaphore.withPermit(process(key));
 
-  const reconcile = Effect.fn("Subscriptions.reconcile")(function* (
-    subscription: SubscriptionRecord,
-  ) {
+  const reconcile = Effect.fnUntraced(function* (subscription: SubscriptionRecord) {
     const time = yield* now;
 
     if (

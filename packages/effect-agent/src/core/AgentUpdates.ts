@@ -52,7 +52,7 @@ type Source<S extends Schema.Top> = {
 type BoundSource<S extends Schema.Top> = Source<S> | { readonly definition: Source<S> };
 
 /** Emit a decoded update under an explicit stable key. Retries cannot replace accepted values. */
-export const emit = Effect.fn("AgentUpdates.emit")(function* <S extends Schema.Top>(
+export const emit = Effect.fnUntraced(function* <S extends Schema.Top>(
   agent: BoundSource<S>,
   value: NoInfer<S["Type"]>,
   options: { readonly idempotencyKey: IdempotencyKey },
@@ -78,7 +78,7 @@ export const emit = Effect.fn("AgentUpdates.emit")(function* <S extends Schema.T
 });
 
 /** Decode canonical update data through its declaring Agent Schema. */
-export const decode = Effect.fn("AgentUpdates.decode")(function* <S extends Schema.Top>(
+export const decode = Effect.fnUntraced(function* <S extends Schema.Top>(
   agent: BoundSource<S>,
   update: Update,
 ): Effect.fn.Return<S["Type"], UpdateError, S["DecodingServices"]> {

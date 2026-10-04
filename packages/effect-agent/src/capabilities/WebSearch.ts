@@ -148,7 +148,7 @@ export const layer = <T extends Tool.AnyProviderDefined>(options: Options<T>) =>
         Effect.provide(generate(query), encodingContext);
 
       return {
-        WebSearch: Effect.fn("WebSearch.search")(function* (input) {
+        WebSearch: Effect.fnUntraced(function* (input) {
           const { query } = yield* Schema.decodeEffect(Parameters)(input).pipe(
             Effect.mapError(() => new Failure({ reason: "invalid-query" })),
           );

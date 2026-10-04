@@ -392,7 +392,7 @@ const changedFileFromWire = (wire: typeof ChangedFileWire.Type): ChangedFile => 
   patch: wire.patch,
 });
 
-export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options: {
+export const makeGitHubClient = Effect.fnUntraced(function* (options: {
   readonly repository: string;
   readonly pullRequest: number;
   readonly token: Redacted.Redacted<string>;
@@ -439,7 +439,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
 
   // Only explicitly read-only operations enter this retry boundary. Include body
   // consumption in each attempt: retrying headers alone cannot repair a cut-off body.
-  const readJson = Effect.fn("GitHubClient.readJson")(function* <S extends Schema.Top>(
+  const readJson = Effect.fnUntraced(function* <S extends Schema.Top>(
     operation: string,
     value: HttpClientRequest.HttpClientRequest,
     schema: S,
@@ -601,7 +601,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
   });
 
   /** Revisit unresolved feedback independently of the delta; never truncate its blockers. */
-  const loadReviewFollowUps = Effect.fn("GitHubClient.loadReviewFollowUps")(function* (input: {
+  const loadReviewFollowUps = Effect.fnUntraced(function* (input: {
     readonly reviewAuthor: string;
     readonly history: ReadonlyArray<ReviewHistoryItem>;
   }) {
@@ -665,7 +665,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
   });
 
   /** Recent discussion is evidence only; it never joins the authoritative follow-up fingerprint. */
-  const loadReviewDiscussion = Effect.fn("GitHubClient.loadReviewDiscussion")(function* (input: {
+  const loadReviewDiscussion = Effect.fnUntraced(function* (input: {
     readonly reviewAuthor: string;
     readonly history: ReadonlyArray<ReviewHistoryItem>;
     readonly pullRequestUrl: string;
@@ -798,7 +798,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
   });
 
   /** Recheck ownership, feedback, and head before each dismissal. GitHub has no conditional PUT. */
-  const dismissReview = Effect.fn("GitHubClient.dismissReview")(function* (input: {
+  const dismissReview = Effect.fnUntraced(function* (input: {
     readonly review: ReviewHistoryItem;
     readonly reviewAuthor: string;
     readonly commitId: string;
@@ -949,7 +949,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
 
   const textBlobs = new Map<string, string>();
 
-  const readTextBlob = Effect.fn("GitHubClient.readTextBlob")(function* (sha: string) {
+  const readTextBlob = Effect.fnUntraced(function* (sha: string) {
     const cached = textBlobs.get(sha);
 
     if (cached !== undefined) return cached;
@@ -1006,7 +1006,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     return content;
   });
 
-  const readTreeSnapshot = Effect.fn("GitHubClient.readTreeSnapshot")(function* (
+  const readTreeSnapshot = Effect.fnUntraced(function* (
     revision: string,
   ): Effect.fn.Return<RepositorySnapshot, GitHubApiFailure> {
     const commit = yield* readJson(
@@ -1063,9 +1063,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
 
     const entry = (path: string) => entries.get(path);
 
-    const readTextFile = Effect.fn("GitHubClient.RepositorySnapshot.readTextFile")(function* (
-      path: string,
-    ) {
+    const readTextFile = Effect.fnUntraced(function* (path: string) {
       const value = entry(path);
 
       if (value?.type !== "blob") {
@@ -1081,10 +1079,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     return { revision, paths, entry, readTextFile } satisfies RepositorySnapshot;
   });
 
-  const getMergeBase = Effect.fn("GitHubClient.getMergeBase")(function* (
-    base: string,
-    head: string,
-  ) {
+  const getMergeBase = Effect.fnUntraced(function* (base: string, head: string) {
     const comparison = yield* readJson(
       "get pull request merge base",
       HttpClientRequest.get(
@@ -1096,10 +1091,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     return comparison.merge_base_commit.sha;
   });
 
-  const compareTrees = Effect.fn("GitHubClient.compareTrees")(function* (
-    baseRevision: string,
-    headRevision: string,
-  ) {
+  const compareTrees = Effect.fnUntraced(function* (baseRevision: string, headRevision: string) {
     const { base: baseSnapshot, head: headSnapshot } = yield* Effect.all(
       {
         base: readTreeSnapshot(baseRevision),
@@ -1123,10 +1115,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
   });
 
   /** Classify only an existing regular file in a caller-selected trusted snapshot. */
-  const isGenerated = Effect.fn("GitHubClient.isGenerated")(function* (
-    snapshot: RepositorySnapshot,
-    path: string,
-  ) {
+  const isGenerated = Effect.fnUntraced(function* (snapshot: RepositorySnapshot, path: string) {
     const entry = snapshot.entry(path);
 
     if (entry?.type !== "blob" || entry.mode === "120000") return false;
@@ -1177,9 +1166,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     return commit.file.isGenerated;
   });
 
-  const acknowledgeComment = Effect.fn("GitHubClient.acknowledgeComment")(function* (
-    commentId: number,
-  ) {
+  const acknowledgeComment = Effect.fnUntraced(function* (commentId: number) {
     const body = yield* Schema.encodeEffect(CreateReactionWire)({ content: "eyes" }).pipe(
       Effect.mapError((cause) => failure("encode issue comment reaction", cause)),
     );
@@ -1240,7 +1227,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     });
 
   /** Record a host-authored incomplete attempt on the inspected commit, even after a push. */
-  const publishAttemptMarker = Effect.fn("GitHubClient.publishAttemptMarker")(function* (input: {
+  const publishAttemptMarker = Effect.fnUntraced(function* (input: {
     readonly commitId: string;
     readonly body: string;
   }) {
@@ -1272,9 +1259,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     wire.external_id === checkExternalId;
 
   /** Skipped events preserve an existing attempt instead of replacing its result. */
-  const hasReviewCheck = Effect.fn("GitHubClient.hasReviewCheck")(function* (
-    check: Omit<ReviewCheck, "id">,
-  ) {
+  const hasReviewCheck = Effect.fnUntraced(function* (check: Omit<ReviewCheck, "id">) {
     const result = yield* readJson(
       "list review checks",
       HttpClientRequest.get(
@@ -1293,7 +1278,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     return result.check_runs.some((wire) => validateCheck(wire, check));
   });
 
-  const writeReviewCheck = Effect.fn("GitHubClient.writeReviewCheck")(function* (
+  const writeReviewCheck = Effect.fnUntraced(function* (
     operation: string,
     request: HttpClientRequest.HttpClientRequest,
     input: typeof CheckWriteWire.Type,
@@ -1321,7 +1306,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
 
   // Every attempt creates its own run under one stable name. Completion only
   // updates the returned ID, so an older attempt cannot overwrite a newer one.
-  const startReviewCheck = Effect.fn("GitHubClient.startReviewCheck")(function* (
+  const startReviewCheck = Effect.fnUntraced(function* (
     input: Omit<ReviewCheck, "id"> & { readonly detailsUrl?: string | undefined },
   ) {
     const wire = yield* writeReviewCheck("start review check", HttpClientRequest.post(checksUrl), {
@@ -1350,7 +1335,7 @@ export const makeGitHubClient = Effect.fn("makeGitHubClient")(function* (options
     } satisfies ReviewCheck;
   });
 
-  const completeReviewCheck = Effect.fn("GitHubClient.completeReviewCheck")(function* (
+  const completeReviewCheck = Effect.fnUntraced(function* (
     check: ReviewCheck,
     completion: ReviewCheckCompletion,
   ) {

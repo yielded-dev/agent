@@ -51,7 +51,7 @@ const invalid = () => SubscriptionSourceError.make({ code: "source-schema", retr
  * Each operation owns a fresh Scope for its callbacks and codecs; captured host services
  * retain their host lifetime. Operation resources finalize on success, failure, or interruption.
  */
-export const makeEventSource = Effect.fn("Thread.makeEventSource")(function* <
+export const makeEventSource = Effect.fnUntraced(function* <
   Event extends Schema.Top,
   Parameters extends Schema.Top,
   R = never,
@@ -99,7 +99,7 @@ export const makeEventSource = Effect.fn("Thread.makeEventSource")(function* <
       Effect.mapError(invalid),
     );
 
-  const normalized = Effect.fn("EventSource.normalized")(function* (event: Event["Type"]) {
+  const normalized = Effect.fnUntraced(function* (event: Event["Type"]) {
     const occurredAtMillis = options.occurredAtMillis?.(event);
 
     return {

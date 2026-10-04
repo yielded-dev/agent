@@ -281,9 +281,7 @@ const CurrentStartDelivery = Context.Reference<
 >("@effect-agent/thread/internal/CurrentStartDelivery", { defaultValue: () => undefined });
 
 /** No in-memory ownership: every mutation is reserved in source canonical history with CAS. */
-export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
-  options: WorkerRuntimeOptions,
-) {
+export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRuntimeOptions) {
   const control = yield* WorkerInputControl;
   // A routed read may belong to another owner; capture it before exposing worker operations.
   const admission = yield* Effect.serviceOption(PreparedInputAdmission);
@@ -337,7 +335,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       : undefined;
   });
 
-  const authorizeBudget = Effect.fn("WorkerHost.authorizeBudget")(function* (
+  const authorizeBudget = Effect.fnUntraced(function* (
     origin: WorkerOrigin,
     principal: Principal,
     admission?: WorkerStartAdmission,
@@ -363,7 +361,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       .export(ThreadExportRequest.make({ threadId }))
       .pipe(Effect.mapError(storageFailure(operation)));
 
-  const exactRecord = Effect.fn("WorkerHost.exactRecord")(function* (
+  const exactRecord = Effect.fnUntraced(function* (
     threadId: ThreadId,
     recordId: RecordId,
     operation: WorkerError["operation"],
@@ -374,7 +372,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     );
   });
 
-  const completedContinuation = Effect.fn("WorkerHost.completedContinuation")(function* (
+  const completedContinuation = Effect.fnUntraced(function* (
     source: WorkerContext["source"],
     worker: WorkerRef,
     targetAgentId: AgentId,
@@ -511,9 +509,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return { evidence, origin };
   });
 
-  const verifyContinuation = Effect.fn("WorkerHost.verifyContinuation")(function* (
-    origin: WorkerOrigin,
-  ) {
+  const verifyContinuation = Effect.fnUntraced(function* (origin: WorkerOrigin) {
     if (origin.continuationOf === undefined) return;
 
     const previous = yield* completedContinuation(
@@ -538,7 +534,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       return yield* failure("start", "denied");
   });
 
-  const readIdentity = Effect.fn("WorkerHost.readIdentity")(function* (
+  const readIdentity = Effect.fnUntraced(function* (
     threadId: ThreadId,
     operation: WorkerError["operation"],
   ) {
@@ -547,7 +543,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       .pipe(Effect.mapError(storageFailure(operation)));
   });
 
-  const readWorkerState = Effect.fn("WorkerHost.readWorkerState")(function* (
+  const readWorkerState = Effect.fnUntraced(function* (
     threadId: ThreadId,
     operation: WorkerError["operation"],
     sourceSubmissionId?: SubmissionId,
@@ -565,7 +561,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
   const hit = (location: DurableRuntimeFailpointLocation, operation: WorkerError["operation"]) =>
     deps.failpoint.hit(location).pipe(Effect.mapError(storageFailure(operation)));
 
-  const append = Effect.fn("WorkerHost.append")(
+  const append = Effect.fnUntraced(
     function* (
       threadId: ThreadId,
       id: string,
@@ -664,7 +660,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
 
   // Read exact child receipts only under capacity pressure. Collect in source order so
   // parallel foreign reads cannot change the canonical acknowledgement batch order.
-  const completedInputs = Effect.fn("WorkerHost.completedInputs")(function* (
+  const completedInputs = Effect.fnUntraced(function* (
     rows: ReadonlyArray<WorkerInputRequested>,
     sourceRecords: ThreadExport["records"],
   ) {
@@ -706,7 +702,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return { completed, acknowledgements };
   });
 
-  const reportIntent = Effect.fn("WorkerHost.reportIntent")(function* (
+  const reportIntent = Effect.fnUntraced(function* (
     source: ResolvedBinding,
     target: ResolvedBinding,
     delegationId: WorkerRef["delegationId"],
@@ -755,7 +751,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return matches.length === 1 ? matches[0] : undefined;
   };
 
-  const sourceAuthority = Effect.fn("WorkerHost.sourceAuthority")(function* (
+  const sourceAuthority = Effect.fnUntraced(function* (
     threadId: ThreadId,
     submissionId?: SubmissionId,
     reservations = false,
@@ -891,9 +887,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     };
   });
 
-  const resolveTargetPolicy = Effect.fn("WorkerHost.resolveTargetPolicy")(function* (
-    request: WorkerPolicyTarget,
-  ) {
+  const resolveTargetPolicy = Effect.fnUntraced(function* (request: WorkerPolicyTarget) {
     const selected = yield* deps.policyResolver.resolveTarget(request);
 
     if (Option.isNone(selected)) return selected;
@@ -905,7 +899,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return Option.some(policy);
   });
 
-  const reserveSubtree = Effect.fn("WorkerHost.reserveSubtree")(function* (
+  const reserveSubtree = Effect.fnUntraced(function* (
     sourceThreadId: ThreadId,
     requested: SubtreeBudgetReserved,
   ): Effect.fn.Return<void, WorkerError> {
@@ -1102,7 +1096,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return yield* failure("start", "storage");
   });
 
-  const reservation = Effect.fn("WorkerHost.reserveInput")(function* (
+  const reservation = Effect.fnUntraced(function* (
     admission: WorkerAdmission,
     inputDigest: Digest,
     input: PersistedJson,
@@ -1388,7 +1382,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       Effect.provideService(DurableRuntimeFailpoint, deps.failpoint),
     );
 
-  const validateAdmission = Effect.fn("WorkerHost.validateAdmission")(function* (
+  const validateAdmission = Effect.fnUntraced(function* (
     unvalidated: WorkerAdmission,
     options: DurableSubmitOptions,
     agentId: Agent.AnyDefinition["id"],
@@ -1460,7 +1454,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return admission;
   });
 
-  const prepareUpdate = Effect.fn("WorkerHost.prepareUpdate")(
+  const prepareUpdate = Effect.fnUntraced(
     function* (update: Update, submission: SubmissionSnapshot, messageId: IdempotencyKey) {
       const origin = submission.workerAdmission?.origin;
       const intent = origin?.reporting;
@@ -1571,7 +1565,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     ),
   );
 
-  const reportRun = Effect.fn("WorkerHost.reportRun")(function* (
+  const reportRun = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     history: Effect.Success<ReturnType<typeof read>>,
   ): Effect.fn.Return<void, WorkerError> {
@@ -1606,7 +1600,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
 
     const recordId = workerReportRecordId(messageId);
 
-    const prepare = Effect.fn("WorkerHost.prepareReport")(function* (): Effect.fn.Return<
+    const prepare = Effect.fnUntraced(function* (): Effect.fn.Return<
       WorkerReportPrepared | WorkerReportRefused,
       WorkerError
     > {
@@ -1852,9 +1846,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     yield* hit("worker:after-report-delivery", "inspect");
   });
 
-  const completeInput = Effect.fn("WorkerHost.completeInput")(function* (
-    submission: SubmissionSnapshot,
-  ) {
+  const completeInput = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {
     const admission = submission.workerAdmission;
 
     if (admission === undefined) return;
@@ -1976,7 +1968,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     const deliveryStatus = (row: MessageDeliveryRecord, operation: WorkerError["operation"]) =>
       messageStatus(row).pipe(Effect.mapError((cause) => failure(operation, "corrupt", cause)));
 
-    const preparedTarget = Effect.fn("WorkerHost.preparedTarget")(function* (
+    const preparedTarget = Effect.fnUntraced(function* (
       target: Agent.AnyDefinition,
       encodedInput: unknown,
       continuationOf?: WorkerContinuation,
@@ -2019,7 +2011,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       return { resolved, source, policy };
     });
 
-    const findOrigin = Effect.fn("WorkerHost.findOrigin")(function* (
+    const findOrigin = Effect.fnUntraced(function* (
       worker: WorkerRef,
       target: Agent.AnyDefinition,
       operation: WorkerError["operation"],
@@ -2067,7 +2059,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       return origin;
     });
 
-    const receiptInput = Effect.fn("WorkerHost.receiptInput")(function* (
+    const receiptInput = Effect.fnUntraced(function* (
       request: WorkerReceiptRequest,
       operation: WorkerError["operation"],
     ) {
@@ -2094,7 +2086,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       return row.workerAdmission;
     });
 
-    const observation = Effect.fn("WorkerHost.observation")(function* (
+    const observation = Effect.fnUntraced(function* (
       request: WorkerReceiptRequest,
       admission: WorkerAdmission,
       settlement: Settlement,
@@ -2154,7 +2146,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
       };
     });
 
-    const send = Effect.fn("WorkerHost.send")(function* (
+    const send = Effect.fnUntraced(function* (
       origin: WorkerOrigin,
       messageId: IdempotencyKey,
       encodedInput: unknown,
@@ -2285,7 +2277,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
         Effect.mapError(storageFailure("start")),
       );
 
-    const summarize = Effect.fn("WorkerHost.summarize")(function* (
+    const summarize = Effect.fnUntraced(function* (
       origin: WorkerOrigin,
       operation: "list" | "inspect",
     ): Effect.fn.Return<WorkerSummary, WorkerError> {
@@ -2488,7 +2480,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           policy: Option.getOrElse(source.policyOverride, () => context.policy),
         };
       }),
-      resolveTargetPolicy: Effect.fn("WorkerHost.resolvePreparedTargetPolicy")(function* (request) {
+      resolveTargetPolicy: Effect.fnUntraced(function* (request) {
         const previous =
           request.continuationOf === undefined
             ? undefined
@@ -2517,7 +2509,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           admission,
         )).policy;
       }),
-      start: Effect.fn("WorkerHost.start")(function* <E = never, R = never>(
+      start: Effect.fnUntraced(function* <E = never, R = never>(
         command: StartWorkerRequest | DeferredStartWorkerRequest<E, R>,
       ): Effect.fn.Return<WorkerStarted, WorkerError | E, R> {
         const previous =
@@ -2796,7 +2788,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           ),
         );
       }),
-      followUp: Effect.fn("WorkerHost.followUp")(function* <E = never, R = never>(
+      followUp: Effect.fnUntraced(function* <E = never, R = never>(
         command: FollowUpWorkerRequest | DeferredFollowUpWorkerRequest<E, R>,
       ): Effect.fn.Return<MessageStatus, WorkerError | E, R> {
         const principal = yield* authorize("followUp", "send", command.worker);
@@ -2884,7 +2876,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           ),
         );
       }),
-      inspect: Effect.fn("WorkerHost.inspect")(function* (request) {
+      inspect: Effect.fnUntraced(function* (request) {
         yield* authorize("inspect", "read", request.worker);
 
         if ("message" in request) {
@@ -2933,7 +2925,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           ? { _tag: "Pending" as const, receipt: request.receipt }
           : yield* observation(request, admission, status.settlement);
       }),
-      summary: Effect.fn("WorkerHost.inspectWorker")(function* (request) {
+      summary: Effect.fnUntraced(function* (request) {
         yield* authorize("inspect", "read", request.worker);
         const origin = yield* findOrigin(request.worker, request.target, "inspect");
 
@@ -3002,7 +2994,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
             );
           }),
         ),
-      await: Effect.fn("WorkerHost.await")(function* (request) {
+      await: Effect.fnUntraced(function* (request) {
         yield* authorize("await", "read", request.worker);
         const admission = yield* receiptInput(request, "await");
 
@@ -3017,7 +3009,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           yield* Effect.sleep(deps.settlementPollInterval);
         }
       }),
-      list: Effect.fn("WorkerHost.list")(function* (request) {
+      list: Effect.fnUntraced(function* (request) {
         yield* authorize("list", "read");
         yield* binding(request.target, "list");
         if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 100)
@@ -3045,7 +3037,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
 
         return { items, next: page.next === null ? null : Schema.decodeSync(ThreadId)(page.next) };
       }),
-      stop: Effect.fn("WorkerHost.stop")(function* (request) {
+      stop: Effect.fnUntraced(function* (request) {
         const principal = yield* authorize("stop", "control", request.worker);
 
         yield* findOrigin(request.worker, request.target, "stop");
@@ -3104,7 +3096,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
           yield* Effect.sleep(deps.settlementPollInterval);
         }
       }),
-      cancel: Effect.fn("WorkerHost.cancel")(function* (request) {
+      cancel: Effect.fnUntraced(function* (request) {
         const principal = yield* authorize("cancel", "control", request.worker);
 
         yield* receiptInput(request, "cancel");
@@ -3125,7 +3117,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     };
   };
 
-  const validateCompletion = Effect.fn("WorkerHost.validateCompletion")(function* (
+  const validateCompletion = Effect.fnUntraced(function* (
     unvalidated: FrameworkMessage,
     options: DurableSubmitOptions,
     agentId: AgentId,
@@ -3236,7 +3228,7 @@ export const makeWorkerRuntime = Effect.fn("WorkerHost.make")(function* (
     return message;
   });
 
-  const acquire = Effect.fn("WorkerHost.acquire")(function* (request: {
+  const acquire = Effect.fnUntraced(function* (request: {
     readonly sourceThreadId: ThreadId;
     readonly principal: Principal;
     readonly sourceSubmissionId?: SubmissionId;

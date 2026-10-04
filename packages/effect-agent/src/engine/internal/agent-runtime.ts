@@ -403,7 +403,7 @@ const runTotalsOf = (context: RunContext): RunTotals =>
     unobservedModelCalls: context.unobservedModelCalls,
   });
 
-const usageReportOf = Effect.fn("AgentRuntime.usageReport")(function* (context: RunContext) {
+const usageReportOf = Effect.fnUntraced(function* (context: RunContext) {
   const contributions: RunTotals[] = [];
 
   for (const read of context.childUsage.values()) {
@@ -420,10 +420,7 @@ const usageReportOf = Effect.fn("AgentRuntime.usageReport")(function* (context: 
   return RunUsageReport.make({ usage: runTotalsOf(context), delegatedUsage });
 });
 
-const noteIncompleteUsage = Effect.fn("AgentRuntime.noteIncompleteUsage")(function* (
-  context: RunContext,
-  turn: number,
-) {
+const noteIncompleteUsage = Effect.fnUntraced(function* (context: RunContext, turn: number) {
   const accounting = yield* ModelUsageAccounting;
 
   context.unobservedModelCalls += 1;
@@ -1431,186 +1428,180 @@ const effectiveRunBounds = (
   maxToolCalls: boundedAllowance(policy.maxToolCalls, options.toolCallAllowance),
 });
 
-const decodeResumedSettledCall = Effect.fn("AgentRuntime.decodeResumedSettledCall")(
-  (input: unknown) =>
-    Effect.gen(function* () {
-      const raw = yield* Effect.try({
-        try: () => {
-          if (input === null || typeof input !== "object") {
-            throw new TypeError("settled Tool Call must be an object");
-          }
-
-          const readOwnDataProperty = (key: "id" | "result" | "isFailure"): unknown => {
-            const descriptor = Object.getOwnPropertyDescriptor(input, key);
-
-            if (descriptor === undefined || !("value" in descriptor)) {
-              throw new TypeError(`settled Tool Call ${key} must be an own data property`);
-            }
-
-            return descriptor.value;
-          };
-
-          const selection = Object.getOwnPropertyDescriptor(input, "toolSelection");
-
-          if (selection !== undefined && !("value" in selection))
-            throw new TypeError("settled Tool selection must be an own data property");
-          const rejected = Object.getOwnPropertyDescriptor(input, "budgetRejected");
-
-          if (rejected !== undefined && !("value" in rejected)) {
-            throw new TypeError("settled Tool Call budgetRejected must be an own data property");
-          }
-
-          return {
-            id: readOwnDataProperty("id"),
-            result: readOwnDataProperty("result"),
-            isFailure: readOwnDataProperty("isFailure"),
-            ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
-            ...(selection === undefined ? {} : { toolSelection: selection.value }),
-          };
-        },
-        catch: () =>
-          ModelProtocolError.make({
-            message: "Turn resume contains an invalid settled Tool Call",
-          }),
-      });
-
-      const result = boundedCanonicalJsonSnapshot(raw.result, MAX_RESUMED_RESULT_BYTES);
-
-      if (result === undefined) {
-        return yield* ModelProtocolError.make({
-          message: "Turn resume settled Tool result is not bounded canonical JSON",
-        });
+const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
+  const raw = yield* Effect.try({
+    try: () => {
+      if (input === null || typeof input !== "object") {
+        throw new TypeError("settled Tool Call must be an object");
       }
 
-      return yield* Schema.decodeUnknownEffect(RunTurnResumeSettledCallSchema)({
-        ...raw,
-        result: result.value,
-      }).pipe(
-        Effect.mapError(() =>
-          ModelProtocolError.make({
-            message: "Turn resume contains an invalid settled Tool Call",
-          }),
-        ),
-      );
-    }),
-);
+      const readOwnDataProperty = (key: "id" | "result" | "isFailure"): unknown => {
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
 
-const snapshotResumedSettledCalls = Effect.fn("AgentRuntime.snapshotResumedSettledCalls")(
-  (resume: unknown, maximum: number) =>
-    Effect.try({
-      try: () => {
-        if (resume === null || typeof resume !== "object") {
-          throw new TypeError("Turn resume must be an object");
-        }
-        const settledDescriptor = Object.getOwnPropertyDescriptor(resume, "settled");
-
-        if (settledDescriptor === undefined || !("value" in settledDescriptor)) {
-          throw new TypeError("Turn resume settled must be an own data property");
-        }
-        const settled = settledDescriptor.value;
-
-        if (!Array.isArray(settled)) {
-          throw new TypeError("Turn resume settled must be an array");
-        }
-        const lengthDescriptor = Object.getOwnPropertyDescriptor(settled, "length");
-
-        if (
-          lengthDescriptor === undefined ||
-          !("value" in lengthDescriptor) ||
-          !Number.isSafeInteger(lengthDescriptor.value) ||
-          lengthDescriptor.value < 0 ||
-          lengthDescriptor.value > maximum
-        ) {
-          throw new TypeError("Turn resume settled has an invalid length");
-        }
-        const snapshot: Array<unknown> = [];
-
-        for (let index = 0; index < lengthDescriptor.value; index += 1) {
-          const entryDescriptor = Object.getOwnPropertyDescriptor(settled, String(index));
-
-          if (entryDescriptor === undefined || !("value" in entryDescriptor)) {
-            throw new TypeError("Turn resume settled entries must be own data properties");
-          }
-          snapshot.push(entryDescriptor.value);
+        if (descriptor === undefined || !("value" in descriptor)) {
+          throw new TypeError(`settled Tool Call ${key} must be an own data property`);
         }
 
-        return snapshot;
-      },
-      catch: () =>
-        ModelProtocolError.make({
-          message: "Turn resume contains an invalid settled Tool Call collection",
-        }),
-    }),
-);
+        return descriptor.value;
+      };
 
-const decodeResumeUsage = Effect.fn("AgentRuntime.decodeResumeUsage")((input: unknown) =>
-  Effect.gen(function* () {
-    const snapshot = yield* Effect.try({
-      try: () => {
-        if (input === null || typeof input !== "object") {
-          throw new TypeError("Run resume usage must be an object");
-        }
+      const selection = Object.getOwnPropertyDescriptor(input, "toolSelection");
 
-        const read = (key: keyof RunResumeUsage, optional = false): unknown => {
-          const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (selection !== undefined && !("value" in selection))
+        throw new TypeError("settled Tool selection must be an own data property");
+      const rejected = Object.getOwnPropertyDescriptor(input, "budgetRejected");
 
-          if (descriptor === undefined && optional) return undefined;
-          if (descriptor === undefined || !("value" in descriptor)) {
-            throw new TypeError(`Run resume usage ${key} must be an own data property`);
-          }
+      if (rejected !== undefined && !("value" in rejected)) {
+        throw new TypeError("settled Tool Call budgetRejected must be an own data property");
+      }
 
-          return descriptor.value;
-        };
+      return {
+        id: readOwnDataProperty("id"),
+        result: readOwnDataProperty("result"),
+        isFailure: readOwnDataProperty("isFailure"),
+        ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
+        ...(selection === undefined ? {} : { toolSelection: selection.value }),
+      };
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call",
+      }),
+  });
 
-        const optional = Object.fromEntries(
-          (
-            [
-              "usageStatus",
-              "pricingStatus",
-              "unobservedModelCalls",
-              "children",
-              "modelRestarts",
-              "webSearchCalls",
-            ] as const
-          )
-            .map((key) => [key, read(key, true)])
-            .filter(([, value]) => value !== undefined),
-        );
+  const result = boundedCanonicalJsonSnapshot(raw.result, MAX_RESUMED_RESULT_BYTES);
 
-        return {
-          ...optional,
-          modelCalls: read("modelCalls"),
-          inputTokens: read("inputTokens"),
-          outputTokens: read("outputTokens"),
-          lastInputTokens: read("lastInputTokens"),
-          lastOutputTokens: read("lastOutputTokens"),
-          costMicrousd: read("costMicrousd"),
-          committedTurns: read("committedTurns"),
-          toolCalls: read("toolCalls"),
-          programmaticToolCalls: read("programmaticToolCalls"),
-          consecutiveToolFailures: read("consecutiveToolFailures"),
-          finalizationUsed: read("finalizationUsed"),
-        };
-      },
-      catch: () =>
-        ModelProtocolError.make({
-          message:
-            "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
-        }),
+  if (result === undefined) {
+    return yield* ModelProtocolError.make({
+      message: "Turn resume settled Tool result is not bounded canonical JSON",
     });
+  }
 
-    return yield* Schema.decodeUnknownEffect(RunResumeUsageSchema)(snapshot).pipe(
-      Effect.mapError(() =>
-        ModelProtocolError.make({
-          message:
-            "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
-        }),
-      ),
-    );
-  }),
-);
+  return yield* Schema.decodeUnknownEffect(RunTurnResumeSettledCallSchema)({
+    ...raw,
+    result: result.value,
+  }).pipe(
+    Effect.mapError(() =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call",
+      }),
+    ),
+  );
+});
 
-const makeToolFailedEvent = Effect.fn("AgentRuntime.makeToolFailedEvent")(function* (
+const snapshotResumedSettledCalls = Effect.fnUntraced(function* (resume: unknown, maximum: number) {
+  return yield* Effect.try({
+    try: () => {
+      if (resume === null || typeof resume !== "object") {
+        throw new TypeError("Turn resume must be an object");
+      }
+      const settledDescriptor = Object.getOwnPropertyDescriptor(resume, "settled");
+
+      if (settledDescriptor === undefined || !("value" in settledDescriptor)) {
+        throw new TypeError("Turn resume settled must be an own data property");
+      }
+      const settled = settledDescriptor.value;
+
+      if (!Array.isArray(settled)) {
+        throw new TypeError("Turn resume settled must be an array");
+      }
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(settled, "length");
+
+      if (
+        lengthDescriptor === undefined ||
+        !("value" in lengthDescriptor) ||
+        !Number.isSafeInteger(lengthDescriptor.value) ||
+        lengthDescriptor.value < 0 ||
+        lengthDescriptor.value > maximum
+      ) {
+        throw new TypeError("Turn resume settled has an invalid length");
+      }
+      const snapshot: Array<unknown> = [];
+
+      for (let index = 0; index < lengthDescriptor.value; index += 1) {
+        const entryDescriptor = Object.getOwnPropertyDescriptor(settled, String(index));
+
+        if (entryDescriptor === undefined || !("value" in entryDescriptor)) {
+          throw new TypeError("Turn resume settled entries must be own data properties");
+        }
+        snapshot.push(entryDescriptor.value);
+      }
+
+      return snapshot;
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call collection",
+      }),
+  });
+});
+
+const decodeResumeUsage = Effect.fnUntraced(function* (input: unknown) {
+  const snapshot = yield* Effect.try({
+    try: () => {
+      if (input === null || typeof input !== "object") {
+        throw new TypeError("Run resume usage must be an object");
+      }
+
+      const read = (key: keyof RunResumeUsage, optional = false): unknown => {
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
+
+        if (descriptor === undefined && optional) return undefined;
+        if (descriptor === undefined || !("value" in descriptor)) {
+          throw new TypeError(`Run resume usage ${key} must be an own data property`);
+        }
+
+        return descriptor.value;
+      };
+
+      const optional = Object.fromEntries(
+        (
+          [
+            "usageStatus",
+            "pricingStatus",
+            "unobservedModelCalls",
+            "children",
+            "modelRestarts",
+            "webSearchCalls",
+          ] as const
+        )
+          .map((key) => [key, read(key, true)])
+          .filter(([, value]) => value !== undefined),
+      );
+
+      return {
+        ...optional,
+        modelCalls: read("modelCalls"),
+        inputTokens: read("inputTokens"),
+        outputTokens: read("outputTokens"),
+        lastInputTokens: read("lastInputTokens"),
+        lastOutputTokens: read("lastOutputTokens"),
+        costMicrousd: read("costMicrousd"),
+        committedTurns: read("committedTurns"),
+        toolCalls: read("toolCalls"),
+        programmaticToolCalls: read("programmaticToolCalls"),
+        consecutiveToolFailures: read("consecutiveToolFailures"),
+        finalizationUsed: read("finalizationUsed"),
+      };
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message:
+          "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
+      }),
+  });
+
+  return yield* Schema.decodeUnknownEffect(RunResumeUsageSchema)(snapshot).pipe(
+    Effect.mapError(() =>
+      ModelProtocolError.make({
+        message:
+          "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
+      }),
+    ),
+  );
+});
+
+const makeToolFailedEvent = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   call: Response.ToolCallPart<string, Schema.Json>,
@@ -1647,7 +1638,7 @@ const makeToolFailedEvent = Effect.fn("AgentRuntime.makeToolFailedEvent")(functi
  * a response commit for this Turn — settle canonically via the single-batch
  * Turn commit.
  */
-const settleRejectedBatch = Effect.fn("AgentRuntime.settleRejectedBatch")(function* (
+const settleRejectedBatch = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   trace: TurnTrace,
@@ -1695,7 +1686,7 @@ type ToolEventPayload =
   | SubagentEventPayload
   | { readonly _tag: "AgentUpdateEmitted"; readonly update: Update };
 
-const stampSubagentEvent = Effect.fn("AgentRuntime.stampSubagentEvent")(function* (
+const stampSubagentEvent = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   payload: ToolEventPayload,
@@ -3886,7 +3877,7 @@ const estimateContextTokens = Effect.fnUntraced(function* (
   );
 });
 
-const nextContextEstimate = Effect.fn("AgentRuntime.nextContextEstimate")(function* (
+const nextContextEstimate = Effect.fnUntraced(function* (
   context: RunContext,
   view: ReadonlyArray<Prompt.Message>,
   systemMessagesInHistory: boolean,
@@ -4461,82 +4452,78 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
     return { events: events ?? noEvents, changed };
   });
 
-const decodeInput = Effect.fn("AgentRuntime.decodeInput")(
-  <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    input: unknown,
-  ): Effect.Effect<
-    Agent.Input<AgentValue>,
-    AgentInputError,
-    AgentValue["definition"]["input"]["DecodingServices"]
-  > =>
-    Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
-      Effect.mapError((cause) =>
-        AgentInputError.make({
-          message: cause.message,
-        }),
-      ),
+const decodeInput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  input: unknown,
+): Effect.fn.Return<
+  Agent.Input<AgentValue>,
+  AgentInputError,
+  AgentValue["definition"]["input"]["DecodingServices"]
+> {
+  return yield* Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
+    Effect.mapError((cause) =>
+      AgentInputError.make({
+        message: cause.message,
+      }),
     ),
-);
+  );
+});
 
-const evaluateInstructions = Effect.fn("AgentRuntime.evaluateInstructions")(
-  <Input, Error, Services>(
-    instructions: InstructionSource<Input, Error, Services>,
-    input: Input,
-  ): Effect.Effect<Prompt.RawInput, Error, Services> =>
-    Effect.suspend(() => {
-      const result = typeof instructions === "function" ? instructions(input) : instructions;
+const evaluateInstructions = Effect.fnUntraced(function* <Input, Error, Services>(
+  instructions: InstructionSource<Input, Error, Services>,
+  input: Input,
+): Effect.fn.Return<Prompt.RawInput, Error, Services> {
+  return yield* Effect.suspend(() => {
+    const result = typeof instructions === "function" ? instructions(input) : instructions;
 
-      return Effect.isEffect(result) ? result : Effect.succeed(result);
-    }),
-);
+    return Effect.isEffect(result) ? result : Effect.succeed(result);
+  });
+});
 
-const encodeInput = Effect.fn("AgentRuntime.encodeInput")(
-  <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    input: Agent.Input<AgentValue>,
-  ): Effect.Effect<
-    AgentValue["definition"]["input"]["Encoded"],
-    AgentInputError,
-    AgentValue["definition"]["input"]["EncodingServices"]
-  > =>
-    Schema.encodeEffect(agent.definition.input)(input).pipe(
-      Effect.mapError((cause) =>
-        AgentInputError.make({
-          message: `Unable to encode Agent input: ${cause.message}`,
-        }),
-      ),
+const encodeInput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  input: Agent.Input<AgentValue>,
+): Effect.fn.Return<
+  AgentValue["definition"]["input"]["Encoded"],
+  AgentInputError,
+  AgentValue["definition"]["input"]["EncodingServices"]
+> {
+  return yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
+    Effect.mapError((cause) =>
+      AgentInputError.make({
+        message: `Unable to encode Agent input: ${cause.message}`,
+      }),
     ),
-);
+  );
+});
 
-const renderInputPromptEffect = Effect.fn("AgentRuntime.renderInputPrompt")(
-  <Input, Error, Services>(
-    inputPrompt: InputPromptSource<Input, Error, Services> | undefined,
-    decodedInput: Input,
-    encodedInput: unknown,
-  ): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Services> =>
-    inputPrompt === undefined
-      ? Effect.try({
-          try: () => {
-            const encoded = JSON.stringify(encodedInput);
+const renderInputPromptEffect = Effect.fnUntraced(function* <Input, Error, Services>(
+  inputPrompt: InputPromptSource<Input, Error, Services> | undefined,
+  decodedInput: Input,
+  encodedInput: unknown,
+): Effect.fn.Return<Prompt.RawInput, Error | AgentInputError, Services> {
+  return yield* inputPrompt === undefined
+    ? Effect.try({
+        try: () => {
+          const encoded = JSON.stringify(encodedInput);
 
-            if (encoded === undefined) {
-              throw new Error("Agent input cannot be represented as JSON");
-            }
+          if (encoded === undefined) {
+            throw new Error("Agent input cannot be represented as JSON");
+          }
 
-            return encoded;
-          },
-          catch: (cause) =>
-            AgentInputError.make({
-              message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
-            }),
-        })
-      : Effect.suspend(() => {
-          const result = inputPrompt(decodedInput);
+          return encoded;
+        },
+        catch: (cause) =>
+          AgentInputError.make({
+            message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
+          }),
+      })
+    : Effect.suspend(() => {
+        const result = inputPrompt(decodedInput);
 
-          return Effect.isEffect(result) ? result : Effect.succeed(result);
-        }),
-);
+        return Effect.isEffect(result) ? result : Effect.succeed(result);
+      });
+});
 
 /** Render decoded Agent input for model visibility, preserving the legacy JSON default. */
 export function renderInputPrompt<
@@ -5145,9 +5132,7 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
   }
 });
 
-const decodeFinalOutput = Effect.fn("AgentRuntime.decodeFinalOutput")(function* <
-  AgentValue extends Agent.Any,
->(
+const decodeFinalOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
   text: string,
 ): Effect.fn.Return<
@@ -5178,9 +5163,10 @@ const decodeFinalOutput = Effect.fn("AgentRuntime.decodeFinalOutput")(function* 
   return { encoded: eventJson, decoded };
 });
 
-const encodeOutputCandidate = Effect.fn("AgentRuntime.encodeOutputCandidate")(function* <
-  AgentValue extends Agent.Any,
->(agent: AgentValue, candidate: unknown) {
+const encodeOutputCandidate = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  candidate: unknown,
+) {
   const encoded = yield* Schema.encodeUnknownEffect(agent.definition.output)(candidate).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
@@ -5208,9 +5194,7 @@ const encodeOutputCandidate = Effect.fn("AgentRuntime.encodeOutputCandidate")(fu
   return { encoded: json, decoded };
 });
 
-const projectToolResult = Effect.fn("AgentRuntime.projectToolResult")(function* <
-  AgentValue extends Agent.Any,
->(
+const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
   declaration: CompletionToolDeclaration | CompletionFromToolDeclaration,
   parameters: unknown,
@@ -5257,9 +5241,12 @@ const projectToolResult = Effect.fn("AgentRuntime.projectToolResult")(function* 
   return projected;
 });
 
-const projectCompletionOutput = Effect.fn("AgentRuntime.projectCompletionOutput")(function* <
-  AgentValue extends Agent.Any,
->(agent: AgentValue, declaration: CompletionToolDeclaration, parameters: unknown, result: unknown) {
+const projectCompletionOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  declaration: CompletionToolDeclaration,
+  parameters: unknown,
+  result: unknown,
+) {
   return yield* encodeOutputCandidate(
     agent,
     yield* projectToolResult(agent, declaration, parameters, result),
@@ -5267,27 +5254,25 @@ const projectCompletionOutput = Effect.fn("AgentRuntime.projectCompletionOutput"
 });
 
 /** Reconstruct optional action completion identically for live execution and canonical recovery. */
-const projectCompletionFromToolOutput = Effect.fn("AgentRuntime.projectCompletionFromToolOutput")(
-  function* <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    declaration: CompletionFromToolDeclaration,
-    parameters: unknown,
-    result: unknown,
-  ) {
-    const projected = yield* projectToolResult(agent, declaration, parameters, result);
+const projectCompletionFromToolOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  declaration: CompletionFromToolDeclaration,
+  parameters: unknown,
+  result: unknown,
+) {
+  const projected = yield* projectToolResult(agent, declaration, parameters, result);
 
-    if (!Option.isOption(projected)) {
-      return yield* AgentOutputError.make({
-        message: "Action completion projector did not return an Option",
-      });
-    }
-    if (Option.isNone(projected)) return Option.none();
+  if (!Option.isOption(projected)) {
+    return yield* AgentOutputError.make({
+      message: "Action completion projector did not return an Option",
+    });
+  }
+  if (Option.isNone(projected)) return Option.none();
 
-    return Option.some(yield* encodeOutputCandidate(agent, projected.value));
-  },
-);
+  return Option.some(yield* encodeOutputCandidate(agent, projected.value));
+});
 
-const encodeRunDispositionCandidate = Effect.fn("AgentRuntime.encodeRunDisposition")(function* <
+const encodeRunDispositionCandidate = Effect.fnUntraced(function* <
   Output,
   DispositionSchema extends Schema.Top,
 >(
@@ -5366,7 +5351,7 @@ function encodeRunDisposition<Output, DispositionSchema extends Schema.Top>(
     : encodeRunDispositionCandidate(declaration, output);
 }
 
-const decodeRunDispositionCandidate = Effect.fn("AgentRuntime.decodeRunDisposition")(function* <
+const decodeRunDispositionCandidate = Effect.fnUntraced(function* <
   Output,
   DispositionSchema extends Schema.Top,
 >(
@@ -6331,7 +6316,7 @@ const makeTurn = <
 
       // Failure accounting observes the already-selected failure; a secondary
       // budget/estimator failure must not replace that native outcome.
-      const retainFailedUsage = Effect.fn("AgentRuntime.retainFailedUsage")(function* () {
+      const retainFailedUsage = Effect.fnUntraced(function* () {
         if (trace.usageConsumed) return;
         trace.usageConsumed = true;
         if (trace.usage === undefined) {
@@ -10788,7 +10773,7 @@ const spawnWithParent = (
   preparation: RunContextPreparation["Service"],
   onChild: (runId: RunId, read: Effect.Effect<RunUsageReport>) => void,
 ) =>
-  Effect.fn("AgentSpawner.spawn")(function* <
+  Effect.fnUntraced(function* <
     InputSchema extends Schema.Top,
     OutputSchema extends Schema.Top,
     Instructions,

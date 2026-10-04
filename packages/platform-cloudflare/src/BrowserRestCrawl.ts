@@ -160,7 +160,7 @@ const endpoint = (options: BrowserRestCrawlOptions, jobId?: string): string =>
     jobId === undefined ? "" : `/${encodeURIComponent(jobId)}`
   }`;
 
-const readBoundedResponse = Effect.fn("BrowserRestCrawl.readBoundedResponse")(function* (
+const readBoundedResponse = Effect.fnUntraced(function* (
   response: HttpClientResponse.HttpClientResponse,
   maximum: number,
 ): Effect.fn.Return<string, PageCrawlProtocolError> {
@@ -206,16 +206,13 @@ const readBoundedResponse = Effect.fn("BrowserRestCrawl.readBoundedResponse")(fu
   });
 });
 
-const deadlineFailure = Effect.fn("BrowserRestCrawl.deadlineFailure")(function* (
-  request: PageCrawlRequest,
-  startedAt: number,
-) {
+const deadlineFailure = Effect.fnUntraced(function* (request: PageCrawlRequest, startedAt: number) {
   const now = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
 
   return yield* limitError(request, "deadline", Math.max(0, now - startedAt));
 });
 
-const withinDeadline = Effect.fn("BrowserRestCrawl.withinDeadline")(function* <A, E, R>(
+const withinDeadline = Effect.fnUntraced(function* <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   request: PageCrawlRequest,
   startedAt: number,
@@ -234,10 +231,7 @@ const withinDeadline = Effect.fn("BrowserRestCrawl.withinDeadline")(function* <A
   );
 });
 
-const checkDeadline = Effect.fn("BrowserRestCrawl.checkDeadline")(function* (
-  request: PageCrawlRequest,
-  startedAt: number,
-) {
+const checkDeadline = Effect.fnUntraced(function* (request: PageCrawlRequest, startedAt: number) {
   const now = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
   const elapsed = Math.max(0, now - startedAt);
 
@@ -268,9 +262,11 @@ const makeCrawl =
         const startedAt = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
         const startHost = new URL(input.startUrl).host;
 
-        const executeJson = Effect.fn("BrowserRestCrawl.executeJson")(function* <
-          S extends Schema.Top,
-        >(request: HttpClientRequest.HttpClientRequest, schema: S, maximum: number) {
+        const executeJson = Effect.fnUntraced(function* <S extends Schema.Top>(
+          request: HttpClientRequest.HttpClientRequest,
+          schema: S,
+          maximum: number,
+        ) {
           const authorized = HttpClientRequest.bearerToken(request, options.apiToken).pipe(
             HttpClientRequest.acceptJson,
           );
@@ -409,7 +405,7 @@ const makeCrawl =
           ),
         );
 
-        const fetchResult = Effect.fn("BrowserRestCrawl.fetchResult")(function* (
+        const fetchResult = Effect.fnUntraced(function* (
           cursor: Option.Option<string>,
           statusOnly: boolean,
         ) {

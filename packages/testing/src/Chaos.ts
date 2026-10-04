@@ -621,7 +621,7 @@ const scriptFor = (
   }
 };
 
-const makeLaneFixture = Effect.fn("Chaos.makeLaneFixture")(function* (
+const makeLaneFixture = Effect.fnUntraced(function* (
   plan: ChaosPlan,
   laneIndex: number,
   kind: ChaosScenarioKind,
@@ -845,7 +845,7 @@ const resolutionFor = (
 };
 
 /** Drive one DUR-017 pass: resolve Unknown Outcomes and pending approvals from the plan. */
-const resolutionPass = Effect.fn("Chaos.resolutionPass")(function* (
+const resolutionPass = Effect.fnUntraced(function* (
   plan: ChaosPlan,
   states: ReadonlyArray<SubmissionState>,
   desk: ChaosDesk,
@@ -999,7 +999,7 @@ const assertNoFabrication = (
  * Execute one chaos plan against whatever adapters the ambient Layer provides and end in the
  * shared invariant claims. Deterministic: same plan + same adapters → same schedule.
  */
-export const runChaosPlan = Effect.fn("Chaos.runChaosPlan")(function* (
+export const runChaosPlan = Effect.fnUntraced(function* (
   plan: ChaosPlan,
   options?: ChaosRunOptions,
 ) {
@@ -1166,7 +1166,7 @@ export const runChaosPlan = Effect.fn("Chaos.runChaosPlan")(function* (
   const produced = yield* desk.produced;
   const laneReports: Array<ChaosLaneReport> = [];
 
-  const verifyThread = Effect.fn("Chaos.verifyThread")(function* (
+  const verifyThread = Effect.fnUntraced(function* (
     threadId: ThreadId,
     kind: ChaosScenarioKind,
     deskInPlay: boolean,

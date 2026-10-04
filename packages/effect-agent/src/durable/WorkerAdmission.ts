@@ -46,9 +46,7 @@ export const WorkerAdmissionFailure = Schema.Union([
 ]);
 
 /** Local implementation shared by every host; retries finish the same admitted row. */
-export const admitWorker = Effect.fn("WorkerAdmission.admitWorker")(function* (
-  request: WorkerAdmissionRequest,
-) {
+export const admitWorker = Effect.fnUntraced(function* (request: WorkerAdmissionRequest) {
   const origin = request.workerAdmission.origin;
 
   if (

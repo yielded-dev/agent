@@ -54,7 +54,7 @@ import { makeSqlThreadStoreKernel, type SqlThreadStoreOptions } from "./SqlThrea
  * state is retained; canonical facts, queued followers, aborts, approvals and reservations remain
  * database-authoritative.
  */
-export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
+export const makeSqlRunStorage = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,

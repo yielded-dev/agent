@@ -66,7 +66,7 @@ const validate = <A, I>(schema: Schema.Codec<A, I>, value: unknown, code: string
 const decodeRows = <A, I>(schema: Schema.Codec<A, I>, rows: unknown, code: string) =>
   Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(Effect.mapError(() => corrupt(code)));
 
-const initializeDoSubscriptionStore = Effect.fn("DoSubscriptionStore.initialize")(function* () {
+const initializeDoSubscriptionStore = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
 
   const names = yield* sql<Record<string, unknown>>`
@@ -199,9 +199,7 @@ const initializeDoSubscriptionStore = Effect.fn("DoSubscriptionStore.initialize"
     );
 });
 
-const makeSubscriptionStore = Effect.fn("DoSubscriptionStore.make")(function* (
-  owned: SourcePartition,
-) {
+const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartition) {
   const partition = yield* validate(SourcePartition, owned, "partition");
   const sql = yield* SqlClientService.SqlClient;
   const failpoint = yield* SubscriptionFailpoint;
@@ -214,7 +212,7 @@ const makeSubscriptionStore = Effect.fn("DoSubscriptionStore.make")(function* (
     code: string,
   ) => effect.pipe(Effect.mapError(() => unavailable(code)));
 
-  const readIndexedDeadline = Effect.fn("DoSubscriptionStore.readIndexedDeadline")(function* () {
+  const readIndexedDeadline = Effect.fnUntraced(function* () {
     const scanRows = yield* query(
       sql<Record<string, unknown>>`
       SELECT event_scan_cursor, delivery_scan_cursor, recovery_scan_cursor FROM effect_agent_subscription_sequences
@@ -262,7 +260,7 @@ const makeSubscriptionStore = Effect.fn("DoSubscriptionStore.make")(function* (
     return decoded[0].deadline;
   });
 
-  const replaceAlarm = Effect.fn("DoSubscriptionStore.replaceAlarm")(function* (
+  const replaceAlarm = Effect.fnUntraced(function* (
     replace: DoSubscriptionReplaceAlarm,
     deadlineAtMillis: number | null,
   ) {
@@ -299,7 +297,7 @@ const makeSubscriptionStore = Effect.fn("DoSubscriptionStore.make")(function* (
     transaction: transact,
   });
 
-  const prearm = Effect.fn("DoSubscriptionStore.prearm")(function* (deadlineAtMillis: number) {
+  const prearm = Effect.fnUntraced(function* (deadlineAtMillis: number) {
     yield* transactions.run((replace) => replaceAlarm(replace, deadlineAtMillis));
     yield* failpoint.hit("subscription:prearm:after");
   });

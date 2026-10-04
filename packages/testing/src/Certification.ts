@@ -536,10 +536,7 @@ const makeSingleAgentCell = (
   };
 };
 
-const makeCell = Effect.fn("Certification.makeCell")(function* (
-  scenario: CertificationScenario,
-  slug: string,
-) {
+const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, slug: string) {
   switch (scenario) {
     case "plain": {
       const binding = Agent.withModel(
@@ -637,10 +634,7 @@ const makeCell = Effect.fn("Certification.makeCell")(function* (
       const resolved = yield* DurableWorkerBinding.make(binding, DIGESTS);
       const threadId = decodeThreadId(`certify-${slug}`);
 
-      const submitOne = Effect.fn("Certification.submitOne")(function* (
-        key: string,
-        question: string,
-      ) {
+      const submitOne = Effect.fnUntraced(function* (key: string, question: string) {
         const runtime = yield* DurableAgentRuntime;
 
         return yield* runtime.submit(
@@ -738,7 +732,7 @@ const MAX_REDRIVE_ROUNDS = 8;
  * invariant checker in convergence mode WITH the captured per-batch producer directory, so
  * the digest chain is fully recomputed instead of skipped.
  */
-const verifyLane = Effect.fn("Certification.verifyLane")(function* (
+const verifyLane = Effect.fnUntraced(function* (
   lane: ThreadId,
   batchProducers: ReadonlyMap<BatchId, ProducerId>,
 ) {
@@ -810,7 +804,7 @@ type SweepOutcome = Pick<
 >;
 
 /** Discover a clean path, or arm one location; both drives converge and verify real storage. */
-const runSweepCell = Effect.fn("Certification.runSweepCell")(function* (
+const runSweepCell = Effect.fnUntraced(function* (
   scenario: CertificationScenario,
   location: DurableRuntimeFailpointLocation | undefined,
   batchProducers: ReadonlyMap<BatchId, ProducerId>,
@@ -1004,7 +998,7 @@ const runSweepCell = Effect.fn("Certification.runSweepCell")(function* (
  * real-loss citations are recorded (`recorded-evidence`); otherwise the certificate says
  * `not-exercised` — a scoped statement, never a silent claim.
  */
-export const resolveTierThree = Effect.fn("Certification.resolveTierThree")(function* (
+export const resolveTierThree = Effect.fnUntraced(function* (
   durability: CertifiedAdapterIdentity["durability"],
   options: {
     readonly crashLever?: CertificationCrashLever | undefined;

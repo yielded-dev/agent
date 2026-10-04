@@ -421,7 +421,7 @@ const make = <const Name extends string>(
   const build = Effect.gen(function* () {
     const pageCapture = yield* PageCapture;
 
-    const invoke = Effect.fn(`WebCapture.${name}`)(function* (parameters: {
+    const invoke = Effect.fnUntraced(function* (parameters: {
       readonly url: string;
       readonly action: WebCaptureAction;
     }) {
@@ -560,9 +560,7 @@ const makeExtract = <const Name extends string, S extends Schema.Top>(
   const build = Effect.gen(function* () {
     const pageCapture = yield* PageCapture;
 
-    const invoke = Effect.fn(`WebCapture.${name}`)(function* (parameters: {
-      readonly url: string;
-    }) {
+    const invoke = Effect.fnUntraced(function* (parameters: { readonly url: string }) {
       const denied = deniedUrl(parameters.url, patterns);
 
       if (denied !== undefined) {
@@ -661,7 +659,7 @@ const makeScrape = <const Name extends string>(
   const build = Effect.gen(function* () {
     const pageCapture = yield* PageCapture;
 
-    const invoke = Effect.fn(`WebCapture.${name}`)(function* (parameters: {
+    const invoke = Effect.fnUntraced(function* (parameters: {
       readonly url: string;
       readonly selectors: ReadonlyArray<string>;
     }) {

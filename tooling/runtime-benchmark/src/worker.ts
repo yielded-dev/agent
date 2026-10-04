@@ -28,13 +28,13 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
   let active: SampleProgress | null = null;
   let failure: string | null = null;
   let steadyState: SteadyStateResult | undefined;
+  const resident = options.mode === "steady-state-profile" || options.mode === "steady-state";
 
-  const available =
-    options.mode === "steady-state-profile"
-      ? steadyStateCases
-      : options.cold
-        ? casesFor(options.profile).slice(0, 1)
-        : casesFor(options.profile);
+  const available = resident
+    ? steadyStateCases
+    : options.cold
+      ? casesFor(options.profile).slice(0, 1)
+      : casesFor(options.profile, (options.cases?.length ?? 0) > 0);
 
   const cases = yield* selectCaseNames(
     available.map(({ name }) => name),
@@ -77,18 +77,21 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
 
   yield* Effect.gen(function* () {
     yield* persist();
-    if (options.mode === "steady-state-profile") {
+    if (resident) {
       const evidenceFs = yield* FileSystem.FileSystem;
       const name = cases[0];
 
       if (
-        options.cpuProfile === undefined ||
+        (options.mode === "steady-state-profile"
+          ? options.cpuProfile === undefined
+          : options.cpuProfile !== undefined) ||
         options.cold ||
         cases.length !== 1 ||
         name === undefined
       )
         return yield* BenchmarkError.make({
-          message: "Steady-state profiling requires one warm case and a profile output path",
+          message:
+            "Steady-state modes require one warm case and a CPU output path only when profiling",
         });
       active = { case: name, ordinal: 0, warmup: true, phase: "setup", elapsedMs: 0 };
       yield* persist();
@@ -99,20 +102,17 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
           BenchmarkError.make({ message: "Cannot load steady-state fixture", cause }),
       });
 
-      steadyState = yield* fixture.runSteadyStateProfile(
-        options.cpuProfile,
-        (operations, elapsedMs) => {
-          active = {
-            case: name,
-            ordinal: operations,
-            warmup: false,
-            phase: "operation",
-            elapsedMs,
-          };
+      steadyState = yield* fixture.runSteadyState(options.cpuProfile, (operations, elapsedMs) => {
+        active = {
+          case: name,
+          ordinal: operations,
+          warmup: false,
+          phase: "operation",
+          elapsedMs,
+        };
 
-          return persist().pipe(Effect.provideService(FileSystem.FileSystem, evidenceFs));
-        },
-      );
+        return persist().pipe(Effect.provideService(FileSystem.FileSystem, evidenceFs));
+      });
       active = null;
 
       return;

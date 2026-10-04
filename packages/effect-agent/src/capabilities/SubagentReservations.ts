@@ -763,50 +763,45 @@ export const SubagentReservationsMemoryLive: Layer.Layer<SubagentReservations> =
     });
 
     return SubagentReservations.of({
-      registerParent: Effect.fn("SubagentReservations.registerParent")(
-        function* (parentRunId, caps) {
-          const gate =
-            caps.maxConcurrentChildren !== undefined && caps.maxConcurrentChildren > 0
-              ? yield* Semaphore.make(caps.maxConcurrentChildren)
-              : undefined;
+      registerParent: Effect.fnUntraced(function* (parentRunId, caps) {
+        const gate =
+          caps.maxConcurrentChildren !== undefined && caps.maxConcurrentChildren > 0
+            ? yield* Semaphore.make(caps.maxConcurrentChildren)
+            : undefined;
 
-          const result = yield* Ref.modify(state, (ledger) =>
-            registerTransition(ledger, parentRunId, caps, gate),
-          );
+        const result = yield* Ref.modify(state, (ledger) =>
+          registerTransition(ledger, parentRunId, caps, gate),
+        );
 
-          return yield* resolve(result);
-        },
-      ),
-      reserve: Effect.fn("SubagentReservations.reserve")(function* (request) {
+        return yield* resolve(result);
+      }),
+      reserve: Effect.fnUntraced(function* (request) {
         const result = yield* Ref.modify(state, (ledger) => reserveTransition(ledger, request));
 
         return yield* resolve(result);
       }),
-      observe: Effect.fn("SubagentReservations.observe")(function* (reservationId, usage) {
+      observe: Effect.fnUntraced(function* (reservationId, usage) {
         const result = yield* Ref.modify(state, (ledger) =>
           observeTransition(ledger, reservationId, usage),
         );
 
         return yield* resolve(result);
       }),
-      beginRelease: Effect.fn("SubagentReservations.beginRelease")(function* (reservationId) {
+      beginRelease: Effect.fnUntraced(function* (reservationId) {
         const result = yield* Ref.modify(state, (ledger) =>
           beginReleaseTransition(ledger, reservationId),
         );
 
         return yield* resolve(result);
       }),
-      release: Effect.fn("SubagentReservations.release")(function* (reservationId) {
+      release: Effect.fnUntraced(function* (reservationId) {
         const result = yield* Ref.modify(state, (ledger) =>
           releaseTransition(ledger, reservationId),
         );
 
         return yield* resolve(result);
       }),
-      acquireChildSlot: Effect.fn("SubagentReservations.acquireChildSlot")(function* (
-        parentRunId,
-        slots = 1,
-      ) {
+      acquireChildSlot: Effect.fnUntraced(function* (parentRunId, slots = 1) {
         const ledger = yield* Ref.get(state);
         const parent = ledger.parents.get(parentRunId);
 
@@ -834,14 +829,14 @@ export const SubagentReservationsMemoryLive: Layer.Layer<SubagentReservations> =
           { interruptible: true },
         );
       }),
-      retireParent: Effect.fn("SubagentReservations.retireParent")(function* (parentRunId) {
+      retireParent: Effect.fnUntraced(function* (parentRunId) {
         const result = yield* Ref.modify(state, (ledger) =>
           retireParentTransition(ledger, parentRunId),
         );
 
         return yield* resolve(result);
       }),
-      parentSnapshot: Effect.fn("SubagentReservations.parentSnapshot")(function* (parentRunId) {
+      parentSnapshot: Effect.fnUntraced(function* (parentRunId) {
         const ledger = yield* Ref.get(state);
         const parent = ledger.parents.get(parentRunId);
 
