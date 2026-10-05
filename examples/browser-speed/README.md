@@ -1,6 +1,7 @@
 # Browser speed lab
 
-Live at **[agent.yielded.dev/browser-use](https://agent.yielded.dev/browser-use/)**: visitors bring their own keys.
+Live at **[agent.yielded.dev/browser-use](https://agent.yielded.dev/browser-use/)**: visitors bring
+their own keys, and allowlisted travel planner accounts run on the lab's.
 
 Ask **Jev** or a model agent: **“Starting at the Wikipedia page for Mars, get to Nelson Mandela.”**
 Watch a real Cloudflare browser follow article links and inspect the route, hop count, and
@@ -316,8 +317,15 @@ protect the custom hostname; an Access policy on a custom domain does not protec
 Preview URLs are disabled so they cannot bypass that policy.
 
 The public lab is the `public` environment: `vp run -F @yielded/agent-example-browser-speed deploy:public`
-serves `agent.yielded.dev/browser-use` with no model keys of its own. Give it only
-`CLOUDFLARE_ACCOUNT_ID` and a Browser Run Write token as `BROWSER_RENDERING_API_TOKEN`. Visitors
-add TypeSafe, OpenRouter and OpenAI keys in the page; each run sends them as request headers, and
-the lab uses them for that run without storing or reporting them. The public lab has no scripted
-baseline or Workers AI model, and admits at most six runs per minute per address.
+serves `agent.yielded.dev/browser-use`. Give it `CLOUDFLARE_ACCOUNT_ID` and a Browser Run Write
+token as `BROWSER_RENDERING_API_TOKEN`. Visitors add TypeSafe, OpenRouter and OpenAI keys in the
+page; each run sends them as request headers, and the lab uses them for that run without storing
+or reporting them. The public lab has no scripted baseline or Workers AI model, and admits at most
+six runs per minute per address.
+
+Sign-in belongs to the [travel planner](../travel-planner) at `agent.yielded.dev/travel`. Both
+apps share an origin, so the lab receives its session cookie and checks it through a binding to
+the planner's auth Durable Object. When a same-origin run comes from an account on the planner's
+funding allowlist, the lab fills any key the visitor left out from `FUNDED_OPENAI_API_KEY`,
+`FUNDED_TYPESAFE_API_KEY` and `FUNDED_OPENROUTER_API_KEY`. Any other request, or any auth failure,
+runs on visitor keys only.

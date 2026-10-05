@@ -9,8 +9,10 @@ import {
   Circle,
   Download,
   KeyRound,
+  LogIn,
   Play,
   Square,
+  UserRound,
   X,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -32,6 +34,7 @@ import {
   type Scenario,
 } from "./contract.ts";
 import {
+  accountAtom,
   cohort,
   comparisons,
   controlAtom,
@@ -47,6 +50,7 @@ import {
   runOutcome,
   saveKeysAtom,
   selectedAtom,
+  signInUrl,
   snapshotAtom,
   submittedAtom,
   validKey,
@@ -296,6 +300,9 @@ export const App = () => {
   const busy = watching || remote?.busy === true;
   const connected = remote !== null;
   const publicLab = remote?.public ?? false;
+  const accountResult = useAtomValue(accountAtom);
+  const account = AsyncResult.isSuccess(accountResult) ? accountResult.value : null;
+  const funded = account?.funded === true;
   const failure = errorMessage(run) ?? errorMessage(control) ?? errorMessage(snapshot);
 
   const isWiki = scenario === "wikipedia";
@@ -316,16 +323,19 @@ export const App = () => {
     Schema.is(ArticleTitle)(wikiTarget.trim()) &&
     wikiStart.trim() !== wikiTarget.trim();
 
-  // A visitor key or the lab's own key (private labs only) satisfies each requirement.
-  const hasTypesafe = validKey(keys.typesafe) || remote?.jevConfigured === true;
+  // A visitor key, a funded account, or a private lab's own key satisfies each requirement.
+  const hasTypesafe = funded || validKey(keys.typesafe) || remote?.jevConfigured === true;
 
   const hasFieldText =
-    validKey(keys.openrouter) || validKey(keys.openai) || (remote?.jevTextModel ?? null) !== null;
+    funded ||
+    validKey(keys.openrouter) ||
+    validKey(keys.openai) ||
+    (remote?.jevTextModel ?? null) !== null;
 
   const availableModels = modelChoices.filter(
     (choice) =>
       remote?.models.some((candidate) => candidate.id === choice.id && candidate.configured) ||
-      (!choice.id.startsWith("@cf/") && validKey(keys.openai)),
+      (!choice.id.startsWith("@cf/") && (funded || validKey(keys.openai))),
   );
 
   const modelReady =
@@ -417,6 +427,25 @@ export const App = () => {
           <a href={sourceUrl}>
             Source <ArrowUpRight size={14} />
           </a>
+          {account ? (
+            <span
+              className="account"
+              title={
+                account.funded
+                  ? "Your account is allowlisted: runs use the lab’s keys where you haven’t added your own."
+                  : "This account isn’t allowlisted. Add your own keys to run."
+              }
+            >
+              <UserRound size={15} /> <span className="account-name">{account.displayName}</span>
+              {account.funded && <small>lab keys</small>}
+            </span>
+          ) : (
+            publicLab && (
+              <a className="account" href={signInUrl}>
+                <LogIn size={15} /> Sign in
+              </a>
+            )
+          )}
           <button className={`keys-button ${keyCount ? "has-keys" : ""}`} onClick={openKeys}>
             <KeyRound size={15} />{" "}
             {keyCount ? `${keyCount} key${keyCount === 1 ? "" : "s"}` : "Add keys"}
@@ -526,6 +555,7 @@ export const App = () => {
                   {need.ok ? <Check size={13} /> : <X size={13} />} {need.label}
                 </span>
               ))}
+              {funded && <small className="needs-note">lab keys</small>}
               {needs.some((need) => !need.ok) && (
                 <button className="link-button" onClick={openKeys}>
                   Add keys
@@ -1005,7 +1035,10 @@ export const App = () => {
         <span>
           <Mark /> yielded.dev
         </span>
-        <span>Runs use a real Cloudflare browser and real model calls with your keys.</span>
+        <span>
+          Runs use a real Cloudflare browser and real model calls, on your keys or, for allowlisted
+          accounts, the lab’s.
+        </span>
       </footer>
 
       <dialog
@@ -1026,6 +1059,11 @@ export const App = () => {
               Keys stay in this browser. Each run sends them over HTTPS to this lab’s Worker, which
               uses them for that run only. They aren’t stored on the server or included in reports.
             </p>
+            {publicLab && account === null && (
+              <p>
+                Allowlisted? <a href={signInUrl}>Sign in</a> to run on the lab’s keys instead.
+              </p>
+            )}
             <KeyField
               id="typesafe"
               label="TypeSafe"

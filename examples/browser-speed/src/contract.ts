@@ -222,8 +222,13 @@ const visitorKeyHeaders = {
   "x-lab-openrouter-key": Schema.optionalKey(VisitorKey),
 };
 
+/** A travel planner account signed in on this origin. Funded accounts run on the lab's keys. */
+export const Account = Schema.Struct({ displayName: Schema.String, funded: Schema.Boolean });
+export type Account = typeof Account.Type;
+
 export const LabApi = HttpApi.make("BrowserSpeedLab").add(
   HttpApiGroup.make("lab").add(
+    HttpApiEndpoint.get("account", "/api/account", { headers, success: Schema.NullOr(Account) }),
     HttpApiEndpoint.get("snapshot", "/api/snapshot", {
       headers,
       success: Snapshot,

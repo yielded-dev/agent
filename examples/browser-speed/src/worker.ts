@@ -4,7 +4,7 @@ import { Effect, Layer, Redacted, Schema } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
-import { LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
+import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
 import { connectKitesurf } from "./kitesurf.ts";
 import { Control, emptyControl, makeOwner } from "./owner.ts";
 
@@ -26,12 +26,55 @@ export interface Env {
   readonly LAB_PUBLIC?: string;
   /** Per-address run admission for public labs. */
   readonly RUN_LIMIT?: RateLimit;
+  /** The travel planner's auth on this origin; its allowlisted accounts run on FUNDED_* keys. */
+  readonly AUTH?: DurableObjectNamespace;
+  readonly FUNDED_OPENAI_API_KEY?: string;
+  readonly FUNDED_TYPESAFE_API_KEY?: string;
+  readonly FUNDED_OPENROUTER_API_KEY?: string;
 }
 
 /** Served under this path on agent.yielded.dev; the unprefixed API remains for local tools. */
 const basePath = "/browser-use";
 
 const codec = Schema.fromJsonString(Control);
+
+const PlannerSession = Schema.Struct({
+  subjectId: Schema.String.check(Schema.isUUID()),
+  displayName: Schema.String,
+});
+
+const PlannerFunding = Schema.Struct({ allowed: Schema.Boolean });
+
+/** Reads the request's travel planner session. Any failure reads as signed out. */
+const readAccount = Effect.fnUntraced(
+  function* (auth: DurableObjectNamespace | undefined, request: Request) {
+    const cookie = request.headers.get("cookie");
+
+    if (auth === undefined || !cookie) return null;
+    const planner = auth.getByName("auth-v1");
+
+    const read = Effect.fnUntraced(function* (path: string, headers: HeadersInit = {}) {
+      const response = yield* Effect.tryPromise(() =>
+        planner.fetch(new Request(new URL(path, request.url), { headers })),
+      );
+
+      if (!response.ok) return yield* Effect.fail(response.status);
+
+      return yield* Effect.tryPromise(() => response.json());
+    });
+
+    const session = yield* read("/_internal/session", { cookie }).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(PlannerSession)),
+    );
+
+    const funding = yield* read(`/_internal/funding/${session.subjectId}`).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(PlannerFunding)),
+    );
+
+    return { displayName: session.displayName, funded: funding.allowed } satisfies Account;
+  },
+  Effect.catch(() => Effect.succeed(null)),
+);
 
 export class BrowserLab extends DurableObject<Env> {
   private readonly owner;
@@ -150,15 +193,29 @@ export class BrowserLab extends DurableObject<Env> {
   fetch(request: Request): Promise<Response> {
     const handlers = HttpApiBuilder.group(LabApi, "lab", (group) =>
       group
+        .handle("account", () => readAccount(this.env.AUTH, request))
         .handle("snapshot", () => this.owner.snapshot())
         .handle("run", ({ payload, headers }) =>
-          this.withBrowser(
-            this.owner.run(payload, {
-              openai: headers["x-lab-openai-key"],
-              typesafe: headers["x-lab-typesafe-key"],
-              openrouter: headers["x-lab-openrouter-key"],
-            }),
-          ),
+          Effect.gen({ self: this }, function* () {
+            // Lab keys fill only what the visitor left out, and only for same-origin requests.
+            const funded =
+              request.headers.get("origin") === new URL(request.url).origin &&
+              (yield* readAccount(this.env.AUTH, request))?.funded === true;
+
+            return yield* this.withBrowser(
+              this.owner.run(payload, {
+                openai:
+                  headers["x-lab-openai-key"] ??
+                  (funded ? this.env.FUNDED_OPENAI_API_KEY : undefined),
+                typesafe:
+                  headers["x-lab-typesafe-key"] ??
+                  (funded ? this.env.FUNDED_TYPESAFE_API_KEY : undefined),
+                openrouter:
+                  headers["x-lab-openrouter-key"] ??
+                  (funded ? this.env.FUNDED_OPENROUTER_API_KEY : undefined),
+              }),
+            );
+          }),
         )
         .handle("stop", () => this.owner.stop())
         .handle("close", () => this.withBrowser(this.owner.close())),
@@ -230,6 +287,7 @@ export default {
     if (session._tag === "None") return errorResponse("Invalid lab session.", 400);
     if (
       url.pathname !== "/api/snapshot" &&
+      url.pathname !== "/api/account" &&
       (!env.CLOUDFLARE_ACCOUNT_ID || !env.BROWSER_RENDERING_API_TOKEN)
     )
       return errorResponse(

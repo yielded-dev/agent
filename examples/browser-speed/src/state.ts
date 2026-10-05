@@ -86,6 +86,11 @@ const keyHeaders = (keys: ProviderKeys) => ({
   ...(validKey(keys.openrouter) ? { "x-lab-openrouter-key": keys.openrouter.trim() } : {}),
 });
 
+export const accountAtom = LabClient.query("lab", "account", { headers });
+
+/** The travel planner signs visitors in on this origin and returns them to the lab. */
+export const signInUrl = `/travel/login?return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
+
 const snapshotQuery = LabClient.query("lab", "snapshot", {
   headers,
   reactivityKeys: ["lab"],

@@ -199,6 +199,30 @@ textarea {
   border-color: var(--text-faint);
 }
 
+.top-links .account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.account-name {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account small,
+.needs-note {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .keys-button.has-keys {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
@@ -1311,7 +1335,8 @@ tr.selected td {
     padding-bottom: 40px;
   }
 
-  .top-links a,
+  .top-links a:not(.account),
+  .account-name,
   .crumbs {
     display: none;
   }

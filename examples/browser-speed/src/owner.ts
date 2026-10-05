@@ -23,7 +23,7 @@ import { makeTrace, Trace } from "./telemetry.ts";
 import type { textModelLayer } from "./text-model.ts";
 import { normalizeTitle } from "./wikipedia.ts";
 
-/** Validated provider keys supplied with one run request. */
+/** Validated provider keys for one run: the visitor's, or the lab's for a funded account. */
 export interface VisitorKeys {
   readonly openai?: string;
   readonly typesafe?: string;
