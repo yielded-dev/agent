@@ -1,8 +1,14 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Navigate } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 
+// Copied unchanged from yielded-dev/brand assets/. Regenerate there, not here.
+import lockupInk from "./brand/lockup-agent-ink.svg?url";
+import lockupPaper from "./brand/lockup-agent-paper.svg?url";
+import markInk from "./brand/mark-ink.svg?url";
+import markPaper from "./brand/mark-paper.svg?url";
 import {
   loginTarget,
   leaveLogin,
@@ -13,6 +19,20 @@ import {
   verifyEmailCode,
   type LoginLoadingStep,
 } from "./client";
+
+/** One account signs in to every app on agent.yielded.dev; copy names the one the visitor returns to. */
+const destinations = {
+  "/travel/": {
+    title: "Sign in to plan a trip",
+    lede: "Elsewhere is a travel planner built with yielded agent. Bring your own OpenAI key to start a conversation.",
+    back: null,
+  },
+  "/browser-use/": {
+    title: "Sign in to the browser lab",
+    lede: "Allowlisted accounts run Jev and model agents on the lab’s keys. Without one, you can still bring your own.",
+    back: { href: "/browser-use/", label: "Back to the browser lab" },
+  },
+} as const;
 
 export function Login({ callback = false }: { readonly callback?: boolean }) {
   const view = useAtomValue(loginView(callback));
@@ -41,61 +61,68 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   if (view._tag === "Loading") return <LoginLoading step={view.step} />;
 
   const { pending, busy } = view;
+  const destination = destinations[returnTarget];
 
   return (
-    <main className="login-page">
-      <section className="login-card">
-        <a className="wordmark" href="/travel/login">
-          elsewhere<span>↗</span>
-        </a>
-        <h1>Your next trip starts here.</h1>
-        <p>Plan somewhere wonderful. Bring your own OpenAI key to start a conversation.</p>
-        <button className="login-github" disabled={busy} onClick={() => startGithub(returnTarget)}>
-          Continue with GitHub
-        </button>
-        <div className="login-divider">or use your email</div>
+    <LoginShell back={destination.back}>
+      <section className="login-card" aria-labelledby="login-title">
+        <p className="login-kicker">agent.yielded.dev{returnTarget}</p>
+        <h1 id="login-title">{pending ? "Check your email" : destination.title}</h1>
         {!pending ? (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              requestCode({ mode, email, returnTarget });
-            }}
-          >
-            <div className="login-modes" aria-label="Email account action">
-              <button
-                type="button"
-                aria-pressed={mode === "signin"}
-                onClick={() => setMode("signin")}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                aria-pressed={mode === "register"}
-                onClick={() => setMode("register")}
-              >
-                Create account
-              </button>
-            </div>
-            <label htmlFor="login-email">Email address</label>
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              required
-              maxLength={254}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+          <>
+            <p className="login-lede">{destination.lede}</p>
+            <button
+              className="login-primary"
               disabled={busy}
-            />
-            <button className="primary" disabled={busy}>
-              {busy
-                ? "Sending…"
-                : mode === "register"
-                  ? "Create account with email"
-                  : "Send sign-in code"}
+              onClick={() => startGithub(returnTarget)}
+            >
+              <GithubMark /> Continue with GitHub
             </button>
-          </form>
+            <div className="login-divider">
+              <span>or use email</span>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                requestCode({ mode, email, returnTarget });
+              }}
+            >
+              <div className="login-modes" aria-label="Email account action">
+                <button
+                  type="button"
+                  aria-pressed={mode === "signin"}
+                  onClick={() => setMode("signin")}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={mode === "register"}
+                  onClick={() => setMode("register")}
+                >
+                  Create account
+                </button>
+              </div>
+              <label htmlFor="login-email">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                required
+                maxLength={254}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={busy}
+              />
+              <button className="login-secondary" disabled={busy}>
+                {busy
+                  ? "Sending…"
+                  : mode === "register"
+                    ? "Create account with email"
+                    : "Send sign-in code"}
+              </button>
+            </form>
+          </>
         ) : (
           <form
             onSubmit={(event) => {
@@ -104,7 +131,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
               setCode("");
             }}
           >
-            <p role="status">
+            <p className="login-lede" role="status">
               {view.registered
                 ? "Your account is ready. We sent a new code to finish signing in."
                 : pending.mode === "register"
@@ -115,6 +142,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             <label htmlFor="login-code">Six-digit code</label>
             <input
               id="login-code"
+              className="login-code"
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9]{6}"
@@ -125,7 +153,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
               onChange={(event) => setCode(event.target.value)}
               disabled={busy}
             />
-            <button className="primary" disabled={busy}>
+            <button className="login-primary" disabled={busy}>
               {busy
                 ? "Checking…"
                 : pending.mode === "register"
@@ -133,7 +161,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
                   : "Sign in"}
             </button>
             <button
-              className="quiet"
+              className="login-quiet"
               type="button"
               disabled={busy}
               onClick={() => {
@@ -150,7 +178,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
           </form>
         )}
         {view.error && (
-          <p className="error" role="alert">
+          <p className="login-alert" role="alert">
             {view.error === "github"
               ? "We couldn’t finish signing in with GitHub. Please start a new attempt."
               : view.error === "email"
@@ -159,26 +187,28 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
           </p>
         )}
         {view.cancelled && (
-          <p role="status">GitHub sign-in was cancelled. You can start again when you’re ready.</p>
+          <p className="login-notice" role="status">
+            GitHub sign-in was cancelled. You can start again when you’re ready.
+          </p>
         )}
         <p className="login-note">
           Email and GitHub create separate accounts. Use the same method when you return.
         </p>
       </section>
-    </main>
+    </LoginShell>
   );
 }
 
 export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
   return (
-    <main className="login-page">
+    <LoginShell>
       <section className="login-card login-loading" aria-labelledby="login-loading-title">
-        <a className="wordmark" href="/travel/login">
-          elsewhere<span>↗</span>
-        </a>
         <div className="login-loading-content" role="status" aria-live="polite">
           <div className="login-loader" aria-hidden="true">
-            <span>↗</span>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcSet={markPaper} />
+              <img src={markInk} alt="" width={63} height={90} />
+            </picture>
           </div>
           <h1 id="login-loading-title">
             {step === "github"
@@ -191,11 +221,50 @@ export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
             {step === "github"
               ? "Taking you to GitHub to continue."
               : step === "callback"
-                ? "Finishing up. Your planner will open shortly."
+                ? "Finishing up. You’ll be on your way in a moment."
                 : "One moment while we check your sign-in."}
           </p>
         </div>
       </section>
-    </main>
+    </LoginShell>
+  );
+}
+
+function LoginShell({
+  back = null,
+  children,
+}: {
+  readonly back?: { readonly href: string; readonly label: string } | null;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <div className="login-page">
+      <header className="login-top">
+        <a className="login-brand" href="https://yielded.dev/agent/">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcSet={lockupPaper} />
+            <img src={lockupInk} alt="yielded Agent" width={773} height={113} />
+          </picture>
+        </a>
+        {back && (
+          <a className="login-back" href={back.href}>
+            <ArrowLeft size={15} aria-hidden="true" /> {back.label}
+          </a>
+        )}
+      </header>
+      <main className="login-main">{children}</main>
+      <footer className="login-foot">
+        One account for agent.yielded.dev: the travel planner and the browser lab.
+      </footer>
+    </div>
+  );
+}
+
+/** GitHub's mark (Octicons mark-github). */
+function GithubMark() {
+  return (
+    <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true" fill="currentColor">
+      <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
+    </svg>
   );
 }
