@@ -58,12 +58,7 @@ export interface SqlThreadStoreOptions<
 }
 
 /** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
-export const prepareSqlAppend = Effect.fnUntraced(function* (
-  request: FencedAppendRequest,
-  requireMaterialized: (
-    request: PreparedAppend,
-  ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized> = () => Effect.void,
-) {
+export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppendRequest) {
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
     ThreadStoreError.make({ operation, message: cause.message, cause });
 
@@ -72,8 +67,6 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
   );
 
   const captured = yield* PreparedAppend.capture(validated);
-
-  yield* requireMaterialized(captured);
 
   const tailDigest = yield* captured
     .digest()
@@ -509,36 +502,33 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
     yield* hitFailpoint("materialize:after");
   });
 
-  const appendKernel = Effect.fn("SqlThreadStore.append")(function* (
-    request: FencedAppendRequest,
-    requireMaterialized: (
-      request: PreparedAppend,
-    ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
-    commit: SqlJournal<S, C, W, F>["append"],
-  ) {
-    const rawRequest = yield* prepareSqlAppend(request, requireMaterialized).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-    );
+  const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
+    Effect.fn("SqlThreadStore.append")(function* (request: FencedAppendRequest) {
+      const rawRequest = yield* prepareSqlAppend(request).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
 
-    yield* hitFailpoint("append:before");
+      if (requireMaterialized) yield* requireThread(journal, rawRequest.threadId);
 
-    const result = yield* commit(rawRequest).pipe(
-      Effect.mapError((error) => {
-        if (isFenceRejected(error) || isAppendConflict(error)) return error;
+      yield* hitFailpoint("append:before");
 
-        return storeError("append canonical batch", error);
-      }),
-      Effect.flatMap((result) =>
-        Schema.decodeEffect(AppendResult)(result).pipe(
-          Effect.mapError((error) => schemaStoreError("decode append result", error)),
+      const result = yield* commit(rawRequest).pipe(
+        Effect.mapError((error) => {
+          if (isFenceRejected(error) || isAppendConflict(error)) return error;
+
+          return storeError("append canonical batch", error);
+        }),
+        Effect.flatMap((result) =>
+          Schema.decodeEffect(AppendResult)(result).pipe(
+            Effect.mapError((error) => schemaStoreError("decode append result", error)),
+          ),
         ),
-      ),
-    );
+      );
 
-    yield* hitFailpoint("append:after");
+      yield* hitFailpoint("append:after");
 
-    return result;
-  });
+      return result;
+    });
 
   const loadRecords = Effect.fnUntraced(function* (request: RawReadRequest) {
     const rows = yield* journal
@@ -852,12 +842,7 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
       : { lifecyclePublications: journal.lifecycle.storage }),
     countPeerMessages: selectedReads.countPeerMessages,
     readIdentity: selectedReads.readIdentity,
-    append: (request) =>
-      appendKernel(
-        request,
-        (captured) => requireThread(journal, captured.threadId),
-        journal.append,
-      ),
+    append: makeAppend(journal.append, true),
     export: exportThread,
     inspectTail,
     materialize,
@@ -869,8 +854,8 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
 
   return {
     store,
-    appendOwned: (request: FencedAppendRequest, commit: SqlJournal<S, C, W, F>["append"]) =>
-      appendKernel(request, () => Effect.void, commit),
+    /** Bind the writer once when constructing a claimed Run session. */
+    makeOwnedAppend: (commit: SqlJournal<S, C, W, F>["append"]) => makeAppend(commit, false),
   };
 });
 

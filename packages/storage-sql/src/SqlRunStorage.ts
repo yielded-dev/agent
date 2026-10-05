@@ -39,7 +39,7 @@ import {
 import { SqlClient } from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 
-import type { makeSqlJournalKernel } from "./SqlJournal.ts";
+import type { makeSqlJournalKernel, RawAppendRequest } from "./SqlJournal.ts";
 import type { Diagnostic } from "./SqlStorage.ts";
 import {
   makeSqlSubmissionLedgerKernel,
@@ -461,6 +461,64 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
       ),
     );
 
+    const appendOwned = storeKernel.makeOwnedAppend(
+      Effect.fnUntraced(function* (raw: RawAppendRequest) {
+        const record = raw.records[0]?.canonical;
+
+        if (
+          !authority.owned ||
+          authority.submission.input_applied_record_id !== null ||
+          raw.records.length !== 1 ||
+          raw.batchId !== submissionInputBatchId(submissionId) ||
+          record?.recordId !== submissionInputRecordId(submissionId) ||
+          record.payload._tag !== "UserInputRecorded" ||
+          record.payload.kind !== "user" ||
+          record.payload.submissionId !== submissionId ||
+          record.payload.runId !== runIdForSubmission(submissionId)
+        )
+          return yield* journalKernel.appendWithThread(raw, authority.thread);
+
+        const committed = yield* journalKernel.journal.withWriteTransaction(
+          "append applied input transaction",
+        )(
+          Effect.gen(function* () {
+            yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:before");
+
+            const appended = yield* journalKernel.appendWithThreadInTransaction(
+              raw,
+              authority.thread,
+            );
+
+            const submission = yield* commands
+              .markInputAppliedInTransaction(
+                MarkInputAppliedRequest.make({
+                  submissionId,
+                  ownershipToken: owned.token,
+                  recordId: record.recordId,
+                  sequence: appended.firstSequence,
+                }),
+              )
+              .pipe(
+                Effect.mapError((cause) =>
+                  storeOptions.errors.storage({
+                    operation: "append applied input",
+                    message: cause.message,
+                    cause,
+                  }),
+                ),
+              );
+
+            return { appended, submission };
+          }),
+        );
+
+        yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:after");
+        authority.submission = Object.freeze(committed.submission);
+
+        return committed.appended;
+      }),
+    );
+
     const append: RunStorageSession["append"] = (batch) =>
       bind(
         gate.withPermits(1)(
@@ -480,75 +538,13 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
                 batch,
               });
 
-              let inputPoststate: SqlRunAuthority["submission"] | undefined;
-
-              const result = yield* restore(
-                storeKernel.appendOwned(request, (raw) =>
-                  Effect.gen(function* () {
-                    const record = raw.records[0]?.canonical;
-
-                    if (
-                      !authority.owned ||
-                      authority.submission.input_applied_record_id !== null ||
-                      raw.records.length !== 1 ||
-                      raw.batchId !== submissionInputBatchId(submissionId) ||
-                      record?.recordId !== submissionInputRecordId(submissionId) ||
-                      record.payload._tag !== "UserInputRecorded" ||
-                      record.payload.kind !== "user" ||
-                      record.payload.submissionId !== submissionId ||
-                      record.payload.runId !== runIdForSubmission(submissionId)
-                    )
-                      return yield* journalKernel.appendWithThread(raw, authority.thread);
-
-                    const committed = yield* journalKernel.journal.withWriteTransaction(
-                      "append applied input transaction",
-                    )(
-                      Effect.gen(function* () {
-                        yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:before");
-
-                        const appended = yield* journalKernel.appendWithThreadInTransaction(
-                          raw,
-                          authority.thread,
-                        );
-
-                        const submission = yield* commands
-                          .markInputAppliedInTransaction(
-                            MarkInputAppliedRequest.make({
-                              submissionId,
-                              ownershipToken: owned.token,
-                              recordId: record.recordId,
-                              sequence: appended.firstSequence,
-                            }),
-                          )
-                          .pipe(
-                            Effect.mapError((cause) =>
-                              storeOptions.errors.storage({
-                                operation: "append applied input",
-                                message: cause.message,
-                                cause,
-                              }),
-                            ),
-                          );
-
-                        return { appended, submission };
-                      }),
-                    );
-
-                    yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:after");
-                    inputPoststate = committed.submission;
-
-                    return committed.appended;
-                  }),
-                ),
-              ).pipe(Effect.exit);
+              const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
 
               if (Exit.isFailure(result)) {
                 close(owned);
 
                 return yield* result;
               }
-              if (inputPoststate !== undefined)
-                authority.submission = Object.freeze(inputPoststate);
               if (!result.value.replayed) {
                 authority.thread = Object.freeze({
                   ...authority.thread,
