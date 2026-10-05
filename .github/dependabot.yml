@@ -7,10 +7,6 @@ updates:
     directories: ["/", "/.github/actions/*", "/action"]
     schedule:
       interval: "weekly"
-    # Action v2 requires Changesets CLI v3 and a release-workflow migration.
-    ignore:
-      - dependency-name: "changesets/action"
-        update-types: ["version-update:semver-major"]
     groups:
       actions:
         patterns: ["*"]

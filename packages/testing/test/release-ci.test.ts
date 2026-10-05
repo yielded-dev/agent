@@ -28,15 +28,9 @@ const checkout = "c".repeat(40);
 const pre = {
   mode: "pre",
   tag: "beta",
-  initialVersions: { "@yielded/agent": "0.1.0-beta.44" },
-  changesets: ["previous-change"],
 };
 
-const nextPre = {
-  ...pre,
-  initialVersions: { ...pre.initialVersions, "@yielded/agent-ai-decision": "0.1.0-beta.99" },
-  changesets: ["previous-change", "new-change"],
-};
+const changeset = '---\n"@yielded/agent": patch\n---\nA change.\n';
 
 const manifest = (name: string, version: string) =>
   JSON.stringify(
@@ -77,10 +71,17 @@ const fixture = (): Array<MetadataChange> => [
     newMode: "100644",
   },
   {
-    path: ".changeset/pre.json",
-    before: JSON.stringify(pre),
-    after: JSON.stringify(nextPre),
+    path: ".changeset/new-change.md",
+    before: changeset,
+    after: null,
     oldMode: "100644",
+    newMode: null,
+  },
+  {
+    path: ".changeset/pre/new-change.md",
+    before: null,
+    after: changeset,
+    oldMode: null,
     newMode: "100644",
   },
   ...packages.flatMap((name) => {
@@ -120,6 +121,27 @@ const replace = (path: string, transform: (change: MetadataChange) => MetadataCh
 const decideMetadata = (changes: ReadonlyArray<MetadataChange>) =>
   decideReleaseCi(verifyMetadata(packages, ["new-change"], changes));
 
+// Changesets v3 consumption: https://github.com/changesets/changesets/pull/2190
+// Archived notes must not authorize source-CI reuse if candidate bytes change or disappear.
+it.effect("reuses source checks only when all pending changesets move without edits", () =>
+  Effect.gen(function* () {
+    expect(yield* decideMetadata(fixture())).toMatchObject({ fast: true });
+    expect(
+      yield* decideMetadata(
+        replace(".changeset/pre/new-change.md", (change) => ({
+          ...change,
+          after: `${change.after}\nAltered release note.\n`,
+        })),
+      ),
+    ).toEqual({ fast: false });
+    expect(
+      yield* decideMetadata(
+        fixture().filter((change) => change.path !== ".changeset/pre/new-change.md"),
+      ),
+    ).toEqual({ fast: false });
+  }),
+);
+
 it.effect("rejects executable manifest changes even beside a valid version bump", () =>
   Effect.gen(function* () {
     {
@@ -127,7 +149,7 @@ it.effect("rejects executable manifest changes even beside a valid version bump"
 
       const changes = replace("packages/effect-agent/package.json", (change) => ({
         ...change,
-        after: change.after.replace(from!, to!),
+        after: change.after?.replace(from!, to!) ?? null,
       }));
 
       expect(yield* decideMetadata(changes)).toEqual({ fast: false });
@@ -409,6 +431,7 @@ layer(NodeServices.layer)((it) => {
         yield* git("config", "core.hooksPath", `${directory}/.git/hooks`);
         for (const change of fixture())
           if (change.before !== null) yield* write(change.path, change.before);
+        yield* write(".changeset/pre.json", JSON.stringify(pre));
         yield* write(".changeset/config.json", JSON.stringify({ fixed: [packages] }));
         yield* write(".changeset/new-change.md", '---\n"@yielded/agent": patch\n---\nA change.\n');
         yield* write(
@@ -420,7 +443,10 @@ layer(NodeServices.layer)((it) => {
         const base = yield* git("rev-parse", "HEAD");
 
         yield* git("checkout", "-b", "changeset-release/main");
-        for (const change of fixture()) yield* write(change.path, change.after);
+        for (const change of fixture()) {
+          if (change.after === null) yield* fs.remove(`${directory}/${change.path}`);
+          else yield* write(change.path, change.after);
+        }
         yield* git("add", ".");
         yield* git("commit", "-m", "Version packages");
         const head = yield* git("rev-parse", "HEAD");

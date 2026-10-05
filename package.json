@@ -12,9 +12,9 @@
   "scripts": {
     "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
     "patch:tsgo": "effect-tsgo patch --typescript",
-    "changeset": "bun x changeset",
-    "changeset:version": "bun x changeset version",
-    "ci:version": "bun x changeset version && bun install",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "ci:version": "changeset version && vp install --ignore-scripts",
     "verify:package-purity": "bun scripts/verify-package-purity.ts",
     "admin:durable": "node --experimental-transform-types scripts/durable-admin.ts",
     "docs:dev": "vp run -F @yielded/agent-docs dev",
@@ -28,8 +28,8 @@
     "check:record-format": "bun scripts/verify-record-format.ts"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "0.7.0",
-    "@changesets/cli": "2.31.0",
+    "@changesets/changelog-github": "1.0.1",
+    "@changesets/cli": "3.0.3",
     "@effect/ai-anthropic": "catalog:",
     "@effect/ai-openai": "catalog:",
     "@effect/ai-typesafe": "catalog:",
