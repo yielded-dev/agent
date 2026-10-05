@@ -273,7 +273,7 @@ export const artifactsLayer = (
       revision,
       commitId,
       publishedAt,
-      path: `/trips/${tripId}/${revision}`,
+      path: `/travel/trips/${tripId}/${revision}`,
     };
 
     const { blob: htmlBytes } = yield* operation("read trip page", () =>

@@ -49,7 +49,7 @@ const sites = Layer.succeed(TripSiteStore, {
     Effect.succeed({
       tripId: trip.id,
       revision: trip.revision,
-      path: `/trips/${trip.id}/${trip.revision}`,
+      path: `/travel/trips/${trip.id}/${trip.revision}`,
       commitId: `fixture-commit-${trip.revision}`,
       publishedAt: "2026-09-09T00:00:00Z",
     }),

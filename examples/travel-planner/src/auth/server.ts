@@ -100,15 +100,15 @@ export const makeAuth = (config: AuthConfiguration) => {
       keyring: keyring(config.AUTH_BINDING_KEY),
     }),
     OAuthCrypto.transactionLayer(keyring(config.AUTH_TRANSACTION_KEY)),
-    OAuth.OAuthReturnTargets.exactRoutes(["/"]),
-    Email.EmailReturnTargets.exactRoutes(["/"]),
+    OAuth.OAuthReturnTargets.exactRoutes(["/travel/", "/browser-use/"]),
+    Email.EmailReturnTargets.exactRoutes(["/travel/", "/browser-use/"]),
   );
 
   const github = GitHub.layer({
     configurationGeneration: 2,
     clientId: config.AUTH_GITHUB_CLIENT_ID,
     clientSecret: Redacted.make(config.AUTH_GITHUB_CLIENT_SECRET),
-    redirectUri: `${config.AUTH_ORIGIN}/auth/github/callback`,
+    redirectUri: `${config.AUTH_ORIGIN}/travel/auth/github/callback`,
   });
 
   return { AppAuth, http, security, github };

@@ -120,7 +120,7 @@ export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
 
   const answer = yield* Effect.tryPromise({
     try: async (signal) => {
-      const response = await fetch("/api/voice", {
+      const response = await fetch("/travel/api/voice", {
         method: "POST",
         headers: { "content-type": "application/json", "x-elsewhere-account": subjectId },
         body: JSON.stringify({ sdp, history }),

@@ -3,6 +3,25 @@
 An Effect Agent example for planning trips through chat or voice, researching destinations
 with background agents, saving itineraries, and building standalone trip websites.
 
+The planner lives at <https://agent.yielded.dev/travel/>. It shares host-only sign-in
+cookies (`__Host-elsewhere-auth-*`, `Path=/`) with `/browser-use/`. Link to
+`/travel/login?return=%2Fbrowser-use%2F` to return to the lab after sign-in;
+only `/travel/` (the default) and `/browser-use/` are accepted return targets.
+Generated trip apps stay on `*-trip.effect-agent.com`, outside the session origin.
+
+`travel.effect-agent.com` redirects paths and queries to `/travel` with HTTP 301.
+Users must sign in again; accounts, threads, and funding grants remain in the same
+Worker and Durable Objects. Keep the `AUTH`/`AuthV1`/`PlannerAuth` and
+`ACCOUNT_THREADS`/`AccountThreadsV1`/`AccountPlannerThread` identities unchanged.
+The lab binds `PlannerAuth` on script `effect-agent-travel-planner`, instance
+`auth-v1`; `/_internal/session` and `/_internal/funding/<id>` remain private.
+
+At deployment, manually change the GitHub OAuth app's Authorization callback URL
+to `https://agent.yielded.dev/travel/auth/github/callback`. Set `AUTH_ORIGIN` to
+`https://agent.yielded.dev` and retain `auth@effect-agent.com` as the email sender.
+This stack owns only `agent.yielded.dev/travel*` on `yielded.dev`; the existing DNS
+record and the browser lab's root and `/browser-use*` routes stay externally managed.
+
 It uses Cloudflare:
 
 - **Workers** to serve the TanStack Start UI and APIs.
@@ -69,7 +88,7 @@ vp install
 vp run -F @yielded/agent-example-travel-planner preview
 ```
 
-Open `https://127.0.0.1:4173` and accept the local certificate. Create an email account;
+Open `https://127.0.0.1:4173/travel/` and accept the local certificate. Create an email account;
 the terminal prints the file paths of locally delivered verification emails. After
 registration, sign in with a fresh email code. Connect the synthetic key
 `sk-preview-local` in Settings and send `complete travel cards fixture` to display
@@ -86,7 +105,7 @@ For the full application, configure [.env.example](.env.example) with developmen
 credentials and use `vp run -F @yielded/agent-example-travel-planner dev` from the repository
 root. Alchemy supplies the resources declared in [alchemy.run.ts](alchemy.run.ts), including
 `AUTH` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
-GitHub OAuth callback at `AUTH_ORIGIN/auth/github/callback`, a verified email sender, and
+GitHub OAuth callback at `${AUTH_ORIGIN}/travel/auth/github/callback`, a verified email sender, and
 three independent persistent base64url-encoded 32-byte auth keys.
 
 The conversation loads in stages. `GetPlanner` returns messages, trips, and the latest

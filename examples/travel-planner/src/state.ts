@@ -83,7 +83,7 @@ export class PlannerClient extends AtomRpc.Service<PlannerClient>()("travel-plan
   group: PlannerRpcs,
   protocol: (get) =>
     RpcClient.layerProtocolHttp({
-      url: "/api/rpc",
+      url: "/travel/api/rpc",
       transformClient: (client) =>
         HttpClient.mapRequest(
           client,
@@ -341,7 +341,7 @@ export class ProgressClient extends AtomRpc.Service<ProgressClient>()(
     group: ProgressRpcs,
     protocol: (get) =>
       RpcClient.layerProtocolHttp({
-        url: "/api/progress",
+        url: "/travel/api/progress",
         transformClient: (client) =>
           HttpClient.mapRequest(
             client,

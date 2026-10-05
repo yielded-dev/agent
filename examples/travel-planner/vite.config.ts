@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  base: "/travel/",
   plugins: process.env.VITEST
     ? [react()]
     : [
@@ -15,7 +16,7 @@ export default defineConfig({
               compatibilityDate: "2026-07-01",
               compatibilityFlags: ["nodejs_compat"],
             }),
-        tanstackStart(),
+        tanstackStart({ router: { basepath: "/travel" } }),
         tailwindcss(),
         react(),
       ],

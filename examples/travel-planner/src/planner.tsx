@@ -786,7 +786,11 @@ function TripDetail({
           {publishing ? "Creating your site…" : "Create trip website ↗"}
         </button>
         {trip.published && (
-          <a href={trip.published.path} target="_blank" rel="noreferrer">
+          <a
+            href={`/travel/trips/${trip.published.tripId}/${trip.published.revision}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             View published trip · version {trip.published.revision} ↗
           </a>
         )}

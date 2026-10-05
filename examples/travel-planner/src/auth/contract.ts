@@ -55,6 +55,7 @@ const attempt = {
 const verified = Schema.Struct({ continuation: ProofContinuation });
 
 export const LoginApi = AuthContract.make("travel-planner/Auth", {
+  basePath: "/travel/auth",
   claims: Schema.Struct({ displayName: Schema.String }),
   actions: (sessions) => ({
     beginEmailSignIn: AuthContract.action({
