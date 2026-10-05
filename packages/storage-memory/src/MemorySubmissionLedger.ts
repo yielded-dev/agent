@@ -246,7 +246,8 @@ interface LedgerState {
   readonly admissionIndex: ReadonlyMap<string, SubmissionId>;
   readonly lanes: ReadonlyMap<ThreadId, LaneState>;
   readonly childReservations: ReadonlyMap<ChildReservationId, StoredChildReservation>;
-  readonly mintCounter: number;
+  /** Imported numeric suffixes may exceed Number.MAX_SAFE_INTEGER. */
+  readonly mintCounter: bigint;
   readonly latestByThread: ReadonlyMap<ThreadId, SubmissionId>;
   readonly activeByThread: ReadonlyMap<ThreadId, ReadonlySet<SubmissionId>>;
   readonly stoppedWorkers: ReadonlyMap<ThreadId, WorkerLedgerState["terminal"]>;
@@ -454,7 +455,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       admissionIndex: new Map(),
       lanes: new Map(),
       childReservations: new Map(),
-      mintCounter: 0,
+      mintCounter: 0n,
       stoppedWorkers: new Map(),
       latestByThread: new Map(),
       activeByThread: new Map(),
@@ -636,7 +637,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             producerEpoch: 0,
           };
 
-          const mintCounter = current.mintCounter + 1;
+          const mintCounter = current.mintCounter + 1n;
 
           const row: SubmissionRow = {
             submissionId: decodeSubmissionId(`submission-memory-${mintCounter}`),
@@ -882,7 +883,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 ];
               }
               const producerEpoch = decodeProducerEpoch(lane.producerEpoch + 1);
-              const mintCounter = current.mintCounter + 1;
+              const mintCounter = current.mintCounter + 1n;
 
               const ownership: StoredOwnership = {
                 attemptId: decodeAttemptId(`attempt-memory-${mintCounter}`),
@@ -2963,7 +2964,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           const match =
             id === undefined ? null : /^(?:submission|receipt|attempt)-memory-(\d+)$/.exec(id);
 
-          if (match !== null) mintCounter = Math.max(mintCounter, Number(match[1]));
+          if (match !== null) {
+            const retained = BigInt(match[1]);
+
+            if (retained > mintCounter) mintCounter = retained;
+          }
         };
 
         const codec = Schema.fromJsonString(RebuiltSubmission);
@@ -3121,12 +3126,12 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             retainMint(record.payload.attemptId);
           retainMint(settlementFailureFromRecord(record)?.context?.attemptId);
         }
-        if (!Number.isSafeInteger(mintCounter + 1) || !Number.isSafeInteger(lastQueue + 1))
+        if (!Number.isSafeInteger(lastQueue + 1))
           return yield* ThreadImportRejected.make({
             threadId,
             reason: "unsupported-capacity",
             message:
-              "Imported identities exhaust the in-memory allocator; use a persistent adapter with fresh identity allocation",
+              "The imported queue position exhausts in-memory sequence capacity; retain the source and use a destination with sufficient queue capacity",
           });
         lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
         activeByThread.set(threadId, active);
