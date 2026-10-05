@@ -23,8 +23,6 @@ const Manifest = Schema.Struct({
 const PreState = Schema.Struct({
   mode: Schema.Literal("pre"),
   tag: Schema.Literal("beta"),
-  initialVersions: Schema.Record(Schema.String, Schema.String),
-  changesets: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-z0-9-]+$/))),
 });
 
 export class ProofUnavailable extends Schema.TaggedError<ProofUnavailable>()("ProofUnavailable", {
@@ -38,9 +36,9 @@ export const requireProof = (condition: boolean, message: string) =>
 export interface MetadataChange {
   readonly path: string;
   readonly before: string | null;
-  readonly after: string;
+  readonly after: string | null;
   readonly oldMode: string | null;
-  readonly newMode: string;
+  readonly newMode: string | null;
 }
 
 /**
@@ -60,8 +58,7 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
       new Set(changes.map((change) => change.path)).size === changes.length,
     "Fixed group",
   );
-  const allowed = new Set(["bun.lock", ".changeset/pre.json"]);
-  const versions = new Map<string, string>();
+  const allowed = new Set(["bun.lock"]);
   const byPath = new Map(changes.map((change) => [change.path, change]));
   let releaseVersion: string | undefined;
   const lock = byPath.get("bun.lock");
@@ -81,7 +78,13 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
     const change = byPath.get(manifestPath);
     const changelog = byPath.get(changelogPath);
 
-    if (change === undefined || change.before === null || changelog === undefined)
+    if (
+      change === undefined ||
+      change.before === null ||
+      change.after === null ||
+      changelog === undefined ||
+      changelog.after === null
+    )
       return yield* new ProofUnavailable({ message: "Missing package version or changelog" });
     const before = yield* Schema.decodeEffect(Schema.fromJsonString(Manifest))(change.before);
     const after = yield* Schema.decodeEffect(Schema.fromJsonString(Manifest))(change.after);
@@ -101,7 +104,6 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
       "Only a synchronized one-step beta version bump is supported",
     );
     releaseVersion = next;
-    versions.set(name, before.version);
 
     const header = `# ${name}\n\n`;
     const previous = changelog.before ?? header;
@@ -126,55 +128,43 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
     expectedLock = expectedLock.replace(workspace, workspace.replace(before.version, next));
   }
   yield* requireProof(lock?.after === expectedLock, "Lockfile changed beyond workspace versions");
+
+  yield* requireProof(
+    changesetIds.length > 0 && new Set(changesetIds).size === changesetIds.length,
+    "Missing or duplicate pending changesets",
+  );
+  for (const id of changesetIds) {
+    const sourcePath = `.changeset/${id}.md`;
+    const archivePath = `.changeset/pre/${id}.md`;
+    const source = byPath.get(sourcePath);
+    const archive = byPath.get(archivePath);
+
+    yield* requireProof(
+      source !== undefined &&
+        source.before !== null &&
+        source.after === null &&
+        source.oldMode === "100644" &&
+        source.newMode === null &&
+        archive !== undefined &&
+        archive.before === null &&
+        archive.after === source.before &&
+        archive.oldMode === null &&
+        archive.newMode === "100644",
+      "Pending changesets must move to pre without edits",
+    );
+    allowed.add(sourcePath);
+    allowed.add(archivePath);
+  }
   for (const change of changes) {
     yield* requireProof(
       allowed.has(change.path) &&
-        change.newMode === "100644" &&
-        (change.oldMode === "100644" ||
-          (change.oldMode === null && change.path.endsWith("/CHANGELOG.md"))),
+        (change.path.startsWith(".changeset/") ||
+          (change.newMode === "100644" &&
+            (change.oldMode === "100644" ||
+              (change.oldMode === null && change.path.endsWith("/CHANGELOG.md"))))),
       "Unsupported file or mode change",
     );
   }
-  const pre = byPath.get(".changeset/pre.json");
-
-  if (pre === undefined || pre.before === null)
-    return yield* new ProofUnavailable({ message: "Missing prerelease state" });
-
-  const decodePre = Schema.decodeEffect(Schema.fromJsonString(PreState), {
-    onExcessProperty: "error",
-  });
-
-  const before = yield* decodePre(pre.before);
-  const after = yield* decodePre(pre.after);
-
-  for (const [name, version] of Object.entries(before.initialVersions)) {
-    yield* requireProof(after.initialVersions[name] === version, "Rewritten initial version");
-  }
-  for (const [name, version] of Object.entries(after.initialVersions)) {
-    yield* requireProof(
-      before.initialVersions[name] === version ||
-        (before.initialVersions[name] === undefined && versions.get(name) === version),
-      "Unsupported initial version addition",
-    );
-  }
-  for (const [name, version] of versions) {
-    yield* requireProof(
-      after.initialVersions[name] === (before.initialVersions[name] ?? version),
-      "Missing public package initial version",
-    );
-  }
-  const consumed = new Set(after.changesets);
-  const added = after.changesets.filter((id) => !before.changesets.includes(id));
-
-  yield* requireProof(
-    new Set(before.changesets).size === before.changesets.length &&
-      consumed.size === after.changesets.length &&
-      before.changesets.every((id) => consumed.has(id)) &&
-      changesetIds.every((id) => consumed.has(id)) &&
-      added.length > 0 &&
-      added.every((id) => changesetIds.includes(id)),
-    "Prerelease consumption must only add existing changesets",
-  );
 
   return releaseVersion;
 });
@@ -372,6 +362,14 @@ export const readMetadata = Effect.fn("releaseCi.readMetadata")(function* (
   const git = (...args: ReadonlyArray<string>) => readCommand(root, "git", args);
   const read = (sha: string, path: string) => git("show", `${sha}:${path}`);
 
+  const pre = yield* read(base, ".changeset/pre.json");
+
+  yield* Schema.decodeEffect(Schema.fromJsonString(PreState), { onExcessProperty: "error" })(pre);
+  yield* requireProof(
+    pre === (yield* read(head, ".changeset/pre.json")),
+    "Prerelease mode and tag must remain unchanged",
+  );
+
   const config = yield* Schema.decodeEffect(
     Schema.fromJsonString(
       Schema.Struct({
@@ -403,16 +401,16 @@ export const readMetadata = Effect.fn("releaseCi.readMetadata")(function* (
   for (let index = 0; index < fields.length; index += 2) {
     const record = fields[index];
     const path = fields[index + 1];
-    const match = record?.match(/^:(\d{6}) (\d{6}) [a-f0-9]{40} [a-f0-9]{40} ([AM])$/);
+    const match = record?.match(/^:(\d{6}) (\d{6}) [a-f0-9]{40} [a-f0-9]{40} ([AMD])$/);
 
     if (match === null || match === undefined || path === undefined)
       return yield* new ProofUnavailable({ message: "Unsupported Git change" });
     changes.push({
       path,
       oldMode: match[1] === "000000" ? null : (match[1] ?? null),
-      newMode: match[2] ?? "",
+      newMode: match[2] === "000000" ? null : (match[2] ?? null),
       before: match[3] === "A" ? null : yield* read(base, path),
-      after: yield* read(head, path),
+      after: match[3] === "D" ? null : yield* read(head, path),
     });
   }
 
