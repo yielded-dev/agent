@@ -308,6 +308,7 @@ import {
   type Claim,
   type JoinedToHost,
   type OwnershipLost,
+  type OwnershipToken,
   type RecoverySnapshot,
   type SettlementConflict,
   type SubmissionSnapshot,
@@ -2691,13 +2692,22 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     ).pipe(Effect.provideService(ThreadStore, store), Effect.provideService(WakeScheduler, wake));
 
   const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
-    makeRunWriter(store, threadId, producerEpoch);
+    makeRunWriter(threadId, producerEpoch).pipe(Effect.provideService(ThreadStore, store));
+
+  const recoveryOwnership = (
+    threadId: ThreadId,
+    submissionId: SubmissionId,
+    ownershipToken: OwnershipToken,
+  ) =>
+    bindRunOwnership(threadId, submissionId, Effect.succeed(ownershipToken)).pipe(
+      Effect.provideService(SubmissionLedger, ledger),
+    );
 
   /** Administrative publication rechecks its explicit authority under the canonical writer. */
   const attemptContextAtTail = Effect.fnUntraced(function* (threadId: ThreadId) {
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-    return yield* makeRunWriter(store, threadId, tail.producerEpoch);
+    return yield* attemptContextFor(threadId, tail.producerEpoch);
   });
 
   const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
@@ -9319,11 +9329,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         yield* reconcileRetainedChildren(
           ctx,
           submission,
-          bindRunOwnership(
-            ledger,
+          yield* recoveryOwnership(
             submission.threadId,
             submission.submissionId,
-            Effect.succeed(claim.ownershipToken),
+            claim.ownershipToken,
           ),
         );
         const open = yield* completeJoinedReleases(submission);
@@ -9533,11 +9542,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           );
           const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
 
-          const ownership = bindRunOwnership(
-            ledger,
+          const ownership = yield* recoveryOwnership(
             submission.threadId,
             submission.submissionId,
-            Effect.succeed(claim.ownershipToken),
+            claim.ownershipToken,
           );
 
           const currentRecords = yield* refreshRecoveryHistory(

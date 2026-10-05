@@ -125,75 +125,78 @@ export class RunStorage extends Context.Service<
 >()("@effect-agent/thread/RunStorage") {}
 
 /** Administrative recovery binds its separately acquired authority once, outside active Runs. */
-export const bindRunOwnership = (
-  ledger: SubmissionLedger["Service"],
+export const bindRunOwnership = Effect.fnUntraced(function* (
   threadId: ThreadId,
   submissionId: SubmissionId,
   token: Effect.Effect<OwnershipToken>,
-): RunOwnership => ({
-  release: Effect.flatMap(token, (ownershipToken) =>
-    ledger.releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken })),
-  ),
-  markInputApplied: (marker) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.markInputApplied(
-        MarkInputAppliedRequest.make({ ...marker, submissionId, ownershipToken }),
+) {
+  const ledger = yield* SubmissionLedger;
+
+  return {
+    release: Effect.flatMap(token, (ownershipToken) =>
+      ledger.releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken })),
+    ),
+    markInputApplied: (marker) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.markInputApplied(
+          MarkInputAppliedRequest.make({ ...marker, submissionId, ownershipToken }),
+        ),
       ),
-    ),
-  claimJoining: (maxCount) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.claimJoining(
-        ClaimJoiningRequest.make({
-          threadId,
-          hostSubmissionId: submissionId,
-          ownershipToken,
-          maxCount,
-        }),
+    claimJoining: (maxCount) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.claimJoining(
+          ClaimJoiningRequest.make({
+            threadId,
+            hostSubmissionId: submissionId,
+            ownershipToken,
+            maxCount,
+          }),
+        ),
       ),
-    ),
-  markJoined: (joinedSubmissionId, marker) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.markJoined(
-        MarkJoinedRequest.make({ ...marker, submissionId: joinedSubmissionId, ownershipToken }),
+    markJoined: (joinedSubmissionId, marker) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.markJoined(
+          MarkJoinedRequest.make({ ...marker, submissionId: joinedSubmissionId, ownershipToken }),
+        ),
       ),
-    ),
-  revertJoining: (joinedSubmissionId) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.revertJoining(
-        RevertJoiningRequest.make({
-          submissionId: joinedSubmissionId,
-          guard: { hostSubmissionId: submissionId, ownershipToken },
-        }),
+    revertJoining: (joinedSubmissionId) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.revertJoining(
+          RevertJoiningRequest.make({
+            submissionId: joinedSubmissionId,
+            guard: { hostSubmissionId: submissionId, ownershipToken },
+          }),
+        ),
       ),
-    ),
-  suspend: (reason) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.suspend(SuspendRequest.make({ submissionId, ownershipToken, reason })),
-    ),
-  reserveChildBudget: (request) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.reserveChildBudget(
-        ChildBudgetReservationRequest.make({
-          ...request,
-          parentSubmissionId: submissionId,
-          ownershipToken,
-        }),
+    suspend: (reason) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.suspend(SuspendRequest.make({ submissionId, ownershipToken, reason })),
       ),
-    ),
-  attachChildToReservation: (request) =>
-    Effect.flatMap(token, (ownershipToken) =>
-      ledger.attachChildToReservation(
-        AttachChildToReservationRequest.make({ ...request, ownershipToken }),
+    reserveChildBudget: (request) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.reserveChildBudget(
+          ChildBudgetReservationRequest.make({
+            ...request,
+            parentSubmissionId: submissionId,
+            ownershipToken,
+          }),
+        ),
       ),
-    ),
+    attachChildToReservation: (request) =>
+      Effect.flatMap(token, (ownershipToken) =>
+        ledger.attachChildToReservation(
+          AttachChildToReservationRequest.make({ ...request, ownershipToken }),
+        ),
+      ),
+  } satisfies RunOwnership;
 });
 
 /** Fenced canonical writer shared by generic Run sessions and administrative repair owners. */
 export const makeRunWriter = Effect.fnUntraced(function* (
-  store: ThreadStore["Service"],
   threadId: ThreadId,
   producerEpoch: ProducerEpoch,
 ) {
+  const store = yield* ThreadStore;
   const initial = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
   const gate = yield* Semaphore.make(1);
   let tail = { sequence: initial.tailSequence, digest: initial.tailDigest };
@@ -281,8 +284,7 @@ export const make = Effect.gen(function* () {
         let released = false;
         const gate = yield* Semaphore.make(1);
 
-        const ownership = bindRunOwnership(
-          ledger,
+        const ownership = yield* bindRunOwnership(
           request.threadId,
           claimed.submissionId,
           Effect.sync(() => token),
@@ -333,7 +335,7 @@ export const make = Effect.gen(function* () {
                 producerEpoch: claimed.producerEpoch,
               }),
             );
-            const writer = yield* makeRunWriter(store, request.threadId, claimed.producerEpoch);
+            const writer = yield* makeRunWriter(request.threadId, claimed.producerEpoch);
 
             const renew = gate.withPermits(1)(
               Effect.gen(function* () {
@@ -484,6 +486,9 @@ export const make = Effect.gen(function* () {
           }),
         );
       }),
+    ).pipe(
+      Effect.provideService(SubmissionLedger, ledger),
+      Effect.provideService(ThreadStore, store),
     ),
   );
 

@@ -3,7 +3,7 @@ import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { bindRunOwnership, RunStorage, type RunStorageSession } from "@yielded/agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
-  type SubmissionLedger,
+  SubmissionLedger,
   LedgerError,
   MarkInputAppliedRequest,
   OwnershipLost,
@@ -390,12 +390,11 @@ export const makeSqlRunStorage = Effect.fn("SqlRunStorage.make")(function* <
 
     releaseOwned = commands.releaseOwnership;
 
-    const ownership = bindRunOwnership(
-      { ...rawLedger, ...commands },
+    const ownership = yield* bindRunOwnership(
       claimedThreadId,
       submissionId,
       Effect.sync(() => owned.token),
-    );
+    ).pipe(Effect.provideService(SubmissionLedger, { ...rawLedger, ...commands }));
 
     const command = <A, E>(
       effect: Effect.Effect<A, E>,
