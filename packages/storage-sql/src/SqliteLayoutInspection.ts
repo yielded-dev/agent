@@ -1,6 +1,6 @@
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
-import type * as SqlClient from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
 const Header = Schema.Struct({
@@ -58,8 +58,8 @@ export const makeSqliteLayoutInspection = <C, K, S>(
       Effect.mapError(() => options.corruption(table)),
     );
 
-  const readObjects = Effect.fnUntraced(function* (client: SqlClient.SqlClient) {
-    const sql = client.withoutTransforms();
+  const readObjects = Effect.fnUntraced(function* () {
+    const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
     return yield* decode(
       Objects,
@@ -71,11 +71,10 @@ export const makeSqliteLayoutInspection = <C, K, S>(
   });
 
   const readHeader = Effect.fnUntraced(function* (
-    client: SqlClient.SqlClient,
     objects: typeof Objects.Type,
     version: number,
-  ): Effect.fn.Return<SqliteLayoutHeader, C | K | S> {
-    const sql = client.withoutTransforms();
+  ): Effect.fn.Return<SqliteLayoutHeader, C | K | S, SqlClient.SqlClient> {
+    const sql = (yield* SqlClient.SqlClient).withoutTransforms();
     const { baseline, steps, incompatible } = options;
 
     if (!steps.some((step) => step.version === version))

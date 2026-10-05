@@ -481,7 +481,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       canonicalAbort?.record.payload._tag === "AbortRequested"
         ? AbortIntent.make({
             ...canonicalAbort.record.payload,
-            requestedAt: canonicalAbort.record.createdAt,
+            requestedAt: acceptedAbort?.requestedAt ?? canonicalAbort.record.createdAt,
             canonicalRecordId: canonicalAbort.record.recordId,
           })
         : acceptedAbort === undefined
@@ -684,8 +684,8 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
 /** Export from a quiesced source, then atomically install into an empty destination Thread. */
 export const reencodeThread = Effect.fn("ThreadImport.reencodeThread")(function* <E, R>(
   source: Effect.Effect<ThreadExport, E, R>,
-  target: ThreadImport["Service"],
 ) {
+  const target = yield* ThreadImport;
   const exported = yield* source;
 
   // Only the record view needs encoding here. Import captures and validates the complete

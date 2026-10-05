@@ -2,7 +2,7 @@ import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
-import type * as SqlClient from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
 import {
@@ -156,15 +156,14 @@ const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
     }),
 });
 
-const inspectStorage = Effect.fnUntraced(function* (
-  client: SqlClient.SqlClient,
-): Effect.fn.Return<
+const inspectStorage = Effect.fnUntraced(function* (): Effect.fn.Return<
   SqliteStorageHeader | undefined,
-  SqliteStorageCompatibilityError | SqliteStorageCorruptionError | SqliteStorageError
+  SqliteStorageCompatibilityError | SqliteStorageCorruptionError | SqliteStorageError,
+  SqlClient.SqlClient
 > {
-  const sql = client.withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
-  const objects = yield* readObjects(sql);
+  const objects = yield* readObjects();
 
   const [legacy] = yield* decode(
     Legacy,
@@ -176,12 +175,12 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   if (version === 0 && objects.length === 0) return undefined;
 
-  return yield* readHeader(sql, objects, version);
+  return yield* readHeader(objects, version);
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
-export const readSqliteStorageHeader = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  const header = yield* inspectStorage(sql);
+export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
+  const header = yield* inspectStorage();
 
   if (header === undefined)
     return yield* incompatible(0, "No initialized Thread storage to export.");
@@ -190,14 +189,12 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* (sql: SqlClie
 });
 
 /** Validate under the writer transaction before any DDL; commit every pending step together. */
-export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout")(function* (
-  client: SqlClient.SqlClient,
-) {
-  const sql = client.withoutTransforms();
+export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout")(function* () {
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   // Current storage opens through a read snapshot even while another connection is writing.
   // Only a pending layout acquires the writer lock, then repeats every check under that lock.
-  const current = yield* makeSqlTransaction(sql, { begin: "BEGIN" })(inspectStorage(sql)).pipe(
+  const current = yield* makeSqlTransaction(sql, { begin: "BEGIN" })(inspectStorage()).pipe(
     Effect.catchTag("SqlError", storageError),
   );
 
@@ -205,7 +202,7 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout"
 
   return yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(
     Effect.gen(function* () {
-      const header = yield* inspectStorage(sql);
+      const header = yield* inspectStorage();
       const version = header?.layoutVersion ?? 0;
 
       for (const step of sqliteLayoutSteps) {
@@ -217,7 +214,7 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout"
       if (header === undefined)
         yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
 
-      return yield* readSqliteStorageHeader(sql);
+      return yield* readSqliteStorageHeader();
     }),
   ).pipe(Effect.catchTag("SqlError", storageError));
 });

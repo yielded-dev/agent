@@ -399,7 +399,7 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
 
     return yield* makeSqlTransaction(sql, { begin: "BEGIN" })(
       Effect.gen(function* () {
-        yield* readSqliteStorageHeader(sql);
+        yield* readSqliteStorageHeader();
 
         const transfer = yield* makeSqlThreadImport({
           offsetPrefix: "effect-agent-sqlite@1:",

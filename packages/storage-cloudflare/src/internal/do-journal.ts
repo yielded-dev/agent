@@ -335,7 +335,7 @@ const ensureCurrentStorage = Effect.fnUntraced(function* (
   failpoint: DoJournalFailpoint = noFailpoint,
   maxStoredValueBytes: number,
 ) {
-  yield* ensureDoStorageLayout(sql);
+  yield* ensureDoStorageLayout().pipe(Effect.provideService(SqlClient.SqlClient, sql));
 
   const state = yield* ownedState(sql);
   const owner = (yield* SqlStorageOwner) ?? state;

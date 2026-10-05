@@ -117,7 +117,7 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
     });
   }
 
-  yield* ensureSqliteStorageLayout(sql);
+  yield* ensureSqliteStorageLayout();
 
   const classifyWriteFailure =
     (operation: string) =>

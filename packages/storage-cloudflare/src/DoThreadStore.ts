@@ -1066,7 +1066,7 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
     return yield* state
       .transaction(
         Effect.gen(function* () {
-          yield* readDoStorageHeader(sql);
+          yield* readDoStorageHeader();
 
           const transfer = yield* makeSqlThreadImport({
             offsetPrefix: DO_OFFSET_PREFIX,

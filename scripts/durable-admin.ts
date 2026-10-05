@@ -421,9 +421,9 @@ const reencodeCommand = CliCommand.make(
         ThreadExportRequest.make({ threadId }),
       );
 
-      const result = yield* Effect.flatMap(ThreadImport, (target) =>
-        reencodeThread(Effect.succeed(exported), target),
-      ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
+      const result = yield* reencodeThread(Effect.succeed(exported)).pipe(
+        Effect.provide(SqliteThreadStore.layer({ filename })),
+      );
 
       yield* Console.log(
         yield* Schema.encodeEffect(Schema.fromJsonString(ThreadImportResult))(result),

@@ -485,8 +485,9 @@ Thread, and import it into an empty destination Thread. Both layouts use record 
 `effect-agent/thread@1`, so this cutover preserves the records and tail digest. `ThreadStore.export`
 supplies the archive and the local `ThreadImport` service installs it. Each adapter also provides
 `exportThread` to read layout 16 without acquiring execution authority or upgrading its layout.
-`reencodeThread` composes the export Effect with the destination importer. Switch the host only
-after checking the imported tail and resuming retained work with its original Agent bindings.
+`reencodeThread(source)` composes the export Effect with the destination `ThreadImport` service
+provided through its Effect environment. Switch the host only after checking the imported tail
+and resuming retained work with its original Agent bindings.
 
 Readers and importers accept only the current record format. A future change to record meaning
 requires a release-specific one-time archive conversion before import; the runtime carries no

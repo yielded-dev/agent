@@ -1,7 +1,7 @@
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
-import type * as SqlClient from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
 import {
@@ -147,15 +147,14 @@ const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
     }),
 });
 
-const inspectStorage = Effect.fnUntraced(function* (
-  client: SqlClient.SqlClient,
-): Effect.fn.Return<
+const inspectStorage = Effect.fnUntraced(function* (): Effect.fn.Return<
   DoStorageHeader | undefined,
-  DoStorageCompatibilityError | DoStorageCorruptionError | DoStorageError
+  DoStorageCompatibilityError | DoStorageCorruptionError | DoStorageError,
+  SqlClient.SqlClient
 > {
-  const sql = client.withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
-  const objects = yield* readObjects(sql);
+  const objects = yield* readObjects();
 
   const meta = objects.find((row) => row.name === "effect_agent_meta");
 
@@ -175,12 +174,12 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   const version = legacy.value;
 
-  return yield* readHeader(sql, objects, version);
+  return yield* readHeader(objects, version);
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
-export const readDoStorageHeader = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  const header = yield* inspectStorage(sql);
+export const readDoStorageHeader = Effect.fnUntraced(function* () {
+  const header = yield* inspectStorage();
 
   if (header === undefined)
     return yield* incompatible(0, "No initialized Thread storage to export.");
@@ -189,15 +188,13 @@ export const readDoStorageHeader = Effect.fnUntraced(function* (sql: SqlClient.S
 });
 
 /** Validate under the writer transaction before any DDL; commit every pending step together. */
-export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(function* (
-  client: SqlClient.SqlClient,
-) {
-  const sql = client.withoutTransforms();
+export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(function* () {
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   return yield* sql
     .withTransaction(
       Effect.gen(function* () {
-        const header = yield* inspectStorage(sql);
+        const header = yield* inspectStorage();
         const version = header?.layoutVersion ?? 0;
 
         for (const step of doLayoutSteps) {
@@ -209,7 +206,7 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.upgradeLayout")(functi
         if (header === undefined)
           yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
 
-        return yield* readDoStorageHeader(sql);
+        return yield* readDoStorageHeader();
       }),
     )
     .pipe(Effect.catchTag("SqlError", storageError));
