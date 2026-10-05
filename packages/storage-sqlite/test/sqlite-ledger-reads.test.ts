@@ -1,20 +1,26 @@
 import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { describe, expect, it } from "@effect/vitest";
+import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import type { ThreadStore } from "@yielded/agent/thread-store";
 import { Effect, FileSystem, Layer, type Crypto } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   ledgerReadCases,
-  reserveReadFixture,
+  publishReadFixture,
 } from "../../../test/fixtures/ledger-read-contracts.ts";
 import { SqliteStorageFailpoint } from "../src/SqliteStorageFailpoint.ts";
 import { submissionLedgerLayer } from "../src/SqliteSubmissionLedger.ts";
-import { storageConfigLayer } from "../src/SqliteThreadStore.ts";
+import { storageConfigLayer, threadStoreLayer } from "../src/SqliteThreadStore.ts";
 
 const withFixture = <A, E>(
-  effect: Effect.Effect<A, E, SubmissionLedger | SqlClient.SqlClient | Crypto.Crypto>,
+  effect: Effect.Effect<
+    A,
+    E,
+    SubmissionLedger | SettlementPublisher | ThreadStore | SqlClient.SqlClient | Crypto.Crypto
+  >,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -33,7 +39,9 @@ const withFixture = <A, E>(
         );
 
         return yield* effect.pipe(
-          Effect.provide(submissionLedgerLayer.pipe(Layer.provideMerge(deps))),
+          Effect.provide(
+            Layer.merge(submissionLedgerLayer, threadStoreLayer).pipe(Layer.provideMerge(deps)),
+          ),
         );
       }).pipe(Effect.provide(SqliteClient.layer({ filename })));
     }),
@@ -58,7 +66,7 @@ describe("SQLite ledger read contracts", () => {
 
         yield* Effect.gen(function* () {
           const ledger = yield* SubmissionLedger;
-          const request = yield* reserveReadFixture("lock-reader");
+          const request = yield* publishReadFixture("lock-reader");
           const settled = yield* ledger.finalizeSettlement(request);
 
           yield* Effect.gen(function* () {
@@ -67,13 +75,17 @@ describe("SQLite ledger read contracts", () => {
             yield* Effect.acquireRelease(writer`BEGIN IMMEDIATE`, () =>
               writer`ROLLBACK`.pipe(Effect.orDie),
             );
-            yield* writer`UPDATE effect_agent_settlement_reservations SET finalized_at='2040-01-01T00:00:00.000Z' WHERE submission_id=${request.submissionId}`;
+            yield* writer`UPDATE effect_agent_submissions SET finalized_at='2040-01-01T00:00:00.000Z' WHERE submission_id=${request.submissionId}`;
             expect(yield* ledger.finalizeSettlement(request)).toEqual(settled);
           }).pipe(Effect.scoped, Effect.provide(SqliteClient.layer({ filename })));
           expect(yield* ledger.finalizeSettlement(request)).toEqual(settled);
           // The subsequent genuine finalization must still acquire and release the writer.
-          yield* ledger.finalizeSettlement(yield* reserveReadFixture("after-lock"));
-        }).pipe(Effect.provide(submissionLedgerLayer.pipe(Layer.provideMerge(deps))));
+          yield* ledger.finalizeSettlement(yield* publishReadFixture("after-lock"));
+        }).pipe(
+          Effect.provide(
+            Layer.merge(submissionLedgerLayer, threadStoreLayer).pipe(Layer.provideMerge(deps)),
+          ),
+        );
       }),
     ).pipe(Effect.provide(NodeFileSystem.layer)),
   );

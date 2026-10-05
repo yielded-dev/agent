@@ -37,6 +37,7 @@ import {
   ProducerId,
 } from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
@@ -122,8 +123,7 @@ const makeHarness = Effect.fn(function* (
 
   const originalShared = yield* Layer.build(
     Layer.mergeAll(
-      MemorySubmissionLedgerLive,
-      MemoryThreadStoreLive,
+      MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
       memoryMessageDeliveryStoreLayer({
         maxPendingPerOwner: options.maxPendingPerOwner ?? 100,
         maxRetainedPerOwner: 100,
@@ -191,7 +191,9 @@ const makeHarness = Effect.fn(function* (
   });
 
   const makeRuntime = Effect.fn(function* (lifetimeMillis = options.lifetimeMillis ?? 60_000) {
-    const context = yield* Layer.build(DurableAgentRuntime.layerWithBindings(bindings)).pipe(
+    const context = yield* Layer.build(
+      DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer())),
+    ).pipe(
       Effect.provideService(PeerDeliveryLifetime, lifetimeMillis),
       Effect.provideService(PeerMessageCapacity, options.maxMessagesPerSource ?? 256),
       Effect.provide(shared),

@@ -203,8 +203,10 @@ const driveRun = (setup: RunSetup) =>
       commitCompaction === undefined
         ? undefined
         : {
-            commitResponse: () => Effect.void,
-            prepareToolCalls: () => Effect.void,
+            checkpoint: Effect.void,
+            initialize: () => Effect.void,
+            commitTurn: () => Effect.succeed("committed"),
+            checkToolDispatch: Effect.void,
             step: {
               lookup: () => Effect.succeed(Option.none()),
               commit: () => Effect.void,

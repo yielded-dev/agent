@@ -358,11 +358,10 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
   );
 
   it.effect(
-    "holds the call's permit during delivery and preserves interruption after its terminal event",
+    "holds the call's permit during observer delivery and preserves interruption before terminal publication",
     () =>
       Effect.gen(function* () {
         const entered = yield* Deferred.make<void>();
-        const terminalObserved = yield* Deferred.make<void>();
         const events: Array<RunEvent> = [];
         let starts = 0;
         let attempts = 0;
@@ -390,13 +389,7 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
           Stream.tap((event) =>
             Effect.sync(() => {
               events.push(event);
-            }).pipe(
-              Effect.andThen(
-                event._tag === "ToolCallFailed"
-                  ? Deferred.succeed(terminalObserved, undefined)
-                  : Effect.void,
-              ),
-            ),
+            }),
           ),
           Stream.runDrain,
           Effect.provide([
@@ -412,7 +405,6 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
         );
 
         yield* Deferred.await(entered);
-        yield* Deferred.await(terminalObserved);
         expect(starts).toBe(1);
         fiber.interruptUnsafe(7_333);
         const exit = yield* Fiber.await(fiber);
@@ -423,7 +415,7 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
           events
             .filter((event) => event._tag === "ToolCallFailed")
             .map((event) => event.toolCallId),
-        ).toEqual(["one"]);
+        ).toEqual([]);
         expect(events.some((event) => event._tag === "RunCompleted")).toBe(false);
         expect({ starts, attempts, finalized }).toEqual({ starts: 1, attempts: 1, finalized: 1 });
       }),

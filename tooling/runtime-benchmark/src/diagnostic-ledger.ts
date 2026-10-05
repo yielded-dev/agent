@@ -9,6 +9,7 @@ import { digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { AgentId, ThreadId } from "@yielded/agent/identifiers";
 import {
+  CanonicalBatch,
   DefinitionDigests,
   DeploymentId,
   Digest,
@@ -16,6 +17,7 @@ import {
   RecordEnvelope,
   SubmissionSettledRecord,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import {
   AdmissionRequest,
   ClaimRequest,
@@ -23,13 +25,14 @@ import {
   MarkReadyRequest,
   Principal,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
+  submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import type { Settlement } from "@yielded/agent/submission-ledger";
 import type { SubmissionStatus } from "@yielded/agent/submission-status";
+import { FencedAppendRequest, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import {
   Clock,
   Context,
@@ -61,6 +64,7 @@ import {
 } from "./diagnostic-writer.js";
 
 export { ledgerCases } from "./diagnostic-cases.js";
+import { publishSeedSettlement } from "./settlement.js";
 
 /** Test-only scheduling input; real diagnostic cases observe immediately after the go signal. */
 export const DiagnosticLedgerWaitForWriterRelease = Context.Reference(
@@ -105,8 +109,8 @@ const admit = Effect.fn("diagnostic.ledger.admit")(function* (index: number) {
   );
 });
 
-/** Public adapter seed, deliberately independent of canonical history size. */
-const reserve = Effect.fn("diagnostic.ledger.reserve")(function* (index: number) {
+/** Public adapter seed with one canonical settlement per finalized Submission. */
+const publish = Effect.fn("diagnostic.ledger.publish")(function* (index: number) {
   const ledger = yield* SubmissionLedger;
   const admitted = yield* admit(index);
 
@@ -129,17 +133,26 @@ const reserve = Effect.fn("diagnostic.ledger.reserve")(function* (index: number)
       receiptId: admitted.receiptId,
       settlementId,
       outcome: "aborted",
+      runId: runIdForSubmission(admitted.submissionId),
     }),
   });
 
-  yield* ledger.reserveSettlement(
-    SettlementReservation.make({
-      submissionId: admitted.submissionId,
-      ownershipToken: claim.value.ownershipToken,
-      settlementId,
-      outcome: "aborted",
-      record,
-      recordDigest: yield* digestJson(yield* Schema.encodeEffect(RecordEnvelope)(record)),
+  const store = yield* ThreadStore;
+  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
+
+  yield* publishSeedSettlement(
+    admitted.submissionId,
+    claim.value.ownershipToken,
+    FencedAppendRequest.make({
+      threadId: seedThread,
+      producerEpoch: claim.value.producerEpoch,
+      expectedTailSequence: tail.tailSequence,
+      expectedTailDigest: tail.tailDigest,
+      batch: CanonicalBatch.make({
+        batchId: submissionSettlementBatchId(admitted.submissionId),
+        producerId,
+        records: [record],
+      }),
     }),
   );
 
@@ -151,7 +164,7 @@ const seed = Effect.fn("diagnostic.ledger.seed")(function* (settled: number, unf
   const progress = yield* DiagnosticProgress;
 
   for (let index = 0; index < settled; index++) {
-    yield* ledger.finalizeSettlement(yield* reserve(index));
+    yield* ledger.finalizeSettlement(yield* publish(index));
     if (index === 0) yield* progress.mark({ name: "seed.firstSettlement.committed", elapsedMs: 0 });
   }
   for (let index = settled; index < settled + unfinished; index++) yield* admit(index);
@@ -360,7 +373,7 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
           return receipt;
         });
 
-  if (receipt === undefined) request = yield* reserve(0);
+  if (receipt === undefined) request = yield* publish(0);
   else
     request = SettlementFinalization.make({
       submissionId: receipt.submissionId,

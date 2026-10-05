@@ -7,6 +7,7 @@ import {
 import { type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { type PersistedJson } from "@yielded/agent/records";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger, type SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { Clock, Context, Duration, Effect, Layer, Option, Stream } from "effect";
@@ -143,7 +144,7 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
                 .pipe(Effect.catchTag("DurableAlarmError", Effect.die)),
           });
         }),
-      ).pipe(Layer.provide(submissionLedgerLayer));
+      ).pipe(Layer.provideMerge(submissionLedgerLayer));
 
       const ports = Layer.mergeAll(observedStore, observedLedger).pipe(
         Layer.provide(
@@ -158,6 +159,7 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
       return Layer.fresh(ThreadMaintenance.layer).pipe(
         Layer.provide(host),
         Layer.provideMerge(DurableAgentRuntime.layerWithBindings(bindings)),
+        Layer.provide(runStorageLayer()),
         Layer.provideMerge(ports),
         Layer.provide(
           Layer.fresh(cloudflareWakeSchedulerLayer).pipe(

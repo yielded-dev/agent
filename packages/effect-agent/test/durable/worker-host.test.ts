@@ -541,7 +541,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
       renewOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
       releaseOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
       markInputApplied: () => Effect.die("Worker fixture only implements ledger lookup"),
-      reserveSettlement: () => Effect.die("Worker fixture only implements ledger lookup"),
       finalizeSettlement: () => Effect.die("Worker fixture only implements ledger lookup"),
       requestAbort: () => Effect.die("Worker fixture only implements ledger lookup"),
       readAbortIntent: () => Effect.die("Worker fixture only implements ledger lookup"),

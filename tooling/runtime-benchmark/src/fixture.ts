@@ -39,8 +39,8 @@ import {
   Principal,
   type Settlement,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
+  submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
@@ -75,6 +75,7 @@ import { BenchmarkError, check, type Case, type Sample, type SamplePhase } from 
 import { BenchmarkProgress } from "./evidence.js";
 import { BenchmarkHistoryLive } from "./history.js";
 import { SeedInitializer, SeedTemplates, type SeedRequest } from "./seeds.js";
+import { publishSeedSettlement } from "./settlement.js";
 
 const answerSchema = Schema.Struct({ answer: Schema.String });
 
@@ -254,7 +255,7 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
   }
 });
 
-/** Adapter-only settled rows isolate ledger growth from canonical-history growth. */
+/** Ledger growth includes its authoritative canonical settlement records on a separate Thread. */
 const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
   const ledger = yield* SubmissionLedger;
   const inputDigest = yield* digestJson("fixture");
@@ -286,6 +287,7 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
         settlementId,
         receiptId: admitted.receiptId,
         outcome: "aborted",
+        runId: runIdForSubmission(admitted.submissionId),
       }),
     );
 
@@ -298,16 +300,22 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
       payload,
     });
 
-    const recordDigest = yield* digestJson(yield* Schema.encodeEffect(RecordEnvelope)(record));
+    const store = yield* ThreadStore;
+    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
 
-    yield* ledger.reserveSettlement(
-      SettlementReservation.make({
-        submissionId: admitted.submissionId,
-        ownershipToken: claim.value.ownershipToken,
-        settlementId,
-        outcome: "aborted",
-        record,
-        recordDigest,
+    yield* publishSeedSettlement(
+      admitted.submissionId,
+      claim.value.ownershipToken,
+      FencedAppendRequest.make({
+        threadId: seedThread,
+        producerEpoch: claim.value.producerEpoch,
+        expectedTailSequence: tail.tailSequence,
+        expectedTailDigest: tail.tailDigest,
+        batch: CanonicalBatch.make({
+          batchId: submissionSettlementBatchId(admitted.submissionId),
+          producerId,
+          records: [record],
+        }),
       }),
     );
     yield* ledger.finalizeSettlement(

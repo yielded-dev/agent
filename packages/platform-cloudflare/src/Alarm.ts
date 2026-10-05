@@ -677,7 +677,6 @@ const stableExternalWait = (
     case "ready":
     case "running":
     case "settled":
-    case "terminalizing":
       return false;
   }
 };

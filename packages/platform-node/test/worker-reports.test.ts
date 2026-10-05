@@ -9,13 +9,8 @@ import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { DefinitionDigestInput } from "@yielded/agent/records";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
-import {
-  IdempotencyKey,
-  Principal,
-  RecoverySnapshotRequest,
-  SubmissionLedger,
-} from "@yielded/agent/submission-ledger";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { ThreadExportRequest, ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { WorkerCompletion, WorkerError } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
 import {
@@ -250,9 +245,8 @@ it.live.each(["worker:after-report-append"] as const)(
         );
 
         const reopened = Context.get(second, DurableAgentRuntime);
-        const store = Context.get(second, ThreadStore);
+        const store = Context.get(second, ThreadReader);
         const deliveries = Context.get(second, MessageDeliveryStore);
-        const ledger = Context.get(second, SubmissionLedger);
 
         const report = yield* Effect.gen(function* () {
           for (;;) {
@@ -276,29 +270,9 @@ it.live.each(["worker:after-report-append"] as const)(
         expect(joinedResult.outcome).toBe("completed");
         expect((yield* reopened.awaitSettlement(report.receipt)).outcome).toBe("completed");
 
-        // Canonical settlement may precede ledger finalization. Wait until every involved
-        // submission has released ownership before advancing the report's persisted poll.
-        yield* Effect.gen(function* () {
-          for (;;) {
-            let settled = true;
-
-            for (const receipt of [
-              sourceReceipt,
-              started.delivery.receipt!,
-              joined.receipt!,
-              report.receipt,
-            ]) {
-              const snapshot = yield* ledger.loadRecoverySnapshot(
-                RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
-              );
-
-              if (snapshot.submission.state !== "settled" || snapshot.ownership !== undefined)
-                settled = false;
-            }
-            if (settled) return;
-            yield* Effect.sleep("10 millis");
-          }
-        }).pipe(Effect.timeout("10 seconds"));
+        // The public wait verifies canonical outcome and finalized ledger state together.
+        // Finalization has released ownership before advancing the report's persisted poll.
+        yield* reopened.awaitSettlement(sourceReceipt);
 
         const delivery = yield* deliveries.get(report.key);
 

@@ -1,26 +1,22 @@
-import { Context, Effect, Option, Schema, Stream } from "effect";
+import { Context, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 
 import { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { canonicalJson, digestCanonicalBatchJson } from "./Digest.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
-import type { ToolCallPrepared, WorkerInputRequested } from "./Records.ts";
 import {
   BatchId,
   CanonicalBatch,
+  type CanonicalRecordPayload,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
   ObservationOffset,
   PersistedJson,
   ProducerEpoch,
+  RecordEnvelope,
   RecordId,
 } from "./Records.ts";
-import {
-  runIdForSubmission,
-  subagentLineageRecordId,
-  toolCallPreparedRecordId,
-  workerOriginRecordId,
-} from "./RunJournal.ts";
-import { SubmissionLedger, SubmissionLookupById } from "./SubmissionLedger.ts";
+import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 
 export const MAX_THREAD_EXPORT_RECORDS = 131_072;
 
@@ -31,28 +27,6 @@ export type ThreadRecordRequest = typeof ThreadRecordRequest.Type;
 /** The original user input for a Run, excluding later joined inputs. */
 export const ThreadRunInputRequest = Schema.Struct({ threadId: ThreadId, runId: RunId });
 export type ThreadRunInputRequest = typeof ThreadRunInputRequest.Type;
-
-export const ThreadOutstandingRequest = Schema.Struct({
-  threadId: ThreadId,
-  /** Exceeding this bound fails; a truncated inventory never grants authority. */
-  limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(4_096)),
-});
-
-export type ThreadOutstandingRequest = typeof ThreadOutstandingRequest.Type;
-
-export interface ThreadOutstanding {
-  readonly threadId: ThreadId;
-  readonly throughSequence: CanonicalSequence;
-  readonly complete: true;
-  readonly operations: ReadonlyArray<{
-    readonly submissionId: SubmissionId;
-    readonly prepared: ToolCallPrepared;
-    /** Prepared is not an unknown outcome or a grant to execute. */
-    readonly state: "prepared" | "unknown";
-  }>;
-  /** Source reservations without proof that external effects are resolved. */
-  readonly workerInputs: ReadonlyArray<WorkerInputRequested>;
-}
 
 /** Native worker reservation/accounting snapshot at a captured canonical tail. */
 export const ThreadWorkerStateRequest = Schema.Struct({
@@ -86,7 +60,7 @@ const selectedRecords = Effect.fnUntraced(function* (
   selection: ThreadSelection,
   limit: number,
 ) {
-  const store = yield* ThreadStore;
+  const store = yield* ThreadReader;
   const records: Array<CanonicalRecordEnvelope> = [];
   let afterSequence: CanonicalSequence | undefined;
 
@@ -170,7 +144,7 @@ export const readWorkerState = Effect.fn("ThreadStore.readWorkerState")(function
   yield* Schema.decodeEffect(ThreadWorkerStateRequest)(request).pipe(
     Effect.mapError(() => incomplete("readWorkerState request")),
   );
-  const store = yield* ThreadStore;
+  const store = yield* ThreadReader;
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
 
   const records = yield* selectedRecords(
@@ -194,103 +168,6 @@ export const readWorkerState = Effect.fn("ThreadStore.readWorkerState")(function
   };
 });
 
-/**
- * Work is proportional to outstanding records, independent of completed history. Unknown
- * effects survive abort and resolution intent; only canonical closure removes them. A
- * preparation from another Run still requires native recovery before it can be treated as
- * safe. This snapshot grants no execution authority and does not freeze other owners.
- */
-export const readOutstanding = Effect.fn("ThreadStore.readOutstanding")(function* (
-  request: ThreadOutstandingRequest,
-) {
-  yield* Schema.decodeEffect(ThreadOutstandingRequest)(request).pipe(
-    Effect.mapError(() => incomplete("readOutstanding request")),
-  );
-  const store = yield* ThreadStore;
-  const ledger = yield* SubmissionLedger;
-  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
-
-  const records = yield* selectedRecords(
-    request.threadId,
-    {
-      _tag: "Outstanding",
-      expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
-    },
-    request.limit,
-  );
-
-  const operations: Array<ThreadOutstanding["operations"][number]> = [];
-  const workerInputs: Array<WorkerInputRequested> = [];
-
-  for (const entry of records) {
-    const payload = entry.record.payload;
-
-    if (payload._tag === "WorkerInputRequested") {
-      workerInputs.push(payload);
-      continue;
-    }
-    if (payload._tag !== "ToolCallPrepared" && payload._tag !== "ToolCallUnknown")
-      return yield* incomplete("readOutstanding record");
-
-    const preparedEntry =
-      payload._tag === "ToolCallPrepared"
-        ? entry
-        : Option.getOrUndefined(
-            yield* getRecord({
-              threadId: request.threadId,
-              recordId: toolCallPreparedRecordId(payload.runId, payload.turn, payload.toolCallId),
-            }),
-          );
-
-    const inputEntry = Option.getOrUndefined(
-      yield* getRunInput({ threadId: request.threadId, runId: payload.runId }),
-    );
-
-    if (
-      preparedEntry === undefined ||
-      inputEntry === undefined ||
-      preparedEntry.sequence > tail.tailSequence ||
-      inputEntry.sequence > tail.tailSequence
-    )
-      return yield* incomplete("readOutstanding proof beyond snapshot");
-    const prepared = preparedEntry.record.payload;
-    const input = inputEntry.record.payload;
-
-    if (
-      prepared?._tag !== "ToolCallPrepared" ||
-      prepared.runId !== payload.runId ||
-      prepared.turn !== payload.turn ||
-      prepared.toolCallId !== payload.toolCallId ||
-      prepared.toolName !== payload.toolName ||
-      input?._tag !== "UserInputRecorded" ||
-      input.submissionId === undefined ||
-      runIdForSubmission(input.submissionId) !== prepared.runId
-    )
-      return yield* incomplete("readOutstanding canonical ownership");
-
-    const submission = yield* ledger.lookup(
-      SubmissionLookupById.make({ submissionId: input.submissionId }),
-    );
-
-    if (Option.isNone(submission) || submission.value.threadId !== request.threadId)
-      return yield* incomplete("readOutstanding native admission");
-    operations.push({
-      submissionId: input.submissionId,
-      prepared,
-      state: payload._tag === "ToolCallUnknown" ? "unknown" : "prepared",
-    });
-  }
-
-  return {
-    threadId: request.threadId,
-    throughSequence: tail.tailSequence,
-    complete: true as const,
-    operations,
-    workerInputs,
-  };
-});
-
 export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   "@effect-agent/thread/ThreadMaterialization",
 )({
@@ -307,6 +184,156 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   expectedTailDigest: Digest,
   producerEpoch: ProducerEpoch,
 }) {}
+
+const encodeAppend = Schema.encodeSync(FencedAppendRequest);
+const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
+
+/** Own only lifecycle graphs consumed after SQL INSERT suspension; keep Schema/Duration prototypes. */
+const capturePayload = (payload: CanonicalRecordPayload): CanonicalRecordPayload => {
+  const captured = { ...payload };
+
+  Object.setPrototypeOf(captured, Object.getPrototypeOf(payload));
+  switch (payload._tag) {
+    case "UserInputRecorded":
+    case "RunStarted":
+    case "AgentUpdateEmitted":
+    case "ToolApprovalRequested":
+    case "ToolApprovalDecided":
+    case "AbortRequested":
+    case "WorkerInputCompleted":
+    case "WorkerInputRequested":
+    case "WorkerStopRequested":
+    case "SubagentRequested":
+    case "SubagentStarted":
+    case "SubagentJoined":
+    case "SubmissionSettled":
+      break;
+    default:
+      return captured;
+  }
+
+  const pending: Array<{ readonly source: object; readonly target: object }> = [
+    { source: payload, target: captured },
+  ];
+
+  while (pending.length > 0) {
+    const next = pending.pop()!;
+
+    for (const [key, value] of Object.entries(next.source)) {
+      if (!Predicate.isObject(value)) continue;
+      const copy: object = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
+
+      Object.assign(copy, value);
+      Reflect.set(next.target, key, copy);
+      pending.push({ source: value, target: copy });
+    }
+  }
+
+  return captured;
+};
+
+/**
+ * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
+ * is serialized once and shared by the digest, batch and record rows. Owned shallow metadata
+ * keeps row identities and authority stable; lifecycle payloads are detached where storage
+ * consumes them after suspension. Other nested typed values retain their readonly contract:
+ * adapters persist the captured strings rather than reconstructing bytes from those values.
+ * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
+ */
+export interface PreparedAppend extends FencedAppendRequest {
+  readonly batchJson: string;
+  readonly records: ReadonlyArray<{
+    readonly recordId: RecordId;
+    readonly recordJson: string;
+    readonly canonical: CanonicalBatch["records"][number];
+  }>;
+  readonly digest: () => ReturnType<typeof digestCanonicalBatchJson>;
+}
+
+export const PreparedAppend = {
+  capture: (input: FencedAppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
+    Effect.suspend(() => {
+      const existing = capturedAppends.get(input);
+
+      if (existing !== undefined) return Effect.succeed(existing);
+
+      return Effect.try({
+        try: () => {
+          const encoded = encodeAppend(input);
+          const recordJson = encoded.batch.records.map(canonicalJson);
+          const batchJson = `{"batchId":${JSON.stringify(encoded.batch.batchId)},"producerId":${JSON.stringify(encoded.batch.producerId)},"records":[${recordJson.join(",")}]}`;
+
+          const captureRecord = (record: RecordEnvelope) =>
+            Object.freeze(
+              new RecordEnvelope(
+                {
+                  ...record,
+                  createdAt: DateTime.makeUnsafe(DateTime.toEpochMillis(record.createdAt)),
+                  payload: Object.freeze(capturePayload(record.payload)),
+                },
+                { disableChecks: true },
+              ),
+            );
+
+          // Encoding validated the typed graph. Retain its typed values without parsing and
+          // decoding our own wire representation or traversing every nested value to freeze it.
+          const batch = Object.freeze(
+            new CanonicalBatch(
+              {
+                ...input.batch,
+                records: Object.freeze([
+                  captureRecord(input.batch.records[0]),
+                  ...input.batch.records.slice(1).map(captureRecord),
+                ]),
+              },
+              { disableChecks: true },
+            ),
+          );
+
+          const request = new FencedAppendRequest(
+            {
+              threadId: input.threadId,
+              expectedTailSequence: input.expectedTailSequence,
+              expectedTailDigest: input.expectedTailDigest,
+              producerEpoch: input.producerEpoch,
+              batch,
+            },
+            { disableChecks: true },
+          );
+
+          const records = Object.freeze(
+            batch.records.map((canonical, index) =>
+              Object.freeze({
+                recordId: canonical.recordId,
+                recordJson: recordJson[index],
+                canonical,
+              }),
+            ),
+          );
+
+          const captured = Object.freeze(
+            Object.assign(request, {
+              batchJson,
+              records,
+              digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
+            }),
+          );
+
+          capturedAppends.set(captured, captured);
+
+          return captured;
+        },
+        catch: (cause) =>
+          ThreadStoreError.make({
+            operation: "prepare canonical append",
+            message: Schema.isSchemaError(cause)
+              ? cause.message
+              : "Canonical append capture failed",
+            cause,
+          }),
+      });
+    }),
+};
 
 export class AppendResult extends Schema.Class<AppendResult>("@effect-agent/thread/AppendResult")({
   firstSequence: CanonicalSequence,
@@ -325,11 +352,6 @@ export class ThreadRead extends Schema.Class<ThreadRead>("@effect-agent/thread/T
 export const ThreadSelection = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("RecordId"), recordId: RecordId }),
   Schema.Struct({ _tag: Schema.Literal("RunInput"), runId: RunId }),
-  Schema.Struct({
-    _tag: Schema.Literal("Outstanding"),
-    expectedTailSequence: CanonicalSequence,
-    expectedTailDigest: Digest,
-  }),
   Schema.Struct({
     _tag: Schema.Literal("WorkerExecution"),
     expectedTailSequence: CanonicalSequence,
@@ -635,3 +657,30 @@ export class ThreadStore extends Context.Service<
       | undefined;
   }
 >()("@effect-agent/thread/ThreadStore") {}
+
+/** Canonical observation without append, materialization, or checkpoint mutation authority. */
+export class ThreadReader extends Context.Service<
+  ThreadReader,
+  Pick<
+    ThreadStore["Service"],
+    "read" | "observe" | "export" | "inspectTail" | "readIdentity" | "countPeerMessages"
+  >
+>()("@effect-agent/thread/ThreadReader") {
+  static fromStore(store: ThreadStore["Service"]): ThreadReader["Service"] {
+    return {
+      read: store.read,
+      observe: store.observe,
+      export: store.export,
+      inspectTail: store.inspectTail,
+      readIdentity: store.readIdentity,
+      ...(store.countPeerMessages === undefined
+        ? {}
+        : { countPeerMessages: store.countPeerMessages }),
+    };
+  }
+
+  /** Capture this assembly's store, independently of other local or routed stores. */
+  static layer() {
+    return Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore));
+  }
+}

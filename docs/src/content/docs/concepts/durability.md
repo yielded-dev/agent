@@ -38,10 +38,31 @@ Later appends enter through a separately captured suffix; a gap or short page fa
 view can drive recovery. Compaction metadata is discarded after projection, before model waits.
 Canonical prompt and unresolved-tool validation still apply, including when reusing metadata.
 
-`ThreadProjection` version 2 scopes open tool calls and subagent invocations by Run and Tool Call
-ID. Decode checkpoint state with its Schema before replaying a suffix. Earlier projection states,
-including empty views, fail decoding and must be discarded and rebuilt from canonical records.
-The canonical record and checkpoint envelope versions remain unchanged.
+`ThreadProjection` version 3 derives open tool calls from committed model responses and scopes
+calls and subagent invocations by Run and Tool Call ID. Decode projection state with its Schema
+before replaying a suffix. Earlier versions, including empty views, must be discarded and rebuilt
+from canonical records.
+
+## Complete a submission
+
+The storage owner publishes one canonical `SubmissionSettled` record after checking the current
+claim, joined host, or queued abort authority in the same transaction. Delivery and parent
+acknowledgements complete before ledger finalization releases the lane. Finalization derives the
+outcome from that record and preserves its first finalization timestamp on every retry.
+SQL adapters finalize plain-root submissions in the publication transaction; submissions with
+delivery or parent obligations retain recoverable finalization after those obligations complete.
+SQLite's opt-in WAL `synchronous: "NORMAL"` survives process crashes, but power loss or an OS crash can lose acknowledged commits and cause external effects to repeat during recovery.
+
+A crash before publication resumes from existing execution facts: a committed `RunCompleted`
+retains its output, while unresolved ordinary tools remain uncertain. A crash after publication
+repeats notifications and finalization without choosing another outcome. There is no separate
+settlement reservation or reserved-record recovery phase.
+
+Completion-tool results commit before the runtime drains new input at the turn boundary.
+If a crash occurs before `RunCompleted`, recovery reuses the recorded result without executing
+the handler again. It may reevaluate the completion projection, so keep that function pure and
+deterministic. `RunCompleted` fixes the output and disposition for subsequent recovery. A final
+response with no application tool calls commits atomically with its `RunCompleted` record.
 
 <a id="recovery-checkpoints"></a>
 
@@ -52,6 +73,9 @@ recovery checkpoint through `ThreadStore.recoveryCheckpoints`. The checkpoint pr
 replacement context, protected instructions and input, cumulative usage and policy accounting,
 the latest replayable tool batch, and required control and Durable Step evidence. Completed Step
 results remain available for reuse after an ownership change.
+
+Checkpoints also retain retired application call IDs, so compaction never permits their reuse
+within the same Run.
 
 When that Run completes, an eligible checkpoint also preserves the complete Thread's canonical
 conversation. A later Run can start from that context and its own records, with fresh instructions
@@ -189,19 +213,18 @@ replacement takes ownership. Recovery uses the same current binding selection as
 default, or explicit host selection from the canonical Submission). It validates a strongly
 consistent canonical prefix before classifying the last committed boundary:
 
-| Last committed boundary                          | Recovery                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------- |
-| admission without readiness                      | finish materialization and readiness                                         |
-| ready input with no attempted execution          | leave input application to the normal worker claim                           |
-| input appended without its ledger marker         | repair the marker without applying input twice                               |
-| `RunStarted`                                     | preserve the original deadline                                               |
-| incomplete model response                        | retry inference when policy allows; provider charges may repeat              |
-| complete tool declaration without preparation    | check the original operation contract, then resume or record unavailability  |
-| ordinary tool prepared without a result          | reconcile or record `UnknownToolOutcome`                                     |
-| canonical tool or Durable Step result            | reuse the recorded result                                                    |
-| `RunCompleted`                                   | preserve stored output and disposition; validate `resultDigest` when present |
-| reserved settlement                              | append that outcome, then finalize the ledger idempotently                   |
-| canonical settlement without ledger finalization | finalize from history                                                        |
+| Last committed boundary                           | Recovery                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| admission without readiness                       | finish materialization and readiness                                         |
+| ready input with no attempted execution           | leave input application to the normal worker claim                           |
+| input appended without its ledger marker          | repair the marker without applying input twice                               |
+| `RunStarted`                                      | preserve the original deadline                                               |
+| incomplete model response                         | retry inference when policy allows; provider charges may repeat              |
+| committed ordinary mutating call without a result | reconcile or record `UnknownToolOutcome`                                     |
+| initial pending or denied approval                | preserve the blocked batch; no handler started                               |
+| canonical tool or Durable Step result             | reuse the recorded result                                                    |
+| `RunCompleted`                                    | preserve stored output and disposition; validate `resultDigest` when present |
+| canonical settlement without ledger finalization  | finalize from history                                                        |
 
 Joined input follows the same rule. Claimed input without a canonical append returns to ready.
 Appended input rejoins its host run and settles with it. Approval must be canonical before work
@@ -209,34 +232,45 @@ resumes. Unknown work releases execution permits while keeping its accepted obli
 Abort preserves evidence and cannot roll back external effects or replace a settlement that won.
 See [Operations](/guide/operations/).
 
-`ModelResponseRecorded.toolOperations` retains compact per-call identity, execution class, kind,
-and replay hash. `ToolCallPrepared` retains the original parameters and may also carry the class,
-kind, and hash. These facts govern pending operation replay independently of later Agent or
-toolbox changes; old records without proof do not authorize a changed handler.
+Application tool call IDs must be unique within a Run. A durable Run permits at most 4,096 distinct
+application call IDs; reuse or a response exceeding that limit fails with `RunJournalError` before
+that response commits or its tools dispatch.
+The committed model response owns each call's normalized arguments and original execution class,
+kind, and replay hash. There is no separate preparation record. Losing ownership immediately
+after that response commits can therefore leave an ordinary mutating call unknown, even if its
+handler had not started. Execution still validates arguments, resolves the whole batch's approvals,
+checks host authorization, and rechecks the writer fence before granting handler permits.
 
-An incompatible mutating call with proof that dispatch never started receives `ToolUnavailable`
-with `execution: "not-executed"`. Readonly calls can run without a prepared record, so that
-absence alone yields no never-started proof; an unavailable readonly result uses
-`execution: "unavailable"`. Prepared calls require their original execution semantics before
-retry. Reconciliation's `CompletedWithResult` injects a confirmed result; `NeverStarted` can retire an unavailable
-call without executing it. `SafeToRetry` does not authorize changed code or erase uncertainty
-about an unsupported operation. Unproven effects stay unknown.
+A turn containing only ordinary readonly calls without approval can commit its response and
+results together. If interrupted before that commit, recovery may ask the model again. Using a
+Durable Step, reserving durable policy capacity, or accepting an update first commits the saved
+response. Idempotent calls retain the earlier declaration so retries keep the original call.
+
+A pending or denied approval recorded before the original dispatch proves that the whole batch
+never started. An initially blocked approval flow retains this proof across resumes until dispatch;
+an approval after possible execution cannot restore it. Parameter rejection proves nonexecution
+of its individual call. Approved calls without results remain uncertain.
+
+Recovery uses the original recorded arguments and operation contract. `CompletedWithResult`
+injects a confirmed result; `NeverStarted` proves nonexecution. `SafeToRetry` permits another
+attempt under compatible original semantics, but cannot authorize changed code or erase uncertainty.
+Readonly and idempotent calls retain their declared replay behavior. Unsupported effects stay unknown.
 
 Later model requests preserve earlier user intent, assistant text, and settled sibling results.
-Recovered discovery selections keep only tools in the current definition. Their original
-receipts remain unchanged, and newly added tools are not added to the saved selection.
-For an incomplete earlier batch, the model-facing history uses `ToolUnavailable` with
-`execution: "not-executed"` when the recorded operation required preparation and no preparation
-or unknown-outcome evidence exists. Other missing results remain explicitly unknown, including
-ordinary readonly calls that can run without preparation. This explanatory view creates no
-canonical tool settlement or compaction coverage and does not resolve a dispatched operation.
-A committed `RunCompleted` output and
-disposition remain authoritative across later codec or completion-projector changes.
+Missing results remain explicitly unknown unless canonical evidence proves nonexecution. This
+explanatory history creates no tool settlement and cannot resolve an effect. Compaction retains
+unresolved declarations. Recovered discovery selections keep only currently defined tools; newly
+added tools do not enter the saved selection. A committed `RunCompleted` output and disposition
+remain authoritative across later codec or completion-projector changes.
 
 ## Attached subagents
 
 A [durable attached child](/guide/subagents/durable-attached/) owns a separate thread and attempt.
 The waiting parent releases its worker permit; recovery rejoins the existing child.
+
+Completed sibling tools retain their results while a child is suspended. Their failures use the
+Tool's declared encoded failure value, as ordinary settlements do. Decode them with that failure
+Schema rather than expecting an observer diagnostic such as `{ errorTag, message }`.
 
 Recovery preserves child identity and checks the registered tool's delegation classification.
 Missing or conflicting classification fails closed. If admission cannot confirm whether a child

@@ -1,10 +1,6 @@
 import { Schema } from "effect";
 
 export const SqlStorageFailpointLocation = Schema.Literals([
-  "upgrade:before-mutation",
-  "upgrade:after-mutation",
-  "upgrade:before-version",
-  "upgrade:after-version",
   "materialize:before",
   "materialize:after",
   "append:before",
@@ -27,8 +23,6 @@ export const SqlStorageFailpointLocation = Schema.Literals([
   "ledger:mark-input-applied:after",
   "ledger:renew:before",
   "ledger:renew:after",
-  "ledger:reserve-settlement:before",
-  "ledger:reserve-settlement:after",
   "ledger:finalize-settlement:before",
   "ledger:finalize-settlement:after",
   "ledger:request-abort:before",

@@ -12,6 +12,15 @@ import {
   RecordEnvelope,
   SettlementOutcome,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import type { SettlementPublication } from "@yielded/agent/settlement-publisher";
+import {
+  SettlementPublicationResult,
+  SettlementPublisher,
+  validatePublication,
+  validateCanonicalSettlement,
+  validateJoinedSettlement,
+} from "@yielded/agent/settlement-publisher";
 import {
   AbortCommand,
   WorkerStopCommand,
@@ -63,19 +72,16 @@ import {
   ReleaseOwnershipRequest,
   RenewOwnershipRequest,
   ReservedChildBudget,
-  ReservedSettlement,
   RevertJoiningRequest,
   Settlement,
   SettlementConflict,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
   SubmissionLookup,
   SubmissionLookupByKey,
   SubmissionSnapshot,
   SubmissionWorkItem,
   SubmissionState,
-  SettlementReservationSnapshot,
   settlementFailureFromRecord,
   SuspendRequest,
   SuspensionReason,
@@ -85,14 +91,20 @@ import {
   UnknownResolutionConflict,
   UnknownResolutionIntent,
   submissionAbortRecordId,
+  submissionSettlementRecordId,
   type ChildSettledOutcome,
   type SuspensionOutcome,
 } from "@yielded/agent/submission-ledger";
+import {
+  AppendConflict,
+  FenceRejected,
+  type ThreadStoreFailure,
+} from "@yielded/agent/thread-store";
 import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
-import type { SqlJournal } from "./SqlJournal.ts";
+import type { SqlJournal, ThreadRow } from "./SqlJournal.ts";
 import {
   makeRowDecoder,
   makeSqlQuery,
@@ -102,6 +114,7 @@ import {
   type SqlStorageFailpoint,
 } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
+import { prepareSqlAppend } from "./SqlThreadStore.ts";
 type SubmissionId = SubmissionSnapshot["submissionId"];
 
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
@@ -130,6 +143,8 @@ class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")({
   receipt_id: BoundedIdentifier,
   state: SubmissionState,
   settled_outcome: Schema.NullOr(SettlementOutcome),
+  settled_record_id: Schema.NullOr(BoundedIdentifier),
+  finalized_at: Schema.NullOr(BoundedTimestamp),
   created_at: BoundedTimestamp,
   ready_at: Schema.NullOr(BoundedTimestamp),
   input_applied_record_id: Schema.NullOr(BoundedIdentifier),
@@ -188,17 +203,6 @@ class OwnershipRow extends Schema.Class<OwnershipRow>("OwnershipRow")({
   lease_expires_at: BoundedTimestamp,
 }) {}
 
-class ReservationRow extends Schema.Class<ReservationRow>("ReservationRow")({
-  submission_id: BoundedIdentifier,
-  settlement_id: BoundedIdentifier,
-  outcome: SettlementOutcome,
-  record_id: BoundedIdentifier,
-  record_json: BoundedStoredText,
-  record_digest: Digest,
-  reserved_at: BoundedTimestamp,
-  finalized_at: Schema.NullOr(BoundedTimestamp),
-}) {}
-
 class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")({
   submission_id: BoundedIdentifier,
   author: BoundedIdentifier,
@@ -243,6 +247,8 @@ const SUBMISSION_COLUMNS = `
   receipt_id,
   state,
   settled_outcome,
+  settled_record_id,
+  finalized_at,
   created_at,
   ready_at,
   input_applied_record_id,
@@ -280,7 +286,6 @@ const ToolCallIdList = Schema.Array(ToolCallIdSchema);
 
 const encodePersistedJsonText = Schema.encodeEffect(Schema.fromJsonString(PersistedJson));
 const encodeDefinitionDigestsText = Schema.encodeEffect(Schema.fromJsonString(DefinitionDigests));
-const encodeRecordEnvelopeText = Schema.encodeEffect(Schema.fromJsonString(RecordEnvelope));
 const decodeRecordEnvelopeText = Schema.decodeEffect(Schema.fromJsonString(RecordEnvelope));
 const encodeSuspensionReasonText = Schema.encodeEffect(Schema.fromJsonString(SuspensionReason));
 const encodeUnknownResolutionText = Schema.encodeEffect(Schema.fromJsonString(UnknownResolution));
@@ -313,6 +318,27 @@ const decodeChildAttachmentSnapshot = Schema.decodeUnknownEffect(ChildAttachment
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
 const equivalentUnknownResolution = Schema.toEquivalence(UnknownResolution);
 
+/** Complete primitive SQL state retained only by an exclusive claim Scope. */
+export interface SqlRunAuthority {
+  readonly submissionId: SubmissionId;
+  submission: SubmissionRow;
+  ownership: OwnershipRow;
+  thread: ThreadRow;
+  owned: boolean;
+}
+
+interface SqlAuthorityReader {
+  readonly requireSubmission: (
+    operation: string,
+    submissionId: string,
+  ) => Effect.Effect<SubmissionRow, LedgerError>;
+  readonly requireOwnership: (
+    operation: string,
+    submission: SubmissionRow,
+    token: string,
+  ) => Effect.Effect<OwnershipRow, OwnershipLost | LedgerError>;
+}
+
 /** Wrap an adapter-internal failure into the port's LedgerError without erasing its tag. */
 const internalFailure =
   (operation: string) =>
@@ -332,7 +358,7 @@ export interface SqlSubmissionLedgerOptions<
 }
 
 /** Durable submission transitions shared by relational adapters. */
-export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(function* <
+export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make")(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -427,7 +453,8 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
       | OwnershipLost
       | SettlementConflict
       | UnknownResolutionConflict
-      | LedgerError,
+      | LedgerError
+      | ThreadStoreFailure,
   >(
     operation: string,
     effect: Effect.Effect<A, E>,
@@ -464,7 +491,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
       Effect.mapError(internalFailure(operation)),
     );
 
-  const readSubmission = Effect.fn("SqlSubmissionLedger.readSubmission")(function* (
+  const readSubmission = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<Option.Option<SubmissionRow>, LedgerError> {
@@ -488,7 +515,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
   });
 
-  const requireSubmission = Effect.fn("SqlSubmissionLedger.requireSubmission")(function* (
+  const requireSubmission = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<SubmissionRow, LedgerError> {
@@ -504,7 +531,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return submission.value;
   });
 
-  const readOwnership = Effect.fn("SqlSubmissionLedger.readOwnership")(function* (
+  const readOwnership = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<Option.Option<OwnershipRow>, LedgerError> {
@@ -539,7 +566,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
   });
 
-  const threadEpoch = Effect.fn("SqlSubmissionLedger.threadEpoch")(function* (
+  const threadEpoch = Effect.fnUntraced(function* (
     operation: string,
     threadId: string,
   ): Effect.fn.Return<ProducerEpoch, LedgerError> {
@@ -555,7 +582,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
    * Submission's lane; a superseded or missing token fails with OwnershipLost carrying the
    * Thread's current producer epoch (DUR-006).
    */
-  const requireOwnership = Effect.fn("SqlSubmissionLedger.requireOwnership")(function* (
+  const requireOwnership = Effect.fnUntraced(function* (
     operation: string,
     submission: SubmissionRow,
     ownershipToken: string,
@@ -578,139 +605,123 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return ownership.value;
   });
 
-  const decodeSubmissionSnapshot = Effect.fn("SqlSubmissionLedger.decodeSubmissionSnapshot")(
-    function* (
-      operation: string,
-      row: SubmissionRow,
-    ): Effect.fn.Return<SubmissionSnapshot, LedgerError> {
-      const agentDigests = yield* parseStoredJsonText(row.agent_digests_json).pipe(
-        Effect.mapError((error) =>
-          corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            row.submission_id,
-            error.message,
-          ),
-        ),
-      );
+  const ordinaryAuthority: SqlAuthorityReader = { requireSubmission, requireOwnership };
 
-      const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
-        Effect.mapError((error) =>
-          corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            row.submission_id,
-            error.message,
-          ),
-        ),
-      );
-
-      if ((row.parent_submission_id === null) !== (row.parent_tool_call_id === null)) {
-        return yield* corruptionFailure(
-          operation,
-          "effect_agent_submissions",
-          row.submission_id,
-          "A parent linkage must record both the parent Submission and the parent Tool Call.",
-        );
-      }
-
-      return yield* decodeSubmissionSnapshotUnknown({
-        submissionId: row.submission_id,
-        threadId: row.thread_id,
-        queueSequence: row.queue_sequence,
-        principal: row.principal,
-        idempotencyKey: row.idempotency_key,
-        agentId: row.agent_id,
-        agentDigests,
-        deploymentId: row.deployment_id,
-        inputPayload,
-        inputDigest: row.input_digest,
-        receiptId: row.receipt_id,
-        state: row.state,
-        createdAt: row.created_at,
-        ...(row.admission_group === null ? {} : { admissionGroup: row.admission_group }),
-        ...(row.worker_admission_json === null
-          ? {}
-          : {
-              workerAdmission: yield* parseStoredJsonText(row.worker_admission_json).pipe(
-                Effect.mapError(internalFailure(operation)),
-              ),
-            }),
-        ...(row.message_admission_json === null
-          ? {}
-          : {
-              messageAdmission: yield* parseStoredJsonText(row.message_admission_json).pipe(
-                Effect.mapError(internalFailure(operation)),
-              ),
-            }),
-        ...(row.admission_fence_json === null
-          ? {}
-          : {
-              admissionFence: yield* parseStoredJsonText(row.admission_fence_json).pipe(
-                Effect.mapError(internalFailure(operation)),
-              ),
-            }),
-        ...(row.settled_outcome === null ? {} : { settledOutcome: row.settled_outcome }),
-        ...(row.ready_at === null ? {} : { readyAt: row.ready_at }),
-        ...(row.parent_submission_id === null || row.parent_tool_call_id === null
-          ? {}
-          : {
-              parentLinkage: {
-                parentSubmissionId: row.parent_submission_id,
-                parentToolCallId: row.parent_tool_call_id,
-              },
-            }),
-      }).pipe(
-        Effect.mapError((error) =>
-          corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            row.submission_id,
-            error.message,
-          ),
-        ),
-      );
-    },
-  );
-
-  const readReservation = Effect.fn("SqlSubmissionLedger.readReservation")(function* (
+  const decodeSubmissionSnapshot = Effect.fnUntraced(function* (
     operation: string,
-    submissionId: string,
-  ): Effect.fn.Return<Option.Option<ReservationRow>, LedgerError> {
-    const rows = yield* sql<Record<string, unknown>>`
-      SELECT
-        submission_id,
-        settlement_id,
-        outcome,
-        record_id,
-        record_json,
-        record_digest,
-        reserved_at,
-        finalized_at
-      FROM ${relation("effect_agent_settlement_reservations")}
-      WHERE submission_id = ${submissionId}
-    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+    row: SubmissionRow,
+  ): Effect.fn.Return<SubmissionSnapshot, LedgerError> {
+    const agentDigests = yield* parseStoredJsonText(row.agent_digests_json).pipe(
+      Effect.mapError((error) =>
+        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
+      ),
+    );
 
-    const decoded = yield* decodeRows(
-      Schema.Array(ReservationRow),
-      "effect_agent_settlement_reservations",
-      submissionId,
-      rows,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
+      Effect.mapError((error) =>
+        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
+      ),
+    );
 
-    if (decoded.length > 1) {
+    if ((row.parent_submission_id === null) !== (row.parent_tool_call_id === null)) {
       return yield* corruptionFailure(
         operation,
-        "effect_agent_settlement_reservations",
-        submissionId,
-        "A settlement reservation primary key returned more than one row.",
+        "effect_agent_submissions",
+        row.submission_id,
+        "A parent linkage must record both the parent Submission and the parent Tool Call.",
       );
     }
 
-    return decoded.length === 0 ? Option.none() : Option.some(decoded[0]);
+    return yield* decodeSubmissionSnapshotUnknown({
+      submissionId: row.submission_id,
+      threadId: row.thread_id,
+      queueSequence: row.queue_sequence,
+      principal: row.principal,
+      idempotencyKey: row.idempotency_key,
+      agentId: row.agent_id,
+      agentDigests,
+      deploymentId: row.deployment_id,
+      inputPayload,
+      inputDigest: row.input_digest,
+      receiptId: row.receipt_id,
+      state: row.state,
+      createdAt: row.created_at,
+      ...(row.admission_group === null ? {} : { admissionGroup: row.admission_group }),
+      ...(row.worker_admission_json === null
+        ? {}
+        : {
+            workerAdmission: yield* parseStoredJsonText(row.worker_admission_json).pipe(
+              Effect.mapError(internalFailure(operation)),
+            ),
+          }),
+      ...(row.message_admission_json === null
+        ? {}
+        : {
+            messageAdmission: yield* parseStoredJsonText(row.message_admission_json).pipe(
+              Effect.mapError(internalFailure(operation)),
+            ),
+          }),
+      ...(row.admission_fence_json === null
+        ? {}
+        : {
+            admissionFence: yield* parseStoredJsonText(row.admission_fence_json).pipe(
+              Effect.mapError(internalFailure(operation)),
+            ),
+          }),
+      ...(row.settled_outcome === null ? {} : { settledOutcome: row.settled_outcome }),
+      ...(row.ready_at === null ? {} : { readyAt: row.ready_at }),
+      ...(row.parent_submission_id === null || row.parent_tool_call_id === null
+        ? {}
+        : {
+            parentLinkage: {
+              parentSubmissionId: row.parent_submission_id,
+              parentToolCallId: row.parent_tool_call_id,
+            },
+          }),
+    }).pipe(
+      Effect.mapError((error) =>
+        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
+      ),
+    );
   });
 
-  const readAbortIntent = Effect.fn("SqlSubmissionLedger.readAbortIntent")(function* (
+  const readCanonicalSettlement = Effect.fnUntraced(function* (
+    operation: string,
+    submission: SubmissionRow,
+  ) {
+    const submissionId = yield* decodeSubmissionId(submission.submission_id).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
+
+    const receiptId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.receiptId)(
+      submission.receipt_id,
+    ).pipe(Effect.mapError(internalFailure(operation)));
+
+    const rows = yield* sql<{ readonly record_json: string }>`
+      SELECT record_json FROM ${relation("effect_agent_canonical_records")}
+      WHERE thread_id = ${submission.thread_id}
+        AND record_id = ${submissionSettlementRecordId(submissionId)}
+    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+    if (rows.length === 0) return Option.none();
+    if (rows.length !== 1)
+      return yield* corruptionFailure(
+        operation,
+        "effect_agent_canonical_records",
+        submission.submission_id,
+        "A canonical settlement identity returned multiple records.",
+      );
+
+    const record = yield* decodeRecordEnvelopeText(rows[0].record_json).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
+
+    const settlement = yield* validateCanonicalSettlement(record, { submissionId, receiptId });
+
+    return Option.some({ record, settlement });
+  });
+
+  const readAbortIntent = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<Option.Option<AbortIntentRow>, LedgerError> {
@@ -846,7 +857,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     }).pipe(Effect.mapError(rowFailure));
   });
 
-  const readApprovalDecisions = Effect.fn("SqlSubmissionLedger.readApprovalDecisions")(function* (
+  const readApprovalDecisions = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<ReadonlyArray<ApprovalDecisionRow>, LedgerError> {
@@ -894,7 +905,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     );
   });
 
-  const readUnknownResolutions = Effect.fn("SqlSubmissionLedger.readUnknownResolutions")(function* (
+  const readUnknownResolutions = Effect.fnUntraced(function* (
     operation: string,
     submissionId: string,
   ): Effect.fn.Return<ReadonlyArray<UnknownResolutionRow>, LedgerError> {
@@ -1671,9 +1682,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     },
   );
 
-  const renewOwnership: SubmissionLedger["Service"]["renewOwnership"] = Effect.fn(
-    "SqlSubmissionLedger.renewOwnership",
-  )(function* (request: RenewOwnershipRequest) {
+  const renewOwnershipKernel = Effect.fn("SqlSubmissionLedger.renewOwnership")(function* (
+    request: RenewOwnershipRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger renew ownership";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(RenewOwnershipRequest))(
@@ -1685,9 +1697,9 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     const renewal = yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+        const submission = yield* authority.requireSubmission(operation, validated.submissionId);
 
-        yield* requireOwnership(operation, submission, validated.ownershipToken);
+        yield* authority.requireOwnership(operation, submission, validated.ownershipToken);
         const now = yield* currentInstant;
         const leaseExpiresAt = new Date(now.millis + config.ownershipLeaseDuration).toISOString();
 
@@ -1709,9 +1721,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return renewal;
   });
 
-  const releaseOwnership: SubmissionLedger["Service"]["releaseOwnership"] = Effect.fn(
-    "SqlSubmissionLedger.releaseOwnership",
-  )(function* (request: ReleaseOwnershipRequest) {
+  const releaseOwnershipKernel = Effect.fn("SqlSubmissionLedger.releaseOwnership")(function* (
+    request: ReleaseOwnershipRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger release ownership";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(ReleaseOwnershipRequest))(
@@ -1722,9 +1735,9 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+        const submission = yield* authority.requireSubmission(operation, validated.submissionId);
 
-        yield* requireOwnership(operation, submission, validated.ownershipToken);
+        yield* authority.requireOwnership(operation, submission, validated.ownershipToken);
         yield* sql`
           DELETE FROM ${relation("effect_agent_submission_ownership")}
           WHERE submission_id = ${validated.submissionId}
@@ -1741,9 +1754,56 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     yield* hitFailpoint("ledger:release:after", operation);
   });
 
-  const markInputApplied: SubmissionLedger["Service"]["markInputApplied"] = Effect.fn(
-    "SqlSubmissionLedger.markInputApplied",
-  )(function* (request: MarkInputAppliedRequest) {
+  const markInputAppliedInTransaction = Effect.fnUntraced(function* (
+    validated: MarkInputAppliedRequest,
+    authority: SqlAuthorityReader,
+  ): Effect.fn.Return<SubmissionRow, OwnershipLost | LedgerError> {
+    const operation = "ledger mark input applied";
+    const submission = yield* authority.requireSubmission(operation, validated.submissionId);
+
+    yield* authority.requireOwnership(operation, submission, validated.ownershipToken);
+    if (submission.input_applied_record_id !== null) {
+      if (
+        submission.input_applied_record_id === validated.recordId &&
+        submission.input_applied_sequence === validated.sequence
+      ) {
+        return submission;
+      }
+
+      return yield* corruptionFailure(
+        operation,
+        "effect_agent_submissions",
+        validated.submissionId,
+        "A different canonical input marker is already recorded for this Submission.",
+      );
+    }
+    yield* sql`
+      UPDATE ${relation("effect_agent_submissions")}
+      SET
+        input_applied_record_id = ${validated.recordId},
+        input_applied_sequence = ${validated.sequence},
+        state = CASE
+          WHEN state IN ('admitted', 'ready', 'running') THEN 'input-applied'
+          ELSE state
+        END
+      WHERE submission_id = ${validated.submissionId}
+    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+    return SubmissionRow.make({
+      ...submission,
+      input_applied_record_id: validated.recordId,
+      input_applied_sequence: validated.sequence,
+      state: ["admitted", "ready", "running"].includes(submission.state)
+        ? "input-applied"
+        : submission.state,
+    });
+  });
+
+  const markInputAppliedKernel = Effect.fn("SqlSubmissionLedger.markInputApplied")(function* (
+    request: MarkInputAppliedRequest,
+    authority: SqlAuthorityReader,
+    cached = false,
+  ) {
     const operation = "ledger mark input applied";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(MarkInputAppliedRequest))(
@@ -1751,252 +1811,359 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     ).pipe(Effect.mapError(internalFailure(operation)));
 
     yield* hitFailpoint("ledger:mark-input-applied:before", operation);
-    yield* inWriteTransaction(
-      operation,
-      Effect.gen(function* () {
-        const submission = yield* requireSubmission(operation, validated.submissionId);
+    const mutation = markInputAppliedInTransaction(validated, authority);
 
-        yield* requireOwnership(operation, submission, validated.ownershipToken);
-        if (submission.input_applied_record_id !== null) {
-          if (
-            submission.input_applied_record_id === validated.recordId &&
-            submission.input_applied_sequence === validated.sequence
-          ) {
-            return;
-          }
-
-          return yield* corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            validated.submissionId,
-            "A different canonical input marker is already recorded for this Submission.",
-          );
-        }
-        yield* sql`
-          UPDATE ${relation("effect_agent_submissions")}
-          SET
-            input_applied_record_id = ${validated.recordId},
-            input_applied_sequence = ${validated.sequence},
-            state = CASE
-              WHEN state IN ('admitted', 'ready', 'running') THEN 'input-applied'
-              ELSE state
-            END
-          WHERE submission_id = ${validated.submissionId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-      }),
-    );
+    // Only the exclusive Run owner can prove this replay without acquiring a writer.
+    if (
+      cached &&
+      (yield* authority.requireSubmission(operation, validated.submissionId))
+        .input_applied_record_id !== null
+    )
+      yield* mutation;
+    else yield* inWriteTransaction(operation, mutation);
     yield* hitFailpoint("ledger:mark-input-applied:after", operation);
   });
 
-  const reserveSettlement: SubmissionLedger["Service"]["reserveSettlement"] = Effect.fn(
-    "SqlSubmissionLedger.reserveSettlement",
-  )(function* (request: SettlementReservation) {
-    const operation = "ledger reserve settlement";
+  const publishWithState = Effect.fn("SqlSubmissionLedger.publishSettlement")(function* (
+    input: SettlementPublication,
+  ) {
+    const operation = "publish settlement";
+    const { request, record, settlement } = yield* validatePublication(input);
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SettlementReservation))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
-
-    const recordJson = yield* encodeRecordEnvelopeText(validated.record).pipe(
-      Effect.mapError(internalFailure(operation)),
+    const prepared = yield* prepareSqlAppend(request.append).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
     );
 
-    yield* hitFailpoint("ledger:reserve-settlement:before", operation);
+    yield* hitFailpoint("append:before", operation);
 
-    const reserved = yield* inWriteTransaction(
+    const published = yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const existing = yield* readReservation(operation, validated.submissionId);
+        const submission = yield* requireSubmission(operation, request.submissionId);
+
+        if (submission.thread_id !== request.append.threadId)
+          return yield* LedgerError.make({
+            operation,
+            message: "Settlement Thread disagrees with its admitted Submission.",
+          });
+
+        const receiptId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.receiptId)(
+          submission.receipt_id,
+        ).pipe(Effect.mapError(internalFailure(operation)));
+
+        yield* validateCanonicalSettlement(record, {
+          submissionId: request.submissionId,
+          receiptId,
+        });
+        const existing = yield* readCanonicalSettlement(operation, submission);
+
+        // Replay still requires authority: finalization releases Owned tokens, while
+        // retained host linkage or abort intent can authorize tokenless settled replay.
+        switch (request.authority._tag) {
+          case "Owned": {
+            yield* requireOwnership(operation, submission, request.authority.ownershipToken);
+            yield* validateCanonicalSettlement(record, {
+              submissionId: request.submissionId,
+              receiptId,
+              ...(settlement.outcome === "aborted" && settlement.runId === undefined
+                ? {}
+                : { runId: runIdForSubmission(request.submissionId) }),
+            });
+            break;
+          }
+          case "Joined": {
+            if (
+              (submission.state !== "joined" &&
+                !(submission.state === "settled" && Option.isSome(existing))) ||
+              submission.joined_host_submission_id !== request.authority.hostSubmissionId
+            )
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined settlement requires the current host linkage.",
+              });
+            const host = yield* requireSubmission(operation, request.authority.hostSubmissionId);
+
+            if (host.thread_id !== submission.thread_id)
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined host belongs to another Thread.",
+              });
+            const canonicalHost = yield* readCanonicalSettlement(operation, host);
+
+            if (Option.isNone(canonicalHost))
+              return yield* LedgerError.make({
+                operation,
+                message: "Joined settlement requires the canonical host settlement.",
+              });
+            yield* validateJoinedSettlement(settlement, canonicalHost.value.settlement);
+            break;
+          }
+          case "QueuedAbort": {
+            if (
+              (submission.state !== "ready" &&
+                !(submission.state === "settled" && Option.isSome(existing))) ||
+              settlement.outcome !== "aborted" ||
+              Option.isNone(yield* readAbortIntent(operation, request.submissionId)) ||
+              Option.isSome(yield* readOwnership(operation, request.submissionId))
+            )
+              return yield* LedgerError.make({
+                operation,
+                message: "Queued abort requires ready, unowned work with a durable abort intent.",
+              });
+            yield* validateCanonicalSettlement(record, {
+              submissionId: request.submissionId,
+              receiptId,
+              runId: undefined,
+            });
+            break;
+          }
+        }
 
         if (Option.isSome(existing)) {
-          const identical =
-            existing.value.settlement_id === validated.settlementId &&
-            existing.value.outcome === validated.outcome &&
-            existing.value.record_digest === validated.recordDigest &&
-            existing.value.record_json === recordJson;
+          const threads = yield* journal
+            .getThread(request.append.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)));
 
-          if (!identical) {
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: existing.value.outcome,
+          if (threads.length !== 1)
+            return yield* LedgerError.make({
+              operation,
+              message: "Canonical settlement has no current Thread.",
             });
-          }
 
-          const record = yield* decodeRecordEnvelopeText(existing.value.record_json).pipe(
-            Effect.mapError((error) =>
-              corruptionFailure(
-                operation,
-                "effect_agent_settlement_reservations",
-                validated.submissionId,
-                error.message,
+          return {
+            ...(yield* finalizePublication(request, submission, existing.value)),
+            publication: SettlementPublicationResult.make({
+              record: existing.value.record,
+              tailSequence: threads[0].tail_sequence,
+              tailDigest: yield* Schema.decodeEffect(Digest)(threads[0].tail_digest).pipe(
+                Effect.mapError(internalFailure(operation)),
               ),
+              replayed: true,
+            }),
+          };
+        }
+        if (submission.state === "settled")
+          return yield* LedgerError.make({
+            operation,
+            message: "A finalized Submission has no canonical settlement.",
+          });
+
+        const appended = yield* journal
+          .appendInTransaction(prepared)
+          .pipe(
+            Effect.mapError((error) =>
+              Schema.is(AppendConflict)(error) || Schema.is(FenceRejected)(error)
+                ? error
+                : internalFailure(operation)(error),
             ),
           );
 
-          return ReservedSettlement.make({
-            submissionId: validated.submissionId,
-            settlementId: validated.settlementId,
-            outcome: validated.outcome,
+        return {
+          ...(yield* finalizePublication(request, submission, { record, settlement })),
+          publication: SettlementPublicationResult.make({
             record,
-            recordDigest: validated.recordDigest,
-            replayed: true,
-          });
-        }
-
-        const submission = yield* requireSubmission(operation, validated.submissionId);
-
-        if (submission.state === "settled") {
-          if (submission.settled_outcome === null) {
-            return yield* corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              validated.submissionId,
-              "A settled Submission carries no terminal outcome.",
-            );
-          }
-
-          return yield* SettlementConflict.make({
-            submissionId: validated.submissionId,
-            existingOutcome: submission.settled_outcome,
-          });
-        }
-        // A `joined` Submission settles WITH its host (plan §2.5) and its lane is never
-        // worker-claimable, so no ownership token can exist for it: the recorded host linkage
-        // authorizes the reservation and the presented token is not consulted.
-        if (!(submission.state === "joined" && submission.joined_host_submission_id !== null)) {
-          // P7 §7(c): an aborted, never-claimed, still-queued Submission likewise has no live
-          // ownership to fence against — its durable abort intent authorizes exactly its
-          // ABORTED settlement (`terminalizing` is the same pass's crash replay). Every other
-          // reservation stays fenced by the target lane's live ownership.
-          let queuedAbortSettlement = false;
-
-          if (
-            validated.outcome === "aborted" &&
-            (submission.state === "ready" || submission.state === "terminalizing")
-          ) {
-            const abortIntent = yield* readAbortIntent(operation, validated.submissionId);
-
-            if (Option.isSome(abortIntent)) {
-              const ownership = yield* readOwnership(operation, validated.submissionId);
-
-              queuedAbortSettlement = Option.isNone(ownership);
-            }
-          }
-          if (!queuedAbortSettlement) {
-            yield* requireOwnership(operation, submission, validated.ownershipToken);
-          }
-        }
-        const now = yield* currentInstant;
-
-        yield* sql`
-          INSERT INTO ${relation("effect_agent_settlement_reservations")} (
-            submission_id,
-            settlement_id,
-            outcome,
-            record_id,
-            record_json,
-            record_digest,
-            reserved_at
-          ) VALUES (
-            ${validated.submissionId},
-            ${validated.settlementId},
-            ${validated.outcome},
-            ${validated.record.recordId},
-            ${recordJson},
-            ${validated.recordDigest},
-            ${now.iso}
-          )
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        yield* sql`
-          UPDATE ${relation("effect_agent_submissions")}
-          SET state = 'terminalizing'
-          WHERE submission_id = ${validated.submissionId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-
-        return ReservedSettlement.make({
-          submissionId: validated.submissionId,
-          settlementId: validated.settlementId,
-          outcome: validated.outcome,
-          record: validated.record,
-          recordDigest: validated.recordDigest,
-          replayed: false,
-        });
+            tailSequence: appended.lastSequence,
+            tailDigest: yield* Schema.decodeEffect(Digest)(appended.tailDigest).pipe(
+              Effect.mapError(internalFailure(operation)),
+            ),
+            replayed: appended.replayed,
+          }),
+        };
       }),
     );
 
-    yield* hitFailpoint("ledger:reserve-settlement:after", operation);
+    yield* hitFailpoint("append:after", operation);
+    if (published.finalized)
+      yield* hitFailpoint("ledger:finalize-settlement:after", "ledger finalize settlement");
 
-    return reserved;
+    return published;
   });
 
-  const validateFinalization = Effect.fn("SqlSubmissionLedger.validateFinalization")(function* (
-    validated: SettlementFinalization,
-    reservation: Option.Option<ReservationRow>,
-  ) {
-    const operation = "ledger finalize settlement";
-
-    if (Option.isNone(reservation)) {
-      return yield* LedgerError.make({
-        operation,
-        message: `No settlement reservation exists for submission ${validated.submissionId}.`,
-      });
-    }
-    if (reservation.value.settlement_id !== validated.settlementId) {
-      return yield* SettlementConflict.make({
-        submissionId: validated.submissionId,
-        existingOutcome: reservation.value.outcome,
-      });
-    }
-
-    const reservationRecord = yield* decodeRecordEnvelopeText(reservation.value.record_json).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(
-          operation,
-          "effect_agent_settlement_reservations",
-          validated.submissionId,
-          error.message,
-        ),
-      ),
-    );
-
-    const settlementFailure = settlementFailureFromRecord(reservationRecord);
-
-    if ((reservation.value.outcome === "failed") !== (settlementFailure !== undefined)) {
-      return yield* corruptionFailure(
-        operation,
-        "effect_agent_settlement_reservations",
-        validated.submissionId,
-        "The reserved outcome and canonical failure diagnostic disagree.",
-      );
-    }
-
-    return { reservation: reservation.value, reservationRecord, settlementFailure };
+  const publisher = SettlementPublisher.of({
+    publish: (input) => publishWithState(input).pipe(Effect.map((result) => result.publication)),
   });
 
-  const replayFinalization = Effect.fn("SqlSubmissionLedger.replayFinalization")(function* (
+  const validateFinalization = Effect.fnUntraced(function* (
     validated: SettlementFinalization,
     submission: SubmissionRow,
-    { reservation, settlementFailure }: Effect.Success<ReturnType<typeof validateFinalization>>,
+  ) {
+    const operation = "ledger finalize settlement";
+    const canonical = yield* readCanonicalSettlement(operation, submission);
+
+    if (Option.isNone(canonical))
+      return yield* LedgerError.make({
+        operation,
+        message: `No canonical settlement exists for submission ${validated.submissionId}.`,
+      });
+    const { record, settlement } = canonical.value;
+
+    if (settlement.settlementId !== validated.settlementId)
+      return yield* SettlementConflict.make({
+        submissionId: validated.submissionId,
+        existingOutcome: settlement.outcome,
+      });
+
+    return { record, settlement, settlementFailure: settlementFailureFromRecord(record) };
+  });
+
+  const replayFinalization = Effect.fnUntraced(function* (
+    validated: SettlementFinalization,
+    submission: SubmissionRow,
+    {
+      record,
+      settlement,
+      settlementFailure,
+    }: Effect.Success<ReturnType<typeof validateFinalization>>,
   ) {
     const operation = "ledger finalize settlement";
 
-    if (reservation.finalized_at === null) {
+    if (
+      submission.finalized_at === null ||
+      submission.settled_record_id !== record.recordId ||
+      submission.settled_outcome !== settlement.outcome
+    )
       return yield* corruptionFailure(
         operation,
-        "effect_agent_settlement_reservations",
+        "effect_agent_submissions",
         validated.submissionId,
-        "A settled Submission's reservation carries no finalization timestamp.",
+        "Finalized Submission disagrees with its canonical settlement or lacks a finalization timestamp.",
       );
-    }
 
     return yield* decodeSettlement({
       submissionId: validated.submissionId,
       settlementId: validated.settlementId,
       receiptId: submission.receipt_id,
-      outcome: reservation.outcome,
+      outcome: settlement.outcome,
       ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
-      settledAt: reservation.finalized_at,
+      settledAt: submission.finalized_at,
     }).pipe(Effect.mapError(internalFailure(operation)));
+  });
+
+  /** Caller holds the journal writer; notifications remain outside this transaction. */
+  const finalizeInTransaction = Effect.fnUntraced(function* (
+    validated: SettlementFinalization,
+    submission: SubmissionRow,
+    state: Effect.Success<ReturnType<typeof validateFinalization>>,
+  ) {
+    const operation = "ledger finalize settlement";
+    const { settlement, record, settlementFailure } = state;
+
+    if (submission.state === "settled")
+      return {
+        settlement: yield* replayFinalization(validated, submission, state),
+        submission,
+      };
+    const now = yield* currentInstant;
+
+    const terminal =
+      submission.worker_admission_json === null
+        ? undefined
+        : workerTerminalFromRecord(yield* decodeSubmissionSnapshot(operation, submission), record);
+
+    let sealedTerminal: typeof terminal;
+
+    if (terminal !== undefined) {
+      // Admission and finalization serialize here. An accepted correction that this Run
+      // has not applied vetoes its completion, including admission after RunCompleted.
+      const pending =
+        terminal === "completed"
+          ? yield* sql`SELECT submission_id FROM ${relation("effect_agent_submissions")}
+            WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
+            AND queue_sequence = (SELECT MAX(queue_sequence) FROM ${relation("effect_agent_submissions")} WHERE thread_id = ${submission.thread_id})
+            AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+              OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
+              execute,
+              Effect.mapError(sqlFailure(operation)),
+            )
+          : [];
+
+      if (pending.length === 0) {
+        const sealed =
+          yield* sql`INSERT INTO ${relation("effect_agent_worker_stops")} (thread_id, terminal)
+          VALUES (${submission.thread_id}, ${terminal}) ON CONFLICT DO NOTHING RETURNING thread_id`.pipe(
+            execute,
+            Effect.mapError(sqlFailure(operation)),
+          );
+
+        yield* sql`INSERT INTO ${relation("effect_agent_abort_intents")} (submission_id, author, reason, requested_at)
+          SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
+          FROM ${relation("effect_agent_submissions")} WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
+          AND submission_id <> ${submission.submission_id}
+          AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+            OR input_applied_record_id IS NULL) ON CONFLICT DO NOTHING`.pipe(
+          execute,
+          Effect.mapError(sqlFailure(operation)),
+        );
+        if (sealed.length > 0) sealedTerminal = terminal;
+      }
+    }
+
+    yield* sql`
+      UPDATE ${relation("effect_agent_submissions")}
+      SET state = 'settled', settled_outcome = ${settlement.outcome},
+        settled_record_id = ${record.recordId}, finalized_at = ${now.iso}
+      WHERE submission_id = ${validated.submissionId}
+    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+    yield* sql`
+      DELETE FROM ${relation("effect_agent_submission_ownership")}
+      WHERE submission_id = ${validated.submissionId}
+    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+    if (sealedTerminal !== undefined) yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
+
+    const finalized = yield* decodeSettlement({
+      submissionId: validated.submissionId,
+      settlementId: validated.settlementId,
+      receiptId: submission.receipt_id,
+      outcome: settlement.outcome,
+      ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
+      settledAt: now.iso,
+    }).pipe(Effect.mapError(internalFailure(operation)));
+
+    return {
+      settlement: finalized,
+      submission: SubmissionRow.make({
+        ...submission,
+        state: "settled",
+        settled_outcome: settlement.outcome,
+        settled_record_id: record.recordId,
+        finalized_at: now.iso,
+      }),
+    };
+  });
+
+  const finalizePublication = Effect.fnUntraced(function* (
+    request: SettlementPublication,
+    submission: SubmissionRow,
+    canonical: Pick<
+      Effect.Success<ReturnType<typeof validateFinalization>>,
+      "record" | "settlement"
+    >,
+  ) {
+    // Settled rows leave recovery scans. Keep every external notification/delivery obligation
+    // discoverable until the runtime has completed it before its separate finalization call.
+    if (
+      request.authority._tag === "Joined" ||
+      submission.joined_host_submission_id !== null ||
+      submission.parent_submission_id !== null ||
+      submission.parent_tool_call_id !== null ||
+      submission.worker_admission_json !== null ||
+      submission.message_admission_json !== null
+    )
+      return { submission, finalized: false };
+
+    yield* hitFailpoint("ledger:finalize-settlement:before", "ledger finalize settlement");
+
+    const finalized = yield* finalizeInTransaction(
+      SettlementFinalization.make({
+        submissionId: request.submissionId,
+        settlementId: canonical.settlement.settlementId,
+      }),
+      submission,
+      { ...canonical, settlementFailure: settlementFailureFromRecord(canonical.record) },
+    );
+
+    return { submission: finalized.submission, finalized: true };
   });
 
   const finalizeSettlement: SubmissionLedger["Service"]["finalizeSettlement"] = Effect.fn(
@@ -2010,143 +2177,25 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
 
     yield* hitFailpoint("ledger:finalize-settlement:before", operation);
 
-    // A single statement captures the settled row and its immutable reservation together.
-    // A miss does not authorize finalization: the write path re-reads under its transaction.
-    const replayRows = yield* sql<Record<string, unknown>>`
-      SELECT submission.*, reservation.settlement_id, reservation.outcome,
-        reservation.record_id, reservation.record_json, reservation.record_digest,
-        reservation.reserved_at, reservation.finalized_at
-      FROM ${relation("effect_agent_submissions")} AS submission
-      INNER JOIN ${relation("effect_agent_settlement_reservations")} AS reservation
-        ON reservation.submission_id = submission.submission_id
-      WHERE submission.submission_id = ${validated.submissionId} AND submission.state = 'settled'
-    `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+    const replay = yield* readSubmission(operation, validated.submissionId);
 
-    if (replayRows.length > 1) {
-      return yield* corruptionFailure(
-        operation,
-        "effect_agent_submissions",
-        validated.submissionId,
-        "A submission primary key returned more than one row.",
-      );
-    }
-    const replayRow = replayRows[0];
-
-    if (replayRow !== undefined) {
-      const reservations = yield* decodeRows(
-        Schema.Array(ReservationRow),
-        "effect_agent_settlement_reservations",
-        validated.submissionId,
-        replayRows,
-      ).pipe(Effect.mapError(internalFailure(operation)));
-
-      const state = yield* validateFinalization(validated, Option.fromUndefinedOr(reservations[0]));
-
-      const submission = yield* Schema.decodeUnknownEffect(SubmissionRow)(replayRow).pipe(
-        Effect.mapError((error) =>
-          corruptionFailure(
-            operation,
-            "effect_agent_submissions",
-            validated.submissionId,
-            error.message,
-          ),
-        ),
-      );
-
-      const settlement = yield* replayFinalization(validated, submission, state);
+    if (Option.isSome(replay) && replay.value.state === "settled") {
+      const state = yield* validateFinalization(validated, replay.value);
+      const settled = yield* replayFinalization(validated, replay.value, state);
 
       yield* hitFailpoint("ledger:finalize-settlement:after", operation);
 
-      return settlement;
+      return settled;
     }
 
     const settlement = yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const state = yield* validateFinalization(
-          validated,
-          yield* readReservation(operation, validated.submissionId),
-        );
-
-        const { reservation, reservationRecord, settlementFailure } = state;
         const submission = yield* requireSubmission(operation, validated.submissionId);
+        const state = yield* validateFinalization(validated, submission);
+        const finalized = yield* finalizeInTransaction(validated, submission, state);
 
-        if (submission.state === "settled")
-          return yield* replayFinalization(validated, submission, state);
-        const now = yield* currentInstant;
-
-        const terminal =
-          submission.worker_admission_json === null
-            ? undefined
-            : workerTerminalFromRecord(
-                yield* decodeSubmissionSnapshot(operation, submission),
-                reservationRecord,
-              );
-
-        let sealedTerminal: typeof terminal;
-
-        if (terminal !== undefined) {
-          // Admission and finalization serialize here. An accepted correction that this Run
-          // has not applied vetoes its completion, including admission after RunCompleted.
-          const pending =
-            terminal === "completed"
-              ? yield* sql`SELECT submission_id FROM ${relation("effect_agent_submissions")}
-                WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
-                AND queue_sequence = (SELECT MAX(queue_sequence) FROM ${relation("effect_agent_submissions")} WHERE thread_id = ${submission.thread_id})
-                AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
-                  OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
-                  execute,
-                  Effect.mapError(sqlFailure(operation)),
-                )
-              : [];
-
-          if (pending.length === 0) {
-            const sealed =
-              yield* sql`INSERT INTO ${relation("effect_agent_worker_stops")} (thread_id, terminal)
-              VALUES (${submission.thread_id}, ${terminal}) ON CONFLICT DO NOTHING RETURNING thread_id`.pipe(
-                execute,
-                Effect.mapError(sqlFailure(operation)),
-              );
-
-            yield* sql`INSERT INTO ${relation("effect_agent_abort_intents")} (submission_id, author, reason, requested_at)
-              SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
-              FROM ${relation("effect_agent_submissions")} WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
-              AND submission_id <> ${submission.submission_id}
-              AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
-                OR input_applied_record_id IS NULL) ON CONFLICT DO NOTHING`.pipe(
-              execute,
-              Effect.mapError(sqlFailure(operation)),
-            );
-            if (sealed.length > 0) sealedTerminal = terminal;
-          }
-        }
-
-        yield* sql`
-          UPDATE ${relation("effect_agent_submissions")}
-          SET state = 'settled', settled_outcome = ${reservation.outcome}
-          WHERE submission_id = ${validated.submissionId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        yield* sql`
-          UPDATE ${relation("effect_agent_settlement_reservations")}
-          SET finalized_at = ${now.iso}
-          WHERE submission_id = ${validated.submissionId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-        yield* sql`
-          DELETE FROM ${relation("effect_agent_submission_ownership")}
-          WHERE submission_id = ${validated.submissionId}
-        `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-
-        if (sealedTerminal !== undefined)
-          yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
-
-        return yield* decodeSettlement({
-          submissionId: validated.submissionId,
-          settlementId: validated.settlementId,
-          receiptId: submission.receipt_id,
-          outcome: reservation.outcome,
-          ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
-          settledAt: now.iso,
-        }).pipe(Effect.mapError(internalFailure(operation)));
+        return finalized.settlement;
       }),
     );
 
@@ -2351,9 +2400,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return intent;
   });
 
-  const claimJoining: SubmissionLedger["Service"]["claimJoining"] = Effect.fn(
-    "SqlSubmissionLedger.claimJoining",
-  )(function* (request: ClaimJoiningRequest) {
+  const claimJoiningKernel = Effect.fn("SqlSubmissionLedger.claimJoining")(function* (
+    request: ClaimJoiningRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger claim joining";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(ClaimJoiningRequest))(request).pipe(
@@ -2365,7 +2415,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     const claims = yield* inWriteTransaction(
       operation,
       Effect.gen(function* () {
-        const host = yield* requireSubmission(operation, validated.hostSubmissionId);
+        const host = yield* authority.requireSubmission(operation, validated.hostSubmissionId);
 
         if (host.thread_id !== validated.threadId) {
           return yield* LedgerError.make({
@@ -2374,7 +2424,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
           });
         }
         // The host Attempt already owns the lane; no epoch bump happens here (plan §2.5).
-        yield* requireOwnership(operation, host, validated.ownershipToken);
+        yield* authority.requireOwnership(operation, host, validated.ownershipToken);
 
         const stopped =
           yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id = ${validated.threadId}`.pipe(
@@ -2412,6 +2462,12 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
           // Any other non-ready row — an admitted-not-ready gap in particular — breaks the
           // contiguous ready prefix (plan §2.5); later ready work stays queued (DUR-004).
           if (row.state !== "ready") break;
+          const terminal = yield* readCanonicalSettlement(operation, row);
+
+          if (Option.isSome(terminal)) {
+            if (terminal.value.settlement.outcome === "aborted") continue;
+            break;
+          }
           yield* sql`
             UPDATE ${relation("effect_agent_submissions")}
             SET state = 'joining', joined_host_submission_id = ${validated.hostSubmissionId}
@@ -2447,9 +2503,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return claims;
   });
 
-  const markJoined: SubmissionLedger["Service"]["markJoined"] = Effect.fn(
-    "SqlSubmissionLedger.markJoined",
-  )(function* (request: MarkJoinedRequest) {
+  const markJoinedKernel = Effect.fn("SqlSubmissionLedger.markJoined")(function* (
+    request: MarkJoinedRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger mark joined";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(MarkJoinedRequest))(request).pipe(
@@ -2468,11 +2525,15 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             message: `Submission ${validated.submissionId} was never claimed for joining.`,
           });
         }
-        const host = yield* requireSubmission(operation, submission.joined_host_submission_id);
+
+        const host = yield* authority.requireSubmission(
+          operation,
+          submission.joined_host_submission_id,
+        );
 
         // The lane is host-owned: the presented token must own the HOST's ownership period,
         // which also lets a later host Attempt repair a lost marker from history (DUR-016).
-        yield* requireOwnership(operation, host, validated.ownershipToken);
+        yield* authority.requireOwnership(operation, host, validated.ownershipToken);
         if (submission.input_applied_record_id !== null) {
           if (
             submission.input_applied_record_id === validated.recordId &&
@@ -2507,9 +2568,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     yield* hitFailpoint("ledger:mark-joined:after", operation);
   });
 
-  const revertJoining: SubmissionLedger["Service"]["revertJoining"] = Effect.fn(
-    "SqlSubmissionLedger.revertJoining",
-  )(function* (request: RevertJoiningRequest) {
+  const revertJoiningKernel = Effect.fn("SqlSubmissionLedger.revertJoining")(function* (
+    request: RevertJoiningRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger revert joining";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(RevertJoiningRequest))(request).pipe(
@@ -2525,6 +2587,39 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
         // Idempotent and recovery-only: only a still-`joining` Submission reverts; an
         // already-joined (or already-reverted) Submission is a no-op (DUR-016).
         if (submission.state !== "joining") return;
+        const guard = validated.guard;
+
+        if (guard !== undefined) {
+          if (submission.joined_host_submission_id !== guard.hostSubmissionId) return;
+          const host = yield* authority.requireSubmission(operation, guard.hostSubmissionId);
+
+          if (host.thread_id !== submission.thread_id) {
+            return yield* corruptionFailure(
+              operation,
+              "effect_agent_submissions",
+              validated.submissionId,
+              "Linked host belongs to another Thread.",
+            );
+          }
+          if (guard.ownershipToken === undefined) {
+            if (host.state !== "settled") {
+              return yield* LedgerError.make({
+                operation,
+                message: "Tokenless cleanup requires a settled host.",
+              });
+            }
+          } else {
+            yield* authority.requireOwnership(operation, host, guard.ownershipToken).pipe(
+              Effect.catchTag("OwnershipLost", (cause) =>
+                LedgerError.make({
+                  operation,
+                  message: "Host ownership changed before reverting the joining Submission.",
+                  cause,
+                }),
+              ),
+            );
+          }
+        }
         yield* sql`
           UPDATE ${relation("effect_agent_submissions")}
           SET state = 'ready', joined_host_submission_id = NULL
@@ -2535,79 +2630,83 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     yield* hitFailpoint("ledger:revert-joining:after", operation);
   });
 
-  const suspend: SubmissionLedger["Service"]["suspend"] = Effect.fn("SqlSubmissionLedger.suspend")(
-    function* (request: SuspendRequest) {
-      const operation = "ledger suspend";
+  const suspendKernel = Effect.fn("SqlSubmissionLedger.suspend")(function* (
+    request: SuspendRequest,
+    authority: SqlAuthorityReader,
+  ) {
+    const operation = "ledger suspend";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(SuspendRequest))(request).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
+    const validated = yield* Schema.decodeEffect(Schema.toType(SuspendRequest))(request).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
-      const reasonJson = yield* encodeSuspensionReasonText(validated.reason).pipe(
-        Effect.mapError(internalFailure(operation)),
-      );
+    const reasonJson = yield* encodeSuspensionReasonText(validated.reason).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
-      yield* hitFailpoint("ledger:suspend:before", operation);
+    yield* hitFailpoint("ledger:suspend:before", operation);
 
-      const outcome = yield* inWriteTransaction(
-        operation,
-        Effect.gen(function* () {
-          const submission = yield* requireSubmission(operation, validated.submissionId);
+    const outcome = yield* inWriteTransaction(
+      operation,
+      Effect.gen(function* () {
+        const submission = yield* authority.requireSubmission(operation, validated.submissionId);
 
-          if (submission.state === "settled") {
-            if (submission.settled_outcome === null) {
-              return yield* corruptionFailure(
-                operation,
-                "effect_agent_submissions",
-                validated.submissionId,
-                "A settled Submission carries no terminal outcome.",
-              );
-            }
-
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: submission.settled_outcome,
-            });
+        if (submission.state === "settled") {
+          if (submission.settled_outcome === null) {
+            return yield* corruptionFailure(
+              operation,
+              "effect_agent_submissions",
+              validated.submissionId,
+              "A settled Submission carries no terminal outcome.",
+            );
           }
-          // An exact terminal outcome is already reserved (DUR-011); suspension would
-          // contradict it, so the reservation wins.
-          const reservation = yield* readReservation(operation, validated.submissionId);
 
-          if (Option.isSome(reservation)) {
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: reservation.value.outcome,
-            });
+          return yield* SettlementConflict.make({
+            submissionId: validated.submissionId,
+            existingOutcome: submission.settled_outcome,
+          });
+        }
+        // Canonical terminal intent wins over a late suspension.
+        const reservation = yield* readCanonicalSettlement(operation, submission);
+
+        if (Option.isSome(reservation)) {
+          return yield* SettlementConflict.make({
+            submissionId: validated.submissionId,
+            existingOutcome: reservation.value.settlement.outcome,
+          });
+        }
+        yield* authority.requireOwnership(operation, submission, validated.ownershipToken);
+        // A covering event that raced ahead of the suspend transaction (an approval decision,
+        // or a child settlement observed directly from the child's row in this single-store
+        // file) resumes the caller immediately WITHOUT releasing the lane (plan §2.6, §12).
+        if (validated.reason._tag === "ApprovalPending") {
+          const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
+          const decided = new Set(decisions.map((row) => row.tool_call_id));
+
+          if (validated.reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) {
+            return RESUME_IMMEDIATELY;
           }
-          yield* requireOwnership(operation, submission, validated.ownershipToken);
-          // A covering event that raced ahead of the suspend transaction (an approval decision,
-          // or a child settlement observed directly from the child's row in this single-store
-          // file) resumes the caller immediately WITHOUT releasing the lane (plan §2.6, §12).
-          if (validated.reason._tag === "ApprovalPending") {
-            const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
-            const decided = new Set(decisions.map((row) => row.tool_call_id));
+        } else {
+          let allSettled = true;
 
-            if (validated.reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) {
-              return RESUME_IMMEDIATELY;
-            }
-          } else {
-            let allSettled = true;
+          for (const child of validated.reason.children) {
+            const childRow = yield* readSubmission(operation, child.childSubmissionId);
 
-            for (const child of validated.reason.children) {
-              const childRow = yield* readSubmission(operation, child.childSubmissionId);
-
-              if (Option.isNone(childRow) || childRow.value.state !== "settled") {
-                allSettled = false;
-                break;
-              }
-            }
-            if (allSettled) {
-              return RESUME_IMMEDIATELY;
+            if (
+              Option.isNone(childRow) ||
+              Option.isNone(yield* readCanonicalSettlement(operation, childRow.value))
+            ) {
+              allSettled = false;
+              break;
             }
           }
-          const now = yield* currentInstant;
+          if (allSettled) {
+            return RESUME_IMMEDIATELY;
+          }
+        }
+        const now = yield* currentInstant;
 
-          yield* sql`
+        yield* sql`
           UPDATE ${relation("effect_agent_submissions")}
           SET
             state = 'suspended',
@@ -2615,28 +2714,27 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             suspended_at = ${now.iso}
           WHERE submission_id = ${validated.submissionId}
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-          // Suspension ends the ownership period WITHOUT settling: the accepted-work
-          // obligation stays owed while the lane consumes no worker permit (plan §2.6).
-          yield* sql`
+        // Suspension ends the ownership period WITHOUT settling: the accepted-work
+        // obligation stays owed while the lane consumes no worker permit (plan §2.6).
+        yield* sql`
           DELETE FROM ${relation("effect_agent_submission_ownership")}
           WHERE submission_id = ${validated.submissionId}
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-          yield* retainLifecycle(submission, {
-            _tag: "SubmissionSuspended",
-            submissionId: validated.submissionId,
-            reason: validated.reason,
-          });
+        yield* retainLifecycle(submission, {
+          _tag: "SubmissionSuspended",
+          submissionId: validated.submissionId,
+          reason: validated.reason,
+        });
 
-          return SUSPENDED;
-        }),
-      );
+        return SUSPENDED;
+      }),
+    );
 
-      yield* hitFailpoint("ledger:suspend:after", operation);
+    yield* hitFailpoint("ledger:suspend:after", operation);
 
-      return outcome;
-    },
-  );
+    return outcome;
+  });
 
   /**
    * Once every pending call of a recorded ApprovalPending suspension has a decision intent,
@@ -2798,14 +2896,13 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             existingOutcome: submission.settled_outcome,
           });
         }
-        // A reserved exact outcome wins over a late Unknown marking (DUR-011); the recovery
-        // classifier orders reservation ahead of MarkUnknown for the same reason.
-        const reservation = yield* readReservation(operation, validated.submissionId);
+        // Canonical terminal intent wins over a late Unknown marking.
+        const reservation = yield* readCanonicalSettlement(operation, submission);
 
         if (Option.isSome(reservation)) {
           return yield* SettlementConflict.make({
             submissionId: validated.submissionId,
-            existingOutcome: reservation.value.outcome,
+            existingOutcome: reservation.value.settlement.outcome,
           });
         }
         // Idempotent merge: repeating is a no-op; additional open calls extend the marked
@@ -2980,16 +3077,12 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
       operation,
       Effect.gen(function* () {
         const parent = yield* requireSubmission(operation, validated.parentSubmissionId);
-        // The caller may notify after the canonical Settlement append but before ledger
-        // finalization. An exact reservation plus `terminalizing` is the narrow durable prefix
-        // that makes that ordering admissible; earlier states remain a caller error.
+        // Canonical publication precedes parent notification and ledger finalization.
         const child = yield* readSubmission(operation, validated.childSubmissionId);
-        const childReservation = yield* readReservation(operation, validated.childSubmissionId);
 
         const announced =
           Option.isSome(child) &&
-          (child.value.state === "settled" ||
-            (child.value.state === "terminalizing" && Option.isSome(childReservation)));
+          Option.isSome(yield* readCanonicalSettlement(operation, child.value));
 
         if (!announced) {
           return yield* LedgerError.make({
@@ -3022,16 +3115,13 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
         ) {
           return NOT_WAITING;
         }
-        // Every listed child must be either finalized or canonically announced from the exact
-        // terminalizing reservation. Replays re-run this coverage check idempotently.
+        // Every listed child must have canonical terminal intent; finalization may follow.
         for (const entry of reason.children) {
           const listed = yield* readSubmission(operation, entry.childSubmissionId);
-          const reservation = yield* readReservation(operation, entry.childSubmissionId);
 
           const covered =
             Option.isSome(listed) &&
-            (listed.value.state === "settled" ||
-              (listed.value.state === "terminalizing" && Option.isSome(reservation)));
+            Option.isSome(yield* readCanonicalSettlement(operation, listed.value));
 
           if (!covered) {
             return STILL_WAITING;
@@ -3060,9 +3150,10 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return outcome;
   });
 
-  const reserveChildBudget: SubmissionLedger["Service"]["reserveChildBudget"] = Effect.fn(
-    "SqlSubmissionLedger.reserveChildBudget",
-  )(function* (request: ChildBudgetReservationRequest) {
+  const reserveChildBudgetKernel = Effect.fn("SqlSubmissionLedger.reserveChildBudget")(function* (
+    request: ChildBudgetReservationRequest,
+    authority: SqlAuthorityReader,
+  ) {
     const operation = "ledger reserve child budget";
 
     const validated = yield* Schema.decodeEffect(Schema.toType(ChildBudgetReservationRequest))(
@@ -3086,7 +3177,7 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             existing.value,
           );
 
-          // Identical replays short-circuit before the fence, mirroring reserveSettlement: a
+          // Identical replays short-circuit before the fence, retaining the first committed allocation: a
           // replay creates nothing, so a recovering caller resumes rather than duplicates.
           const identical =
             existing.value.parent_submission_id === validated.parentSubmissionId &&
@@ -3122,11 +3213,11 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             message: `Parent Tool Call ${validated.parentToolCallId} already owns reservation ${collision.value.reservation_id}.`,
           });
         }
-        const parent = yield* requireSubmission(operation, validated.parentSubmissionId);
+        const parent = yield* authority.requireSubmission(operation, validated.parentSubmissionId);
 
         // Creation is fenced by the parent lane's live ownership (spec §12 step 2): a stale
         // parent Attempt can never create new reservation state.
-        yield* requireOwnership(operation, parent, validated.ownershipToken);
+        yield* authority.requireOwnership(operation, parent, validated.ownershipToken);
         const now = yield* currentInstant;
 
         yield* sql`
@@ -3171,10 +3262,8 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
     return reserved;
   });
 
-  const attachChildToReservation: SubmissionLedger["Service"]["attachChildToReservation"] =
-    Effect.fn("SqlSubmissionLedger.attachChildToReservation")(function* (
-      request: AttachChildToReservationRequest,
-    ) {
+  const attachChildToReservationKernel = Effect.fn("SqlSubmissionLedger.attachChildToReservation")(
+    function* (request: AttachChildToReservationRequest, authority: SqlAuthorityReader) {
       const operation = "ledger attach child to reservation";
 
       const validated = yield* Schema.decodeEffect(Schema.toType(AttachChildToReservationRequest))(
@@ -3206,9 +3295,13 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
               message: `Reservation ${validated.reservationId} already records child ${existing.value.child_submission_id}.`,
             });
           }
-          const parent = yield* requireSubmission(operation, existing.value.parent_submission_id);
 
-          yield* requireOwnership(operation, parent, validated.ownershipToken);
+          const parent = yield* authority.requireSubmission(
+            operation,
+            existing.value.parent_submission_id,
+          );
+
+          yield* authority.requireOwnership(operation, parent, validated.ownershipToken);
           if (existing.value.status !== "reserved") {
             return yield* ChildReservationConflict.make({
               reservationId: validated.reservationId,
@@ -3249,7 +3342,8 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
       yield* hitFailpoint("ledger:child-attach:after", operation);
 
       return attached;
-    });
+    },
+  );
 
   const beginChildBudgetRelease: SubmissionLedger["Service"]["beginChildBudgetRelease"] = Effect.fn(
     "SqlSubmissionLedger.beginChildBudgetRelease",
@@ -3561,34 +3655,6 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             }).pipe(Effect.mapError(internalFailure(operation)));
           }
 
-          let reservation: SettlementReservationSnapshot | undefined;
-          const reservationRow = yield* readReservation(operation, validated.submissionId);
-
-          if (Option.isSome(reservationRow)) {
-            const record = yield* decodeRecordEnvelopeText(reservationRow.value.record_json).pipe(
-              Effect.mapError((error) =>
-                corruptionFailure(
-                  operation,
-                  "effect_agent_settlement_reservations",
-                  validated.submissionId,
-                  error.message,
-                ),
-              ),
-            );
-
-            const settlementId = yield* Schema.decodeEffect(
-              SettlementReservationSnapshot.fields.settlementId,
-            )(reservationRow.value.settlement_id).pipe(Effect.mapError(internalFailure(operation)));
-
-            reservation = SettlementReservationSnapshot.make({
-              settlementId,
-              outcome: reservationRow.value.outcome,
-              record,
-              recordDigest: reservationRow.value.record_digest,
-              finalized: reservationRow.value.finalized_at !== null,
-            });
-          }
-
           let abortIntent: AbortIntent | undefined;
           const abortRow = yield* readAbortIntent(operation, validated.submissionId);
 
@@ -3736,7 +3802,6 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
             ...(suspension === undefined ? {} : { suspension }),
             ...(ownership === undefined ? {} : { ownership }),
             ...(inputApplied === undefined ? {} : { inputApplied }),
-            ...(reservation === undefined ? {} : { reservation }),
             ...(abortIntent === undefined ? {} : { abortIntent }),
           });
         }),
@@ -3748,35 +3813,159 @@ export const makeSqlSubmissionLedger = Effect.fn("SqlSubmissionLedger.make")(fun
       );
   });
 
-  return SubmissionLedger.of({
+  const ledger = SubmissionLedger.of({
     capabilities,
     admit,
     markReady,
     lookup,
     resolveAdmission,
     claim,
-    renewOwnership,
-    releaseOwnership,
-    markInputApplied,
-    reserveSettlement,
+    renewOwnership: (request) => renewOwnershipKernel(request, ordinaryAuthority),
+    releaseOwnership: (request) => releaseOwnershipKernel(request, ordinaryAuthority),
+    markInputApplied: (request) => markInputAppliedKernel(request, ordinaryAuthority),
     finalizeSettlement,
     requestAbort,
     stopWorker,
     inspectWorker,
-    claimJoining,
-    markJoined,
-    revertJoining,
-    suspend,
+    claimJoining: (request) => claimJoiningKernel(request, ordinaryAuthority),
+    markJoined: (request) => markJoinedKernel(request, ordinaryAuthority),
+    revertJoining: (request) => revertJoiningKernel(request, ordinaryAuthority),
+    suspend: (request) => suspendKernel(request, ordinaryAuthority),
     recordApprovalDecision,
     markUnknown,
     recordUnknownResolution,
     recordChildSettled,
-    reserveChildBudget,
-    attachChildToReservation,
+    reserveChildBudget: (request) => reserveChildBudgetKernel(request, ordinaryAuthority),
+    attachChildToReservation: (request) =>
+      attachChildToReservationKernel(request, ordinaryAuthority),
     beginChildBudgetRelease,
     releaseChildBudget,
     scanNonterminal,
     loadRecoverySnapshot,
     readAbortIntent: readAbortIntentForSubmission,
   });
+
+  const loadAuthority = Effect.fnUntraced(function* (claimed: Claim) {
+    const operation = "bind claimed Run storage";
+    const submission = yield* requireSubmission(operation, claimed.submissionId);
+    const existing = yield* readOwnership(operation, claimed.submissionId);
+
+    const threads = yield* journal
+      .getThread(submission.thread_id)
+      .pipe(Effect.mapError(internalFailure(operation)));
+
+    const thread = threads[0];
+
+    if (
+      thread === undefined ||
+      Option.isNone(existing) ||
+      existing.value.ownership_token !== claimed.ownershipToken ||
+      thread.producer_epoch !== existing.value.producer_epoch
+    )
+      return yield* OwnershipLost.make({
+        submissionId: claimed.submissionId,
+        actualEpoch: thread?.producer_epoch ?? EPOCH_ZERO,
+      });
+
+    return {
+      submission: Object.freeze(submission),
+      ownership: Object.freeze(existing.value),
+      thread: Object.freeze(thread),
+      owned: true,
+      submissionId: claimed.submissionId,
+    };
+  });
+
+  const bindAuthority = (state: SqlRunAuthority) => {
+    const authority: SqlAuthorityReader = {
+      requireSubmission: (operation, submissionId) =>
+        submissionId === state.submission.submission_id
+          ? Effect.succeed(state.submission)
+          : Effect.fail(
+              LedgerError.make({
+                operation,
+                message: "Run ownership is bound to another Submission.",
+              }),
+            ),
+      requireOwnership: (_operation, submission, token) =>
+        Effect.suspend(() =>
+          state.owned &&
+          submission.submission_id === state.ownership.submission_id &&
+          token === state.ownership.ownership_token &&
+          state.ownership.producer_epoch === state.thread.producer_epoch
+            ? Effect.succeed(state.ownership)
+            : Effect.fail(
+                OwnershipLost.make({
+                  submissionId: state.submissionId,
+                  actualEpoch: state.thread.producer_epoch,
+                }),
+              ),
+        ),
+    };
+
+    return {
+      renewOwnership: (request: Parameters<SubmissionLedger["Service"]["renewOwnership"]>[0]) =>
+        renewOwnershipKernel(request, authority),
+      releaseOwnership: (request: Parameters<SubmissionLedger["Service"]["releaseOwnership"]>[0]) =>
+        releaseOwnershipKernel(request, authority),
+      markInputApplied: (request: Parameters<SubmissionLedger["Service"]["markInputApplied"]>[0]) =>
+        markInputAppliedKernel(request, authority, true),
+      /** The exclusive owner supplies captured canonical identity inside its append writer. */
+      markInputAppliedInTransaction: (request: MarkInputAppliedRequest) =>
+        markInputAppliedInTransaction(request, authority),
+      claimJoining: (request: Parameters<SubmissionLedger["Service"]["claimJoining"]>[0]) =>
+        claimJoiningKernel(request, authority),
+      markJoined: (request: Parameters<SubmissionLedger["Service"]["markJoined"]>[0]) =>
+        markJoinedKernel(request, authority),
+      revertJoining: (request: Parameters<SubmissionLedger["Service"]["revertJoining"]>[0]) =>
+        revertJoiningKernel(request, authority),
+      suspend: (request: Parameters<SubmissionLedger["Service"]["suspend"]>[0]) =>
+        suspendKernel(request, authority),
+      reserveChildBudget: (
+        request: Parameters<SubmissionLedger["Service"]["reserveChildBudget"]>[0],
+      ) => reserveChildBudgetKernel(request, authority),
+      attachChildToReservation: (
+        request: Parameters<SubmissionLedger["Service"]["attachChildToReservation"]>[0],
+      ) => attachChildToReservationKernel(request, authority),
+    };
+  };
+
+  const refreshAuthority = Effect.fnUntraced(function* (state: SqlRunAuthority) {
+    const operation = "refresh claimed Run storage";
+    const submission = yield* requireSubmission(operation, state.submissionId);
+    const ownership = yield* readOwnership(operation, state.submissionId);
+
+    const threads = yield* journal
+      .getThread(submission.thread_id)
+      .pipe(Effect.mapError(internalFailure(operation)));
+
+    const thread = threads[0];
+
+    if (thread === undefined)
+      return yield* LedgerError.make({ operation, message: "Claimed Thread disappeared." });
+    state.submission = Object.freeze(submission);
+    state.thread = Object.freeze(thread);
+
+    const current =
+      Option.isSome(ownership) &&
+      ownership.value.ownership_token === state.ownership.ownership_token &&
+      ownership.value.producer_epoch === thread.producer_epoch;
+
+    state.owned = state.owned && current;
+    if (current && Option.isSome(ownership)) state.ownership = Object.freeze(ownership.value);
+
+    return current;
+  });
+
+  return { ledger, publisher, publishWithState, loadAuthority, refreshAuthority, bindAuthority };
 });
+
+export const makeSqlSubmissionLedger = <
+  S extends Diagnostic,
+  C extends Diagnostic,
+  W extends Diagnostic,
+  F extends Diagnostic,
+>(
+  journal: SqlJournal<S, C, W, F>,
+  options: SqlSubmissionLedgerOptions<S, C, F>,
+) => Effect.map(makeSqlSubmissionLedgerKernel(journal, options), (kernel) => kernel.ledger);

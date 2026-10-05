@@ -12,3 +12,4 @@ export * as SqlSubscriptionStore from "./SqlSubscriptionStore.ts";
 export * as SqlStorageV2Upgrade from "./SqlStorageV2Upgrade.ts";
 export * as SqlLifecyclePublication from "./SqlLifecyclePublication.ts";
 export * as SqlStorageProgress from "./SqlStorageProgress.ts";
+export * as SqlRunStorage from "./SqlRunStorage.ts";

@@ -311,6 +311,18 @@ export class ToolOperation extends Schema.Class<ToolOperation>(
   replay: Digest,
 }) {}
 
+/** Derived recovery input from one committed response; never a separate canonical record. */
+export class DeclaredToolCall extends Schema.Class<DeclaredToolCall>(
+  "@effect-agent/thread/DeclaredToolCall",
+)({
+  ...ToolOperation.fields,
+  runId: RunId,
+  turnId: TurnId,
+  turn: TurnNumber,
+  parameters: PersistedJson,
+  parametersDigest: Digest,
+}) {}
+
 /** A retired call's runtime result. Unavailable readonly work may already have been observed. */
 export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("ToolUnavailable", {
   toolName: BoundedName,
@@ -325,8 +337,8 @@ export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("Tool
  * `messagesDigest` pins the exact encoded content.
  */
 const ModelResponseRecordedFields = Schema.Struct({
-  /** Original operation identity/semantics, independent of later Agent and toolbox changes. */
-  toolOperations: Schema.optionalKey(Schema.Array(ToolOperation)),
+  /** Exactly one entry per application call, including rejected calls; none for provider execution. */
+  toolOperations: Schema.Array(ToolOperation),
   /** Explicit pre-execution failures, committed with the original arguments before any approval. */
   toolParameterRejections: Schema.optionalKey(Schema.Array(ToolParameterRejection)),
   toolExposure: Schema.optionalKey(Snapshot),
@@ -357,6 +369,39 @@ const ModelResponseRecordedFields = Schema.Struct({
   costMicrousd: Schema.optionalKey(Schema.Natural),
 }).check(
   Schema.makeFilter(
+    (response) => {
+      if (!isPersistedPromptMessages(response.messages)) return false;
+
+      const declarations = response.messages.content.flatMap((message) =>
+        message.role === "assistant" && typeof message.content !== "string"
+          ? message.content.filter(
+              (part) => part.type === "tool-call" && part.providerExecuted !== true,
+            )
+          : [],
+      );
+
+      if (declarations.length !== response.toolOperations.length) return false;
+      const seen = new Set<string>();
+
+      for (const operation of response.toolOperations) {
+        if (
+          seen.has(operation.toolCallId) ||
+          !declarations.some(
+            (call) =>
+              call.type === "tool-call" &&
+              call.id === operation.toolCallId &&
+              call.name === operation.toolName,
+          )
+        )
+          return false;
+        seen.add(operation.toolCallId);
+      }
+
+      return declarations.every((call) => call.type === "tool-call" && seen.has(call.id));
+    },
+    { title: "Every application Tool declaration has unique original operation evidence" },
+  ),
+  Schema.makeFilter(
     (response) =>
       response.runScopedPrefixLength === undefined ||
       (isPersistedPromptMessages(response.messages) &&
@@ -375,30 +420,6 @@ export class ModelResponseRecorded extends Schema.TaggedClass<ModelResponseRecor
   "@effect-agent/thread/ModelResponseRecorded",
 )("ModelResponseRecorded", ModelResponseRecordedFields) {}
 
-/**
- * One approved uncertain/idempotent ordinary Tool Call made durable BEFORE any handler starts
- * (durability §10). `parameters` is the Schema-encoded wire form of the declared call and
- * `parametersDigest` pins it; recovery that sees this record without a matching `ToolCallSettled`
- * (or `ToolCallUnknown` → `ToolCallResolved`) must reconcile or mark unknown, never silently
- * replay (DUR-009). Ordinary `readonly`-class Tools never produce this record. Delegation
- * classification is always prepared, including for a Tool annotated `readonly`.
- */
-export class ToolCallPrepared extends Schema.TaggedClass<ToolCallPrepared>(
-  "@effect-agent/thread/ToolCallPrepared",
-)("ToolCallPrepared", {
-  runId: RunId,
-  turnId: TurnId,
-  turn: TurnNumber,
-  toolCallId: ToolCallId,
-  toolName: BoundedName,
-  parameters: PersistedJson,
-  parametersDigest: Digest,
-  /** Absent legacy evidence grants no delegation replay authority. */
-  executionKind: Schema.optionalKey(ToolExecutionKind),
-  executionClass: Schema.optionalKey(ToolOperation.fields.executionClass),
-  replay: Schema.optionalKey(Digest),
-}) {}
-
 /** Monotonic reservations charged before programmatic execution or grace finalization. */
 export class RunPolicyUsageReserved extends Schema.TaggedClass<RunPolicyUsageReserved>()(
   "RunPolicyUsageReserved",
@@ -410,7 +431,7 @@ export class RunPolicyUsageReserved extends Schema.TaggedClass<RunPolicyUsageRes
 ) {}
 
 /**
- * A durable Unknown Outcome: the external effect of one prepared ordinary Tool Call may have
+ * A durable Unknown Outcome: the external effect of one declared ordinary Tool Call may have
  * happened but was not confirmed canonically (DUR-009/DUR-017). It is neither success nor
  * ordinary failure; automatic continuation stops until an authorized resolution arrives.
  */
@@ -480,6 +501,8 @@ export class ToolApprovalRequested extends Schema.TaggedClass<ToolApprovalReques
   toolCallId: ToolCallId,
   toolName: BoundedName,
   parametersDigest: Digest,
+  /** This request preceded every possible dispatch of the original response. */
+  blocksInitialDispatch: Schema.Boolean,
 }) {}
 
 /** The two-valued approval decision family shared by canonical records and ledger intents. */
@@ -504,9 +527,9 @@ export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>
 }) {}
 
 /**
- * First-class interruption audit (durability §9): appended by a superseding Attempt before it
- * re-invokes the model for a Turn whose prior owner died without a complete canonical response.
- * Duplicate provider cost is thereby possible AND observable in canonical history.
+ * Conservative interruption audit before resuming inference without a canonical response.
+ * The preceding fencing generation may include retirement or repair, so this marks incomplete
+ * usage coverage and possible duplicate provider cost, not an exact missing-call count.
  */
 export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseInterrupted>(
   "@effect-agent/thread/ModelResponseInterrupted",
@@ -1029,12 +1052,7 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/**
- * Current private-development canonical payload family. Phase 5 adds the seven durable-Tool tags
- * (prepared/unknown/resolved/step/approval-request/approval-decision/interrupted) additively; S2
- * adds the four durable-Subagent tags (requested/started/joined/lineage) additively, so the
- * envelope keeps `schemaVersion: 1` (P4 precedent for additive payload tags).
- */
+/** Current canonical payload family. Storage adapters reject unsupported predecessor formats. */
 export const CanonicalRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
@@ -1043,7 +1061,6 @@ export const CanonicalRecordPayload = Schema.Union([
   RunPolicyUsageReserved,
   ModelCompleted,
   ModelResponseRecorded,
-  ToolCallPrepared,
   ToolCallSettled,
   ToolCallUnknown,
   ToolCallResolved,

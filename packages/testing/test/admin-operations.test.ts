@@ -29,6 +29,7 @@ import {
   Digest,
   ProducerId,
 } from "@yielded/agent/records";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ApprovalDecisionCommand,
@@ -226,8 +227,7 @@ const authorizerLayer = Layer.effectContext(
 );
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
@@ -235,7 +235,9 @@ const baseLayer = Layer.mergeAll(
   authorizerLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const readLog = (threadId: string) =>
   Effect.gen(function* () {
@@ -341,7 +343,7 @@ const makeUnknownLane = (thread: string, key: string) =>
       submitOptions(thread, key),
     );
 
-    yield* armFailpoint("tools:after-prepared-append");
+    yield* armFailpoint("tools:after-dispatch-fence");
 
     const killed = yield* Effect.exit(
       runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(bookToolLayer)),
@@ -560,7 +562,9 @@ layer(testLayer)("DUR-017/SEC-011 P7 administrative operations", (it) => {
           ),
         ).toBe("OperationDenied");
       }).pipe(
-        Effect.provide(Layer.fresh(DurableAgentRuntime.layer)),
+        Effect.provide(
+          Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+        ),
         Effect.provideService(SubmissionLedger, guardedLedger),
         Effect.provideService(WakeScheduler, { ...wake, notify: () => protectedAccess("notify") }),
       );
@@ -632,7 +636,9 @@ layer(testLayer)("DUR-017/SEC-011 P7 administrative operations", (it) => {
         expect(settlement.submissionId).toBe(allowed.submissionId);
         expect(settlement.outcome).toBe("completed");
       }).pipe(
-        Effect.provide(Layer.fresh(DurableAgentRuntime.layer)),
+        Effect.provide(
+          Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+        ),
         Effect.provideService(SubmissionLedger, guardedLedger),
         Effect.provideService(OperationAuthorizer, authorizer),
       );

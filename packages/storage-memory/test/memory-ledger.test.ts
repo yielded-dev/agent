@@ -4,6 +4,7 @@ import {
   MemorySubmissionLedgerLive,
   memorySubmissionLedgerLayer,
 } from "@yielded/agent-storage-memory/memory-submission-ledger";
+import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import { AgentId, ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigests, DeploymentId, Digest } from "@yielded/agent/records";
 import {
@@ -18,7 +19,10 @@ import {
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
 import { Effect, Layer, Schema } from "effect";
 
-const testLayer = Layer.mergeAll(MemorySubmissionLedgerLive, NodeCrypto.layer);
+const testLayer = MemorySubmissionLedgerLive.pipe(
+  Layer.provideMerge(MemoryThreadStoreLive),
+  Layer.provideMerge(NodeCrypto.layer),
+);
 
 const threadId = Schema.decodeSync(ThreadId)("thread-memory-ledger-1");
 const principal = Schema.decodeSync(Principal)("principal-memory-ledger");
@@ -76,7 +80,15 @@ describe("MemorySubmissionLedger", () => {
       expect((yield* ledger.resolveAdmission(SubmissionLookupByKey.make(request)))._tag).toBe(
         "NotAdmitted",
       );
-    }).pipe(Effect.provide(memorySubmissionLedgerLayer().pipe(Layer.provide(fence))));
+    }).pipe(
+      Effect.provide(
+        memorySubmissionLedgerLayer().pipe(
+          Layer.provideMerge(MemoryThreadStoreLive),
+          Layer.provideMerge(NodeCrypto.layer),
+          Layer.provide(fence),
+        ),
+      ),
+    );
   });
 
   it.effect(
@@ -119,6 +131,8 @@ describe("MemorySubmissionLedger", () => {
       }).pipe(
         Effect.provide(
           memorySubmissionLedgerLayer().pipe(
+            Layer.provideMerge(MemoryThreadStoreLive),
+            Layer.provideMerge(NodeCrypto.layer),
             Layer.provide(
               Layer.succeed(SubmissionAdmissionFence, {
                 check: () =>

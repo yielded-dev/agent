@@ -17,6 +17,7 @@ import {
   toolFailureObserverLayer,
   type ToolFailureObservation,
 } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
@@ -100,11 +101,10 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
         });
       });
 
-      const runtimeLayer = DurableAgentRuntime.layer.pipe(
+      const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
         Layer.provideMerge(
           Layer.mergeAll(
-            MemoryThreadStoreLive,
-            MemorySubmissionLedgerLive,
+            MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
             WakeScheduler.layerNoop,
             DurableRuntimeFailpoint.layer,
             ToolReconciler.uncertain,

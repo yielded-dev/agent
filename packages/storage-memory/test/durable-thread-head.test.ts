@@ -18,7 +18,7 @@ import {
 } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
-import { ReceiptId, RunId, ThreadId } from "@yielded/agent/identifiers";
+import { ReceiptId, RunId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import { OperationAuthorizer, OperationDenied } from "@yielded/agent/operation-authorizer";
 import {
   CanonicalBatch,
@@ -30,6 +30,7 @@ import {
 } from "@yielded/agent/records";
 import { projectRunJournal, turnIdForRun, turnResponseBatch } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ClaimRequest,
@@ -125,8 +126,7 @@ const makeModel = (
   );
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
@@ -142,6 +142,7 @@ const makeRuntime = (bindings: ReadonlyArray<ResolvedBinding> = []) =>
   DurableAgentRuntime.pipe(
     Effect.provide(
       DurableAgentRuntime.layerWithBindings(bindings).pipe(
+        Layer.provide(runStorageLayer()),
         Layer.provide(RunToolAuthorization.allowAll),
       ),
     ),
@@ -414,11 +415,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
               ]),
             );
             expect(
-              original.records.some(
-                (entry) =>
-                  entry.record.payload._tag === "ToolCallPrepared" ||
-                  entry.record.payload._tag === "ToolCallSettled",
-              ),
+              original.records.some((entry) => entry.record.payload._tag === "ToolCallSettled"),
             ).toBe(false);
 
             const response = original.records.find(
@@ -465,12 +462,21 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
           const response = yield* turnResponseBatch({
             runId: oldRunId,
+            toolOperations: [
+              {
+                toolCallId: Schema.decodeSync(ToolCallId)("uncertain-call"),
+                toolName: "failing_action",
+                executionClass: "uncertain",
+                executionKind: "ordinary",
+                replay: digest,
+              },
+            ],
             turn: 1,
             turnId: turnIdForRun(oldRunId, 1),
             producerId: Schema.decodeSync(ProducerId)("head-test"),
             deploymentId: Schema.decodeSync(DeploymentId)("head-test"),
             createdAt: DateTime.toUtc(DateTime.makeUnsafe(1_000)),
-            appended: Prompt.make([
+            responseMessages: Prompt.make([
               { role: "user", content: "OLD RETAINED EVIDENCE" },
               {
                 role: "assistant",
@@ -485,6 +491,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
                 ],
               },
             ]).content,
+            toolResults: [],
             usage: { inputTokens: 100, outputTokens: 10 },
           });
 
@@ -499,17 +506,6 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
                 producerId: Schema.decodeSync(ProducerId)("head-test"),
                 records: [
                   ...response.records,
-                  record("prepared-old", {
-                    _tag: "ToolCallPrepared",
-                    runId: "run:old-submission",
-                    turn: 1,
-                    turnId: "turn:run:old-submission:1",
-                    toolCallId: "uncertain-call",
-                    toolName: "failing_action",
-                    parameters: {},
-                    parametersDigest: digest,
-                    executionKind: "ordinary",
-                  }),
                   record("settled-old", {
                     _tag: "SubmissionSettled",
                     submissionId: "old-submission",
@@ -585,11 +581,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(handlerCalls).toBe(0);
         if (providerFailure) {
           expect(
-            after.records.some(
-              (entry) =>
-                entry.record.payload._tag === "ToolCallPrepared" ||
-                entry.record.payload._tag === "ToolCallSettled",
-            ),
+            after.records.some((entry) => entry.record.payload._tag === "ToolCallSettled"),
           ).toBe(false);
         }
         if (scenario === "retained-incomplete") {
@@ -1060,13 +1052,13 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       bindings.length = 0;
       const first = yield* runtime.submit(agent, "first", options("bounded", "first"));
-      const reserved = yield* Deferred.make<void>();
+      const publishing = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
       const control = yield* DurableRuntimeFailpointTestControl;
 
       yield* control.setHandler((location) =>
-        location === "terminalize:after-reserve"
-          ? Deferred.succeed(reserved, undefined).pipe(Effect.andThen(Deferred.await(finish)))
+        location === "terminalize:before-publication"
+          ? Deferred.succeed(publishing, undefined).pipe(Effect.andThen(Deferred.await(finish)))
           : Effect.void,
       );
 
@@ -1074,7 +1066,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       const worker = yield* runtime.processThreadHead(first.threadId).pipe(Effect.forkChild);
 
-      yield* Deferred.await(reserved);
+      yield* Deferred.await(publishing);
       // Admission after the final Turn cannot join that Run and must remain FIFO work.
       const second = yield* runtime.submit(agent, "second", options("bounded", "second"));
 
@@ -1319,7 +1311,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
   );
 
   it.effect(
-    "releases recovery ownership when settlement reservation fails before its canonical append",
+    "releases recovery ownership when settlement publication fails before its canonical append",
     () =>
       Effect.gen(function* () {
         const runtime = yield* makeRuntime();
@@ -1339,7 +1331,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           }),
         );
         yield* control.setHandler((location) =>
-          location === "terminalize:after-reserve"
+          location === "terminalize:before-publication"
             ? Effect.fail(DurableRuntimeFailpointError.make({ location }))
             : Effect.void,
         );
@@ -1356,7 +1348,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
   );
 
   for (const location of [
-    "terminalize:after-reserve",
+    "terminalize:before-publication",
     "terminalize:after-canonical-append",
   ] as const) {
     it.effect(`holds admission group through ${location} until canonical repair finalizes`, () =>

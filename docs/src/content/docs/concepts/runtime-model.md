@@ -22,10 +22,16 @@ flowchart LR
 
 ## Turns and responsiveness
 
-- Use one interpreter for running, streaming, and durable execution. Finish the model response
-  before starting application tools. Validate and authorize executable calls, honor approvals,
-  and commit their bounded results in declaration order before the next turn. Tool concurrency
-  and run budgets are finite; all execution resources belong to a Scope.
+- Use one scoped Effect interpreter for running, streaming, and durable execution. Public streams
+  observe that execution through a bounded producer; headless runs do not transport public events.
+  Finish the model response before starting application tools. Validate and authorize executable
+  calls, honor approvals,
+  and commit their bounded results in declaration order after their streams close, before draining
+  new input or starting the next turn. Tool concurrency and run budgets are finite; all execution
+  resources belong to a Scope.
+- Ordinary readonly turns without approval may commit response and results together. Persist the
+  response before a Durable Step, durable policy reservation, or accepted update. Idempotent and
+  mutating calls keep their declaration before dispatch, preserving the original recovery decision.
 - Admit new input ahead of eventual work. In Cloudflare, new native work preempts maintenance;
   publish the lifecycle start promptly after pickup. Reply publication, projection backfills, and memory
   have independent recovery obligations and must not become prerequisites for a model call.
@@ -58,10 +64,17 @@ flowchart LR
   canonical terminal settlement. Approval, input, and capacity waits park the exact accepted
   Receipt. Generic host deliveries must supply terminal acknowledgement or explicit recovery;
   a wake hint is never proof of completion. See [messaging](/guide/messaging/).
+- Canonical `SubmissionSettled` is the single terminal intent. Its publisher checks live authority
+  and appends the record in one storage transaction. Delivery and parent acknowledgements follow
+  that publication; ledger finalization records a stable receipt timestamp and releases the
+  lane. An adapter may finalize inside publication when no recoverable delivery remains.
+  Recovery completes outstanding obligations from the same canonical record.
 - The append-only journal owns execution facts; the ledger owns what is still owed and who may
   advance it. Projections and checkpoints are disposable. Current bindings select queued and
-  resumed work; retained operation contracts govern unfinished effects. Unresolved ordinary tools are never
-  automatically replayed after ownership loss. Durable Steps still require external idempotency
+  resumed work; each committed model response owns its normalized tool arguments and original
+  operation contracts. A declared mutating call without a result may have executed, including when
+  ownership is lost before its handler starts. Initial blocked approvals and parameter rejections
+  prove nonexecution; unresolved ordinary tools are never automatically replayed after ownership loss. Durable Steps still require external idempotency
   or reconciliation: exactly-once recording does not promise exactly-once execution.
 - Keep application reads in application-owned views. Durable Object SQLite retains execution
   and recovery state, not a second application query model. Measure a statement budget for a
@@ -91,8 +104,11 @@ Wrap CPU-heavy synchronous work inside tracing spans, including hydration and de
 Object clocks may not advance during synchronous work, so elapsed clock samples alone cannot
 establish a CPU budget. Preserve original failure causes where the error contract carries them;
 some storage boundaries retain only diagnostic classifications. Keep scheduling reports content-free.
-Events and disposable drafts help observers follow execution; only canonical records establish
-recovery facts.
+The interpreter supplies validated response and closed tool-result facts directly to the canonical
+journal. Events, history callbacks, and disposable drafts help observers follow execution; they do
+not reconstruct durable commits. Only canonical records establish recovery facts.
+Execution captures its services when it starts; changing a stream consumer's Context between pulls
+does not change the running model, tools, or hooks.
 
 See [Run & stream](/guide/run-agents/), [budgets](/concepts/budgets/), and
 [durability](/concepts/durability/) for options and recovery boundaries.

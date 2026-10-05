@@ -147,18 +147,23 @@ packages.
 
 ## Change discipline
 
+- This library is a v0 beta. Prefer simpler machinery and measured performance gains over
+  compatibility with superseded APIs or storage formats.
 - Add or update Effect Schema definitions before implementing new wire or persisted values.
 - Use the [simplify skill](.agents/skills/simplify/SKILL.md) to consider removing unnecessary
-  mechanisms within the affected workflow. Preserve public and persisted contracts; complexity
-  alone does not justify unrelated cleanup.
+  mechanisms within the affected workflow. Public APIs and persisted formats may change to
+  simplify the architecture or meet the task's requirements. Do not preserve obsolete paths or
+  add compatibility layers unless the user explicitly requires compatibility. Keep unrelated
+  cleanup out of scope; the architecture and durability rules above still apply.
 - Update existing guides or API comments when a change affects their documented behavior.
 - Explain rejected alternatives in the pull request when a future agent could reasonably
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Keep supported persisted-format upgrades narrow and adapter-owned, atomic and data-preserving.
-  Unsupported or ambiguous data must fail clearly without mutation; never reset supported data.
-  Do not introduce a general migration framework.
+- Do not build persisted-format upgrades unless compatibility is explicitly required. When an
+  upgrade is required, keep it narrow, adapter-owned, atomic, and data-preserving. Reject
+  unsupported or ambiguous data clearly; do not silently reset it. Do not introduce a general
+  migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

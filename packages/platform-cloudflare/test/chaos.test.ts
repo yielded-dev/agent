@@ -56,8 +56,8 @@ describe("DC chaos-abort evidence equivalence", () => {
   it("startup reconciliation ordering: the armed repair executes before the pass claims new work", async () => {
     const thread = lane("reconcile-first");
 
-    // Strand S1 mid-terminalization: the settlement is reserved but not canonical.
-    armRuntimeEviction(thread, "terminalize:after-reserve");
+    // Strand S1 mid-terminalization: the settlement is canonical but not finalized.
+    armRuntimeEviction(thread, "terminalize:after-canonical-append");
     const receipt1 = await submitTo(plannerDefinition, thread);
 
     await drainAlarmsUntil(thread, () => Promise.resolve(armedEvictionsRemaining(thread) === 0));

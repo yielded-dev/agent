@@ -528,7 +528,7 @@ describe("NodeDurableAgentRuntime", () => {
                 runContext,
                 toolAuthorization,
                 runtimeFailpoint: (location) =>
-                  incarnation === 1 && location === "turn:after-results-append"
+                  incarnation === 1 && location === "turn:after-canonical-append"
                     ? Effect.fail(DurableRuntimeFailpointError.make({ location }))
                     : Effect.void,
               }),
@@ -584,6 +584,8 @@ describe("NodeDurableAgentRuntime", () => {
         const tools = Toolkit.make(
           Tool.make("lookup", {
             parameters: Schema.Struct({}),
+            // This recovery proof needs a response committed before approval preflight.
+            needsApproval: () => false,
             success: Schema.String,
           }).annotate(ToolExecutionClass, "readonly"),
         );

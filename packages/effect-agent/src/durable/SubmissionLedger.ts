@@ -16,6 +16,7 @@ import type { JoinedToHost } from "../core/Receipt.ts";
 import { IdempotencyKey, QueueSequence, Principal } from "../core/Receipt.ts";
 import { RunUsageSummary } from "../core/Usage.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
+import type { RecordEnvelope } from "./Records.ts";
 import {
   AbortRequested,
   ApprovalDecision,
@@ -27,7 +28,6 @@ import {
   PersistedJson,
   ProducerEpoch,
   ProducerId,
-  RecordEnvelope,
   RecordId,
   SettlementFailureDiagnostic,
   SettlementOutcome,
@@ -77,7 +77,6 @@ export const SubmissionState = Schema.Literals([
   "input-applied",
   "suspended",
   "unknown",
-  "terminalizing",
   "settled",
 ]);
 
@@ -377,38 +376,6 @@ export class InputAppliedMarker extends Schema.Class<InputAppliedMarker>(
   sequence: CanonicalSequence,
 }) {}
 
-/**
- * Reservation of the single exact settlement record for one Submission (DUR-011). `record` is
- * the complete canonical envelope that will be appended — including `createdAt` — so a recovering
- * Attempt can re-append byte-identical content without a batch-digest conflict. `recordDigest`
- * must be the digest of the canonical JSON encoding of the Schema-encoded envelope.
- */
-export class SettlementReservation extends Schema.Class<SettlementReservation>(
-  "@effect-agent/thread/SettlementReservation",
-)({
-  submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
-  settlementId: SettlementId,
-  outcome: SettlementOutcome,
-  record: RecordEnvelope,
-  recordDigest: Digest,
-}) {}
-
-/**
- * The committed reservation. `replayed` is true when an identical reservation already existed;
- * the stored exact record is returned so recovery appends precisely what was reserved.
- */
-export class ReservedSettlement extends Schema.Class<ReservedSettlement>(
-  "@effect-agent/thread/ReservedSettlement",
-)({
-  submissionId: SubmissionId,
-  settlementId: SettlementId,
-  outcome: SettlementOutcome,
-  record: RecordEnvelope,
-  recordDigest: Digest,
-  replayed: Schema.Boolean,
-}) {}
-
 export class SettlementFinalization extends Schema.Class<SettlementFinalization>(
   "@effect-agent/thread/SettlementFinalization",
 )({
@@ -421,7 +388,7 @@ const SettlementFields = Schema.Struct({
   settlementId: SettlementId,
   receiptId: ReceiptId,
   outcome: SettlementOutcome,
-  /** Schema-encoded application disposition materialized from the exact canonical reservation. */
+  /** Schema-encoded application disposition materialized from the exact canonical settlement. */
   runDisposition: Schema.optionalKey(PersistedJson),
   /** Canonical aggregate of model usage and estimated spend for this Run. */
   usageSummary: Schema.optionalKey(RunUsageSummary),
@@ -442,7 +409,7 @@ export class Settlement extends Schema.Class<Settlement>("@effect-agent/thread/S
 
 /**
  * Project the bounded failed-settlement diagnostic from an already Schema-validated exact
- * reservation. Storage adapters use this when materializing their operational Settlement value;
+ * canonical record. Storage adapters use this when materializing their operational Settlement value;
  * the canonical record remains the authority.
  */
 export const settlementFailureFromRecord = (
@@ -553,11 +520,21 @@ export class MarkJoinedRequest extends Schema.Class<MarkJoinedRequest>(
 /**
  * Recovery-only revert of a `joining` Submission whose canonical input append never committed
  * (DUR-016): `joining → ready`, idempotent, a no-op when the Submission already joined.
+ * A guard limits the revert to the exact linked host: its current ownership token is required
+ * while it is live; omit the token only for a settled host. A changed host link is a no-op.
+ * Adapters validate the guard atomically with the transition. Unguarded requests retain the
+ * caller-owned recovery contract.
  */
 export class RevertJoiningRequest extends Schema.Class<RevertJoiningRequest>(
   "@effect-agent/thread/RevertJoiningRequest",
 )({
   submissionId: SubmissionId,
+  guard: Schema.optionalKey(
+    Schema.Struct({
+      hostSubmissionId: SubmissionId,
+      ownershipToken: Schema.optionalKey(OwnershipToken),
+    }),
+  ),
 }) {}
 
 /**
@@ -852,17 +829,6 @@ export class OwnershipSnapshot extends Schema.Class<OwnershipSnapshot>(
   leaseExpiresAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/** A settlement reservation as recovery sees it. */
-export class SettlementReservationSnapshot extends Schema.Class<SettlementReservationSnapshot>(
-  "@effect-agent/thread/SettlementReservationSnapshot",
-)({
-  settlementId: SettlementId,
-  outcome: SettlementOutcome,
-  record: RecordEnvelope,
-  recordDigest: Digest,
-  finalized: Schema.Boolean,
-}) {}
-
 export class RecoverySnapshotRequest extends Schema.Class<RecoverySnapshotRequest>(
   "@effect-agent/thread/RecoverySnapshotRequest",
 )({
@@ -918,7 +884,6 @@ export class RecoverySnapshot extends Schema.Class<RecoverySnapshot>(
   submission: SubmissionSnapshot,
   ownership: Schema.optionalKey(OwnershipSnapshot),
   inputApplied: Schema.optionalKey(InputAppliedMarker),
-  reservation: Schema.optionalKey(SettlementReservationSnapshot),
   abortIntent: Schema.optionalKey(AbortIntent),
   joins: Schema.Array(JoinSnapshot),
   hostSubmissionId: Schema.optionalKey(SubmissionId),
@@ -1064,21 +1029,11 @@ export type SubmissionLedgerFailure =
  * - `markInputApplied` — idempotent marker that the deterministic `UserInputRecorded` record is
  *   canonical (state → input-applied). Recovery repairs this marker from history when the append
  *   committed but the marker write was lost.
- * - `reserveSettlement` — reserves the Submission's single exact settlement record
- *   (state → terminalizing). Idempotent: an identical reservation replays with `replayed` set; a
- *   different outcome or content fails with `SettlementConflict{existingOutcome}` (DUR-011).
- *   For a `joined` Submission the reservation is authorized by its recorded host linkage — a
- *   joined lane is never worker-claimable, so no ownership token can exist for it and the
- *   presented token is not consulted (plan §2.5: joined Submissions settle with the host).
- *   Likewise, an ABORTED reservation for a `ready`/`terminalizing` Submission that carries a
- *   durable abort intent and holds no live ownership is authorized by that intent (P7 §7(c)):
- *   recovery settles aborted never-claimed queued work immediately, without waiting for it to
- *   head the lane. Both exceptions are outcome- and state-narrow; everything else stays fenced.
- * - `finalizeSettlement` — idempotent terminal transition (state → settled) after the reserved
- *   record is canonical. Native adapters seal opted-in worker assignments atomically before
- *   releasing the lane. Otherwise the next `queueSequence` becomes claimable. It
- *   requires no ownership token: canonical history authorizes finalization (DUR-015). A
- *   finalization that disagrees with the recorded outcome fails with `SettlementConflict`.
+ * - `finalizeSettlement` — idempotent terminal projection (state → settled) from the
+ *   deterministic canonical SubmissionSettled record. It validates the admitted receipt and
+ *   retains the first finalization timestamp. Native adapters seal opted-in worker assignments
+ *   atomically before releasing the lane. No ownership token is required: canonical history
+ *   authorizes finalization; missing or contradictory canonical evidence fails without mutation.
  * - `requestAbort` — durable, idempotent by `submissionId`: repeating returns the recorded
  *   intent unchanged (DUR-012). Fails with `SettlementConflict` once the Submission is settled;
  *   abort never rewrites a terminal outcome. Fails with `JoinedToHost` for a `joined` Submission
@@ -1110,14 +1065,14 @@ export type SubmissionLedgerFailure =
  *   answering `woken`; `still-waiting` while any listed child is unsettled; `not-waiting` when
  *   the parent is not suspended waiting on this child (including replays after the wake). The
  *   child's canonical Settlement is the authority. The runtime reports it after the exact
- *   reserved record is appended and before ledger finalization, so same-store adapters accept
- *   `terminalizing` only when its exact reservation exists; an earlier child is an
- *   adapter-checked caller error. It never settles the parent and requires no ownership token:
+ *   record is published and before ledger finalization. Adapters verify that canonical record
+ *   under their mutation authority; an earlier child is an adapter-checked caller error. It never
+ *   settles the parent and requires no ownership token:
  *   the canonically recorded child settlement authorizes the wake.
  * - `reserveChildBudget` — idempotent get-or-create of the parent-owned child budget
  *   reservation (spec §12 step 2), fenced by the parent lane's live `OwnershipToken`. An
- *   identical replay returns the stored row with `replayed` set (unfenced, mirroring
- *   `reserveSettlement`); a divergent allocation for the same id, or a second id for the same
+ *   identical replay returns the stored row with `replayed` set without requiring a live token;
+ *   a divergent allocation for the same id, or a second id for the same
  *   `(parentSubmissionId, parentToolCallId)`, fails with `ChildReservationConflict`.
  * - `attachChildToReservation` — idempotent: records the admitted child on the reservation row
  *   (repairable from the canonical `SubagentStarted` record). A replay with the recorded child
@@ -1175,9 +1130,6 @@ export class SubmissionLedger extends Context.Service<
     readonly markInputApplied: (
       request: MarkInputAppliedRequest,
     ) => Effect.Effect<void, OwnershipLost | LedgerError>;
-    readonly reserveSettlement: (
-      request: SettlementReservation,
-    ) => Effect.Effect<ReservedSettlement, SettlementConflict | OwnershipLost | LedgerError>;
     readonly finalizeSettlement: (
       request: SettlementFinalization,
     ) => Effect.Effect<Settlement, SettlementConflict | LedgerError>;

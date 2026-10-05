@@ -14,8 +14,6 @@ import {
   CanonicalSequence,
   ProducerEpoch,
   RunCompleted,
-  ToolCallPrepared,
-  ToolCallSettled,
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
@@ -32,21 +30,8 @@ import {
   ThreadStoreError,
   type AppendResult,
 } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
+import { Cause, DateTime, Effect, Exit, Fiber, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
-import * as Statement from "effect/sql/Statement";
 
 import { WRITER_LOCK_KEY } from "../src/internal/postgres-storage.ts";
 import {
@@ -169,114 +154,6 @@ const singleConnectionStore = (url: string, lockTimeout: number) =>
   singleConnectionStorage(url, lockTimeout).threadStore;
 
 describe("PostgresThreadStore faults", () => {
-  it.live(
-    "keeps outstanding records in the captured snapshot while another client settles them",
-    () =>
-      withTemporaryDatabase((url) =>
-        withStorage(
-          url,
-          Effect.scoped(
-            Effect.gen(function* () {
-              const store = yield* ThreadStore;
-
-              yield* store.materialize(
-                ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-              );
-              const toolCallId = id(ToolCallPrepared.fields.toolCallId, "snapshot-call");
-
-              const prepared = canonicalRecord(
-                "snapshot-prepared",
-                ToolCallPrepared.make({
-                  runId,
-                  turnId: id(ToolCallPrepared.fields.turnId, "snapshot-turn"),
-                  turn: 1,
-                  toolCallId,
-                  toolName: "write",
-                  parameters: { original: true },
-                  parametersDigest: EMPTY_TAIL_DIGEST,
-                  executionKind: "orchestration",
-                  executionClass: "uncertain",
-                }),
-              );
-
-              const tail = yield* append(store, batch("snapshot-prepared", [prepared]));
-              const paused = yield* Deferred.make<void>();
-              const resume = yield* Deferred.make<void>();
-
-              const reader = yield* store
-                .read({
-                  threadId,
-                  page: { limit: 10 },
-                  selection: {
-                    _tag: "Outstanding",
-                    expectedTailSequence: tail.lastSequence,
-                    expectedTailDigest: tail.tailDigest,
-                  },
-                } satisfies SelectedThreadRead)
-                .pipe(
-                  Stream.runCollect,
-                  Effect.provideService(Statement.CurrentTransformer, (statement) =>
-                    statement.compile()[0].includes("AND outstanding <> 0")
-                      ? Deferred.succeed(paused, undefined).pipe(
-                          Effect.andThen(Deferred.await(resume)),
-                          Effect.as(statement),
-                        )
-                      : Effect.succeed(statement),
-                  ),
-                  Effect.forkScoped,
-                );
-
-              // Pause after tail validation but before the mutable outstanding index is queried.
-              yield* Deferred.await(paused).pipe(Effect.timeout("2 seconds"));
-
-              const settled = yield* withStorage(
-                url,
-                Effect.gen(function* () {
-                  const writer = yield* ThreadStore;
-
-                  return yield* append(
-                    writer,
-                    batch("snapshot-settled", [
-                      canonicalRecord(
-                        "snapshot-settled",
-                        ToolCallSettled.make({
-                          runId,
-                          toolCallId,
-                          toolName: "write",
-                          result: { receipt: "supplier-receipt" },
-                          isFailure: false,
-                        }),
-                      ),
-                    ]),
-                    tail,
-                  );
-                }),
-              );
-
-              yield* Deferred.succeed(resume, undefined);
-              expect((yield* Fiber.join(reader)).map((envelope) => envelope.record)).toEqual([
-                prepared,
-              ]);
-
-              const current = yield* store
-                .read({
-                  threadId,
-                  page: { limit: 10 },
-                  selection: {
-                    _tag: "Outstanding",
-                    expectedTailSequence: settled.lastSequence,
-                    expectedTailDigest: settled.tailDigest,
-                  },
-                } satisfies SelectedThreadRead)
-                .pipe(Stream.runCollect);
-
-              expect(current).toEqual([]);
-            }),
-          ),
-        ),
-      ),
-  );
-
   it.effect(
     "preserves arbitrary JSON strings through append, native lookup, replay and reopen",
     () =>

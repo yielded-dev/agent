@@ -9,24 +9,23 @@ describe("PostgresSubmissionLedger", () => {
   describe("shared SubmissionLedger conformance", () => {
     for (const conformanceCase of submissionLedgerConformanceCases) {
       it.effect(conformanceCase.name, () =>
-        withTemporaryDatabase((url) =>
-          conformanceCase.run.pipe(
+        withTemporaryDatabase((url) => {
+          const storage = makeStorage(
+            url,
+            { schema: "select" },
+            {
+              startupParameters: { search_path: "pg_catalog" },
+              transformQueryNames: String.snakeToCamel,
+              transformResultNames: String.snakeToCamel,
+            },
+          );
+
+          return conformanceCase.run.pipe(
             Effect.provide(
-              Layer.mergeAll(
-                makeStorage(
-                  url,
-                  { schema: "select" },
-                  {
-                    startupParameters: { search_path: "pg_catalog" },
-                    transformQueryNames: String.snakeToCamel,
-                    transformResultNames: String.snakeToCamel,
-                  },
-                ).submissionLedger,
-                NodeCrypto.layer,
-              ),
+              Layer.mergeAll(storage.submissionLedger, storage.threadStore, NodeCrypto.layer),
             ),
-          ),
-        ),
+          );
+        }),
       );
     }
   });

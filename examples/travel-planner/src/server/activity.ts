@@ -224,12 +224,6 @@ export const plannerActivity = (
         boundaries.set(payload.runId, time);
         break;
       }
-      case "ToolCallPrepared": {
-        const key = `${payload.runId}:${payload.toolCallId}`;
-
-        if (!calls.has(key)) calls.set(key, { requestedAt: time, parameters: payload.parameters });
-        break;
-      }
       case "ToolCallSettled": {
         const call = calls.get(`${payload.runId}:${payload.toolCallId}`);
 

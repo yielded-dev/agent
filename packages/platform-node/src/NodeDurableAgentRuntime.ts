@@ -7,27 +7,29 @@ import {
   SqliteStorageConfigValue,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-config";
 import {
-  type SqliteStorageFailpoint,
+  SqliteStorageFailpoint,
   type SqliteStorageFailpointHandler,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-failpoint";
 import { submissionLedgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
 import {
   exclusiveHostClientLayer,
+  exclusiveRunStorageLayer,
   threadStoreLayer,
   storageFailpointLayer,
   type SqliteStorageInitializationError,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
-import { type AgentRegistration, type ResolvedBinding } from "@yielded/agent/agent-registration";
+import {
+  compileRegistrations,
+  type AgentRegistration,
+  type ResolvedBinding,
+} from "@yielded/agent/agent-registration";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import {
   DurableRuntimeFailpoint,
   type DurableRuntimeFailpointHandler,
 } from "@yielded/agent/durable-failpoint";
 import { type SubmissionId } from "@yielded/agent/identifiers";
-import {
-  type MessageDeliveryError,
-  type MessageDeliveryStore,
-} from "@yielded/agent/message-delivery";
+import { type MessageDeliveryError, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { DeploymentId, ProducerId } from "@yielded/agent/records";
 import {
   CurrentToolFailureObserver,
@@ -38,19 +40,20 @@ import {
   type RunCostEstimator,
   type RunToolFailureObserver,
 } from "@yielded/agent/run-options";
-import { type ScheduleStore } from "@yielded/agent/schedule";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   DEFAULT_OWNERSHIP_LEASE_DURATION,
   ReleaseOwnershipRequest,
   SubmissionLedger,
   type OwnershipToken,
 } from "@yielded/agent/submission-ledger";
-import { type ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadReader } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, type Crypto, Duration, Effect, Layer, Ref, Schema } from "effect";
-import type * as SqlClientService from "effect/sql/SqlClient";
+import { Context, Crypto, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
+import * as SqlClientService from "effect/sql/SqlClient";
+import { CurrentTransformer } from "effect/sql/Statement";
 
+import { applicationInvocationContext } from "./internal/application-context.ts";
 import { ExclusiveSqliteHost } from "./internal/exclusive-host.ts";
 import { NodeWakeSchedulerConfig, nodeWakeSchedulerLayer } from "./NodeWakeScheduler.ts";
 
@@ -97,6 +100,8 @@ export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurable
   abortPollInterval: PositiveMillis,
   /** Bounded SQLITE_BUSY retry window for write-lock acquisition. */
   busyTimeout: NonNegativeMillis,
+  /** SQLite WAL synchronization selected for this host's connection at construction. */
+  synchronous: SqliteStorageConfigValue.fields.synchronous,
   /** Canonical observation poll cadence of the SQLite store. */
   observationPollInterval: NonNegativeMillis,
   /** Opt-in full payload/digest-chain audit while opening the store. */
@@ -143,6 +148,11 @@ export interface NodeDurableAgentRuntimeOptions<
   readonly toolFailureObserver?: RunToolFailureObserver | undefined;
   /** Milliseconds; default 5000. */
   readonly busyTimeout?: number | undefined;
+  /**
+   * Defaults to FULL. NORMAL can lose acknowledged commits after power loss or an OS crash,
+   * potentially repeating external effects. The choice belongs to this host's SQLite connection.
+   */
+  readonly synchronous?: "FULL" | "NORMAL" | undefined;
   /** Milliseconds; default 25. */
   readonly observationPollInterval?: number | undefined;
   /** Default false. */
@@ -189,18 +199,9 @@ export type NodeDurableAgentRuntimeInitializationError =
  * The services `NodeDurableAgentRuntime.layer` provides. Additional SQLite adapters can use
  * the same client and storage configuration, sharing its serialized connection and Scope.
  */
-export type NodeDurableAgentRuntimeServices =
-  | DurableAgentRuntime
-  | SubmissionLedger
-  | ThreadStore
-  | ScheduleStore
-  | MessageDeliveryStore
-  | WakeScheduler
-  | DurableRuntimeConfig
-  | NodeDurableAgentRuntimeConfig
-  | SqlClientService.SqlClient
-  | SqliteStorageConfig
-  | SqliteStorageFailpoint;
+export type NodeDurableAgentRuntimeServices = Layer.Success<
+  ReturnType<typeof NodeDurableAgentRuntime.layer>
+>;
 
 const decodeConfigValue = Schema.decodeUnknownEffect(NodeDurableAgentRuntimeConfigValue);
 
@@ -222,6 +223,7 @@ const configFromOptions = (
     leaseRenewalInterval: options.leaseRenewalInterval ?? 10_000,
     abortPollInterval: options.abortPollInterval ?? 500,
     busyTimeout: options.busyTimeout ?? 5_000,
+    synchronous: options.synchronous ?? "FULL",
     observationPollInterval: options.observationPollInterval ?? 25,
     verifyOnOpen: options.verifyOnOpen ?? false,
   }).pipe(
@@ -245,6 +247,7 @@ const sqliteStorageConfigLayer: Layer.Layer<
     return SqliteStorageConfigValue.make({
       observationPollInterval: config.observationPollInterval,
       busyTimeout: config.busyTimeout,
+      synchronous: config.synchronous,
       ownershipLeaseDuration: config.ownershipLeaseDuration,
       verifyOnOpen: config.verifyOnOpen,
     });
@@ -280,6 +283,65 @@ const wakeSchedulerConfigLayer: Layer.Layer<
     const config = yield* NodeDurableAgentRuntimeConfig;
 
     return { scanInterval: Duration.millis(config.wakeScanInterval) };
+  }),
+);
+
+/** The managed database stays private even when a caller supplies SQL transformers. */
+const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
+  Effect.gen(function* () {
+    const storageContext = (yield* Effect.context<
+      | SqlClientService.SqlClient
+      | Crypto.Crypto
+      | SqliteStorageConfig
+      | SqliteStorageFailpoint
+      | Scope.Scope
+    >()).pipe(
+      Context.pick(
+        SqlClientService.SqlClient,
+        Crypto.Crypto,
+        SqliteStorageConfig,
+        SqliteStorageFailpoint,
+        Scope.Scope,
+      ),
+    );
+
+    const sql = Context.get(storageContext, SqlClientService.SqlClient);
+
+    const bind = <A, E>(
+      effect: Effect.Effect<
+        A,
+        E,
+        | SqlClientService.SqlClient
+        | Crypto.Crypto
+        | SqliteStorageConfig
+        | SqliteStorageFailpoint
+        | Scope.Scope
+      >,
+    ) =>
+      Effect.contextWith((live: Context.Context<never>) =>
+        Effect.setContext(
+          effect,
+          Context.merge(
+            Context.omit(CurrentTransformer, sql.transactionService)(live),
+            storageContext,
+          ),
+        ),
+      );
+
+    const services = yield* bind(Layer.build(messageDeliveryStoreLayer()));
+
+    const store = Context.get(services, MessageDeliveryStore);
+
+    return MessageDeliveryStore.of({
+      limits: store.limits,
+      maxStoredValueBytes: store.maxStoredValueBytes,
+      insert: (record) => bind(store.insert(record)),
+      get: (key) => bind(store.get(key)),
+      list: (request) => bind(store.list(request)),
+      change: (key, change) => bind(store.change(key, change)),
+      due: (now, limit, owner) => bind(store.due(now, limit, owner)),
+      nextDeadline: (owner) => bind(store.nextDeadline(owner)),
+    });
   }),
 );
 
@@ -448,9 +510,36 @@ export class NodeDurableAgentRuntime {
       ReconcilerRequirements
     >,
   ) {
-    return NodeDurableAgentRuntime.assemble(
-      DurableAgentRuntime.layerRegistered(registrations),
-      options,
+    return Layer.unwrap(
+      Effect.gen(function* () {
+        const bindings = yield* compileRegistrations(registrations);
+        const exclusive = yield* ExclusiveSqliteHost;
+
+        // Only the managed Node host owns a private database. Other platforms retain their
+        // invocation controls, including the source identity of native maintenance writes.
+        const isolate = <A, E>(effect: Effect.Effect<A, E>) =>
+          Effect.contextWith((live: Context.Context<never>) =>
+            Effect.setContext(effect, applicationInvocationContext(live)),
+          );
+
+        return NodeDurableAgentRuntime.layerWithBindings(
+          exclusive
+            ? bindings.map((binding): ResolvedBinding => ({
+                ...binding,
+                attempt: (...args) => isolate(binding.attempt(...args)),
+                ...(binding.reporting === undefined
+                  ? {}
+                  : {
+                      reporting: binding.reporting.map((report) => ({
+                        ...report,
+                        prepare: (value) => isolate(report.prepare(value)),
+                      })),
+                    }),
+              }))
+            : bindings,
+          options,
+        );
+      }).pipe(Effect.provide(NodeCrypto.layer)),
     );
   }
 
@@ -505,71 +594,99 @@ export class NodeDurableAgentRuntime {
         const exclusive = yield* ExclusiveSqliteHost;
         const nodeConfigLayer = Layer.succeed(NodeDurableAgentRuntimeConfig)(config);
 
+        // Application extensions are acquired before the private database exists.
+        const applicationContext = (yield* Effect.context<never>()).pipe(Context.omit(Scope.Scope));
+
+        const applicationServices = yield* Layer.build(
+          Layer.mergeAll(
+            options.runContext ?? RunContextPreparationPassthrough,
+            options.toolAuthorization ?? RunToolAuthorization.allowAll,
+            options.toolReconciler ?? ToolReconciler.uncertain,
+            options.toolFailureObserver === undefined
+              ? Layer.succeed(CurrentToolFailureObserver)(undefined)
+              : toolFailureObserverLayer(options.toolFailureObserver),
+          ).pipe(Layer.provide(NodeCrypto.layer)),
+        );
+
+        const storageFailpoint = options.storageFailpoint;
+        const runtimeFailpoint = options.runtimeFailpoint;
+
         const clientInfrastructure = Layer.mergeAll(
           sqliteStorageConfigLayer,
           storageFailpointLayer({
             filename: config.filename,
-            failpoint: options.storageFailpoint,
+            failpoint:
+              storageFailpoint === undefined
+                ? undefined
+                : (location) =>
+                    Effect.scoped(Effect.suspend(() => storageFailpoint(location))).pipe(
+                      Effect.setContext(applicationContext),
+                    ),
           }),
           SqliteClient.layer({ filename: config.filename, disableWAL: exclusive }),
           NodeCrypto.layer,
-        );
+        ).pipe(Layer.provide(nodeConfigLayer));
 
-        const infrastructure = exclusive
-          ? Layer.fresh(exclusiveHostClientLayer).pipe(Layer.provideMerge(clientInfrastructure))
-          : clientInfrastructure;
+        // The managed host no longer composes its database with application SQL hooks.
+        // Only the enclosing resource Scope crosses into storage construction.
+        const exclusiveInfrastructure = Layer.effectContext(
+          Effect.gen(function* () {
+            const scope = yield* Effect.scope;
+
+            return yield* Layer.build(
+              Layer.fresh(exclusiveHostClientLayer).pipe(Layer.provideMerge(clientInfrastructure)),
+            ).pipe(Effect.setContext(Context.make(Scope.Scope, scope)));
+          }),
+        );
 
         const runtimeFailpointLayer =
-          options.runtimeFailpoint === undefined
+          runtimeFailpoint === undefined
             ? DurableRuntimeFailpoint.layer
-            : Layer.succeed(DurableRuntimeFailpoint)({ hit: options.runtimeFailpoint });
+            : Layer.succeed(DurableRuntimeFailpoint)({
+                hit: (location) =>
+                  Effect.scoped(Effect.suspend(() => runtimeFailpoint(location))).pipe(
+                    Effect.setContext(applicationContext),
+                  ),
+              });
 
-        const reconcilerLayer = options.toolReconciler ?? ToolReconciler.uncertain;
-
-        const observerLayer =
-          options.toolFailureObserver === undefined
-            ? Layer.succeed(CurrentToolFailureObserver)(undefined)
-            : toolFailureObserverLayer(options.toolFailureObserver);
-
-        const ports = Layer.mergeAll(
-          threadStoreLayer,
-          scheduleStoreLayer,
-          messageDeliveryStoreLayer(),
-          nodeWakeSchedulerLayer.pipe(
-            Layer.provideMerge(ownershipDrainLayer.pipe(Layer.provide(submissionLedgerLayer))),
+        const ordinaryStorage = runStorageLayer().pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              threadStoreLayer,
+              ownershipDrainLayer.pipe(Layer.provideMerge(submissionLedgerLayer)),
+            ),
           ),
         );
+
+        const portLayers = Layer.mergeAll(
+          ThreadReader.layer(),
+          nodeWakeSchedulerLayer,
+          exclusive ? privateMessageDeliveryLayer : messageDeliveryStoreLayer(),
+          // Custom manual assemblies own schedules; the managed host owns only its runtime.
+          exclusive ? Layer.empty : scheduleStoreLayer,
+        );
+
+        const ports = exclusive
+          ? portLayers.pipe(
+              Layer.provideMerge(exclusiveRunStorageLayer),
+              Layer.provideMerge(exclusiveInfrastructure),
+            )
+          : portLayers.pipe(
+              Layer.provideMerge(ordinaryStorage),
+              Layer.provideMerge(clientInfrastructure),
+            );
 
         return runtimeLayer.pipe(
           Layer.provideMerge(
             Layer.mergeAll(ports, durableRuntimeConfigLayer(options.estimateCostMicrousd)),
           ),
-          Layer.provide(
-            Layer.mergeAll(
-              wakeSchedulerConfigLayer,
-              runtimeFailpointLayer,
-              reconcilerLayer,
-              observerLayer,
-            ),
-          ),
-          Layer.provideMerge(infrastructure),
+          Layer.provide(Layer.mergeAll(wakeSchedulerConfigLayer, runtimeFailpointLayer)),
           Layer.provideMerge(nodeConfigLayer),
-          Layer.provide(
-            Layer.mergeAll(
-              options.runContext ?? RunContextPreparationPassthrough,
-              options.toolAuthorization ?? RunToolAuthorization.allowAll,
-            ).pipe(Layer.provide(NodeCrypto.layer)),
-          ),
+          Layer.provide(Layer.succeedContext(applicationServices)),
         );
       }),
     );
 
-    const runtime: Layer.Layer<
-      NodeDurableAgentRuntimeServices,
-      Layer.Error<typeof assembled>,
-      Layer.Services<typeof assembled>
-    > = assembled;
-
-    return runtime;
+    return assembled;
   }
 }

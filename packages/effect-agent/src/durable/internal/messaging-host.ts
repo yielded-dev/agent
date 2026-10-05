@@ -53,6 +53,7 @@ import {
   ThreadRead,
   ThreadTailRequest,
   ThreadStore,
+  ThreadReader,
 } from "../ThreadStore.ts";
 import {
   definitionDigestsEqual,
@@ -103,7 +104,7 @@ export const makeMessagingRuntime = Effect.fn("MessagingHost.make")(function* (
   ) {
     return Option.getOrUndefined(
       yield* getRecord({ threadId, recordId })
-        .pipe(Effect.provideService(ThreadStore, deps.store))
+        .pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)))
         .pipe(Effect.mapError(() => failure("send", "storage"))),
     )?.record;
   });

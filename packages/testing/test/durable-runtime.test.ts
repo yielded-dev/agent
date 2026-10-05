@@ -47,12 +47,14 @@ import {
   runIdForSubmission,
 } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   IdempotencyKey,
   Principal,
   RecoverySnapshotRequest,
   ResolutionCompletedWithResult,
+  ResolutionNeverHappened,
   ResolutionSafeToRetry,
   UnknownResolutionCommand,
   SubmissionLedger,
@@ -226,7 +228,7 @@ const receiptCreateParts: ReadonlyArray<Response.StreamPartEncoded> = [
 ];
 
 // `readonly` keeps the P4 canonical record shape byte-stable (plan §4.3): an unannotated tool
-// fails closed to `uncertain` and gains `ToolCallPrepared` records under the P5 split commits.
+// fails closed to `uncertain` after its declaration commits.
 const Search = Tool.make("search", {
   parameters: Schema.Struct({ query: Schema.String }),
   success: Schema.Struct({ available: Schema.Boolean }),
@@ -261,15 +263,16 @@ const configLayer = DurableRuntimeConfig.layer({
 
 const baseLayer = Layer.mergeAll(
   RunToolAuthorization.allowAll,
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const AnswerCompletionOutput = Schema.Struct({ answer: Schema.String });
 
@@ -311,10 +314,11 @@ const corruptedCompletionStoreLayer = Layer.effect(
       read: (request) => inner.read(request).pipe(Stream.map(corruptCompletionEnvelope)),
     });
   }),
-).pipe(Layer.provide(MemoryThreadStoreLive));
+).pipe(
+  Layer.provideMerge(MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive))),
+);
 
 const corruptedCompletionBaseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
   corruptedCompletionStoreLayer,
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
@@ -322,9 +326,9 @@ const corruptedCompletionBaseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const corruptedCompletionTestLayer = DurableAgentRuntime.layer.pipe(
-  Layer.provideMerge(corruptedCompletionBaseLayer),
-);
+const corruptedCompletionTestLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(corruptedCompletionBaseLayer));
 
 class ProgressWaitTestControl extends Context.Service<
   ProgressWaitTestControl,
@@ -388,21 +392,21 @@ const progressWaitSchedulerLayer = Layer.effect(
   Effect.map(ProgressWaitTestControl, (control) => control.scheduler),
 );
 
-const progressWaitAdapters = Layer.merge(progressWaitSchedulerLayer, MemoryThreadStoreLive).pipe(
-  Layer.provideMerge(progressWaitControlLayer),
-);
+const progressWaitAdapters = Layer.merge(
+  progressWaitSchedulerLayer,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
+).pipe(Layer.provideMerge(progressWaitControlLayer));
 
 const progressWaitBaseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
   progressWaitAdapters,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const progressWaitTestLayer = DurableAgentRuntime.layer.pipe(
-  Layer.provideMerge(progressWaitBaseLayer),
-);
+const progressWaitTestLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(progressWaitBaseLayer));
 
 const waitForAtLeast = (ref: Ref.Ref<number>, expected: number): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -600,7 +604,7 @@ layer(progressWaitTestLayer)("#94 DurableAgentRuntime progress waits", (it) => {
 
 layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
   // Requested hosted-search recovery seam: interruption before the response commit, and
-  // a crash after it, must neither replay provider results nor duplicate a local effect.
+  // a crash after it requires nonexecution proof before the local effect can run.
   it.effect("recovers native hosted search before and after response commit", () =>
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
@@ -700,6 +704,17 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
 
       expect(failureTag(crashed)).toBe("DurableRuntimeFailpointError");
       expect(deliveries).toBe(0);
+      expect(yield* process).toEqual([]);
+      expect(deliveries).toBe(0);
+      yield* runtime.resolveUnknown(
+        UnknownResolutionCommand.make({
+          submissionId: receipt.submissionId,
+          toolCallId: ToolCallId.make("deliver_1"),
+          author: "operator",
+          reason: "The retained delivery counter confirms dispatch never started",
+          resolution: ResolutionNeverHappened.make(),
+        }),
+      );
       const settled = yield* process;
 
       expect(settled[0]).toMatchObject({
@@ -900,7 +915,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
       yield* runtime.submit(agent, { question: "First" }, submitOptions(threadId, "first"));
       expect((yield* process).map((settlement) => settlement.outcome)).toEqual(["completed"]);
       yield* runtime.submit(agent, { question: "Second" }, submitOptions(threadId, "second"));
-      yield* armFailpoint("turn:after-results-append");
+      yield* armFailpoint("turn:after-canonical-append");
       const crashed = yield* process.pipe(Effect.exit, Effect.ensuring(clearFailpoint));
 
       expect(failureTag(crashed)).toBe("DurableRuntimeFailpointError");
@@ -1029,7 +1044,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
           submitOptions(thread, "recovered-result"),
         );
 
-        yield* armFailpoint("tools:after-prepared-append");
+        yield* armFailpoint("tools:after-dispatch-fence");
 
         const crashed = yield* runtime
           .processThread(agent, decodeThreadId(thread))
@@ -1247,13 +1262,6 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
               result: { _tag: "ModelProtocolError" },
             },
           ]);
-          expect(
-            before.some(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                (payload.toolCallId === "premature-0" || payload.toolCallId === "rejected-0"),
-            ),
-          ).toBe(false);
           expect(before.some((payload) => payload._tag === "RunCompleted")).toBe(false);
           expect(starts).toEqual(["search"]);
 
@@ -1311,7 +1319,7 @@ layer(corruptedCompletionTestLayer)("RUN-032 recovered completion validation", (
         { question: "Create a project." },
         submitOptions(thread, "hostile-receipt-completion-1"),
       );
-      yield* armFailpoint("turn:after-results-append");
+      yield* armFailpoint("terminalize:before-publication");
 
       const crashed = yield* Effect.exit(
         runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
@@ -1616,6 +1624,8 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
             parameters: Schema.Struct({}),
             success: Schema.String,
             dependencies: [ContextWindow],
+            // Retain a response boundary before dispatch for pending-batch recovery.
+            needsApproval: () => false,
           }).annotate(ToolExecutionClass, "readonly"),
         );
 
@@ -1755,7 +1765,9 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         expect(JSON.stringify(records)).not.toContain("HOST-REFERENCE");
       }).pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(
             Layer.provide(ContextCompactor.layerRollover),
             Layer.provide(
               Layer.succeed(RunContextPreparation, {
@@ -1970,10 +1982,9 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         );
       }).pipe(
         Effect.provide(
-          Layer.fresh(DurableAgentRuntime.layerWithServices).pipe(
-            Layer.provide(preparation),
-            Layer.provideMerge(baseLayer),
-          ),
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(Layer.provide(preparation), Layer.provideMerge(baseLayer)),
         ),
       );
     },
@@ -1988,7 +1999,8 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         input: Schema.Struct({ question: Schema.String }),
         output: Schema.Struct({ answer: Schema.String }),
         instructions: "Search before answering.",
-        toolkit: searchTools,
+        // Re-seed usage from a declared pending call, before its handler has run.
+        toolkit: Toolkit.make(Search.setNeedsApproval(() => false)),
         policy: AgentPolicy.make({
           maxTurns: 3,
           maxToolCalls: 2,
@@ -2148,13 +2160,21 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
               start,
             ]);
             expect(
-              after.filter(({ record }) => record.payload._tag === "ToolCallPrepared"),
+              after.flatMap(({ record }) =>
+                record.payload._tag === "ModelResponseRecorded"
+                  ? record.payload.toolOperations
+                  : [],
+              ),
             ).toHaveLength(1);
             expect(
               after.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
             ).toHaveLength(1);
           }).pipe(
-            Effect.provide(DurableAgentRuntime.layerWithBindings([binding])),
+            Effect.provide(
+              DurableAgentRuntime.layerWithBindings([binding]).pipe(
+                Layer.provide(runStorageLayer()),
+              ),
+            ),
             Effect.provideService(RunContextPreparation, {
               hook: {
                 prepare: ({ source }) =>
@@ -2237,17 +2257,27 @@ layer(testLayer)("deployment continuity", (it) => {
             submitOptions("unsupported-retry-admin", "original"),
           );
 
-          yield* armFailpoint("tools:after-prepared-append");
+          yield* armFailpoint("tools:after-dispatch-fence");
           expect(failureTag(yield* Effect.exit(runtime.processThreadHead(receipt.threadId)))).toBe(
             "DurableRuntimeFailpointError",
           );
           yield* clearFailpoint;
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         const runtime = yield* DurableAgentRuntime.pipe(
-          Effect.provide(DurableAgentRuntime.layerWithBindings(currentBindings)),
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
         );
 
         yield* runtime.runRecovery();
@@ -2377,33 +2407,41 @@ layer(testLayer)("deployment continuity", (it) => {
             submitOptions(`continuity-proof-${proof}`, "original"),
           );
 
-          yield* armFailpoint("tools:after-prepared-append");
+          yield* armFailpoint("tools:after-dispatch-fence");
           expect(failureTag(yield* Effect.exit(runtime.processThreadHead(receipt.threadId)))).toBe(
             "DurableRuntimeFailpointError",
           );
           yield* clearFailpoint;
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         const retained = yield* readLog(receipt.threadId);
         const reviewed: Array<unknown> = [];
 
-        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
-          Layer.provide(
-            Layer.succeed(ToolReconciler)({
-              reconcile: (evidence) => {
-                reviewed.push(evidence);
+        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings)
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provide(
+              Layer.succeed(ToolReconciler)({
+                reconcile: (evidence) => {
+                  reviewed.push(evidence);
 
-                return Effect.succeed(
-                  proof === "NeverStarted"
-                    ? ReconciliationNeverStarted.make({})
-                    : ReconciliationSafeToRetry.make({}),
-                );
-              },
-            }),
-          ),
-        );
+                  return Effect.succeed(
+                    proof === "NeverStarted"
+                      ? ReconciliationNeverStarted.make({})
+                      : ReconciliationSafeToRetry.make({}),
+                  );
+                },
+              }),
+            ),
+          );
 
         const outcome = yield* DurableAgentRuntime.use((runtime) =>
           runtime.processThreadHead(receipt.threadId),
@@ -2501,7 +2539,13 @@ layer(testLayer)("deployment continuity", (it) => {
           yield* Fiber.interrupt(worker);
 
           return receipt;
-        }).pipe(Effect.provide(DurableAgentRuntime.layerWithBindings(originalBindings)));
+        }).pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings(originalBindings).pipe(
+              Layer.provide(runStorageLayer()),
+            ),
+          ),
+        );
 
         expect(yield* Ref.get(effects)).toBe(1);
         expect(yield* Ref.get(finalized)).toBe(1);
@@ -2511,27 +2555,29 @@ layer(testLayer)("deployment continuity", (it) => {
           [],
         );
 
-        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings).pipe(
-          Layer.provide(
-            Layer.succeed(ToolReconciler)({
-              reconcile: (evidence) => {
-                expect(evidence).toMatchObject({
-                  submissionId: receipt.submissionId,
-                  runId: runIdForSubmission(receipt.submissionId),
-                  toolCallId: "search-1",
-                  parameters: { query: "sea" },
-                });
+        const currentLayer = DurableAgentRuntime.layerWithBindings(currentBindings)
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(
+            Layer.provide(
+              Layer.succeed(ToolReconciler)({
+                reconcile: (evidence) => {
+                  expect(evidence).toMatchObject({
+                    submissionId: receipt.submissionId,
+                    runId: runIdForSubmission(receipt.submissionId),
+                    toolCallId: "search-1",
+                    parameters: { query: "sea" },
+                  });
 
-                return Effect.succeed(
-                  ReconciliationCompleted.make({
-                    result: { available: true, supplierReceipt: "external-1" },
-                    isFailure: false,
-                  }),
-                );
-              },
-            }),
-          ),
-        );
+                  return Effect.succeed(
+                    ReconciliationCompleted.make({
+                      result: { available: true, supplierReceipt: "external-1" },
+                      isFailure: false,
+                    }),
+                  );
+                },
+              }),
+            ),
+          );
 
         const settled = yield* DurableAgentRuntime.use((runtime) =>
           runtime.processThreadHead(receipt.threadId),
@@ -2694,34 +2740,36 @@ layer(testLayer)("independent input scheduling", (it) => {
               ),
           };
 
-          const runtimeLayer = DurableAgentRuntime.layerWithBindings([tracked]).pipe(
-            Layer.provide(
-              Layer.succeed(SubmissionScheduling, {
-                yieldTo: ({ next }) => Effect.succeed(next.principal === "human-one"),
-              }),
-            ),
-            Layer.provide(
-              Layer.succeed(SubmissionLedger, {
-                ...ledger,
-                claimJoining: () => Effect.succeed([]),
-              }),
-            ),
-            Layer.provide(
-              Layer.succeed(RunToolAuthorization, {
-                authorize: (request) =>
-                  Effect.sync(() => {
-                    const admitted = Schema.decodeUnknownSync(input)(request.input);
+          const runtimeLayer = DurableAgentRuntime.layerWithBindings([tracked])
+            .pipe(Layer.provide(runStorageLayer()))
+            .pipe(
+              Layer.provide(
+                Layer.succeed(SubmissionScheduling, {
+                  yieldTo: ({ next }) => Effect.succeed(next.principal === "human-one"),
+                }),
+              ),
+              Layer.provide(
+                Layer.succeed(SubmissionLedger, {
+                  ...ledger,
+                  claimJoining: () => Effect.succeed([]),
+                }),
+              ),
+              Layer.provide(
+                Layer.succeed(RunToolAuthorization, {
+                  authorize: (request) =>
+                    Effect.sync(() => {
+                      const admitted = Schema.decodeUnknownSync(input)(request.input);
 
-                    authorizations.push({ runId: request.runId, question: admitted.question });
-                    if (activeSubmission === undefined)
-                      throw new Error("Missing active submission");
-                    expect(request.runId).toBe(runIdForSubmission(activeSubmission));
+                      authorizations.push({ runId: request.runId, question: admitted.question });
+                      if (activeSubmission === undefined)
+                        throw new Error("Missing active submission");
+                      expect(request.runId).toBe(runIdForSubmission(activeSubmission));
 
-                    return { _tag: "allowed" as const };
-                  }),
-              }),
-            ),
-          );
+                      return { _tag: "allowed" as const };
+                    }),
+                }),
+              ),
+            );
 
           let first: Receipt;
           let second: Receipt;

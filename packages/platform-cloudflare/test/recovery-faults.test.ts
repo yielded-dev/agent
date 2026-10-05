@@ -11,6 +11,7 @@ import {
   operationAuthorizerLayer,
   possessionOperationAuthorizer,
 } from "@yielded/agent/operation-authorizer";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   AbortIntentRequest,
@@ -125,7 +126,7 @@ const localRun =
                     options.readAbortIntent?.(ledger.readAbortIntent) ?? ledger.readAbortIntent,
                 }),
               ),
-            ).pipe(Layer.provide(submissionLedgerLayer));
+            ).pipe(Layer.provideMerge(submissionLedgerLayer));
 
             const ports = Layer.mergeAll(observedStore, observedLedger).pipe(
               Layer.provide(
@@ -143,6 +144,7 @@ const localRun =
                   bindings.filter((binding) => binding.agentId !== options.withoutBinding),
                 ),
               ),
+              Layer.provide(runStorageLayer()),
               Layer.provideMerge(ports),
               Layer.provide(
                 Layer.succeed(WakeScheduler, {

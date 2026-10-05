@@ -14,7 +14,6 @@ import {
   Option,
   Ref,
   Result,
-  Schedule,
   Schema,
   Semaphore,
   Stream,
@@ -50,8 +49,9 @@ import {
   type TurnId,
 } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
+import { copyJson } from "../core/internal/json.ts";
 import { Receipt } from "../core/Receipt.ts";
-import { type ExhaustedLimit, type RunEvent } from "../core/RunEvent.ts";
+import type { ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import {
   SubagentBudgetReservation,
@@ -64,7 +64,8 @@ import {
 import { Selection, Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
 import {
-  type ModelCallUsage,
+  ModelCallUsage,
+  ModelResponseIdentity,
   InputTokenUsage,
   ModelUsageGroup,
   RunUsageSummary,
@@ -134,7 +135,7 @@ import {
   type ObligationBlockedOn,
   type ObligationThresholds,
 } from "./Admin.ts";
-import { digestJson, type DigestError } from "./Digest.ts";
+import { canonicalJson, digestJson, type DigestError } from "./Digest.ts";
 import {
   DurableRuntimeFailpoint,
   type DurableRuntimeFailpointError,
@@ -157,6 +158,7 @@ import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import {
   JournalCheckpointSeed,
+  MAX_RUN_TOOL_CALL_IDENTITIES,
   RecoveryCheckpointState,
   RecoveryCheckpointContents,
   ThreadContextCheckpoint,
@@ -167,6 +169,11 @@ import {
 import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
+import {
+  initialDispatchBlockedTurns,
+  toolOperationStates,
+  unresolvedToolOperations,
+} from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
 import { WorkerRuntime } from "./internal/worker-runtime.ts";
 import { MessageDeliveryStore } from "./MessageDelivery.ts";
@@ -206,7 +213,7 @@ import {
   SubmissionSettledRecord,
   ToolApprovalDecided,
   ToolApprovalRequested,
-  ToolCallPrepared,
+  DeclaredToolCall,
   ToolOperation,
   ToolUnavailable,
   RunPolicyUsageReserved,
@@ -246,6 +253,7 @@ import {
   projectRunJournalStream,
   type JournalBoundary,
   type RunJournalProjection,
+  type TurnCommitInput,
   runCompletedRecordId,
   runCompletionDigest,
   runIdForSubmission,
@@ -263,7 +271,6 @@ import {
   subagentStartedRecordId,
   toolApprovalDecisionRecordId,
   toolApprovalRequestRecordId,
-  toolCallPreparedRecordId,
   toolCallResolutionBatchId,
   toolCallResolvedRecordId,
   toolCallResultBatchId,
@@ -274,10 +281,24 @@ import {
   turnApprovalsBatchId,
   turnCanonicalBatch,
   turnIdForRun,
-  turnPreparedBatchId,
   turnResponseBatch,
+  turnResponseBatchId,
   turnResultsBatch,
 } from "./RunJournal.ts";
+import {
+  RunStorage,
+  bindRunOwnership,
+  makeRunWriter,
+  type RunOwnership,
+  type RunStorageSession,
+  type RunWriter,
+} from "./RunStorage.ts";
+import {
+  SettlementPublication,
+  type SettlementPublicationAuthority,
+  type SettlementPublicationFailure,
+  type SettlementPublicationResult,
+} from "./SettlementPublisher.ts";
 import {
   type AdmissionFence,
   AdmissionPolicyError,
@@ -287,6 +308,7 @@ import {
   type Claim,
   type JoinedToHost,
   type OwnershipLost,
+  type OwnershipToken,
   type RecoverySnapshot,
   type SettlementConflict,
   type SubmissionSnapshot,
@@ -296,30 +318,24 @@ import {
   ApprovalPendingSuspension,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
-  ChildBudgetReservationRequest,
   ChildReservationId,
   ChildSettledNotification,
   ClaimHandoff,
   SubmissionScheduling,
-  ClaimJoiningRequest,
   type JoiningClaim,
   ClaimRequest,
   IdempotencyKey,
   LedgerError,
-  MarkInputAppliedRequest,
   MarkJoinedRequest,
   MarkReadyRequest,
   MarkUnknownRequest,
-  OwnershipToken,
   ParentLinkage,
   Principal,
   RecoverySnapshotRequest,
   ReleaseChildBudgetRequest,
   ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   RevertJoiningRequest,
   SettlementFinalization,
-  SettlementReservation,
   Settlement,
   SubmissionLedger,
   SubmissionLookupById,
@@ -362,9 +378,10 @@ import {
   ThreadCheckpoint,
   SaveRecoveryCheckpointRequest,
   getRecord,
+  ThreadReader,
   getRunInput,
 } from "./ThreadStore.ts";
-import { PreparedToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
+import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
 import { WakeScheduler } from "./WakeScheduler.ts";
 import { WorkerAdmissionPort, WorkerAdmissionRequest } from "./WorkerAdmission.ts";
 
@@ -405,8 +422,6 @@ const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
 const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
 const READ_PAGE = 1_024;
-/** Stale-tail append retries per batch before the conflict propagates (see `appendBatch`). */
-const MAX_APPEND_FENCE_REFRESHES = 8;
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
 const RECONCILER_AUTHOR = "reconciler";
 /** Canonical `ToolApprovalDecided.resolver` for policy-auto decisions made by the delegate. */
@@ -415,22 +430,6 @@ const APPROVAL_POLICY_RESOLVER = "approval-policy";
 const RECOVERY_RESOLVER = "recovery";
 /** Upper bound of one `drain("all")` joining pass (`claimJoining.maxCount` must be positive). */
 const MAX_JOIN_DRAIN = 32;
-/**
- * Token presented when reserving a joined Submission's settlement (plan §2.5). A `joined` lane is
- * never worker-claimable (WP2 claim rule), so no real ownership token can exist for it: the
- * ledger authorizes the reservation by the recorded host linkage and does not consult this value.
- */
-const JOINED_SETTLEMENT_TOKEN = Schema.decodeSync(OwnershipToken)("ownership-joined-settlement");
-
-/**
- * Placeholder token for the P7 §7(c) queued-abort settlement: an aborted, never-claimed,
- * still-queued `ready` Submission has no live ownership to fence against, so the ledger
- * authorizes its aborted reservation by the durable abort intent itself (the joined-settlement
- * pattern) and the presented token is not consulted.
- */
-const QUEUED_ABORT_SETTLEMENT_TOKEN = Schema.decodeSync(OwnershipToken)(
-  "ownership-aborted-queued-settlement",
-);
 
 /** Bound a hook-supplied approval reason to the canonical `BoundedText` persistence limits. */
 const boundedApprovalReason = (reason: string | undefined, fallback: string): string => {
@@ -489,8 +488,8 @@ interface SubagentCallRecords {
   readonly requested: Map<ToolCallId, SubagentRequested>;
   readonly started: Map<ToolCallId, SubagentStarted>;
   readonly joined: Map<ToolCallId, SubagentJoined>;
-  /** Declared Tool name per prepared call (delegation joins reuse it for `ToolCallSettled`). */
-  readonly preparedNames: Map<ToolCallId, string>;
+  /** Declared Tool name per application call (delegation joins reuse it for `ToolCallSettled`). */
+  readonly declaredNames: Map<ToolCallId, string>;
 }
 
 /** Pure fold of one Run's canonical subagent lifecycle records (plan §1.2). */
@@ -501,7 +500,7 @@ const subagentRecordsOf = (
   const requested = new Map<ToolCallId, SubagentRequested>();
   const started = new Map<ToolCallId, SubagentStarted>();
   const joined = new Map<ToolCallId, SubagentJoined>();
-  const preparedNames = new Map<ToolCallId, string>();
+  const declaredNames = new Map<ToolCallId, string>();
 
   for (const envelope of records) {
     const payload = envelope.record.payload;
@@ -519,8 +518,10 @@ const subagentRecordsOf = (
         if (payload.runId === runId) joined.set(payload.toolCallId, payload);
         break;
       }
-      case "ToolCallPrepared": {
-        if (payload.runId === runId) preparedNames.set(payload.toolCallId, payload.toolName);
+      case "ModelResponseRecorded": {
+        if (payload.runId === runId)
+          for (const operation of payload.toolOperations)
+            declaredNames.set(operation.toolCallId, operation.toolName);
         break;
       }
       default: {
@@ -529,7 +530,7 @@ const subagentRecordsOf = (
     }
   }
 
-  return { requested, started, joined, preparedNames };
+  return { requested, started, joined, declaredNames };
 };
 
 /** Joined reports are canonical snapshots, keyed by child Run so replay cannot double charge. */
@@ -1118,6 +1119,8 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
 
 const decodePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
 const decodePersisted = Schema.decodeUnknownEffect(PersistedJson);
+const encodeCompactionMessageJson = Schema.encodeEffect(Schema.fromJsonString(Prompt.Message));
+const decodeCompactionMessageJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
 
 /** One application Tool Call declared inside a canonical `ModelResponseRecorded`'s messages. */
 interface DeclaredApplicationCall {
@@ -1136,11 +1139,13 @@ interface DeclaredToolCalls {
 
 /**
  * Pure inspection of every Tool Call declared in one canonical response. Provider-executed calls
- * retain their terminal results, while only application calls enter the durable prepared/settled
+ * retain their terminal results, while only application calls enter the durable declaration/settlement
  * protocol and completion singleton invariant.
  */
-const declaredToolCalls = Effect.fn("DurableAgentRuntime.declaredToolCalls")(
-  (messages: PersistedJson): Effect.Effect<DeclaredToolCalls, RunJournalError> =>
+const declaredToolCalls = (
+  messages: PersistedJson,
+): Effect.Effect<DeclaredToolCalls, RunJournalError> =>
+  Effect.suspend(() =>
     decodePrompt(messages).pipe(
       Effect.mapError((cause) =>
         RunJournalError.make({
@@ -1199,13 +1204,7 @@ const declaredToolCalls = Effect.fn("DurableAgentRuntime.declaredToolCalls")(
         return Effect.succeed({ application, all, providerResults });
       }),
     ),
-);
-
-/** Application calls alone drive durable preparation, settlement, and batch resume. */
-const declaredApplicationCalls = Effect.fn("DurableAgentRuntime.declaredApplicationCalls")(
-  (messages: PersistedJson): Effect.Effect<Array<DeclaredApplicationCall>, RunJournalError> =>
-    declaredToolCalls(messages).pipe(Effect.map(({ application }) => application)),
-);
+  );
 
 /**
  * The declared-but-unsettled Tool batch of one Run's last committed Turn (§2.4 batch resume):
@@ -1214,7 +1213,7 @@ const declaredApplicationCalls = Effect.fn("DurableAgentRuntime.declaredApplicat
  * path). `undefined` when the Run's journal ends at a complete Turn boundary.
  */
 interface PendingToolBatch {
-  readonly toolOperations?: ReadonlyArray<ToolOperation> | undefined;
+  readonly toolOperations: ReadonlyArray<ToolOperation>;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
   readonly turn: number;
@@ -1233,24 +1232,21 @@ interface PendingToolBatch {
   readonly messages: PersistedJson;
 }
 
-interface AttemptAppendContext {
-  readonly threadId: ThreadId;
-  readonly producerEpoch: ProducerEpoch;
-  readonly tailRef: Ref.Ref<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
-  /** Serializes every canonical append of one Attempt (run commits vs. the abort watcher). */
-  readonly gate: Semaphore.Semaphore;
-}
+type AttemptAppendContext = RunWriter;
+type PublishSettlement = (
+  batch: CanonicalBatch,
+) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
 
 /** What the resuming worker knows about the ownership period it superseded (durability §9). */
 interface AttemptLineage {
   readonly attemptId: AttemptId;
-  /** The Thread-store fence BEFORE this Attempt advanced it (0 = no prior producer). */
+  /** The fencing generation preceding this claim (0 = no prior generation). */
   readonly supersededEpoch: ProducerEpoch;
   /** The canonical `input:{sid}` record existed before this Attempt started. */
   readonly inputWasRecorded: boolean;
 }
 
-/** Review of one Submission's open (prepared-without-outcome) ordinary Tool Calls (DUR-009). */
+/** Review of one Submission's open (declared-without-outcome) ordinary Tool Calls (DUR-009). */
 interface OpenCallReview {
   /** No proof either way: these calls must become Unknown Outcomes (never auto-replayed). */
   readonly uncertain: Array<OpenToolCallEvidence>;
@@ -1271,6 +1267,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const ledger = yield* SubmissionLedger;
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
+  const reader = ThreadReader.fromStore(store);
+  const runStorage = yield* RunStorage;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
   // Disposable: canonical tail and owner identify the exact projection, never ownership.
@@ -1365,7 +1363,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       record: { payload },
     } of records) {
       if (payload._tag !== "ModelResponseRecorded" || payload.runId !== runId) continue;
-      for (const operation of payload.toolOperations ?? [])
+      for (const operation of payload.toolOperations)
         operations.set(operation.toolCallId, operation);
     }
 
@@ -1373,10 +1371,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   };
 
   const supportsOperation = (
-    submission: SubmissionSnapshot,
     call: OpenToolCallEvidence,
     operation: ToolOperation | undefined,
-    prepared: ToolCallPrepared | undefined,
     current:
       | {
           readonly definition: Agent.AnyDefinition;
@@ -1386,22 +1382,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   ): boolean => {
     const tool = current?.definition.toolkit.tools[call.toolName];
 
-    const replay =
-      operation?.replay ?? prepared?.replay ?? submission.agentDigests.replay?.tools[call.toolName];
-
     return (
       tool !== undefined &&
-      replay !== undefined &&
-      current?.contracts[call.toolName] === replay &&
-      (operation === undefined ||
-        (operation.toolName === call.toolName &&
-          operation.executionClass === getToolExecutionClass(tool) &&
-          operation.executionKind === getToolExecutionKind(tool.annotations))) &&
-      (prepared === undefined ||
-        (prepared.toolName === call.toolName &&
-          (prepared.executionClass === undefined ||
-            prepared.executionClass === getToolExecutionClass(tool)) &&
-          (prepared.executionKind ?? "ordinary") === getToolExecutionKind(tool.annotations)))
+      operation !== undefined &&
+      current?.contracts[call.toolName] === operation.replay &&
+      operation.toolName === call.toolName &&
+      operation.executionClass === getToolExecutionClass(tool) &&
+      operation.executionKind === getToolExecutionKind(tool.annotations)
     );
   };
 
@@ -1556,7 +1543,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         runIds.has(record.payload.runId));
   };
 
-  const readControl = Effect.fn("DurableAgentRuntime.readControl")(function* (
+  const readControl = Effect.fnUntraced(function* (
     threadId: ThreadId,
     submissionIds: ReadonlyArray<SubmissionId>,
   ) {
@@ -1568,7 +1555,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     );
   });
 
-  const loadRecoveryCheckpoint = Effect.fn("DurableAgentRuntime.loadRecoveryCheckpoint")(function* (
+  const loadRecoveryCheckpoint = Effect.fnUntraced(function* (
     threadId: ThreadId,
     throughSequence: CanonicalSequence,
   ) {
@@ -1698,7 +1685,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   };
 
   /** Run seeds retain their owner; certified Thread context serves only provably later Runs. */
-  const recoveryView = Effect.fn("DurableAgentRuntime.recoveryView")(function* (
+  const recoveryView = Effect.fnUntraced(function* (
     threadId: ThreadId,
     throughSequence: CanonicalSequence,
     submissionIds: ReadonlyArray<SubmissionId>,
@@ -1733,7 +1720,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const runId = runIdForSubmission(submissionId);
 
       const input = yield* getRunInput({ threadId, runId }).pipe(
-        Effect.provideService(ThreadStore, store),
+        Effect.provideService(ThreadReader, reader),
       );
 
       const controls = yield* Effect.forEach(
@@ -1745,7 +1732,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           runCompletedRecordId(runId),
         ],
         (recordId) =>
-          getRecord({ threadId, recordId }).pipe(Effect.provideService(ThreadStore, store)),
+          getRecord({ threadId, recordId }).pipe(Effect.provideService(ThreadReader, reader)),
       );
 
       const fresh = [input, ...controls].every(
@@ -1859,7 +1846,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     priorContext?: ThreadContextCheckpoint,
   ): Effect.fn.Return<void, DurableWorkerFailure> {
     if (store.recoveryCheckpoints === undefined) return;
-    const tail = yield* Ref.get(ctx.tailRef);
+    const tail = yield* ctx.tail;
     const loaded = yield* loadRecoveryCheckpoint(ctx.threadId, tail.sequence);
 
     // Start certification only after compaction has produced an eligible runtime checkpoint.
@@ -1972,21 +1959,21 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     yield* persistRecoveryCheckpoint(ctx, submission, contents.value, tail, yield* DateTime.now);
   });
 
-  const readAllTolerant = Effect.fn("DurableAgentRuntime.readAllTolerant")(
-    (
-      threadId: ThreadId,
-      submissionIds: ReadonlyArray<SubmissionId>,
-    ): Effect.Effect<
-      { readonly records: ReadonlyArray<CanonicalRecordEnvelope>; readonly materialized: boolean },
-      ThreadStoreError
-    > =>
+  const readAllTolerant = (
+    threadId: ThreadId,
+    submissionIds: ReadonlyArray<SubmissionId>,
+  ): Effect.Effect<
+    { readonly records: ReadonlyArray<CanonicalRecordEnvelope>; readonly materialized: boolean },
+    ThreadStoreError
+  > =>
+    Effect.suspend(() =>
       readControl(threadId, submissionIds).pipe(
         Effect.map((records) => ({ records, materialized: true })),
         Effect.catchTag("ThreadNotMaterialized", () =>
           Effect.succeed({ records: [], materialized: false }),
         ),
       ),
-  );
+    );
 
   interface RecoveryHistorySnapshot {
     readonly records: ReadonlyArray<CanonicalRecordEnvelope>;
@@ -2001,7 +1988,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * left for a later snapshot, while a short page or sequence gap fails typed before recovery
    * mutates anything. At most `ceil((through - after) / READ_PAGE)` store pages are requested.
    */
-  const readCanonicalRange = Effect.fn("DurableAgentRuntime.readCanonicalRange")(function* (
+  const readCanonicalRange = Effect.fnUntraced(function* (
     threadId: ThreadId,
     afterSequence: CanonicalSequence,
     throughSequence: CanonicalSequence,
@@ -2018,7 +2005,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * for this Thread, retaining only the addressed runs' control evidence
    * and never survives the pass or an interruption/restart.
    */
-  const readRecoveryHistory = Effect.fn("DurableAgentRuntime.readRecoveryHistory")(function* (
+  const readRecoveryHistory = Effect.fnUntraced(function* (
     threadId: ThreadId,
     submissionIds: ReadonlyArray<SubmissionId>,
   ): Effect.fn.Return<RecoveryHistorySnapshot, ThreadStoreError> {
@@ -2051,7 +2038,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * beyond its pass snapshot. The append-only prefix remains valid; no full-history retry is
    * needed, and malformed suffix pagination fails through the same typed boundary.
    */
-  const refreshRecoveryHistory = Effect.fn("DurableAgentRuntime.refreshRecoveryHistory")(function* (
+  const refreshRecoveryHistory = Effect.fnUntraced(function* (
     threadId: ThreadId,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     after: CanonicalSequence,
@@ -2082,59 +2069,52 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const knownRecordIdsOf = (records: ReadonlyArray<CanonicalRecordEnvelope>): Set<string> =>
     new Set(records.map((envelope) => envelope.record.recordId));
 
-  const settlementPayloadFromRecord = Effect.fn("DurableAgentRuntime.settlementPayloadFromRecord")(
-    function* (
-      record: RecordEnvelope,
-      submissionId: SubmissionId,
-    ): Effect.fn.Return<SubmissionSettledRecord, LedgerError> {
-      const payload = record.payload;
+  const settlementPayloadFromRecord = Effect.fnUntraced(function* (
+    record: RecordEnvelope,
+    submissionId: SubmissionId,
+  ): Effect.fn.Return<SubmissionSettledRecord, LedgerError> {
+    const payload = record.payload;
 
-      if (
-        payload._tag !== "SubmissionSettled" ||
-        payload.submissionId !== submissionId ||
-        payload.settlementId !== submissionSettlementId(submissionId) ||
-        record.recordId !== submissionSettlementRecordId(submissionId)
-      ) {
-        return yield* LedgerError.make({
-          operation: "settlementPayloadFromRecord",
-          message: `The reserved canonical record is not the exact Settlement for Submission ${submissionId}`,
-        });
-      }
+    if (
+      payload._tag !== "SubmissionSettled" ||
+      payload.submissionId !== submissionId ||
+      payload.settlementId !== submissionSettlementId(submissionId) ||
+      record.recordId !== submissionSettlementRecordId(submissionId)
+    ) {
+      return yield* LedgerError.make({
+        operation: "settlementPayloadFromRecord",
+        message: `The canonical record is not the exact Settlement for Submission ${submissionId}`,
+      });
+    }
 
-      return payload;
-    },
-  );
+    return payload;
+  });
 
-  const canonicalSettlementRecord = Effect.fn("DurableAgentRuntime.canonicalSettlementRecord")(
-    function* (
-      records: ReadonlyArray<CanonicalRecordEnvelope>,
-      submissionId: SubmissionId,
-    ): Effect.fn.Return<RecordEnvelope, LedgerError> {
-      const record = records.find(
-        (envelope) => envelope.record.recordId === submissionSettlementRecordId(submissionId),
-      )?.record;
+  const canonicalSettlementRecord = Effect.fnUntraced(function* (
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    submissionId: SubmissionId,
+  ): Effect.fn.Return<RecordEnvelope, LedgerError> {
+    const record = records.find(
+      (envelope) => envelope.record.recordId === submissionSettlementRecordId(submissionId),
+    )?.record;
 
-      if (record === undefined) {
-        return yield* LedgerError.make({
-          operation: "canonicalSettlementRecord",
-          message: `Canonical history has no Settlement for Submission ${submissionId}`,
-        });
-      }
-      yield* settlementPayloadFromRecord(record, submissionId);
+    if (record === undefined) {
+      return yield* LedgerError.make({
+        operation: "canonicalSettlementRecord",
+        message: `Canonical history has no Settlement for Submission ${submissionId}`,
+      });
+    }
+    yield* settlementPayloadFromRecord(record, submissionId);
 
-      return record;
-    },
-  );
+    return record;
+  });
 
   /**
-   * Fold structured recovery evidence from canonical records (plan §2.2). Canonical history is
-   * the only recovery truth (DUR-015): open Tool Calls are `ToolCallPrepared` without a closing
-   * `ToolCallSettled`/`ToolCallResolved`, a declared-pending batch is a committed tool-declaring
-   * response with zero prepared and zero settled records for its Turn (the provably-safe
-   * durability §15 window), approvals pend until a canonical decision exists, and joined-side
-   * prompt coverage requires a host `ModelResponseRecorded` after the joined `input:{sid}` record.
+   * Fold canonical declaration and closure evidence. Unsettled ordinary effects are uncertain
+   * unless canonical parameter rejection or a whole-batch approval blocker proves no dispatch.
+   * Original operation contracts classify idempotent delegation and orchestration recovery.
    */
-  const evidenceFor = Effect.fn("DurableAgentRuntime.evidenceFor")(function* (
+  const evidenceFor = Effect.fnUntraced(function* (
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     submissionId: SubmissionId,
     materialized: boolean,
@@ -2159,12 +2139,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     let recordedSettlementOutcome: SettlementOutcome | undefined;
     let hostSettlementOutcome: SettlementOutcome | undefined;
     let hostRespondedAfterInput = false;
-    const prepared: Array<OpenToolCallEvidence> = [];
-    const preparedKinds = new Map<RecordId, ToolCallPrepared["executionKind"]>();
-    const preparedTurns = new Set<number>();
-    const settledIds = new Set<string>();
-    const resolvedIds = new Set<string>();
     const unknownIds = new Set<string>();
+    const declarationIds = new Set<string>();
+    const responseTurns = new Set<number>();
     const requested: Array<PendingApprovalEvidence> = [];
     const decidedIds = new Set<string>();
 
@@ -2202,41 +2179,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         continue;
       }
       switch (payload._tag) {
-        case "ToolCallPrepared": {
-          if (payload.runId !== runId) break;
-          const identity = toolCallPreparedRecordId(runId, payload.turn, payload.toolCallId);
-
-          if (preparedKinds.has(identity)) {
-            return yield* RunJournalError.make({
-              message: "Duplicate canonical Tool preparation evidence",
-            });
-          }
-          preparedKinds.set(identity, payload.executionKind);
-          prepared.push(
-            OpenToolCallEvidence.make({
-              toolCallId: payload.toolCallId,
-              toolName: payload.toolName,
-              turn: payload.turn,
-            }),
-          );
-          preparedTurns.add(payload.turn);
-          break;
-        }
-        case "ToolCallSettled": {
-          if (payload.runId === runId) settledIds.add(payload.toolCallId);
-          break;
-        }
         case "ToolCallUnknown": {
           if (payload.runId === runId) unknownIds.add(payload.toolCallId);
-          break;
-        }
-        case "ToolCallResolved": {
-          if (
-            payload.runId === runId &&
-            (payload.resolution === "completed-with-result" ||
-              payload.resolution === "failed-with-error")
-          )
-            resolvedIds.add(payload.toolCallId);
           break;
         }
         case "ToolApprovalRequested": {
@@ -2258,6 +2202,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           break;
         }
         case "ModelResponseRecorded": {
+          if (payload.runId === runId) {
+            if (
+              responseTurns.has(payload.turn) ||
+              recordId !== modelResponseRecordId(runId, payload.turn) ||
+              payload.turnId !== turnIdForRun(runId, payload.turn)
+            )
+              return yield* RunJournalError.make({
+                message: "Tool declaration has no unique original response",
+              });
+            responseTurns.add(payload.turn);
+            for (const operation of payload.toolOperations) {
+              if (declarationIds.has(operation.toolCallId))
+                return yield* RunJournalError.make({
+                  message: "Tool Call identity is reused within a Run",
+                });
+              declarationIds.add(operation.toolCallId);
+            }
+          }
           if (
             payload.runId === runId &&
             (lastResponse === undefined || payload.turn > lastResponse.turn)
@@ -2284,20 +2246,31 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       }
     }
 
-    const allOpenCalls = prepared.filter(
-      (call) => !settledIds.has(call.toolCallId) && !resolvedIds.has(call.toolCallId),
+    const operationStates = toolOperationStates(records, runId);
+    const operations = operationsFor(records, runId);
+
+    for (const toolCallId of unknownIds)
+      if (!operations.has(toolCallId))
+        return yield* RunJournalError.make({
+          message: "Unknown Tool call has no original declaration",
+        });
+
+    const allOpenCalls = unresolvedToolOperations(records, runId).map((state) =>
+      OpenToolCallEvidence.make({
+        toolCallId: state.operation.toolCallId,
+        toolName: state.operation.toolName,
+        turn: state.turn,
+      }),
     );
 
-    // Only canonical classification authorizes the idempotent establishment protocol.
-    // A lifecycle record cannot silently upgrade an ordinary or unclassified preparation.
+    // Only the original response's operation contract authorizes idempotent establishment.
     const subagent = subagentRecordsOf(records, runId);
 
-    const isPreparedDelegation = (call: OpenToolCallEvidence): boolean =>
-      preparedKinds.get(toolCallPreparedRecordId(runId, call.turn, call.toolCallId)) ===
-      "delegation";
+    const isDeclaredDelegation = (call: OpenToolCallEvidence): boolean =>
+      operations.get(call.toolCallId)?.executionKind === "delegation";
 
     const openByCallId = new Map(
-      allOpenCalls.filter(isPreparedDelegation).map((call) => [call.toolCallId, call]),
+      allOpenCalls.filter(isDeclaredDelegation).map((call) => [call.toolCallId, call]),
     );
 
     const delegationCallIds: Array<ToolCallId> = [];
@@ -2315,22 +2288,20 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     for (const toolCallId of delegationCallIds) {
       const request = subagent.requested.get(toolCallId);
 
-      if (
-        request === undefined ||
-        preparedKinds.get(toolCallPreparedRecordId(runId, request.turn, toolCallId)) !==
-          "delegation"
-      ) {
+      if (request === undefined || operations.get(toolCallId)?.executionKind !== "delegation") {
         return yield* RunJournalError.make({
-          message: "Subagent evidence conflicts with Tool preparation classification",
+          message: "Subagent evidence conflicts with original Tool classification",
         });
       }
     }
     for (const call of allOpenCalls) {
-      if (isPreparedDelegation(call)) noteDelegation(call.toolCallId);
+      if (isDeclaredDelegation(call)) noteDelegation(call.toolCallId);
     }
     const openDelegationCalls: Array<OpenDelegationCallEvidence> = [];
 
     for (const toolCallId of delegationCallIds) {
+      // Explicit uncertainty must reach ordinary reconciliation, even for a framework call.
+      if (unknownIds.has(toolCallId)) continue;
       const open = openByCallId.get(toolCallId);
       const requestedRecord = subagent.requested.get(toolCallId);
       const startedRecord = subagent.started.get(toolCallId);
@@ -2372,7 +2343,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           toolCallId,
           toolName:
             open?.toolName ??
-            subagent.preparedNames.get(toolCallId) ??
+            subagent.declaredNames.get(toolCallId) ??
             requestedRecord?.delegationId ??
             "delegate_unknown",
           turn: open?.turn ?? requestedRecord?.turn ?? 1,
@@ -2386,30 +2357,30 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
     }
 
-    const isPreparedWorker = (call: OpenToolCallEvidence): boolean =>
-      preparedKinds.get(toolCallPreparedRecordId(runId, call.turn, call.toolCallId)) ===
-      "orchestration";
+    const isDeclaredWorker = (call: OpenToolCallEvidence): boolean =>
+      operations.get(call.toolCallId)?.executionKind === "orchestration";
 
     const openWorkerCalls = allOpenCalls.filter(
-      (call) => isPreparedWorker(call) && !unknownIds.has(call.toolCallId),
+      (call) => isDeclaredWorker(call) && !unknownIds.has(call.toolCallId),
     );
 
     const openToolCalls = allOpenCalls.filter(
       (call) =>
-        unknownIds.has(call.toolCallId) || (!isPreparedDelegation(call) && !isPreparedWorker(call)),
+        unknownIds.has(call.toolCallId) || (!isDeclaredDelegation(call) && !isDeclaredWorker(call)),
     );
 
     let declaredPendingBatch: DeclaredPendingBatchEvidence | undefined;
 
-    if (lastResponse !== undefined && !preparedTurns.has(lastResponse.turn)) {
-      const declared = yield* declaredApplicationCalls(lastResponse.messages);
+    if (lastResponse !== undefined) {
+      const pending = operationStates.filter(
+        (state) => state.turn === lastResponse.turn && !state.settled,
+      );
 
-      if (declared.length > 0 && !declared.some((call) => settledIds.has(call.id))) {
+      if (pending.length > 0)
         declaredPendingBatch = DeclaredPendingBatchEvidence.make({
           turn: lastResponse.turn,
-          callCount: declared.length,
+          callCount: pending.length,
         });
-      }
     }
     const approvalsPending = requested.filter((pending) => !decidedIds.has(pending.toolCallId));
 
@@ -2429,51 +2400,91 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     });
   });
 
-  /** Verify immutable preparation against the original declaration before any recovery side effect. */
-  const validatePreparedCall = Effect.fnUntraced(function* (
-    prepared: ToolCallPrepared,
-    declared: Effect.Success<ReturnType<typeof declaredToolCalls>>,
-    operations: ReadonlyArray<ToolOperation> | undefined,
+  /** Validate all original declarations before any reconciliation callback can observe them. */
+  const declaredCallsFor = Effect.fnUntraced(function* (
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    runId: RunId,
   ) {
-    const call = declared.application.find((call) => call.id === prepared.toolCallId);
+    const calls = new Map<string, DeclaredToolCall>();
+    const turns = new Set<number>();
 
-    if (call === undefined || prepared.toolName !== call.name)
-      return yield* RunJournalError.make({
-        message: `Prepared Tool ${prepared.toolCallId} differs from its original declaration`,
-      });
+    for (const { record } of records) {
+      const response = record.payload;
 
-    const parameters = yield* decodePersisted(call.params).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Invalid canonical Tool parameters", cause }),
-      ),
-    );
+      if (response._tag !== "ModelResponseRecorded" || response.runId !== runId) continue;
+      if (
+        turns.has(response.turn) ||
+        record.recordId !== modelResponseRecordId(runId, response.turn) ||
+        response.turnId !== turnIdForRun(runId, response.turn)
+      )
+        return yield* RunJournalError.make({
+          message: "Tool declaration has no unique original response",
+        });
+      turns.add(response.turn);
 
-    const declarationDigest = yield* withCrypto(digestJson(parameters)).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Cannot verify declared Tool parameters", cause }),
-      ),
-    );
+      const messagesDigest = yield* withCrypto(digestJson(response.messages)).pipe(
+        Effect.mapError((cause) =>
+          RunJournalError.make({ message: "Cannot verify original Tool response", cause }),
+        ),
+      );
 
-    const preparedDigest = yield* withCrypto(digestJson(prepared.parameters)).pipe(
-      Effect.mapError((cause) =>
-        RunJournalError.make({ message: "Cannot verify prepared Tool parameters", cause }),
-      ),
-    );
+      if (messagesDigest !== response.messagesDigest)
+        return yield* RunJournalError.make({
+          message: "Original Tool response has an invalid digest",
+        });
+      const declared = yield* declaredToolCalls(response.messages);
+      const identities = new Set<string>();
 
-    const operation = operations?.find((entry) => entry.toolCallId === prepared.toolCallId);
+      for (const operation of response.toolOperations) {
+        const matches = declared.application.filter(
+          (call) => call.id === operation.toolCallId && call.name === operation.toolName,
+        );
 
-    if (
-      prepared.parametersDigest !== declarationDigest ||
-      preparedDigest !== declarationDigest ||
-      (operation !== undefined &&
-        ((prepared.executionClass !== undefined &&
-          prepared.executionClass !== operation.executionClass) ||
-          (prepared.executionKind ?? "ordinary") !== operation.executionKind ||
-          (prepared.replay !== undefined && prepared.replay !== operation.replay)))
-    )
-      return yield* RunJournalError.make({
-        message: `Prepared Tool ${prepared.toolCallId} differs from its original operation`,
-      });
+        const call = matches[0];
+
+        if (
+          call === undefined ||
+          matches.length !== 1 ||
+          identities.has(operation.toolCallId) ||
+          calls.has(operation.toolCallId)
+        )
+          return yield* RunJournalError.make({
+            message: "Operation evidence differs from the original declaration",
+          });
+        identities.add(operation.toolCallId);
+
+        const parameters = yield* decodePersisted(call.params).pipe(
+          Effect.map(copyJson),
+          Effect.mapError((cause) =>
+            RunJournalError.make({ message: "Invalid canonical Tool parameters", cause }),
+          ),
+        );
+
+        const parametersDigest = yield* withCrypto(digestJson(parameters)).pipe(
+          Effect.mapError((cause) =>
+            RunJournalError.make({ message: "Cannot verify declared Tool parameters", cause }),
+          ),
+        );
+
+        calls.set(
+          operation.toolCallId,
+          DeclaredToolCall.make({
+            ...operation,
+            runId,
+            turnId: response.turnId,
+            turn: response.turn,
+            parameters,
+            parametersDigest,
+          }),
+        );
+      }
+      if (identities.size !== declared.application.length)
+        return yield* RunJournalError.make({
+          message: "Declared Tool batch has incomplete operation evidence",
+        });
+    }
+
+    return calls;
   });
 
   /**
@@ -2482,7 +2493,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * has authorized re-execution, so it stays in the resumed batch until its own `ToolCallSettled`
    * exists.
    */
-  const pendingToolBatchFor = Effect.fn("DurableAgentRuntime.pendingToolBatchFor")(function* (
+  const pendingToolBatchFor = Effect.fnUntraced(function* (
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     runId: ReturnType<typeof runIdForSubmission>,
     completionTools: ReadonlyArray<string> = [],
@@ -2491,7 +2502,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       | {
           readonly turn: number;
           readonly messages: PersistedJson;
-          readonly toolOperations?: ReadonlyArray<ToolOperation> | undefined;
+          readonly toolOperations: ReadonlyArray<ToolOperation>;
           readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
           readonly toolExposure?: Snapshot | undefined;
         }
@@ -2542,38 +2553,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     if (declared.application.length === 0) return undefined;
     const calls = declared.all;
 
-    if (lastResponse.toolOperations !== undefined) {
-      const identities = new Set<string>();
+    const identities = new Set<string>();
 
-      for (const operation of lastResponse.toolOperations) {
-        if (
-          identities.has(operation.toolCallId) ||
-          !declared.application.some(
-            (call) => call.id === operation.toolCallId && call.name === operation.toolName,
-          )
-        )
-          return yield* RunJournalError.make({
-            message: "Operation evidence differs from the declared Tool batch",
-          });
-        identities.add(operation.toolCallId);
-      }
-      if (identities.size !== declared.application.length)
-        return yield* RunJournalError.make({
-          message: "Declared Tool batch has incomplete operation evidence",
-        });
-    }
-
-    for (const {
-      record: { payload },
-    } of records) {
+    for (const operation of lastResponse.toolOperations) {
       if (
-        payload._tag !== "ToolCallPrepared" ||
-        payload.runId !== runId ||
-        payload.turn !== lastResponse.turn
+        identities.has(operation.toolCallId) ||
+        !declared.application.some(
+          (call) => call.id === operation.toolCallId && call.name === operation.toolName,
+        )
       )
-        continue;
-      yield* validatePreparedCall(payload, declared, lastResponse.toolOperations);
+        return yield* RunJournalError.make({
+          message: "Operation evidence differs from the declared Tool batch",
+        });
+      identities.add(operation.toolCallId);
     }
+    if (identities.size !== declared.application.length)
+      return yield* RunJournalError.make({
+        message: "Declared Tool batch has incomplete operation evidence",
+      });
 
     for (const part of declared.providerResults) {
       const result = yield* decodePersisted(part.result).pipe(
@@ -2694,89 +2691,72 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       definitions,
     ).pipe(Effect.provideService(ThreadStore, store), Effect.provideService(WakeScheduler, wake));
 
-  const attemptContextFor = Effect.fn("DurableAgentRuntime.attemptContextFor")(function* (
+  const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
+    makeRunWriter(threadId, producerEpoch).pipe(Effect.provideService(ThreadStore, store));
+
+  const recoveryOwnership = (
     threadId: ThreadId,
-    producerEpoch: ProducerEpoch,
-  ): Effect.fn.Return<AttemptAppendContext, ThreadStoreError | ThreadNotMaterialized> {
+    submissionId: SubmissionId,
+    ownershipToken: OwnershipToken,
+  ) =>
+    bindRunOwnership(threadId, submissionId, Effect.succeed(ownershipToken)).pipe(
+      Effect.provideService(SubmissionLedger, ledger),
+    );
+
+  /** Administrative publication rechecks its explicit authority under the canonical writer. */
+  const attemptContextAtTail = Effect.fnUntraced(function* (threadId: ThreadId) {
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-    const tailRef = yield* Ref.make({ sequence: tail.tailSequence, digest: tail.tailDigest });
-    const gate = yield* Semaphore.make(1);
 
-    return { threadId, producerEpoch, tailRef, gate };
-  });
-
-  /**
-   * Existing ownership-free settlement protocol for queued aborts and joined outcomes.
-   * Its canonical settlement reservation authorizes the append; it never authorizes tool
-   * execution, unknown-resolution appends, or repair audits beside a live writer.
-   */
-  const attemptContextAtTail = Effect.fn("DurableAgentRuntime.attemptContextAtTail")(function* (
-    threadId: ThreadId,
-  ): Effect.fn.Return<AttemptAppendContext, ThreadStoreError | ThreadNotMaterialized> {
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-    const tailRef = yield* Ref.make({ sequence: tail.tailSequence, digest: tail.tailDigest });
-    const gate = yield* Semaphore.make(1);
-
-    return { threadId, producerEpoch: tail.producerEpoch, tailRef, gate };
+    return yield* attemptContextFor(threadId, tail.producerEpoch);
   });
 
   const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
-    ctx.gate.withPermits(1)(
-      Effect.gen(function* () {
-        // Bounded fence refresh on a stale-tail conflict: `AppendConflict(reason: "tail")`
-        // means this batch was NOT appended — another legitimate same-epoch writer advanced
-        // the log after this context read its tail (a parent's establishment repair appending
-        // the deterministic lineage/start records to a child Thread while the child's
-        // own Attempt runs — routine when the child lives in its own Durable Object). The
-        // retry re-reads the ACTUAL tail the conflict carries and re-appends under the SAME
-        // epoch: a superseded epoch still fails `FenceRejected` (DUR-006 untouched) and the
-        // batch/record identity dedupe absorbs true replays. Treating a stale-tail conflict
-        // as "already appended" at the tolerant call sites would let a settlement finalize
-        // WITHOUT its canonical record.
-        for (let refresh = 0; ; refresh++) {
-          const tail = yield* Ref.get(ctx.tailRef);
+    ctx.append(batch).pipe(Effect.tap(() => wake.notify(ctx.threadId, "progress")));
 
-          const result = yield* store
-            .append(
-              FencedAppendRequest.make({
+  const publicationFor = (
+    ctx: AttemptAppendContext,
+    submissionId: SubmissionId,
+    authority: SettlementPublicationAuthority,
+  ): PublishSettlement =>
+    Effect.fnUntraced(function* (batch: CanonicalBatch) {
+      let tail = yield* ctx.tail;
+
+      for (let retries = 0; ; retries++) {
+        const result = yield* runStorage
+          .publishSettlement(
+            SettlementPublication.make({
+              submissionId,
+              authority,
+              append: FencedAppendRequest.make({
                 threadId: ctx.threadId,
-                batch,
+                producerEpoch: ctx.producerEpoch,
                 expectedTailSequence: tail.sequence,
                 expectedTailDigest: tail.digest,
-                producerEpoch: ctx.producerEpoch,
+                batch,
               }),
-            )
-            .pipe(
-              Effect.catchTag("AppendConflict", (conflict) =>
-                conflict.reason === "tail" &&
-                conflict.actualTailSequence !== undefined &&
-                conflict.actualTailDigest !== undefined &&
-                refresh < MAX_APPEND_FENCE_REFRESHES
-                  ? Effect.as(
-                      Ref.set(ctx.tailRef, {
-                        sequence: conflict.actualTailSequence,
-                        digest: conflict.actualTailDigest,
-                      }),
-                      undefined,
-                    )
-                  : Effect.fail(conflict),
-              ),
-            );
+            }),
+          )
+          .pipe(
+            Effect.catchTag("AppendConflict", (conflict) => {
+              if (
+                conflict.reason !== "tail" ||
+                conflict.actualTailSequence === undefined ||
+                conflict.actualTailDigest === undefined ||
+                retries >= 8
+              )
+                return Effect.fail(conflict);
+              tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
 
-          if (result !== undefined) {
-            yield* Ref.set(ctx.tailRef, {
-              sequence: result.lastSequence,
-              digest: result.tailDigest,
-            });
-            // Canonical storage is already committed. This hint may be lost or duplicated, but
-            // it lets scoped progress waiters re-read promptly without making memory authoritative.
-            yield* wake.notify(ctx.threadId);
+              return Effect.succeed(undefined);
+            }),
+          );
 
-            return result;
-          }
-        }
-      }),
-    );
+        if (result === undefined) continue;
+        yield* ctx.checkFence;
+
+        return result;
+      }
+    });
 
   /** Append the canonical `AbortRequested` record; an identity conflict means it already exists. */
   const appendAbortRecord = Effect.fn("DurableAgentRuntime.appendAbortRecord")(function* (
@@ -2984,66 +2964,19 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
     yield* pendingToolBatchFor(records, runId);
     const operations = operationsFor(records, runId);
-    const preparedByCallId = new Map<string, ToolCallPrepared>();
+    const declaredByCallId = yield* declaredCallsFor(records, runId);
 
-    for (const { record } of records) {
-      const payload = record.payload;
-
-      if (
-        payload._tag === "ToolCallPrepared" &&
-        payload.runId === runId &&
-        openCalls.some(
-          (call) => call.toolCallId === payload.toolCallId && call.turn === payload.turn,
-        )
-      ) {
-        if (
-          preparedByCallId.has(payload.toolCallId) ||
-          record.recordId !== toolCallPreparedRecordId(runId, payload.turn, payload.toolCallId)
-        )
-          return yield* RunJournalError.make({
-            message: `Prepared Tool ${payload.toolCallId} has inconsistent canonical identity`,
-          });
-        preparedByCallId.set(payload.toolCallId, payload);
-      }
-    }
-    // Validate all open declarations before the first reconciler call. A missing response or
-    // a damaged turn number must never bypass the original parameters/identity checks.
     for (const call of openCalls) {
-      const prepared = preparedByCallId.get(call.toolCallId);
-
-      const responses = records.filter(
-        ({ record }) =>
-          record.payload._tag === "ModelResponseRecorded" &&
-          record.payload.runId === runId &&
-          record.payload.turn === call.turn,
-      );
-
-      const response = responses[0]?.record;
+      const declared = declaredByCallId.get(call.toolCallId);
 
       if (
-        prepared === undefined ||
-        prepared.turn !== call.turn ||
-        prepared.toolName !== call.toolName ||
-        responses.length !== 1 ||
-        response?.payload._tag !== "ModelResponseRecorded" ||
-        response.recordId !== modelResponseRecordId(runId, call.turn) ||
-        response.payload.turnId !== turnIdForRun(runId, call.turn)
+        declared === undefined ||
+        declared.turn !== call.turn ||
+        declared.toolName !== call.toolName
       )
         return yield* RunJournalError.make({
-          message: `Prepared Tool ${call.toolCallId} has no unique original response`,
+          message: `Tool ${call.toolCallId} has no unique original declaration`,
         });
-      if (
-        (yield* withCrypto(digestJson(response.payload.messages))) !==
-        response.payload.messagesDigest
-      )
-        return yield* RunJournalError.make({
-          message: `Original response for Tool ${call.toolCallId} has an invalid digest`,
-        });
-      yield* validatePreparedCall(
-        prepared,
-        yield* declaredToolCalls(response.payload.messages),
-        response.payload.toolOperations,
-      );
     }
 
     const intents = new Map(
@@ -3054,10 +2987,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     let recovered = 0;
 
     for (const call of openCalls) {
-      const prepared = preparedByCallId.get(call.toolCallId);
+      const declared = declaredByCallId.get(call.toolCallId);
       const operation = operations.get(call.toolCallId);
 
-      const supported = supportsOperation(submission, call, operation, prepared, current);
+      const supported = supportsOperation(call, operation, current);
 
       const intent = intents.get(call.toolCallId);
       const author = intent?.author ?? RECONCILER_AUTHOR;
@@ -3130,10 +3063,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       }
       const tool = current?.definition.toolkit.tools[call.toolName];
 
-      if (
-        current === undefined &&
-        (operation?.executionClass ?? prepared?.executionClass) === "idempotent"
-      ) {
+      if (current === undefined && operation?.executionClass === "idempotent") {
         review.unproven.push(call);
         continue;
       }
@@ -3141,29 +3071,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         review.retryable.push(call);
         continue;
       }
-      if (prepared === undefined) {
+      if (declared === undefined) {
         review.unproven.push(call);
         continue;
       }
 
       const reconciled = yield* reconciler
         .reconcile(
-          PreparedToolCallEvidence.make({
+          DeclaredToolCallEvidence.make({
             threadId: submission.threadId,
             submissionId,
-            runId,
-            turn: prepared.turn,
-            toolCallId: prepared.toolCallId,
-            toolName: prepared.toolName,
-            parameters: prepared.parameters,
-            parametersDigest: prepared.parametersDigest,
-            ...(prepared.executionKind === undefined
-              ? {}
-              : { executionKind: prepared.executionKind }),
-            ...(prepared.executionClass === undefined
-              ? {}
-              : { executionClass: prepared.executionClass }),
-            ...(prepared.replay === undefined ? {} : { replay: prepared.replay }),
+            ...declared,
           }),
         )
         .pipe(
@@ -3242,7 +3160,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const applyCanonicalInput = Effect.fn("DurableAgentRuntime.applyCanonicalInput")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     inputApplied: RecoverySnapshot["inputApplied"],
   ) {
@@ -3252,16 +3170,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
     if (existing !== undefined) {
       if (inputApplied === undefined) {
-        const ownershipToken = yield* Ref.get(tokenRef);
-
-        yield* ledger.markInputApplied(
-          MarkInputAppliedRequest.make({
-            submissionId,
-            ownershipToken,
-            recordId,
-            sequence: existing.sequence,
-          }),
-        );
+        yield* ownership.markInputApplied({ recordId, sequence: existing.sequence });
       }
 
       return;
@@ -3290,21 +3199,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     );
 
     yield* hit("input:after-canonical-append");
-    const ownershipToken = yield* Ref.get(tokenRef);
-
-    yield* ledger.markInputApplied(
-      MarkInputAppliedRequest.make({
-        submissionId,
-        ownershipToken,
-        recordId,
-        sequence: result.firstSequence,
-      }),
-    );
+    yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
-  const canonicalRunStartFromRecords = Effect.fn(
-    "DurableAgentRuntime.canonicalRunStartFromRecords",
-  )(function* (records: ReadonlyArray<CanonicalRecordEnvelope>, runId: RunId) {
+  const canonicalRunStartFromRecords = Effect.fnUntraced(function* (
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    runId: RunId,
+  ) {
     const recordId = runStartedRecordId(runId);
 
     const starts = records.filter(
@@ -3382,15 +3283,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     };
   });
 
-  /**
-   * Settle ONE joined Submission with its host Run's outcome (plan §2.5, DUR-002: every accepted
-   * Submission is owed its own settlement). The same recoverable reserve → append → finalize
-   * sequence as `terminalize`, with two joined-specific rules: the canonical record's `runId` is
-   * the HOST Run (the joined input was consumed there), and the reservation is authorized by the
-   * recorded host linkage instead of lane ownership — a `joined` lane is never worker-claimable,
-   * so no ownership token can exist for it. Each step is idempotent; recovery completes any
-   * prefix (`AppendReservedSettlement` / `FinalizeLedgerFromHistory` / `SettleJoinedWithHost`).
-   */
   /**
    * Cross-lane drive-forward after one child Submission settles (spec §12 step 10): the child's
    * canonical Settlement is already durable, so the idempotent `recordChildSettled` wake is the
@@ -3517,74 +3409,36 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     const submission = joined.submission;
     const submissionId = submission.submissionId;
     const settlementId = submissionSettlementId(submissionId);
-    let record: RecordEnvelope;
 
-    if (joined.reservation !== undefined) {
-      // A prior pass already reserved the exact outcome: re-append the STORED record so the
-      // batch replay is byte-identical (DUR-011).
-      record = joined.reservation.record;
-    } else {
-      const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
-        SubmissionSettled.make({
-          submissionId,
-          settlementId,
-          receiptId: submission.receiptId,
-          outcome,
-          runId: runIdForSubmission(hostSubmissionId),
-          ...(hostSettlement.outcome === "failed" ? { result: hostSettlement.result } : {}),
-        }),
-      ).pipe(Effect.orDie);
+    const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
+      SubmissionSettled.make({
+        submissionId,
+        settlementId,
+        receiptId: submission.receiptId,
+        outcome,
+        runId: runIdForSubmission(hostSubmissionId),
+        ...(hostSettlement.outcome === "failed" ? { result: hostSettlement.result } : {}),
+      }),
+    ).pipe(Effect.orDie);
 
-      const envelope = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
-      // The envelope was constructed from validated parts, so an encode failure is a defect.
-      const encoded = yield* Schema.encodeEffect(RecordEnvelope)(envelope).pipe(Effect.orDie);
-      const recordDigest = yield* withCrypto(digestJson(encoded));
+    const envelope = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
 
-      const reserved = yield* ledger
-        .reserveSettlement(
-          SettlementReservation.make({
-            submissionId,
-            ownershipToken: JOINED_SETTLEMENT_TOKEN,
-            settlementId,
-            outcome,
-            record: envelope,
-            recordDigest,
-          }),
-        )
-        .pipe(
-          // A racing pass reserved first (its envelope differs only by `createdAt`): the
-          // stored reservation with the same host-derived outcome is the exact record owed.
-          Effect.catchTag("SettlementConflict", (conflict) =>
-            Effect.gen(function* () {
-              const current = yield* ledger.loadRecoverySnapshot(
-                RecoverySnapshotRequest.make({ submissionId }),
-              );
+    yield* hit("terminalize:before-publication");
 
-              const reservation = current.reservation;
-
-              if (reservation === undefined || reservation.outcome !== outcome) {
-                return yield* conflict;
-              }
-
-              return reservation;
-            }),
-          ),
-        );
-
-      record = reserved.record;
-      yield* hit("terminalize:after-reserve");
-    }
-    yield* appendBatch(
-      ctx,
+    const published = yield* publicationFor(ctx, submissionId, {
+      _tag: "Joined",
+      hostSubmissionId,
+    })(
       CanonicalBatch.make({
         batchId: submissionSettlementBatchId(submissionId),
         producerId: config.producerId,
-        records: [record],
+        records: [envelope],
       }),
-    ).pipe(
-      Effect.catchTag("AppendConflict", () => Effect.void),
-      Effect.asVoid,
     );
+
+    const record = published.record;
+
+    yield* wake.notify(ctx.threadId, "progress");
     yield* hit("terminalize:after-canonical-append");
     yield* notifyParentOfChildSettlement(submission, record);
 
@@ -3598,14 +3452,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return settlement;
   });
 
-  /**
-   * Terminalize joined-settlement loop (plan §2.5): after the host's own reserve → append →
-   * finalize, every Submission joined to the host settles with the host outcome. `terminalizing`
-   * rows are a prior pass's crashed joined settlement (reservation committed, finalize lost) and
-   * complete here too; `joining` rows were never consumed and are recovery's to revert, and
-   * settled rows are done. A crash anywhere in the loop leaves a classifiable prefix
-   * (`SettleJoinedWithHost` / `AppendReservedSettlement` finish the rest).
-   */
+  /** Every joined receipt publishes the host outcome; canonical history repairs any lost finalization. */
   const settleJoinedSubmissions = Effect.fn("DurableAgentRuntime.settleJoinedSubmissions")(
     function* (
       ctx: AttemptAppendContext,
@@ -3618,7 +3465,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
 
       for (const join of snapshot.joins) {
-        if (join.state !== "joined" && join.state !== "terminalizing") continue;
+        if (join.state !== "joined") continue;
 
         const joinedSnapshot = yield* ledger.loadRecoverySnapshot(
           RecoverySnapshotRequest.make({ submissionId: join.submissionId }),
@@ -3631,15 +3478,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   );
 
   /**
-   * Terminalization (durability §12, DUR-011): reserve the single exact settlement record, append
-   * that exact record canonically, finalize the ledger, release the lane, and hint waiters.
+   * Terminalization: publish the single canonical settlement, complete notifications, then
+   * finalize its ledger projection, release the lane, and hint waiters.
    * Submissions joined to this host Run settle with the host outcome immediately after
    * (plan §2.5); recovery completes any prefix of that loop.
    */
   const terminalize = Effect.fn("DurableAgentRuntime.terminalize")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    publishSettlement: PublishSettlement,
     outcome: AttemptOutcome,
     includeRunId: boolean,
     afterCanonical?: Effect.Effect<void, DurableWorkerFailure>,
@@ -3680,91 +3527,34 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     ).pipe(Effect.orDie);
 
     const record = yield* makeEnvelope(submissionSettlementRecordId(submissionId), payload);
-    // The envelope was constructed from validated parts, so an encode failure is a defect.
-    const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
-    const recordDigest = yield* withCrypto(digestJson(encoded));
-    const ownershipToken = yield* Ref.get(tokenRef);
 
-    const reserved = yield* ledger.reserveSettlement(
-      SettlementReservation.make({
-        submissionId,
-        ownershipToken,
-        settlementId,
-        outcome: outcome._tag,
-        record,
-        recordDigest,
-      }),
-    );
+    yield* hit("terminalize:before-publication");
 
-    yield* hit("terminalize:after-reserve");
-    yield* appendBatch(
-      ctx,
+    const published = yield* publishSettlement(
       CanonicalBatch.make({
         batchId: submissionSettlementBatchId(submissionId),
         producerId: config.producerId,
-        records: [reserved.record],
+        records: [record],
       }),
-    ).pipe(
-      Effect.catchTag("AppendConflict", () => Effect.void),
-      Effect.asVoid,
     );
+
+    yield* wake.notify(ctx.threadId, "progress");
     yield* hit("terminalize:after-canonical-append");
-    yield* notifyParentOfChildSettlement(submission, reserved.record);
-    if (afterCanonical !== undefined) yield* afterCanonical;
+    const canonicalSettlement = yield* settlementPayloadFromRecord(published.record, submissionId);
+
+    yield* notifyParentOfChildSettlement(submission, published.record);
+    if (afterCanonical !== undefined && canonicalSettlement.outcome === "completed")
+      yield* afterCanonical;
 
     const settlement = yield* ledger.finalizeSettlement(
       SettlementFinalization.make({ submissionId, settlementId }),
     );
 
-    const canonicalSettlement = yield* settlementPayloadFromRecord(reserved.record, submissionId);
-
     yield* wake.notify(submission.threadId);
-    yield* notifyParentOfChildSettlement(submission, reserved.record);
+    yield* notifyParentOfChildSettlement(submission, published.record);
     yield* settleJoinedSubmissions(ctx, canonicalSettlement);
 
-    return materializeSettlement(settlement, reserved.record);
-  });
-
-  /** Complete a previously reserved settlement: append the EXACT reserved record, then finalize. */
-  const completeReservation = Effect.fn("DurableAgentRuntime.completeReservation")(function* (
-    ctx: AttemptAppendContext,
-    submission: SubmissionSnapshot,
-    reservation: NonNullable<RecoverySnapshot["reservation"]>,
-    alreadyRecorded: boolean,
-  ): Effect.fn.Return<Settlement, DurableWorkerFailure> {
-    if (!alreadyRecorded) {
-      yield* appendBatch(
-        ctx,
-        CanonicalBatch.make({
-          batchId: submissionSettlementBatchId(submission.submissionId),
-          producerId: config.producerId,
-          records: [reservation.record],
-        }),
-      ).pipe(
-        Effect.catchTag("AppendConflict", () => Effect.void),
-        Effect.asVoid,
-      );
-      yield* hit("terminalize:after-canonical-append");
-    }
-    yield* notifyParentOfChildSettlement(submission, reservation.record);
-
-    const settlement = yield* ledger.finalizeSettlement(
-      SettlementFinalization.make({
-        submissionId: submission.submissionId,
-        settlementId: reservation.settlementId,
-      }),
-    );
-
-    const canonicalSettlement = yield* settlementPayloadFromRecord(
-      reservation.record,
-      submission.submissionId,
-    );
-
-    yield* wake.notify(submission.threadId);
-    yield* notifyParentOfChildSettlement(submission, reservation.record);
-    yield* settleJoinedSubmissions(ctx, canonicalSettlement);
-
-    return materializeSettlement(settlement, reservation.record);
+    return materializeSettlement(settlement, published.record);
   });
 
   /** Canonical settlement exists: rebuild the ledger from history, never the reverse (DUR-015). */
@@ -3797,7 +3587,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const settleAborted = Effect.fn("DurableAgentRuntime.settleAborted")(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    publishSettlement: PublishSettlement,
     intent: AbortIntent,
     evidence: RecoveryEvidence,
     knownIds: Set<string>,
@@ -3818,7 +3608,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* terminalize(
       ctx,
       submission,
-      tokenRef,
+      publishSettlement,
       { _tag: "aborted" },
       evidence.inputRecorded,
     );
@@ -4085,7 +3875,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     readonly childRecords: ReadonlyArray<CanonicalRecordEnvelope>;
   }
 
-  const verifiedChildUsage = Effect.fn("DurableAgentRuntime.verifiedChildUsage")(function* (
+  const verifiedChildUsage = Effect.fnUntraced(function* (
     verified: VerifiedChildSettlement,
     childRunId: RunId,
   ) {
@@ -4337,7 +4127,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         reason === "unavailable"
           ? {
               _tag: "ToolUnavailable",
-              toolName: subagent.preparedNames.get(toolCallId) ?? request.delegationId,
+              toolName: subagent.declaredNames.get(toolCallId) ?? request.delegationId,
               execution: "unavailable",
               message: `The original delegation implementation is unavailable. Its original child settled ${verified.outcome}; no replacement child was started.`,
             }
@@ -4380,7 +4170,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ToolCallSettled.make({
           runId,
           toolCallId,
-          toolName: subagent.preparedNames.get(toolCallId) ?? request.delegationId,
+          toolName: subagent.declaredNames.get(toolCallId) ?? request.delegationId,
           result: boundedResult,
           isFailure: true,
         }),
@@ -4450,7 +4240,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     function* (
       ctx: AttemptAppendContext,
       parent: SubmissionSnapshot,
-      ownershipToken: OwnershipToken,
+      ownership: RunOwnership,
       unavailableCalls?: ReadonlySet<ToolCallId>,
     ) {
       const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -4521,7 +4311,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           pending === undefined ||
           call === undefined ||
           request === undefined ||
-          subagent.preparedNames.get(toolCallId) !== call.name ||
+          subagent.declaredNames.get(toolCallId) !== call.name ||
           request.delegationId !== call.name ||
           reservation.parentSubmissionId !== parent.submissionId ||
           request.reservationId !== reservation.reservationId ||
@@ -4616,14 +4406,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             message: `Tool Call ${call.id} has inconsistent canonical child attachment evidence`,
           });
         }
-        yield* ledger
-          .attachChildToReservation(
-            AttachChildToReservationRequest.make({
-              reservationId: reservation.reservationId,
-              ownershipToken,
-              childSubmissionId: started.childSubmissionId,
-            }),
-          )
+        yield* ownership
+          .attachChildToReservation({
+            reservationId: reservation.reservationId,
+            childSubmissionId: started.childSubmissionId,
+          })
           .pipe(
             Effect.catchTag(
               "ChildReservationConflict",
@@ -4668,7 +4455,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const abortAttachedChildren = Effect.fn("DurableAgentRuntime.abortAttachedChildren")(function* (
     ctx: AttemptAppendContext,
     parent: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
+    ownership: RunOwnership,
     knownIds: Set<string>,
   ): Effect.fn.Return<ChildAbortDisposition, DurableWorkerFailure> {
     const submissionId = parent.submissionId;
@@ -4776,14 +4563,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const first = waiting[0];
 
       if (first === undefined) return "clear";
-      const ownershipToken = yield* Ref.get(tokenRef);
 
-      const suspension = yield* ledger.suspend(
-        SuspendRequest.make({
-          submissionId,
-          ownershipToken,
-          reason: WaitingForChildSuspension.make({ children: [first, ...waiting.slice(1)] }),
-        }),
+      const suspension = yield* ownership.suspend(
+        WaitingForChildSuspension.make({ children: [first, ...waiting.slice(1)] }),
       );
 
       yield* hit("subagent:after-suspend");
@@ -4826,10 +4608,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
   /**
    * Superseding-Attempt interruption audit (durability §9): appended at most once per superseded
-   * fence epoch before this Attempt re-invokes the model. It deliberately over-approximates — a
-   * prior ownership period that ended cleanly between commits still gets one — because durable
-   * state cannot distinguish a mid-stream provider loss from a crash between boundaries, and the
-   * honest direction is to record that duplicate provider cost is possible, never to hide it.
+   * fence generation before this Attempt re-invokes the model. It deliberately over-approximates:
+   * an owner may have stopped between commits, and host retirement or repair can advance the
+   * fence without inference. History cannot distinguish these from a lost provider response.
+   * This records incomplete accounting, not an exact number or identity of missing model calls.
    */
   const appendInterruptedAudit = Effect.fn("DurableAgentRuntime.appendInterruptedAudit")(function* (
     ctx: AttemptAppendContext,
@@ -4867,20 +4649,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /**
-   * Plan step 3 (+6): drive `AgentRuntime.stream` with history rebuilt by the run journal, commit
+   * Drive the shared interpreter Effect with history rebuilt by the run journal, commit
    * each Turn canonically through the fenced append, watch for durable abort intent, and keep the
    * ownership lease renewed. Engine Run failures settle `failed`; coordinator failures abort the
    * Attempt cleanly with the obligation still owed.
    *
-   * Phase 5 commit shape (plan §2.1): a tool-declaring Turn splits into a RESPONSE batch
-   * (committed by the engine's `commitResponse` hook at the finish part — pending steering plus
-   * the response messages, creating the durability §15 provably-safe window), the durable
-   * approval preflight (§2.6 — recorded decisions replay deterministically, unresolved requests
-   * become canonical and suspend the Attempt), an optional PREPARED batch (before any handler
-   * starts), and a RESULTS batch at the next TurnStarted/RunCompleted/RunFailed seam. A completed
-   * no-tool Turn atomically adds its `RunCompleted` marker to the P4 single-batch shape. When the
-   * journal ends mid-batch,
-   * `RunOptions.resume` replays the declared batch without re-invoking the model (§2.4).
+   * The interpreter supplies validated response, closed Tool-result, and completion facts.
+   * Responses precede approval and effectful dispatch; readonly responses may join their closed
+   * results. Tool results precede input drains and the next Turn. A no-tool response and Run
+   * completion share one batch. A completion Tool's result
+   * precedes its terminal-only completion batch, so recovery can repeat a pure output projection
+   * without replaying the handler. Pending batches resume from their canonical declarations.
    */
   const runModel = <
     InputSchema extends Schema.Top,
@@ -4915,8 +4694,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     >,
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
-    tokenRef: Ref.Ref<OwnershipToken>,
-    renewAtRef: Ref.Ref<number>,
+    session: RunStorageSession,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     canonical: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     canonicalThrough: CanonicalSequence,
@@ -4971,7 +4749,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       const saveRecoveryCheckpoint = Effect.fn("DurableAgentRuntime.saveRecoveryCheckpoint")(
         function* (compactionId: RecordId): Effect.fn.Return<void, DurableWorkerFailure> {
           if (store.recoveryCheckpoints === undefined) return;
-          const tail = yield* Ref.get(ctx.tailRef);
+          const tail = yield* ctx.tail;
 
           const source =
             priorContext === undefined
@@ -4984,7 +4762,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           let compaction: CanonicalRecordEnvelope | undefined;
           let latestResponse: CanonicalSequence | undefined;
           let firstSequence = journalSeed?.firstSequence;
-          const orchestrationCalls = new Set<string>();
+          const protectedCalls = new Set<string>();
+          const protectedTurns = new Set<number>();
+          const operationRecords: Array<CanonicalRecordEnvelope> = [];
 
           yield* Stream.runForEach(source, (entry) =>
             Effect.sync(() => {
@@ -4993,15 +4773,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               if (entry.record.recordId === compactionId) compaction = entry;
               if (!("runId" in payload) || payload.runId !== runId) return;
               firstSequence ??= entry.sequence;
-              if (payload._tag === "ModelResponseRecorded") latestResponse = entry.sequence;
-              if (
-                payload._tag === "ToolCallPrepared" &&
-                (payload.executionKind === "delegation" ||
-                  payload.executionKind === "orchestration")
-              )
-                orchestrationCalls.add(payload.toolCallId);
+              operationRecords.push(entry);
+              if (payload._tag === "ModelResponseRecorded") {
+                latestResponse = entry.sequence;
+                for (const operation of payload.toolOperations)
+                  if (
+                    operation.executionKind === "delegation" ||
+                    operation.executionKind === "orchestration"
+                  ) {
+                    protectedCalls.add(operation.toolCallId);
+                    protectedTurns.add(payload.turn);
+                  }
+              }
             }),
           );
+          for (const state of unresolvedToolOperations(operationRecords, runId)) {
+            protectedCalls.add(state.operation.toolCallId);
+            protectedTurns.add(state.turn);
+          }
           if (
             compaction === undefined ||
             compaction.record.payload._tag !== "CompactionCreated" ||
@@ -5049,6 +4838,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 );
 
           let frontier = journalSeed?.frontier;
+          const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
+          let retiredIdentitiesExceeded = false;
 
           const retained = yield* Stream.runCollect(
             source.pipe(
@@ -5065,11 +4856,18 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 )
                   return true;
                 if (!("runId" in payload) || payload.runId !== runId) return false;
-                if ("toolCallId" in payload && orchestrationCalls.has(payload.toolCallId))
-                  return true;
+                if ("toolCallId" in payload && protectedCalls.has(payload.toolCallId)) return true;
                 switch (payload._tag) {
                   case "ModelResponseRecorded":
-                  case "ToolCallPrepared":
+                    if (protectedTurns.has(payload.turn)) return true;
+                    for (const operation of payload.toolOperations) {
+                      if (retiredToolCallIds.has(operation.toolCallId)) continue;
+                      if (retiredToolCallIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                        retiredIdentitiesExceeded = true;
+                      else retiredToolCallIds.add(operation.toolCallId);
+                    }
+
+                    return false;
                   case "ToolCallSettled":
                   case "ToolCallUnknown":
                   case "ToolCallResolved":
@@ -5084,6 +4882,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               }),
             ),
           );
+
+          if (retiredIdentitiesExceeded)
+            return yield* RunJournalError.make({
+              message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+            });
 
           const ids = new Set<SubmissionId>([submissionId]);
 
@@ -5102,6 +4905,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 submissionIds: [...ids],
                 seed: JournalCheckpointSeed.make({
                   runId,
+                  retiredToolCallIds: [...retiredToolCallIds],
                   throughSequence: retiredThrough,
                   ...(firstSequence === undefined ? {} : { firstSequence }),
                   committedTurns: retired.committedTurns,
@@ -5233,11 +5037,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         });
       }
 
-      const pending = yield* pendingToolBatchFor(
-        records,
-        runId,
-        agent.definition.completionFromTools?.map((declaration) => declaration.tool),
-      );
+      const completionTools = [
+        ...(agent.definition.completion === undefined ? [] : [agent.definition.completion.tool]),
+        ...(agent.definition.completionFromTools?.map((declaration) => declaration.tool) ?? []),
+      ];
+
+      const pending = yield* pendingToolBatchFor(records, runId, completionTools);
 
       const resumeProjection =
         pending === undefined
@@ -5272,13 +5077,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const applicationCalls = pending?.calls.filter((call) => !call.providerExecuted);
 
-      // Only the original single-call action-completion case may project a reconciled receipt.
-      // Other settled calls are historical outcomes, regardless of their current completion role.
+      // A single successful completion call can have its result committed before the terminal
+      // marker. Reuse that result for either completion mode, after verifying its original
+      // operation contract; no handler or provider call is needed to repeat output projection.
       const completionCandidate =
         applicationCalls?.length === 1 &&
-        agent.definition.completionFromTools?.some(
-          (declaration) => declaration.tool === applicationCalls[0]?.name,
-        ) &&
+        completionTools.some((tool) => tool === applicationCalls[0]?.name) &&
         pending?.settled.some(
           (result) => result.id === applicationCalls[0]?.id && !result.isFailure,
         )
@@ -5289,16 +5093,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         pending !== undefined &&
         completionCandidate !== undefined &&
         supportsOperation(
-          submission,
           OpenToolCallEvidence.make({
             toolCallId: Schema.decodeSync(ToolCallId)(completionCandidate.id),
             toolName: completionCandidate.name,
             turn: pending.turn,
           }),
-          pending.toolOperations?.find(
+          pending.toolOperations.find(
             (operation) => operation.toolCallId === completionCandidate.id,
           ),
-          undefined,
           { definition: agent.definition, contracts: currentContracts },
         )
           ? Schema.decodeSync(ToolCallId)(completionCandidate.id)
@@ -5370,9 +5172,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       // RUN-023: per-Turn usage staged by the engine's `noteTurnUsage` for the
       // Turn's canonical response record (keyed by CANONICAL turn number).
-      const stagedToolExposure = new Map<number, Snapshot>();
-      const stagedToolSelections = new Map<string, Selection>();
-
       const stagedUsage = new Map<
         number,
         {
@@ -5734,20 +5533,27 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       /** Joined inputs already handed to the engine during THIS Attempt (never re-deliver). */
       const deliveredJoinInputs = new Set<string>();
       // Canonical encoded parameters per declared call, for the approval request digest: seeded
-      // by `commitResponse` (which the engine invokes before approval preflight) and by the
-      // resumed batch's declared calls.
+      // by the direct response commit before approval preflight and by the resumed batch.
       const encodedParamsByCallId = new Map<string, unknown>();
-      // Declared Tool name per call: the subagent join/sibling-settle appends rebuild exact
-      // `ToolCallSettled` records outside the engine's results commit, so the declared name must
-      // be recoverable per call id (seeded from canonical prepared records, the resumed batch,
-      // and every `commitResponse`).
+      // Subagent joins append their atomic settlement outside the ordinary results commit.
+      // Their Tool names come from canonical responses or the newly committed declaration.
       const declaredNamesByCallId = new Map<string, string>();
       // Canonical subagent lifecycle state of this Run (SUB-016): seeded from canonical records,
       // advanced by the establish/join hook closures below, and consulted on every replay so an
       // identical establishment converges on the one existing child.
       const subagentState = subagentRecordsOf(records, runId);
 
-      for (const [callId, name] of subagentState.preparedNames) {
+      const declaredToolIds = new Set([
+        ...(journalSeed?.retiredToolCallIds ?? []),
+        ...subagentState.declaredNames.keys(),
+      ]);
+
+      if (declaredToolIds.size > MAX_RUN_TOOL_CALL_IDENTITIES)
+        return yield* RunJournalError.make({
+          message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+        });
+
+      for (const [callId, name] of subagentState.declaredNames) {
         declaredNamesByCallId.set(callId, name);
       }
       if (pending !== undefined) {
@@ -5792,18 +5598,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         }
       }
 
+      // A canonical initial blocker proves no dispatch preceded this Attempt. Carry that
+      // proof across sequential approvals until the fence, as for a newly committed response.
+      // Resumption, retry permission and parameter rejection alone provide no such proof.
+      const initialDispatchProofTurns = new Set(initialDispatchBlockedTurns(records, runId));
+
       let currentToolTurn: { readonly turn: number; readonly turnId: TurnId } | undefined =
         pending === undefined ? undefined : { turn: pending.turn, turnId: pending.turnId };
 
-      // Terminal sibling results observed from the Run event stream, keyed by Tool Call id: the
-      // suspension seam commits each settled non-waiting sibling as a per-call late-settle batch
-      // BEFORE the `waitingForChild` suspension so no sibling effect is lost to it (plan §2).
-      const siblingResults = new Map<
-        string,
-        { readonly toolCallId: ToolCallId; readonly result: unknown; readonly isFailure: boolean }
-      >();
-
-      const budgetRejectedCalls = new Set<string>();
       // Step-hook coordinator failures are re-wrapped by the engine as `DurableStepError` in the
       // handler channel; this side channel preserves the original failure so the Attempt aborts
       // (obligation still owed) instead of settling the Run `failed` on an infrastructure fault.
@@ -5818,27 +5620,76 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           halt,
         );
 
-      interface RunState {
-        readonly baseLen: number | undefined;
-        readonly lastCommitLen: number;
-        readonly history: Prompt.Prompt | undefined;
-        readonly pendingTurn: { readonly turn: number; readonly turnId: TurnId } | undefined;
-        readonly completedOutput: PersistedJson | undefined;
-        readonly completedRunDisposition: PersistedJson | undefined;
-        readonly completedFinishReason: "budget-exhausted" | undefined;
-        readonly completedExhausted: ExhaustedLimit | undefined;
-      }
+      // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
+      // authority before semantic work; progress delivery is not a coordinator checkpoint.
+      const checkpoint = halt(
+        Effect.gen(function* () {
+          const failure = yield* Ref.get(haltRef);
 
-      const stateRef = yield* Ref.make<RunState>({
-        baseLen: undefined,
-        lastCommitLen: 0,
-        history: undefined,
-        pendingTurn: undefined,
-        completedOutput: undefined,
-        completedRunDisposition: undefined,
-        completedFinishReason: undefined,
-        completedExhausted: undefined,
+          if (failure !== undefined) return yield* failure;
+        }),
+      );
+
+      // One readonly Turn may own its response without publishing it. Promotion and settlement
+      // share this gate so concurrent Steps or updates cannot publish the response twice.
+      const responseGate = yield* Semaphore.make(1);
+
+      let deferredResponse:
+        | { readonly turn: number; readonly turnId: TurnId; readonly batch: CanonicalBatch }
+        | undefined;
+
+      const acceptResponseDeclarations = (batch: CanonicalBatch) => {
+        for (const record of batch.records) {
+          if (record.payload._tag !== "ModelResponseRecorded") continue;
+          for (const call of record.payload.toolOperations) {
+            declaredToolIds.add(call.toolCallId);
+            declaredNamesByCallId.set(call.toolCallId, call.toolName);
+          }
+        }
+      };
+
+      const promoteResponse = Effect.gen(function* () {
+        const halted = yield* Ref.get(haltRef);
+
+        if (halted !== undefined) return yield* halted;
+        const deferred = deferredResponse;
+
+        if (deferred === undefined) return;
+        const record = deferred.batch.records[0];
+
+        if (record?.payload._tag !== "ModelResponseRecorded")
+          return yield* RunJournalError.make({ message: "Deferred Turn has no owned response" });
+        const calls = yield* declaredToolCalls(record.payload.messages);
+
+        const batch = CanonicalBatch.make({
+          ...deferred.batch,
+          batchId: turnResponseBatchId(runId, deferred.turn),
+        });
+
+        yield* appendBatch(ctx, batch);
+        acceptResponseDeclarations(batch);
+        for (const call of calls.application) encodedParamsByCallId.set(call.id, call.params);
+        recordCommittedUsage(batch);
+        for (const entry of batch.records) knownIds.add(entry.recordId);
+        deferredResponse = undefined;
+        // Readonly handlers may already have started; promotion does not prove initial dispatch.
+        yield* hit("turn:after-response-append");
       });
+
+      const flushDeferredResponse = promoteResponse.pipe(
+        // Retain failure before releasing the permit; a waiting capability must not retry it.
+        Effect.tapError((failure) => Ref.set(haltRef, failure)),
+        responseGate.withPermits(1),
+      );
+
+      // Initial instruction metadata supports resumed context and compaction. The engine
+      // owns all subsequent history boundaries and supplies complete commit facts directly.
+      let initialHistoryLength = 0;
+      let initialInstructions: ReadonlyArray<Prompt.Message> = [];
+
+      const completionState: {
+        committed?: NonNullable<TurnCommitInput["runCompletion"]>;
+      } = {};
 
       const turnCounter = yield* Ref.make(
         journal.committedTurns + (journal.policyUsage.modelRestarts ?? 0),
@@ -5849,28 +5700,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         nextRunId: Effect.succeed(runId),
         nextTurnId: Ref.modify(turnCounter, (turn) => [turnIdForRun(runId, turn + 1), turn + 1]),
       };
-
-      // Track live Prompt boundaries only. The journal owns durable per-Turn commits and recovery;
-      // successful-run ThreadHistory retention cannot replace those incremental commits.
-      const onHistory = (history: Prompt.Prompt): Effect.Effect<void> =>
-        Ref.update(stateRef, (state) =>
-          state.baseLen === undefined
-            ? {
-                ...state,
-                baseLen: history.content.length,
-                // A fresh Run's first commit starts at the engine-provided history boundary so
-                // the evaluated instruction + user messages become canonical inside Turn 1 (D8).
-                // A resumed Run's boundary is the engine's re-evaluated initial prompt: those
-                // messages are already canonical inside the original Turn 1 and never re-enter
-                // (a pending batch resume always implies at least one committed Turn).
-                lastCommitLen:
-                  journal.committedTurns === 0
-                    ? journal.historyBefore.content.length
-                    : history.content.length,
-                history,
-              }
-            : { ...state, history },
-        );
 
       // Current instructions govern the continuation; the original user intent, steering and
       // committed history survive. The pending Turn re-enters through the batch continuation,
@@ -5904,28 +5733,24 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const resumeContext = {
         prepare: ({ source }: { readonly source: Prompt.Prompt }) =>
-          Ref.get(stateRef).pipe(
-            Effect.map((state) => {
-              const view = instructionView(
-                resumeProjection.prompt.content,
-                source.content
-                  .slice(resumeProjection.historyBefore.content.length, state.baseLen)
-                  .filter((message) => message.role === "system"),
-                true,
-                resumeProjection.historyBefore.content.length,
-              );
+          Effect.sync(() => {
+            const view = instructionView(
+              resumeProjection.prompt.content,
+              initialInstructions,
+              true,
+              resumeProjection.historyBefore.content.length,
+            );
 
-              return {
-                prompt: Prompt.fromMessages([
-                  ...view.messages,
-                  ...source.content.slice(state.baseLen ?? source.content.length),
-                ]),
-                priorRunPrefixLength: view.prefixLength(
-                  resumeProjection.historyBefore.content.length,
-                ),
-              };
-            }),
-          ),
+            return {
+              prompt: Prompt.fromMessages([
+                ...view.messages,
+                ...source.content.slice(initialHistoryLength),
+              ]),
+              priorRunPrefixLength: view.prefixLength(
+                resumeProjection.historyBefore.content.length,
+              ),
+            };
+          }),
       } satisfies RunContextHook<never, never>;
 
       const externalContext = runContextPreparation.hook;
@@ -5955,6 +5780,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             };
 
       const durability: RunDurabilityHook<CoordinatorHalt | CompactionError, never> = {
+        checkpoint,
+        initialize: ({ initialHistory, priorHistoryLength }) =>
+          Effect.sync(() => {
+            initialHistoryLength = initialHistory.content.length;
+            initialInstructions = initialHistory.content
+              .slice(priorHistoryLength)
+              .filter((message) => message.role === "system");
+          }),
         commitModelRestart: (restart) =>
           recordHalt(
             Effect.gen(function* () {
@@ -5986,13 +5819,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               knownIds.add(recordId);
             }),
           ),
-        noteToolExposure: (turn, snapshot) =>
-          Effect.sync(() => {
-            stagedToolExposure.set(turn, snapshot);
-          }),
         reservePolicyUsage: (usage) =>
           recordHalt(
             Effect.gen(function* () {
+              yield* flushDeferredResponse;
+
               const recordId = decodeRecordIdSync(
                 `policy:${runId}:${usage.programmaticToolCalls}:${usage.finalizationUsed}`,
               );
@@ -6017,145 +5848,322 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               yield* hit("policy:after-reservation-append");
             }),
           ),
-        commitResponse: (commit) =>
+        commitTurn: (commit) =>
           recordHalt(
             Effect.gen(function* () {
-              const canonicalTurn = commit.turn;
+              const halted = yield* Ref.get(haltRef);
 
-              currentToolTurn = { turn: canonicalTurn, turnId: commit.turnId };
-              for (const call of commit.calls) {
-                encodedParamsByCallId.set(call.toolCallId, call.parameters);
-                declaredNamesByCallId.set(call.toolCallId, call.toolName);
-              }
-              const responseId = modelResponseRecordId(runId, canonicalTurn);
-
-              if (knownIds.has(responseId)) return;
-              const state = yield* Ref.get(stateRef);
-              const history = state.history;
-
-              if (history === undefined) {
+              if (halted !== undefined) return yield* halted;
+              if (
+                deferredResponse !== undefined &&
+                (deferredResponse.turn !== commit.turn || deferredResponse.turnId !== commit.turnId)
+              )
                 return yield* RunJournalError.make({
-                  message: `Turn ${canonicalTurn} committed a response before official history advanced`,
+                  message: "A new Turn preceded settlement of its deferred response",
                 });
-              }
-              // D8 extension (decision point 6): the pending slice — evaluated instructions +
-              // input for Turn 1, queued steering for later Turns — becomes canonical as the
-              // leading messages of this response batch.
-              const pendingSlice = history.content.slice(state.lastCommitLen);
-              const createdAt = yield* nowUtc;
+              if (commit._tag === "Partial") yield* promoteResponse;
+              const deferred = deferredResponse;
 
-              const batch = yield* withCrypto(
-                turnResponseBatch({
-                  toolExposure: commit.toolExposure,
-                  toolOperations: commit.calls.map((call) =>
-                    ToolOperation.make({
-                      toolCallId: call.toolCallId,
-                      toolName: call.toolName,
-                      executionClass: call.executionClass,
-                      executionKind: call.executionKind,
-                      replay: currentContracts[call.toolName]!,
-                    }),
-                  ),
-                  toolParameterRejections: commit.toolParameterRejections,
-                  runId,
-                  turn: canonicalTurn,
-                  turnId: commit.turnId,
-                  appended: [...pendingSlice, ...commit.responseMessages.content],
-                  producerId: config.producerId,
-                  deploymentId: config.deploymentId,
-                  createdAt,
-                  ...(canonicalTurn === 1 && pendingSlice.length > 0
-                    ? { runScopedPrefixLength: pendingSlice.length }
-                    : {}),
-                  usage: usageForCommit(canonicalTurn),
-                  unobservedModelCalls: unobservedForCommit(canonicalTurn),
-                }),
-              );
-
-              yield* appendBatch(ctx, batch);
-              recordCommittedUsage(batch);
-              for (const record of batch.records) knownIds.add(record.recordId);
-              yield* hit("turn:after-response-append");
-            }),
-          ),
-        prepareToolCalls: (calls) =>
-          recordHalt(
-            Effect.gen(function* () {
-              const first = calls[0];
-
-              if (first === undefined) return;
-              const turnInfo = currentToolTurn;
-
-              if (turnInfo === undefined) {
+              if (commit._tag === "Response" && deferred !== undefined)
                 return yield* RunJournalError.make({
-                  message: "Tool Calls were prepared before any canonical response commit",
+                  message: "Turn response was already deferred",
                 });
-              }
-              // The prepared batch is atomic: one canonical record implies all of them, so a
-              // batch-identity replay (resume) is skipped wholesale.
-              if (knownIds.has(toolCallPreparedRecordId(runId, turnInfo.turn, first.toolCallId))) {
-                return;
-              }
-              const preparedRecords: Array<RecordEnvelope> = [];
+              const responseId = modelResponseRecordId(runId, commit.turn);
+              const suppliedResponse = commit._tag === "Partial" ? undefined : commit.response;
 
-              for (const call of calls) {
-                const parameters = yield* decodePersisted(call.parameters).pipe(
+              const response =
+                knownIds.has(responseId) || deferred !== undefined ? undefined : suppliedResponse;
+
+              if (suppliedResponse !== undefined)
+                currentToolTurn = { turn: commit.turn, turnId: commit.turnId };
+              if (commit._tag === "Response" && response === undefined) return "committed" as const;
+
+              const toolOperations: Array<ToolOperation> = [];
+              const responseToolIds = new Set<ToolCallId>();
+
+              for (const call of response?.calls ?? []) {
+                if (declaredToolIds.has(call.toolCallId) || responseToolIds.has(call.toolCallId))
+                  return yield* RunJournalError.make({
+                    message: "Tool Call identity is reused within a Run",
+                  });
+                // Preserve every prior identity across compaction and recovery. Refuse the
+                // whole response before dispatch instead of overflowing the checkpoint seed.
+                if (declaredToolIds.size + responseToolIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                  return yield* RunJournalError.make({
+                    message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+                  });
+                const replay = currentContracts[call.toolName];
+
+                if (replay === undefined)
+                  return yield* RunJournalError.make({
+                    message: "Canonical Tool declaration has no original operation contract",
+                  });
+                toolOperations.push(
+                  ToolOperation.make({
+                    toolCallId: call.toolCallId,
+                    toolName: call.toolName,
+                    executionClass: call.executionClass,
+                    executionKind: call.executionKind,
+                    replay,
+                  }),
+                );
+                responseToolIds.add(call.toolCallId);
+              }
+
+              const toolResults =
+                commit._tag === "Response"
+                  ? []
+                  : commit.results.filter(
+                      (result) =>
+                        !knownIds.has(
+                          toolCallSettledRecordId(runId, commit.turn, result.toolCallId),
+                        ),
+                    );
+
+              let runCompletion: NonNullable<TurnCommitInput["runCompletion"]> | undefined;
+
+              if (commit._tag === "Settled" && commit.completion !== undefined) {
+                const completion = commit.completion;
+
+                const output = yield* decodePersisted(completion.output).pipe(
                   Effect.mapError((cause) =>
-                    RunJournalError.make({
-                      message: `Tool Call ${call.toolCallId} parameters exceed canonical persistence bounds`,
+                    LedgerError.make({
+                      operation: "recordCompleted",
+                      message: "Run output exceeds canonical persistence bounds",
                       cause,
                     }),
                   ),
                 );
 
-                const parametersDigest = yield* withCrypto(digestJson(parameters));
+                if (
+                  completion.finishReason === "budget-exhausted" &&
+                  completion.runDisposition !== undefined
+                )
+                  return yield* LedgerError.make({
+                    operation: "recordCompleted",
+                    message: "A budget-exhausted Run cannot declare an application run disposition",
+                  });
 
-                preparedRecords.push(
-                  yield* makeEnvelope(
-                    toolCallPreparedRecordId(runId, turnInfo.turn, call.toolCallId),
-                    ToolCallPrepared.make({
-                      runId,
-                      turnId: turnInfo.turnId,
-                      turn: turnInfo.turn,
-                      toolCallId: call.toolCallId,
-                      toolName: call.toolName,
-                      parameters,
-                      parametersDigest,
-                      executionKind: call.executionKind,
-                      executionClass: call.executionClass,
-                      replay: currentContracts[call.toolName]!,
+                const runDisposition =
+                  completion.runDisposition === undefined
+                    ? undefined
+                    : yield* decodePersisted(completion.runDisposition).pipe(
+                        Effect.mapError((cause) =>
+                          LedgerError.make({
+                            operation: "recordCompleted",
+                            message: "Run disposition exceeds canonical persistence bounds",
+                            cause,
+                          }),
+                        ),
+                      );
+
+                runCompletion = {
+                  output,
+                  ...(runDisposition === undefined ? {} : { runDisposition }),
+                  ...(completion.finishReason === "budget-exhausted"
+                    ? {
+                        finishReason: completion.finishReason,
+                        ...(completion.exhausted === undefined
+                          ? {}
+                          : { exhausted: completion.exhausted }),
+                      }
+                    : {}),
+                };
+              }
+              if (
+                response === undefined &&
+                deferred === undefined &&
+                toolResults.length === 0 &&
+                runCompletion === undefined
+              )
+                return "committed" as const;
+              if (response === undefined && deferred === undefined && !knownIds.has(responseId))
+                return yield* RunJournalError.make({
+                  message: "Tool results or completion preceded the canonical response",
+                });
+
+              const input: TurnCommitInput = {
+                runId,
+                turn: commit.turn,
+                turnId: commit.turnId,
+                responseMessages: response?.messages ?? [],
+                toolResults,
+                toolOperations,
+                toolExposure: response?.toolExposure,
+                toolParameterRejections: response?.toolParameterRejections,
+                runScopedPrefixLength: response?.runScopedPrefixLength,
+                producerId: config.producerId,
+                deploymentId: config.deploymentId,
+                createdAt: yield* nowUtc,
+                runCompletion,
+                usage: usageForCommit(commit.turn),
+                unobservedModelCalls: unobservedForCommit(commit.turn),
+              };
+
+              if (commit._tag === "Partial") {
+                // The interpreter supplies only closed siblings, in declaration order.
+                // Per-call identities retain each result before the child suspension.
+                for (const result of toolResults) {
+                  const batch = yield* withCrypto(
+                    turnResultsBatch({ ...input, toolResults: [result] }),
+                  );
+
+                  yield* appendBatch(
+                    ctx,
+                    CanonicalBatch.make({
+                      ...batch,
+                      batchId: toolCallResultBatchId(runId, commit.turn, result.toolCallId),
+                    }),
+                  );
+                  for (const record of batch.records) knownIds.add(record.recordId);
+                  yield* hit("subagent:after-sibling-settle");
+                }
+
+                return "committed" as const;
+              }
+
+              if (commit._tag === "Response" && commit.defer === true) {
+                if (
+                  toolOperations.length === 0 ||
+                  toolOperations.some(
+                    (call) =>
+                      call.executionClass !== "readonly" || call.executionKind !== "ordinary",
+                  )
+                )
+                  return yield* RunJournalError.make({
+                    message: "Only ordinary readonly Tool responses may be deferred",
+                  });
+                deferredResponse = {
+                  turn: commit.turn,
+                  turnId: commit.turnId,
+                  // The journal owns encoded messages. Detach the remaining small metadata
+                  // trees too: Schema validation alone is not an ownership transfer.
+                  batch: yield* withCrypto(
+                    turnCanonicalBatch({
+                      ...input,
+                      toolParameterRejections: input.toolParameterRejections?.map((rejection) => ({
+                        ...rejection,
+                        parameters: copyJson(rejection.parameters),
+                        error: { ...rejection.error, reason: { ...rejection.error.reason } },
+                      })),
+                      toolExposure:
+                        input.toolExposure === undefined
+                          ? undefined
+                          : Snapshot.make({
+                              exposedToolNames: [...input.toolExposure.exposedToolNames],
+                              ...(input.toolExposure.selection === undefined
+                                ? {}
+                                : {
+                                    selection: Selection.make({
+                                      toolNames: [...input.toolExposure.selection.toolNames],
+                                    }),
+                                  }),
+                            }),
+                      usage:
+                        input.usage === undefined
+                          ? undefined
+                          : {
+                              ...input.usage,
+                              modelUsage: input.usage.modelUsage?.map((usage) =>
+                                ModelCallUsage.make({
+                                  ...usage,
+                                  ...(usage.response === undefined
+                                    ? {}
+                                    : {
+                                        response: ModelResponseIdentity.make({ ...usage.response }),
+                                      }),
+                                  inputTokens: InputTokenUsage.make({ ...usage.inputTokens }),
+                                  outputTokens: OutputTokenUsage.make({ ...usage.outputTokens }),
+                                }),
+                              ),
+                            },
                     }),
                   ),
-                );
-              }
-              const head = preparedRecords[0];
+                };
 
-              if (head === undefined) return;
-              yield* hit("tools:before-prepared-append");
-              yield* appendBatch(
-                ctx,
-                CanonicalBatch.make({
-                  batchId: turnPreparedBatchId(runId, turnInfo.turn),
-                  producerId: config.producerId,
-                  records: [head, ...preparedRecords.slice(1)],
-                }),
+                return "deferred" as const;
+              }
+
+              let batch: CanonicalBatch;
+
+              if (deferred === undefined) {
+                batch = yield* withCrypto(
+                  commit._tag === "Response"
+                    ? turnResponseBatch(input)
+                    : response === undefined
+                      ? turnResultsBatch(input)
+                      : turnCanonicalBatch(input),
+                );
+              } else if (toolResults.length === 0 && runCompletion === undefined) {
+                batch = deferred.batch;
+              } else {
+                const results = yield* withCrypto(turnResultsBatch(input));
+
+                batch = CanonicalBatch.make({
+                  ...deferred.batch,
+                  records: [...deferred.batch.records, ...results.records],
+                });
+              }
+
+              yield* appendBatch(ctx, batch);
+              for (const call of response?.calls ?? []) {
+                declaredToolIds.add(call.toolCallId);
+                encodedParamsByCallId.set(call.toolCallId, call.parameters);
+                declaredNamesByCallId.set(call.toolCallId, call.toolName);
+              }
+              if (deferred !== undefined) {
+                acceptResponseDeclarations(batch);
+                deferredResponse = undefined;
+              }
+              if (commit._tag === "Response") initialDispatchProofTurns.add(commit.turn);
+              recordCommittedUsage(batch);
+              for (const record of batch.records) knownIds.add(record.recordId);
+              if (runCompletion !== undefined) completionState.committed = runCompletion;
+              yield* hit(
+                commit._tag === "Response"
+                  ? "turn:after-response-append"
+                  : response === undefined && deferred === undefined
+                    ? "turn:after-results-append"
+                    : "turn:after-canonical-append",
               );
-              for (const record of preparedRecords) knownIds.add(record.recordId);
-              yield* hit("tools:after-prepared-append");
-            }),
+
+              return "committed" as const;
+            }).pipe(
+              Effect.tapError((failure) => Ref.set(haltRef, failure)),
+              responseGate.withPermits(1),
+            ),
           ),
+        checkToolDispatch: recordHalt(
+          Effect.gen(function* () {
+            if (currentToolTurn === undefined)
+              return yield* RunJournalError.make({
+                message: "Tool dispatch preceded its canonical response",
+              });
+            yield* hit("tools:before-dispatch-fence");
+            yield* ctx.checkFence;
+            initialDispatchProofTurns.delete(currentToolTurn.turn);
+            yield* hit("tools:after-dispatch-fence");
+          }),
+        ),
         step: {
           lookup: (key) =>
-            Effect.sync(() => {
-              const output = stepOutputs.get(
-                toolStepSettledRecordId(runId, key.toolCallId, key.stepName),
-              );
+            recordHalt(
+              Effect.gen(function* () {
+                yield* flushDeferredResponse;
 
-              return output === undefined ? Option.none() : Option.some({ encodedOutput: output });
-            }),
+                const output = stepOutputs.get(
+                  toolStepSettledRecordId(runId, key.toolCallId, key.stepName),
+                );
+
+                return output === undefined
+                  ? Option.none()
+                  : Option.some({ encodedOutput: output });
+              }),
+            ),
           commit: (key, encodedOutput) =>
             recordHalt(
               Effect.gen(function* () {
+                yield* flushDeferredResponse;
                 const recordId = toolStepSettledRecordId(runId, key.toolCallId, key.stepName);
 
                 if (knownIds.has(recordId)) return;
@@ -6228,8 +6236,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               // Results must be canonical before pruning or rollover can cover them. Newly committed
               // compactions remain overlays on this Attempt's append-only source, so omit those
               // overlays while reconstructing the exact source-to-record mapping.
-              if (commit.kind !== "summarize") yield* recordHalt(commitPendingTurn);
-              const tail = yield* Ref.get(ctx.tailRef);
+              const tail = yield* ctx.tail;
 
               sourceBoundaries = [];
               sourceJournal = yield* recordHalt(
@@ -6275,13 +6282,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               });
             }
 
-            const state = yield* Ref.get(stateRef);
-
             const comparisonView = instructionView(
               sourceJournal.prompt.content,
-              state.history?.content
-                .slice(resumeProjection.historyBefore.content.length, state.baseLen)
-                .filter((message) => message.role === "system") ?? [],
+              initialInstructions,
               false,
               sourceJournal.historyBefore.content.length,
             );
@@ -6308,8 +6311,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
               if (canonicalMessage === undefined) continue;
 
+              // Preserve Prompt's JSON projection while ignoring persisted object-key order.
               const encode = (entry: Prompt.Message) =>
-                Schema.encodeEffect(Prompt.Message)(entry).pipe(
+                encodeCompactionMessageJson(entry).pipe(
+                  Effect.flatMap(decodeCompactionMessageJson),
+                  Effect.map(canonicalJson),
                   Effect.mapError((cause) =>
                     CompactionError.make({
                       message: "Could not encode the canonical compaction prefix",
@@ -6321,7 +6327,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const left = yield* encode(canonicalMessage);
               const right = yield* encode(message);
 
-              if (JSON.stringify(left) === JSON.stringify(right)) matchingPrefix += 1;
+              if (left === right) matchingPrefix += 1;
             }
 
             let lastCovered: JournalBoundary | undefined;
@@ -6408,7 +6414,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }),
       };
 
-      /** Digest of one declared call's canonical encoded parameters (same family as prepared). */
+      /** Digest of one declared call's canonical encoded parameters (the original normalized wire). */
       const approvalParametersDigest = (
         toolCallId: string,
       ): Effect.Effect<Digest, DurableWorkerFailure> =>
@@ -6467,6 +6473,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               yield* makeEnvelope(
                 requestRecordId,
                 ToolApprovalRequested.make({
+                  blocksInitialDispatch: initialDispatchProofTurns.has(turnInfo.turn),
                   runId,
                   turnId: turnInfo.turnId,
                   turn: turnInfo.turn,
@@ -6647,18 +6654,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           return yield* renderInputPrompt(inputPrompt, decodedInput, encodedInput);
         });
 
-      // Empty successful drains leave Tool results and RunCompleted in one batch.
-      // A join or interrupted continuation must still retain already returned results.
-      const preserveToolResults = Effect.gen(function* () {
-        const state = yield* Ref.get(stateRef);
-
-        if (
-          state.pendingTurn !== undefined &&
-          knownIds.has(modelResponseRecordId(runId, state.pendingTurn.turn))
-        )
-          yield* commitPendingTurn;
-      });
-
       // Claims are authority, wakes are hints. A cancelled waiter retains every claim
       // for the seam drain; it never appends input while an old response can still commit.
       type PreparedJoin = {
@@ -6671,16 +6666,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         [];
 
       const claimInputs = Effect.fnUntraced(function* (maxCount: number) {
-        const ownershipToken = yield* Ref.get(tokenRef);
-
-        const claims = yield* ledger.claimJoining(
-          ClaimJoiningRequest.make({
-            threadId: submission.threadId,
-            hostSubmissionId: submissionId,
-            ownershipToken,
-            maxCount,
-          }),
-        );
+        const claims = yield* session.claimJoining(maxCount);
 
         pendingJoinClaims.push(...claims.map((claim) => ({ claim })));
 
@@ -6691,9 +6677,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         claims: ReadonlyArray<(typeof pendingJoinClaims)[number]>,
       ) {
         for (const pending of claims) {
-          yield* ledger.revertJoining(
-            RevertJoiningRequest.make({ submissionId: pending.claim.submissionId }),
-          );
+          yield* session.revertJoining(pending.claim.submissionId);
           pendingJoinClaims.splice(pendingJoinClaims.indexOf(pending), 1);
         }
       }, Effect.uninterruptible);
@@ -6799,16 +6783,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                   if (join.state === "joining") {
                     // Canonical input without its joined marker (crash between the append and
                     // `markJoined`): repair the marker from history before reattaching.
-                    const ownershipToken = yield* Ref.get(tokenRef);
-
-                    yield* ledger.markJoined(
-                      MarkJoinedRequest.make({
-                        submissionId: joinId,
-                        ownershipToken,
-                        recordId: existing.record.recordId,
-                        sequence: existing.sequence,
-                      }),
-                    );
+                    yield* session.markJoined(joinId, {
+                      recordId: existing.record.recordId,
+                      sequence: existing.sequence,
+                    });
                   }
                   deliveredJoinInputs.add(joinId);
                   if (
@@ -6820,14 +6798,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                   const payload = existing.record.payload;
 
                   if (payload._tag !== "UserInputRecorded") continue;
-                  yield* preserveToolResults;
                   joinedInputs.push(payload);
                 }
                 const claims = yield* prepareInputs(limit);
 
                 pendingJoinClaims.splice(0, claims.length);
                 for (const { claim, input: payload, rendered } of claims) {
-                  yield* preserveToolResults;
                   const recordId = submissionInputRecordId(claim.submissionId);
                   let sequence: CanonicalSequence;
                   const existing = joinedInputEnvelopes.get(claim.submissionId);
@@ -6863,17 +6839,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                     knownIds.add(recordId);
                     yield* hit("join:after-canonical-append");
                   }
-                  // Re-read the token: the concurrent lease renewal may rotate it mid-batch.
-                  const markToken = yield* Ref.get(tokenRef);
-
-                  yield* ledger.markJoined(
-                    MarkJoinedRequest.make({
-                      submissionId: claim.submissionId,
-                      ownershipToken: markToken,
-                      recordId,
-                      sequence,
-                    }),
-                  );
+                  yield* session.markJoined(claim.submissionId, { recordId, sequence });
                   deliveredJoinInputs.add(claim.submissionId);
                   joinedInputs.push({
                     ...payload,
@@ -6882,9 +6848,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 }
 
                 return joinedInputs;
-              }).pipe(
-                Effect.onExit((exit) => (Exit.isFailure(exit) ? preserveToolResults : Effect.void)),
-              ),
+              }),
             );
 
             return yield* Effect.forEach(joinedInputs, (joinedInput) =>
@@ -7132,7 +7096,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               const grantDigest = yield* withCrypto(digestJson(grant.value));
               const allocationDigest = yield* withCrypto(digestJson(allocation.value));
               const reservationId = childReservationIdFor(runId, toolCallId);
-              const ownershipToken = yield* Ref.get(tokenRef);
 
               // Top-level attached declarations retain their independent explicit pool. A
               // child with an ancestor allocation shares its residual with both lifetimes.
@@ -7168,17 +7131,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 );
               }
 
-              yield* ledger
-                .reserveChildBudget(
-                  ChildBudgetReservationRequest.make({
-                    reservationId,
-                    parentSubmissionId: submissionId,
-                    parentToolCallId: toolCallId,
-                    ownershipToken,
-                    allocation: allocation.value,
-                    allocationDigest,
-                  }),
-                )
+              yield* session
+                .reserveChildBudget({
+                  reservationId,
+                  parentToolCallId: toolCallId,
+                  allocation: allocation.value,
+                  allocationDigest,
+                })
                 .pipe(
                   Effect.catchTag(
                     "ChildReservationConflict",
@@ -7282,16 +7241,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 message: `The canonical SubagentStarted record names child ${startedPayload.childSubmissionId} but admission resolved ${admission.childSubmissionId}; establishment fails closed (SUB-016)`,
               });
             }
-            const attachToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .attachChildToReservation(
-                AttachChildToReservationRequest.make({
-                  reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
-                  ownershipToken: attachToken,
-                  childSubmissionId: startedPayload.childSubmissionId,
-                }),
-              )
+            yield* session
+              .attachChildToReservation({
+                reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
+                childSubmissionId: startedPayload.childSubmissionId,
+              })
               .pipe(
                 Effect.catchTag(
                   "ChildReservationConflict",
@@ -7509,7 +7463,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         threadId: submission.threadId,
         runId,
         history: pending === undefined ? journal.historyBefore : resumeProjection.historyBefore,
-        onHistory,
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",
@@ -7579,17 +7532,13 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ...(preparedContext === undefined ? {} : { context: preparedContext }),
         beforeTurn: () =>
           Effect.gen(function* () {
-            // Preparation may resolve the next Model from canonical Tool results or invoke
-            // a compaction Model. Publish the completed Turn before either can observe it.
-            yield* recordHalt(commitPendingTurn);
-
             if (
               yieldAfter !== undefined &&
               (yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(yieldAfter)
             ) {
               yield* Deferred.succeed(yieldSignal, undefined);
 
-              // The successful signal wins the outer race and closes the stream Scope;
+              // The successful signal wins the outer race and closes the execution Scope;
               // no synthetic engine RunFailed event or terminal Settlement is produced.
               return yield* Effect.never;
             }
@@ -7657,386 +7606,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ...(pendingContextToolCallId === undefined ? {} : { pendingContextToolCallId }),
       };
 
-      const commitPendingTurn: Effect.Effect<void, DurableWorkerFailure> = Effect.gen(function* () {
-        const state = yield* Ref.get(stateRef);
-        const history = state.history;
-
-        if (state.pendingTurn === undefined || history === undefined) return;
-        let appended = history.content.slice(state.lastCommitLen);
-
-        if (appended.length === 0) return;
-        const canonicalTurn = state.pendingTurn.turn;
-        const createdAt = yield* nowUtc;
-        let committedLen = history.content.length;
-
-        const completedRun =
-          state.completedOutput === undefined
-            ? undefined
-            : {
-                output: state.completedOutput,
-                ...(state.completedRunDisposition === undefined
-                  ? {}
-                  : { runDisposition: state.completedRunDisposition }),
-                ...(state.completedFinishReason === undefined
-                  ? {}
-                  : { finishReason: state.completedFinishReason }),
-                ...(state.completedExhausted === undefined
-                  ? {}
-                  : { exhausted: state.completedExhausted }),
-              };
-
-        if (knownIds.has(modelResponseRecordId(runId, canonicalTurn))) {
-          // The response is already durable (commit 1 of the split shape): only the results
-          // batch remains. The slice is [response messages…, tool message, trailing input…]:
-          // this commit's canonical coverage ends at the batch's Tool message — messages drained
-          // at the post-batch seam stay pending and become the leading messages of the NEXT
-          // response batch (decision point 6 / D8), never silently dropped.
-          for (let index = appended.length - 1; index >= 0; index -= 1) {
-            if (appended[index]?.role === "tool") {
-              committedLen = state.lastCommitLen + index + 1;
-              appended = appended.slice(0, index + 1);
-              break;
-            }
-          }
-          // Already-canonical per-call settles (late settles from the resolution path, or
-          // resume-injected results) are excluded by record identity.
-          const remaining: Array<Prompt.Message> = [];
-          const resultParts: Array<Prompt.ToolResultPart> = [];
-          let toolParts = 0;
-
-          for (const message of appended) {
-            if (message.role !== "tool") {
-              remaining.push(message);
-              continue;
-            }
-
-            const parts = message.content.filter(
-              (part): part is Prompt.ToolResultPart =>
-                part.type === "tool-result" &&
-                !knownIds.has(`tool-settled:${runId}:${canonicalTurn}:${part.id}`),
-            );
-
-            if (parts.length === 0) continue;
-            toolParts += parts.length;
-            resultParts.push(...parts);
-            remaining.push(Prompt.makeMessage("tool", { content: parts }));
-          }
-
-          const settledCompletionPart =
-            completedRun === undefined || toolParts > 0
-              ? undefined
-              : appended
-                  .flatMap((message) => (message.role === "tool" ? message.content : []))
-                  .find(
-                    (part) =>
-                      part.type === "tool-result" &&
-                      !part.isFailure &&
-                      agent.definition.completionFromTools?.some(
-                        (declaration) => declaration.tool === part.name,
-                      ),
-                  );
-
-          if (settledCompletionPart?.type === "tool-result") {
-            resultParts.push(settledCompletionPart);
-            remaining.push(Prompt.makeMessage("tool", { content: [settledCompletionPart] }));
-          }
-
-          if (toolParts > 0 || settledCompletionPart !== undefined) {
-            const completion = agent.definition.completion;
-            const completionPart = resultParts[0];
-
-            const runCompletion =
-              resultParts.length === 1 &&
-              (completionPart?.name === completion?.tool ||
-                agent.definition.completionFromTools?.some(
-                  (declaration) => declaration.tool === completionPart?.name,
-                )) &&
-              completionPart.isFailure !== true &&
-              completedRun !== undefined
-                ? completedRun
-                : undefined;
-
-            const batch = yield* withCrypto(
-              turnResultsBatch({
-                toolSelections: stagedToolSelections,
-                budgetRejectedCalls,
-                runId,
-                turn: canonicalTurn,
-                turnId: state.pendingTurn.turnId,
-                appended: remaining,
-                producerId: config.producerId,
-                deploymentId: config.deploymentId,
-                createdAt,
-                ...(runCompletion === undefined ? {} : { runCompletion }),
-              }),
-            );
-
-            // A recovered external receipt is already canonical. Commit only the terminal
-            // marker at the same results boundary; never duplicate or rewrite its result.
-            let pendingBatch = batch;
-
-            if (settledCompletionPart !== undefined) {
-              const completionRecord = batch.records.find(
-                (record) => record.payload._tag === "RunCompleted",
-              );
-
-              if (completionRecord === undefined || knownIds.has(completionRecord.recordId)) {
-                return yield* RunJournalError.make({
-                  message: "Recovered action completion has no new terminal record",
-                });
-              }
-              pendingBatch = CanonicalBatch.make({ ...batch, records: [completionRecord] });
-            }
-
-            yield* appendBatch(ctx, pendingBatch);
-            for (const record of pendingBatch.records) knownIds.add(record.recordId);
-            yield* hit("turn:after-results-append");
-          }
-        } else {
-          // No durable response commit: the P4 single-batch shape (no-tool Turns).
-          const runScopedPrefixLength =
-            canonicalTurn === 1
-              ? appended.findIndex((message) => message.role === "assistant")
-              : -1;
-
-          const batch = yield* withCrypto(
-            turnCanonicalBatch({
-              toolExposure: stagedToolExposure.get(canonicalTurn),
-              toolSelections: stagedToolSelections,
-              budgetRejectedCalls,
-              runId,
-              turn: canonicalTurn,
-              turnId: state.pendingTurn.turnId,
-              appended,
-              producerId: config.producerId,
-              deploymentId: config.deploymentId,
-              createdAt,
-              ...(runScopedPrefixLength > 0 ? { runScopedPrefixLength } : {}),
-              ...(completedRun === undefined ? {} : { runCompletion: completedRun }),
-              usage: usageForCommit(canonicalTurn),
-              unobservedModelCalls: unobservedForCommit(canonicalTurn),
-            }),
-          );
-
-          yield* appendBatch(ctx, batch);
-          recordCommittedUsage(batch);
-          for (const record of batch.records) knownIds.add(record.recordId);
-          yield* hit("turn:after-canonical-append");
-        }
-        yield* Ref.update(stateRef, (current) => ({
-          ...current,
-          lastCommitLen: committedLen,
-          pendingTurn: undefined,
-        }));
-      });
-
-      const recordCompleted = (
-        output: unknown,
-        finishReason: "completed" | "model-stop" | "budget-exhausted",
-        exhausted: ExhaustedLimit | undefined,
-        runDisposition: unknown,
-      ): Effect.Effect<void, DurableWorkerFailure> =>
-        Effect.gen(function* () {
-          const result = yield* Schema.decodeUnknownEffect(PersistedJson)(output).pipe(
-            Effect.mapError((cause): DurableWorkerFailure =>
-              LedgerError.make({
-                operation: "recordCompleted",
-                message: "Run output exceeds canonical persistence bounds",
-                cause,
-              }),
-            ),
-          );
-
-          if (finishReason === "budget-exhausted" && runDisposition !== undefined) {
-            return yield* LedgerError.make({
-              operation: "recordCompleted",
-              message: "A budget-exhausted Run cannot declare an application run disposition",
-            });
-          }
-
-          const persistedRunDisposition =
-            runDisposition === undefined
-              ? undefined
-              : yield* Schema.decodeUnknownEffect(PersistedJson)(runDisposition).pipe(
-                  Effect.mapError((cause): DurableWorkerFailure =>
-                    LedgerError.make({
-                      operation: "recordCompleted",
-                      message: "Run disposition exceeds canonical persistence bounds",
-                      cause,
-                    }),
-                  ),
-                );
-
-          yield* Ref.update(stateRef, (state) => ({
-            ...state,
-            completedOutput: result,
-            completedRunDisposition: persistedRunDisposition,
-            completedFinishReason: finishReason === "budget-exhausted" ? finishReason : undefined,
-            // The pair travels together or not at all (RUN-011 fail-safe): a
-            // divergent event never persists a lone dimension.
-            completedExhausted: finishReason === "budget-exhausted" ? exhausted : undefined,
-          }));
-        });
-
-      const handleEvent = (event: RunEvent): Effect.Effect<void, DurableWorkerFailure> => {
-        switch (event._tag) {
-          case "ModelRestarted": {
-            // A finish part can arrive before the provider stream closes. Its TurnCompleted
-            // only staged this disposable Turn; never let the next seam commit its prefix.
-            return Ref.update(stateRef, (state) => ({ ...state, pendingTurn: undefined }));
-          }
-          case "TurnStarted": {
-            // Suspension owns only this Turn's siblings. Earlier results are already canonical
-            // under their original Turn and must never be re-recorded with a later Turn id.
-            return commitPendingTurn.pipe(
-              Effect.andThen(
-                Effect.sync(() => {
-                  siblingResults.clear();
-                  stagedToolSelections.clear();
-                }),
-              ),
-            );
-          }
-          case "TurnCompleted": {
-            const turnId = event.turnId ?? turnIdForRun(runId, event.turn);
-
-            return Ref.update(stateRef, (state) => ({
-              ...state,
-              pendingTurn: { turn: event.turn, turnId },
-            }));
-          }
-          case "RunCompleted": {
-            return recordCompleted(
-              event.output,
-              event.finishReason,
-              event.exhausted,
-              event.runDisposition,
-            ).pipe(
-              // The terminal state is available while the final canonical
-              // batch is built, so its RunCompleted marker commits atomically
-              // with either the no-tool response or the completion Tool result.
-              Effect.andThen(commitPendingTurn),
-            );
-          }
-          case "RunFailed": {
-            // Preserve a completed-and-advanced final Turn for audit before the Run settles failed.
-            return commitPendingTurn;
-          }
-          case "ToolCallSucceeded": {
-            if (!event.providerExecuted && event.toolSelection !== undefined)
-              stagedToolSelections.set(event.toolCallId, event.toolSelection);
-            // Collected for the waitingForChild suspension seam: a batch that suspends never
-            // reaches its results commit, so each settled sibling result is committed there as
-            // a per-call late-settle batch instead (plan §2 step 2).
-            if (!event.providerExecuted) {
-              siblingResults.set(event.toolCallId, {
-                toolCallId: event.toolCallId,
-                result: event.result,
-                isFailure: false,
-              });
-            }
-
-            return Effect.void;
-          }
-          case "ToolCallFailed": {
-            if (event.budgetRejected === true) budgetRejectedCalls.add(event.toolCallId);
-            // Only the bounded diagnostics survive the event stream for a failed sibling; the
-            // per-call late-settle carries this same bounded `{errorTag, message}` projection.
-            if (!event.providerExecuted) {
-              siblingResults.set(event.toolCallId, {
-                toolCallId: event.toolCallId,
-                result: { errorTag: event.errorTag, message: boundedText(event.message) },
-                isFailure: true,
-              });
-            }
-
-            return Effect.void;
-          }
-          default: {
-            return Effect.void;
-          }
-        }
-      };
-
-      /**
-       * The waitingForChild suspension seam (plan §2 steps 1-4): every non-waiting sibling of
-       * the suspending batch has settled — commit each terminal sibling result as a per-call
-       * late-settle batch (`turn-results:{runId}:{turn}:{toolCallId}`) in the batch's declared
-       * order, so no sibling effect is lost to the suspension and the resumed batch injects
-       * them via `resume.settled`. Record identity dedupes results already canonical (joined
-       * delegation calls, resume-injected siblings).
-       */
-      const commitSiblingLateSettles = (
-        children: AgentChildPending["children"],
-      ): Effect.Effect<void, DurableWorkerFailure> =>
-        Effect.gen(function* () {
-          const turnInfo = currentToolTurn;
-
-          if (turnInfo === undefined) return;
-          const waitingIds = new Set<string>(children.map((child) => child.toolCallId));
-
-          // Declared order first (SUB-013's commit-order rule), then any residue in arrival order.
-          const ordered = [
-            ...[...declaredNamesByCallId.keys()].filter((callId) => siblingResults.has(callId)),
-            ...[...siblingResults.keys()].filter((callId) => !declaredNamesByCallId.has(callId)),
-          ];
-
-          for (const callId of ordered) {
-            if (waitingIds.has(callId)) continue;
-            const settled = siblingResults.get(callId);
-
-            if (settled === undefined) continue;
-            const toolCallId = settled.toolCallId;
-            const recordId = toolCallSettledRecordId(runId, turnInfo.turn, toolCallId);
-
-            if (knownIds.has(recordId)) continue;
-            const toolName = declaredNamesByCallId.get(callId);
-
-            if (toolName === undefined) {
-              return yield* RunJournalError.make({
-                message: `Settled sibling ${toolCallId} has no declared Tool name at the suspension seam`,
-              });
-            }
-
-            const result = yield* decodePersisted(settled.result).pipe(
-              Effect.mapError((cause) =>
-                RunJournalError.make({
-                  message: `Sibling result ${toolCallId} exceeds canonical persistence bounds`,
-                  cause,
-                }),
-              ),
-            );
-
-            const envelope = yield* makeEnvelope(
-              recordId,
-              ToolCallSettled.make({
-                runId,
-                toolCallId,
-                toolName,
-                result,
-                isFailure: settled.isFailure,
-                ...(stagedToolSelections.get(toolCallId) === undefined
-                  ? {}
-                  : { toolSelection: stagedToolSelections.get(toolCallId) }),
-              }),
-            );
-
-            yield* appendBatch(
-              ctx,
-              CanonicalBatch.make({
-                batchId: toolCallResultBatchId(runId, turnInfo.turn, toolCallId),
-                producerId: config.producerId,
-                records: [envelope],
-              }),
-            ).pipe(
-              Effect.catchTag("AppendConflict", () => Effect.void),
-              Effect.asVoid,
-            );
-            knownIds.add(recordId);
-            yield* hit("subagent:after-sibling-settle");
-          }
-        });
-
       // Durability §9: the superseding Attempt records the interruption BEFORE re-invoking the
       // model. A batch resume never re-invokes the model for the pending Turn, so it is exempt.
       if (
@@ -8049,78 +7618,89 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         interruptedUsage = true;
       }
 
-      const consume = Stream.runForEach(
-        AgentRuntime.streamWithUsageAccountingUnknown(agent, submission.inputPayload, options).pipe(
-          Stream.provideService(AgentUpdateAcceptance, {
-            accept: (update) =>
-              updateRuntime
-                .emit({
+      const consume = AgentRuntime.executeWithUsageAccountingUnknown(
+        agent,
+        submission.inputPayload,
+        options,
+      ).pipe(
+        Effect.provideService(AgentUpdateAcceptance, {
+          accept: (update) =>
+            flushDeferredResponse.pipe(
+              Effect.catch((failure) =>
+                Ref.set(haltRef, failure).pipe(
+                  Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
+                ),
+              ),
+              Effect.andThen(() =>
+                updateRuntime.emit({
                   updateId: update.updateId,
                   value: update.value,
                   submission,
                   runId,
                   producerEpoch: ctx.producerEpoch,
                   definitions: submission.agentDigests,
-                })
-                .pipe(
-                  Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
-                    // Preserve the original infrastructure failure at the coordinator boundary;
-                    // the engine's next event must not commit this Tool's failure as an outcome.
-                    Ref.set(haltRef, failure).pipe(
-                      Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
+                }),
+              ),
+              Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
+                // Preserve the original infrastructure failure at the coordinator boundary;
+                // the next semantic checkpoint must not commit this Tool failure as an outcome.
+                Ref.set(haltRef, failure).pipe(
+                  Effect.andThen(Effect.fail(UpdateError.make({ reason: "storage" }))),
+                ),
+              ),
+            ),
+        }),
+        Effect.provideService(ModelUsageAccounting, {
+          noteIncompleteUsage: (turn) =>
+            Effect.sync(() => {
+              stagedUnobservedCalls.set(turn, (stagedUnobservedCalls.get(turn) ?? 0) + 1);
+            }),
+        }),
+        Effect.provide(ThreadHistory.layer),
+        Effect.provideService(SubagentHost.forTool, (source) =>
+          source.threadId !== submission.threadId ||
+          source.agentId !== submission.agentId ||
+          source.runId !== runId
+            ? SubagentHost.unavailable
+            : workerRuntime.facet(
+                {
+                  source,
+                  policy: agent.definition.policy,
+                  depth: delegationDepth,
+                  ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
+                },
+                submission.principal,
+                submission.submissionId,
+              ),
+        ),
+        Effect.provideService(MessagingHost.forTool, (source) =>
+          source.threadId !== submission.threadId ||
+          source.agentId !== submission.agentId ||
+          source.runId !== runId
+            ? MessagingHost.unavailable
+            : messagingRuntime.forTool(source, submission.principal),
+        ),
+        Effect.provideService(CurrentToolFailureObserver, toolFailureObserver),
+        Effect.provideService(RunToolVisibility, runToolVisibility),
+        Effect.provideService(RunToolScheduling, runToolScheduling),
+        Effect.provideService(ContextCompactor, compactor),
+        Effect.provideService(RunContextPreparation, runContextPreparation),
+        Effect.andThen(checkpoint),
+        // A wrapped Tool/approval failure cannot outrank retained infrastructure authority.
+        // Preserve independent defects, interruptions and already-marked coordinator failures.
+        Effect.catchCause((cause) =>
+          Ref.get(haltRef).pipe(
+            Effect.flatMap((failure) =>
+              failure === undefined
+                ? Effect.failCause(cause)
+                : Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error instanceof CoordinatorHalt ? error : new CoordinatorHalt(failure),
                     ),
                   ),
-                ),
-          }),
-          Stream.provideService(ModelUsageAccounting, {
-            noteIncompleteUsage: (turn) =>
-              Effect.sync(() => {
-                stagedUnobservedCalls.set(turn, (stagedUnobservedCalls.get(turn) ?? 0) + 1);
-              }),
-          }),
-          Stream.provide(ThreadHistory.layer),
-          Stream.provideService(SubagentHost.forTool, (source) =>
-            source.threadId !== submission.threadId ||
-            source.agentId !== submission.agentId ||
-            source.runId !== runId
-              ? SubagentHost.unavailable
-              : workerRuntime.facet(
-                  {
-                    source,
-                    policy: agent.definition.policy,
-                    depth: delegationDepth,
-                    ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
-                  },
-                  submission.principal,
-                  submission.submissionId,
-                ),
+            ),
           ),
-          Stream.provideService(MessagingHost.forTool, (source) =>
-            source.threadId !== submission.threadId ||
-            source.agentId !== submission.agentId ||
-            source.runId !== runId
-              ? MessagingHost.unavailable
-              : messagingRuntime.forTool(source, submission.principal),
-          ),
-          Stream.provideService(CurrentToolFailureObserver, toolFailureObserver),
-          Stream.provideService(RunToolVisibility, runToolVisibility),
-          Stream.provideService(RunToolScheduling, runToolScheduling),
-          Stream.provideService(ContextCompactor, compactor),
-          Stream.provideService(RunContextPreparation, runContextPreparation),
         ),
-        (event) =>
-          halt(
-            Effect.gen(function* () {
-              // A broker reports hook failures as Tool preflight data. The coordinator's recorded
-              // infrastructure halt must win before any subsequent event commits that Tool outcome.
-              const failure = yield* Ref.get(haltRef);
-
-              if (failure !== undefined) return yield* Effect.fail(failure);
-              yield* handleEvent(event);
-            }),
-          ),
-      ).pipe(
-        Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? preserveToolResults : Effect.void)),
         // Retain while the Attempt's services, claim renewal and abort watcher are still live.
         // A failed retention halts the coordinator; it is not a failed Tool or a safe suspension.
         Effect.tapCause((cause) =>
@@ -8153,35 +7733,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       // Liveness only: the lease keeps the claim visible; correctness stays with the epoch fence.
       // OwnershipLost ends the race and interrupts the Run fiber cleanly.
-      const renewal = halt(
-        Effect.gen(function* () {
-          // Binding selection and preparation consume the acquired lease too. Carry the next
-          // deadline across model continuations; an overdue first renewal must run immediately.
-          const renewAt = yield* Ref.get(renewAtRef);
-          const now = yield* Clock.currentTimeMillis;
-
-          yield* Effect.sleep(Math.max(0, renewAt - now));
-          yield* Effect.repeat(
-            Effect.gen(function* () {
-              const ownershipToken = yield* Ref.get(tokenRef);
-              const renewingAt = yield* Clock.currentTimeMillis;
-
-              const renewal = yield* ledger.renewOwnership(
-                RenewOwnershipRequest.make({ submissionId, ownershipToken }),
-              );
-
-              yield* Ref.set(tokenRef, renewal.ownershipToken);
-              yield* Ref.set(
-                renewAtRef,
-                renewingAt + Duration.toMillis(config.leaseRenewalInterval),
-              );
-            }).pipe(Effect.uninterruptible),
-            { schedule: Schedule.spaced(config.leaseRenewalInterval) },
-          );
-
-          return yield* Effect.never;
-        }),
-      );
+      const renewal = halt(session.maintain(config.leaseRenewalInterval));
 
       const execution = Effect.raceFirst(consume, Effect.raceFirst(abortWatcher, renewal));
 
@@ -8242,16 +7794,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             const childPending = agentChildPendingOption(error);
 
             if (Option.isSome(childPending)) {
-              // Durable waitingForChild suspension (spec §12 step 10): every non-waiting
-              // sibling settled before the Run terminated; commit their results as per-call
-              // late-settle batches FIRST so no sibling effect is lost, then let `runAttempt`
-              // own the ledger transition.
-              return commitSiblingLateSettles(childPending.value.children).pipe(
-                Effect.map(() => ({
-                  _tag: "suspendedChildRun" as const,
-                  children: childPending.value.children,
-                })),
-              );
+              // The interpreter committed every closed sibling before reporting suspension.
+              // The Attempt now owns only the ledger transition.
+              return Effect.succeed({
+                _tag: "suspendedChildRun" as const,
+                children: childPending.value.children,
+              });
             }
 
             return Effect.gen(function* () {
@@ -8263,6 +7811,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               if (halted !== undefined) {
                 return yield* halted;
               }
+              // A semantic failure retains the validated response and its usage. Ownership loss
+              // and coordinator faults escape above without retrying a failed canonical append.
+              yield* flushDeferredResponse;
 
               // Host authorization can observe cancellation before the abort watcher ticks.
               // Only an authorization denial with this Submission's durable intent is an abort.
@@ -8319,6 +7870,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       if (result._tag === "suspendedRun") return approvalSuspension(result.toolCallId);
       if (result._tag === "suspendedChildRun") return childSuspension(result.children);
       if (result._tag === "aborted") {
+        yield* flushDeferredResponse;
+
         return {
           ...abortedRunPhase(yield* currentUsageSummary()),
           uncommittedModelUsage: uncommittedModelUsage(),
@@ -8333,27 +7886,27 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
         return failed;
       }
-      const state = yield* Ref.get(stateRef);
+      const committedCompletion = completionState.committed;
 
-      if (state.completedOutput === undefined) {
+      if (committedCompletion === undefined) {
         return yield* LedgerError.make({
           operation: "runModel",
-          message: "Agent Run stream ended without RunCompleted",
+          message: "Agent Run ended without a committed completion",
         });
       }
 
       const completed: RunPhaseOutcome = {
         _tag: "completed",
-        result: state.completedOutput,
-        ...(state.completedRunDisposition === undefined
+        result: committedCompletion.output,
+        ...(committedCompletion.runDisposition === undefined
           ? {}
-          : { runDisposition: state.completedRunDisposition }),
-        ...(state.completedFinishReason === undefined
+          : { runDisposition: committedCompletion.runDisposition }),
+        ...(committedCompletion.finishReason === undefined
           ? {}
-          : { finishReason: state.completedFinishReason }),
-        ...(state.completedFinishReason === undefined || state.completedExhausted === undefined
+          : { finishReason: committedCompletion.finishReason }),
+        ...(committedCompletion.exhausted === undefined
           ? {}
-          : { exhausted: state.completedExhausted }),
+          : { exhausted: committedCompletion.exhausted }),
         usageSummary: yield* currentUsageSummary(),
         uncommittedModelUsage: uncommittedModelUsage(),
       };
@@ -8399,27 +7952,21 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       InputPromptValue,
       UpdatesSchema
     >,
-    threadId: ThreadId,
-    claim: Claim,
-    tokenRef: Ref.Ref<OwnershipToken>,
-    renewAtRef: Ref.Ref<number>,
+    session: RunStorageSession,
     resumeAfterRetention: () => void,
     onHandoff: (nextSubmissionId: SubmissionId) => void,
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
-      // The Thread-store fence BEFORE this Attempt advances it identifies the superseded
-      // ownership period for the durability §9 interruption audit.
-      const supersededEpoch = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
-        Effect.map((tail) => tail.producerEpoch),
-        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(ZERO_EPOCH)),
-      );
-
-      // Advance the Thread-store fence to this Attempt's epoch (idempotent when equal).
-      yield* store.materialize(
-        ThreadMaterialization.make({ threadId, producerEpoch: claim.producerEpoch }),
+      // Claim atomically advances the lane fence. SQL/DO share that fence with ThreadStore,
+      // so reading the tail here already observes this claim, not its predecessor. Use the
+      // granted generation; canonical input and response evidence below decide whether a
+      // conservative interruption audit is needed before inference can repeat.
+      const supersededEpoch = Schema.decodeSync(ProducerEpoch)(
+        Math.max(0, claim.producerEpoch - 1),
       );
 
       const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -8443,10 +7990,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       if (submission.state === "admitted") {
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId }));
       }
-      const ctx = yield* attemptContextFor(threadId, claim.producerEpoch);
-
-      let controlThrough = (yield* store.inspectTail(ThreadTailRequest.make({ threadId })))
-        .tailSequence;
+      yield* session.refresh;
+      const ctx: AttemptAppendContext = session;
+      let controlThrough = (yield* session.tail).sequence;
 
       const initialThrough = controlThrough;
 
@@ -8486,9 +8032,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       // The append-only prefix remains valid for this Attempt. Retain only this Run's control
       // evidence and validate each newly visible suffix against its own captured tail.
-      const refreshControl = Effect.fn("DurableAgentRuntime.refreshAttemptControl")(function* (
-        throughSequence?: CanonicalSequence,
-      ) {
+      const refreshControl = Effect.fnUntraced(function* (throughSequence?: CanonicalSequence) {
         const through =
           throughSequence ??
           (yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence;
@@ -8555,36 +8099,34 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
         return Option.some(settlement);
       }
-      if (snapshot.reservation !== undefined) {
-        return Option.some(
-          yield* completeReservation(ctx, submission, snapshot.reservation, false),
-        );
-      }
       if (snapshot.abortIntent !== undefined) {
         // request-abort-and-join (spec §13.1, SUB-022): propagate the durable abort to every
         // nonterminal attached child, join every settled child coordinator-side, and settle
         // aborted ONLY once no child obligation stays open. A waiting/blocked disposition ends
         // the ownership period without settling — the obligation stays owed.
-        const disposition = yield* abortAttachedChildren(ctx, submission, tokenRef, knownIds);
+        const disposition = yield* abortAttachedChildren(ctx, submission, session, knownIds);
 
         if (disposition === "waiting") {
           return Option.none<Settlement>();
         }
         if (disposition === "blocked") {
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          yield* ledger
-            .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
           return Option.none<Settlement>();
         }
 
         return Option.some(
-          yield* settleAborted(ctx, submission, tokenRef, snapshot.abortIntent, evidence, knownIds),
+          yield* settleAborted(
+            ctx,
+            submission,
+            session.publishSettlement,
+            snapshot.abortIntent,
+            evidence,
+            knownIds,
+          ),
         );
       }
-      yield* applyCanonicalInput(ctx, submission, tokenRef, records, snapshot.inputApplied);
+      yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
 
       const savedRunTiming = yield* ensureRunStarted(
         ctx,
@@ -8609,11 +8151,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       let expiredChildObligation = false;
 
       if ((yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(runTiming.deadline)) {
-        yield* reconcileRetainedChildren(ctx, submission, yield* Ref.get(tokenRef));
+        yield* reconcileRetainedChildren(ctx, submission, session);
         expiredChildObligation = yield* completeJoinedReleases(submission);
       }
 
-      // Recheck after duration interruption too: that Attempt may have prepared new ordinary calls.
+      // Recheck after duration interruption too: that Attempt may have declared new ordinary calls.
       const ordinaryCallsResolved = Effect.gen(function* () {
         const reconciliationRecords = yield* refreshControl();
 
@@ -8654,11 +8196,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }
           // This Submission is parked (marked Unknown, or reconciliation itself failed):
           // release the claim without settling — the accepted-work obligation stays owed.
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          yield* ledger
-            .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
           return false;
         }
@@ -8692,40 +8230,34 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         const unsupported: Array<OpenToolCallEvidence> = [];
         const unavailableDelegations = new Set<ToolCallId>();
 
+        const operationStates = toolOperationStates(
+          continuationRecords,
+          runIdForSubmission(submissionId),
+        );
+
         for (const call of continuation.calls) {
-          const original = continuationRecords
-            .map(({ record }) => record.payload)
-            .find(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                payload.runId === runIdForSubmission(submissionId) &&
-                payload.toolCallId === call.id,
-            );
+          const operation = operations.get(call.id);
 
           if (
-            original?._tag === "ToolCallPrepared" &&
-            original.executionKind === "delegation" &&
+            operation?.executionKind === "delegation" &&
             !settled.has(call.id) &&
             !supportsOperation(
-              submission,
-              OpenToolCallEvidence.make(original),
-              operations.get(call.id),
-              original,
+              OpenToolCallEvidence.make({
+                toolCallId: operation.toolCallId,
+                toolName: operation.toolName,
+                turn: continuation.turn,
+              }),
+              operation,
               current,
             )
           )
-            unavailableDelegations.add(original.toolCallId);
+            unavailableDelegations.add(operation.toolCallId);
         }
 
         const children =
           unavailableDelegations.size === 0
             ? undefined
-            : yield* reconcileRetainedChildren(
-                ctx,
-                submission,
-                yield* Ref.get(tokenRef),
-                unavailableDelegations,
-              );
+            : yield* reconcileRetainedChildren(ctx, submission, session, unavailableDelegations);
 
         for (const envelope of yield* refreshControl()) knownIds.add(envelope.record.recordId);
 
@@ -8745,32 +8277,25 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
           const operation = operations.get(call.id);
 
-          const prepared = continuationRecords
-            .map(({ record }) => record.payload)
-            .find(
-              (payload) =>
-                payload._tag === "ToolCallPrepared" &&
-                payload.runId === runIdForSubmission(submissionId) &&
-                payload.turn === continuation.turn &&
-                payload.toolCallId === call.id,
-            );
+          if (supportsOperation(evidence, operation, current)) continue;
 
-          const preparation = prepared?._tag === "ToolCallPrepared" ? prepared : undefined;
+          const blocked =
+            operationStates.find(
+              (state) =>
+                state.turn === continuation.turn &&
+                state.operation.toolCallId === evidence.toolCallId,
+            )?.dispatchBlocked === true;
 
-          if (supportsOperation(submission, evidence, operation, preparation, current)) continue;
-          if (preparation !== undefined && !children?.notExecuted.has(evidence.toolCallId)) {
+          const notExecuted = blocked || children?.notExecuted.has(evidence.toolCallId) === true;
+
+          const readonly =
+            operation?.executionClass === "readonly" && operation.executionKind === "ordinary";
+
+          if (!notExecuted && !readonly) {
             if (!unavailableDelegations.has(evidence.toolCallId)) unsupported.push(evidence);
             continue;
           }
-
-          // Mutating handlers cannot cross this protocol boundary without preparation.
-          // Readonly handlers may already have run; their unavailable result makes no nonexecution claim.
-          const execution =
-            children?.notExecuted.has(evidence.toolCallId) ||
-            (operation !== undefined &&
-              (operation.executionClass !== "readonly" || operation.executionKind !== "ordinary"))
-              ? "not-executed"
-              : "unavailable";
+          const execution = notExecuted ? "not-executed" : "unavailable";
 
           const result = yield* Schema.encodeEffect(ToolUnavailable)(
             ToolUnavailable.make({
@@ -8779,7 +8304,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               message:
                 execution === "not-executed"
                   ? "This operation was not executed and its original implementation is unavailable. Continue with the current tools."
-                  : "The original operation is unavailable. No mutating handler was dispatched; readonly work may have run without a recorded result.",
+                  : "The original readonly operation is unavailable and may have run without a recorded result.",
             }),
           ).pipe(Effect.flatMap(decodePersisted), Effect.orDie);
 
@@ -8795,13 +8320,9 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         const firstWaiting = children?.waiting[0];
 
         if (children !== undefined && firstWaiting !== undefined) {
-          const disposition = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken: yield* Ref.get(tokenRef),
-              reason: WaitingForChildSuspension.make({
-                children: [firstWaiting, ...children.waiting.slice(1)],
-              }),
+          const disposition = yield* session.suspend(
+            WaitingForChildSuspension.make({
+              children: [firstWaiting, ...children.waiting.slice(1)],
             }),
           );
 
@@ -8834,30 +8355,30 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       let priorContext = initialView.context;
 
       while (true) {
-        const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+        yield* session.refresh;
+        const tail = yield* session.tail;
 
         // An immediate resume may include a newly committed compaction. Rebuild its canonical
         // proof rather than carrying the initial Thread context across that boundary.
         const fullContextReplay = initialView.context !== undefined && priorContext === undefined;
 
         const canonical = fullContextReplay
-          ? canonicalRange(threadId, tail.tailSequence)
+          ? canonicalRange(threadId, tail.sequence)
           : Stream.concat(
               initialView.canonical,
-              canonicalRange(threadId, tail.tailSequence, initialThrough),
+              canonicalRange(threadId, tail.sequence, initialThrough),
             );
 
-        const currentRecords = yield* refreshControl(tail.tailSequence);
+        const currentRecords = yield* refreshControl(tail.sequence);
 
         const outcome = yield* runModel(
           agent,
           ctx,
           submission,
-          tokenRef,
-          renewAtRef,
+          session,
           currentRecords,
           canonical,
-          tail.tailSequence,
+          tail.sequence,
           initialView.seed,
           priorContext,
           fullContextReplay ? undefined : takeJournalMetadata(),
@@ -8897,14 +8418,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             ),
           ];
 
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          const suspension = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken,
-              reason: WaitingForChildSuspension.make({ children: waitingChildren }),
-            }),
+          const suspension = yield* session.suspend(
+            WaitingForChildSuspension.make({ children: waitingChildren }),
           );
 
           yield* hit("subagent:after-suspend");
@@ -8922,14 +8437,8 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           // consumes no worker permit. A decision that raced ahead of the suspend transaction
           // returns `resume-immediately`. Retained resources require a fresh Attempt; otherwise
           // the declared batch replays under this claim with the fresh decision intents.
-          const ownershipToken = yield* Ref.get(tokenRef);
-
-          const suspension = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId,
-              ownershipToken,
-              reason: ApprovalPendingSuspension.make({ toolCallIds: [outcome.toolCallId] }),
-            }),
+          const suspension = yield* session.suspend(
+            ApprovalPendingSuspension.make({ toolCallIds: [outcome.toolCallId] }),
           );
 
           yield* hit("approval:after-suspend");
@@ -8951,22 +8460,20 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         if (outcome._tag === "aborted") {
           // Durable abort ended the Run while attached children may still be open:
           // request-abort-and-join before the aborted settlement (spec §13.1).
-          const disposition = yield* abortAttachedChildren(ctx, submission, tokenRef, knownIds);
+          const disposition = yield* abortAttachedChildren(ctx, submission, session, knownIds);
 
           if (disposition === "waiting") {
             return Option.none<Settlement>();
           }
           if (disposition === "blocked") {
-            const ownershipToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
             return Option.none<Settlement>();
           }
 
-          return Option.some(yield* terminalize(ctx, submission, tokenRef, outcome, true));
+          return Option.some(
+            yield* terminalize(ctx, submission, session.publishSettlement, outcome, true),
+          );
         }
         // Canonical joins drive their reservation release BEFORE the parent settles (a settled
         // lane would strand the repair); a reserved row WITHOUT a canonical join is an open
@@ -8993,18 +8500,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             );
             yield* hit("run:after-duration-append");
           }
-          yield* reconcileRetainedChildren(ctx, submission, yield* Ref.get(tokenRef));
+          yield* reconcileRetainedChildren(ctx, submission, session);
         }
         const openObligation = yield* completeJoinedReleases(submission);
 
         if (openObligation) {
           if (outcome._tag === "failed") {
             // Release the claim and leave the lane to recovery classification.
-            const ownershipToken = yield* Ref.get(tokenRef);
-
-            yield* ledger
-              .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
             return Option.none<Settlement>();
           }
@@ -9029,7 +8532,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           yield* terminalize(
             ctx,
             submission,
-            tokenRef,
+            session.publishSettlement,
             outcome,
             true,
             outcome._tag === "completed"
@@ -9043,54 +8546,49 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   /** A missing current binding leaves both roots and children owed, with their claims released. */
   type CapturedWorkerBinding = Effect.Success<ReturnType<typeof makeLegacyWorkerBinding>>;
 
-  // Register cleanup before any interruptible work can observe a granted claim. The token
-  // reference is shared with renewal, so cleanup never releases with a superseded token.
-  const acquireClaim = Effect.fn("DurableAgentRuntime.acquireClaim")(function* (
-    threadId: ThreadId,
-    handoff?: ClaimHandoff,
-  ) {
-    const acquiringAt = yield* Clock.currentTimeMillis;
+  // Administrative repairs acquire separately from active Run sessions and never renew.
+  // Register cleanup before any interruptible work can observe the granted claim.
+  const acquireAdministrativeClaim = Effect.fn("DurableAgentRuntime.acquireAdministrativeClaim")(
+    function* (threadId: ThreadId, handoff?: ClaimHandoff) {
+      const claimed = yield* ledger.claim(
+        ClaimRequest.make({
+          threadId,
+          producerId: config.producerId,
+          ...(handoff === undefined ? {} : { handoff }),
+        }),
+      );
 
-    const claimed = yield* ledger.claim(
-      ClaimRequest.make({
-        threadId,
-        producerId: config.producerId,
-        ...(handoff === undefined ? {} : { handoff }),
-      }),
-    );
+      if (Option.isNone(claimed)) return Option.none();
+      const claim = claimed.value;
 
-    if (Option.isNone(claimed)) return Option.none();
-    const claim = claimed.value;
-    const tokenRef = yield* Ref.make(claim.ownershipToken);
-
-    const renewAtRef = yield* Ref.make(
-      acquiringAt + Duration.toMillis(config.leaseRenewalInterval),
-    );
-
-    yield* Effect.addFinalizer(() =>
-      Ref.get(tokenRef).pipe(
-        Effect.flatMap((ownershipToken) =>
-          ledger.releaseOwnership(
-            ReleaseOwnershipRequest.make({ submissionId: claim.submissionId, ownershipToken }),
+      yield* Effect.addFinalizer(() =>
+        ledger
+          .releaseOwnership(
+            ReleaseOwnershipRequest.make({
+              submissionId: claim.submissionId,
+              ownershipToken: claim.ownershipToken,
+            }),
+          )
+          .pipe(
+            Effect.catchTag("OwnershipLost", () => Effect.void),
+            Effect.catchTag("LedgerError", () =>
+              Effect.logWarning(
+                "Attempt ownership release failed; lease recovery remains required",
+              ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
+            ),
           ),
-        ),
-        Effect.catchTag("OwnershipLost", () => Effect.void),
-        Effect.catchTag("LedgerError", () =>
-          Effect.logWarning(
-            "Attempt ownership release failed; lease recovery remains required",
-          ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
-        ),
-      ),
-    );
+      );
 
-    if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
-      return yield* LedgerError.make({
-        operation: "claim handoff",
-        message: "The submission adapter did not honor the requested handoff",
-      });
+      if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
+        return yield* LedgerError.make({
+          operation: "claim handoff",
+          message: "The submission adapter did not honor the requested handoff",
+        });
 
-    return Option.some({ claim, tokenRef, renewAtRef });
-  }, Effect.uninterruptible);
+      return Option.some({ claim });
+    },
+    Effect.uninterruptible,
+  );
 
   const processThreadHead = (
     resolve: (
@@ -9113,10 +8611,17 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
       const attempt = Effect.scoped(
         Effect.gen(function* () {
-          const claimed = yield* acquireClaim(threadId, handoff);
+          const claimed = yield* runStorage.claim(
+            ClaimRequest.make({
+              threadId,
+              producerId: config.producerId,
+              ...(handoff === undefined ? {} : { handoff }),
+            }),
+          );
 
           if (Option.isNone(claimed)) return Option.none();
-          const { claim, tokenRef, renewAtRef } = claimed.value;
+          const session = claimed.value;
+          const { claim } = session;
 
           firstClaimedSubmissionId ??= claim.submissionId;
 
@@ -9156,14 +8661,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             );
 
             if (!lineageRecorded) {
-              yield* ledger
-                .releaseOwnership(
-                  ReleaseOwnershipRequest.make({
-                    submissionId: claim.submissionId,
-                    ownershipToken: claim.ownershipToken,
-                  }),
-                )
-                .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+              yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
               const parent = yield* ledger.lookup(
                 SubmissionLookupById.make({
@@ -9192,13 +8690,10 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }
 
           return yield* resolution.binding.attempt(
-            (agent, attemptThreadId, attemptClaim) =>
+            (agent) =>
               runAttempt(
                 agent,
-                attemptThreadId,
-                attemptClaim,
-                tokenRef,
-                renewAtRef,
+                session,
                 () => {
                   resumeAfterRetention = true;
                 },
@@ -9360,7 +8855,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     if (Option.isNone(head) || head.value.submissionId !== submission.submissionId) {
       return Option.none();
     }
-    const claimed = yield* acquireClaim(submission.threadId);
+    const claimed = yield* acquireAdministrativeClaim(submission.threadId);
 
     if (Option.isNone(claimed)) return Option.none();
     if (claimed.value.claim.submissionId !== submission.submissionId) {
@@ -9498,7 +8993,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         // instead of waiting to head the lane — settlement order of never-run work is not
         // execution order (DUR-004 bounds execution; DUR-012 allows settling inactive
         // accepted work without an Attempt). The appends run at the current tail with the
-        // durable abort intent as the reservation authority; any racing owner's fence
+        // durable abort intent as publication authority; any racing owner's fence
         // advance (or a concurrent joining claim) defers honestly to the next pass.
         if (submission.state === "ready" && snapshot.ownership === undefined) {
           return yield* Effect.gen(function* () {
@@ -9509,12 +9004,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               submission.agentDigests,
             );
             const ctx = yield* attemptContextAtTail(submission.threadId);
-            const tokenRef = yield* Ref.make(QUEUED_ABORT_SETTLEMENT_TOKEN);
 
             yield* settleAborted(
               ctx,
               submission,
-              tokenRef,
+              publicationFor(ctx, submission.submissionId, { _tag: "QueuedAbort" }),
               intent,
               evidence,
               knownRecordIdsOf(records),
@@ -9542,9 +9036,18 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
       yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
       const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-      const tokenRef = yield* Ref.make(claim.ownershipToken);
 
-      yield* settleAborted(ctx, submission, tokenRef, intent, evidence, knownRecordIdsOf(records));
+      yield* settleAborted(
+        ctx,
+        submission,
+        publicationFor(ctx, submission.submissionId, {
+          _tag: "Owned",
+          ownershipToken: claim.ownershipToken,
+        }),
+        intent,
+        evidence,
+        knownRecordIdsOf(records),
+      );
 
       return "repaired";
     },
@@ -9631,30 +9134,22 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     const current = yield* currentOperationsFor(submission);
     const operations = operationsFor(records, runIdForSubmission(submission.submissionId));
 
-    for (const intent of snapshot.unknownResolutions) {
-      if (intent.resolution._tag === "SafeToRetry") {
-        const prepared = records
-          .map(({ record }) => record.payload)
-          .find(
-            (payload) =>
-              payload._tag === "ToolCallPrepared" &&
-              payload.runId === runIdForSubmission(submission.submissionId) &&
-              payload.toolCallId === intent.toolCallId,
-          );
+    const declared = yield* declaredCallsFor(records, runIdForSubmission(submission.submissionId));
 
-        if (
-          prepared?._tag !== "ToolCallPrepared" ||
-          (current !== undefined &&
-            !supportsOperation(
-              submission,
-              OpenToolCallEvidence.make(prepared),
-              operations.get(intent.toolCallId),
-              prepared,
-              current,
-            ))
-        )
-          return true;
-      }
+    for (const intent of snapshot.unknownResolutions) {
+      if (intent.resolution._tag !== "SafeToRetry") continue;
+      const original = declared.get(intent.toolCallId);
+
+      if (
+        original === undefined ||
+        (current !== undefined &&
+          !supportsOperation(
+            OpenToolCallEvidence.make(original),
+            operations.get(intent.toolCallId),
+            current,
+          ))
+      )
+        return true;
     }
 
     return false;
@@ -9831,7 +9326,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         );
         const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
 
-        yield* reconcileRetainedChildren(ctx, submission, claim.ownershipToken);
+        yield* reconcileRetainedChildren(
+          ctx,
+          submission,
+          yield* recoveryOwnership(
+            submission.threadId,
+            submission.submissionId,
+            claim.ownershipToken,
+          ),
+        );
         const open = yield* completeJoinedReleases(submission);
 
         yield* ledger
@@ -9872,76 +9375,103 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         case "ResumeSuspended": {
           return yield* resumeSuspendedForRecovery(snapshot);
         }
-        case "RevertJoining": {
-          // `joining` without a canonical `input:{sid}` record: the host never consumed the
-          // input, so the claim returns to ready and is delivered exactly once later
-          // (DUR-016). Ownership-free by contract; the wake hint reopens the lane.
-          yield* ledger.revertJoining(
-            RevertJoiningRequest.make({ submissionId: submission.submissionId }),
-          );
-          yield* wake.notify(submission.threadId);
-
-          return "repaired";
-        }
+        case "RevertJoining":
         case "RepairJoinMarker": {
           const hostSubmissionId = snapshot.hostSubmissionId;
 
           if (hostSubmissionId === undefined) return "deferred";
 
-          const inputEnvelope = records.find(
-            (envelope) =>
-              envelope.record.recordId === submissionInputRecordId(submission.submissionId),
-          );
-
-          if (inputEnvelope === undefined) return "deferred";
-          if (evidence.hostSettlementOutcome !== undefined) {
-            // The host settled while the marker was lost, so no host ownership can ever repair
-            // it. The coverage rule decides honestly (DUR-016): an uncovered input was never
-            // consumed by the host and returns to ready to run as its own Run (the canonical
-            // `input:{sid}` record reattaches through the ordinary input-marker repair); a
-            // covered-but-unmarked input is unreachable under this coordinator (`markJoined`
-            // always precedes delivery), so it stays visible instead of being guessed at.
-            if (!evidence.joinedInputCovered) {
-              yield* ledger.revertJoining(
-                RevertJoiningRequest.make({ submissionId: submission.submissionId }),
-              );
-              yield* wake.notify(submission.threadId);
-
-              return "repaired";
-            }
-
-            return "deferred";
-          }
-
-          // `markJoined` is fenced by the HOST lane's ownership: claim the host head, repair
-          // the marker from history (DUR-015), and release. A live host defers to that host's
-          // own drain-seam repair.
           const host = yield* ledger.lookup(
             SubmissionLookupById.make({ submissionId: hostSubmissionId }),
           );
 
           if (Option.isNone(host)) return "deferred";
-          const claimed = yield* claimFor(host.value, decision);
 
-          if (Option.isNone(claimed)) return "deferred";
-          const claim = claimed.value;
+          // Joining belongs to the host's ownership period, including the interval before
+          // its input append. Recovery must not revert claims a live host is still consuming.
+          const claimed =
+            host.value.state === "settled"
+              ? Option.none<Claim>()
+              : yield* claimFor(host.value, decision);
 
-          yield* ledger.markJoined(
-            MarkJoinedRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken: claim.ownershipToken,
-              recordId: inputEnvelope.record.recordId,
-              sequence: inputEnvelope.sequence,
-            }),
-          );
-          yield* ledger
-            .releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: hostSubmissionId,
-                ownershipToken: claim.ownershipToken,
+          if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";
+          if (Option.isSome(claimed))
+            yield* store.materialize(
+              ThreadMaterialization.make({
+                threadId: submission.threadId,
+                producerEpoch: claimed.value.producerEpoch,
               }),
-            )
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            );
+
+          // The previous owner may have appended after the pass snapshot, before this claim.
+          // Re-read that suffix and the join link before deciding whether the input is absent.
+          const currentRecords = yield* refreshRecoveryHistory(
+            submission.threadId,
+            records,
+            history.throughSequence,
+            history.submissionIds,
+          );
+
+          const current = yield* ledger.loadRecoverySnapshot(
+            RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
+          );
+
+          if (
+            current.submission.state !== "joining" ||
+            current.hostSubmissionId !== hostSubmissionId
+          )
+            return "deferred";
+
+          const currentEvidence = yield* evidenceFor(
+            currentRecords,
+            submission.submissionId,
+            history.materialized,
+            hostSubmissionId,
+          );
+
+          const inputEnvelope = currentRecords.find(
+            (envelope) =>
+              envelope.record.recordId === submissionInputRecordId(submission.submissionId),
+          );
+
+          if (currentEvidence.hostSettlementOutcome !== undefined) {
+            // A covered terminal input stays visible: markJoined must precede delivery, so
+            // recovery cannot guess at that unreachable prefix. Uncovered input returns ready.
+            if (currentEvidence.joinedInputCovered) return "deferred";
+          } else if (Option.isNone(claimed)) {
+            // A ledger-settled host without canonical settlement evidence is not repair authority.
+            return "deferred";
+          } else if (inputEnvelope !== undefined) {
+            yield* ledger.markJoined(
+              MarkJoinedRequest.make({
+                submissionId: submission.submissionId,
+                ownershipToken: claimed.value.ownershipToken,
+                recordId: inputEnvelope.record.recordId,
+                sequence: inputEnvelope.sequence,
+              }),
+            );
+          }
+          if (currentEvidence.hostSettlementOutcome !== undefined || inputEnvelope === undefined)
+            yield* ledger.revertJoining(
+              RevertJoiningRequest.make({
+                submissionId: submission.submissionId,
+                guard: {
+                  hostSubmissionId,
+                  ...(Option.isNone(claimed)
+                    ? {}
+                    : { ownershipToken: claimed.value.ownershipToken }),
+                },
+              }),
+            );
+          if (Option.isSome(claimed))
+            yield* ledger
+              .releaseOwnership(
+                ReleaseOwnershipRequest.make({
+                  submissionId: hostSubmissionId,
+                  ownershipToken: claimed.value.ownershipToken,
+                }),
+              )
+              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
           yield* wake.notify(submission.threadId);
 
           return "repaired";
@@ -10011,7 +9541,12 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             submission.agentDigests,
           );
           const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-          const tokenRef = yield* Ref.make(claim.ownershipToken);
+
+          const ownership = yield* recoveryOwnership(
+            submission.threadId,
+            submission.submissionId,
+            claim.ownershipToken,
+          );
 
           const currentRecords = yield* refreshRecoveryHistory(
             submission.threadId,
@@ -10023,11 +9558,11 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           yield* applyCanonicalInput(
             ctx,
             submission,
-            tokenRef,
+            ownership,
             currentRecords,
             snapshot.inputApplied,
           );
-          const ownershipToken = yield* Ref.get(tokenRef);
+          const ownershipToken = claim.ownershipToken;
 
           yield* ledger
             .releaseOwnership(
@@ -10037,59 +9572,6 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
               }),
             )
             .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-
-          return "repaired";
-        }
-        case "AppendReservedSettlement": {
-          const reservation = snapshot.reservation;
-
-          if (reservation === undefined) return "deferred";
-          const claimed = yield* claimFor(submission, decision);
-
-          if (Option.isNone(claimed)) {
-            // P7 §7(c) crash replay: a queued-abort settlement that committed its reservation
-            // but lost the append/finalize completes at the current tail — the aborted,
-            // never-claimed row still holds no live ownership, so no claim can ever exist
-            // for it while it stays queued behind the head.
-            if (
-              reservation.outcome === "aborted" &&
-              snapshot.abortIntent !== undefined &&
-              snapshot.ownership === undefined
-            ) {
-              const ctx = yield* attemptContextAtTail(submission.threadId);
-
-              return yield* completeReservation(
-                ctx,
-                submission,
-                reservation,
-                evidence.recordedSettlementOutcome !== undefined,
-              ).pipe(
-                Effect.as("repaired" as const),
-                Effect.catchTags({
-                  FenceRejected: () => Effect.succeed("deferred" as const),
-                  AppendConflict: () => Effect.succeed("deferred" as const),
-                }),
-              );
-            }
-
-            return "deferred";
-          }
-          const claim = claimed.value;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({
-              threadId: submission.threadId,
-              producerEpoch: claim.producerEpoch,
-            }),
-          );
-          const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-
-          yield* completeReservation(
-            ctx,
-            submission,
-            reservation,
-            evidence.recordedSettlementOutcome !== undefined,
-          );
 
           return "repaired";
         }
@@ -10688,6 +10170,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         .pipe(
           Effect.provideService(SubmissionLedger, ledger),
           Effect.provideService(ThreadStore, store),
+          Effect.provideService(ThreadReader, reader),
           Effect.provideService(WakeScheduler, wake),
           Effect.provideService(DurableRuntimeFailpoint, failpoint),
         );
@@ -10790,7 +10273,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       threadId: receipt.threadId,
       recordId: submissionSettlementRecordId(receipt.submissionId),
     }).pipe(
-      Effect.provideService(ThreadStore, store),
+      Effect.provideService(ThreadReader, reader),
       Effect.mapError((cause) =>
         LedgerError.make({
           operation: "awaitSettlement",
@@ -10868,7 +10351,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         Effect.gen(function* () {
           // Register before reading the ledger so settlement between the read and
           // parking cannot be lost. Hints never replace the authoritative re-read.
-          const awaitHint = yield* wake.subscribe(receipt.threadId);
+          const awaitHint = yield* wake.subscribe(receipt.threadId, "settlement");
           const finalized = yield* readFinalizedSubmission(receipt);
 
           if (Option.isNone(finalized))
@@ -11059,7 +10542,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   const ageSecondsSince = (instant: DateTime.Utc, nowMillis: number): number =>
     Math.max(0, Math.floor((nowMillis - DateTime.toEpochMillis(instant)) / 1_000));
 
-  const lookupKnownSubmission = Effect.fn("DurableAgentRuntime.lookupKnownSubmission")(function* (
+  const lookupKnownSubmission = Effect.fnUntraced(function* (
     operation: string,
     submissionId: SubmissionId,
   ): Effect.fn.Return<SubmissionSnapshot, LedgerError> {
@@ -11081,7 +10564,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * assembling it performs zero writes (P7 exit gate: operators explain recovery state without
    * editing storage).
    */
-  const explainSubmission = Effect.fn("DurableAgentRuntime.explainSubmission")(function* (
+  const explainSubmission = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
   ): Effect.fn.Return<RecoveryExplanation, LedgerError | ThreadStoreError | RunJournalError> {
     const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -11129,6 +10612,14 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         }),
       );
     }
+    const declared = yield* declaredCallsFor(read.records, runId);
+
+    const pendingIds = new Set(
+      toolOperationStates(read.records, runId)
+        .filter((state) => !state.settled && !state.resolved)
+        .map((state) => state.operation.toolCallId),
+    );
+
     const row = snapshot.submission;
 
     return RecoveryExplanation.make({
@@ -11149,13 +10640,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         inputRecorded: evidence.inputRecorded,
         abortRecorded: evidence.abortRecorded,
         openToolCalls: evidence.openToolCalls,
-        pendingOperations: read.records.flatMap(({ record }) =>
-          record.payload._tag === "ToolCallPrepared" &&
-          record.payload.runId === runId &&
-          !resolvedIds.has(record.payload.toolCallId)
-            ? [record.payload]
-            : [],
-        ),
+        pendingOperations: [...declared.values()].filter((call) => pendingIds.has(call.toolCallId)),
         openDelegationCalls: evidence.openDelegationCalls,
         approvalsPending: evidence.approvalsPending,
         unknownCalls,
@@ -11633,7 +11118,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
  *   (`suspended → input-applied`) and the next Attempt resumes the declared batch without model
  *   re-invocation, appending the canonical `ToolApprovalDecided` before honoring the decision.
  * - `processThread(agent, threadId)` — drain one lane: fenced FIFO-head claims,
- *   canonical input apply, split response/prepared/results Turn commits (plan §2.1),
+ *   canonical input apply, split response/results Turn commits (plan §2.1),
  *   reconcile-then-mark for open ordinary Tool Calls (DUR-009, never an automatic replay),
  *   declared-batch resume without model re-invocation (§15), and terminalization. An active
  *   host Run claims the contiguous ready prefix of later queued Submissions at every safe Turn
@@ -11890,6 +11375,7 @@ export class DurableAgentRuntime extends Context.Service<
     never,
     | SubmissionLedger
     | ThreadStore
+    | RunStorage
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig
@@ -11904,6 +11390,7 @@ export class DurableAgentRuntime extends Context.Service<
     never,
     | SubmissionLedger
     | ThreadStore
+    | RunStorage
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig

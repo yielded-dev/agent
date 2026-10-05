@@ -1,14 +1,4 @@
-import {
-  Crypto,
-  Option,
-  type Scope,
-  Context,
-  Effect,
-  Layer,
-  References,
-  Schema,
-  Tracer,
-} from "effect";
+import { Crypto, Option, Scope, Context, Effect, Layer, References, Schema, Tracer } from "effect";
 import { Tool } from "effect/ai";
 
 import type * as Agent from "../../core/Agent.ts";
@@ -346,6 +336,7 @@ interface CapturedBinding {
 // Registrations outlive their construction span. Dependencies remain captured,
 // while every attempt/report inherits the invoking fiber's tracing state.
 const omitTraceContext = Context.omit(
+  Scope.Scope,
   Tracer.ParentSpan,
   Tracer.Tracer,
   Tracer.MinimumTraceLevel,
@@ -354,6 +345,12 @@ const omitTraceContext = Context.omit(
   References.TracerTimingEnabled,
   References.TracerSpanAnnotations,
   References.TracerSpanLinks,
+  References.CurrentLoggers,
+  References.CurrentLogLevel,
+  References.MinimumLogLevel,
+  References.CurrentStackFrame,
+  References.CurrentLogAnnotations,
+  References.CurrentLogSpans,
 );
 
 // R describes captured application services; ParentSpan is supplied by the

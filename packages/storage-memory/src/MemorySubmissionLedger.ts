@@ -19,6 +19,14 @@ import {
   type RecordEnvelope,
   type SettlementOutcome,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import {
+  SettlementPublisher,
+  SettlementPublicationResult,
+  validatePublication,
+  validateCanonicalSettlement,
+  validateJoinedSettlement,
+} from "@yielded/agent/settlement-publisher";
 import {
   type ParentLinkage,
   AbortCommand,
@@ -68,14 +76,12 @@ import {
   ReleaseOwnershipRequest,
   RenewOwnershipRequest,
   ReservedChildBudget,
-  ReservedSettlement,
   RevertJoiningRequest,
   Settlement,
   SettlementConflict,
   SettlementFinalization,
-  SettlementReservation,
-  SettlementReservationSnapshot,
   settlementFailureFromRecord,
+  submissionSettlementRecordId,
   AbortIntent,
   AbortIntentRequest,
   SubmissionLedger,
@@ -100,6 +106,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import {
   Clock,
+  Context,
   Cause,
   Exit,
   Fiber,
@@ -113,11 +120,13 @@ import {
   Stream,
 } from "effect";
 
+import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
+
 const MAX_SUBMISSIONS = 65_536;
 
 /**
  * Lifecycle ordering used to advance-but-never-regress the operational state marker: a reclaimed
- * Attempt must not erase progress markers (input-applied, terminalizing) that an earlier Attempt
+ * Attempt must not erase progress markers (input-applied) that an earlier Attempt
  * already committed.
  */
 const STATE_RANK: Record<SubmissionState, number> = {
@@ -129,8 +138,7 @@ const STATE_RANK: Record<SubmissionState, number> = {
   "input-applied": 5,
   suspended: 6,
   unknown: 7,
-  terminalizing: 8,
-  settled: 9,
+  settled: 8,
 };
 
 interface SubmissionRow {
@@ -165,12 +173,10 @@ interface StoredOwnership {
   readonly leaseExpiresAtMillis: number;
 }
 
-interface StoredReservation {
+interface StoredFinalization {
   readonly settlementId: SettlementId;
-  readonly outcome: SettlementOutcome;
-  readonly record: RecordEnvelope;
-  readonly recordDigest: Digest;
-  readonly finalizedAtMillis: number | undefined;
+  readonly finalizedAtMillis: number;
+  readonly recordId: RecordEnvelope["recordId"];
 }
 
 interface StoredSuspension {
@@ -191,7 +197,7 @@ interface StoredSubmission {
   readonly row: SubmissionRow;
   readonly ownership: StoredOwnership | undefined;
   readonly inputApplied: InputAppliedMarker | undefined;
-  readonly reservation: StoredReservation | undefined;
+  readonly finalization: StoredFinalization | undefined;
   readonly abortIntent: AbortIntent | undefined;
   /** Host linkage recorded at `claimJoining` time; cleared by `revertJoining` (DUR-016). */
   readonly joinedHostSubmissionId: SubmissionId | undefined;
@@ -407,7 +413,7 @@ const findHead = (state: LedgerState, threadId: ThreadId): StoredSubmission | un
 /**
  * Reference in-memory SubmissionLedger. It implements the full port contract — atomic idempotent
  * admission, eligible FIFO claims, producer-epoch fencing, Clock-driven ownership leases, idempotent
- * settlement reservation/finalization, and durable abort intent — with every transition applied
+ * canonical settlement publication/finalization, and durable abort intent — with every transition applied
  * as one atomic `Ref.modify`, but its state does not survive the process (`non-durable`).
  *
  * Adapter-specific semantics within the port's latitude:
@@ -430,8 +436,8 @@ const findHead = (state: LedgerState, threadId: ThreadId): StoredSubmission | un
  * - `markJoined` verifies the token against the HOST's live ownership (the lane is
  *   host-owned), so a later host Attempt can repair a lost marker from history (DUR-016). The
  *   join marker reuses the input-applied marker: the joined input IS `input:{sid}`.
- * - `suspend` and `markUnknown` refuse when an exact settlement is already reserved
- *   (`SettlementConflict` with the reserved outcome) — DUR-011's reservation wins.
+ * - `suspend` and `markUnknown` refuse after canonical settlement publication under the
+ *   paired journal mutation gate.
  * - `resolveAdmission` derives its answer from the single strongly consistent store, so it
  *   never answers `Indeterminate` on its own; the test-only `resolveAdmissionFault` option
  *   injects the `Indeterminate` classification so SUB-031 callers can be conformance-tested.
@@ -440,6 +446,8 @@ const findHead = (state: LedgerState, threadId: ThreadId): StoredSubmission | un
  */
 const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
   Effect.gen(function* () {
+    const journal = yield* MemoryThreadStoreKernel;
+
     const state = yield* Ref.make<LedgerState>({
       submissions: new Map(),
       admissionIndex: new Map(),
@@ -666,7 +674,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 row,
                 ownership: undefined,
                 inputApplied: undefined,
-                reservation: undefined,
+                finalization: undefined,
                 abortIntent: undefined,
                 joinedHostSubmissionId: undefined,
                 suspension: undefined,
@@ -1080,128 +1088,133 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       }),
     );
 
-    const reserveSettlement: SubmissionLedger["Service"]["reserveSettlement"] = Effect.fn(
-      "MemorySubmissionLedger.reserveSettlement",
-    )((unvalidated) =>
-      Effect.gen(function* () {
-        const request = yield* validate(SettlementReservation, "reserveSettlement", unvalidated);
+    const canonicalSettlement = Effect.fnUntraced(function* (submission: SubmissionRow) {
+      const record = yield* journal.record(
+        submission.threadId,
+        submissionSettlementRecordId(submission.submissionId),
+      );
 
-        const decision = yield* Ref.modify(
-          state,
-          (
-            current,
-          ): readonly [
-            Decision<ReservedSettlement, SettlementConflict | OwnershipLost | LedgerError>,
-            LedgerState,
-          ] => {
-            const stored = current.submissions.get(request.submissionId);
+      if (record === undefined) return undefined;
+      const settlement = yield* validateCanonicalSettlement(record, submission);
 
-            if (stored === undefined) {
-              return [
-                failure(
-                  ledgerError("reserveSettlement", `Unknown Submission ${request.submissionId}`),
-                ),
-                current,
-              ];
-            }
+      return { record, settlement };
+    });
 
-            // A `joined` Submission settles WITH its host (plan §2.5) and its lane is never
-            // worker-claimable, so no ownership token can exist for it: the recorded host
-            // linkage authorizes the reservation and the presented token is not consulted.
-            const joinedSettlement =
-              stored.row.state === "joined" && stored.joinedHostSubmissionId !== undefined;
+    const publish: SettlementPublisher["Service"]["publish"] = Effect.fn(
+      "MemorySettlementPublisher.publish",
+    )(function* (input) {
+      const { request, record, settlement } = yield* validatePublication(input);
+      const prepared = yield* journal.prepareAppend(request.append);
 
-            // P7 §7(c): an aborted, never-claimed, still-queued Submission likewise has no
-            // live ownership to fence against — its durable abort intent authorizes exactly
-            // its ABORTED settlement (`terminalizing` is the same pass's crash replay). Every
-            // other reservation stays fenced by the target lane's live ownership.
-            const queuedAbortSettlement =
-              request.outcome === "aborted" &&
-              stored.abortIntent !== undefined &&
-              stored.ownership === undefined &&
-              (stored.row.state === "ready" || stored.row.state === "terminalizing");
+      return yield* journal.withMutation(
+        Effect.gen(function* () {
+          const current = yield* Ref.get(state);
+          const stored = current.submissions.get(request.submissionId);
 
-            if (
-              !joinedSettlement &&
-              !queuedAbortSettlement &&
-              !ownsLane(current, stored, request.ownershipToken)
-            ) {
-              return [failure(ownershipLost(current, stored)), current];
-            }
-            const existing = stored.reservation;
+          if (stored === undefined)
+            return yield* ledgerError("publish settlement", "Unknown Submission");
+          if (stored.row.threadId !== prepared.request.threadId)
+            return yield* ledgerError("publish settlement", "Publication targets another Thread");
+          yield* validateCanonicalSettlement(record, stored.row);
+          const existing = yield* canonicalSettlement(stored.row);
+          const tail = yield* journal.tail(stored.row.threadId);
 
-            if (existing !== undefined) {
+          // Replay still requires authority: finalization releases Owned tokens, while
+          // retained host linkage or abort intent can authorize tokenless settled replay.
+          switch (request.authority._tag) {
+            case "Owned":
               if (
-                existing.settlementId !== request.settlementId ||
-                existing.outcome !== request.outcome ||
-                existing.recordDigest !== request.recordDigest
-              ) {
-                return [
-                  failure(
-                    SettlementConflict.make({
-                      submissionId: request.submissionId,
-                      existingOutcome: existing.outcome,
-                    }),
-                  ),
-                  current,
-                ];
-              }
+                !ownsLane(current, stored, request.authority.ownershipToken) ||
+                stored.ownership?.producerEpoch !== tail.producerEpoch
+              )
+                return yield* ownershipLost(current, stored);
+              yield* validateCanonicalSettlement(record, {
+                submissionId: request.submissionId,
+                receiptId: stored.row.receiptId,
+                ...(settlement.outcome === "aborted" && settlement.runId === undefined
+                  ? {}
+                  : { runId: runIdForSubmission(request.submissionId) }),
+              });
+              break;
+            case "Joined": {
+              if (
+                (stored.row.state !== "joined" &&
+                  !(stored.row.state === "settled" && existing !== undefined)) ||
+                stored.joinedHostSubmissionId !== request.authority.hostSubmissionId
+              )
+                return yield* ledgerError(
+                  "publish settlement",
+                  "Submission is not joined to this host",
+                );
+              const host = current.submissions.get(request.authority.hostSubmissionId);
 
-              return [
-                success(
-                  ReservedSettlement.make({
-                    submissionId: request.submissionId,
-                    settlementId: existing.settlementId,
-                    outcome: existing.outcome,
-                    record: existing.record,
-                    recordDigest: existing.recordDigest,
-                    replayed: true,
-                  }),
-                ),
-                current,
-              ];
+              const canonicalHost =
+                host === undefined || host.row.threadId !== stored.row.threadId
+                  ? undefined
+                  : yield* canonicalSettlement(host.row);
+
+              if (canonicalHost === undefined)
+                return yield* ledgerError(
+                  "publish settlement",
+                  "Joined host has no canonical settlement",
+                );
+              yield* validateJoinedSettlement(settlement, canonicalHost.settlement);
+              break;
             }
+            case "QueuedAbort":
+              if (
+                (stored.row.state !== "ready" &&
+                  !(stored.row.state === "settled" && existing !== undefined)) ||
+                stored.abortIntent === undefined ||
+                stored.ownership !== undefined ||
+                settlement.outcome !== "aborted"
+              )
+                return yield* ledgerError(
+                  "publish settlement",
+                  "Submission is not an unclaimed queued abort",
+                );
+              yield* validateCanonicalSettlement(record, {
+                submissionId: request.submissionId,
+                receiptId: stored.row.receiptId,
+                runId: undefined,
+              });
+              break;
+          }
+          if (existing !== undefined)
+            return SettlementPublicationResult.make({
+              record: existing.record,
+              tailSequence: tail.tailSequence,
+              tailDigest: tail.tailDigest,
+              replayed: true,
+            });
+          if (stored.row.state === "settled")
+            return yield* ledgerError(
+              "publish settlement",
+              "Finalized Submission has no canonical settlement",
+            );
+          const appended = yield* journal.appendPrepared(prepared);
 
-            const reservation: StoredReservation = {
-              settlementId: request.settlementId,
-              outcome: request.outcome,
-              record: request.record,
-              recordDigest: request.recordDigest,
-              finalizedAtMillis: undefined,
-            };
-
-            const row: SubmissionRow =
-              STATE_RANK[stored.row.state] < STATE_RANK.terminalizing
-                ? { ...stored.row, state: "terminalizing" }
-                : stored.row;
-
-            return [
-              success(
-                ReservedSettlement.make({
-                  submissionId: request.submissionId,
-                  settlementId: reservation.settlementId,
-                  outcome: reservation.outcome,
-                  record: reservation.record,
-                  recordDigest: reservation.recordDigest,
-                  replayed: false,
-                }),
-              ),
-              withSubmission(current, { ...stored, row, reservation }),
-            ];
-          },
-        );
-
-        if (decision._tag === "failure") return yield* decision.error;
-
-        return decision.value;
-      }),
-    );
+          return SettlementPublicationResult.make({
+            record,
+            tailSequence: appended.lastSequence,
+            tailDigest: appended.tailDigest,
+            replayed: false,
+          });
+        }),
+      );
+    });
 
     const finalizeSettlement: SubmissionLedger["Service"]["finalizeSettlement"] = Effect.fn(
       "MemorySubmissionLedger.finalizeSettlement",
     )((unvalidated) =>
       Effect.gen(function* () {
         const request = yield* validate(SettlementFinalization, "finalizeSettlement", unvalidated);
+        const before = (yield* Ref.get(state)).submissions.get(request.submissionId);
+        const canonical = before === undefined ? undefined : yield* canonicalSettlement(before.row);
+
+        if (canonical === undefined)
+          return yield* ledgerError("finalizeSettlement", "Submission has no canonical settlement");
+        const { record, settlement } = canonical;
         const nowMillis = yield* Clock.currentTimeMillis;
 
         const decision = yield* Ref.modify(
@@ -1219,63 +1232,60 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            const reservation = stored.reservation;
+            const settlementFailure = settlementFailureFromRecord(record);
 
-            if (reservation === undefined) {
-              return [
-                failure(
-                  ledgerError(
-                    "finalizeSettlement",
-                    `No settlement reservation for Submission ${request.submissionId}`,
-                  ),
-                ),
-                current,
-              ];
-            }
-            const settlementFailure = settlementFailureFromRecord(reservation.record);
-
-            if ((reservation.outcome === "failed") !== (settlementFailure !== undefined)) {
-              return [
-                failure(
-                  ledgerError(
-                    "finalizeSettlement",
-                    `Settlement reservation for Submission ${request.submissionId} has contradictory failure evidence`,
-                  ),
-                ),
-                current,
-              ];
-            }
-            if (reservation.settlementId !== request.settlementId) {
+            if (settlement.settlementId !== request.settlementId) {
               return [
                 failure(
                   SettlementConflict.make({
                     submissionId: request.submissionId,
-                    existingOutcome: reservation.outcome,
+                    existingOutcome: settlement.outcome,
                   }),
                 ),
                 current,
               ];
             }
-            if (reservation.finalizedAtMillis !== undefined) {
+            if (stored.finalization !== undefined) {
+              if (
+                stored.row.state !== "settled" ||
+                stored.row.settledOutcome !== settlement.outcome ||
+                stored.finalization.settlementId !== request.settlementId ||
+                stored.finalization.recordId !== record.recordId
+              )
+                return [
+                  failure(
+                    ledgerError(
+                      "finalizeSettlement",
+                      "Finalized identity disagrees with canonical settlement",
+                    ),
+                  ),
+                  current,
+                ];
+
               return [
                 success(
                   Settlement.make({
                     submissionId: stored.row.submissionId,
-                    settlementId: reservation.settlementId,
+                    settlementId: settlement.settlementId,
                     receiptId: stored.row.receiptId,
-                    outcome: reservation.outcome,
+                    outcome: settlement.outcome,
                     ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
-                    settledAt: utc(reservation.finalizedAtMillis),
+                    settledAt: utc(stored.finalization.finalizedAtMillis),
                   }),
                 ),
                 current,
               ];
             }
+            if (stored.row.state === "settled")
+              return [
+                failure(ledgerError("finalizeSettlement", "Finalized timestamp is missing")),
+                current,
+              ];
 
             const terminal =
               stored.row.workerAdmissionJson === undefined
                 ? undefined
-                : workerTerminalFromRecord(toSnapshot(stored.row), reservation.record);
+                : workerTerminalFromRecord(toSnapshot(stored.row), record);
 
             const latestId = current.latestByThread.get(stored.row.threadId);
             const latest = latestId === undefined ? undefined : current.submissions.get(latestId);
@@ -1330,18 +1340,22 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
             const next = withSubmission(sealed, {
               ...stored,
-              row: { ...stored.row, state: "settled", settledOutcome: reservation.outcome },
+              row: { ...stored.row, state: "settled", settledOutcome: settlement.outcome },
               ownership: undefined,
-              reservation: { ...reservation, finalizedAtMillis: nowMillis },
+              finalization: {
+                settlementId: settlement.settlementId,
+                recordId: record.recordId,
+                finalizedAtMillis: nowMillis,
+              },
             });
 
             return [
               success(
                 Settlement.make({
                   submissionId: stored.row.submissionId,
-                  settlementId: reservation.settlementId,
+                  settlementId: settlement.settlementId,
                   receiptId: stored.row.receiptId,
-                  outcome: reservation.outcome,
+                  outcome: settlement.outcome,
                   ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
                   settledAt: utc(nowMillis),
                 }),
@@ -1518,6 +1532,15 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     )((unvalidated) =>
       Effect.gen(function* () {
         const request = yield* validate(ClaimJoiningRequest, "claimJoining", unvalidated);
+        const published = new Map<SubmissionId, Settlement["outcome"]>();
+
+        for (const stored of (yield* Ref.get(state)).submissions.values()) {
+          if (stored.row.threadId !== request.threadId || stored.row.state !== "ready") continue;
+          const canonical = yield* canonicalSettlement(stored.row);
+
+          if (canonical !== undefined)
+            published.set(stored.row.submissionId, canonical.settlement.outcome);
+        }
 
         const decision = yield* Ref.modify(
           state,
@@ -1584,6 +1607,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               // Any other non-ready row — an admitted-not-ready gap in particular — breaks the
               // contiguous ready prefix (plan §2.5); later ready work stays queued (DUR-004).
               if (stored.row.state !== "ready") break;
+              const terminal = published.get(stored.row.submissionId);
+
+              if (terminal === "aborted") continue;
+              if (terminal !== undefined) break;
               submissions.set(stored.row.submissionId, {
                 ...stored,
                 row: { ...stored.row, state: "joining" },
@@ -1725,6 +1752,47 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             // already-joined (or already-reverted) Submission is a no-op (DUR-016).
             if (stored.row.state !== "joining") return [success(undefined), current];
 
+            const guard = request.guard;
+
+            if (guard !== undefined) {
+              if (stored.joinedHostSubmissionId !== guard.hostSubmissionId)
+                return [success(undefined), current];
+              const host = current.submissions.get(guard.hostSubmissionId);
+
+              if (host === undefined || host.row.threadId !== stored.row.threadId) {
+                return [
+                  failure(
+                    ledgerError(
+                      "revertJoining",
+                      `Host Submission ${guard.hostSubmissionId} is missing or belongs to another Thread`,
+                    ),
+                  ),
+                  current,
+                ];
+              }
+              if (guard.ownershipToken === undefined) {
+                if (host.row.state !== "settled") {
+                  return [
+                    failure(
+                      ledgerError("revertJoining", "Tokenless cleanup requires a settled host"),
+                    ),
+                    current,
+                  ];
+                }
+              } else if (!ownsLane(current, host, guard.ownershipToken)) {
+                return [
+                  failure(
+                    ledgerError(
+                      "revertJoining",
+                      "Host ownership changed before reverting the joining Submission",
+                      ownershipLost(current, host),
+                    ),
+                  ),
+                  current,
+                ];
+              }
+            }
+
             return [
               success(undefined),
               withSubmission(current, {
@@ -1746,6 +1814,21 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       Effect.gen(function* () {
         const request = yield* validate(SuspendRequest, "suspend", unvalidated);
         const nowMillis = yield* Clock.currentTimeMillis;
+
+        const target = (yield* Ref.get(state)).submissions.get(request.submissionId);
+        const canonical = target === undefined ? undefined : yield* canonicalSettlement(target.row);
+        const announcedChildren = new Set<SubmissionId>();
+
+        if (request.reason._tag === "WaitingForChild") {
+          const current = yield* Ref.get(state);
+
+          for (const { childSubmissionId } of request.reason.children) {
+            const child = current.submissions.get(childSubmissionId);
+
+            if (child !== undefined && (yield* canonicalSettlement(child.row)) !== undefined)
+              announcedChildren.add(childSubmissionId);
+          }
+        }
 
         const decision = yield* Ref.modify(
           state,
@@ -1786,14 +1869,13 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            // An exact terminal outcome is already reserved (DUR-011); suspension would
-            // contradict it, so the reservation wins.
-            if (stored.reservation !== undefined) {
+            // Canonical publication wins over a late parking transition.
+            if (canonical !== undefined) {
               return [
                 failure(
                   SettlementConflict.make({
                     submissionId: request.submissionId,
-                    existingOutcome: stored.reservation.outcome,
+                    existingOutcome: canonical.settlement.outcome,
                   }),
                 ),
                 current,
@@ -1811,9 +1893,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 ? request.reason.toolCallIds.every((toolCallId) =>
                     stored.approvalDecisions.has(toolCallId),
                   )
-                : request.reason.children.every(
-                    (child) =>
-                      current.submissions.get(child.childSubmissionId)?.row.state === "settled",
+                : request.reason.children.every((child) =>
+                    announcedChildren.has(child.childSubmissionId),
                   );
 
             if (alreadyCovered) {
@@ -1962,6 +2043,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       Effect.gen(function* () {
         const request = yield* validate(MarkUnknownRequest, "markUnknown", unvalidated);
 
+        const target = (yield* Ref.get(state)).submissions.get(request.submissionId);
+        const canonical = target === undefined ? undefined : yield* canonicalSettlement(target.row);
+
         const decision = yield* Ref.modify(
           state,
           (current): readonly [Decision<void, SettlementConflict | LedgerError>, LedgerState] => {
@@ -1996,14 +2080,13 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            // A reserved exact outcome wins over a late Unknown marking (DUR-011); the recovery
-            // classifier orders reservation ahead of MarkUnknown for the same reason.
-            if (stored.reservation !== undefined) {
+            // Canonical publication wins over a late Unknown marking.
+            if (canonical !== undefined) {
               return [
                 failure(
                   SettlementConflict.make({
                     submissionId: request.submissionId,
-                    existingOutcome: stored.reservation.outcome,
+                    existingOutcome: canonical.settlement.outcome,
                   }),
                 ),
                 current,
@@ -2166,6 +2249,25 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           unvalidated,
         );
 
+        const before = yield* Ref.get(state);
+        const waiting = before.submissions.get(request.parentSubmissionId)?.suspension?.reason;
+
+        const ids = new Set([
+          request.childSubmissionId,
+          ...(waiting?._tag === "WaitingForChild"
+            ? waiting.children.map((child) => child.childSubmissionId)
+            : []),
+        ]);
+
+        const announcedChildren = new Set<SubmissionId>();
+
+        for (const id of ids) {
+          const child = before.submissions.get(id);
+
+          if (child !== undefined && (yield* canonicalSettlement(child.row)) !== undefined)
+            announcedChildren.add(id);
+        }
+
         const decision = yield* Ref.modify(
           state,
           (current): readonly [Decision<ChildSettledOutcome, LedgerError>, LedgerState] => {
@@ -2182,16 +2284,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            // The caller may notify after the canonical Settlement append but before ledger
-            // finalization. In a single store, an exact reservation plus `terminalizing` is the
-            // narrow durable prefix that makes that ordering admissible; earlier states remain
-            // a caller error.
-            const child = current.submissions.get(request.childSubmissionId);
-
-            const announced =
-              child !== undefined &&
-              (child.row.state === "settled" ||
-                (child.row.state === "terminalizing" && child.reservation !== undefined));
+            // Canonical publication is visible before child ledger finalization.
+            const announced = announcedChildren.has(request.childSubmissionId);
 
             if (!announced) {
               return [
@@ -2217,16 +2311,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               return [success("not-waiting" as const), current];
             }
 
-            // Every listed child must be either finalized or canonically announced from the
-            // exact terminalizing reservation. Replays re-run this coverage check idempotently.
-            const allSettled = children.every((entry) => {
-              const listed = current.submissions.get(entry.childSubmissionId);
-
-              return (
-                listed?.row.state === "settled" ||
-                (listed?.row.state === "terminalizing" && listed.reservation !== undefined)
-              );
-            });
+            const allSettled = children.every((entry) =>
+              announcedChildren.has(entry.childSubmissionId),
+            );
 
             if (!allSettled) return [success("still-waiting" as const), current];
 
@@ -2270,7 +2357,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const existing = current.childReservations.get(request.reservationId);
 
             if (existing !== undefined) {
-              // Identical replays short-circuit before the fence, mirroring reserveSettlement:
+              // Identical replays short-circuit before the fence, retaining the first committed allocation:
               // a replay creates nothing, so a recovering caller resumes rather than duplicates.
               const identical =
                 existing.parentSubmissionId === request.parentSubmissionId &&
@@ -2772,53 +2859,46 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 }),
               }),
           ...(stored.inputApplied === undefined ? {} : { inputApplied: stored.inputApplied }),
-          ...(stored.reservation === undefined
-            ? {}
-            : {
-                reservation: SettlementReservationSnapshot.make({
-                  settlementId: stored.reservation.settlementId,
-                  outcome: stored.reservation.outcome,
-                  record: stored.reservation.record,
-                  recordDigest: stored.reservation.recordDigest,
-                  finalized: stored.reservation.finalizedAtMillis !== undefined,
-                }),
-              }),
           ...(stored.abortIntent === undefined ? {} : { abortIntent: stored.abortIntent }),
         });
       }),
     );
 
-    return SubmissionLedger.of({
+    const ledger = SubmissionLedger.of({
       capabilities,
-      admit,
-      markReady,
+      admit: (request) => journal.withMutation(admit(request)),
+      markReady: (request) => journal.withMutation(markReady(request)),
       lookup,
       resolveAdmission,
-      claim,
-      renewOwnership,
-      releaseOwnership,
-      markInputApplied,
-      reserveSettlement,
-      finalizeSettlement,
-      requestAbort,
-      stopWorker,
+      claim: (request) => journal.withMutation(claim(request)),
+      renewOwnership: (request) => journal.withMutation(renewOwnership(request)),
+      releaseOwnership: (request) => journal.withMutation(releaseOwnership(request)),
+      markInputApplied: (request) => journal.withMutation(markInputApplied(request)),
+      finalizeSettlement: (request) => journal.withMutation(finalizeSettlement(request)),
+      requestAbort: (request) => journal.withMutation(requestAbort(request)),
+      stopWorker: (request) => journal.withMutation(stopWorker(request)),
       inspectWorker,
-      claimJoining,
-      markJoined,
-      revertJoining,
-      suspend,
-      recordApprovalDecision,
-      markUnknown,
-      recordUnknownResolution,
-      recordChildSettled,
-      reserveChildBudget,
-      attachChildToReservation,
-      beginChildBudgetRelease,
-      releaseChildBudget,
+      claimJoining: (request) => journal.withMutation(claimJoining(request)),
+      markJoined: (request) => journal.withMutation(markJoined(request)),
+      revertJoining: (request) => journal.withMutation(revertJoining(request)),
+      suspend: (request) => journal.withMutation(suspend(request)),
+      recordApprovalDecision: (request) => journal.withMutation(recordApprovalDecision(request)),
+      markUnknown: (request) => journal.withMutation(markUnknown(request)),
+      recordUnknownResolution: (request) => journal.withMutation(recordUnknownResolution(request)),
+      recordChildSettled: (request) => journal.withMutation(recordChildSettled(request)),
+      reserveChildBudget: (request) => journal.withMutation(reserveChildBudget(request)),
+      attachChildToReservation: (request) =>
+        journal.withMutation(attachChildToReservation(request)),
+      beginChildBudgetRelease: (request) => journal.withMutation(beginChildBudgetRelease(request)),
+      releaseChildBudget: (request) => journal.withMutation(releaseChildBudget(request)),
       scanNonterminal,
       loadRecoverySnapshot,
       readAbortIntent,
     });
+
+    return Context.make(SubmissionLedger, ledger).pipe(
+      Context.add(SettlementPublisher, { publish }),
+    );
   });
 
 /** Construction options for the in-memory reference SubmissionLedger. */
@@ -2838,7 +2918,11 @@ export interface MemorySubmissionLedgerOptions {
  */
 export const memorySubmissionLedgerLayer = (
   options: MemorySubmissionLedgerOptions = {},
-): Layer.Layer<SubmissionLedger> => Layer.effect(SubmissionLedger, makeSubmissionLedger(options));
+): Layer.Layer<SubmissionLedger | SettlementPublisher, never, MemoryThreadStoreKernel> =>
+  Layer.effectContext(makeSubmissionLedger(options));
 
-export const MemorySubmissionLedgerLive: Layer.Layer<SubmissionLedger> =
-  memorySubmissionLedgerLayer();
+export const MemorySubmissionLedgerLive: Layer.Layer<
+  SubmissionLedger | SettlementPublisher,
+  never,
+  MemoryThreadStoreKernel
+> = memorySubmissionLedgerLayer();

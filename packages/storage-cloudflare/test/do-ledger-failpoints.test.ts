@@ -5,7 +5,9 @@ import {
   type DoStorageFailpointLocation,
 } from "@yielded/agent-storage-cloudflare/do-storage-error";
 import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
+import { layer as storeLayer } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { digestJson } from "@yielded/agent/digest";
+import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AbortCommand,
   ApprovalDecisionCommand,
@@ -36,6 +38,7 @@ import {
   WaitingForChildSuspension,
   submissionInputRecordId,
 } from "@yielded/agent/submission-ledger";
+import type { ThreadStore } from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Option, Ref, Schema, type Crypto } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
@@ -46,7 +49,7 @@ import {
   thread,
   OTHER_PRODUCER,
   sequence,
-  settlementReservation,
+  settlementPublication,
   TEST_PRODUCER,
   toolCall,
   withThreadStorage,
@@ -87,7 +90,13 @@ const makeFailpointHarness = (storage: DurableObjectStorage) =>
     const active = yield* Ref.make<DoStorageFailpointLocation | undefined>(undefined);
     const select = (location: DoStorageFailpointLocation | undefined) => Ref.set(active, location);
 
-    const failingLedger = <A, E>(effect: Effect.Effect<A, E, SubmissionLedger | Crypto.Crypto>) =>
+    const failingLedger = <A, E>(
+      effect: Effect.Effect<
+        A,
+        E,
+        SubmissionLedger | SettlementPublisher | ThreadStore | Crypto.Crypto
+      >,
+    ) =>
       Effect.provide(effect, [
         ledgerLayer({
           storage,
@@ -100,6 +109,7 @@ const makeFailpointHarness = (storage: DurableObjectStorage) =>
               ),
             ),
         }),
+        storeLayer({ storage }),
         BrowserCrypto.layer,
       ]);
 
@@ -120,7 +130,7 @@ describe("DoSubmissionLedger failpoints", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, state, receipt_id, input_applied_record_id
+              SELECT submission_id, state, receipt_id, input_applied_record_id, settled_record_id, finalized_at
               FROM effect_agent_submissions
               ORDER BY thread_id, queue_sequence
             `;
@@ -150,14 +160,14 @@ describe("DoSubmissionLedger failpoints", () => {
           }),
         );
 
-        const reservationRows = withSql(
+        const publicationRows = withSql(
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
-            return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, settlement_id, outcome, finalized_at
-              FROM effect_agent_settlement_reservations
-            `;
+            return yield* sql<
+              Record<string, unknown>
+            >`SELECT record_id FROM effect_agent_canonical_records
+            WHERE json_extract(record_json, '$.payload._tag') = 'SubmissionSettled'`;
           }),
         );
 
@@ -266,34 +276,25 @@ describe("DoSubmissionLedger failpoints", () => {
         yield* select(undefined);
         yield* markInputOnce;
 
-        const reservation = yield* settlementReservation(
-          admitted,
-          claim.value.ownershipToken,
-          "completed",
-        ).pipe(Effect.provide(BrowserCrypto.layer));
+        const publication = yield* failingLedger(
+          settlementPublication(admitted, claim.value.ownershipToken, "completed"),
+        );
 
         const reserveOnce = failingLedger(
           Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            return yield* ledger.reserveSettlement(reservation);
+            return yield* (yield* SettlementPublisher).publish(publication.request);
           }),
         );
 
-        yield* select("ledger:reserve-settlement:after");
-        expectInjectedFailure(
-          yield* reserveOnce.pipe(Effect.exit),
-          "ledger:reserve-settlement:after",
-        );
-        const reservedRows = yield* reservationRows;
-
-        expect(reservedRows).toHaveLength(1);
-        expect(reservedRows[0]?.finalized_at).toBeNull();
-        expect((yield* submissionStates)[0]?.state).toBe("terminalizing");
+        yield* select("append:after");
+        expectInjectedFailure(yield* reserveOnce.pipe(Effect.exit), "append:after");
+        expect(yield* publicationRows).toHaveLength(1);
+        expect((yield* submissionStates)[0]?.finalized_at).toBeNull();
+        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
         yield* select(undefined);
-        const replayedReservation = yield* reserveOnce;
+        const replayedPublication = yield* reserveOnce;
 
-        expect(replayedReservation.replayed).toBe(true);
+        expect(replayedPublication.replayed).toBe(true);
 
         const finalizeOnce = failingLedger(
           Effect.gen(function* () {
@@ -302,7 +303,7 @@ describe("DoSubmissionLedger failpoints", () => {
             return yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: admitted.submissionId,
-                settlementId: reservation.settlementId,
+                settlementId: publication.settlementId,
               }),
             );
           }),
@@ -313,7 +314,7 @@ describe("DoSubmissionLedger failpoints", () => {
           yield* finalizeOnce.pipe(Effect.exit),
           "ledger:finalize-settlement:after",
         );
-        expect((yield* reservationRows)[0]?.finalized_at).not.toBeNull();
+        expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
         expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
@@ -939,17 +940,17 @@ describe("DoSubmissionLedger failpoints", () => {
 
             if (Option.isNone(childClaim)) return yield* Effect.die("missing child claim");
 
-            const reservation = yield* settlementReservation(
+            const publication = yield* settlementPublication(
               child,
               childClaim.value.ownershipToken,
               "completed",
             );
 
-            yield* ledger.reserveSettlement(reservation);
+            yield* (yield* SettlementPublisher).publish(publication.request);
             yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: child.submissionId,
-                settlementId: reservation.settlementId,
+                settlementId: publication.settlementId,
               }),
             );
           }),

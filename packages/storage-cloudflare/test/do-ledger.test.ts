@@ -92,7 +92,13 @@ describe("DoSubmissionLedger", () => {
     // oxlint-disable-next-line vitest/valid-title, vitest/expect-expect -- shared contracts own names and assertions
     it(conformanceCase.name, () =>
       withThreadStorage(`ledger-conformance:${conformanceCase.name}`, (storage) =>
-        conformanceCase.run.pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
+        conformanceCase.run.pipe(
+          Effect.provide([
+            ledgerLayer({ storage }),
+            threadStoreLayer({ storage }),
+            BrowserCrypto.layer,
+          ]),
+        ),
       ),
     );
   }

@@ -20,6 +20,7 @@ import {
   type TurnId,
 } from "../core/Identifiers.ts";
 import { type MemoryRecallError } from "../core/MemoryReference.ts";
+import type { ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import {
   type SubagentBudgetReservation,
@@ -504,21 +505,69 @@ export class RunToolAuthorization extends Context.Service<
 }
 
 /**
- * Payload of one durable response commit: the completed Turn's identity, its
- * response messages in official (encoded) form, and every application Tool
- * Call it declared. The engine invokes it only for Turns that declare
- * application Tool Calls; no-tool Turns keep their late single-batch commit.
+ * Validated response facts supplied by the interpreter. Messages include only this
+ * response and its new leading instructions/inputs, never a reconstructed history suffix.
+ * These are in-process values; the durable owner admits and captures them through its Schemas.
  */
-export interface RunTurnResponseCommit {
+export interface RunTurnResponse {
   /** Rejected fresh arguments; persist atomically with the response and restore on resume. */
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
-  readonly turn: number;
-  readonly turnId: TurnId;
-  /** The Turn's response messages in official history form (encoded Tool parameters). */
-  readonly responseMessages: Prompt.Prompt;
+  readonly messages: ReadonlyArray<Prompt.Message>;
+  readonly runScopedPrefixLength?: number | undefined;
   readonly calls: ReadonlyArray<RunToolCallDescriptor>;
 }
+
+/** One validated, stream-closed application Tool outcome in declaration order. */
+export interface RunTurnToolResult {
+  readonly toolCallId: ToolCallId;
+  readonly toolName: string;
+  readonly result: unknown;
+  readonly isFailure: boolean;
+  readonly toolSelection?: Selection | undefined;
+  readonly budgetRejected?: boolean | undefined;
+}
+
+/** Encoded terminal values. They become authoritative after canonical acceptance. */
+export interface RunTurnCompletion {
+  readonly output: unknown;
+  readonly runDisposition?: unknown;
+  readonly finishReason: "completed" | "model-stop" | "budget-exhausted";
+  readonly exhausted?: ExhaustedLimit | undefined;
+}
+
+interface RunTurnIdentity {
+  readonly turn: number;
+  readonly turnId: TurnId;
+}
+
+/**
+ * The interpreter owns Turn progress; observations do not drive durable state.
+ * Response acceptance precedes Tool dispatch. Settled commits contain closed outcomes;
+ * an omitted response was already committed or restored. Partial commits preserve
+ * closed siblings before child suspension, without declaring the whole Turn settled.
+ */
+export type RunTurnCommit = RunTurnIdentity &
+  (
+    | {
+        readonly _tag: "Response";
+        readonly response: RunTurnResponse;
+        /**
+         * The interpreter proved that the model's hosted Tools and every declared ordinary
+         * application call are readonly, with no approval preflight. The coordinator may retain
+         * an owned response until settlement, but must promote it before any persisted call-scoped
+         * capability.
+         */
+        readonly defer?: true | undefined;
+      }
+    | {
+        readonly _tag: "Settled";
+        readonly response?: RunTurnResponse | undefined;
+        readonly results: ReadonlyArray<RunTurnToolResult>;
+        readonly completion?: RunTurnCompletion | undefined;
+      }
+    | { readonly _tag: "Partial"; readonly results: ReadonlyArray<RunTurnToolResult> }
+  );
 
 /**
  * One compaction decision the engine applied to its model-visible view
@@ -580,16 +629,23 @@ export class AgentUpdateAcceptance extends Context.Service<
  * Dependency-neutral durability seam implemented by a durable coordinator.
  *
  * Invocation ordering inside one Tool-declaring Turn is normative:
- * `commitResponse` fires after the finish part's continuation validations and staged canonical
- * provider/Turn events have been emitted, but before approval preflight (making the response
- * canonical before any Tool work — the provably-safe resume window); `prepareToolCalls` fires after
- * every approval and host authorization resolved allowed and before any handler acquires a
- * scheduler permit, with all delegations and non-`readonly` ordinary calls (it is skipped
- * entirely when no call needs preparation); `step` persists Durable Step
+ * The Response commit fires after the provider stream closes and continuation validates,
+ * but before approval preflight. Unless the interpreter permits deferral, the response becomes
+ * canonical before any Tool work and conservatively records possible execution;
+ * `checkToolDispatch` checks the writer fence after every approval and host authorization resolved
+ * allowed and before any handler acquires a scheduler permit. It is skipped when no unfinished
+ * call is a delegation or non-`readonly` ordinary call; `step` persists Durable Step
  * results mid-flight. When the hook is absent the engine behaves exactly as
  * the ephemeral runtime always has.
  */
 export interface RunDurabilityHook<Error = never, Requirements = never> {
+  /** Fail with retained infrastructure errors before the next execution or commit boundary. */
+  readonly checkpoint: Effect.Effect<void, Error, Requirements>;
+  /** Capture initial instruction/projection metadata once, before input/context preparation. */
+  readonly initialize: (initial: {
+    readonly initialHistory: Prompt.Prompt;
+    readonly priorHistoryLength: number;
+  }) => Effect.Effect<void, Error, Requirements>;
   /** Persist replacement count and staged usage after cancellation, before starting its successor. */
   readonly commitModelRestart?:
     | ((restart: {
@@ -597,10 +653,6 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
         readonly turnId: TurnId;
         readonly restart: number;
       }) => Effect.Effect<void, Error, Requirements>)
-    | undefined;
-  /** Stage the exact request declarations for the existing canonical response append. */
-  readonly noteToolExposure?:
-    | ((turn: number, snapshot: Snapshot) => Effect.Effect<void, Error, Requirements>)
     | undefined;
   /**
    * Reserve cumulative programmatic calls and grace finalization before external execution.
@@ -613,14 +665,16 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
         usage: Pick<RunPolicyUsage, "programmaticToolCalls" | "finalizationUsed">,
       ) => Effect.Effect<void, Error, Requirements>)
     | undefined;
-  /** After validated staged response events are emitted, before approval preflight. */
-  readonly commitResponse: (
-    commit: RunTurnResponseCommit,
-  ) => Effect.Effect<void, Error, Requirements>;
-  /** After every approval and host authorization resolved allowed, before any handler starts. */
-  readonly prepareToolCalls: (
-    calls: ReadonlyArray<RunToolCallDescriptor>,
-  ) => Effect.Effect<void, Error, Requirements>;
+  /**
+   * `committed` accepts the supplied facts canonically. `deferred` is valid only for a Response
+   * with `defer: true`: validation and ownership succeeded, but no canonical acceptance occurred.
+   * The interpreter retains its response and inputs until the Settled commit is accepted.
+   */
+  readonly commitTurn: (
+    commit: RunTurnCommit,
+  ) => Effect.Effect<"committed" | "deferred", Error, Requirements>;
+  /** Check the writer fence after approval/authorization and before handler permits; no write. */
+  readonly checkToolDispatch: Effect.Effect<void, Error, Requirements>;
   readonly step: RunStepHook<Error, Requirements>;
   /**
    * RUN-026: called at the pre-Turn seam BEFORE the engine applies a
@@ -860,9 +914,8 @@ export type RunResumeUsage = typeof RunResumeUsageSchema.Type;
  * executable calls are re-validated through their Tool parameter Schemas (a
  * decode failure executes nothing). Canonically rejected calls retain their native failure;
  * the rejection must match their exact arguments and any settled result. Approval preflight
- * for executable calls runs against recorded decisions, host Tool authorization is re-evaluated, `prepareToolCalls` replays the full
- * prepared batch idempotently,
- * calls listed in `settled` are injected as final results without starting
+ * for executable calls uses recorded decisions, host Tool authorization is re-evaluated,
+ * and the writer fence is checked before dispatch. Calls listed in `settled` use final results without starting
  * their handlers, and only the remaining open calls execute. The Run then
  * proceeds through the normal continuation.
  */
@@ -934,16 +987,16 @@ export interface RunBufferLimits {
   readonly maxModelResponseParts?: number | undefined;
   /** Maximum conservative retained-byte estimate for one model response. */
   readonly maxModelResponseBytes?: number | undefined;
-  /** Maximum semantic Run events, including the reserved terminal event. */
+  /** Maximum observed Run events, including the terminal event; headless execution has no event cap. */
   readonly maxRunEvents?: number | undefined;
   /**
-   * Maximum cumulative UTF-8 JSON bytes in published ToolProgress results, including provider
-   * progress and detached replay. Defaults to 8 MiB. Invalid or oversized application progress
+   * Maximum cumulative UTF-8 JSON bytes in Tool progress, including unobserved and provider
+   * progress. Defaults to 8 MiB. Invalid or oversized application progress
    * fails with ModelProtocolError; terminal Tool results use the Agent's toolResultBounds.
    */
   readonly maxToolProgressBytes?: number | undefined;
-  /** Maximum Subagent lifecycle payloads queued by one Tool batch. */
-  readonly maxSubagentEventsPerBatch?: number | undefined;
+  /** Maximum events buffered by the public stream before its execution producer waits. */
+  readonly maxBufferedEvents?: number | undefined;
 }
 
 /**
@@ -1034,7 +1087,7 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
    * Host-owned action-time authorization for model-declared application Tool batches. The engine
    * uses this per-Run override when present, otherwise the provided RunToolAuthorization service.
    * It invokes the policy for every still-executable call after complete-batch validation and approval, but
-   * before durable preparation or any Handler permit. A resumed durable batch invokes it again
+   * before the durable dispatch fence or any Handler permit. A resumed durable batch invokes it again
    * with the same canonical Run/Turn/input authority and Tool Call identity. Programmatic
    * `ToolBroker` calls invoke it after schema/visibility checks and before budget reservation or
    * execution, with their parent identity in `programmatic`. Inner denials become catchable

@@ -2,6 +2,7 @@ import { type Crypto, Effect, Predicate, Schema, Stream, type DateTime } from "e
 import { Prompt } from "effect/ai";
 
 import { ThreadId, RunId, ToolCallId, TurnId, type SubmissionId } from "../core/Identifiers.ts";
+import { copyJson } from "../core/internal/json.ts";
 import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
@@ -14,16 +15,13 @@ import {
   contextWindowId,
   contextWindowMessage,
 } from "../engine/Compaction.ts";
+import type { RunTurnToolResult } from "../engine/RunOptions.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
 import {
   type JournalCheckpointSeed,
   type ThreadContextCheckpoint,
 } from "./internal/journal-checkpoint.ts";
-import {
-  makeJournalMetadata,
-  toolExecutionKey,
-  type JournalMetadata,
-} from "./internal/journal-metadata.ts";
+import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -79,14 +77,15 @@ export const runDurationBatchId = (runId: RunId): BatchId => decodeBatchId(`run-
 export const turnIdForRun = (runId: RunId, turn: number): TurnId =>
   decodeTurnId(`turn:${runId}:${turn}`);
 
-/** Deterministic batch identity of one committed canonical no-tool Turn (P4 single-batch shape). */
+/** Deterministic batch identity of a response committed atomically with its closed Turn outcomes. */
 export const turnBatchId = (runId: RunId, turn: number): BatchId =>
   decodeBatchId(`turn:${runId}:${turn}`);
 
 /**
  * Deterministic batch identity of a tool-declaring Turn's RESPONSE commit (plan §2.1 commit 1):
- * the assistant response plus pending steering becomes canonical BEFORE approval preflight and
- * tool preparation, creating the durability §15 "resume tool scheduling" window.
+ * the assistant response plus pending steering becomes canonical before approval preflight and
+ * dispatch fencing, or when readonly execution first requires a persisted call-scoped capability.
+ * Unsettled declarations conservatively record possible execution.
  */
 export const turnResponseBatchId = (runId: RunId, turn: number): BatchId =>
   decodeBatchId(`turn-response:${runId}:${turn}`);
@@ -108,10 +107,6 @@ export const toolCallResultBatchId = (
   turn: number,
   toolCallId: ToolCallId,
 ): BatchId => decodeBatchId(`turn-results:${runId}:${turn}:${toolCallId}`);
-
-/** Deterministic batch identity of one Turn's `ToolCallPrepared` commit (plan §2.1 commit 3). */
-export const turnPreparedBatchId = (runId: RunId, turn: number): BatchId =>
-  decodeBatchId(`turn-prepared:${runId}:${turn}`);
 
 /**
  * Deterministic identity of one pre-Turn compaction record (RUN-026,
@@ -173,13 +168,6 @@ export const toolCallSettledRecordId = (
   turn: number,
   toolCallId: ToolCallId,
 ): RecordId => decodeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
-
-/** Deterministic canonical record identity of one Tool Call's `ToolCallPrepared` record. */
-export const toolCallPreparedRecordId = (
-  runId: RunId,
-  turn: number,
-  toolCallId: ToolCallId,
-): RecordId => decodeRecordId(`tool-prepared:${runId}:${turn}:${toolCallId}`);
 
 /** Deterministic batch identity of one Turn's `ToolCallUnknown` marking append. */
 export const markUnknownBatchId = (submissionId: SubmissionId, turn: number): BatchId =>
@@ -250,9 +238,9 @@ export const toolApprovalDecisionRecordId = (
 ): RecordId => decodeRecordId(`approval-decision:${runId}:${turn}:${toolCallId}`);
 
 /**
- * Deterministic identity of one superseded Attempt's `ModelResponseInterrupted` audit record
- * (durability §9). Keyed by the superseded epoch, so each interrupted ownership period is
- * recorded at most once; the one-record batch reuses the same string.
+ * Deterministic identity of a conservative `ModelResponseInterrupted` audit, keyed by the
+ * preceding fencing generation. Retirement and repair can also advance generations; the key
+ * does not identify an exact missing model call. The one-record batch reuses the same string.
  */
 export const modelResponseInterruptedRecordId = (runId: RunId, supersededEpoch: number): RecordId =>
   decodeRecordId(`interrupted:${runId}:${supersededEpoch}`);
@@ -526,7 +514,7 @@ const declaredApplicationToolCallIds = (prompt: Prompt.Prompt): ReadonlyArray<st
 };
 
 /**
- * Phase 5 audit tags that are prompt-transparent: they carry durability evidence (preparation,
+ * Phase 5 audit tags that are prompt-transparent: they carry durability evidence (approval,
  * unknown marking, resolution, Step results, approvals, interruption) but contribute nothing to
  * the model-visible Prompt, and — unlike the P4 tags — they do NOT split a contiguous
  * `ToolCallSettled` group into separate Tool messages, so a late-settled call's audit records
@@ -541,7 +529,6 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
   "RunPolicyUsageReserved",
   "RunStarted",
   "RunDurationExhausted",
-  "ToolCallPrepared",
   "ToolCallUnknown",
   "ToolCallResolved",
   "ToolStepSettled",
@@ -567,9 +554,8 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
  * Pure projection: rebuild one Run's resume state from canonical records (DUR-015). Canonical
  * order is authoritative; the fold projects each `ModelResponseRecorded` Turn and the
  * owning Run's resumable incomplete Tool Turn. It flushes each contiguous group of valid `ToolCallSettled` records into one Tool message,
- * exactly mirroring the per-Turn commit shape produced by `turnCanonicalBatch` (no-tool Turns) and
- * by the
- * `turnResponseBatch`/`turnResultsBatch` split (tool-declaring Turns). The Phase 5 audit tags
+ * exactly mirroring the per-Turn commit shape produced by `turnCanonicalBatch` and the
+ * `turnResponseBatch`/`turnResultsBatch` split. The Phase 5 audit tags
  * are skipped transparently, so split-batch commits replay to the same prompt as P4 single-batch
  * commits.
  *
@@ -662,7 +648,6 @@ export const projectRunJournalStream = Effect.fn("RunJournal.projectRunJournalSt
     lastResponseSequenceByRun,
     terminalSequenceByRun,
     settledSpans,
-    toolExecutionEvidence,
     settledToolCallRecordIds,
     settledById,
   } = metadata;
@@ -928,7 +913,7 @@ export const projectRunJournalStream = Effect.fn("RunJournal.projectRunJournalSt
     modelRestarts: seed?.policyUsage.modelRestarts ?? 0,
   };
 
-  const accountResponse = Effect.fn("RunJournal.accountResponse")(function* (
+  const accountResponse = Effect.fnUntraced(function* (
     envelope: CanonicalRecordEnvelope,
     payload: ModelResponseRecorded,
     messages: Prompt.Prompt,
@@ -1280,49 +1265,17 @@ export const projectRunJournalStream = Effect.fn("RunJournal.projectRunJournalSt
         );
 
         if (calls.length > 0) {
-          const parts = yield* Effect.forEach(calls, (call) =>
-            Effect.gen(function* () {
-              const callId = yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(
-                Effect.mapError((cause) => journalError("Invalid historical Tool Call ID", cause)),
-              );
-
-              const operation = payload.toolOperations?.find(
-                (operation) => operation.toolCallId === callId && operation.toolName === call.name,
-              );
-
-              // Only the recorded execution contract can prove that dispatch required a
-              // preparation. Ordinary readonly calls may execute without one.
-              const notExecuted =
-                operation !== undefined &&
-                (operation.executionClass !== "readonly" ||
-                  operation.executionKind !== "ordinary") &&
-                !toolExecutionEvidence.has(
-                  toolExecutionKey({
-                    runId: payload.runId,
-                    turn: payload.turn,
-                    toolCallId: callId,
-                  }),
-                );
-
-              return Prompt.makePart("tool-result", {
-                id: call.id,
-                name: call.name,
-                result: notExecuted
-                  ? {
-                      _tag: "ToolUnavailable",
-                      toolName: call.name,
-                      execution: "not-executed",
-                      message:
-                        "This earlier call never reached durable preparation and was not executed.",
-                    }
-                  : {
-                      _tag: "ToolOutcomeUnknown",
-                      message:
-                        "This earlier operation has no recorded outcome. It may have executed. Do not assume success or retry it; its original operation remains unresolved.",
-                    },
-                isFailure: true,
-                providerExecuted: false,
-              });
+          const parts = calls.map((call) =>
+            Prompt.makePart("tool-result", {
+              id: call.id,
+              name: call.name,
+              result: {
+                _tag: "ToolOutcomeUnknown",
+                message:
+                  "This earlier operation has no recorded outcome. It may have executed. Do not assume success or retry it; its original operation remains unresolved.",
+              },
+              isFailure: true,
+              providerExecuted: false,
             }),
           );
 
@@ -1427,18 +1380,16 @@ export interface TurnCommitInput {
   readonly toolOperations?: ModelResponseRecorded["toolOperations"] | undefined;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
-  readonly toolSelections?: ReadonlyMap<string, Selection> | undefined;
-  readonly budgetRejectedCalls?: ReadonlySet<string>;
   readonly runId: RunId;
   /** Canonical (Run-relative, Attempt-independent) Turn number; must be positive. */
   readonly turn: number;
   readonly turnId: TurnId;
   /**
-   * The Prompt messages this Turn appended to official history, in order, including the Turn's
-   * Tool message when application Tools ran. Tool messages become `ToolCallSettled` records; the
-   * remaining messages become the Turn's `ModelResponseRecorded.messages`.
+   * Exact response and leading input/instruction messages. Application Tool outcomes
+   * are supplied separately; the journal does not reconstruct them from Prompt history.
    */
-  readonly appended: ReadonlyArray<Prompt.Message>;
+  readonly responseMessages: ReadonlyArray<Prompt.Message>;
+  readonly toolResults: ReadonlyArray<RunTurnToolResult>;
   readonly producerId: ProducerId;
   readonly deploymentId: DeploymentId;
   readonly createdAt: DateTime.Utc;
@@ -1475,35 +1426,16 @@ const requireCanonicalTurn = (turn: number): Effect.Effect<void, RunJournalError
     ? Effect.fail(journalError(`Canonical turn number must be a positive integer: ${turn}`))
     : Effect.void;
 
-interface SplitTurnMessages {
-  readonly promptMessages: ReadonlyArray<Prompt.Message>;
-  readonly toolParts: ReadonlyArray<Prompt.ToolResultPart>;
-}
-
-const splitTurnMessages = (appended: ReadonlyArray<Prompt.Message>): SplitTurnMessages => {
-  const promptMessages: Array<Prompt.Message> = [];
-  const toolParts: Array<Prompt.ToolResultPart> = [];
-
-  for (const message of appended) {
-    if (message.role !== "tool") {
-      promptMessages.push(message);
-      continue;
-    }
-    for (const part of message.content) {
-      if (part.type !== "tool-result") continue;
-      toolParts.push(part);
-    }
-  }
-
-  return { promptMessages, toolParts };
-};
-
-const modelResponseRecord = Effect.fn("RunJournal.modelResponseRecord")(function* (
+const modelResponseRecord = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-  promptMessages: ReadonlyArray<Prompt.Message>,
 ): Effect.fn.Return<RecordEnvelope, RunJournalError | DigestError, Crypto.Crypto> {
+  const promptMessages = input.responseMessages;
+
   if (promptMessages.length === 0) {
     return yield* journalError(`Turn ${input.turn} appended no model-visible Prompt messages`);
+  }
+  if (promptMessages.some((message) => message.role === "tool")) {
+    return yield* journalError("Application Tool outcomes must be supplied as terminal facts");
   }
   const runScopedPrefixLength = input.runScopedPrefixLength;
 
@@ -1527,6 +1459,7 @@ const modelResponseRecord = Effect.fn("RunJournal.modelResponseRecord")(function
   );
 
   const messages = yield* decodePersistedJson(encodedMessages).pipe(
+    Effect.map(copyJson),
     Effect.mapError((cause) =>
       journalError("Turn Prompt messages exceed canonical persistence bounds", cause),
     ),
@@ -1566,8 +1499,8 @@ const modelResponseRecord = Effect.fn("RunJournal.modelResponseRecord")(function
     schemaVersion: 1,
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
-    payload: ModelResponseRecorded.make({
-      ...(input.toolOperations === undefined ? {} : { toolOperations: input.toolOperations }),
+    payload: yield* ModelResponseRecorded.makeEffect({
+      toolOperations: input.toolOperations ?? [],
       ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
         ? {}
         : { toolParameterRejections: input.toolParameterRejections }),
@@ -1600,26 +1533,27 @@ const modelResponseRecord = Effect.fn("RunJournal.modelResponseRecord")(function
                   costMicrousd: yield* validStagedUsage("costMicrousd", input.usage.costMicrousd),
                 }),
           }),
-    }),
+    }).pipe(
+      Effect.mapError((cause) => journalError("Invalid model response operation evidence", cause)),
+    ),
   });
 });
 
-const toolSettledRecords = Effect.fn("RunJournal.toolSettledRecords")(function* (
+const toolSettledRecords = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-  toolParts: ReadonlyArray<Prompt.ToolResultPart>,
 ): Effect.fn.Return<Array<RecordEnvelope>, RunJournalError> {
   const toolRecords: Array<RecordEnvelope> = [];
 
-  for (const part of toolParts) {
+  for (const part of input.toolResults) {
     const result = yield* decodePersistedJson(part.result).pipe(
       Effect.mapError((cause) =>
-        journalError(`Tool result ${part.id} exceeds canonical persistence bounds`, cause),
+        journalError(`Tool result ${part.toolCallId} exceeds canonical persistence bounds`, cause),
       ),
     );
 
     const toolCallId = yield* Effect.try({
-      try: () => decodeToolCallId(part.id),
-      catch: (cause) => journalError(`Invalid Tool Call ID ${part.id}`, cause),
+      try: () => decodeToolCallId(part.toolCallId),
+      catch: (cause) => journalError(`Invalid Tool Call ID ${part.toolCallId}`, cause),
     });
 
     toolRecords.push(
@@ -1630,15 +1564,13 @@ const toolSettledRecords = Effect.fn("RunJournal.toolSettledRecords")(function* 
         createdAt: input.createdAt,
         deploymentId: input.deploymentId,
         payload: ToolCallSettled.make({
-          ...(input.toolSelections?.get(part.id) === undefined
-            ? {}
-            : { toolSelection: input.toolSelections.get(part.id) }),
+          ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
           runId: input.runId,
           toolCallId,
-          toolName: part.name,
+          toolName: part.toolName,
           result,
           isFailure: part.isFailure,
-          ...(input.budgetRejectedCalls?.has(part.id) === true ? { budgetRejected: true } : {}),
+          ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
         }),
       }),
     );
@@ -1662,9 +1594,7 @@ export const runCompletionDigest = (
     exhausted: completion.exhausted ?? null,
   });
 
-const runCompletionRecord = Effect.fn("RunJournal.runCompletionRecord")(function* (
-  input: TurnCommitInput,
-) {
+const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput) {
   if (input.runCompletion === undefined) return undefined;
   const completion = { runId: input.runId, ...input.runCompletion };
 
@@ -1682,22 +1612,21 @@ const runCompletionRecord = Effect.fn("RunJournal.runCompletionRecord")(function
 });
 
 /**
- * Pure per-Turn canonical batch builder (TurnCompleted seam fold, D6/D8): one
+ * Build a canonical batch from interpreter-validated Turn facts: one
  * `ModelResponseRecorded` record plus one `ToolCallSettled` record per terminal Tool result, all
  * under the WP0-style deterministic identities, committed as ONE atomic batch. The same input
  * always yields byte-identical content, so an in-Attempt append retry is an honest batch replay.
  *
- * Phase 5 keeps this shape for Turns that declare no application Tool calls; their terminal
- * `RunCompleted` marker joins the response in this same atomic batch. Tool-declaring Turns split
- * into `turnResponseBatch` + `turnResultsBatch`.
+ * No-tool Turns and eligible readonly Turns use this shape; a terminal `RunCompleted` marker
+ * joins the response in the same atomic batch. Other application Turns split into
+ * `turnResponseBatch` + `turnResultsBatch` before execution.
  */
 export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { promptMessages, toolParts } = splitTurnMessages(input.appended);
-  const modelResponse = yield* modelResponseRecord(input, promptMessages);
-  const toolRecords = yield* toolSettledRecords(input, toolParts);
+  const modelResponse = yield* modelResponseRecord(input);
+  const toolRecords = yield* toolSettledRecords(input);
   const completionRecord = yield* runCompletionRecord(input);
 
   return CanonicalBatch.make({
@@ -1711,22 +1640,17 @@ export const turnCanonicalBatch = Effect.fn("RunJournal.turnCanonicalBatch")(fun
 });
 
 /**
- * Commit 1 of a tool-declaring Turn: the Turn's `ModelResponseRecorded` record, including
- * provider results retained in assistant content before application Tools execute.
- * — pending steering plus the assistant response with its declared tool calls — under batch
- * identity `turn-response:{runId}:{turn}`. Committing the response before preparation creates
- * the provably-safe durability §15 window ("after model item commit, before tool preparation →
- * resume tool scheduling"): a crash there resumes the declared batch with no model re-invocation
- * and no Unknown. Tool messages in `appended` are ignored; the record identity is the same
- * `model-response:{runId}:{turn}` as the single-batch shape, so record-id assertions and the
- * prompt projection are unchanged.
+ * Commit the normalized response and original operation contracts before application Tools
+ * execute, or promote a deferred readonly response before a persisted call-scoped capability.
+ * An unsettled application declaration is conservative uncertainty after ownership
+ * loss; approvals and the dispatch fence remain separate execution requirements. Provider
+ * results stay in assistant content. Application outcomes belong to the results commit.
  */
 export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { promptMessages } = splitTurnMessages(input.appended);
-  const modelResponse = yield* modelResponseRecord(input, promptMessages);
+  const modelResponse = yield* modelResponseRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnResponseBatchId(input.runId, input.turn),
@@ -1738,24 +1662,31 @@ export const turnResponseBatch = Effect.fn("RunJournal.turnResponseBatch")(funct
 /**
  * Commit 5 of a tool-declaring Turn (plan §2.1): the Turn's `ToolCallSettled` records in
  * declaration order under batch identity `turn-results:{runId}:{turn}` — the batch becomes
- * model-visible atomically. Non-tool messages in `appended` are ignored; a Turn without any
- * terminal Tool result has no results batch and fails typed.
+ * model-visible atomically. A completion after already committed Tool results gets its own
+ * terminal batch; it never rewrites or repeats the earlier Tool outcomes.
  */
 export const turnResultsBatch = Effect.fn("RunJournal.turnResultsBatch")(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
   yield* requireCanonicalTurn(input.turn);
-  const { toolParts } = splitTurnMessages(input.appended);
-  const toolRecords = yield* toolSettledRecords(input, toolParts);
+  const toolRecords = yield* toolSettledRecords(input);
   const first = toolRecords[0];
+  const completionRecord = yield* runCompletionRecord(input);
 
   if (first === undefined) {
-    return yield* journalError(`Turn ${input.turn} has no terminal Tool results to commit`);
+    if (completionRecord === undefined) {
+      return yield* journalError(`Turn ${input.turn} has no terminal Tool results to commit`);
+    }
+
+    return CanonicalBatch.make({
+      batchId: decodeBatchId(runCompletedRecordId(input.runId)),
+      producerId: input.producerId,
+      records: [completionRecord],
+    });
   }
   if (input.runCompletion !== undefined && toolRecords.length !== 1) {
     return yield* journalError("A terminal Tool completion requires exactly one settled result");
   }
-  const completionRecord = yield* runCompletionRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnResultsBatchId(input.runId, input.turn),

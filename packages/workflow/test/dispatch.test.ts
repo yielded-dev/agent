@@ -23,6 +23,7 @@ import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { ReceiptId, SettlementId, ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigestInput, DeploymentId, ProducerId } from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AdmissionRequest,
   IdempotencyKey,
@@ -103,8 +104,7 @@ const toolDefinition = Agent.make("dispatch-ordinary-tool", {
 });
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WorkflowEngine.layerMemory,
   RunToolAuthorization.allowAll,
   ToolReconciler.uncertain,
@@ -344,7 +344,7 @@ const makeFixture = Effect.fn("dispatch-test.makeFixture")(function* (ordinaryTo
   const runtimeContext = yield* Layer.build(
     DurableAgentRuntime.layerRegistered([
       { agent: selectedDefinition, model: ordinaryTool ? blockingModel : model, definitions },
-    ]),
+    ]).pipe(Layer.provide(runStorageLayer())),
   ).pipe(Effect.provideContext(services));
 
   const runtime = Context.get(runtimeContext, DurableAgentRuntime);

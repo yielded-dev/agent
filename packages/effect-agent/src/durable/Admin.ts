@@ -4,7 +4,7 @@ import { ThreadId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
 import {
   CanonicalSequence,
   SettlementOutcome,
-  ToolCallPrepared,
+  DeclaredToolCall,
   ToolCallUnknown,
 } from "./Records.ts";
 import {
@@ -91,10 +91,10 @@ export class ExplainedEvidence extends Schema.Class<ExplainedEvidence>(
   inputRecorded: Schema.Boolean,
   abortRecorded: Schema.Boolean,
   recordedSettlementOutcome: Schema.optionalKey(SettlementOutcome),
-  /** Prepared ordinary Tool Calls without a canonical outcome (DUR-009). */
+  /** Declared ordinary Tool Calls without a canonical outcome (DUR-009). */
   openToolCalls: Schema.Array(OpenToolCallEvidence),
-  /** Original prepared operation identities, arguments and recovery contracts; settled calls are excluded. */
-  pendingOperations: Schema.Array(ToolCallPrepared).pipe(
+  /** Original declared operation identities, arguments and recovery contracts; settled calls are excluded. */
+  pendingOperations: Schema.Array(DeclaredToolCall).pipe(
     Schema.withConstructorDefault(Effect.succeed([])),
   ),
   /** Delegation Tool Calls with an open parent-side obligation. */
@@ -157,17 +157,15 @@ export const RECOVERY_DECISION_MEANINGS: Readonly<Record<RecoveryDecision["_tag"
   RepairInputMarker:
     "The canonical input record exists but the ledger marker was lost: recovery repairs the marker from history, never the reverse (DUR-015).",
   ResumeFromTurnBoundary:
-    "Input is applied and no terminal work is reserved: a claiming worker resumes the Run from the last committed Turn boundary; the model may be re-invoked and any duplicate cost is observable (durability §9).",
-  AppendReservedSettlement:
-    "A settlement is reserved but not canonical: recovery appends the EXACT reserved record, then finalizes (DUR-011).",
+    "Input is applied and no terminal outcome is canonical: a claiming worker resumes the Run from the last committed Turn boundary; the model may be re-invoked and any duplicate cost is observable (durability §9).",
   FinalizeLedgerFromHistory:
     "The canonical settlement record exists: recovery rebuilds/finalizes the ledger from history and never rewrites history from the cached ledger status (DUR-011, DUR-015).",
   SettleAborted:
-    "A durable abort intent exists with no reserved outcome and no open attached-child obligation: recovery settles aborted, first recording ToolCallUnknown audits for open ordinary calls — abort never asserts external rollback (durability §13).",
+    "A durable abort intent exists with no canonical terminal outcome and no open attached-child obligation: recovery settles aborted, first recording ToolCallUnknown audits for open ordinary calls — abort never asserts external rollback (durability §13).",
   MarkUnknown:
-    "Prepared ordinary Tool Calls have no canonical outcome: recovery reconciles each open call and marks the remainder Unknown — never an automatic replay (DUR-009/DUR-017).",
+    "Declared ordinary Tool Calls have no canonical outcome: recovery reconciles each open call and marks the remainder Unknown — never an automatic replay (DUR-009/DUR-017).",
   ResumePendingToolBatch:
-    "A committed tool-declaring response has zero prepared and zero settled records: a claiming worker checks unfinished operation contracts and resumes the declared batch without model re-invocation (durability §15).",
+    "A committed tool-declaring response has unfinished calls whose original operation contracts permit replay: a claiming worker resumes those calls without model re-invocation; unresolved ordinary mutating calls require reconciliation.",
   AwaitApprovalDecision:
     "Canonically requested approvals lack decisions: the lane waits durably for the authorized resolveApproval path (recovery repairs a lost suspend transition from history).",
   ResumeSuspended:

@@ -1239,7 +1239,7 @@ it("routes worker stop through its owning Object and keeps queued input fenced a
   const records = await readCanonical(started.worker.threadId);
 
   expect(records.filter(({ record }) => record.payload._tag === "RunStarted")).toHaveLength(1);
-  expect(records.some(({ record }) => record.payload._tag === "ToolCallPrepared")).toBe(false);
+  expect(records.some(({ record }) => record.payload._tag === "ToolCallSettled")).toBe(false);
   expect(
     await withOwner(source, (host) =>
       Subagent.followUp(

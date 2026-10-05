@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Option, Schema } from "effect";
 
 import { DurableRuntimeFailpointLocation } from "./DurableFailpoint.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
+import type { SettlementPublisher } from "./SettlementPublisher.ts";
 import type { SubmissionLedger } from "./SubmissionLedger.ts";
 import { LedgerCapabilities } from "./SubmissionLedger.ts";
 import { submissionLedgerConformanceCases } from "./SubmissionLedgerConformance.ts";
@@ -184,14 +185,14 @@ const caseResult = <A, E>(
  * Tier 1 — port contract (plan §1): run BOTH shared conformance case arrays verbatim against
  * the provided candidate adapters and fold every case into a typed result. Case failures are
  * captured per-case (never short-circuiting the sweep), so a certificate always reports the
- * complete contract surface. Requires the candidate `SubmissionLedger` and `ThreadStore`
- * plus `Crypto.Crypto`, and must run under a TestClock (the ledger cases drive lease expiry
- * through virtual time).
+ * complete contract surface. Requires the co-owned `SubmissionLedger`, `ThreadStore`, and
+ * `SettlementPublisher` plus `Crypto.Crypto`, and must run under a TestClock (the ledger cases
+ * drive lease expiry through virtual time).
  */
 export const certifyPorts = Effect.fn("Thread.certifyPorts")(function* (): Effect.fn.Return<
   ReadonlyArray<CertificationCaseResult>,
   never,
-  SubmissionLedger | ThreadStore | Crypto.Crypto
+  SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto
 > {
   const results: Array<CertificationCaseResult> = [];
 

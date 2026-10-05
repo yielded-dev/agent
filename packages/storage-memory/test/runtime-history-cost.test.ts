@@ -25,6 +25,7 @@ import {
   ThreadCreated,
 } from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   IdempotencyKey,
   Principal,
@@ -67,8 +68,7 @@ const response: ReadonlyArray<Response.StreamPartEncoded> = [
 ];
 
 const base = Layer.mergeAll(
-  MemoryThreadStoreLive,
-  MemorySubmissionLedgerLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   ToolReconciler.uncertain,
   DurableRuntimeFailpoint.layer,
@@ -264,7 +264,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   const agent = Agent.withModel(definition, model);
 
   const runtime = yield* DurableAgentRuntime.pipe(
-    Effect.provide(DurableAgentRuntime.layer),
+    Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
     Effect.provideService(ThreadStore, counted),
   );
 
@@ -306,7 +306,6 @@ it.live.each([{ kind: "interruption", phase: "suffix" }] satisfies ReadonlyArray
     expect(Exit.isFailure(result.exit)).toBe(true);
     expect(result.openedPages).toBe(result.closedPages);
     expect(result.snapshot.ownership).toBeUndefined();
-    expect(result.snapshot.reservation).toBeUndefined();
     expect(result.requests.every((request) => request.limit <= 1_024)).toBe(true);
   }),
 );

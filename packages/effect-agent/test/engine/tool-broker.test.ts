@@ -245,8 +245,10 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
 
       yield* AgentRuntime.run(Agent.withModel(definition, model), "q", {
         durability: {
-          commitResponse: () => Effect.void,
-          prepareToolCalls: () => Effect.void,
+          checkpoint: Effect.void,
+          initialize: () => Effect.void,
+          commitTurn: () => Effect.succeed("committed"),
+          checkToolDispatch: Effect.void,
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,
           step: { lookup: () => Effect.succeed(Option.none()), commit: () => Effect.void },
@@ -285,8 +287,10 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
         }),
         runOptions: {
           durability: {
-            commitResponse: () => Effect.void,
-            prepareToolCalls: () => Effect.void,
+            checkpoint: Effect.void,
+            initialize: () => Effect.void,
+            commitTurn: () => Effect.succeed("committed"),
+            checkToolDispatch: Effect.void,
             commitCompaction: () => Effect.void,
             noteTurnUsage: () => Effect.void,
             step: { lookup: () => Effect.succeed(Option.none()), commit: () => Effect.void },

@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 
 import { ThreadId, SettlementId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
-import { SettlementOutcome, ToolCallPrepared } from "./Records.ts";
+import { SettlementOutcome, DeclaredToolCall } from "./Records.ts";
 import {
   ChildReservationId,
   submissionSettlementId,
@@ -11,24 +11,24 @@ import {
   type RecoverySnapshot,
 } from "./SubmissionLedger.ts";
 
-/** One canonical `ToolCallPrepared` without a settling or resolving canonical record (DUR-009). */
+/** One declared operation that may have executed without a canonical outcome (DUR-009). */
 export class OpenToolCallEvidence extends Schema.Class<OpenToolCallEvidence>(
   "@effect-agent/thread/OpenToolCallEvidence",
 )({
   toolCallId: ToolCallId,
-  toolName: ToolCallPrepared.fields.toolName,
-  turn: ToolCallPrepared.fields.turn,
+  toolName: DeclaredToolCall.fields.toolName,
+  turn: DeclaredToolCall.fields.turn,
 }) {}
 
 /**
- * A committed tool-declaring response with ZERO prepared and ZERO settled records for its Turn:
- * the durability §15 batch-resume window. Mutation preparation has not committed; readonly
- * handlers may already have run. The worker checks each unfinished operation before execution.
+ * A committed response with unfinished calls. Uncertain effects are reconciled before this
+ * scheduling decision; approval blockers and readonly calls can resume without assuming
+ * that an absent preparation proves nonexecution.
  */
 export class DeclaredPendingBatchEvidence extends Schema.Class<DeclaredPendingBatchEvidence>(
   "@effect-agent/thread/DeclaredPendingBatchEvidence",
 )({
-  turn: ToolCallPrepared.fields.turn,
+  turn: DeclaredToolCall.fields.turn,
   callCount: Schema.Int.check(Schema.isGreaterThan(0)),
 }) {}
 
@@ -37,7 +37,7 @@ export class PendingApprovalEvidence extends Schema.Class<PendingApprovalEvidenc
   "@effect-agent/thread/PendingApprovalEvidence",
 )({
   toolCallId: ToolCallId,
-  turn: ToolCallPrepared.fields.turn,
+  turn: DeclaredToolCall.fields.turn,
 }) {}
 
 /**
@@ -56,10 +56,10 @@ export const DelegationAdmissionEvidence = Schema.Literals([
 export type DelegationAdmissionEvidence = typeof DelegationAdmissionEvidence.Type;
 
 /**
- * One prepared-without-outcome parent Tool Call that IS a delegation (plan §4.1), separated from
+ * One declared-without-outcome parent Tool Call that IS a delegation (plan §4.1), separated from
  * `openToolCalls` because its establishment protocol is idempotent by construction and must
  * NEVER be marked Unknown (spec §13 vs. DUR-009). Delegation detection is durable and
- * fail-closed: canonical preparation records carry the definition-owned execution kind;
+ * fail-closed: canonical response operations carry the definition-owned execution kind;
  * child reservations and request records must agree with that classification. Names never
  * authorize replay, including in the pre-reservation window. The
  * `requested`/`started`/`joined` flags come from the parent-log canonical records; the child
@@ -70,8 +70,8 @@ export class OpenDelegationCallEvidence extends Schema.Class<OpenDelegationCallE
   "@effect-agent/thread/OpenDelegationCallEvidence",
 )({
   toolCallId: ToolCallId,
-  toolName: ToolCallPrepared.fields.toolName,
-  turn: ToolCallPrepared.fields.turn,
+  toolName: DeclaredToolCall.fields.toolName,
+  turn: DeclaredToolCall.fields.turn,
   /** The canonical `SubagentRequested` record exists for this call. */
   requested: Schema.Boolean,
   /** The canonical `SubagentStarted` record exists for this call. */
@@ -91,9 +91,9 @@ export class OpenDelegationCallEvidence extends Schema.Class<OpenDelegationCallE
  * settlement is never revisited (DUR-002/DUR-015); the P4 rule that unknown-beats-settlement is
  * gone.
  *
- * `openToolCalls` is the DUR-009 seam: every `ToolCallPrepared` without a matching
+ * `openToolCalls` is the DUR-009 seam: every potentially executed declaration without a matching
  * `ToolCallSettled` or `ToolCallResolved`. S2 separates `openDelegationCalls` from it (plan
- * §4.1): a delegation's prepared-without-outcome state is provably replay-safe, so those calls
+ * §4.1): a delegation's declared-without-outcome state is provably replay-safe, so those calls
  * route through the Subagent recovery rows and never through `MarkUnknown`. Names and
  * operational reservation rows cannot upgrade ordinary classification. `joinedInputCovered`
  * implements the plan §2.5 prompt-coverage rule for the joined side: a joined input is covered
@@ -115,7 +115,7 @@ export class RecoveryEvidence extends Schema.Class<RecoveryEvidence>(
   recordedSettlementOutcome: Schema.optionalKey(SettlementOutcome),
   /** The deterministic canonical `AbortRequested` record (`abort:{sid}`) is committed. */
   abortRecorded: Schema.Boolean,
-  /** Prepared ordinary Tool Calls without a canonical settled/resolved outcome (DUR-009). */
+  /** Declared ordinary Tool Calls without a canonical settled/resolved outcome (DUR-009). */
   openToolCalls: Schema.Array(OpenToolCallEvidence),
   /**
    * Delegation Tool Calls with an open parent-side obligation (plan §4.1), removed from
@@ -127,7 +127,7 @@ export class RecoveryEvidence extends Schema.Class<RecoveryEvidence>(
   ),
   /** Only persisted orchestration classification authorizes idempotent host-operation replay. */
   openWorkerCalls: Schema.optionalKey(Schema.Array(OpenToolCallEvidence)),
-  /** A declared-but-unprepared tool batch: response canonical, zero prepared, zero settled. */
+  /** A committed response with unfinished calls; uncertainty is reconciled before resumption. */
   declaredPendingBatch: Schema.optionalKey(DeclaredPendingBatchEvidence),
   /** Canonically requested approvals without a canonical decision. */
   approvalsPending: Schema.Array(PendingApprovalEvidence),
@@ -170,21 +170,12 @@ export class RepairInputMarker extends Schema.TaggedClass<RepairInputMarker>(
   "@effect-agent/thread/RepairInputMarker",
 )("RepairInputMarker", { submissionId: SubmissionId }) {}
 
-/** Input applied and no terminal work reserved: a worker resumes the Run from the last committed
+/** Input applied and no canonical terminal outcome: a worker resumes the Run from the last committed
  * Turn boundary (D6; the model may be re-invoked, duplicate cost is observable — the resuming
  * worker appends `ModelResponseInterrupted` when superseding a prior owner, durability §9). */
 export class ResumeFromTurnBoundary extends Schema.TaggedClass<ResumeFromTurnBoundary>(
   "@effect-agent/thread/ResumeFromTurnBoundary",
 )("ResumeFromTurnBoundary", { submissionId: SubmissionId }) {}
-
-/** A settlement is reserved but not canonical: append the EXACT reserved record, then finalize. */
-export class AppendReservedSettlement extends Schema.TaggedClass<AppendReservedSettlement>(
-  "@effect-agent/thread/AppendReservedSettlement",
-)("AppendReservedSettlement", {
-  submissionId: SubmissionId,
-  settlementId: SettlementId,
-  outcome: SettlementOutcome,
-}) {}
 
 /** The canonical settlement record exists: rebuild/finalize the ledger from history and never
  * rewrite history from the cached ledger status (DUR-011, DUR-015). */
@@ -196,7 +187,7 @@ export class FinalizeLedgerFromHistory extends Schema.TaggedClass<FinalizeLedger
   outcome: SettlementOutcome,
 }) {}
 
-/** A durable abort intent exists, no terminal outcome is reserved, and no attached-child
+/** A durable abort intent exists, no terminal outcome is canonical, and no attached-child
  * obligation remains open: settle aborted (DUR-012). The executor first appends
  * `ToolCallUnknown` audit records for any open ordinary calls — abort settles the obligation but
  * never asserts external rollback (durability §13). */
@@ -204,7 +195,7 @@ export class SettleAborted extends Schema.TaggedClass<SettleAborted>(
   "@effect-agent/thread/SettleAborted",
 )("SettleAborted", { submissionId: SubmissionId }) {}
 
-/** Prepared ordinary Tool Calls have no canonical outcome: the executor reconciles each open
+/** Declared ordinary Tool Calls have no canonical outcome: the executor reconciles each open
  * call (recovered result / never-started / safe-retry) and marks the remainder Unknown — never
  * an automatic replay (DUR-009/DUR-017). Delegation calls are excluded: their establishment is
  * idempotent by construction and routes through the Subagent rows instead (plan §4.3). */
@@ -216,8 +207,8 @@ export class MarkUnknown extends Schema.TaggedClass<MarkUnknown>(
   openToolCallIds: Schema.Array(ToolCallId),
 }) {}
 
-/** A committed tool-declaring response has zero prepared and zero settled records: a worker
- * checks unfinished contracts and resumes the declared batch without model re-invocation. S2 also
+/** A committed response has unfinished calls: after reconciling uncertain effects, a worker
+ * checks their original contracts and resumes without model re-invocation. This also
  * routes an open delegation call WITHOUT establishment evidence here (spec §13 row 1): the
  * declared batch re-executes and the idempotent establishment converges on one child. */
 export class ResumePendingToolBatch extends Schema.TaggedClass<ResumePendingToolBatch>(
@@ -409,7 +400,6 @@ export const RecoveryDecision = Schema.Union([
   ApplyInput,
   RepairInputMarker,
   ResumeFromTurnBoundary,
-  AppendReservedSettlement,
   FinalizeLedgerFromHistory,
   SettleAborted,
   MarkUnknown,
@@ -444,7 +434,7 @@ export type RecoveryDecision = typeof RecoveryDecision.Type;
 interface DelegationCallView {
   readonly toolCallId: ToolCallId;
   turn: number | undefined;
-  /** A prepared-without-outcome record exists, so the declared batch is worker-resumable. */
+  /** An original delegation declaration authorizes idempotent batch resumption. */
   open: boolean;
   requested: boolean;
   started: boolean;
@@ -802,21 +792,18 @@ const classifyDelegationAbort = (
 /**
  * Pure recovery classifier (durability §14, DUR-013): a finite persisted snapshot plus canonical
  * evidence deterministically selects exactly one decision. Precedence, most-settled first
- * (plan §4.2/§4.3 — note the deliberate P5 reorder: canonical settlement and reservation beat
+ * (plan §4.2/§4.3 — note the deliberate P5 reorder: canonical settlement beats
  * open tool calls, because a recorded terminal outcome is never revisited, DUR-002/DUR-015; and
  * the three S2 edits: the abort row propagates to nonterminal attached children, delegation
  * calls never mark Unknown, and the suspended row branches on the suspension reason):
  *
  * 1. `settled` → NoAction — terminal outcomes are never revisited (DUR-002).
  * 2. canonical settlement record → FinalizeLedgerFromHistory — history beats every ledger
- *    marker (DUR-015), including a missing or divergent reservation AND open tool calls.
- * 3. reservation → FinalizeLedgerFromHistory when finalized, else AppendReservedSettlement —
- *    the reserved record is the single exact outcome owed (DUR-011); it also beats a pending
- *    abort intent (DUR-012).
- * 4. joined-side states (DUR-016): `joining` without canonical input → RevertJoining; `joining`
+ *    marker (DUR-015), including stale open tool calls.
+ * 3. joined-side states (DUR-016): `joining` without canonical input → RevertJoining; `joining`
  *    with canonical input → RepairJoinMarker (marker lost); `joined` + host settled →
  *    SettleJoinedWithHost; `joined` + host live → AwaitHostSettlement (deferred).
- * 5. abort intent → the S2 abort rows (spec §13.1 request-abort-and-join): an unproven child
+ * 4. abort intent → the S2 abort rows (spec §13.1 request-abort-and-join): an unproven child
  *    admission waits, an admitted-but-unlinked child repairs its start link, a nonterminal
  *    attached child gets PropagateChildAbort — the parent does NOT settle — terminal children
  *    are joined, incomplete releases applied, provably childless reservations released; ONLY a
@@ -827,29 +814,29 @@ const classifyDelegationAbort = (
  *    the lane, because settlement order of never-run work is not execution order (DUR-004
  *    bounds execution order; DUR-012 permits settling inactive accepted work without an
  *    Attempt).
- * 6. ordinary open tool calls (state not yet `unknown`) → MarkUnknown — reconcile-then-mark,
+ * 5. ordinary open tool calls (state not yet `unknown`) → MarkUnknown — reconcile-then-mark,
  *    never an automatic replay (DUR-009). Delegation calls are EXCLUDED (plan §4.3's most
- *    important edit): their prepared-without-outcome state is provably replay-safe and routes
- *    through rows 5/8/9 instead. A lane already `unknown` is in the DUR-017 resolution regime
- *    (row 7) and is not re-marked.
- * 7. state `unknown` → ApplyUnknownResolutions when durable intents cover every open ordinary
+ *    important edit): their declared-without-outcome state is provably replay-safe and routes
+ *    through rows 4/7/8 instead. A lane already `unknown` is in the DUR-017 resolution regime
+ *    (row 6) and is not re-marked.
+ * 6. state `unknown` → ApplyUnknownResolutions when durable intents cover every open ordinary
  *    call, else AwaitUnknownResolution.
- * 8. state `suspended` branches on the stored reason: `WaitingForChild` → ResumeWaitingParent
+ * 7. state `suspended` branches on the stored reason: `WaitingForChild` → ResumeWaitingParent
  *    when every listed child is provably settled (replay the idempotent wake), else
  *    AwaitChildSettlement (SUB-030); `ApprovalPending` keeps the P5 behavior — undecided
  *    canonical approval requests → AwaitApprovalDecision (repairing a lost suspend transition
  *    from history), every request decided → ResumeSuspended.
- * 9. the S2 establishment/join rows for a live parent (spec §13, most-repairing first):
+ * 8. the S2 establishment/join rows for a live parent (spec §13, most-repairing first):
  *    ApplyJoinAccounting → CompleteChildAdmission → RepairSubagentStartLink →
  *    AwaitChildAdmissionResolution → ResumePendingToolBatch (idempotent handler re-entry) →
  *    EnsureWaitingForChild → ResumeWaitingParent → ReleaseOrphanChildReservation.
- * 10. declared-but-unprepared tool batch → ResumePendingToolBatch — the worker checks original
- *     operation contracts; missing preparation proves no mutation dispatch, not readonly nonexecution (§15).
- * 11. `admitted` → a parent-linked Submission whose Thread lacks the canonical lineage
+ * 9. unfinished declared tool batch → ResumePendingToolBatch — the worker checks original
+ *     operation contracts after uncertain effects have been reconciled or blocked (§15).
+ * 10. `admitted` → a parent-linked Submission whose Thread lacks the canonical lineage
  *     record defers (AwaitParentEstablishment: the parent's idempotent establishment
  *     completes it); otherwise
  *     CompleteMaterialization / RepairReadiness by Thread durability.
- * 12. otherwise → ApplyInput / RepairInputMarker / ResumeFromTurnBoundary by canonical input
+ * 11. otherwise → ApplyInput / RepairInputMarker / ResumeFromTurnBoundary by canonical input
  *     evidence, with the ledger marker repaired from history, never the reverse.
  *
  * A CHILD Submission (one whose snapshot carries `parentLinkage`) classifies through exactly
@@ -872,23 +859,8 @@ export const classifyRecovery = (
   if (evidence.recordedSettlementOutcome !== undefined) {
     return FinalizeLedgerFromHistory.make({
       submissionId,
-      settlementId: snapshot.reservation?.settlementId ?? submissionSettlementId(submissionId),
+      settlementId: submissionSettlementId(submissionId),
       outcome: evidence.recordedSettlementOutcome,
-    });
-  }
-  if (snapshot.reservation !== undefined) {
-    if (snapshot.reservation.finalized) {
-      return FinalizeLedgerFromHistory.make({
-        submissionId,
-        settlementId: snapshot.reservation.settlementId,
-        outcome: snapshot.reservation.outcome,
-      });
-    }
-
-    return AppendReservedSettlement.make({
-      submissionId,
-      settlementId: snapshot.reservation.settlementId,
-      outcome: snapshot.reservation.outcome,
     });
   }
   if (state === "joining") {

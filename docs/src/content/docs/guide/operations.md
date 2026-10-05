@@ -37,8 +37,8 @@ The `explain --thread <id> --json` payload is an array of recovery explanations,
 when the lane has no nonterminal work. `explain --submission <id> --json` returns one explanation
 object.
 
-`evidence.pendingOperations` exposes original unresolved `ToolCallPrepared` facts, including
-parameters and any recorded execution class, kind, and replay hash. `unknownCalls[].resolved`
+`evidence.pendingOperations` derives unresolved calls from their original committed model
+responses, including parameters, execution class, kind, and replay hash. `unknownCalls[].resolved`
 means a canonical `ToolCallSettled` exists. Accepted resolution intents appear separately in
 `unknownResolutions`; an intent alone is not a recorded result.
 
@@ -47,39 +47,15 @@ resolution consult `OperationAuthorizer`. Its default allows trusted service hol
 real authorizer before exposing these methods outside a trusted host. Denial fails as
 `OperationDenied` before protected I/O. The host must authorize admissions before calling `submit`.
 
-## Read current external work
+## Read canonical work
 
-Host policy can use store-level reads without acquiring `DurableAgentRuntime`:
-
-```ts twoslash
-import { Effect } from "effect";
-import type { ThreadId } from "@yielded/agent/identifiers";
-import * as ThreadStore from "@yielded/agent/thread-store";
-
-const outstanding = Effect.fn("outstanding")(function* (threadId: ThreadId) {
-  return yield* ThreadStore.readOutstanding({ threadId, limit: 4096 });
-});
-```
-
-The result contains `throughSequence`, original `ToolCallPrepared` operations with their
-`submissionId` and `state` (`prepared` or `unknown`), and native `workerInputs` whose completion
-has not proven external effects resolved. Preparation is not an unknown outcome: the current
-Run may already be authorized to execute it. Policy remains application-owned, including which
-children share its scope. These reads do not acquire execution authority or freeze other work.
-
-Memory, SQLite, and Cloudflare maintain this inventory atomically with canonical append. Reads
-visit outstanding records, without replaying completed history or contacting historical children.
-An overflow, missing adapter capability, invalid canonical ownership, or an unverified legacy
-acknowledgement fails closed. The maximum requested inventory is 4096; partial inventories never
-mean permission. `readOutstanding` requires `ThreadStore` and `SubmissionLedger`.
-The helpers use closed selections through `ThreadStore.read`; selected requests use nested
-`page.limit`, and mutable pages verify the captured tail sequence and digest. Older adapters
-reject this distinct request shape rather than interpreting it as a history read.
+Use `explain` to inspect unresolved effects and their original declarations. A committed tool call
+may have executed even when no result was recorded; declaration alone grants no execution authority.
 
 For exact receipts, use `ThreadStore.getRecord({ threadId, recordId })` or
 `ThreadStore.getRunInput({ threadId, runId })`. The latter returns the original user input,
 excluding joined inputs, and rejects ambiguous original inputs. Both return an optional canonical
-envelope and require only `ThreadStore`. Authorize the owner and locator before reading and
+envelope and require only `ThreadReader`. Authorize the owner and locator before reading and
 verify the returned payload; absence alone does not prove an admission was never accepted.
 
 Native stores provide `readIdentity({ threadId })` for the first canonical record and exact worker
@@ -109,14 +85,13 @@ read to the source owner. Bounds, missing capability, malformed data, or a misma
 fail closed. A no-receipt action delivery remains uncertain even before a canonical worker
 reservation exists. A native receipt proves accepted admission, not destination materialization;
 worker admission reserves its source input before returning a receipt. Applications can leave
-accepted worker discovery to canonical outstanding inputs and recognize native completion/update
+accepted worker discovery to canonical worker inputs and recognize native completion/update
 reports without reconstructing transport validation. These reads grant no execution authority.
 
-Supported SQLite and Cloudflare storage upgrades build the indexes once, atomically and in
-bounded decode pages. Existing worker acknowledgements without external-outcome proof remain
-incomplete and fail closed. Current proven completion retires inventory entries while preserving
-the original canonical records and receipts. Aborting a submission retains its unknown outcomes;
-a terminal settlement does not authorize retrying or resolving those operations.
+Aborting a submission retains its unknown outcomes. A terminal settlement does not authorize
+retrying or resolving those operations. Current SQLite, PostgreSQL, and Cloudflare thread stores
+accept only fresh storage or format 16. Earlier beta formats fail before mutation; use a fresh
+store for this release.
 
 <a id="obligation-monitoring"></a>
 
@@ -445,7 +420,7 @@ use their existing bounded sweeps and retry deadlines; settlement probes retry c
 The delivery attempt cap does not cap all background maintenance.
 
 Optional `admissionGroup` permits one actually unsettled submission per group **in a destination
-thread**. Admission, suspension, unknown outcome and terminalization all retain occupancy until
+thread**. Admission, suspension, unknown outcome and canonical settlement publication retain occupancy until
 canonical settlement finalization. A lagging finalization conservatively holds capacity until repair.
 `FreshThread` per event does not provide exclusion across threads. Schedules retain one frozen
 pending occurrence and coalesce missed recurring times; distinct events keep separate durable
@@ -496,64 +471,37 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 
 ### Adopting these contracts
 
-Compatibility metadata is now optional for application projection checkpoints. Existing checkpoints retain supplied
-`engineVersion`, `agentDefinitionDigest`, `modelDigest`, and `toolDigest` values without a rewrite
-or migration. Older binaries still require these fields and cannot read newly written
-metadata-free checkpoints, including during `verifyOnOpen`. This change does not provide
-bidirectional rollback compatibility. The checkpoint envelope and projection versions remain
-unchanged; consumers remain responsible for validating projection state. Runtime-owned recovery
-checkpoints continue to populate and compare these fields; absent metadata falls back to
-canonical replay.
+SQLite, PostgreSQL, and Cloudflare Thread adapters accept fresh storage or exactly format 16.
+Earlier Thread formats fail acquisition without mutation; this release provides no Thread migration.
+Preserve old stores and their compatible writer for retained work or inspection, and use fresh storage
+for this release. The same format requirement applies to combined SQLite files used by Schedule
+and Subscription adapters.
 
-The persistent adapters automatically upgrade supported predecessor formats on acquisition:
-Cloudflare Thread stores move from versions 2–8 to 9; Schedule and Subscription stores move
-from version 2 to 3; combined SQLite files move from versions 7–13 to 14. Thread and SQLite
-stores add native read indexes, worker destination seals, recovery checkpoints and message delivery
-storage where missing. The immediate predecessor adds only a nullable terminal-outcome column to
-the existing worker seal. Existing explicit stops remain stopped; historical worker origins without
-an assignment lifecycle remain reusable. No completed receipt is retroactively treated as assignment
-completion, and supported stores never require a reset.
+Cloudflare's separate Schedule and Subscription stores still upgrade supported version 2 layouts to
+version 3. Each upgrade runs in one native transaction and advances its version marker last;
+interruption retries the uncommitted upgrade. Unsupported layouts or invalid retained values fail
+without committing a partial conversion. Preserve the original store if an upgrade fails.
 
-Each owning store upgrades in one native transaction and advances its version marker last.
-Reopening after interruption retries the entire uncommitted upgrade.
-Namespaces, canonical history and digests, receipts, pending work, ownership, deadlines, alarm
-generations and scan cursors are preserved. Keep the existing namespace/file and the source
-versions and input bindings needed to finish retained deliveries. Register the current binding
-for each stable Agent ID; unfinished operations retain their recorded replay contracts. See
-[deployment continuity](/guide/agents/#resume-across-deployments).
+For these upgrades, subscription configurations become revision 1 and remain pinned for already
+selected deliveries. Retained retry counts become the initial generation's automatic attempt count.
+Existing runnable work stays runnable; its next failure applies the current retry cap. No admission
+group or fence is inferred. Missing historical occurrence and settlement timestamps remain absent;
+replay returns the retained event and receipt, and retention keeps history of unknown age.
 
-Recovery checkpoints are disposable: missing or incompatible cache state rebuilds from canonical
-history. Upgrades preserve existing generic projection checkpoints. The optional `verifyOnOpen`
-audit checks canonical history and generic projection checkpoints; recovery caches are validated
-when loaded. See [recovery checkpoints](/concepts/durability/#recovery-checkpoints) for the bounded
-resume path and its fallback rules.
+Application projection checkpoints may omit compatibility metadata; consumers must validate their
+state with Schema. Runtime recovery checkpoints retain and check their metadata, and incompatible
+cache state falls back to canonical history. `verifyOnOpen` audits canonical history and application
+projection checkpoints; recovery caches are validated when loaded. See
+[recovery checkpoints](/concepts/durability/#recovery-checkpoints).
 
-Legacy subscription configurations become revision 1 and remain the immutable configuration for
-already selected deliveries. Retry counts become the initial generation's automatic attempt count;
-existing runnable work stays runnable even if it already exceeds a newly configured retry cap.
-The next failed attempt applies the current cap. No admission group or fence is inferred.
+Keep the source versions and input bindings needed to finish retained deliveries. Register the
+current binding for each stable Agent ID; unfinished operations retain their original replay
+contracts. See [deployment continuity](/guide/agents/#resume-across-deployments). Custom stores must
+implement revision and retry-generation fencing, bounded retention cursors, and canonical observation.
 
-Historical occurrence and settlement timestamps stay absent. An event replay with the same retained
-identity and payload digest returns the original event even if the caller now supplies an occurrence
-time that was previously unknown. Once an occurrence time is stored it must match on replay. Replay
-never fills missing historical timestamps or invents a receipt. Retention conservatively keeps
-history whose occurrence or settlement time is unknown.
-
-An unsupported layout, corrupt transformed record, orphaned delivery, mismatched fingerprint or translated value
-over the adapter's size limit fails acquisition without advancing the version. Thread errors identify
-the table and row; Schedule and Subscription errors retain the structured diagnosis in `cause`.
-Unchanged canonical history uses the existing reader validation rather than a new startup audit.
-Preserve the original store and investigate with its original writer or backup. Do not replace a
-namespace to work around an upgrade failure. Upgrades are forward-only: older binaries reject the
-new marker. Back up SQLite files or use the platform's backup facilities before an application rollout.
-
-Custom stores must implement revision and retry-generation fencing, bounded retention cursors and
-the canonical observation contract. Existing finite lifetimes, UTC cron defaults and no-retention
-behavior remain available.
-
-Node uses a Scope-owned indexed polling driver. Cloudflare commits work and required alarms
-together and re-arms after failed passes. If storage prevents both mutation and alarm repair,
-restore storage and send a new wake or intervene as an operator.
+Node uses a Scope-owned polling driver. Cloudflare commits work and required alarms together and
+re-arms after failed passes. If storage prevents mutation and alarm repair, restore storage and send
+a new wake or intervene as an operator.
 
 See the compiling [Node](https://github.com/yielded-dev/agent/blob/main/packages/platform-node/test/fixtures/subscriptions-example.ts)
 and [Cloudflare](https://github.com/yielded-dev/agent/blob/main/packages/platform-cloudflare/examples/subscriptions.ts)

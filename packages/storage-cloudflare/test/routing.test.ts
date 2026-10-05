@@ -20,6 +20,7 @@ import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import { MessageDeliveryStore, readPending } from "@yielded/agent/message-delivery";
 import { type PersistedJson } from "@yielded/agent/records";
+import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AttachChildToReservationRequest,
   ChildBudgetReservationRequest,
@@ -58,7 +59,7 @@ import {
   threadStub,
   id,
   epoch,
-  settlementReservation,
+  settlementPublication,
   TEST_PRINCIPAL,
   TEST_PRODUCER,
   toolCall,
@@ -352,17 +353,17 @@ describe("cross-DO port routing", () => {
         const ledger = yield* SubmissionLedger;
         const settled = yield* claimedLocalLane(childConv, "wp2-settled-child", { part: 1 });
 
-        const reservation = yield* settlementReservation(
+        const publication = yield* settlementPublication(
           settled.admitted,
           settled.claim.ownershipToken,
           "completed",
         );
 
-        yield* ledger.reserveSettlement(reservation);
+        yield* (yield* SettlementPublisher).publish(publication.request);
         yield* ledger.finalizeSettlement(
           SettlementFinalization.make({
             submissionId: settled.admitted.submissionId,
-            settlementId: reservation.settlementId,
+            settlementId: publication.settlementId,
           }),
         );
 
@@ -373,7 +374,9 @@ describe("cross-DO port routing", () => {
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId: pending.submissionId }));
 
         return { settled: settled.admitted, pending };
-      }).pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
+      }).pipe(
+        Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+      ),
     );
 
     // The parent Object suspends its lane waiting on BOTH children (they live elsewhere, so
@@ -408,7 +411,9 @@ describe("cross-DO port routing", () => {
         expect(outcome).toBe("suspended");
 
         return lane.admitted;
-      }).pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
+      }).pipe(
+        Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+      ),
     );
 
     // The child's Object notifies the parent's Object over the routed port. One settled
@@ -447,20 +452,22 @@ describe("cross-DO port routing", () => {
 
         expect(claimed.submissionId).toBe(children.pending.submissionId);
 
-        const reservation = yield* settlementReservation(
+        const publication = yield* settlementPublication(
           children.pending,
           claimed.ownershipToken,
           "completed",
         );
 
-        yield* ledger.reserveSettlement(reservation);
+        yield* (yield* SettlementPublisher).publish(publication.request);
         yield* ledger.finalizeSettlement(
           SettlementFinalization.make({
             submissionId: children.pending.submissionId,
-            settlementId: reservation.settlementId,
+            settlementId: publication.settlementId,
           }),
         );
-      }).pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
+      }).pipe(
+        Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+      ),
     );
 
     await withRoutedPorts(
@@ -628,7 +635,9 @@ describe("cross-DO port routing", () => {
         const rows = yield* ledger.scanNonterminal.pipe(Stream.runCollect);
 
         expect(rows.map((row) => row.submissionId)).toEqual([established.submissionId]);
-      }).pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
+      }).pipe(
+        Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+      ),
     );
   });
 

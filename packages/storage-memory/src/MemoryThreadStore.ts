@@ -29,6 +29,7 @@ import {
   ThreadObservation,
   ThreadReadRequest,
   ThreadStore,
+  ThreadReader,
   type ThreadCheckpoints,
   ThreadStoreError,
   ThreadTail,
@@ -41,8 +42,24 @@ import {
   type ThreadRecoveryCheckpoints,
   MAX_THREAD_EXPORT_RECORDS,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Effect, Layer, Option, PubSub, Ref, Schema, Stream } from "effect";
+import {
+  Context,
+  Crypto,
+  Effect,
+  Layer,
+  Option,
+  PubSub,
+  Ref,
+  Schema,
+  Semaphore,
+  Stream,
+} from "effect";
 import { Base64 } from "effect/encoding";
+
+import {
+  MemoryThreadStoreKernel,
+  type PreparedMemoryAppend,
+} from "./internal/MemoryThreadStoreKernel.ts";
 
 const MAX_THREADS = 256;
 const MAX_RECORDS_PER_THREAD = MAX_THREAD_EXPORT_RECORDS;
@@ -60,11 +77,9 @@ interface StoredBatch {
 
 interface StoredThread {
   readonly peerCount: number;
-  readonly unverifiedWorkerInputs: ReadonlySet<string>;
   readonly workerRecords: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
   readonly byId: ReadonlyMap<string, CanonicalRecordEnvelope>;
   readonly runInputs: ReadonlyMap<string, CanonicalRecordEnvelope | null>;
-  readonly outstanding: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
   readonly producerEpoch: ProducerEpoch;
   readonly tailSequence: CanonicalSequence;
   readonly tailDigest: Digest;
@@ -182,6 +197,8 @@ const makeThreadStore = Effect.gen(function* () {
   const maxThreads = yield* ThreadCapacity;
   const crypto = yield* Crypto.Crypto;
   const state = yield* Ref.make<MemoryState>({ threads: new Map() });
+  const gate = yield* Semaphore.make(1);
+  const withMutation = gate.withPermits(1);
   const updates = yield* PubSub.sliding<void>(1);
 
   yield* Effect.addFinalizer(() => PubSub.shutdown(updates));
@@ -238,12 +255,10 @@ const makeThreadStore = Effect.gen(function* () {
             producerEpoch: request.producerEpoch,
             tailSequence: ZERO_CANONICAL_SEQUENCE,
             tailDigest: EMPTY_TAIL_DIGEST,
-            unverifiedWorkerInputs: new Set(),
             byId: new Map(),
             workerRecords: new Map(),
             peerCount: 0,
             runInputs: new Map(),
-            outstanding: new Map(),
             records: [],
             recordIds: new Set(),
             batches: new Map(),
@@ -259,260 +274,240 @@ const makeThreadStore = Effect.gen(function* () {
     }),
   );
 
-  const append: ThreadStore["Service"]["append"] = Effect.fn("MemoryThreadStore.append")(
-    (unvalidated) =>
-      Effect.gen(function* () {
-        const request = yield* validate(FencedAppendRequest, "append", unvalidated);
+  const prepareAppend = Effect.fnUntraced(function* (unvalidated: FencedAppendRequest) {
+    const codec = Schema.fromJsonString(FencedAppendRequest);
 
-        const digest = yield* digestCanonicalBatch(request.expectedTailDigest, request.batch).pipe(
-          Effect.provideService(Crypto.Crypto, crypto),
-          Effect.mapError((error) => storeError("append", error.message, error)),
-        );
+    const request = yield* Schema.encodeUnknownEffect(codec)(unvalidated).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(codec)),
+      Effect.mapError((error) => storeError("append", "Invalid append request", error)),
+    );
 
-        const decision = yield* Effect.uninterruptible(
-          Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
-            const thread = current.threads.get(request.threadId);
+    const digest = yield* digestCanonicalBatch(request.expectedTailDigest, request.batch).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError((error) => storeError("append", error.message, error)),
+    );
 
-            if (thread === undefined) {
-              return [
-                {
-                  _tag: "failure",
-                  error: ThreadNotMaterialized.make({
-                    threadId: request.threadId,
-                  }),
-                },
-                current,
-              ];
-            }
-            if (request.producerEpoch !== thread.producerEpoch) {
-              return [
-                {
-                  _tag: "failure",
-                  error: FenceRejected.make({
-                    threadId: request.threadId,
-                    actualEpoch: thread.producerEpoch,
-                    attemptedEpoch: request.producerEpoch,
-                  }),
-                },
-                current,
-              ];
-            }
-            const previous = thread.batches.get(request.batch.batchId);
+    return { request, digest };
+  });
 
-            if (previous !== undefined) {
-              if (previous.digest !== digest) {
-                return [
-                  {
-                    _tag: "failure",
-                    error: AppendConflict.make({
-                      threadId: request.threadId,
-                      batchId: request.batch.batchId,
-                      reason: "batch-digest",
-                    }),
-                  },
-                  current,
-                ];
-              }
+  const appendPrepared = Effect.fnUntraced(function* ({ request, digest }: PreparedMemoryAppend) {
+    const decision = yield* Effect.uninterruptible(
+      Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
+        const thread = current.threads.get(request.threadId);
 
-              return [
-                {
-                  _tag: "success",
-                  result: AppendResult.make({
-                    firstSequence: previous.result.firstSequence,
-                    lastSequence: previous.result.lastSequence,
-                    tailDigest: previous.result.tailDigest,
-                    replayed: true,
-                  }),
-                  records: [],
-                },
-                current,
-              ];
-            }
-            if (
-              request.expectedTailSequence !== thread.tailSequence ||
-              request.expectedTailDigest !== thread.tailDigest
-            ) {
-              return [
-                {
-                  _tag: "failure",
-                  error: AppendConflict.make({
-                    threadId: request.threadId,
-                    batchId: request.batch.batchId,
-                    reason: "tail",
-                    actualTailSequence: thread.tailSequence,
-                    actualTailDigest: thread.tailDigest,
-                  }),
-                },
-                current,
-              ];
-            }
-            if (thread.records.length + request.batch.records.length > MAX_RECORDS_PER_THREAD) {
-              return [
-                {
-                  _tag: "failure",
-                  error: storeError(
-                    "append",
-                    `In-memory record limit ${MAX_RECORDS_PER_THREAD} exceeded`,
-                  ),
-                },
-                current,
-              ];
-            }
+        if (thread === undefined) {
+          return [
+            {
+              _tag: "failure",
+              error: ThreadNotMaterialized.make({
+                threadId: request.threadId,
+              }),
+            },
+            current,
+          ];
+        }
+        if (request.producerEpoch !== thread.producerEpoch) {
+          return [
+            {
+              _tag: "failure",
+              error: FenceRejected.make({
+                threadId: request.threadId,
+                actualEpoch: thread.producerEpoch,
+                attemptedEpoch: request.producerEpoch,
+              }),
+            },
+            current,
+          ];
+        }
+        const previous = thread.batches.get(request.batch.batchId);
 
-            const batchRecordIds = new Set<RecordId>();
+        if (previous !== undefined) {
+          if (previous.digest !== digest) {
+            return [
+              {
+                _tag: "failure",
+                error: AppendConflict.make({
+                  threadId: request.threadId,
+                  batchId: request.batch.batchId,
+                  reason: "batch-digest",
+                }),
+              },
+              current,
+            ];
+          }
 
-            for (const record of request.batch.records) {
-              if (thread.recordIds.has(record.recordId) || batchRecordIds.has(record.recordId)) {
-                return [
-                  {
-                    _tag: "failure",
-                    error: AppendConflict.make({
-                      threadId: request.threadId,
-                      batchId: request.batch.batchId,
-                      reason: "record-identity",
-                    }),
-                  },
-                  current,
-                ];
-              }
-              batchRecordIds.add(record.recordId);
-            }
-
-            const records = request.batch.records.map((record, index) => {
-              const sequence = decodeCanonicalSequence(thread.tailSequence + index + 1);
-
-              return CanonicalRecordEnvelope.make({
+          return [
+            {
+              _tag: "success",
+              result: AppendResult.make({
+                firstSequence: previous.result.firstSequence,
+                lastSequence: previous.result.lastSequence,
+                tailDigest: previous.result.tailDigest,
+                replayed: true,
+              }),
+              records: [],
+            },
+            current,
+          ];
+        }
+        if (
+          request.expectedTailSequence !== thread.tailSequence ||
+          request.expectedTailDigest !== thread.tailDigest
+        ) {
+          return [
+            {
+              _tag: "failure",
+              error: AppendConflict.make({
                 threadId: request.threadId,
                 batchId: request.batch.batchId,
-                sequence,
-                offset: observationOffset(request.threadId, sequence),
-                record,
-              });
-            });
+                reason: "tail",
+                actualTailSequence: thread.tailSequence,
+                actualTailDigest: thread.tailDigest,
+              }),
+            },
+            current,
+          ];
+        }
+        if (thread.records.length + request.batch.records.length > MAX_RECORDS_PER_THREAD) {
+          return [
+            {
+              _tag: "failure",
+              error: storeError(
+                "append",
+                `In-memory record limit ${MAX_RECORDS_PER_THREAD} exceeded`,
+              ),
+            },
+            current,
+          ];
+        }
 
-            const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
+        const batchRecordIds = new Set<RecordId>();
 
-            const result = AppendResult.make({
-              firstSequence: decodeCanonicalSequence(thread.tailSequence + 1),
-              lastSequence,
-              tailDigest: digest,
-              replayed: false,
-            });
+        for (const record of request.batch.records) {
+          if (thread.recordIds.has(record.recordId) || batchRecordIds.has(record.recordId)) {
+            return [
+              {
+                _tag: "failure",
+                error: AppendConflict.make({
+                  threadId: request.threadId,
+                  batchId: request.batch.batchId,
+                  reason: "record-identity",
+                }),
+              },
+              current,
+            ];
+          }
+          batchRecordIds.add(record.recordId);
+        }
 
-            const batches = new Map(thread.batches);
+        const records = request.batch.records.map((record, index) => {
+          const sequence = decodeCanonicalSequence(thread.tailSequence + index + 1);
 
-            batches.set(request.batch.batchId, { digest, result });
-            const recordIds = new Set(thread.recordIds);
+          return CanonicalRecordEnvelope.make({
+            threadId: request.threadId,
+            batchId: request.batch.batchId,
+            sequence,
+            offset: observationOffset(request.threadId, sequence),
+            record,
+          });
+        });
 
-            for (const recordId of batchRecordIds) recordIds.add(recordId);
-            const tailDigests = new Map(thread.tailDigests);
+        const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
 
-            tailDigests.set(lastSequence, digest);
-            const threads = new Map(current.threads);
+        const result = AppendResult.make({
+          firstSequence: decodeCanonicalSequence(thread.tailSequence + 1),
+          lastSequence,
+          tailDigest: digest,
+          replayed: false,
+        });
 
-            const unverifiedWorkerInputs = new Set(thread.unverifiedWorkerInputs);
-            let peerCount = thread.peerCount;
-            const workerRecords = new Map(thread.workerRecords);
-            const byId = new Map(thread.byId);
-            const runInputs = new Map(thread.runInputs);
-            const outstanding = new Map(thread.outstanding);
+        const batches = new Map(thread.batches);
 
-            for (const entry of records) {
-              byId.set(entry.record.recordId, entry);
-              const payload = entry.record.payload;
+        batches.set(request.batch.batchId, { digest, result });
+        const recordIds = new Set(thread.recordIds);
 
-              if (payload._tag === "PeerMessagePrepared") peerCount++;
-              if (
-                (payload._tag === "UserInputRecorded" || payload._tag === "RunStarted") &&
-                payload.runId !== undefined
-              )
-                workerRecords.set(`execution:${payload._tag}`, [entry]);
+        for (const recordId of batchRecordIds) recordIds.add(recordId);
+        const tailDigests = new Map(thread.tailDigests);
 
-              const workerKey =
-                payload._tag === "SubtreeBudgetReserved"
-                  ? `subtree:${payload.sourceSubmissionId ?? ""}`
-                  : payload._tag === "SubagentJoined"
-                    ? `joined:${payload.runId}`
-                    : [
-                          "ThreadCreated",
-                          "WorkerOriginRecorded",
-                          "SubagentLineageRecorded",
-                          "WorkerInputRequested",
-                          "WorkerInputCompleted",
-                          "WorkerStopRequested",
-                        ].includes(payload._tag)
-                      ? "worker"
-                      : undefined;
+        tailDigests.set(lastSequence, digest);
+        const threads = new Map(current.threads);
 
-              if (workerKey !== undefined)
-                workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
+        let peerCount = thread.peerCount;
+        const workerRecords = new Map(thread.workerRecords);
+        const byId = new Map(thread.byId);
+        const runInputs = new Map(thread.runInputs);
 
-              if (
-                payload._tag === "UserInputRecorded" &&
-                payload.kind === "user" &&
-                payload.runId !== undefined
-              )
-                runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
-              if (
-                payload._tag === "ToolCallPrepared" ||
-                payload._tag === "ToolCallUnknown" ||
-                payload._tag === "ToolCallSettled"
-              ) {
-                const key = JSON.stringify([payload.runId, payload.toolCallId]);
+        for (const entry of records) {
+          byId.set(entry.record.recordId, entry);
+          const payload = entry.record.payload;
 
-                if (payload._tag === "ToolCallSettled") outstanding.delete(key);
-                else
-                  outstanding.set(key, [
-                    ...(outstanding.get(key) ?? []).filter(
-                      (prior) =>
-                        payload._tag !== "ToolCallUnknown" ||
-                        prior.record.payload._tag !== "ToolCallPrepared",
-                    ),
-                    entry,
-                  ]);
-              }
-              if (payload._tag === "WorkerInputRequested")
-                outstanding.set(`worker:${payload.admission.messageId}`, [
-                  ...(outstanding.get(`worker:${payload.admission.messageId}`) ?? []),
-                  entry,
-                ]);
-              if (payload._tag === "WorkerInputCompleted") {
-                if (payload.effectsResolved) {
-                  outstanding.delete(`worker:${payload.messageId}`);
-                  unverifiedWorkerInputs.delete(payload.messageId);
-                } else unverifiedWorkerInputs.add(payload.messageId);
-              }
-            }
-            threads.set(request.threadId, {
-              ...thread,
-              byId,
-              workerRecords,
-              peerCount,
-              runInputs,
-              outstanding,
-              unverifiedWorkerInputs,
-              tailSequence: lastSequence,
-              tailDigest: digest,
-              records: [...thread.records, ...records],
-              recordIds,
-              batches,
-              tailDigests,
-            });
+          if (payload._tag === "PeerMessagePrepared") peerCount++;
+          if (
+            (payload._tag === "UserInputRecorded" || payload._tag === "RunStarted") &&
+            payload.runId !== undefined
+          )
+            workerRecords.set(`execution:${payload._tag}`, [entry]);
 
-            return [{ _tag: "success", result, records }, { threads }];
-          }).pipe(
-            Effect.tap((decision) =>
-              decision._tag === "success" && decision.records.length > 0
-                ? PubSub.publish(updates, undefined)
-                : Effect.void,
-            ),
-          ),
-        );
+          const workerKey =
+            payload._tag === "SubtreeBudgetReserved"
+              ? `subtree:${payload.sourceSubmissionId ?? ""}`
+              : payload._tag === "SubagentJoined"
+                ? `joined:${payload.runId}`
+                : [
+                      "ThreadCreated",
+                      "WorkerOriginRecorded",
+                      "SubagentLineageRecorded",
+                      "WorkerInputRequested",
+                      "WorkerInputCompleted",
+                      "WorkerStopRequested",
+                    ].includes(payload._tag)
+                  ? "worker"
+                  : undefined;
 
-        if (decision._tag === "failure") return yield* decision.error;
+          if (workerKey !== undefined)
+            workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
 
-        return decision.result;
-      }),
+          if (
+            payload._tag === "UserInputRecorded" &&
+            payload.kind === "user" &&
+            payload.runId !== undefined
+          )
+            runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
+        }
+        threads.set(request.threadId, {
+          ...thread,
+          byId,
+          workerRecords,
+          peerCount,
+          runInputs,
+          tailSequence: lastSequence,
+          tailDigest: digest,
+          records: [...thread.records, ...records],
+          recordIds,
+          batches,
+          tailDigests,
+        });
+
+        return [{ _tag: "success", result, records }, { threads }];
+      }).pipe(
+        Effect.tap((decision) =>
+          decision._tag === "success" && decision.records.length > 0
+            ? PubSub.publish(updates, undefined)
+            : Effect.void,
+        ),
+      ),
+    );
+
+    if (decision._tag === "failure") return yield* decision.error;
+
+    return decision.result;
+  });
+
+  const append: ThreadStore["Service"]["append"] = Effect.fn("MemoryThreadStore.append")(
+    (request) =>
+      prepareAppend(request).pipe(
+        Effect.flatMap((prepared) => withMutation(appendPrepared(prepared))),
+      ),
   );
 
   const countPeerMessages: NonNullable<ThreadStore["Service"]["countPeerMessages"]> =
@@ -568,11 +563,6 @@ const makeThreadStore = Effect.gen(function* () {
               records = input === undefined ? [] : [input];
               break;
             }
-            case "Outstanding":
-              if (thread.unverifiedWorkerInputs.size > 0)
-                return yield* storeError("selected read", "Unverified worker acknowledgement");
-              records = [...thread.outstanding.values()].flat();
-              break;
             case "WorkerExecution":
               records = ["UserInputRecorded", "RunStarted"].flatMap(
                 (tag) => thread.workerRecords.get(`execution:${tag}`) ?? [],
@@ -920,25 +910,43 @@ const makeThreadStore = Effect.gen(function* () {
     return Option.some(checkpoint);
   });
 
-  return ThreadStore.of({
+  const threadStore = ThreadStore.of({
     readIdentity,
     countPeerMessages,
-    materialize,
+    materialize: (request) => withMutation(materialize(request)),
     append,
     read,
     observe,
     export: exportThread,
     inspectTail,
-    checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
-    recoveryCheckpoints: { save: saveRecoveryCheckpoint, load: loadRecoveryCheckpoint },
+    checkpoints: { save: (request) => withMutation(saveCheckpoint(request)), load: loadCheckpoint },
+    recoveryCheckpoints: {
+      save: (request) => withMutation(saveRecoveryCheckpoint(request)),
+      load: loadRecoveryCheckpoint,
+    },
   });
+
+  return Context.make(ThreadStore, threadStore).pipe(
+    Context.add(MemoryThreadStoreKernel, {
+      withMutation,
+      prepareAppend,
+      appendPrepared,
+      record: (threadId, recordId) =>
+        Ref.get(state).pipe(
+          Effect.map((current) => current.threads.get(threadId)?.byId.get(recordId)?.record),
+        ),
+      tail: (threadId) => inspectTail(ThreadTailRequest.make({ threadId })),
+    }),
+  );
 });
 
 /**
  * In-memory canonical Thread persistence. Durable accepted work is served by the separate
- * SubmissionLedger port; this Layer deliberately provides only the ThreadStore.
+ * SubmissionLedger port; this Layer provides ThreadStore and its ThreadReader.
  */
-export const MemoryThreadStoreLive = Layer.effect(ThreadStore, makeThreadStore);
+export const MemoryThreadStoreLive = ThreadReader.layer().pipe(
+  Layer.provideMerge(Layer.effectContext(makeThreadStore)),
+);
 
 /** Configure a finite retained Thread capacity. Invalid construction options throw immediately. */
 export const memoryThreadStoreLayer = (options: { readonly maxThreads?: number } = {}) =>

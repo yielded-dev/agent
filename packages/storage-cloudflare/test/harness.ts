@@ -1,5 +1,6 @@
 import { digestJson } from "@yielded/agent/digest";
 import {
+  CanonicalBatch,
   CanonicalSequence,
   DefinitionDigests,
   DeploymentId,
@@ -12,18 +13,23 @@ import {
   type PersistedJson,
   type SettlementOutcome,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { SettlementPublication } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionRequest,
   ApprovalDecisionCommand,
+  SubmissionLedger,
+  RecoverySnapshotRequest,
   IdempotencyKey,
   Principal,
-  SettlementReservation,
   submissionSettlementId,
+  submissionSettlementBatchId,
   submissionSettlementRecordId,
   type AdmissionResult,
   type OwnershipToken,
   type ParentLinkage,
 } from "@yielded/agent/submission-ledger";
+import { ThreadStore, ThreadTailRequest, FencedAppendRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { DateTime, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -111,7 +117,7 @@ export const admission = Effect.fn("DoLedgerTest.admission")(function* (
   });
 });
 
-export const settlementReservation = Effect.fn("DoLedgerTest.settlementReservation")(function* (
+export const settlementPublication = Effect.fn("DoLedgerTest.settlementPublication")(function* (
   admitted: AdmissionResult,
   ownershipToken: OwnershipToken,
   outcome: SettlementOutcome,
@@ -124,6 +130,7 @@ export const settlementReservation = Effect.fn("DoLedgerTest.settlementReservati
       settlementId,
       receiptId: admitted.receiptId,
       outcome,
+      runId: runIdForSubmission(admitted.submissionId),
       ...(outcome === "failed"
         ? {
             result: {
@@ -144,15 +151,31 @@ export const settlementReservation = Effect.fn("DoLedgerTest.settlementReservati
     payload,
   });
 
-  const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
-  const recordDigest = yield* digestJson(encoded);
+  const store = yield* ThreadStore;
 
-  return SettlementReservation.make({
-    submissionId: admitted.submissionId,
-    ownershipToken,
+  const snapshot = yield* (yield* SubmissionLedger).loadRecoverySnapshot(
+    RecoverySnapshotRequest.make({ submissionId: admitted.submissionId }),
+  );
+
+  const threadId = snapshot.submission.threadId;
+  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+  return {
     settlementId,
-    outcome,
-    record,
-    recordDigest,
-  });
+    request: SettlementPublication.make({
+      submissionId: admitted.submissionId,
+      authority: { _tag: "Owned", ownershipToken },
+      append: FencedAppendRequest.make({
+        threadId,
+        producerEpoch: tail.producerEpoch,
+        expectedTailSequence: tail.tailSequence,
+        expectedTailDigest: tail.tailDigest,
+        batch: CanonicalBatch.make({
+          producerId: TEST_PRODUCER,
+          batchId: submissionSettlementBatchId(admitted.submissionId),
+          records: [record],
+        }),
+      }),
+    }),
+  };
 });

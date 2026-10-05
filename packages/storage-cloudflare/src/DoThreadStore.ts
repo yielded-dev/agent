@@ -27,6 +27,7 @@ import {
   ThreadObservation,
   ThreadReadRequest,
   ThreadStore,
+  ThreadReader,
   type ThreadCheckpoints,
   ThreadStoreError,
   ThreadStoreDiagnostic,
@@ -34,6 +35,7 @@ import {
   ThreadTailRequest,
   FenceRejected,
   FencedAppendRequest,
+  PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   SaveRecoveryCheckpointRequest,
@@ -69,9 +71,9 @@ import {
   DoStorageError,
 } from "./DoStorageError.ts";
 import { DoStorageFailpoint, type DoStorageFailpointHandler } from "./DoStorageFailpoint.ts";
+import { prepareCanonicalAppend } from "./internal/canonical-append.ts";
 import {
   initializeDoJournal,
-  RawAppendRequest,
   RawCheckpoint,
   RawReadRequest,
   type DoJournal,
@@ -121,7 +123,6 @@ const isDoCheckpointConflict = Schema.is(DoCheckpointConflict);
 // Reuse the same AST/parser across reads. Reconstructing a JSON codec per row
 // defeats Schema's parser cache and repeatedly walks the canonical union.
 const CanonicalRecordJson = Schema.fromJsonString(CanonicalRecord);
-const CanonicalBatchJson = Schema.fromJsonString(CanonicalBatch);
 const ThreadCheckpointJson = Schema.fromJsonString(ThreadCheckpoint);
 const decodeCanonicalRecord = Schema.decodeEffect(CanonicalRecordJson);
 
@@ -199,22 +200,6 @@ const mapFence = (threadId: ThreadMaterialization["threadId"], error: DoFenceRej
     actualEpoch: error.actualEpoch,
     attemptedEpoch: error.producerEpoch,
   });
-
-const encodeCanonicalRecord = Effect.fn(function* (
-  record: CanonicalRecord,
-): Effect.fn.Return<string, ThreadStoreError> {
-  return yield* Schema.encodeEffect(CanonicalRecordJson)(record).pipe(
-    Effect.mapError((error) => schemaStoreError("encode canonical record", error)),
-  );
-});
-
-const encodeCanonicalBatch = Effect.fn(function* (
-  batch: CanonicalBatch,
-): Effect.fn.Return<string, ThreadStoreError> {
-  return yield* Schema.encodeEffect(CanonicalBatchJson)(batch).pipe(
-    Effect.mapError((error) => schemaStoreError("encode canonical batch", error)),
-  );
-});
 
 const encodeCheckpoint = Effect.fn(function* (
   checkpoint: ThreadCheckpoint,
@@ -554,9 +539,6 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
     yield* decodeStartupPayloads(journal, crypto);
   }
 
-  const provideCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
-
   const hitFailpoint = Effect.fn(
     (location: DoStorageFailpointLocation): Effect.Effect<void, ThreadStoreError> =>
       failpoint
@@ -594,38 +576,16 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
 
   const append: ThreadStore["Service"]["append"] = Effect.fnUntraced(
     function* (request: FencedAppendRequest) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate canonical append", error)));
-
-      const observed = yield* requireThread(journal, validated.threadId);
-
-      const tailDigest = yield* provideCrypto(
-        digestCanonicalBatch(validated.expectedTailDigest, validated.batch),
-      ).pipe(Effect.mapError((error) => storeError("digest canonical append", error)));
-
-      const batchJson = yield* encodeCanonicalBatch(validated.batch);
-
-      const rawRecords = yield* Effect.forEach(validated.batch.records, (record) =>
-        encodeCanonicalRecord(record).pipe(
-          Effect.map((recordJson) => ({
-            recordId: record.recordId,
-            recordJson,
-          })),
-        ),
+      const checked = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
+        Effect.mapError((error) => schemaStoreError("validate canonical append", error)),
       );
 
-      const rawRequest = yield* Schema.decodeEffect(RawAppendRequest)({
-        threadId: validated.threadId,
-        batchId: validated.batch.batchId,
-        batchDigest: tailDigest,
-        batchJson,
-        expectedTailSequence: validated.expectedTailSequence,
-        expectedTailDigest: validated.expectedTailDigest,
-        producerEpoch: validated.producerEpoch,
-        records: rawRecords,
-        tailDigest,
-      }).pipe(Effect.mapError((error) => schemaStoreError("encode canonical append", error)));
+      const validated = yield* PreparedAppend.capture(checked);
+      const observed = yield* requireThread(journal, validated.threadId);
+
+      const { raw: rawRequest } = yield* prepareCanonicalAppend(validated).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
 
       yield* hitFailpoint("append:before");
 
@@ -1045,10 +1005,10 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
  * Crypto authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore,
+  ThreadStore | ThreadReader,
   DoStorageInitializationError,
   DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
-> = Layer.effectContext(makeServices());
+> = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
 
 /**
  * Validated Durable Object storage configuration Layer with the documented defaults applied.
@@ -1092,7 +1052,7 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: DoStorageOptions,
-): Layer.Layer<ThreadStore, DoStorageInitializationError> =>
+): Layer.Layer<ThreadStore | ThreadReader, DoStorageInitializationError> =>
   Layer.unwrap(
     Effect.map(DoStorageConfig, (config) =>
       threadStoreLayer.pipe(

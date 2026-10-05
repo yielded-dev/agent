@@ -14,6 +14,7 @@ import * as Output from "@yielded/agent/output";
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { projectRunJournal, runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
@@ -25,11 +26,10 @@ import { LanguageModel, Model, Prompt, type Response, Tool, Toolkit } from "effe
 const digest = Digest.make("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
 
-const testLayer = DurableAgentRuntime.layer.pipe(
+const testLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      MemorySubmissionLedgerLive,
-      MemoryThreadStoreLive,
+      MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
       WakeScheduler.layerNoop,
       ToolReconciler.uncertain,
       RunToolAuthorization.allowAll,

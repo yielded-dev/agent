@@ -14,11 +14,13 @@ import {
 import { WorkerCompletion, WorkerUpdate } from "../core/Worker.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
 import {
+  CanonicalBatch,
   CanonicalSequence,
   DefinitionDigests,
   DeploymentId,
   Digest,
   ProducerId,
+  ProducerEpoch,
   RecordEnvelope,
   SubmissionSettled,
   SubmissionSettledRecord,
@@ -27,6 +29,12 @@ import {
   type SettlementFailureDiagnostic,
 } from "./Records.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
+import {
+  SettlementPublication,
+  SettlementPublisher,
+  type SettlementPublicationAuthority,
+  type SettlementPublicationFailure,
+} from "./SettlementPublisher.ts";
 import {
   type AdmissionResult,
   AbortCommand,
@@ -68,7 +76,6 @@ import {
   SettlementConflict,
   Settlement,
   SettlementFinalization,
-  SettlementReservation,
   SubmissionLedger,
   SubmissionLookupById,
   SubmissionLookupByKey,
@@ -78,10 +85,19 @@ import {
   WaitingChild,
   WaitingForChildSuspension,
   submissionInputRecordId,
+  submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
   type SubmissionLedgerFailure,
 } from "./SubmissionLedger.ts";
+import {
+  FencedAppendRequest,
+  ThreadMaterialization,
+  ThreadReader,
+  ThreadStore,
+  ThreadTailRequest,
+  getRecord,
+} from "./ThreadStore.ts";
 
 /** A SubmissionLedger contract invariant that an adapter under test violated. */
 export class SubmissionLedgerConformanceViolation extends Schema.TaggedError<SubmissionLedgerConformanceViolation>()(
@@ -94,22 +110,24 @@ export class SubmissionLedgerConformanceViolation extends Schema.TaggedError<Sub
 
 export type SubmissionLedgerConformanceFailure =
   | SubmissionLedgerFailure
+  | SettlementPublicationFailure
   | DigestError
   | SubmissionLedgerConformanceViolation;
 
 /**
  * One adapter-neutral SubmissionLedger contract case. Each case owns disjoint Thread
- * lanes, so a suite may run every case against one shared ledger instance or against a fresh
- * ledger per case. Cases drive lease expiry through `TestClock`, so they must run inside the
+ * lanes, so a suite may run every case against one shared storage owner or a fresh
+ * owner per case. Cases drive lease expiry through `TestClock`, so they must run inside the
  * `@effect/vitest` test environment (`it.effect`), and they compute real content digests, so the
- * host suite must provide `Crypto.Crypto`.
+ * host suite must provide `Crypto.Crypto` and the same owner's `ThreadStore` and
+ * `SettlementPublisher`.
  */
 export interface SubmissionLedgerConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<
     void,
     SubmissionLedgerConformanceFailure,
-    SubmissionLedger | Crypto.Crypto
+    SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto
   >;
 }
 
@@ -192,7 +210,17 @@ const claimLane = Effect.fn("SubmissionLedgerConformance.claimLane")(function* (
 ) {
   const ledger = yield* SubmissionLedger;
 
-  return yield* ledger.claim(ClaimRequest.make({ threadId, producerId }));
+  const claimed = yield* ledger.claim(ClaimRequest.make({ threadId, producerId }));
+
+  if (Option.isSome(claimed)) {
+    const store = yield* ThreadStore;
+
+    yield* store.materialize(
+      ThreadMaterialization.make({ threadId, producerEpoch: claimed.value.producerEpoch }),
+    );
+  }
+
+  return claimed;
 });
 
 const lookupById = Effect.fn("SubmissionLedgerConformance.lookupById")(function* (
@@ -211,69 +239,117 @@ const recoverySnapshot = Effect.fn("SubmissionLedgerConformance.recoverySnapshot
   return yield* ledger.loadRecoverySnapshot(RecoverySnapshotRequest.make({ submissionId }));
 });
 
-interface ReservationIdentity {
+const readSettlementRecord = Effect.fn("SubmissionLedgerConformance.readSettlementRecord")(
+  function* (threadId: ThreadId, submissionId: SubmissionId) {
+    const store = yield* ThreadStore;
+
+    return yield* getRecord({
+      threadId,
+      recordId: submissionSettlementRecordId(submissionId),
+    }).pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(store)));
+  },
+);
+
+interface PublicationIdentity {
   readonly submissionId: SubmissionId;
-  readonly ownershipToken: OwnershipToken;
+  readonly authority: SettlementPublicationAuthority;
   readonly receiptId: ReceiptId;
 }
 
-type ReservationOptions = ReservationIdentity &
+type PublicationOptions = PublicationIdentity &
   (
-    | {
-        readonly outcome: "completed";
-        readonly result?: PersistedJson;
-      }
-    | {
-        readonly outcome: "failed";
-        readonly result: SettlementFailureDiagnostic;
-      }
-    | {
-        readonly outcome: "aborted";
-        readonly result?: never;
-      }
+    | { readonly outcome: "completed"; readonly result?: PersistedJson }
+    | { readonly outcome: "failed"; readonly result: SettlementFailureDiagnostic }
+    | { readonly outcome: "aborted"; readonly result?: never }
   );
 
-/**
- * Builds a complete, deterministic settlement reservation: the exact canonical envelope that
- * would be appended (DUR-011) plus the digest of its canonical JSON encoding. Two calls with the
- * same options produce byte-identical content, so replays are honest reservation replays.
- */
-const settlementReservation = Effect.fn("SubmissionLedgerConformance.settlementReservation")(
-  function* (options: ReservationOptions) {
-    const settlementId = submissionSettlementId(options.submissionId);
+/** Build a real fenced request from the same storage owner's current canonical tail. */
+const publicationForRecord = Effect.fn("SubmissionLedgerConformance.publicationForRecord")(
+  function* (
+    submissionId: SubmissionId,
+    authority: SettlementPublicationAuthority,
+    record: RecordEnvelope,
+  ) {
+    const store = yield* ThreadStore;
+    const found = yield* lookupById(submissionId);
 
+    if (Option.isNone(found))
+      return yield* LedgerError.make({
+        operation: "conformance publication",
+        message: "Unknown Submission",
+      });
+    const threadId = found.value.threadId;
+
+    const tail = yield* store
+      .inspectTail(ThreadTailRequest.make({ threadId }))
+      .pipe(
+        Effect.catchTag("ThreadNotMaterialized", () =>
+          store
+            .materialize(
+              ThreadMaterialization.make({ threadId, producerEpoch: ProducerEpoch.make(0) }),
+            )
+            .pipe(Effect.andThen(store.inspectTail(ThreadTailRequest.make({ threadId })))),
+        ),
+      );
+
+    return SettlementPublication.make({
+      submissionId,
+      authority,
+      append: FencedAppendRequest.make({
+        threadId,
+        producerEpoch: tail.producerEpoch,
+        expectedTailSequence: tail.tailSequence,
+        expectedTailDigest: tail.tailDigest,
+        batch: CanonicalBatch.make({
+          batchId: submissionSettlementBatchId(submissionId),
+          producerId: PRODUCER_A,
+          records: [record],
+        }),
+      }),
+    });
+  },
+);
+
+/** Deterministic canonical settlement candidate; publication itself chooses the immutable winner. */
+const settlementPublication = Effect.fn("SubmissionLedgerConformance.settlementPublication")(
+  function* (options: PublicationOptions) {
     const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
       SubmissionSettled.make({
         submissionId: options.submissionId,
-        settlementId,
+        settlementId: submissionSettlementId(options.submissionId),
         receiptId: options.receiptId,
         outcome: options.outcome,
+        ...(options.authority._tag === "Joined"
+          ? { runId: runIdForSubmission(options.authority.hostSubmissionId) }
+          : options.authority._tag === "Owned"
+            ? { runId: runIdForSubmission(options.submissionId) }
+            : {}),
         ...(options.result === undefined ? {} : { result: options.result }),
       }),
     ).pipe(Effect.orDie);
 
-    const record = RecordEnvelope.make({
-      recordId: submissionSettlementRecordId(options.submissionId),
-      family: "thread",
-      schemaVersion: 1,
-      createdAt: CONFORMANCE_CREATED_AT,
-      deploymentId: CONFORMANCE_DEPLOYMENT,
-      payload,
-    });
-
-    const encoded = yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie);
-    const recordDigest = yield* digestJson(encoded);
-
-    return SettlementReservation.make({
-      submissionId: options.submissionId,
-      ownershipToken: options.ownershipToken,
-      settlementId,
-      outcome: options.outcome,
-      record,
-      recordDigest,
-    });
+    return yield* publicationForRecord(
+      options.submissionId,
+      options.authority,
+      RecordEnvelope.make({
+        recordId: submissionSettlementRecordId(options.submissionId),
+        family: "thread",
+        schemaVersion: 1,
+        createdAt: CONFORMANCE_CREATED_AT,
+        deploymentId: CONFORMANCE_DEPLOYMENT,
+        payload,
+      }),
+    );
   },
 );
+
+const publishSettlement = Effect.fn("SubmissionLedgerConformance.publishSettlement")(function* (
+  request: SettlementPublication,
+) {
+  return yield* (yield* SettlementPublisher).publish(request);
+});
+
+const recordEquivalent = Schema.toEquivalence(RecordEnvelope);
 
 const settleClaimed = Effect.fn("SubmissionLedgerConformance.settleClaimed")(function* (
   admitted: AdmissionResult,
@@ -281,14 +357,14 @@ const settleClaimed = Effect.fn("SubmissionLedgerConformance.settleClaimed")(fun
 ) {
   const ledger = yield* SubmissionLedger;
 
-  const reservation = yield* settlementReservation({
+  const publication = yield* settlementPublication({
     submissionId: admitted.submissionId,
-    ownershipToken,
+    authority: { _tag: "Owned", ownershipToken },
     receiptId: admitted.receiptId,
     outcome: "completed",
   });
 
-  yield* ledger.reserveSettlement(reservation);
+  yield* publishSettlement(publication);
 
   return yield* ledger.finalizeSettlement(
     SettlementFinalization.make({
@@ -323,7 +399,11 @@ const conformanceCase = (
       description: string,
       option: Option.Option<A>,
     ) => Effect.Effect<A, SubmissionLedgerConformanceViolation>;
-  }) => Effect.Effect<void, SubmissionLedgerConformanceFailure, SubmissionLedger | Crypto.Crypto>,
+  }) => Effect.Effect<
+    void,
+    SubmissionLedgerConformanceFailure,
+    SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto
+  >,
 ): SubmissionLedgerConformanceCase => ({
   name,
   run: build({
@@ -410,7 +490,7 @@ const admissionGroupRace = conformanceCase(
 );
 
 const admissionGroupSettlement = conformanceCase(
-  "retains group capacity through terminalizing and permits exact replay",
+  "retains group capacity until finalization and permits exact replay",
   ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const ledger = yield* SubmissionLedger;
@@ -436,15 +516,22 @@ const admissionGroupSettlement = conformanceCase(
       yield* ledger.markReady(MarkReadyRequest.make({ submissionId: first.submissionId }));
       const claim = yield* expectSome("claimed group head", yield* claimLane(threadId, PRODUCER_A));
 
-      yield* ledger.reserveSettlement(
-        yield* settlementReservation({
+      yield* publishSettlement(
+        yield* settlementPublication({
           submissionId: first.submissionId,
           receiptId: first.receiptId,
-          ownershipToken: claim.ownershipToken,
+          authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
           outcome: "completed",
         }),
       );
-      yield* expectFailure("terminalizing group", ledger.admit(successor));
+
+      const published = yield* expectSome(
+        "group snapshot after publication",
+        yield* lookupById(first.submissionId),
+      );
+
+      if (published.state !== "settled")
+        yield* expectFailure("published but unfinalized group", ledger.admit(successor));
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: first.submissionId,
@@ -453,7 +540,7 @@ const admissionGroupSettlement = conformanceCase(
       );
       yield* ensure(
         !(yield* ledger.admit(successor)).replayed,
-        "Only canonical settlement releases group capacity",
+        "Only finalized settlement releases group capacity",
       );
     }),
 );
@@ -1394,27 +1481,25 @@ const leaseExpiryReclaim = conformanceCase(
         "A superseded token must not mark canonical input applied",
       );
 
-      const staleReservation = yield* settlementReservation({
+      const stalePublication = yield* settlementPublication({
         submissionId: admitted.submissionId,
-        ownershipToken: liveToken,
+        authority: { _tag: "Owned", ownershipToken: liveToken },
         receiptId: admitted.receiptId,
         outcome: "completed",
       });
 
-      const staleReserve = yield* expectFailure(
-        "reserving a settlement with the superseded token",
-        ledger.reserveSettlement(staleReservation),
+      const stalePublicationFailure = yield* expectFailure(
+        "publishing a settlement with the superseded token",
+        publishSettlement(stalePublication),
       );
 
       yield* ensure(
-        isOwnershipLost(staleReserve),
-        "A superseded token must not reserve a settlement",
+        isOwnershipLost(stalePublicationFailure),
+        "A superseded token must not publish a settlement",
       );
-      const afterStale = yield* recoverySnapshot(admitted.submissionId);
-
       yield* ensure(
-        afterStale.reservation === undefined,
-        "A fenced settlement reservation must leave no reservation behind",
+        Option.isNone(yield* readSettlementRecord(threadId, admitted.submissionId)),
+        "A fenced publication must leave no canonical settlement behind",
       );
 
       yield* ledger.renewOwnership(
@@ -1573,67 +1658,97 @@ const inputAppliedIdempotency = conformanceCase(
 );
 
 const settlementLifecycle = conformanceCase(
-  "reserves and finalizes exactly one settlement with idempotent replays",
-  ({ ensure, expectSome }) =>
+  "publishes and finalizes exactly one canonical settlement with idempotent replays",
+  ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const threadId = decodeThreadId("ledger-conformance-settle");
       const ledger = yield* SubmissionLedger;
       const admitted = yield* admitReady(threadId, "settle-key-1", { work: "settle" });
 
       const claim = yield* expectSome(
-        "the claim before terminalization",
+        "the claim before publication",
         yield* claimLane(threadId, PRODUCER_A),
       );
 
-      const reservation = yield* settlementReservation({
+      const publication = yield* settlementPublication({
         submissionId: admitted.submissionId,
-        ownershipToken: claim.ownershipToken,
+        authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
         receiptId: admitted.receiptId,
         outcome: "completed",
         result: { answer: 42 },
       });
 
-      const reserved = yield* ledger.reserveSettlement(reservation);
+      const finalization = SettlementFinalization.make({
+        submissionId: admitted.submissionId,
+        settlementId: submissionSettlementId(admitted.submissionId),
+      });
 
       yield* ensure(
-        !reserved.replayed &&
-          reserved.settlementId === reservation.settlementId &&
-          reserved.outcome === "completed" &&
-          reserved.recordDigest === reservation.recordDigest,
-        "The first reservation must commit the exact reserved record without replay",
+        isLedgerError(
+          yield* expectFailure(
+            "finalization without canonical publication",
+            ledger.finalizeSettlement(finalization),
+          ),
+        ),
+        "A ledger marker alone cannot authorize finalization",
+      );
+      const published = yield* publishSettlement(publication);
+
+      yield* ensure(
+        !published.replayed &&
+          recordEquivalent(published.record, publication.append.batch.records[0]),
+        "First publication must commit the exact canonical record without replay",
       );
 
-      const terminalizing = yield* expectSome(
-        "lookup after reservation",
+      const canonical = yield* expectSome(
+        "the published canonical settlement",
+        yield* readSettlementRecord(threadId, admitted.submissionId),
+      );
+
+      yield* ensure(
+        recordEquivalent(canonical.record, published.record),
+        "Publication must be visible in the real canonical ThreadStore",
+      );
+
+      const pending = yield* expectSome(
+        "lookup after publication",
         yield* lookupById(admitted.submissionId),
       );
 
       yield* ensure(
-        terminalizing.state === "terminalizing",
-        "Reserving a settlement must transition the Submission to terminalizing",
+        pending.state === "running" ||
+          (pending.state === "settled" && pending.settledOutcome === "completed"),
+        "Canonical publication may atomically finalize the same outcome",
       );
+      if (pending.state === "settled")
+        yield* ensure(
+          isOwnershipLost(
+            yield* expectFailure(
+              "Owned replay after atomic finalization",
+              publishSettlement(publication),
+            ),
+          ),
+          "Atomic finalization releases authority; recover its acknowledgement through finalization",
+        );
+      else {
+        const replayed = yield* publishSettlement(publication);
 
-      const replayedReservation = yield* ledger.reserveSettlement(reservation);
-
-      yield* ensure(
-        replayedReservation.replayed &&
-          replayedReservation.recordDigest === reservation.recordDigest,
-        "An identical reservation must replay with the stored exact record",
-      );
-
-      const finalization = SettlementFinalization.make({
-        submissionId: admitted.submissionId,
-        settlementId: reservation.settlementId,
-      });
-
+        yield* ensure(
+          replayed.replayed &&
+            recordEquivalent(replayed.record, published.record) &&
+            replayed.tailSequence === published.tailSequence &&
+            replayed.tailDigest === published.tailDigest,
+          "Authorized publication replay must return the immutable winner and current canonical tail",
+        );
+      }
       const settlement = yield* ledger.finalizeSettlement(finalization);
 
       yield* ensure(
         settlement.submissionId === admitted.submissionId &&
-          settlement.settlementId === reservation.settlementId &&
+          settlement.settlementId === finalization.settlementId &&
           settlement.receiptId === admitted.receiptId &&
           settlement.outcome === "completed",
-        "Finalization must return the Settlement bound to the admission Receipt",
+        "Finalization must return the canonical Settlement bound to the admission Receipt",
       );
 
       const settled = yield* expectSome(
@@ -1643,18 +1758,15 @@ const settlementLifecycle = conformanceCase(
 
       yield* ensure(
         settled.state === "settled" && settled.settledOutcome === "completed",
-        "Finalization must settle the Submission with its recorded outcome",
+        "Finalization must project the canonical outcome",
       );
-
       yield* TestClock.adjust("1 second");
       const retried = yield* ledger.finalizeSettlement(finalization);
 
       yield* ensure(
-        retried.settlementId === settlement.settlementId &&
-          retried.receiptId === settlement.receiptId &&
-          retried.outcome === settlement.outcome &&
+        Schema.toEquivalence(Settlement)(retried, settlement) &&
           sameInstant(retried.settledAt, settlement.settledAt),
-        "Retrying finalization after a lost acknowledgment must return the same Settlement",
+        "Retrying finalization after a lost acknowledgment must retain the same Settlement and timestamp",
       );
       yield* ensure(
         Option.isNone(yield* claimLane(threadId, PRODUCER_B)),
@@ -1666,58 +1778,48 @@ const settlementLifecycle = conformanceCase(
         message: "The conformance Submission failed",
       } as const;
 
-      const failedAdmission = yield* admitReady(threadId, "settle-key-2", {
-        work: "fail",
-      });
+      const failedAdmission = yield* admitReady(threadId, "settle-key-2", { work: "fail" });
 
       const failedClaim = yield* expectSome(
-        "the claim before failed terminalization",
+        "the failed settlement claim",
         yield* claimLane(threadId, PRODUCER_A),
       );
 
-      const failedReservation = yield* settlementReservation({
-        submissionId: failedAdmission.submissionId,
-        ownershipToken: failedClaim.ownershipToken,
-        receiptId: failedAdmission.receiptId,
-        outcome: "failed",
-        result: failedDiagnostic,
-      });
-
-      yield* ledger.reserveSettlement(failedReservation);
-
-      const failedSettlement = yield* ledger.finalizeSettlement(
-        SettlementFinalization.make({
+      yield* publishSettlement(
+        yield* settlementPublication({
           submissionId: failedAdmission.submissionId,
-          settlementId: failedReservation.settlementId,
+          authority: { _tag: "Owned", ownershipToken: failedClaim.ownershipToken },
+          receiptId: failedAdmission.receiptId,
+          outcome: "failed",
+          result: failedDiagnostic,
         }),
       );
+
+      const failedFinalization = SettlementFinalization.make({
+        submissionId: failedAdmission.submissionId,
+        settlementId: submissionSettlementId(failedAdmission.submissionId),
+      });
+
+      const failedSettlement = yield* ledger.finalizeSettlement(failedFinalization);
 
       yield* ensure(
         failedSettlement.outcome === "failed" &&
           failedSettlement.failure?.errorTag === failedDiagnostic.errorTag &&
           failedSettlement.failure.message === failedDiagnostic.message,
-        "A failed finalization must return the exact bounded canonical diagnostic",
+        "Failed finalization must return the exact canonical diagnostic",
       );
       yield* TestClock.adjust("1 second");
-
-      const replayedFailedSettlement = yield* ledger.finalizeSettlement(
-        SettlementFinalization.make({
-          submissionId: failedAdmission.submissionId,
-          settlementId: failedReservation.settlementId,
-        }),
-      );
+      const failedReplay = yield* ledger.finalizeSettlement(failedFinalization);
 
       yield* ensure(
-        replayedFailedSettlement.failure?.errorTag === failedDiagnostic.errorTag &&
-          replayedFailedSettlement.failure.message === failedDiagnostic.message &&
-          sameInstant(replayedFailedSettlement.settledAt, failedSettlement.settledAt),
-        "A replayed failed finalization must preserve its diagnostic and original settledAt",
+        Schema.toEquivalence(Settlement)(failedReplay, failedSettlement),
+        "Failed finalization replay must retain the diagnostic and original timestamp",
       );
     }),
 );
 
 const settlementConflicts = conformanceCase(
-  "rejects conflicting settlement reservations and finalizations",
+  "adopts the first canonical settlement and rejects a wrong finalization identity",
   ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const threadId = decodeThreadId("ledger-conformance-settle-conflict");
@@ -1725,61 +1827,72 @@ const settlementConflicts = conformanceCase(
       const admitted = yield* admitReady(threadId, "conflict-key-1", { work: "conflict" });
 
       const claim = yield* expectSome(
-        "the claim before terminalization",
+        "the publication claim",
         yield* claimLane(threadId, PRODUCER_A),
       );
 
-      const reservation = yield* settlementReservation({
-        submissionId: admitted.submissionId,
-        ownershipToken: claim.ownershipToken,
-        receiptId: admitted.receiptId,
-        outcome: "completed",
-        result: { attempt: 1 },
-      });
+      const original = yield* publishSettlement(
+        yield* settlementPublication({
+          submissionId: admitted.submissionId,
+          authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
+          receiptId: admitted.receiptId,
+          outcome: "completed",
+          result: { attempt: 1 },
+        }),
+      );
 
-      yield* ledger.reserveSettlement(reservation);
-
-      const conflictingOutcome = yield* settlementReservation({
-        submissionId: admitted.submissionId,
-        ownershipToken: claim.ownershipToken,
-        receiptId: admitted.receiptId,
-        outcome: "failed",
-        result: {
-          errorTag: "ConformanceFailure",
-          message: "The conflicting conformance reservation failed",
-        },
-      });
-
-      const outcomeConflict = yield* expectFailure(
-        "reserving a different outcome for the same Submission",
-        ledger.reserveSettlement(conflictingOutcome),
+      const changedOutcome = yield* expectFailure(
+        "publication replay with a revoked token",
+        publishSettlement(
+          yield* settlementPublication({
+            submissionId: admitted.submissionId,
+            authority: { _tag: "Owned", ownershipToken: BOGUS_TOKEN },
+            receiptId: admitted.receiptId,
+            outcome: "failed",
+            result: { errorTag: "ConformanceFailure", message: "A later candidate failed" },
+          }),
+        ),
       );
 
       yield* ensure(
-        isSettlementConflict(outcomeConflict) && outcomeConflict.existingOutcome === "completed",
-        "A second reservation with a different outcome must conflict with the recorded outcome",
+        isOwnershipLost(changedOutcome),
+        "An existing canonical winner does not authorize publication with a revoked token",
       );
 
-      const conflictingContent = yield* settlementReservation({
+      const changedPublication = yield* settlementPublication({
         submissionId: admitted.submissionId,
-        ownershipToken: claim.ownershipToken,
+        authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
         receiptId: admitted.receiptId,
         outcome: "completed",
         result: { attempt: 2 },
       });
 
-      const contentConflict = yield* expectFailure(
-        "reserving the same outcome with different canonical content",
-        ledger.reserveSettlement(conflictingContent),
+      const current = yield* expectSome(
+        "the published Submission",
+        yield* lookupById(admitted.submissionId),
       );
 
-      yield* ensure(
-        isSettlementConflict(contentConflict) && contentConflict.existingOutcome === "completed",
-        "A second reservation with different content must conflict even when outcomes match",
-      );
+      if (current.state === "settled")
+        yield* ensure(
+          isOwnershipLost(
+            yield* expectFailure(
+              "changed publication after atomic finalization",
+              publishSettlement(changedPublication),
+            ),
+          ),
+          "The original token must lose authority when publication atomically finalizes",
+        );
+      else {
+        const changedContent = yield* publishSettlement(changedPublication);
+
+        yield* ensure(
+          changedContent.replayed && recordEquivalent(changedContent.record, original.record),
+          "Different authorized candidate content must not replace the immutable canonical record",
+        );
+      }
 
       const wrongFinalization = yield* expectFailure(
-        "finalizing with a settlement identity that was never reserved",
+        "finalizing another settlement identity",
         ledger.finalizeSettlement(
           SettlementFinalization.make({
             submissionId: admitted.submissionId,
@@ -1793,19 +1906,19 @@ const settlementConflicts = conformanceCase(
       yield* ensure(
         isSettlementConflict(wrongFinalization) &&
           wrongFinalization.existingOutcome === "completed",
-        "Finalization disagreeing with the reserved settlement must conflict",
+        "A wrong finalization identity must conflict with canonical intent",
       );
 
       const settlement = yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: admitted.submissionId,
-          settlementId: reservation.settlementId,
+          settlementId: submissionSettlementId(admitted.submissionId),
         }),
       );
 
       yield* ensure(
         settlement.outcome === "completed",
-        "The originally reserved outcome must remain the one that settles",
+        "Finalization must retain the first canonical outcome",
       );
     }),
 );
@@ -2087,9 +2200,8 @@ const recoverySnapshotConsistency = conformanceCase(
         initial.submission.state === "ready" &&
           initial.ownership === undefined &&
           initial.inputApplied === undefined &&
-          initial.reservation === undefined &&
           initial.abortIntent === undefined,
-        "A ready, unclaimed Submission must have no ownership, marker, reservation, or intent",
+        "A ready, unclaimed Submission must have no ownership, marker, or intent",
       );
 
       const claim = yield* expectSome(
@@ -2124,51 +2236,53 @@ const recoverySnapshotConsistency = conformanceCase(
         }),
       );
 
-      const reservation = yield* settlementReservation({
+      const publication = yield* settlementPublication({
         submissionId: admitted.submissionId,
-        ownershipToken: claim.ownershipToken,
+        authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
         receiptId: admitted.receiptId,
         outcome: "aborted",
       });
 
-      yield* ledger.reserveSettlement(reservation);
+      yield* publishSettlement(publication);
 
-      const reserved = yield* recoverySnapshot(admitted.submissionId);
+      const published = yield* recoverySnapshot(admitted.submissionId);
 
       yield* ensure(
-        reserved.inputApplied !== undefined &&
-          reserved.inputApplied.recordId === marker.recordId &&
-          reserved.inputApplied.sequence === marker.sequence,
+        published.inputApplied !== undefined &&
+          published.inputApplied.recordId === marker.recordId &&
+          published.inputApplied.sequence === marker.sequence,
         "The recovery snapshot must expose the applied-input marker",
       );
       yield* ensure(
-        reserved.abortIntent !== undefined &&
-          reserved.abortIntent.reason === "abort during recovery case",
+        published.abortIntent !== undefined &&
+          published.abortIntent.reason === "abort during recovery case",
         "The recovery snapshot must expose the abort intent",
       );
+
+      const canonical = yield* expectSome(
+        "canonical settlement before finalization",
+        yield* readSettlementRecord(threadId, admitted.submissionId),
+      );
+
       yield* ensure(
-        reserved.reservation !== undefined &&
-          !reserved.reservation.finalized &&
-          reserved.reservation.settlementId === reservation.settlementId &&
-          reserved.reservation.outcome === "aborted" &&
-          reserved.reservation.recordDigest === reservation.recordDigest,
-        "The recovery snapshot must expose the unfinalized reservation with its exact record",
+        (published.submission.state === "input-applied" ||
+          (published.submission.state === "settled" &&
+            published.submission.settledOutcome === "aborted")) &&
+          recordEquivalent(canonical.record, publication.append.batch.records[0]),
+        "Recovery must retain input and abort facts whether publication also finalized",
       );
 
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: admitted.submissionId,
-          settlementId: reservation.settlementId,
+          settlementId: submissionSettlementId(publication.submissionId),
         }),
       );
       const settled = yield* recoverySnapshot(admitted.submissionId);
 
       yield* ensure(
-        settled.submission.state === "settled" &&
-          settled.submission.settledOutcome === "aborted" &&
-          settled.reservation !== undefined &&
-          settled.reservation.finalized,
-        "After finalization the snapshot must show the settled state and finalized reservation",
+        settled.submission.state === "settled" && settled.submission.settledOutcome === "aborted",
+        "After finalization the snapshot must show the canonical settled outcome",
       );
     }),
 );
@@ -2321,7 +2435,7 @@ const joiningPrefixClaim = conformanceCase(
 
 const revertJoiningReturnsToReady = conformanceCase(
   "revertJoining returns exactly the pre-append claims to ready",
-  ({ ensure, expectSome }) =>
+  ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const threadId = decodeThreadId("ledger-conformance-revert-joining");
       const ledger = yield* SubmissionLedger;
@@ -2342,17 +2456,86 @@ const revertJoiningReturnsToReady = conformanceCase(
 
       yield* ensure(claims.length === 2, "Both queued Submissions must join the host's prefix");
 
+      // Regression in the unguarded recovery mutation (161aab335): a stale recovery view
+      // must not clear a join still owned by the live host or a successor Attempt.
+      yield* ledger.revertJoining(
+        RevertJoiningRequest.make({
+          submissionId: second.submissionId,
+          guard: { hostSubmissionId: third.submissionId, ownershipToken: BOGUS_TOKEN },
+        }),
+      );
+      const unchangedHost = yield* recoverySnapshot(second.submissionId);
+
+      yield* ensure(
+        unchangedHost.submission.state === "joining" &&
+          unchangedHost.hostSubmissionId === host.submissionId,
+        "A different guarded host must leave the current join unchanged",
+      );
+
+      const liveHost = yield* expectFailure(
+        "reverting a live host's join without its ownership token",
+        ledger.revertJoining(
+          RevertJoiningRequest.make({
+            submissionId: second.submissionId,
+            guard: { hostSubmissionId: host.submissionId },
+          }),
+        ),
+      );
+
+      yield* ensure(isLedgerError(liveHost), "Tokenless cleanup must reject an unsettled host");
+      yield* ledger.releaseOwnership(
+        ReleaseOwnershipRequest.make({
+          submissionId: host.submissionId,
+          ownershipToken: hostClaim.ownershipToken,
+        }),
+      );
+
+      const currentHostClaim = yield* expectSome(
+        "the successor host claim",
+        yield* claimLane(threadId, PRODUCER_B),
+      );
+
+      const staleOwner = yield* expectFailure(
+        "reverting a join with the superseded host token",
+        ledger.revertJoining(
+          RevertJoiningRequest.make({
+            submissionId: second.submissionId,
+            guard: {
+              hostSubmissionId: host.submissionId,
+              ownershipToken: hostClaim.ownershipToken,
+            },
+          }),
+        ),
+      );
+
+      yield* ensure(isLedgerError(staleOwner), "A superseded owner must not clear the join");
+      const unchangedOwner = yield* recoverySnapshot(second.submissionId);
+
+      yield* ensure(
+        unchangedOwner.submission.state === "joining" &&
+          unchangedOwner.hostSubmissionId === host.submissionId,
+        "Rejected recovery must retain the live host's joining state and linkage",
+      );
+
       // third's canonical input is appended; second's never is.
       yield* ledger.markJoined(
         MarkJoinedRequest.make({
           submissionId: third.submissionId,
-          ownershipToken: hostClaim.ownershipToken,
+          ownershipToken: currentHostClaim.ownershipToken,
           recordId: submissionInputRecordId(third.submissionId),
           sequence: decodeSequence(7),
         }),
       );
 
-      yield* ledger.revertJoining(RevertJoiningRequest.make({ submissionId: second.submissionId }));
+      yield* ledger.revertJoining(
+        RevertJoiningRequest.make({
+          submissionId: second.submissionId,
+          guard: {
+            hostSubmissionId: host.submissionId,
+            ownershipToken: currentHostClaim.ownershipToken,
+          },
+        }),
+      );
 
       const reverted = yield* expectSome(
         "lookup after revert",
@@ -2404,7 +2587,7 @@ const revertJoiningReturnsToReady = conformanceCase(
         ClaimJoiningRequest.make({
           threadId,
           hostSubmissionId: host.submissionId,
-          ownershipToken: hostClaim.ownershipToken,
+          ownershipToken: currentHostClaim.ownershipToken,
           maxCount: 8,
         }),
       );
@@ -2412,6 +2595,20 @@ const revertJoiningReturnsToReady = conformanceCase(
       yield* ensure(
         reclaimed.length === 1 && reclaimed[0].submissionId === second.submissionId,
         "A reverted Submission must be claimable again exactly once",
+      );
+      yield* settleClaimed(host, currentHostClaim.ownershipToken);
+      yield* ledger.revertJoining(
+        RevertJoiningRequest.make({
+          submissionId: second.submissionId,
+          guard: { hostSubmissionId: host.submissionId },
+        }),
+      );
+      const afterSettlement = yield* recoverySnapshot(second.submissionId);
+
+      yield* ensure(
+        afterSettlement.submission.state === "ready" &&
+          afterSettlement.hostSubmissionId === undefined,
+        "The exact settled host must permit tokenless cleanup of its uncommitted join",
       );
     }),
 );
@@ -2947,10 +3144,10 @@ const unknownAbortClaim = conformanceCase(
 
         const stale = yield* expectFailure(
           "stale owner",
-          ledger.reserveSettlement(
-            yield* settlementReservation({
+          publishSettlement(
+            yield* settlementPublication({
               ...head,
-              ownershipToken: original.ownershipToken,
+              authority: { _tag: "Owned", ownershipToken: original.ownershipToken },
               outcome: "completed",
             }),
           ),
@@ -2958,19 +3155,41 @@ const unknownAbortClaim = conformanceCase(
 
         yield* ensure(isOwnershipLost(stale), "The original owner must remain fenced");
 
-        const reservation = yield* settlementReservation({
+        const publication = yield* settlementPublication({
           ...head,
-          ownershipToken: reclaimed.ownershipToken,
+          authority: { _tag: "Owned", ownershipToken: reclaimed.ownershipToken },
           outcome: "aborted",
         });
 
-        yield* ledger.reserveSettlement(reservation);
-        yield* ledger.requestAbort(command);
-        const settled = yield* ledger.finalizeSettlement(SettlementFinalization.make(reservation));
+        yield* publishSettlement(publication);
+
+        const afterPublication = yield* expectSome(
+          "aborted submission after publication",
+          yield* lookupById(head.submissionId),
+        );
+
+        if (afterPublication.state === "settled") {
+          const duplicate = yield* expectFailure(
+            "abort after atomic finalization",
+            ledger.requestAbort(command),
+          );
+
+          yield* ensure(
+            isSettlementConflict(duplicate) && duplicate.existingOutcome === "aborted",
+            "Atomic finalization must retain the aborted outcome",
+          );
+        } else yield* ledger.requestAbort(command);
+
+        const settled = yield* ledger.finalizeSettlement(
+          SettlementFinalization.make({
+            submissionId: publication.submissionId,
+            settlementId: submissionSettlementId(publication.submissionId),
+          }),
+        );
 
         yield* ensure(
           settled.outcome === "aborted",
-          "The abort reservation must survive a duplicate command",
+          "The abort publication must survive a duplicate command",
         );
         const late = yield* expectFailure("abort after settlement", ledger.requestAbort(command));
 
@@ -3342,12 +3561,11 @@ const suspendResumesImmediatelyWhenDecided = conformanceCase(
 );
 
 const joinedSettlementLinkageAuthority = conformanceCase(
-  "a joined Submission's settlement reservation is authorized by host linkage",
+  "a joined settlement requires immutable host linkage and the canonical host outcome",
   ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const threadId = decodeThreadId("ledger-conformance-joined-settlement");
       const ledger = yield* SubmissionLedger;
-
       const host = yield* admitReady(threadId, "joined-settle-host", { work: "host" });
       const queued = yield* admitReady(threadId, "joined-settle-2", { queued: 2 });
       const hostClaim = yield* expectSome("the host claim", yield* claimLane(threadId, PRODUCER_A));
@@ -3366,25 +3584,22 @@ const joinedSettlementLinkageAuthority = conformanceCase(
         "The queued Submission must join the host's contiguous prefix",
       );
 
-      // A merely-`joining` Submission is still revertible: its reservation stays fenced by
-      // lane ownership like any other row.
-      const joiningReservation = yield* settlementReservation({
+      const joiningPublication = yield* settlementPublication({
         submissionId: queued.submissionId,
-        ownershipToken: BOGUS_TOKEN,
+        authority: { _tag: "Joined", hostSubmissionId: host.submissionId },
         receiptId: queued.receiptId,
         outcome: "completed",
       });
 
       const fenced = yield* expectFailure(
-        "reserving a joining Submission's settlement without lane ownership",
-        ledger.reserveSettlement(joiningReservation),
+        "publishing before joined linkage is committed",
+        publishSettlement(joiningPublication),
       );
 
       yield* ensure(
-        isOwnershipLost(fenced),
-        "A joining Submission's settlement reservation must stay ownership-fenced",
+        isLedgerError(fenced),
+        "A revertible joining row cannot authorize joined settlement publication",
       );
-
       yield* ledger.markJoined(
         MarkJoinedRequest.make({
           submissionId: queued.submissionId,
@@ -3393,19 +3608,23 @@ const joinedSettlementLinkageAuthority = conformanceCase(
           sequence: decodeSequence(7),
         }),
       );
+      yield* publishSettlement(
+        yield* settlementPublication({
+          submissionId: host.submissionId,
+          authority: { _tag: "Owned", ownershipToken: hostClaim.ownershipToken },
+          receiptId: host.receiptId,
+          outcome: "completed",
+        }),
+      );
 
-      // A `joined` lane is never worker-claimable, so no ownership token can exist for it:
-      // the recorded host linkage authorizes the reservation and the presented token is not
-      // consulted (plan §2.5 — the coordinator's joined-settlement loop and the
-      // SettleJoinedWithHost recovery executor both rely on this).
-      const joinedReservation = yield* settlementReservation({
+      const joinedPublication = yield* settlementPublication({
         submissionId: queued.submissionId,
-        ownershipToken: BOGUS_TOKEN,
+        authority: { _tag: "Joined", hostSubmissionId: host.submissionId },
         receiptId: queued.receiptId,
         outcome: "completed",
       });
 
-      yield* ledger.reserveSettlement(joinedReservation);
+      yield* publishSettlement(joinedPublication);
 
       const settlement = yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
@@ -3416,11 +3635,11 @@ const joinedSettlementLinkageAuthority = conformanceCase(
 
       yield* ensure(
         settlement.outcome === "completed",
-        "The joined settlement must finalize with the reserved outcome",
+        "The joined receipt must finalize from its canonical host outcome",
       );
 
       const settled = yield* expectSome(
-        "lookup after the joined settlement",
+        "lookup after joined finalization",
         yield* lookupById(queued.submissionId),
       );
 
@@ -3629,8 +3848,8 @@ const childReservationFencing = conformanceCase(
         "A superseded parent token must not create new reservation state",
       );
 
-      // An identical replay creates nothing, so it short-circuits before the fence exactly
-      // like reserveSettlement: a recovering caller reads the recorded row.
+      // An identical child reservation replay creates nothing and may return its recorded
+      // winner before checking the current parent fence.
       const staleReplay = yield* ledger.reserveChildBudget(
         ChildBudgetReservationRequest.make({
           ...requestFields,
@@ -3929,7 +4148,7 @@ const releaseAppliedExactlyOnce = conformanceCase(
 );
 
 const recordChildSettledWake = conformanceCase(
-  "recordChildSettled accepts canonical terminalizing prefixes and wakes only when all are covered",
+  "recordChildSettled accepts canonical publication prefixes and wakes only when all are covered",
   ({ ensure, expectFailure, expectSome }) =>
     Effect.gen(function* () {
       const parentLane = decodeThreadId("ledger-conformance-child-wake");
@@ -3994,14 +4213,14 @@ const recordChildSettledWake = conformanceCase(
         yield* claimLane(childLaneA, PRODUCER_A),
       );
 
-      const childReservationA = yield* settlementReservation({
+      const childPublicationA = yield* settlementPublication({
         submissionId: childA.submissionId,
-        ownershipToken: childClaimA.ownershipToken,
+        authority: { _tag: "Owned", ownershipToken: childClaimA.ownershipToken },
         receiptId: childA.receiptId,
         outcome: "completed",
       });
 
-      yield* ledger.reserveSettlement(childReservationA);
+      yield* publishSettlement(childPublicationA);
 
       const partial = yield* ledger.recordChildSettled(
         ChildSettledNotification.make({
@@ -4017,7 +4236,7 @@ const recordChildSettledWake = conformanceCase(
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: childA.submissionId,
-          settlementId: childReservationA.settlementId,
+          settlementId: submissionSettlementId(childPublicationA.submissionId),
         }),
       );
 
@@ -4037,14 +4256,14 @@ const recordChildSettledWake = conformanceCase(
         yield* claimLane(childLaneB, PRODUCER_A),
       );
 
-      const childReservationB = yield* settlementReservation({
+      const childPublicationB = yield* settlementPublication({
         submissionId: childB.submissionId,
-        ownershipToken: childClaimB.ownershipToken,
+        authority: { _tag: "Owned", ownershipToken: childClaimB.ownershipToken },
         receiptId: childB.receiptId,
         outcome: "completed",
       });
 
-      yield* ledger.reserveSettlement(childReservationB);
+      yield* publishSettlement(childPublicationB);
 
       const woken = yield* ledger.recordChildSettled(
         ChildSettledNotification.make({
@@ -4060,7 +4279,7 @@ const recordChildSettledWake = conformanceCase(
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: childB.submissionId,
-          settlementId: childReservationB.settlementId,
+          settlementId: submissionSettlementId(childPublicationB.submissionId),
         }),
       );
 
@@ -4395,7 +4614,7 @@ const resolveAdmissionAuthority = conformanceCase(
 );
 
 const queuedAbortSettlementAuthority = conformanceCase(
-  "reserveSettlement authorizes an aborted, unowned queued settlement by its durable intent",
+  "publishes an unowned queued abort only under its durable intent",
   ({ ensure, expectFailure }) =>
     Effect.gen(function* () {
       // P7 §7(c): an aborted, never-claimed, still-queued `ready` Submission has no live
@@ -4418,58 +4637,60 @@ const queuedAbortSettlementAuthority = conformanceCase(
       );
 
       // Fail-closed control: a queued row WITHOUT an abort intent never accepts an unowned
-      // reservation, aborted or not.
+      // publication, aborted or not.
       const unaborted = yield* expectFailure(
-        "reserving an aborted settlement for a queued row without an abort intent",
-        settlementReservation({
+        "publishing an aborted settlement for a queued row without an abort intent",
+        settlementPublication({
           submissionId: third.submissionId,
-          ownershipToken: BOGUS_TOKEN,
+          authority: { _tag: "QueuedAbort" },
           receiptId: third.receiptId,
           outcome: "aborted",
-        }).pipe(Effect.flatMap((reservation) => ledger.reserveSettlement(reservation))),
+        }).pipe(Effect.flatMap((publication) => publishSettlement(publication))),
       );
 
       yield* ensure(
-        isOwnershipLost(unaborted),
-        "A queued reservation without a durable abort intent must stay fenced (OwnershipLost)",
+        isLedgerError(unaborted),
+        "A queued publication without a durable abort intent must stay fenced (LedgerError)",
       );
 
       // Fail-closed control: the durable intent authorizes ONLY the aborted outcome.
       const wrongOutcome = yield* expectFailure(
-        "reserving a completed settlement for the aborted queued row",
-        settlementReservation({
+        "publishing a completed settlement for the aborted queued row",
+        settlementPublication({
           submissionId: second.submissionId,
-          ownershipToken: BOGUS_TOKEN,
+          authority: { _tag: "QueuedAbort" },
           receiptId: second.receiptId,
           outcome: "completed",
           result: { fabricated: true },
-        }).pipe(Effect.flatMap((reservation) => ledger.reserveSettlement(reservation))),
+        }).pipe(Effect.flatMap((publication) => publishSettlement(publication))),
       );
 
       yield* ensure(
-        isOwnershipLost(wrongOutcome),
+        isLedgerError(wrongOutcome),
         "An abort intent must never authorize a non-aborted settlement outcome",
       );
 
-      const reservation = yield* settlementReservation({
+      const publication = yield* settlementPublication({
         submissionId: second.submissionId,
-        ownershipToken: BOGUS_TOKEN,
+        authority: { _tag: "QueuedAbort" },
         receiptId: second.receiptId,
         outcome: "aborted",
       });
 
-      const reserved = yield* ledger.reserveSettlement(reservation);
+      const published = yield* publishSettlement(publication);
 
       yield* ensure(
-        reserved.replayed === false && reserved.outcome === "aborted",
-        "The abort intent must authorize the aborted reservation without lane ownership",
+        published.replayed === false &&
+          published.record.payload._tag === "SubmissionSettled" &&
+          published.record.payload.outcome === "aborted",
+        "The abort intent must authorize the aborted publication without lane ownership",
       );
-      // The crash replay (`terminalizing` + committed reservation) is equally authorized.
-      const replayed = yield* ledger.reserveSettlement(reservation);
+      // The canonical publication is an immutable replay even before ledger finalization.
+      const replayed = yield* publishSettlement(publication);
 
       yield* ensure(
         replayed.replayed === true,
-        "Replaying the identical aborted reservation must short-circuit idempotently",
+        "Replaying the identical aborted publication must short-circuit idempotently",
       );
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
@@ -4515,14 +4736,14 @@ const abortedSettledRowIsNotAJoiningGap = conformanceCase(
         }),
       );
 
-      const reservation = yield* settlementReservation({
+      const publication = yield* settlementPublication({
         submissionId: second.submissionId,
-        ownershipToken: BOGUS_TOKEN,
+        authority: { _tag: "QueuedAbort" },
         receiptId: second.receiptId,
         outcome: "aborted",
       });
 
-      yield* ledger.reserveSettlement(reservation);
+      yield* publishSettlement(publication);
       yield* ledger.finalizeSettlement(
         SettlementFinalization.make({
           submissionId: second.submissionId,
@@ -4696,17 +4917,12 @@ const assignmentSettlement = conformanceCase(
             );
           }
         }
-        yield* ledger.reserveSettlement(
-          SettlementReservation.make({
-            submissionId: first.submissionId,
-            ownershipToken: claim.ownershipToken,
-            settlementId: payload.settlementId,
-            outcome: scenario.outcome,
+        yield* publishSettlement(
+          yield* publicationForRecord(
+            first.submissionId,
+            { _tag: "Owned", ownershipToken: claim.ownershipToken },
             record,
-            recordDigest: yield* digestJson(
-              yield* Schema.encodeEffect(RecordEnvelope)(record).pipe(Effect.orDie),
-            ),
-          }),
+          ),
         );
 
         const finalization = SettlementFinalization.make({
@@ -4868,6 +5084,11 @@ const cooperativeHandoff = conformanceCase(
           nextClaim.submissionId === next.submissionId &&
             nextClaim.producerEpoch > claim.producerEpoch,
           "Handoff must claim the next Submission with a new epoch",
+        );
+        const store = yield* ThreadStore;
+
+        yield* store.materialize(
+          ThreadMaterialization.make({ threadId, producerEpoch: nextClaim.producerEpoch }),
         );
         yield* settleClaimed(next, nextClaim.ownershipToken);
 

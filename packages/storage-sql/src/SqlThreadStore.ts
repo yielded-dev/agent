@@ -25,6 +25,7 @@ import {
   ThreadTailRequest,
   FenceRejected,
   FencedAppendRequest,
+  PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   SaveRecoveryCheckpointRequest,
@@ -33,7 +34,12 @@ import {
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 
-import { RawAppendRequest, RawCheckpoint, RawReadRequest, type SqlJournal } from "./SqlJournal.ts";
+import {
+  type RawAppendRequest,
+  RawCheckpoint,
+  RawReadRequest,
+  type SqlJournal,
+} from "./SqlJournal.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 import { makeSelectedReads } from "./SqlThreadNativeReads.ts";
@@ -51,8 +57,36 @@ export interface SqlThreadStoreOptions<
   readonly offsetPrefix: string;
 }
 
+/** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
+export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppendRequest) {
+  const invalid = (operation: string) => (cause: { readonly message: string }) =>
+    ThreadStoreError.make({ operation, message: cause.message, cause });
+
+  const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
+    Effect.mapError(invalid("validate canonical append")),
+  );
+
+  const captured = yield* PreparedAppend.capture(validated);
+
+  const tailDigest = yield* captured
+    .digest()
+    .pipe(Effect.mapError(invalid("digest canonical append")));
+
+  return {
+    threadId: captured.threadId,
+    batchId: captured.batch.batchId,
+    batchDigest: tailDigest,
+    batchJson: captured.batchJson,
+    expectedTailSequence: captured.expectedTailSequence,
+    expectedTailDigest: captured.expectedTailDigest,
+    producerEpoch: captured.producerEpoch,
+    records: captured.records,
+    tailDigest,
+  } satisfies RawAppendRequest;
+});
+
 /** Canonical ThreadStore behavior over an adapter-initialized SQL journal. */
-export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
+export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(function* <
   S extends Diagnostic,
   C extends Diagnostic,
   W extends Diagnostic,
@@ -86,7 +120,7 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
       message: error.message,
     });
 
-  const parseOffset = Effect.fn("SqlThreadStore.parseOffset")(function* (
+  const parseOffset = Effect.fnUntraced(function* (
     threadId: ThreadMaterialization["threadId"],
     offset: ObservationOffset | undefined,
   ): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
@@ -119,29 +153,14 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     );
   });
 
-  const encodeCanonicalRecord = Effect.fn("SqlThreadStore.encodeCanonicalRecord")(function* (
-    record: CanonicalRecord,
-  ): Effect.fn.Return<string, ThreadStoreError> {
-    return yield* encodeRecordJson(record).pipe(
-      Effect.mapError((error) => schemaStoreError("encode canonical record", error)),
-    );
-  });
-
-  const encodeCanonicalBatch = Effect.fn("SqlThreadStore.encodeCanonicalBatch")(function* (
-    batch: CanonicalBatch,
-  ): Effect.fn.Return<string, ThreadStoreError> {
-    return yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(batch).pipe(
-      Effect.mapError((error) => schemaStoreError("encode canonical batch", error)),
-    );
-  });
-
-  const encodeCheckpoint = Effect.fn("SqlThreadStore.encodeCheckpoint")(function* (
+  const encodeCheckpoint = (
     checkpoint: ThreadCheckpoint,
-  ): Effect.fn.Return<string, ThreadStoreError> {
-    return yield* Schema.encodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpoint).pipe(
-      Effect.mapError((error) => schemaStoreError("encode checkpoint", error)),
+  ): Effect.Effect<string, ThreadStoreError> =>
+    Effect.suspend(() =>
+      Schema.encodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpoint).pipe(
+        Effect.mapError((error) => schemaStoreError("encode checkpoint", error)),
+      ),
     );
-  });
 
   // Scalar decoders resolve immediately; eager error mapping preserves that fast path between
   // the full canonical JSON decode and envelope construction, within the enclosing read span.
@@ -185,15 +204,16 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     });
   });
 
-  const decodeCheckpoint = Effect.fn("SqlThreadStore.decodeCheckpoint")(function* (
+  const decodeCheckpoint = (
     checkpointJson: string,
-  ): Effect.fn.Return<ThreadCheckpoint, ThreadStoreError> {
-    return yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
-      Effect.mapError((error) => schemaStoreError("decode checkpoint", error)),
+  ): Effect.Effect<ThreadCheckpoint, ThreadStoreError> =>
+    Effect.suspend(() =>
+      Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
+        Effect.mapError((error) => schemaStoreError("decode checkpoint", error)),
+      ),
     );
-  });
 
-  const requireThread = Effect.fn("SqlThreadStore.requireThread")(function* (
+  const requireThread = Effect.fnUntraced(function* (
     journal: SqlJournal<S, C, W, F>,
     threadId: ThreadMaterialization["threadId"],
   ) {
@@ -208,7 +228,7 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     return rows[0];
   });
 
-  const tailDigestAt = Effect.fn("SqlThreadStore.tailDigestAt")(function* (
+  const tailDigestAt = Effect.fnUntraced(function* (
     journal: SqlJournal<S, C, W, F>,
     threadId: ThreadMaterialization["threadId"],
     sequence: CanonicalSequence,
@@ -448,15 +468,14 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     yield* decodeStartupPayloads(journal, crypto);
   }
 
-  const provideCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
-
-  const hitFailpoint = Effect.fn("SqlThreadStore.hitFailpoint")(
-    (location: SqlStorageFailpointLocation): Effect.Effect<void, ThreadStoreError> =>
+  const hitFailpoint = (
+    location: SqlStorageFailpointLocation,
+  ): Effect.Effect<void, ThreadStoreError> =>
+    Effect.suspend(() =>
       failpoint
         .hit(location)
         .pipe(Effect.mapError((error) => storeError(`storage failpoint ${location}`, error))),
-  );
+    );
 
   const materialize: ThreadStore["Service"]["materialize"] = Effect.fn(
     "SqlThreadStore.materialize",
@@ -483,63 +502,35 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     yield* hitFailpoint("materialize:after");
   });
 
-  const append: ThreadStore["Service"]["append"] = Effect.fn("SqlThreadStore.append")(function* (
-    request: FencedAppendRequest,
-  ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate canonical append", error)),
-    );
+  const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
+    Effect.fn("SqlThreadStore.append")(function* (request: FencedAppendRequest) {
+      const rawRequest = yield* prepareSqlAppend(request).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
 
-    yield* requireThread(journal, validated.threadId);
+      if (requireMaterialized) yield* requireThread(journal, rawRequest.threadId);
 
-    const tailDigest = yield* provideCrypto(
-      digestCanonicalBatch(validated.expectedTailDigest, validated.batch),
-    ).pipe(Effect.mapError((error) => storeError("digest canonical append", error)));
+      yield* hitFailpoint("append:before");
 
-    const batchJson = yield* encodeCanonicalBatch(validated.batch);
+      const result = yield* commit(rawRequest).pipe(
+        Effect.mapError((error) => {
+          if (isFenceRejected(error) || isAppendConflict(error)) return error;
 
-    const rawRecords = yield* Effect.forEach(validated.batch.records, (record) =>
-      encodeCanonicalRecord(record).pipe(
-        Effect.map((recordJson) => ({
-          recordId: record.recordId,
-          recordJson,
-        })),
-      ),
-    );
-
-    const rawRequest = yield* Schema.decodeEffect(RawAppendRequest)({
-      threadId: validated.threadId,
-      batchId: validated.batch.batchId,
-      batchDigest: tailDigest,
-      batchJson,
-      expectedTailSequence: validated.expectedTailSequence,
-      expectedTailDigest: validated.expectedTailDigest,
-      producerEpoch: validated.producerEpoch,
-      records: rawRecords,
-      tailDigest,
-    }).pipe(Effect.mapError((error) => schemaStoreError("encode canonical append", error)));
-
-    yield* hitFailpoint("append:before");
-
-    const result = yield* journal.append(rawRequest).pipe(
-      Effect.mapError((error) => {
-        if (isFenceRejected(error) || isAppendConflict(error)) return error;
-
-        return storeError("append canonical batch", error);
-      }),
-      Effect.flatMap((result) =>
-        Schema.decodeEffect(AppendResult)(result).pipe(
-          Effect.mapError((error) => schemaStoreError("decode append result", error)),
+          return storeError("append canonical batch", error);
+        }),
+        Effect.flatMap((result) =>
+          Schema.decodeEffect(AppendResult)(result).pipe(
+            Effect.mapError((error) => schemaStoreError("decode append result", error)),
+          ),
         ),
-      ),
-    );
+      );
 
-    yield* hitFailpoint("append:after");
+      yield* hitFailpoint("append:after");
 
-    return result;
-  });
+      return result;
+    });
 
-  const loadRecords = Effect.fn("SqlThreadStore.loadRecords")(function* (request: RawReadRequest) {
+  const loadRecords = Effect.fnUntraced(function* (request: RawReadRequest) {
     const rows = yield* journal
       .read(request)
       .pipe(Effect.mapError((error) => storeError("read canonical records", error)));
@@ -845,13 +836,13 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
 
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
 
-  return ThreadStore.of({
+  const store = ThreadStore.of({
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     countPeerMessages: selectedReads.countPeerMessages,
     readIdentity: selectedReads.readIdentity,
-    append,
+    append: makeAppend(journal.append, true),
     export: exportThread,
     inspectTail,
     materialize,
@@ -860,4 +851,20 @@ export const makeSqlThreadStore = Effect.fn("SqlThreadStore.make")(function* <
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
     recoveryCheckpoints: { save: saveRecoveryCheckpoint, load: loadRecoveryCheckpoint },
   });
+
+  return {
+    store,
+    /** Bind the writer once when constructing a claimed Run session. */
+    makeOwnedAppend: (commit: SqlJournal<S, C, W, F>["append"]) => makeAppend(commit, false),
+  };
 });
+
+export const makeSqlThreadStore = <
+  S extends Diagnostic,
+  C extends Diagnostic,
+  W extends Diagnostic,
+  F extends Diagnostic,
+>(
+  journal: SqlJournal<S, C, W, F>,
+  options: SqlThreadStoreOptions<S, C, F>,
+) => Effect.map(makeSqlThreadStoreKernel(journal, options), (kernel) => kernel.store);

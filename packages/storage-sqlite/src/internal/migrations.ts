@@ -3,7 +3,7 @@ import { createStorageSchema } from "@yielded/agent-storage-sql/sql-storage-sche
 import { Effect } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-export const CurrentSqliteStorageVersion = 14;
+export const CurrentSqliteStorageVersion = 16;
 
 /** One permanent destination inbox fence, including workers stopped before admission. */
 export const createWorkerStops = Effect.gen(function* () {
@@ -21,14 +21,6 @@ export const createWorkerStops = Effect.gen(function* () {
     json_extract(record_json, '$.payload._tag'), sequence) WHERE json_extract(record_json, '$.payload.runId') IS NOT NULL`;
 });
 
-/** Index only outstanding obligations, ordered by the recovery scan's stable cursor. */
-export const createNonterminalIndex = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
-
-  yield* sql`CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'`
-    .withoutTransform;
-});
-
 /** Initialize empty storage with the complete current schema. */
 export const sqliteMigrations = SqliteMigrator.fromRecord({
   "1_current_thread_storage": Effect.gen(function* () {
@@ -36,6 +28,6 @@ export const sqliteMigrations = SqliteMigrator.fromRecord({
 
     yield* createStorageSchema();
     yield* createWorkerStops;
-    yield* sql`PRAGMA user_version = 14`.withoutTransform;
+    yield* sql`PRAGMA user_version = 16`.withoutTransform;
   }),
 });

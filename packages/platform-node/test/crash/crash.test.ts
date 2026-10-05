@@ -10,7 +10,6 @@ import {
   runIdForSubmission,
   toolApprovalDecisionRecordId,
   toolApprovalRequestRecordId,
-  toolCallPreparedRecordId,
   toolCallResolvedRecordId,
   toolCallSettledRecordId,
   toolCallUnknownRecordId,
@@ -321,7 +320,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill at input:after-canonical-append: the marker is repaired and FIFO holds for the queued Submission",
+      "kill at input:after-canonical-append: the applied input survives and FIFO holds for the queued Submission",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -448,6 +447,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(records.map((envelope) => envelope.record.recordId)).toContain(
                   modelResponseRecordId(runId, 2),
                 );
+                expect(records.map((envelope) => envelope.record.recordId)).toContain(
+                  modelResponseInterruptedRecordId(runId, 1),
+                );
                 const settlement = yield* host.awaitSettlement(receipt);
 
                 expect(settlement.outcome).toBe("completed");
@@ -551,19 +553,19 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill before settlement reservation: canonical completion avoids another model call and settles once",
+      "kill before settlement publication: canonical completion avoids another model call and settles once",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
-            const thread = "thread-kill-prereserve";
-            const key = "kill-prereserve-1";
+            const thread = "thread-kill-prepublication";
+            const key = "kill-prepublication-1";
 
             const result = yield* runWorkerToExit({
               db: site.db,
               scenario: "run",
               thread,
               key,
-              killAtStorage: "ledger:reserve-settlement:before",
+              killAt: "terminalize:before-publication",
               leaseMillis: CHILD_LEASE_MS,
             });
 
@@ -581,7 +583,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(settlements[0]?.outcome).toBe("completed");
 
                 // The response and Run completion committed atomically before
-                // reservation, so recovery terminalizes without another model call.
+                // publication, so recovery terminalizes without another model call.
                 const records = yield* readLog(thread);
 
                 expect(
@@ -600,67 +602,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill at terminalize:after-reserve: recovery appends the EXACT reserved record",
-      () =>
-        withCrashSite((site) =>
-          Effect.gen(function* () {
-            const thread = "thread-kill-reserved";
-            const key = "kill-reserved-1";
-
-            const result = yield* runWorkerToExit({
-              db: site.db,
-              scenario: "run",
-              thread,
-              key,
-              killAt: "terminalize:after-reserve",
-              leaseMillis: CHILD_LEASE_MS,
-            });
-
-            expectKilled(result);
-            yield* waitAfterChildExit;
-
-            yield* withHost(
-              site.db,
-              Effect.gen(function* () {
-                const host = yield* NodeDurableHost;
-                const ledger = yield* SubmissionLedger;
-                const snapshot = yield* lookupByKey(thread, key);
-
-                expect(yield* lookupState(snapshot.submissionId)).toBe("settled");
-
-                // The appended canonical settlement IS the reserved record, byte for byte.
-                const recovered = yield* ledger.loadRecoverySnapshot(
-                  RecoverySnapshotRequest.make({ submissionId: snapshot.submissionId }),
-                );
-
-                const records = yield* readLog(thread);
-
-                const settled = records.filter(
-                  (envelope) => envelope.record.payload._tag === "SubmissionSettled",
-                );
-
-                expect(settled).toHaveLength(1);
-                expect(settled[0]?.record).toEqual(recovered.reservation?.record);
-                expect(records.map((envelope) => envelope.record.recordId)).toContain(
-                  recoveryRepairRecordId(snapshot.submissionId, "AppendReservedSettlement"),
-                );
-
-                // awaitSettlement after restart returns the recorded Settlement.
-                const receipt = yield* resubmit(thread, key);
-                const settlement = yield* host.awaitSettlement(receipt);
-
-                expect(settlement.outcome).toBe("completed");
-                expect(settlement.receiptId).toBe(snapshot.receiptId);
-                yield* assertConvergence(thread, [snapshot.submissionId]);
-              }),
-            );
-          }),
-        ),
-      30_000,
-    );
-
-    it.effect(
-      "kill at terminalize:after-canonical-append: the ledger is finalized from history, the record never rewritten",
+      "kill at terminalize:after-canonical-append: atomic finalization survives and the record is never rewritten",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -678,13 +620,13 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
             expectKilled(result);
 
-            // Before any recovery: the canonical outcome exists, the ledger row is nonterminal.
+            // The SQL publisher commits the outcome and plain-root finalization together.
             const before = yield* withRuntime(
               site.db,
               Effect.gen(function* () {
                 const snapshot = yield* lookupByKey(thread, key);
 
-                expect(snapshot.state).not.toBe("settled");
+                expect(snapshot.state).toBe("settled");
                 const records = yield* readLog(thread);
 
                 const settled = records.filter(
@@ -909,12 +851,12 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     // ------------------------------------------------------------------------------------------
 
     it.effect(
-      "kill at turn:after-response-append: the declared batch resumes without model re-invocation",
+      "kill at turn:after-response-append under the default reconciler: Unknown parks work until resolveUnknown from a second process",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
-            const thread = "thread-kill-response";
-            const key = "kill-response-1";
+            const thread = "thread-kill-declared-unknown";
+            const key = "kill-declared-unknown-1";
 
             const result = yield* runWorkerToExit({
               db: site.db,
@@ -922,73 +864,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "turn:after-response-append",
-              leaseMillis: CHILD_LEASE_MS,
-              supplierDir: site.supplier,
-            });
-
-            expectKilled(result);
-            yield* waitAfterChildExit;
-
-            yield* withHost(
-              site.db,
-              Effect.gen(function* () {
-                const snapshot = yield* lookupByKey(thread, key);
-                const runId = runIdForSubmission(snapshot.submissionId);
-
-                expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
-
-                const settlements = yield* drainUncertainBook(site, thread, FRESH_ANSWER);
-
-                expect(settlements).toHaveLength(1);
-                expect(settlements[0]?.outcome).toBe("completed");
-                expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(1);
-
-                // No model re-invocation for the declared Turn: exactly one ModelResponseRecorded
-                // for Turn 1 and no interruption audit — the resumed batch replayed the canonical
-                // declaration instead of asking the model again.
-                const records = yield* readLog(thread);
-                const ids = records.map((envelope) => envelope.record.recordId);
-
-                expect(
-                  records.filter(
-                    (envelope) => envelope.record.recordId === modelResponseRecordId(runId, 1),
-                  ),
-                ).toHaveLength(1);
-                expect(
-                  logTags(records).filter((tag) => tag === "ModelResponseRecorded"),
-                ).toHaveLength(2);
-                expect(ids).toContain(
-                  toolCallPreparedRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
-                expect(ids).toContain(
-                  toolCallSettledRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
-                expect(ids).not.toContain(modelResponseInterruptedRecordId(runId, 1));
-                yield* assertConvergence(thread, [snapshot.submissionId], {
-                  site,
-                  counts: { [`book:${BOOK_REF}`]: 1 },
-                });
-              }),
-            );
-          }),
-        ),
-      30_000,
-    );
-
-    it.effect(
-      "kill at tools:after-prepared-append under the default reconciler: Unknown parks work until resolveUnknown from a second process",
-      () =>
-        withCrashSite((site) =>
-          Effect.gen(function* () {
-            const thread = "thread-kill-prepared-unknown";
-            const key = "kill-prepared-unknown-1";
-
-            const result = yield* runWorkerToExit({
-              db: site.db,
-              scenario: "run-uncertain",
-              thread,
-              key,
-              killAt: "tools:after-prepared-append",
               leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
@@ -1188,10 +1063,8 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 expect(snapshot.state).not.toBe("settled");
                 const before = (yield* readLog(thread)).map((envelope) => envelope.record.recordId);
 
-                // The result was lost in memory: prepared is canonical, settled is not.
-                expect(before).toContain(
-                  toolCallPreparedRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
-                );
+                // The result was lost in memory: the declaration is canonical, settlement is not.
+                expect(before).toContain(modelResponseRecordId(runId, 1));
                 expect(before).not.toContain(
                   toolCallSettledRecordId(runId, 1, decodeToolCallId(BOOK_CALL_ID)),
                 );

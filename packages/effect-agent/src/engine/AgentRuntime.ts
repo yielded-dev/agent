@@ -11,6 +11,7 @@ export {
   stream,
   streamUnknown,
   streamWithUsageAccountingUnknown,
+  executeWithUsageAccountingUnknown,
   AgentResultSchema,
   AgentChildPending,
   AgentSpawner,

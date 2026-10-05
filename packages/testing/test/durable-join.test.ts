@@ -35,6 +35,7 @@ import {
   type CanonicalRecordEnvelope,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   IdempotencyKey,
@@ -153,15 +154,16 @@ const configLayer = DurableRuntimeConfig.layer({
 });
 
 const baseLayer = Layer.mergeAll(
-  MemorySubmissionLedgerLive,
-  MemoryThreadStoreLive,
+  MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
   WakeScheduler.layerNoop,
   DurableRuntimeFailpointTestControl.layer,
   ToolReconciler.uncertain,
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer
+  .pipe(Layer.provide(runStorageLayer()))
+  .pipe(Layer.provideMerge(baseLayer));
 
 const readLog = (threadId: string) =>
   Effect.gen(function* () {
@@ -364,7 +366,7 @@ layer(Layer.mergeAll(baseLayer, publicationStorageLayer))("asynchronous lifecycl
         expect(delivered).toEqual(pending[1]?.map((fact) => fact.id));
         expect(failureTag(result)).toBe("LifecyclePublicationError");
         expect(yield* publications.pending(Number.MAX_SAFE_INTEGER, 2)).toEqual([pending[0]]);
-      }).pipe(Effect.provide(DurableAgentRuntime.layer));
+      }).pipe(Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))));
     }),
   );
 });
@@ -896,7 +898,7 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
     }),
   );
 
-  it.effect("a kill inside the joined-settlement loop converges through the reservation", () =>
+  it.effect("a kill inside the joined-settlement loop converges from the canonical host", () =>
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
       const scripted = yield* makeScriptedModel(() => finalParts('{"answer":"loop"}'));
@@ -915,20 +917,20 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         submitOptions(thread, "loop-2"),
       );
 
-      // First reserve is the host's, the second is the JOINED Submission's: kill right after
-      // the joined reservation commits, before its canonical append.
-      yield* armFailpointAt("terminalize:after-reserve", 2);
+      // The host publishes first. Stop before the joined Submission's publication so
+      // recovery must derive its outcome from the canonical host settlement.
+      yield* armFailpointAt("terminalize:before-publication", 2);
       const killed = yield* Effect.exit(runtime.processThread(agent, decodeThreadId(thread)));
 
       expect(failureTag(killed)).toBe("DurableRuntimeFailpointError");
       yield* clearFailpoint;
       expect(yield* lookupState(host.submissionId)).toBe("settled");
-      expect(yield* lookupState(joined.submissionId)).toBe("terminalizing");
+      expect(yield* lookupState(joined.submissionId)).toBe("joined");
 
       const reports = (yield* runtime.runRecovery()).reports;
       const report = reports.find((entry) => entry.submissionId === joined.submissionId);
 
-      expect(report?.decision._tag).toBe("AppendReservedSettlement");
+      expect(report?.decision._tag).toBe("SettleJoinedWithHost");
       expect(report?.disposition).toBe("repaired");
       const settled = yield* runtime.awaitSettlement(joined);
 

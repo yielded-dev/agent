@@ -15,6 +15,8 @@ export class SqliteStorageConfigValue extends Schema.Class<SqliteStorageConfigVa
   observationPollInterval: ObservationPollInterval,
   /** Bounded SQLITE_BUSY retry window for write-lock acquisition, in milliseconds. */
   busyTimeout: BusyTimeoutMillis,
+  /** Connection synchronization selected at construction; FULL is the convenience default. */
+  synchronous: Schema.Literals(["FULL", "NORMAL"]),
   /**
    * Submission ownership lease duration in milliseconds (D5). The lease is a liveness hint
    * that makes an abandoned claim reclaimable; correctness never depends on it because every

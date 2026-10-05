@@ -1,19 +1,12 @@
 import { SqliteMigrator } from "@effect/sql-sqlite-do";
+import type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 import {
   makeSqlLifecyclePublication,
   type SqlLifecycleRetainMany,
   SqlLifecycleSource,
   SqlLifecycleRetainer,
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
-import { createMessageDeliveryPendingIndex } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
-import { checkV2ThreadLayout } from "@yielded/agent-storage-sql/sql-storage-v2-upgrade";
-import {
-  createNativeReadIndexes,
-  seedNativeReadIndexes,
-  indexCanonicalRecord,
-  canonicalRecordOutstanding,
-} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -45,15 +38,8 @@ import {
   DoValueBoundExceeded,
   type DoStorageFailpointLocation,
 } from "../DoStorageError.ts";
-import { createMessageDeliveryTables } from "./message-delivery-schema.ts";
-import {
-  CurrentDoStorageVersion,
-  createNonterminalIndex,
-  createWorkerStops,
-  doMigrations,
-} from "./migrations.ts";
+import { CurrentDoStorageVersion, doMigrations } from "./migrations.ts";
 import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
-import { createRecoveryCheckpointTable } from "./recovery-checkpoint-schema.ts";
 import {
   isAppendContention,
   annotateStorageError,
@@ -239,26 +225,7 @@ const lifecycleCursorRows = ownedRows(
 
 const initializedLifecycleSources = new WeakSet<OwnedState>();
 
-export class RawRecord extends Schema.Class<RawRecord>(
-  "@effect-agent/storage-cloudflare/RawRecord",
-)({
-  recordId: BoundedIdentifier,
-  recordJson: BoundedStoredText,
-}) {}
-
-export class RawAppendRequest extends Schema.Class<RawAppendRequest>(
-  "@effect-agent/storage-cloudflare/RawAppendRequest",
-)({
-  batchDigest: BoundedStoredText,
-  batchId: BoundedIdentifier,
-  batchJson: BoundedStoredText,
-  threadId: BoundedIdentifier,
-  expectedTailDigest: BoundedStoredText,
-  expectedTailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
-  records: Schema.NonEmptyArray(RawRecord).check(Schema.isMaxLength(256)),
-  tailDigest: BoundedStoredText,
-}) {}
+export type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 
 export class RawAppendResult extends Schema.Class<RawAppendResult>(
   "@effect-agent/storage-cloudflare/RawAppendResult",
@@ -384,191 +351,6 @@ export const decodeSingleRow = Effect.fn(
     ),
 );
 
-/** Column inventory of the supported v3 predecessor, independent of physical column order. */
-const predecessorColumns = {
-  effect_agent_threads: [
-    "thread_id",
-    "created_at",
-    "tail_sequence",
-    "tail_digest",
-    "producer_epoch",
-  ],
-  effect_agent_canonical_batches: [
-    "thread_id",
-    "batch_id",
-    "first_sequence",
-    "last_sequence",
-    "batch_digest",
-    "tail_digest",
-    "batch_json",
-  ],
-  effect_agent_canonical_records: ["thread_id", "sequence", "record_id", "batch_id", "record_json"],
-  effect_agent_checkpoints: ["thread_id", "through_sequence", "tail_digest", "checkpoint_json"],
-  effect_agent_submissions: [
-    "submission_id",
-    "thread_id",
-    "queue_sequence",
-    "principal",
-    "idempotency_key",
-    "agent_id",
-    "agent_digests_json",
-    "deployment_id",
-    "input_json",
-    "input_digest",
-    "receipt_id",
-    "state",
-    "settled_outcome",
-    "created_at",
-    "ready_at",
-    "input_applied_record_id",
-    "input_applied_sequence",
-    "joined_host_submission_id",
-    "suspended_reason_json",
-    "suspended_at",
-    "unknown_reason",
-    "unknown_tool_call_ids_json",
-    "parent_submission_id",
-    "parent_tool_call_id",
-    "admission_group",
-    "admission_fence_json",
-  ],
-  effect_agent_submission_ownership: [
-    "submission_id",
-    "attempt_id",
-    "ownership_token",
-    "producer_epoch",
-    "owner_producer_id",
-    "lease_expires_at",
-  ],
-  effect_agent_attempts: [
-    "attempt_id",
-    "submission_id",
-    "thread_id",
-    "owner_producer_id",
-    "producer_epoch",
-    "claimed_at",
-  ],
-  effect_agent_settlement_reservations: [
-    "submission_id",
-    "settlement_id",
-    "outcome",
-    "record_id",
-    "record_json",
-    "record_digest",
-    "reserved_at",
-    "finalized_at",
-  ],
-  effect_agent_abort_intents: [
-    "submission_id",
-    "author",
-    "reason",
-    "requested_at",
-    "canonical_record_id",
-  ],
-  effect_agent_approval_decisions: [
-    "submission_id",
-    "tool_call_id",
-    "decision",
-    "resolver",
-    "reason",
-    "decided_at",
-  ],
-  effect_agent_unknown_resolutions: [
-    "submission_id",
-    "tool_call_id",
-    "author",
-    "reason",
-    "resolution_json",
-    "resolved_at",
-  ],
-  effect_agent_child_reservations: [
-    "reservation_id",
-    "parent_submission_id",
-    "parent_tool_call_id",
-    "child_submission_id",
-    "status",
-    "allocation_json",
-    "allocation_digest",
-    "accounting_json",
-    "reserved_at",
-    "release_began_at",
-    "released_at",
-  ],
-  effect_agent_meta: ["key", "value"],
-  effect_agent_child_settlements: [
-    "parent_submission_id",
-    "child_submission_id",
-    "child_outcome",
-    "recorded_at",
-  ],
-} as const;
-
-const checkPredecessorLayout = Effect.fn("DoJournal.checkPredecessorLayout")(function* (
-  version: 3 | 4 | 5 | 7,
-) {
-  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
-
-  const messageColumns =
-    version === 3
-      ? predecessorColumns
-      : {
-          ...predecessorColumns,
-          effect_agent_submissions: [
-            ...predecessorColumns.effect_agent_submissions,
-            "worker_admission_json",
-            "message_admission_json",
-          ],
-          effect_agent_message_deliveries: [
-            "owner_thread_id",
-            "message_id",
-            "version",
-            "state",
-            "deadline_at_millis",
-            "record_json",
-          ],
-        };
-
-  const expectedColumns = {
-    ...messageColumns,
-    ...(version === 7
-      ? {
-          effect_agent_canonical_records: [
-            ...predecessorColumns.effect_agent_canonical_records,
-            "outstanding",
-          ],
-        }
-      : {}),
-    ...(version >= 5
-      ? {
-          effect_agent_recovery_checkpoints: [
-            "thread_id",
-            "through_sequence",
-            "tail_digest",
-            "checkpoint_json",
-          ],
-        }
-      : {}),
-  };
-
-  for (const [table, expected] of Object.entries(expectedColumns)) {
-    const columns = yield* decodeRows(
-      Schema.Array(Schema.Struct({ name: BoundedIdentifier })),
-      table,
-      "schema",
-      yield* sql.unsafe(`PRAGMA table_info(${table})`),
-    );
-
-    const names = new Set<string>(expected);
-
-    if (columns.length !== names.size || columns.some((column) => !names.has(column.name)))
-      return yield* DoStorageCompatibilityError.make({
-        actualVersion: version,
-        supportedVersion: CurrentDoStorageVersion,
-        message: `The v${version} ${table} columns do not match the supported predecessor; no upgrade was committed.`,
-      });
-  }
-});
-
 const REQUIRED_TABLES = [
   "effect_agent_abort_intents",
   "effect_agent_approval_decisions",
@@ -580,14 +362,13 @@ const REQUIRED_TABLES = [
   "effect_agent_child_settlements",
   "effect_agent_threads",
   "effect_agent_meta",
-  "effect_agent_settlement_reservations",
   "effect_agent_submission_ownership",
   "effect_agent_submissions",
   "effect_agent_unknown_resolutions",
 ] as const;
 
 /**
- * Supported-predecessor or fresh storage gate (DEPLOY-008) over `effect_agent_meta` instead of
+ * Current-format or fresh storage gate (DEPLOY-008) over `effect_agent_meta` instead of
  * `PRAGMA user_version` (unverified on Durable Object SQL storage; a meta table is portable
  * regardless). No WAL check (Durable Object storage owns durability and confirms writes
  * through output gates) and no busy timeout (a Durable Object has exactly one writer): the
@@ -598,14 +379,14 @@ const ensureCurrentStorage = Effect.fn("DoJournal.ensureCurrentStorage")(functio
   failpoint: DoJournalFailpoint = noFailpoint,
   maxStoredValueBytes: number,
 ) {
-  const verifyWorkerPredecessor = Effect.fnUntraced(function* (workerContract: boolean) {
+  const verifyCurrentStorage = Effect.fnUntraced(function* () {
     const requiredRows = yield* sql<Record<string, unknown>>`
     SELECT name
     FROM sqlite_master
     WHERE (type = 'table'
       AND name IN ${sql.in([...REQUIRED_TABLES, "effect_agent_message_deliveries", "effect_agent_recovery_checkpoints"])}
-    ) OR (type = 'index' AND name IN ('effect_agent_submissions_nonterminal', 'effect_agent_records_subtree', 'effect_agent_message_deliveries_pending', 'effect_agent_records_outstanding', 'effect_agent_records_call', 'effect_agent_records_run_input', 'effect_agent_records_worker_input'))
-    OR (${workerContract ? 1 : 0} = 1 AND name IN ('effect_agent_worker_stops', 'effect_agent_worker_starts', 'effect_agent_worker_pending', 'effect_agent_worker_execution'))
+    ) OR (type = 'index' AND name IN ('effect_agent_submissions_nonterminal', 'effect_agent_records_subtree', 'effect_agent_message_deliveries_pending', 'effect_agent_records_call', 'effect_agent_records_run_input', 'effect_agent_records_worker_input'))
+    OR (name IN ('effect_agent_worker_stops', 'effect_agent_worker_starts', 'effect_agent_worker_pending', 'effect_agent_worker_execution'))
     ORDER BY name
   `.pipe(Effect.mapError(storageError("verify storage tables")));
 
@@ -616,7 +397,7 @@ const ensureCurrentStorage = Effect.fn("DoJournal.ensureCurrentStorage")(functio
       requiredRows,
     );
 
-    if (required.length !== REQUIRED_TABLES.length + 9 + (workerContract ? 4 : 0)) {
+    if (required.length !== REQUIRED_TABLES.length + 12) {
       return yield* DoStorageCompatibilityError.make({
         actualVersion: CurrentDoStorageVersion,
         supportedVersion: CurrentDoStorageVersion,
@@ -697,290 +478,7 @@ const ensureCurrentStorage = Effect.fn("DoJournal.ensureCurrentStorage")(functio
       versionRows,
     );
 
-    if (
-      version.value === "2" ||
-      version.value === "3" ||
-      version.value === "4" ||
-      version.value === "5"
-    ) {
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            const current = yield* sql<{
-              value: string;
-            }>`SELECT value FROM effect_agent_meta WHERE key='storage_version'`;
-
-            if (current.length === 1 && current[0].value === String(CurrentDoStorageVersion))
-              return;
-            if (
-              current.length !== 1 ||
-              (current[0].value !== "2" &&
-                current[0].value !== "3" &&
-                current[0].value !== "4" &&
-                current[0].value !== "5")
-            )
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: -1,
-                supportedVersion: CurrentDoStorageVersion,
-                message: "Storage version changed while acquiring the upgrade transaction.",
-              });
-
-            const required = yield* decodeRows(
-              Schema.Array(DoNameRow),
-              "sqlite_master",
-              "required_tables",
-              yield* sql`SELECT name FROM sqlite_master WHERE type='table' AND name IN ${sql.in([...REQUIRED_TABLES])}`,
-            );
-
-            if (required.length !== REQUIRED_TABLES.length)
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: Number(current[0].value),
-                supportedVersion: CurrentDoStorageVersion,
-                message:
-                  "The predecessor store is missing required tables. Retain the original store for inspection; no upgrade was committed.",
-              });
-
-            const recoveryTables =
-              yield* sql`SELECT name FROM sqlite_master WHERE type='table' AND name='effect_agent_recovery_checkpoints'`;
-
-            if (recoveryTables.length !== (current[0].value === "5" ? 1 : 0))
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: Number(current[0].value),
-                supportedVersion: CurrentDoStorageVersion,
-                message:
-                  "The predecessor recovery checkpoint storage does not match its version; refusing ambiguous data without mutation.",
-              });
-
-            const indexes =
-              yield* sql`SELECT name FROM sqlite_master WHERE name='effect_agent_submissions_nonterminal'`;
-
-            if (indexes.length !== 0)
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: Number(current[0].value),
-                supportedVersion: CurrentDoStorageVersion,
-                message:
-                  "The predecessor already contains the nonterminal index; refusing ambiguous storage without mutation.",
-              });
-            if (current[0].value === "2") {
-              yield* checkV2ThreadLayout();
-              for (const statement of [
-                sql`ALTER TABLE effect_agent_submissions ADD COLUMN admission_group TEXT`,
-                sql`ALTER TABLE effect_agent_submissions ADD COLUMN admission_fence_json TEXT`,
-                sql`CREATE INDEX effect_agent_submissions_group ON effect_agent_submissions (thread_id, admission_group, state)`,
-              ]) {
-                yield* failpoint("upgrade:before-mutation");
-                yield* statement;
-                yield* failpoint("upgrade:after-mutation");
-              }
-            }
-            if (current[0].value === "3") yield* checkPredecessorLayout(3);
-            if (current[0].value === "4") yield* checkPredecessorLayout(4);
-            if (current[0].value === "5") yield* checkPredecessorLayout(5);
-            if (current[0].value === "2" || current[0].value === "3") {
-              yield* failpoint("upgrade:before-mutation");
-              yield* sql`ALTER TABLE effect_agent_submissions ADD COLUMN worker_admission_json TEXT`;
-              yield* failpoint("upgrade:after-mutation");
-              yield* failpoint("upgrade:before-mutation");
-              yield* sql`ALTER TABLE effect_agent_submissions ADD COLUMN message_admission_json TEXT`;
-              yield* failpoint("upgrade:after-mutation");
-              yield* failpoint("upgrade:before-mutation");
-              yield* createMessageDeliveryTables;
-              yield* failpoint("upgrade:after-mutation");
-            }
-            if (current[0].value !== "5") {
-              yield* failpoint("upgrade:before-mutation");
-              yield* createRecoveryCheckpointTable;
-              yield* failpoint("upgrade:after-mutation");
-            }
-            yield* failpoint("upgrade:before-mutation");
-            yield* createNonterminalIndex;
-            yield* failpoint("upgrade:after-mutation");
-            yield* failpoint("upgrade:before-version");
-            yield* createNativeReadIndexes();
-            yield* createMessageDeliveryPendingIndex();
-            yield* seedNativeReadIndexes.pipe(
-              Effect.catchTag("ThreadStoreError", (error) =>
-                DoStorageCorruptionError.make({
-                  table: "effect_agent_canonical_records",
-                  rowKey: "upgrade",
-                  message: error.message,
-                }),
-              ),
-            );
-            yield* createWorkerStops;
-            yield* sql`UPDATE effect_agent_meta SET value='9' WHERE key='storage_version'`;
-            yield* failpoint("upgrade:after-version");
-          }),
-        )
-        .pipe(
-          Effect.catchTag("DoStorageFailpointError", (error) =>
-            DoStorageError.make({
-              cause: error,
-              operation: "upgrade storage",
-              message: error.message,
-            }),
-          ),
-          Effect.catchTag("StorageUpgradeError", (error) =>
-            DoStorageCorruptionError.make({
-              table: error.table,
-              rowKey: error.rowKey,
-              message: error.message,
-            }),
-          ),
-          Effect.catchTag("SchemaError", (error) =>
-            DoStorageCorruptionError.make({
-              table: "effect_agent_canonical_records",
-              rowKey: "upgrade",
-              message: error.message,
-            }),
-          ),
-          Effect.catchTag("SqlError", storageError("upgrade supported thread storage")),
-        );
-    } else if (version.value === "6") {
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            const current = yield* sql<{
-              value: string;
-            }>`SELECT value FROM effect_agent_meta WHERE key = 'storage_version'`;
-
-            if (current[0]?.value === "9") return;
-            if (current[0]?.value !== "6")
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: -1,
-                supportedVersion: 9,
-                message: "Storage version changed during native index upgrade",
-              });
-            yield* checkPredecessorLayout(5);
-
-            const requiredIndex =
-              yield* sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'effect_agent_submissions_nonterminal'`;
-
-            if (requiredIndex.length !== 1)
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: 6,
-                supportedVersion: 9,
-                message: "Predecessor storage is missing its required nonterminal index",
-              });
-            yield* failpoint("upgrade:before-mutation");
-            yield* createNativeReadIndexes();
-            yield* createMessageDeliveryPendingIndex();
-            yield* seedNativeReadIndexes.pipe(
-              Effect.catchTag("ThreadStoreError", (error) =>
-                DoStorageCorruptionError.make({
-                  table: "effect_agent_canonical_records",
-                  rowKey: "upgrade",
-                  message: error.message,
-                }),
-              ),
-            );
-            yield* failpoint("upgrade:after-mutation");
-            yield* failpoint("upgrade:before-version");
-            yield* createWorkerStops;
-            yield* sql`UPDATE effect_agent_meta SET value='9' WHERE key='storage_version'`;
-            yield* failpoint("upgrade:after-version");
-          }),
-        )
-        .pipe(
-          Effect.mapError((error) =>
-            DoStorageError.make({
-              operation: "upgrade native indexes",
-              message: error.message,
-              cause: error,
-            }),
-          ),
-        );
-    } else if (version.value === "7") {
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            const current = yield* sql<{
-              value: string;
-            }>`SELECT value FROM effect_agent_meta WHERE key = 'storage_version'`;
-
-            if (current[0]?.value === "9") return;
-            if (current[0]?.value !== "7")
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: -1,
-                supportedVersion: 9,
-                message: "Storage version changed during worker stop upgrade",
-              });
-            yield* checkPredecessorLayout(7);
-            yield* verifyWorkerPredecessor(false);
-            yield* failpoint("upgrade:before-mutation");
-            yield* createWorkerStops;
-            yield* failpoint("upgrade:after-mutation");
-            yield* failpoint("upgrade:before-version");
-            yield* sql`UPDATE effect_agent_meta SET value='9' WHERE key='storage_version'`;
-            yield* failpoint("upgrade:after-version");
-          }),
-        )
-        .pipe(
-          Effect.mapError((cause) =>
-            DoStorageError.make({
-              operation: "upgrade worker stop",
-              message: "Worker stop upgrade failed",
-              cause,
-            }),
-          ),
-        );
-    } else if (version.value === "8") {
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            const current = yield* sql<{
-              value: string;
-            }>`SELECT value FROM effect_agent_meta WHERE key = 'storage_version'`;
-
-            if (current[0]?.value === "9") return;
-            if (current[0]?.value !== "8")
-              return yield* DoStorageCompatibilityError.make({
-                actualVersion: -1,
-                supportedVersion: 9,
-                message: "Storage version changed during assignment seal upgrade",
-              });
-            yield* checkPredecessorLayout(7);
-            yield* verifyWorkerPredecessor(true);
-            const columns = yield* sql`PRAGMA table_info(effect_agent_worker_stops)`;
-
-            yield* Schema.decodeUnknownEffect(
-              Schema.Tuple([
-                Schema.Struct({
-                  cid: Schema.Literal(0),
-                  name: Schema.Literal("thread_id"),
-                  type: Schema.Literal("TEXT"),
-                  notnull: Schema.Literal(1),
-                  dflt_value: Schema.Null,
-                  pk: Schema.Literal(1),
-                }),
-              ]),
-            )(columns).pipe(
-              Effect.mapError(() =>
-                DoStorageCompatibilityError.make({
-                  actualVersion: 8,
-                  supportedVersion: 9,
-                  message: "Unsupported worker seal layout; no upgrade was committed",
-                }),
-              ),
-            );
-            yield* failpoint("upgrade:before-mutation");
-            yield* sql`ALTER TABLE effect_agent_worker_stops ADD COLUMN terminal TEXT`;
-            yield* failpoint("upgrade:after-mutation");
-            yield* failpoint("upgrade:before-version");
-            yield* sql`UPDATE effect_agent_meta SET value='9' WHERE key='storage_version'`;
-            yield* failpoint("upgrade:after-version");
-          }),
-        )
-        .pipe(
-          Effect.mapError((cause) =>
-            DoStorageError.make({
-              operation: "upgrade assignment seals",
-              message: "Assignment seal upgrade failed",
-              cause,
-            }),
-          ),
-        );
-    } else if (version.value !== String(CurrentDoStorageVersion)) {
+    if (version.value !== String(CurrentDoStorageVersion)) {
       const actualVersion = Number.parseInt(version.value, 10);
 
       return yield* DoStorageCompatibilityError.make({
@@ -989,12 +487,12 @@ const ensureCurrentStorage = Effect.fn("DoJournal.ensureCurrentStorage")(functio
         message:
           `The Durable Object uses unsupported storage version ${version.value}; ` +
           `this build supports exactly version ${CurrentDoStorageVersion}. ` +
-          "Only supported v2, v3, v4, v5, v6, v7 and v8 can be upgraded automatically. Keep the original store and use a compatible library version.",
+          "Keep the original store and use a compatible library version.",
       });
     }
   }
 
-  yield* verifyWorkerPredecessor(true);
+  yield* verifyCurrentStorage();
 
   const state = yield* ownedState(sql);
   const owner = (yield* SqlStorageOwner) ?? state;
@@ -1235,40 +733,304 @@ const makeJournal = (
       return rows.length > 0;
     });
 
+    const prepareAppend = Effect.fnUntraced(function* (request: RawAppendRequest) {
+      if (
+        request.threadId.length > MAX_IDENTIFIER_LENGTH ||
+        request.batchId.length > MAX_IDENTIFIER_LENGTH ||
+        request.records.some((record) => record.recordId.length > MAX_IDENTIFIER_LENGTH)
+      ) {
+        return yield* DoStorageError.make({
+          operation: "append canonical batch",
+          message: "Canonical identifiers exceed the Durable Object storage bounds.",
+        });
+      }
+      // The platform's ~2 MB per-value limit, enforced typed BEFORE any write (plan §1.2).
+      yield* checkValueBound("append canonical batch", request.batchJson);
+      yield* checkValueBound("append canonical batch", request.batchDigest);
+      yield* checkValueBound("append canonical batch", request.tailDigest);
+      yield* Effect.forEach(
+        request.records,
+        (record) => checkValueBound("append canonical record", record.recordJson),
+        { discard: true },
+      );
+
+      const recordIds: Array<string> = request.records.map((record) => record.recordId);
+
+      if (new Set(recordIds).size !== recordIds.length) {
+        return yield* DoAppendConflict.make({
+          message: `Batch ${request.batchId} contains duplicate canonical record IDs.`,
+          reason: "record-identity",
+        });
+      }
+
+      return request;
+    });
+
+    const appendPrepared = Effect.fnUntraced(function* (
+      request: RawAppendRequest,
+    ): Effect.fn.Return<RawAppendResult, AppendError> {
+      const recordIds: Array<string> = request.records.map((record) => record.recordId);
+      const threadRows = yield* getThread(request.threadId);
+
+      const thread = yield* decodeSingleRow(
+        Schema.Array(ThreadRow),
+        "effect_agent_threads",
+        request.threadId,
+        threadRows,
+      );
+
+      if (request.producerEpoch !== thread.producer_epoch) {
+        return yield* DoFenceRejected.make({
+          producerEpoch: request.producerEpoch,
+          actualEpoch: thread.producer_epoch,
+          message: `Producer epoch ${request.producerEpoch} is not the current epoch ${thread.producer_epoch}.`,
+        });
+      }
+
+      const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
+
+      const batchRows =
+        prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
+          ? []
+          : yield* sql<Record<string, unknown>>`
+          SELECT
+            thread_id,
+            batch_id,
+            first_sequence,
+            last_sequence,
+            batch_digest,
+            tail_digest,
+            batch_json
+          FROM effect_agent_canonical_batches
+          WHERE thread_id = ${request.threadId}
+            AND batch_id = ${request.batchId}
+        `.pipe(Effect.mapError(storageError("read idempotent batch")));
+
+      const batches = yield* decodeRows(
+        Schema.Array(BatchRow),
+        "effect_agent_canonical_batches",
+        `${request.threadId}/${request.batchId}`,
+        batchRows,
+      );
+
+      if (batches.length > 1) {
+        return yield* DoStorageCorruptionError.make({
+          table: "effect_agent_canonical_batches",
+          rowKey: `${request.threadId}/${request.batchId}`,
+          message: "A canonical batch primary key returned more than one row.",
+        });
+      }
+      if (batches.length === 1) {
+        const existing = batches[0];
+
+        if (existing.batch_digest !== request.batchDigest) {
+          return yield* DoAppendConflict.make({
+            message: `Batch ${request.batchId} already exists with different canonical content.`,
+            reason: "batch-digest",
+          });
+        }
+
+        return RawAppendResult.make({
+          firstSequence: existing.first_sequence,
+          lastSequence: existing.last_sequence,
+          replayed: true,
+          tailDigest: existing.tail_digest,
+        });
+      }
+
+      if (
+        request.expectedTailSequence !== thread.tail_sequence ||
+        request.expectedTailDigest !== thread.tail_digest
+      ) {
+        return yield* DoAppendConflict.make({
+          message:
+            `Expected tail ${request.expectedTailSequence}/${request.expectedTailDigest} ` +
+            `but found ${thread.tail_sequence}/${thread.tail_digest}.`,
+          reason: "tail",
+          actualTailSequence: thread.tail_sequence,
+          actualTailDigest: thread.tail_digest,
+        });
+      }
+      if (thread.tail_sequence + request.records.length > MAX_RECORDS_PER_THREAD) {
+        return yield* DoStorageError.make({
+          operation: "append canonical batch",
+          message: `Thread record limit ${MAX_RECORDS_PER_THREAD} would be exceeded.`,
+        });
+      }
+
+      // Chunked to respect the Durable Object platform's 100-bound-parameter statement
+      // limit: a batch may carry up to 256 records.
+      const existingRecords: Array<RecordRow> =
+        prefix === undefined ? [] : prefix.filter((row) => recordIds.includes(row.record_id));
+
+      for (const chunk of prefix === undefined
+        ? chunked(recordIds, MAX_BOUND_PARAMETERS - 10)
+        : []) {
+        const existingRecordRows = yield* sql<Record<string, unknown>>`
+            SELECT
+              thread_id,
+              sequence,
+              record_id,
+              batch_id,
+              record_json
+            FROM effect_agent_canonical_records
+            WHERE thread_id = ${request.threadId}
+              AND record_id IN ${sql.in([...chunk])}
+            ORDER BY sequence
+          `.pipe(Effect.mapError(storageError("check canonical record identities")));
+
+        existingRecords.push(
+          ...(yield* decodeRows(
+            Schema.Array(RecordRow),
+            "effect_agent_canonical_records",
+            `${request.threadId}/record_ids`,
+            existingRecordRows,
+          )),
+        );
+      }
+      if (existingRecords.length > 0) {
+        return yield* DoAppendConflict.make({
+          message: `Canonical record ID ${existingRecords[0].record_id} already exists.`,
+          reason: "record-identity",
+        });
+      }
+
+      const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
+        thread.tail_sequence + 1,
+      ).pipe(
+        Effect.mapError((error) =>
+          DoStorageError.make({
+            cause: error,
+            operation: "append canonical batch",
+            message: error.message,
+          }),
+        ),
+      );
+
+      const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
+        firstSequence + request.records.length - 1,
+      ).pipe(
+        Effect.mapError((error) =>
+          DoStorageError.make({
+            cause: error,
+            operation: "append canonical batch",
+            message: error.message,
+          }),
+        ),
+      );
+
+      yield* sql`
+          INSERT INTO effect_agent_canonical_batches (
+            thread_id,
+            batch_id,
+            first_sequence,
+            last_sequence,
+            batch_digest,
+            tail_digest,
+            batch_json
+          ) VALUES (
+            ${request.threadId},
+            ${request.batchId},
+            ${firstSequence},
+            ${lastSequence},
+            ${request.batchDigest},
+            ${request.tailDigest},
+            ${request.batchJson}
+          )
+        `.pipe(Effect.mapError(storageError("insert canonical batch")));
+      yield* failpoint("append:after-batch-insert");
+
+      const records = request.records.map((record, index) => ({
+        record,
+        canonical: record.canonical,
+        row: {
+          thread_id: request.threadId,
+          sequence: firstSequence + index,
+          record_id: record.recordId,
+          batch_id: request.batchId,
+          record_json: record.recordJson,
+        },
+      }));
+
+      // Five bound columns per row; preserve the logical batch and every append barrier.
+      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 5))) {
+        yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
+          Effect.mapError(storageError("insert canonical records")),
+        );
+        for (const { row } of group) {
+          recordCache.put(
+            RecordRow.make({
+              ...row,
+              sequence: Schema.decodeSync(CanonicalSequence)(row.sequence),
+            }),
+          );
+          yield* failpoint("append:after-record-insert");
+        }
+      }
+
+      yield* sql`
+          UPDATE effect_agent_threads
+          SET
+            tail_sequence = ${lastSequence},
+            tail_digest = ${request.tailDigest},
+            producer_epoch = ${request.producerEpoch}
+          WHERE thread_id = ${request.threadId}
+         RETURNING *`.pipe(
+        threads.write,
+        Effect.mapError((error) =>
+          error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
+        ),
+      );
+      yield* failpoint("append:after-tail-update");
+
+      // Retain one start prefix atomically with its canonical proof, before model/tool
+      // execution. Later facts stay journal-backed until the settlement publication wave.
+      if (
+        lifecycle !== undefined &&
+        records.some(
+          ({ canonical: { payload } }) =>
+            payload._tag === "RunStarted" || payload._tag === "SubagentStarted",
+        )
+      )
+        yield* flushCanonical(request.threadId).pipe(
+          Effect.provideService(SqlLifecycleRetainer, { retainMany: lifecycle.retainMany }),
+          Effect.mapError((cause) =>
+            DoStorageError.make({
+              operation: "retain lifecycle start prefix",
+              message: "Lifecycle start intent could not be retained",
+              cause,
+            }),
+          ),
+        );
+
+      yield* progress.committed("canonical").pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              DoStorageError.make({
+                operation: "enroll canonical progress",
+                message: error.message,
+                cause: error,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      return RawAppendResult.make({
+        firstSequence,
+        lastSequence,
+        replayed: false,
+        tailDigest: request.tailDigest,
+      });
+    });
+
     const append = Effect.fnUntraced(
       function* (
         request: RawAppendRequest,
         observed: ThreadRow,
       ): Effect.fn.Return<RawAppendResult, AppendError> {
-        if (
-          request.threadId.length > MAX_IDENTIFIER_LENGTH ||
-          request.batchId.length > MAX_IDENTIFIER_LENGTH ||
-          request.records.some((record) => record.recordId.length > MAX_IDENTIFIER_LENGTH)
-        ) {
-          return yield* DoStorageError.make({
-            operation: "append canonical batch",
-            message: "Canonical identifiers exceed the Durable Object storage bounds.",
-          });
-        }
-        // The platform's ~2 MB per-value limit, enforced typed BEFORE any write (plan §1.2).
-        yield* checkValueBound("append canonical batch", request.batchJson);
-        yield* checkValueBound("append canonical batch", request.batchDigest);
-        yield* checkValueBound("append canonical batch", request.tailDigest);
-        yield* Effect.forEach(
-          request.records,
-          (record) => checkValueBound("append canonical record", record.recordJson),
-          { discard: true },
-        );
-
-        const recordIds = request.records.map((record) => record.recordId);
-
-        if (new Set(recordIds).size !== recordIds.length) {
-          return yield* DoAppendConflict.make({
-            message: `Batch ${request.batchId} contains duplicate canonical record IDs.`,
-            reason: "record-identity",
-          });
-        }
-
+        yield* prepareAppend(request);
         // The facade already read this tail. Reject a known stale writer without opening a
         // transaction; a matching tail is still checked atomically below. Replays precede tail
         // conflicts, preserving retry identity even after the log has advanced.
@@ -1302,286 +1064,7 @@ const makeJournal = (
         return yield* withWriteTransaction(
           "append transaction",
           isAppendContention,
-        )(
-          Effect.gen(function* () {
-            const threadRows = yield* getThread(request.threadId);
-
-            const thread = yield* decodeSingleRow(
-              Schema.Array(ThreadRow),
-              "effect_agent_threads",
-              request.threadId,
-              threadRows,
-            );
-
-            if (request.producerEpoch !== thread.producer_epoch) {
-              return yield* DoFenceRejected.make({
-                producerEpoch: request.producerEpoch,
-                actualEpoch: thread.producer_epoch,
-                message: `Producer epoch ${request.producerEpoch} is not the current epoch ${thread.producer_epoch}.`,
-              });
-            }
-
-            const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
-
-            const batchRows =
-              prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
-                ? []
-                : yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            batch_id,
-            first_sequence,
-            last_sequence,
-            batch_digest,
-            tail_digest,
-            batch_json
-          FROM effect_agent_canonical_batches
-          WHERE thread_id = ${request.threadId}
-            AND batch_id = ${request.batchId}
-        `.pipe(Effect.mapError(storageError("read idempotent batch")));
-
-            const batches = yield* decodeRows(
-              Schema.Array(BatchRow),
-              "effect_agent_canonical_batches",
-              `${request.threadId}/${request.batchId}`,
-              batchRows,
-            );
-
-            if (batches.length > 1) {
-              return yield* DoStorageCorruptionError.make({
-                table: "effect_agent_canonical_batches",
-                rowKey: `${request.threadId}/${request.batchId}`,
-                message: "A canonical batch primary key returned more than one row.",
-              });
-            }
-            if (batches.length === 1) {
-              const existing = batches[0];
-
-              if (existing.batch_digest !== request.batchDigest) {
-                return yield* DoAppendConflict.make({
-                  message: `Batch ${request.batchId} already exists with different canonical content.`,
-                  reason: "batch-digest",
-                });
-              }
-
-              return RawAppendResult.make({
-                firstSequence: existing.first_sequence,
-                lastSequence: existing.last_sequence,
-                replayed: true,
-                tailDigest: existing.tail_digest,
-              });
-            }
-
-            if (
-              request.expectedTailSequence !== thread.tail_sequence ||
-              request.expectedTailDigest !== thread.tail_digest
-            ) {
-              return yield* DoAppendConflict.make({
-                message:
-                  `Expected tail ${request.expectedTailSequence}/${request.expectedTailDigest} ` +
-                  `but found ${thread.tail_sequence}/${thread.tail_digest}.`,
-                reason: "tail",
-                actualTailSequence: thread.tail_sequence,
-                actualTailDigest: thread.tail_digest,
-              });
-            }
-            if (thread.tail_sequence + request.records.length > MAX_RECORDS_PER_THREAD) {
-              return yield* DoStorageError.make({
-                operation: "append canonical batch",
-                message: `Thread record limit ${MAX_RECORDS_PER_THREAD} would be exceeded.`,
-              });
-            }
-
-            // Chunked to respect the Durable Object platform's 100-bound-parameter statement
-            // limit: a batch may carry up to 256 records.
-            const existingRecords: Array<RecordRow> =
-              prefix === undefined ? [] : prefix.filter((row) => recordIds.includes(row.record_id));
-
-            for (const chunk of prefix === undefined
-              ? chunked(recordIds, MAX_BOUND_PARAMETERS - 10)
-              : []) {
-              const existingRecordRows = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              sequence,
-              record_id,
-              batch_id,
-              record_json
-            FROM effect_agent_canonical_records
-            WHERE thread_id = ${request.threadId}
-              AND record_id IN ${sql.in([...chunk])}
-            ORDER BY sequence
-          `.pipe(Effect.mapError(storageError("check canonical record identities")));
-
-              existingRecords.push(
-                ...(yield* decodeRows(
-                  Schema.Array(RecordRow),
-                  "effect_agent_canonical_records",
-                  `${request.threadId}/record_ids`,
-                  existingRecordRows,
-                )),
-              );
-            }
-            if (existingRecords.length > 0) {
-              return yield* DoAppendConflict.make({
-                message: `Canonical record ID ${existingRecords[0].record_id} already exists.`,
-                reason: "record-identity",
-              });
-            }
-
-            const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-              thread.tail_sequence + 1,
-            ).pipe(
-              Effect.mapError((error) =>
-                DoStorageError.make({
-                  cause: error,
-                  operation: "append canonical batch",
-                  message: error.message,
-                }),
-              ),
-            );
-
-            const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-              firstSequence + request.records.length - 1,
-            ).pipe(
-              Effect.mapError((error) =>
-                DoStorageError.make({
-                  cause: error,
-                  operation: "append canonical batch",
-                  message: error.message,
-                }),
-              ),
-            );
-
-            yield* sql`
-          INSERT INTO effect_agent_canonical_batches (
-            thread_id,
-            batch_id,
-            first_sequence,
-            last_sequence,
-            batch_digest,
-            tail_digest,
-            batch_json
-          ) VALUES (
-            ${request.threadId},
-            ${request.batchId},
-            ${firstSequence},
-            ${lastSequence},
-            ${request.batchDigest},
-            ${request.tailDigest},
-            ${request.batchJson}
-          )
-        `.pipe(Effect.mapError(storageError("insert canonical batch")));
-            yield* failpoint("append:after-batch-insert");
-
-            const records = yield* Effect.forEach(request.records, (record, index) =>
-              Effect.gen(function* () {
-                const canonical = yield* Schema.decodeEffect(
-                  Schema.fromJsonString(CanonicalRecord),
-                )(record.recordJson).pipe(
-                  Effect.mapError((error) =>
-                    DoStorageCorruptionError.make({
-                      table: "effect_agent_canonical_records",
-                      rowKey: record.recordId,
-                      message: error.message,
-                    }),
-                  ),
-                );
-
-                return {
-                  record,
-                  canonical,
-                  row: {
-                    thread_id: request.threadId,
-                    sequence: firstSequence + index,
-                    record_id: record.recordId,
-                    batch_id: request.batchId,
-                    record_json: record.recordJson,
-                    outstanding: canonicalRecordOutstanding(canonical),
-                  },
-                };
-              }),
-            );
-
-            // Six bound columns per row; preserve the logical batch and every append barrier.
-            for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 6))) {
-              yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
-                Effect.mapError(storageError("insert canonical records")),
-              );
-              for (const { canonical, row } of group) {
-                yield* indexCanonicalRecord(request.threadId, canonical, undefined, {
-                  sequence: row.sequence,
-                }).pipe(
-                  Effect.provideService(SqlClient.SqlClient, sql),
-                  Effect.mapError(storageError("index canonical record")),
-                );
-                recordCache.put(
-                  RecordRow.make({
-                    ...row,
-                    sequence: Schema.decodeSync(CanonicalSequence)(row.sequence),
-                  }),
-                );
-                yield* failpoint("append:after-record-insert");
-              }
-            }
-
-            yield* sql`
-          UPDATE effect_agent_threads
-          SET
-            tail_sequence = ${lastSequence},
-            tail_digest = ${request.tailDigest},
-            producer_epoch = ${request.producerEpoch}
-          WHERE thread_id = ${request.threadId}
-         RETURNING *`.pipe(
-              threads.write,
-              Effect.mapError((error) =>
-                error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
-              ),
-            );
-            yield* failpoint("append:after-tail-update");
-
-            // Retain one start prefix atomically with its canonical proof, before model/tool
-            // execution. Later facts stay journal-backed until the settlement publication wave.
-            if (
-              lifecycle !== undefined &&
-              records.some(
-                ({ canonical: { payload } }) =>
-                  payload._tag === "RunStarted" || payload._tag === "SubagentStarted",
-              )
-            )
-              yield* flushCanonical(request.threadId).pipe(
-                Effect.provideService(SqlLifecycleRetainer, { retainMany: lifecycle.retainMany }),
-                Effect.mapError((cause) =>
-                  DoStorageError.make({
-                    operation: "retain lifecycle start prefix",
-                    message: "Lifecycle start intent could not be retained",
-                    cause,
-                  }),
-                ),
-              );
-
-            yield* progress.committed("canonical").pipe(
-              Effect.catchCause((cause) =>
-                Effect.failCause(
-                  Cause.map(cause, (error) =>
-                    DoStorageError.make({
-                      operation: "enroll canonical progress",
-                      message: error.message,
-                      cause: error,
-                    }),
-                  ),
-                ),
-              ),
-            );
-
-            return RawAppendResult.make({
-              firstSequence,
-              lastSequence,
-              replayed: false,
-              tailDigest: request.tailDigest,
-            });
-          }),
-        );
+        )(appendPrepared(request));
       },
       withStorageSpan("DoJournal.append", isAppendContention),
     );
@@ -2261,6 +1744,8 @@ const makeJournal = (
       flushCanonical,
       flushPublications,
       append,
+      prepareAppend,
+      appendPrepared,
       checkValueBound,
       exportThread,
       getThread,

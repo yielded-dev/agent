@@ -45,6 +45,11 @@ a Vitest 5 peer minimum, as it did on Effect rc.117. Verify this compatibility w
 existing suites when either dependency changes.
 Operational harnesses under `tooling/*` also use Vite tasks for Miniflare tests.
 
+The root temporarily patches Effect 4.0.0 to reuse streaming response decoders when
+tool declarations stay unchanged. This applies to repository installations; published
+libraries still resolve their consumer's Effect peer. Remove the patch when adopting
+an upstream release containing the change.
+
 Astro uses its own Vite dependency. Keep the root Vite+ core alias required by Vite+;
 do not add a global Vite override.
 
@@ -507,13 +512,21 @@ running them. Repeat `--case` to focus a comparison on the component under inves
 
 ```sh
 vp run perf:compare --base-dir /path/to/base --case checkpoint-recovery-2048 --out-dir /tmp/recovery-comparison
-vp run perf:compare --base-dir /path/to/base --case checkpoint-recovery-2048 --cpu-profile --out-dir /tmp/recovery-profile
+vp run perf:compare --base-dir /path/to/base --steady-state-profile --case sqlite-tool-rounds-4 --out-dir /tmp/sqlite-profile
 ```
 
-CPU profiles cover the whole child process, including imports and setup. Use them to find work
-to investigate, then rerun without profiling to measure a change. Profiled reports keep raw
-samples but suppress timing comparisons. Timing tasks bypass the task cache; keep other builds,
-tests, and benchmarks idle during measurement.
+`--steady-state-profile` captures one warmed operation loop inside a resident file-backed SQLite
+host per revision. It performs exactly 500 warmup operations, then
+captures 1,000 fresh-Thread operations, each with four immediate tool calls and five provider
+requests. Imports, host acquisition, warmup, reporting, and host disposal are outside capture.
+The provider uses native `Stream.make`, so this is a diagnostic workload distinct from async-iterable
+delivery and the ordinary reopen-per-sample matrix. Select the workflow's
+`steady_state_profile` input to run it in Actions.
+
+`--cpu-profile` remains whole-process profiling, including imports and setup; diagnostics support
+that mode only. Both modes suppress timing comparisons. Use profiles to locate work, then rerun
+an unprofiled matched workload to measure a change. Timing tasks bypass the task cache; keep
+other builds, tests, and benchmarks idle during measurement.
 
 The bounded `pr` profile covers small runs and streams, fixed-size responses with increasing fragmentation,
 growing prompts, parallel tools and repeated rounds, file-backed SQLite history, checkpoint
@@ -616,7 +629,7 @@ and caches are not consumed by the review workflow.
 Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
 builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
 always precedes task-cache restoration.
-Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs only on PRs. Main runs are not cancelled
+Proven version merges reuse their source checks and exact PR build. The `ready` fan-in runs on PRs and manually dispatched branch CI. Main runs are not cancelled
 by newer pushes. GitHub scopes PR caches to each PR's merge ref, so another PR cannot reuse them.
 A new release PR can restore the latest main results only after those jobs finish saving their
 caches. Waiting for those caches alone does not prevent version fields from invalidating whole-file

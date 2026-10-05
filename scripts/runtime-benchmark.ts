@@ -27,6 +27,8 @@ import {
   FIXTURE_VERSION,
   Profile,
   selectCaseNames,
+  steadyStateCases,
+  STEADY_STATE,
   summary,
   WorkerOptions,
   WorkerReport,
@@ -84,6 +86,13 @@ export const PerformanceReport = Schema.Struct({
     production: Schema.Literal(true),
     execution: Schema.Literal("unbundled published ESM"),
     timingGate: Schema.Literals(["informational", "profiling only"]),
+    steadyState: Schema.optionalKey(
+      Schema.Struct({
+        warmupOperations: Schema.Natural,
+        operations: Schema.Natural,
+        samplingIntervalMicros: Schema.Natural,
+      }),
+    ),
   }),
   revisions: Schema.Array(Revision),
   batches: Schema.Array(Batch),
@@ -259,17 +268,33 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
   const workloads = report.cases ?? casesFor(report.profile);
 
   const expectedBatches =
-    report.settings.batches * (workloads.some(({ name }) => name === "small-run") ? 4 : 2);
+    report.settings.batches *
+    (report.mode !== "steady-state-profile" && workloads.some(({ name }) => name === "small-run")
+      ? 4
+      : 2);
 
-  if (report.mode === "cpu-profile" || report.settings.timingGate === "profiling only")
+  if (
+    report.mode === "cpu-profile" ||
+    report.mode === "steady-state-profile" ||
+    report.settings.timingGate === "profiling only"
+  )
     return [
-      "CPU profiling mode. Profiles cover each whole Node child: startup, imports, setup, warmups, operations, verification, reporting, and shutdown.",
+      report.mode === "steady-state-profile"
+        ? "Steady-state CPU profiling: one continuous loop in a resident file-backed SQLite host per revision. Imports, host acquisition, warmup, reporting and host disposal are excluded; admission through settlement and canonical completion read, with inline correctness checks, are included. The native provider uses Stream.make, a diagnostic workload distinct from async-iterable delivery."
+        : "Whole-process CPU profiling: each Node child includes startup, imports, setup, warmups, operations, verification, reporting, and shutdown.",
       "Instrumented elapsed timings remain in raw JSON for diagnosis only; they are not before/after acceptance measurements. No comparison timing table is produced.",
       `Selected cases: ${workloads.map(({ name }) => name).join(", ")}.`,
       `Complete batches: ${report.batches.filter((batch) => batch.complete && batch.exitCode === 0).length}/${expectedBatches}.`,
       ...report.batches.map(
         (batch) =>
           `${batch.role}/${batch.cohort}/${batch.cold ? "cold" : "warm"}: ${batch.cpuProfile ?? "missing profile"}${batch.failure === null ? "" : `; ${batch.failure.split("\n")[0]}`}`,
+      ),
+      ...report.batches.flatMap((batch) =>
+        batch.report?.steadyState === undefined
+          ? []
+          : [
+              `${batch.role}: ${batch.report.steadyState.warmupOperations} warmup operations in ${batch.report.steadyState.warmupMs.toFixed(2)} ms; ${batch.report.steadyState.operations} captured operations in ${batch.report.steadyState.operationMs.toFixed(2)} ms; ${batch.report.steadyState.modelCalls} provider calls, ${batch.report.steadyState.toolCalls} tool calls; profile interval ${batch.report.steadyState.profileDurationMs.toFixed(2)} ms.`,
+            ],
       ),
       ...(report.activeBatch === null
         ? []
@@ -439,19 +464,35 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
   baselineTag: string | null;
   cases?: ReadonlyArray<string>;
   cpuProfile?: boolean;
+  steadyStateProfile?: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const root = path.resolve(options.root);
   const output = path.resolve(options.output);
 
+  yield* check(
+    !(options.cpuProfile && options.steadyStateProfile),
+    "Choose either --cpu-profile (whole process) or --steady-state-profile",
+  );
+  const available = options.steadyStateProfile ? steadyStateCases : casesFor(options.profile);
+  const profiling = options.cpuProfile || options.steadyStateProfile;
+
+  const mode = options.steadyStateProfile
+    ? "steady-state-profile"
+    : options.cpuProfile
+      ? "cpu-profile"
+      : "comparison";
+
   const cases = yield* selectCaseNames(
-    casesFor(options.profile).map(({ name }) => name),
+    available.map(({ name }) => name),
     options.cases,
   );
 
-  const workloads = casesFor(options.profile).filter(({ name }) => cases.includes(name));
-  const temperatures = cases.includes("small-run") ? [true, false] : [false];
+  const workloads = available.filter(({ name }) => cases.includes(name));
+
+  const temperatures =
+    !options.steadyStateProfile && cases.includes("small-run") ? [true, false] : [false];
 
   yield* fs.makeDirectory(output, { recursive: true });
   yield* check(
@@ -472,6 +513,9 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
           "seeds.ts",
           "ids.ts",
           "history.ts",
+          "settlement.ts",
+          "cpu-profile.ts",
+          "steady-state.ts",
         ].map((file) => path.join(source, file)),
         outdir: fixtures,
         bundle: false,
@@ -509,8 +553,9 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
     `${FIXTURE_VERSION} requires Node 24; record runtime changes before comparing across runs`,
   );
 
-  const sizes =
-    options.profile === "smoke"
+  const sizes = options.steadyStateProfile
+    ? { batches: 1, warmupsPerBatch: 0, samplesPerBatch: 0 }
+    : options.profile === "smoke"
       ? { batches: 1, warmupsPerBatch: 0, samplesPerBatch: 1 }
       : options.profile === "pr"
         ? { batches: 3, warmupsPerBatch: 2, samplesPerBatch: 3 }
@@ -530,7 +575,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
     fixtureSha256: sha256(fixtureBytes.join("\n")),
     transpiler: `esbuild ${esbuildVersion} (fixture syntax only; no bundling)`,
     profile: options.profile,
-    mode: options.cpuProfile ? "cpu-profile" : "comparison",
+    mode,
     cases: workloads,
     environment: {
       platform: platform(),
@@ -545,7 +590,8 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
       ...sizes,
       production: true,
       execution: "unbundled published ESM",
-      timingGate: options.cpuProfile ? "profiling only" : "informational",
+      timingGate: profiling ? "profiling only" : "informational",
+      ...(options.steadyStateProfile ? { steadyState: STEADY_STATE } : {}),
     },
     revisions: stages.map((stage) => stage.revision),
     batches,
@@ -577,7 +623,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
           const name = `${cohort}-${stage.revision.role}-${cold ? "cold" : "warm"}`;
           const outputFile = path.join(output, `${name}.json`);
           const logFile = path.join(output, `${name}.log`);
-          const cpuProfile = options.cpuProfile ? `${name}.cpuprofile` : undefined;
+          const cpuProfile = profiling ? `${name}.cpuprofile` : undefined;
 
           if (cpuProfile !== undefined)
             yield* check(
@@ -589,16 +635,19 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
           yield* persist;
 
           yield* Console.error(
-            `${options.cpuProfile ? "Profiling" : "Measuring"} ${name} (${options.profile})`,
+            `${profiling ? "Profiling" : "Measuring"} ${name} (${options.profile})`,
           );
 
           const workerOptions: typeof WorkerOptions.Type = {
             cold,
             profile: options.profile,
-            mode: options.cpuProfile ? "cpu-profile" : "comparison",
+            mode,
+            ...(options.steadyStateProfile && cpuProfile !== undefined
+              ? { cpuProfile: path.join(output, cpuProfile) }
+              : {}),
             cases: cold ? ["small-run"] : cases,
             warmups: cold ? 0 : sizes.warmupsPerBatch,
-            samples: cold ? 1 : sizes.samplesPerBatch,
+            samples: options.steadyStateProfile ? 1 : cold ? 1 : sizes.samplesPerBatch,
             output: outputFile,
           };
 
@@ -610,7 +659,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
                 subprocess(
                   "node",
                   [
-                    ...(cpuProfile === undefined
+                    ...(!options.cpuProfile || cpuProfile === undefined
                       ? []
                       : [
                           "--cpu-prof",
@@ -767,6 +816,12 @@ export const command = Command.make(
         "List exact case IDs for --profile without building or requiring --base-dir.",
       ),
     ),
+    steadyStateProfile: Flag.Boolean("steady-state-profile").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Capture one warmed resident SQLite operation loop per revision; use --list-cases for this mode’s workload.",
+      ),
+    ),
     cpuProfile: Flag.Boolean("cpu-profile").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -783,9 +838,10 @@ export const command = Command.make(
     cases,
     listCases,
     cpuProfile,
+    steadyStateProfile,
   }) {
     const selected = yield* selectCaseNames(
-      casesFor(profile).map(({ name }) => name),
+      (steadyStateProfile ? steadyStateCases : casesFor(profile)).map(({ name }) => name),
       cases,
     );
 
@@ -810,6 +866,7 @@ export const command = Command.make(
       requireClean,
       cases: selected,
       cpuProfile,
+      steadyStateProfile,
     });
   }),
 ).pipe(

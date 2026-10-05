@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 
-export const FIXTURE_VERSION = "runtime-v3";
+export const FIXTURE_VERSION = "runtime-v4";
 
 export class BenchmarkError extends Schema.TaggedError<BenchmarkError>()("BenchmarkError", {
   message: Schema.String,
@@ -78,10 +78,50 @@ export const casesFor = (profile: Profile): ReadonlyArray<Case> => [
   ]),
 ];
 
+/** Resident SQLite is a separate workload from reopening a host in ordinary A/B samples. */
+export const steadyStateCases: ReadonlyArray<Case> = [
+  workload("sqlite-tool-rounds-4", "durable", { rounds: 4, outputBytes: 32 }),
+];
+
+export const STEADY_STATE = {
+  warmupOperations: 500,
+  operations: 1_000,
+  samplingIntervalMicros: 1_000,
+} as const;
+
+export const SteadyStateResult = Schema.Struct({
+  case: Schema.Literal("sqlite-tool-rounds-4"),
+  workload: Schema.Literal(
+    "resident file-backed SQLite host; fresh Thread and Submission per operation",
+  ),
+  capture: Schema.Literal(
+    "one continuous operation loop; imports, host acquisition, warmup, reporting and host disposal excluded",
+  ),
+  provider: Schema.Literal("native Effect LanguageModel with Stream.make; no inference or network"),
+  warmupOperations: Schema.Natural,
+  warmupMs: Schema.Finite,
+  operations: Schema.Natural,
+  operationMs: Schema.Finite,
+  profileDurationMs: Schema.Finite,
+  samplingIntervalMicros: Schema.Literal(STEADY_STATE.samplingIntervalMicros),
+  modelCalls: Schema.Natural,
+  modelFinalizers: Schema.Natural,
+  toolCalls: Schema.Natural,
+  toolFinalizers: Schema.Natural,
+  canonicalCompletions: Schema.Natural,
+  inputBytes: Schema.Literal(32),
+  outputBytes: Schema.Literal(32),
+  toolResultBytes: Schema.Literal(32),
+  syntheticDelayMs: Schema.Literal(0),
+});
+
+export type SteadyStateResult = typeof SteadyStateResult.Type;
+
 export const WorkerOptions = Schema.Struct({
   cold: Schema.Boolean,
   profile: Profile,
-  mode: Schema.optionalKey(Schema.Literals(["comparison", "cpu-profile"])),
+  mode: Schema.optionalKey(Schema.Literals(["comparison", "cpu-profile", "steady-state-profile"])),
+  cpuProfile: Schema.optionalKey(Schema.String),
   cases: Schema.optionalKey(Schema.Array(Schema.String).check(Schema.isMinLength(1))),
   warmups: Schema.Natural.check(Schema.isLessThanOrEqualTo(20)),
   samples: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
@@ -133,6 +173,7 @@ export const WorkerReport = Schema.Struct({
   active: Schema.NullOr(SampleProgress),
   failure: Schema.NullOr(Schema.String),
   samples: Schema.Array(Sample),
+  steadyState: Schema.optionalKey(SteadyStateResult),
 });
 
 export type WorkerReport = typeof WorkerReport.Type;
@@ -141,6 +182,34 @@ export const completeBatch = (
   report: WorkerReport,
   options: typeof WorkerOptions.Type,
 ): boolean => {
+  if (options.mode === "steady-state-profile") {
+    const result = report.steadyState;
+
+    return (
+      report.mode === options.mode &&
+      report.profile === options.profile &&
+      !options.cold &&
+      options.cases?.length === 1 &&
+      options.cases[0] === "sqlite-tool-rounds-4" &&
+      report.cases?.length === 1 &&
+      report.cases[0] === "sqlite-tool-rounds-4" &&
+      report.active === null &&
+      report.failure === null &&
+      report.samples.length === 0 &&
+      result !== undefined &&
+      result.operations === STEADY_STATE.operations &&
+      result.warmupOperations === STEADY_STATE.warmupOperations &&
+      result.warmupMs > 0 &&
+      result.operationMs > 0 &&
+      result.profileDurationMs > 0 &&
+      result.modelCalls === result.operations * 5 &&
+      result.modelFinalizers === result.modelCalls &&
+      result.toolCalls === result.operations * 4 &&
+      result.toolFinalizers === result.toolCalls &&
+      result.canonicalCompletions === result.operations
+    );
+  }
+
   const available = options.cold
     ? casesFor(options.profile).slice(0, 1)
     : casesFor(options.profile);

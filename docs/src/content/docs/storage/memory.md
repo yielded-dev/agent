@@ -43,9 +43,12 @@ history inspection.
 ## Canonical stores for tests and custom assemblies
 
 `@yielded/agent-storage-memory` supplies implementations of the canonical
-`ThreadStore` and `SubmissionLedger` ports. These are useful for adapter tests and
-custom runtime assemblies. They are separate from the conversation store supplied
-by `InMemory.layer`; the submission ledger reports itself as non-durable.
+`ThreadStore`, `SubmissionLedger` and `SettlementPublisher` ports. These are useful
+for adapter tests and custom runtime assemblies. The ledger and publisher share the
+thread store's mutation boundary. Assemble them with
+`MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive))` so each
+assembly owns one store. They are separate from the conversation store supplied by
+`InMemory.layer`; the submission ledger reports itself as non-durable.
 
 `MemoryThreadStoreLive`, imported from
 `@yielded/agent-storage-memory/memory-thread-store`, provides `ThreadStore` and

@@ -8,7 +8,7 @@ import { createMessageDeliveryTables } from "./message-delivery-schema.ts";
 import { createRecoveryCheckpointTable } from "./recovery-checkpoint-schema.ts";
 
 /** The current storage version recorded in `effect_agent_meta`. */
-export const CurrentDoStorageVersion = 9;
+export const CurrentDoStorageVersion = 16;
 
 /** One permanent destination inbox fence, including workers stopped before admission. */
 export const createWorkerStops = Effect.gen(function* () {
@@ -126,6 +126,8 @@ export const doMigrations = SqliteMigrator.fromRecord({
         receipt_id TEXT NOT NULL,
         state TEXT NOT NULL,
         settled_outcome TEXT,
+        settled_record_id TEXT,
+        finalized_at TEXT,
         created_at TEXT NOT NULL,
         ready_at TEXT,
         input_applied_record_id TEXT,
@@ -183,22 +185,6 @@ export const doMigrations = SqliteMigrator.fromRecord({
         owner_producer_id TEXT NOT NULL,
         producer_epoch INTEGER NOT NULL,
         claimed_at TEXT NOT NULL,
-        FOREIGN KEY (submission_id)
-          REFERENCES effect_agent_submissions(submission_id)
-          ON DELETE RESTRICT
-      )
-    `.withoutTransform;
-
-    yield* sql`
-      CREATE TABLE effect_agent_settlement_reservations (
-        submission_id TEXT PRIMARY KEY NOT NULL,
-        settlement_id TEXT NOT NULL,
-        outcome TEXT NOT NULL,
-        record_id TEXT NOT NULL,
-        record_json TEXT NOT NULL,
-        record_digest TEXT NOT NULL,
-        reserved_at TEXT NOT NULL,
-        finalized_at TEXT,
         FOREIGN KEY (submission_id)
           REFERENCES effect_agent_submissions(submission_id)
           ON DELETE RESTRICT

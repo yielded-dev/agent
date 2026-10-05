@@ -407,17 +407,17 @@ describe("durable host publication", () => {
         await entered.promise;
         acknowledge.resolve();
 
-        const prepared = await runInDurableObject(stub(thread), (_, state) =>
-          Schema.decodeUnknownSync(Schema.Struct({ prepared: Schema.Natural }))(
+        const declared = await runInDurableObject(stub(thread), (_, state) =>
+          Schema.decodeUnknownSync(Schema.Struct({ declarations: Schema.Natural }))(
             state.storage.sql
               .exec(
-                "SELECT COUNT(*) AS prepared FROM effect_agent_canonical_records WHERE json_extract(record_json, '$.payload._tag') = 'ToolCallPrepared'",
+                "SELECT COUNT(*) AS declarations FROM effect_agent_canonical_records WHERE json_extract(record_json, '$.payload._tag') = 'ModelResponseRecorded'",
               )
               .one(),
           ),
         );
 
-        expect(prepared.prepared).toBe(1);
+        expect(declared.declarations).toBe(1);
         await vi.waitFor(
           () => {
             expect((lifecycleBatches.get(thread) ?? []).flat().map((p) => p.fact._tag)).toEqual([
