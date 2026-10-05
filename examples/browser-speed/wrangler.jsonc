@@ -22,7 +22,11 @@
     "public": {
       "name": "yielded-agent-browser-use",
       "workers_dev": false,
-      "routes": [{ "pattern": "agent.yielded.dev/browser-use*", "zone_name": "yielded.dev" }],
+      // The bare root redirects to the lab; nothing else is served on agent.yielded.dev yet.
+      "routes": [
+        { "pattern": "agent.yielded.dev/", "zone_name": "yielded.dev" },
+        { "pattern": "agent.yielded.dev/browser-use*", "zone_name": "yielded.dev" },
+      ],
       "vars": { "LAB_PUBLIC": "true" },
       "browser": { "binding": "BROWSER", "remote": true },
       "durable_objects": { "bindings": [{ "name": "LAB", "class_name": "BrowserLab" }] },
