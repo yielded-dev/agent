@@ -355,6 +355,7 @@ import {
   contextWindowId,
   collectCoveredMessages,
   estimatePromptTokens,
+  estimateMessageTokens,
   evaluateMessageTokenEstimates,
   initialCompactionState,
   isContextOverflowMessage,
@@ -1097,9 +1098,7 @@ const makeModelResponseParsers = (toolkit: Toolkit.Any) => {
 
   return {
     encode: Schema.encodeUnknownEffect(codec),
-    decodeParts: Schema.decodeUnknownEffect(
-      Schema.NonEmptyArray(Schema.toCodecJson(Response.StreamPart(ownedToolkit))),
-    ),
+    decode: Schema.decodeUnknownEffect(Schema.toCodecJson(Response.StreamPart(ownedToolkit))),
   };
 };
 
@@ -1202,78 +1201,30 @@ interface OwnedModelResponsePart {
   readonly retainedBytes: number;
 }
 
-type ModelResponseChunkItem = OwnedModelResponsePart | { readonly failure: ModelProtocolError };
-
-const ownModelResponseParts = Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
-  parts: Arr.NonEmptyReadonlyArray<unknown>,
+/** Reject trailing content before its capture can run an application codec or suspend. */
+const ownModelResponsePart = Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
+  part: unknown,
   toolkit: Toolkit.Toolkit<Tools>,
   usage: ModelResponseBufferUsage,
   limits: EffectiveRunBufferLimits,
-) {
-  // Keep the detached prefix and first capture error. No provider object or application codec
-  // is retried on failure, and the existing cumulative ceilings bound this staging allocation.
-  const reserved = {
-    responsePartCount: usage.responsePartCount,
-    responsePartBytes: usage.responsePartBytes,
-  };
-
-  const captured: Array<Effect.Success<ReturnType<typeof captureModelResponsePart>>> = [];
-  let failure: ModelProtocolError | undefined;
-
-  yield* Effect.gen(function* () {
-    for (let index = 0; index < parts.length; index++) {
-      const owned = yield* captureModelResponsePart(parts[index], toolkit, reserved, limits);
-
-      captured.push(owned);
-      reserved.responsePartCount++;
-      reserved.responsePartBytes += owned.retainedBytes;
-
-      // A finish closes the response. Reject trailing content before its capture can suspend and
-      // hide usage already reported by this prefix. Native Schema still validates the finish below.
-      if (
-        index + 1 < parts.length &&
-        typeof owned.encodedPart === "object" &&
-        owned.encodedPart !== null &&
-        "type" in owned.encodedPart &&
-        owned.encodedPart.type === "finish"
-      ) {
-        return yield* ModelProtocolError.make({
-          message: "Model response emitted content after its finish part",
-        });
-      }
-    }
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        failure = error;
-      }),
-    ),
-  );
-
-  if (!Arr.isReadonlyArrayNonEmpty(captured)) {
-    return [
-      {
-        failure: failure ?? ModelProtocolError.make({ message: "Model response chunk was empty" }),
-      },
-    ] satisfies Arr.NonEmptyArray<ModelResponseChunkItem>;
+  finished: boolean,
+): Effect.fn.Return<OwnedModelResponsePart, ModelProtocolError> {
+  if (finished) {
+    return yield* ModelProtocolError.make({
+      message: "Model response emitted content after its finish part",
+    });
   }
+  const captured = yield* captureModelResponsePart(part, toolkit, usage, limits);
 
-  const decoded = yield* modelResponseParsersFor(toolkit)
-    .decodeParts(captured.map((part) => part.encodedPart))
+  const ownedPart = yield* modelResponseParsersFor(toolkit)
+    .decode(captured.encodedPart)
     .pipe(
       Effect.mapError(() =>
-        ModelProtocolError.make({ message: "Model response chunk failed canonical decoding" }),
+        ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
       ),
     );
 
-  const owned: Arr.NonEmptyArray<ModelResponseChunkItem> = Arr.map(decoded, (ownedPart, index) => ({
-    ownedPart,
-    retainedBytes: captured[index].retainedBytes,
-  }));
-
-  if (failure !== undefined) owned.push({ failure });
-
-  return owned;
+  return { ownedPart, retainedBytes: captured.retainedBytes };
 });
 
 type PartLifecycle = "open" | "closed";
@@ -1554,8 +1505,8 @@ const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
   );
 });
 
-const snapshotResumedSettledCalls = Effect.fnUntraced(function* (resume: unknown, maximum: number) {
-  return yield* Effect.try({
+const snapshotResumedSettledCalls = (resume: unknown, maximum: number) =>
+  Effect.try({
     try: () => {
       if (resume === null || typeof resume !== "object") {
         throw new TypeError("Turn resume must be an object");
@@ -1599,7 +1550,6 @@ const snapshotResumedSettledCalls = Effect.fnUntraced(function* (resume: unknown
         message: "Turn resume contains an invalid settled Tool Call collection",
       }),
   });
-});
 
 const decodeResumeUsage = Effect.fnUntraced(function* (input: unknown) {
   const snapshot = yield* Effect.try({
@@ -3974,10 +3924,8 @@ const nextContextEstimate = Effect.fnUntraced(function* (
   );
 });
 
-const snapshotCompactionMessages = Effect.fnUntraced(function* (
-  messages: ReadonlyArray<Prompt.Message>,
-) {
-  return yield* Effect.try({
+const snapshotCompactionMessages = (messages: ReadonlyArray<Prompt.Message>) =>
+  Effect.try({
     try: () =>
       messages.map((message) =>
         Schema.decodeUnknownSync(Schema.Json)(
@@ -3987,7 +3935,6 @@ const snapshotCompactionMessages = Effect.fnUntraced(function* (
     catch: (cause) =>
       CompactionError.make({ message: "Could not snapshot prepared compaction history", cause }),
   });
-});
 
 const HttpStatus = AiError.HttpResponseDetails.fields.status.check(
   Schema.isBetween({ minimum: 100, maximum: 599 }),
@@ -4199,10 +4146,8 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
         const textParts = new Map<string, PartLifecycle>();
         const reasoningParts = new Map<string, PartLifecycle>();
 
-        const consumeSummaryPart = (owned: ModelResponseChunkItem) =>
+        const consumeSummaryPart = (owned: OwnedModelResponsePart) =>
           Effect.gen(function* () {
-            if ("failure" in owned) return yield* owned.failure;
-
             responseUsage.responsePartCount++;
             responseUsage.responsePartBytes += owned.retainedBytes;
             const ownedPart = owned.ownedPart;
@@ -4219,11 +4164,6 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
             }
             // Drain malformed responses within the buffer bounds so reported usage is charged.
             yield* Effect.gen(function* () {
-              if (summaryFinished) {
-                return yield* ModelProtocolError.make({
-                  message: "Compaction response emitted content after its finish part",
-                });
-              }
               switch (ownedPart.type) {
                 case "text-start":
                   return yield* startPart(textParts, ownedPart.id, "compaction text");
@@ -4283,17 +4223,14 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
           context.durationFailure,
         ).pipe(
           Stream.provideServiceEffect(Tracer.Tracer, modelTelemetryTracer(context)),
-          Stream.mapArrayEffect((parts) =>
-            summaryFinished
-              ? Effect.fail(
-                  ModelProtocolError.make({
-                    message: "Compaction response emitted content after its finish part",
-                  }),
-                )
-              : ownModelResponseParts(parts, Toolkit.empty, responseUsage, context.bufferLimits),
-          ),
-          Stream.runForEachArray((parts) =>
-            Effect.forEach(parts, consumeSummaryPart, { discard: true }),
+          Stream.runForEach((part) =>
+            ownModelResponsePart(
+              part,
+              Toolkit.empty,
+              responseUsage,
+              context.bufferLimits,
+              summaryFinished,
+            ).pipe(Effect.flatMap(consumeSummaryPart)),
           ),
           Effect.exit,
         );
@@ -4523,57 +4460,54 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
     return { events: events ?? noEvents, changed };
   });
 
-const decodeInput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+const decodeInput = <AgentValue extends Agent.Any>(
   agent: AgentValue,
   input: unknown,
-): Effect.fn.Return<
+): Effect.Effect<
   Agent.Input<AgentValue>,
   AgentInputError,
   AgentValue["definition"]["input"]["DecodingServices"]
-> {
-  return yield* Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
+> =>
+  Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
     Effect.mapError((cause) =>
       AgentInputError.make({
         message: cause.message,
       }),
     ),
   );
-});
 
-const evaluateInstructions = Effect.fnUntraced(function* <Input, Error, Services>(
+const evaluateInstructions = <Input, Error, Services>(
   instructions: InstructionSource<Input, Error, Services>,
   input: Input,
-): Effect.fn.Return<Prompt.RawInput, Error, Services> {
-  return yield* Effect.suspend(() => {
+): Effect.Effect<Prompt.RawInput, Error, Services> =>
+  Effect.suspend(() => {
     const result = typeof instructions === "function" ? instructions(input) : instructions;
 
     return Effect.isEffect(result) ? result : Effect.succeed(result);
   });
-});
 
-const encodeInput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+const encodeInput = <AgentValue extends Agent.Any>(
   agent: AgentValue,
   input: Agent.Input<AgentValue>,
-): Effect.fn.Return<
+): Effect.Effect<
   AgentValue["definition"]["input"]["Encoded"],
   AgentInputError,
   AgentValue["definition"]["input"]["EncodingServices"]
-> {
-  return yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
+> =>
+  Schema.encodeEffect(agent.definition.input)(input).pipe(
     Effect.mapError((cause) =>
       AgentInputError.make({
         message: `Unable to encode Agent input: ${cause.message}`,
       }),
     ),
   );
-});
 
-const renderInputPromptEffect = Effect.fnUntraced(function* <Input, Error, Services>(
+const renderInputPromptEffect = <Input, Error, Services>(
   inputPrompt: InputPromptSource<Input, Error, Services> | undefined,
   decodedInput: Input,
   encodedInput: unknown,
-): Effect.fn.Return<Prompt.RawInput, Error | AgentInputError, Services> {
-  return yield* inputPrompt === undefined
+): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Services> =>
+  inputPrompt === undefined
     ? Effect.try({
         try: () => {
           const encoded = JSON.stringify(encodedInput);
@@ -4594,7 +4528,6 @@ const renderInputPromptEffect = Effect.fnUntraced(function* <Input, Error, Servi
 
         return Effect.isEffect(result) ? result : Effect.succeed(result);
       });
-});
 
 /** Render decoded Agent input for model visibility, preserving the legacy JSON default. */
 export function renderInputPrompt<
@@ -4834,18 +4767,13 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
   | Tool.HandlerServices<ToolUnion<Tools>>
   | Tool.ParametersSchema<ToolUnion<Tools>>["EncodingServices"]
 > {
-  // Ownership reserved this part's count and bytes against the whole chunk before decoding.
+  // Ownership checked this part against the cumulative count and byte limits.
   trace.responsePartCount++;
   trace.responsePartBytes += retainedBytes;
   // Capture reported accounting before lifecycle validation can reject the response.
   if (part.type === "finish" && trace.usage === undefined) {
     trace.usage = part.usage;
     trace.finishMetadata = part.metadata;
-  }
-  if (trace.finished) {
-    return yield* ModelProtocolError.make({
-      message: "Model response emitted content after its finish part",
-    });
   }
   // Provider/model identifiers are untrusted correlation keys. Reject them before they enter
   // the Turn trace, lifecycle maps, canonical event stream, diagnostics, or Tool scheduler.
@@ -5208,49 +5136,6 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
   }
 });
 
-const processModelParts = <Tools extends Record<string, Tool.Any>>(
-  context: RunContext,
-  turnId: TurnId,
-  turn: number,
-  tools: Tools,
-  trace: TurnTrace,
-  parts: ReadonlyArray<ModelResponseChunkItem>,
-) => {
-  const events: Array<RunEvent> | undefined = context.publish === undefined ? undefined : [];
-
-  const process = Effect.forEach(
-    parts,
-    (part) =>
-      "failure" in part
-        ? Effect.fail(part.failure)
-        : processModelPart(
-            context,
-            turnId,
-            turn,
-            tools,
-            trace,
-            part.ownedPart,
-            part.retainedBytes,
-            events,
-          ),
-    { discard: true },
-  );
-
-  // Keep accepted prefix events on failure, with interruptible backpressure. Deadline expiry or
-  // a joined-input restart must not wait for a slow observer to drain the public queue.
-  return events === undefined
-    ? process
-    : process.pipe(
-        Effect.matchCauseEffect({
-          onSuccess: () => publishEvents(context, events),
-          onFailure: (cause) =>
-            Cause.hasInterrupts(cause)
-              ? Effect.failCause(cause)
-              : publishEvents(context, events).pipe(Effect.andThen(Effect.failCause(cause))),
-        }),
-      );
-};
-
 const decodeFinalOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
   text: string,
@@ -5470,18 +5355,15 @@ function encodeRunDisposition<Output, DispositionSchema extends Schema.Top>(
     : encodeRunDispositionCandidate(declaration, output);
 }
 
-const decodeRunDispositionCandidate = Effect.fnUntraced(function* <
-  Output,
-  DispositionSchema extends Schema.Top,
->(
+const decodeRunDispositionCandidate = <Output, DispositionSchema extends Schema.Top>(
   declaration: RunDispositionDeclaration<Output, DispositionSchema>,
   encoded: Schema.Json,
-): Effect.fn.Return<
+): Effect.Effect<
   DispositionSchema["Type"],
   AgentRunDispositionError,
   DispositionSchema["DecodingServices"]
-> {
-  return yield* Schema.decodeEffect(declaration.schema)(encoded).pipe(
+> =>
+  Schema.decodeEffect(declaration.schema)(encoded).pipe(
     Effect.mapError((cause) =>
       AgentRunDispositionError.make({
         cause,
@@ -5489,7 +5371,6 @@ const decodeRunDispositionCandidate = Effect.fnUntraced(function* <
       }),
     ),
   );
-});
 
 function decodeRunDisposition<AgentValue extends Agent.Any>(
   agent: AgentValue,
@@ -5677,7 +5558,27 @@ const makeTurn = <
 
       context.windowContextTokenLimit = contextTokenLimit;
       const toolSchemaTransformer = modelContext.modelCall?.toolSchemaTransformer;
-      const messageTokenEstimator = modelContext.modelCall?.estimateMessageTokens;
+      // Estimates belong to this prepared prompt. Rebuild the cache after every context
+      // preparation so caller-owned message identities never carry counts into another turn.
+      const messageTokenEstimates = new WeakMap<Prompt.Message, number>();
+
+      const estimatePreparedMessage = (message: Prompt.Message) => {
+        const cached = messageTokenEstimates.get(message);
+
+        if (cached !== undefined) return cached;
+        const tokens = estimateMessageTokens(message);
+
+        messageTokenEstimates.set(message, tokens);
+
+        return tokens;
+      };
+
+      const compactor = yield* ContextCompactor;
+
+      const messageTokenEstimator =
+        modelContext.modelCall?.estimateMessageTokens ??
+        (compactor.estimate === estimatePromptTokens ? estimatePreparedMessage : undefined);
+
       const visibility = yield* RunToolVisibility;
 
       const catalog = yield* prepareWithinDeadline(
@@ -6571,29 +6472,31 @@ const makeTurn = <
                           trace.usageConsumed = false;
                         }),
                       ),
-                      Stream.mapArrayEffect((parts) =>
-                        trace.finished
-                          ? Effect.fail(
-                              ModelProtocolError.make({
-                                message: "Model response emitted content after its finish part",
-                              }),
-                            )
-                          : ownModelResponseParts(
-                              parts,
-                              agent.definition.toolkit,
-                              trace,
-                              context.bufferLimits,
-                            ),
-                      ),
-                      Stream.runForEachArray((parts) =>
-                        processModelParts(
-                          context,
-                          turnId,
-                          turn,
-                          agent.definition.toolkit.tools,
-                          trace,
-                          parts,
-                        ),
+                      Stream.runForEach((part) =>
+                        Effect.gen(function* () {
+                          const owned = yield* ownModelResponsePart(
+                            part,
+                            agent.definition.toolkit,
+                            trace,
+                            context.bufferLimits,
+                            trace.finished,
+                          );
+
+                          const events = context.publish === undefined ? undefined : [];
+
+                          yield* processModelPart(
+                            context,
+                            turnId,
+                            turn,
+                            agent.definition.toolkit.tools,
+                            trace,
+                            owned.ownedPart,
+                            owned.retainedBytes,
+                            events,
+                          );
+                          // Publish before accepting the next part. Backpressure stays interruptible.
+                          if (events !== undefined) yield* publishEvents(context, events);
+                        }),
                       ),
                       (effect) => prepareWithinDeadline(context, effect),
                       Effect.onExit((exit) =>

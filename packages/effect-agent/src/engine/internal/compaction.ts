@@ -98,19 +98,12 @@ const utf8Length = (text: string): number => {
   return bytes;
 };
 
-const messageTokenEstimates = new WeakMap<Prompt.Message, number>();
-
 /**
  * Deterministic UTF-8 bytes/4 token estimate over one message's structural JSON.
  * Conservative for prose, slightly generous for dense JSON — the estimate
  * only gates WHEN to compact, never what is preserved.
- * Reuse immutable message identities across turns; replace a message when editing its content.
- * Weak keys let discarded history leave the cache with the messages that owned it.
  */
 export const estimateMessageTokens = (message: Prompt.Message): number => {
-  const cached = messageTokenEstimates.get(message);
-
-  if (cached !== undefined) return cached;
   let text: string | undefined;
 
   try {
@@ -119,12 +112,7 @@ export const estimateMessageTokens = (message: Prompt.Message): number => {
     text = undefined;
   }
 
-  if (text === undefined) return 0;
-  const tokens = Math.ceil(utf8Length(text) / 4);
-
-  messageTokenEstimates.set(message, tokens);
-
-  return tokens;
+  return text === undefined ? 0 : Math.ceil(utf8Length(text) / 4);
 };
 
 /** Sum of `estimateMessageTokens` over a message array. */

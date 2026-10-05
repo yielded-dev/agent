@@ -37,6 +37,7 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
   "packages/effect-agent/src/engine/internal/agent-runtime.ts": [
     "AgentRuntime.run",
     "AgentRuntime.start",
+    "AgentRuntime.model",
   ],
   "packages/effect-agent/src/durable/DurableAgentRuntime.ts": [
     "DurableAgentRuntime.recoverSubmission",
@@ -44,6 +45,7 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "DurableAgentRuntime.retry",
     "DurableAgentRuntime.resolveUnknown",
     "DurableAgentRuntime.resolveApproval",
+    "DurableAgentRuntime.processThreadHead",
   ],
   "packages/effect-agent/src/durable/RunStorage.ts": ["RunStorage.claim"],
   "packages/effect-agent/src/durable/Scheduling.ts": ["Scheduling.recover"],
@@ -72,17 +74,61 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
   "packages/storage-cloudflare/src/DoSubmissionLedger.ts": [
     "DoSubmissionLedger.claim",
     "DoSubmissionLedger.renewOwnership",
+    "DoSubmissionLedger.releaseOwnership",
     "DoSubmissionLedger.publishSettlement",
     "DoSubmissionLedger.finalizeSettlement",
   ],
+  "packages/effect-agent/src/capabilities/BrowserUse.ts": ["BrowserUse.selectTargets"],
+  "packages/sandbox-local/src/LocalSandbox.ts": ["LocalSandbox.execute"],
+  "packages/platform-cloudflare/src/CloudflareThreadClient.ts": ["CloudflareThreadClient.call"],
+  "packages/platform-cloudflare/src/internal/transport.ts": ["CloudflarePortTransport.call"],
+  "packages/platform-cloudflare/src/BrowserUse.ts": [
+    "BrowserUse.respond-dialog.input",
+    "BrowserUse.act",
+    "BrowserUse.respond-dialog",
+  ],
+  "packages/storage-cloudflare/src/DoThreadStore.ts": [
+    "DoThreadStore.materialize",
+    "DoThreadStore.append",
+    "DoThreadStore.observe",
+  ],
+  "packages/storage-cloudflare/src/internal/do-journal.ts": [
+    "DoJournal.withWriteTransaction",
+    "DoJournal.materialize",
+    "DoJournal.append",
+  ],
+  "packages/storage-cloudflare/src/PortRouting.ts": [
+    "DoPortRouting.foreignLedgerCall",
+    "DoPortRouting.resolveForeignAdmission",
+    "DoPortRouting.foreignStoreCall",
+  ],
+};
+
+// Dynamic names have a fixed operation prefix and an explicit owner. The storage
+// wrapper forwards its name; its imported call sites are checked just like primitives.
+const operationSpanExpressions: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "packages/effect-agent/src/engine/internal/agent-runtime.ts": [
+    "`execute_tool ${call.name}`",
+    "`execute_tool ${descriptor.toolName}`",
+    "`invoke_agent ${context.agentId}`",
+  ],
+  "packages/platform-cloudflare/src/BrowserUse.ts": [
+    '`BrowserUse.${command.kind}${phase === undefined ? "" : `.${phase}`}`',
+  ],
+  "packages/storage-cloudflare/src/internal/storage-span.ts": ["name"],
 };
 
 const checkOperationSpans = (
   source: ts.SourceFile,
   report: (file: string, message: string) => void,
 ): void => {
-  const namespaces = new Set<string>();
-  const functions = new Set<string>();
+  const primitives: Readonly<Record<string, ReadonlyArray<string>>> = {
+    Effect: ["fn", "withSpan", "withSpanScoped", "makeSpan", "makeSpanScoped", "useSpan"],
+    Stream: ["withSpan"],
+  };
+
+  const namespaces = new Map<string, string>();
+  const functions = new Map<string, string>();
 
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
@@ -92,47 +138,79 @@ const checkOperationSpans = (
 
     if (bindings === undefined) continue;
     if (module === "effect" && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements)
-        if ((binding.propertyName ?? binding.name).text === "Effect")
-          namespaces.add(binding.name.text);
-    } else if (module === "effect/Effect") {
-      if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+      for (const binding of bindings.elements) {
+        const imported = (binding.propertyName ?? binding.name).text;
+
+        if (imported in primitives) namespaces.set(binding.name.text, imported);
+      }
+    } else if (module === "effect/Effect" || module === "effect/Stream") {
+      const owner = module.slice("effect/".length);
+
+      if (ts.isNamespaceImport(bindings)) namespaces.set(bindings.name.text, owner);
       else
-        for (const binding of bindings.elements)
-          if ((binding.propertyName ?? binding.name).text === "fn")
-            functions.add(binding.name.text);
+        for (const binding of bindings.elements) {
+          const imported = (binding.propertyName ?? binding.name).text;
+
+          if (primitives[owner]?.includes(imported)) functions.set(binding.name.text, imported);
+        }
+    } else if (module.endsWith("/storage-span.ts") && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements)
+        if ((binding.propertyName ?? binding.name).text === "withStorageSpan")
+          functions.set(binding.name.text, "withStorageSpan");
     }
   }
+
+  const allowedNames = operationSpans[source.fileName] ?? [];
+  const allowedExpressions = operationSpanExpressions[source.fileName] ?? [];
+  const used = new Set<string>();
+
+  const isName = (node: ts.Expression): boolean =>
+    ts.isStringLiteralLike(node) || ts.isTemplateExpression(node);
 
   walk(source, (node) => {
     if (!ts.isCallExpression(node)) return;
     const callee = node.expression;
+    let primitive: string | undefined;
 
-    if (
-      !(
-        (ts.isPropertyAccessExpression(callee) &&
-          ts.isIdentifier(callee.expression) &&
-          namespaces.has(callee.expression.text) &&
-          callee.name.text === "fn") ||
-        (ts.isIdentifier(callee) && functions.has(callee.text))
-      )
-    )
-      return;
-    const name = node.arguments[0];
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+      const owner = namespaces.get(callee.expression.text);
 
-    if (
-      name !== undefined &&
-      ts.isStringLiteralLike(name) &&
-      operationSpans[source.fileName]?.includes(name.text)
-    )
+      if (owner !== undefined && primitives[owner]?.includes(callee.name.text))
+        primitive = callee.name.text;
+    } else if (ts.isIdentifier(callee)) primitive = functions.get(callee.text);
+    if (primitive === undefined) return;
+
+    // withSpan supports both withSpan(name, options) and withSpan(effect, name, options).
+    const name =
+      primitive === "withSpan" &&
+      node.arguments[1] !== undefined &&
+      !isName(node.arguments[0]) &&
+      isName(node.arguments[1])
+        ? node.arguments[1]
+        : node.arguments[0];
+
+    const literal = name !== undefined && ts.isStringLiteralLike(name) ? name.text : undefined;
+    const expression = name?.getText(source);
+
+    if (literal !== undefined && allowedNames.includes(literal)) {
+      used.add(literal);
+
       return;
+    }
+    if (expression !== undefined && allowedExpressions.includes(expression)) {
+      used.add(expression);
+
+      return;
+    }
     const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
 
     report(
       source.fileName,
-      `Line ${line}: use Effect.fnUntraced; Effect.fn requires an allowlisted operation boundary`,
+      `Line ${line}: ${primitive} requires an allowlisted operation boundary; keep helpers untraced`,
     );
   });
+  for (const name of [...allowedNames, ...allowedExpressions])
+    if (!used.has(name)) report(source.fileName, `Unused operation span allowlist entry: ${name}`);
 };
 
 const walk = (node: ts.Node, visit: (node: ts.Node) => void): void => {

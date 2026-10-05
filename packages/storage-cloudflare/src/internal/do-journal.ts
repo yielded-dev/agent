@@ -295,14 +295,14 @@ const storageError =
     });
 
 /** Decode raw Durable Object SQLite rows against a Schema, reporting failures as typed corruption. */
-export const decodeRows = Effect.fnUntraced(function* <A, I>(
+export const decodeRows = <A, I>(
   schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
   table: string,
   rowKey: string,
   rows: unknown,
   decoder: string = table,
-): Effect.fn.Return<ReadonlyArray<A>, DoStorageCorruptionError> {
-  return yield* Schema.decodeUnknownEffect(schema)(rows).pipe(
+): Effect.Effect<ReadonlyArray<A>, DoStorageCorruptionError> =>
+  Schema.decodeUnknownEffect(schema)(rows).pipe(
     Effect.mapError((error) =>
       DoStorageCorruptionError.make({
         table,
@@ -325,16 +325,15 @@ export const decodeRows = Effect.fnUntraced(function* <A, I>(
       }),
     ),
   );
-});
 
 /** Decode exactly one raw row against a Schema, reporting failures as typed corruption. */
-export const decodeSingleRow = Effect.fnUntraced(function* <A, I>(
+export const decodeSingleRow = <A, I>(
   schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
   table: string,
   rowKey: string,
   rows: unknown,
-): Effect.fn.Return<A, DoStorageCorruptionError> {
-  return yield* decodeRows(schema, table, rowKey, rows).pipe(
+): Effect.Effect<A, DoStorageCorruptionError> =>
+  decodeRows(schema, table, rowKey, rows).pipe(
     Effect.flatMap((decoded) =>
       decoded.length === 1
         ? Effect.succeed(decoded[0])
@@ -347,7 +346,6 @@ export const decodeSingleRow = Effect.fnUntraced(function* <A, I>(
           ),
     ),
   );
-});
 
 const REQUIRED_TABLES = [
   "effect_agent_abort_intents",
@@ -1179,8 +1177,8 @@ const makeJournal = (
       };
     });
 
-    const exportThread = Effect.fnUntraced(function* (threadId: string) {
-      return yield* state
+    const exportThread = (threadId: string) =>
+      state
         .transaction(
           Effect.gen(function* () {
             const threadRows = yield* getThread(threadId);
@@ -1250,7 +1248,6 @@ const makeJournal = (
             Effect.fail(storageError("export transaction")(error)),
           ),
         );
-    });
 
     const saveCheckpoint = Effect.fnUntraced(function* (
       checkpoint: RawCheckpoint,
@@ -1401,15 +1398,14 @@ const makeJournal = (
       yield* failpoint("save-recovery-checkpoint:after");
     });
 
-    const loadRecoveryCheckpoint = Effect.fnUntraced(function* (threadId: string) {
-      return yield* recovery
+    const loadRecoveryCheckpoint = (threadId: string) =>
+      recovery
         .by("thread_id", threadId)
         .pipe(
           Effect.mapError((error) =>
             error._tag === "SqlError" ? storageError("load recovery checkpoint")(error) : error,
           ),
         );
-    });
 
     const loadCheckpoint = Effect.fnUntraced(function* (
       threadId: string,
@@ -1483,8 +1479,8 @@ const makeJournal = (
       return batches.map((batch) => batch.tail_digest);
     });
 
-    const scanStoredPayloads = Effect.fnUntraced(function* () {
-      return yield* state
+    const scanStoredPayloads = () =>
+      state
         .transaction(
           Effect.gen(function* () {
             const threads = yield* sql<Record<string, unknown>>`
@@ -1566,7 +1562,6 @@ const makeJournal = (
             Effect.fail(storageError("startup scan transaction")(error)),
           ),
         );
-    });
 
     const sourceFailure = (cause: unknown) =>
       LifecyclePublicationError.make({ reason: "unavailable", cause });

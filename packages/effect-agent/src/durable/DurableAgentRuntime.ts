@@ -1984,16 +1984,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
    * left for a later snapshot, while a short page or sequence gap fails typed before recovery
    * mutates anything. At most `ceil((through - after) / READ_PAGE)` store pages are requested.
    */
-  const readCanonicalRange = Effect.fnUntraced(function* (
+  const readCanonicalRange = (
     threadId: ThreadId,
     afterSequence: CanonicalSequence,
     throughSequence: CanonicalSequence,
     retain: (record: CanonicalRecordEnvelope) => boolean,
-  ): Effect.fn.Return<Array<CanonicalRecordEnvelope>, ThreadStoreError | ThreadNotMaterialized> {
-    return yield* Stream.runCollect(
+  ): Effect.Effect<Array<CanonicalRecordEnvelope>, ThreadStoreError | ThreadNotMaterialized> =>
+    Stream.runCollect(
       canonicalRange(threadId, throughSequence, afterSequence).pipe(Stream.filter(retain)),
     );
-  });
 
   /**
    * Capture one strongly-consistent pass-start tail and read exactly that prefix. This snapshot

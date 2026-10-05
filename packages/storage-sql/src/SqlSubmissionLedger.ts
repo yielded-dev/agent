@@ -920,11 +920,11 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     ).pipe(Effect.mapError(internalFailure(operation)));
   });
 
-  const approvalIntentFromRow = Effect.fnUntraced(function* (
+  const approvalIntentFromRow = (
     operation: string,
     row: ApprovalDecisionRow,
-  ): Effect.fn.Return<ApprovalDecisionIntent, LedgerError> {
-    return yield* decodeApprovalDecisionIntent({
+  ): Effect.Effect<ApprovalDecisionIntent, LedgerError> =>
+    decodeApprovalDecisionIntent({
       submissionId: row.submission_id,
       toolCallId: row.tool_call_id,
       decision: row.decision,
@@ -941,7 +941,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         ),
       ),
     );
-  });
 
   const readUnknownResolutions = Effect.fnUntraced(function* (
     operation: string,
@@ -1842,14 +1841,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       WHERE submission_id = ${validated.submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
-    return {
+    return SubmissionRow.make({
       ...submission,
       input_applied_record_id: validated.recordId,
       input_applied_sequence: validated.sequence,
       state: ["admitted", "ready", "running"].includes(submission.state)
         ? "input-applied"
         : submission.state,
-    };
+    });
   });
 
   const markInputAppliedKernel = Effect.fnUntraced(function* (
@@ -2173,13 +2172,13 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       settledAt: now.iso,
     }).pipe(Effect.mapError(internalFailure(operation)));
 
-    const poststate: SubmissionRow = {
+    const poststate = SubmissionRow.make({
       ...submission,
       state: "settled",
       settled_outcome: settlement.outcome,
       settled_record_id: record.recordId,
       finalized_at: now.iso,
-    };
+    });
 
     return { settlement: finalized, submission: poststate };
   });

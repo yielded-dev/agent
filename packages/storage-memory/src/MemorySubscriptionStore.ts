@@ -1317,7 +1317,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
       if (record.state === "active" && record.recoveryAt !== null) consider(record.recoveryAt);
 
     return deadline;
-  }).pipe(Effect.withSpan("MemorySubscriptionStore.nextDeadline"));
+  });
 
   const compact: SubscriptionStore["Service"]["compact"] = Effect.fnUntraced(
     function* (nowMillis, inputPolicy, requestedLimit) {

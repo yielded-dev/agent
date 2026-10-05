@@ -60,16 +60,15 @@ const keyString = (key: MemoryKey): string => JSON.stringify([key.namespace.addr
 const sourceIdentityBytes = (source: MemoryIndexSource): number =>
   Hex.encode(JSON.stringify(source)).length / 2;
 
-const decodeBoundary = Effect.fnUntraced(function* <A, I>(
+const decodeBoundary = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: unknown,
   operation: string,
-): Effect.fn.Return<A, MemoryIndexError> {
-  return yield* Schema.decodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, MemoryIndexError> =>
+  Schema.decodeUnknownEffect(schema)(value).pipe(
     Effect.flatMap((decoded) => Schema.encodeEffect(schema)(decoded).pipe(Effect.as(decoded))),
     Effect.mapError(() => error(operation, "invalid-input")),
   );
-});
 
 const freezeSource = (source: MemoryIndexSource): MemoryIndexSource =>
   Object.freeze(

@@ -1338,25 +1338,23 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 });
 
 /** Pure projection of one Run's durable recovery state from canonical records. */
-export const projectRunJournal = Effect.fnUntraced(function* (
+export const projectRunJournal = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   runId: RunId,
-): Effect.fn.Return<RunJournalProjection, RunJournalError> {
-  return yield* projectRunJournalStream(Stream.fromIterable(records), runId);
-});
+): Effect.Effect<RunJournalProjection, RunJournalError> =>
+  projectRunJournalStream(Stream.fromIterable(records), runId);
 
 /**
  * Pure valid-prompt projection from canonical records: `UserInputRecorded` +
  * `ModelResponseRecorded` + complete `ToolCallSettled` batches → the deterministic model-visible
  * Prompt (plan §Coordinator flow step 3).
  */
-export const promptFromCanonicalRecords = Effect.fnUntraced(function* (
+export const promptFromCanonicalRecords = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-): Effect.fn.Return<Prompt.Prompt, RunJournalError> {
-  return yield* projectRunJournalStream(Stream.fromIterable(records), undefined).pipe(
+): Effect.Effect<Prompt.Prompt, RunJournalError> =>
+  projectRunJournalStream(Stream.fromIterable(records), undefined).pipe(
     Effect.map((projection) => projection.prompt),
   );
-});
 
 /** Everything one committed Turn contributes to its canonical batch. */
 /**

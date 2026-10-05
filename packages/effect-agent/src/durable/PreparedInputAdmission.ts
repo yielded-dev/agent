@@ -22,11 +22,11 @@ export class PreparedInputAdmission extends Context.Service<
  * Reduce one bounded admission attempt. The caller owns concurrency, durable retry state,
  * and completion fencing. Interruption and defects propagate without claiming a refusal.
  */
-export const admitPreparedInput = Effect.fnUntraced(function* <R>(
+export const admitPreparedInput = <R>(
   submit: Effect.Effect<Receipt, ScheduledInputFailure, R>,
   timeoutMillis: number,
-) {
-  return yield* submit.pipe(
+) =>
+  submit.pipe(
     Effect.timeout(timeoutMillis),
     Effect.map((receipt) => ({ _tag: "Receipt" as const, receipt })),
     Effect.catchTag("ScheduledInputRefused", (error) =>
@@ -56,4 +56,3 @@ export const admitPreparedInput = Effect.fnUntraced(function* <R>(
         : Effect.fail(ScheduleStorageError.make(error)),
     ),
   );
-});

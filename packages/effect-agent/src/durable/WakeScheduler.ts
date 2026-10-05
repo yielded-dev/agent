@@ -55,24 +55,22 @@ export const makeWakeSubscriptionHub: Effect.Effect<WakeSubscriptionHub> = Effec
   const subscribe = Effect.fnUntraced(function* (
     threadId: ThreadId,
   ): Effect.fn.Return<Effect.Effect<void>, never, Scope.Scope> {
-    return yield* Effect.gen(function* () {
-      const deferred = yield* Deferred.make<void>();
-      const id = yield* Ref.getAndUpdate(nextId, (current) => current + 1);
-      const registration: WakeRegistration = { id, deferred };
+    const deferred = yield* Deferred.make<void>();
+    const id = yield* Ref.getAndUpdate(nextId, (current) => current + 1);
+    const registration: WakeRegistration = { id, deferred };
 
-      yield* Effect.addFinalizer(() => remove(threadId, registration.id));
-      yield* Ref.update(registrations, (current) => {
-        const next = new Map(current);
-        const thread = new Map(current.get(threadId) ?? []);
+    yield* Effect.addFinalizer(() => remove(threadId, registration.id));
+    yield* Ref.update(registrations, (current) => {
+      const next = new Map(current);
+      const thread = new Map(current.get(threadId) ?? []);
 
-        thread.set(registration.id, registration.deferred);
-        next.set(threadId, thread);
+      thread.set(registration.id, registration.deferred);
+      next.set(threadId, thread);
 
-        return next;
-      });
+      return next;
+    });
 
-      return registration.deferred;
-    }).pipe(Effect.map((deferred) => Deferred.await(deferred)));
+    return Deferred.await(registration.deferred);
   });
 
   const notify = Effect.fnUntraced(function* (threadId: ThreadId) {

@@ -162,9 +162,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
   const isDigest = Schema.is(Digest);
 
-  const decodeLifecyclePublicationFact = Schema.decodeUnknownEffect(
-    Schema.toType(LifecyclePublicationFact),
-  );
+  const isLifecyclePublicationFact = Schema.is(Schema.toType(LifecyclePublicationFact));
 
   const storageError =
     (operation: string) =>
@@ -482,11 +480,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
               `.pipe(execute, Effect.mapError(storageError("insert canonical record")));
 
           if (lifecycle !== undefined) {
-            const fact = yield* decodeLifecyclePublicationFact(canonical.payload).pipe(
-              Effect.option,
-            );
-
-            if (Option.isSome(fact))
+            if (isLifecyclePublicationFact(canonical.payload))
               yield* lifecycle
                 .retain({
                   id: JSON.stringify([request.threadId, "record", record.recordId]),
@@ -495,7 +489,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
                     Effect.orDie,
                   ),
                   createdAt: canonical.createdAt,
-                  fact: fact.value,
+                  fact: canonical.payload,
                 })
                 .pipe(
                   Effect.mapError((cause) =>
@@ -530,14 +524,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     });
   });
 
-  const appendKernel = Effect.fnUntraced(function* (
-    request: RawAppendRequest,
-    readThread: Effect.Effect<ThreadRow, C | S>,
-  ) {
-    return yield* withWriteTransaction("append transaction")(
-      appendInTransaction(request, readThread),
-    );
-  });
+  const appendKernel = (request: RawAppendRequest, readThread: Effect.Effect<ThreadRow, C | S>) =>
+    withWriteTransaction("append transaction")(appendInTransaction(request, readThread));
 
   const read = Effect.fnUntraced(function* (request: RawReadRequest) {
     const rows = yield* sql<Record<string, unknown>>`
@@ -561,8 +549,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const exportThread = Effect.fnUntraced(function* (threadId: ThreadId) {
-    return yield* withReadTransaction("export transaction")(
+  const exportThread = (threadId: ThreadId) =>
+    withReadTransaction("export transaction")(
       Effect.gen(function* () {
         const threadRows = yield* sql<Record<string, unknown>>`
             SELECT
@@ -628,7 +616,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         return RawThreadExport.make({ thread, records });
       }),
     );
-  });
 
   const saveCheckpoint = Effect.fnUntraced(function* (
     checkpoint: RawCheckpoint,
@@ -860,8 +847,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     return batches.map((batch) => batch.tail_digest);
   });
 
-  const scanStoredPayloads = Effect.fnUntraced(function* () {
-    return yield* withReadTransaction("startup scan transaction")(
+  const scanStoredPayloads = () =>
+    withReadTransaction("startup scan transaction")(
       Effect.gen(function* () {
         const threads = yield* sql<Record<string, unknown>>`
             SELECT
@@ -928,7 +915,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         };
       }),
     );
-  });
 
   const journal = {
     lifecycle,

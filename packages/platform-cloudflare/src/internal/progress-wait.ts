@@ -51,32 +51,26 @@ export class ProgressWaitRegistry extends Context.Service<
       const subscribe = Effect.fnUntraced(function* (
         waiterId: string,
       ): Effect.fn.Return<Effect.Effect<void>, never, Scope.Scope> {
-        return yield* Effect.gen(function* () {
-          const deferred = yield* Deferred.make<void>();
+        const deferred = yield* Deferred.make<void>();
 
-          yield* Effect.addFinalizer(() => remove(waiterId, deferred));
+        yield* Effect.addFinalizer(() => remove(waiterId, deferred));
 
-          const cancelled = yield* Ref.modify(registrations, (current) => {
-            const existing = current.get(waiterId);
-            const next = new Map(current);
+        const cancelled = yield* Ref.modify(registrations, (current) => {
+          const existing = current.get(waiterId);
+          const next = new Map(current);
 
-            if (existing === "cancelled") {
-              return [true, current] as const;
-            }
-            const active = new Set(existing ?? []);
+          if (existing === "cancelled") {
+            return [true, current] as const;
+          }
+          const active = new Set(existing ?? []);
 
-            active.add(deferred);
-            next.set(waiterId, active);
+          active.add(deferred);
+          next.set(waiterId, active);
 
-            return [false, next] as const;
-          });
+          return [false, next] as const;
+        });
 
-          return { cancelled, deferred };
-        }).pipe(
-          Effect.map(({ cancelled, deferred }) =>
-            cancelled ? Effect.void : Deferred.await(deferred),
-          ),
-        );
+        return cancelled ? Effect.void : Deferred.await(deferred);
       });
 
       // Updating the registry and completing captured signals form one nonblocking operation;

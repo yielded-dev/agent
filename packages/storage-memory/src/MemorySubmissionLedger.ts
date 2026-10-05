@@ -261,16 +261,15 @@ const ledgerError = (operation: string, message: string, cause?: unknown): Ledge
     ? LedgerError.make({ operation, message })
     : LedgerError.make({ operation, message, cause });
 
-const validate = Effect.fnUntraced(function* <A, I>(
+const validate = <A, I>(
   schema: Schema.Codec<A, I>,
   operation: string,
   value: unknown,
-): Effect.fn.Return<A, LedgerError> {
-  return yield* Schema.encodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, LedgerError> =>
+  Schema.encodeUnknownEffect(schema)(value).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(schema)),
     Effect.mapError((error) => ledgerError(operation, `Invalid ${operation} request`, error)),
   );
-});
 
 const decodeSubmissionId = Schema.decodeSync(SubmissionId);
 const decodeReceiptId = Schema.decodeSync(ReceiptId);

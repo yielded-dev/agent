@@ -675,8 +675,8 @@ export class MessageDeliveryDriver extends Context.Service<
         const failpoint = yield* MessageDeliveryFailpoint;
         const semaphore = yield* Semaphore.make(config.concurrency);
 
-        const process = Effect.fnUntraced(function* (key: MessageDeliveryKey) {
-          return yield* semaphore
+        const process = (key: MessageDeliveryKey) =>
+          semaphore
             .withPermit(
               Effect.gen(function* () {
                 const current = yield* store.get(key);
@@ -848,7 +848,6 @@ export class MessageDeliveryDriver extends Context.Service<
                   : Effect.fail(failure),
               ),
             );
-        });
 
         return MessageDeliveryDriver.of({
           process,

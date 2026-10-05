@@ -2,4 +2,4 @@
 "@yielded/agent": patch
 ---
 
-Validate model responses and publish semantic progress in chunks while preserving response limits, backpressure, and accepted progress on failure.
+Reuse model response parsers while validating and publishing each part in order. Preserve earlier progress and reported usage when a later part fails or is interrupted.

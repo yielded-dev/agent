@@ -221,12 +221,12 @@ const makeMemoryClient = Effect.fnUntraced(function* <Namespace extends MemoryNa
     }).pipe((effect) => withinDeadline(effect, validated.timeoutMillis));
   });
 
-  const revalidateSemantic = Effect.fnUntraced(function* (
-    found: MemoryIndexSearch<Namespace>,
-    profile: SemanticMemoryProfile,
-    limits: SemanticCandidateLimits,
-  ) {
-    return yield* Effect.gen(function* () {
+  const revalidateSemantic = Effect.fnUntraced(
+    function* (
+      found: MemoryIndexSearch<Namespace>,
+      profile: SemanticMemoryProfile,
+      limits: SemanticCandidateLimits,
+    ) {
       const response = yield* call({
         _tag: "RevalidateSemantic",
         version: 1,
@@ -241,8 +241,9 @@ const makeMemoryClient = Effect.fnUntraced(function* <Namespace extends MemoryNa
       if (response._tag !== "Semantic") return yield* MemoryRpcError.make({ reason: "protocol" });
 
       return response.result;
-    }).pipe((effect) => withinDeadline(effect, validated.timeoutMillis));
-  });
+    },
+    (effect) => withinDeadline(effect, validated.timeoutMillis),
+  );
 
   /**
    * Revalidate in one owner RPC, then render whole passages within the caller's budget.
@@ -251,17 +252,16 @@ const makeMemoryClient = Effect.fnUntraced(function* <Namespace extends MemoryNa
    * The single outcome has sourceId "memory". No embedding or candidate search is performed.
    * Use revalidate with Memory.recall for multiple readers sharing one output budget.
    */
-  const recall = Effect.fnUntraced(function* (
+  const recall = (
     lookup: MemoryLookup,
     limits: MemoryRecallLimits,
     estimateTokens?: (text: string) => number,
-  ) {
-    return yield* Memory.recall(
+  ) =>
+    Memory.recall(
       [{ id: "memory", essential: true, read: revalidate(lookup, limits) }],
       limits,
       estimateTokens,
     );
-  });
 
   return { get, recall, revalidate, revalidateSemantic, change };
 });
@@ -270,18 +270,17 @@ export const CloudflareMemoryClient = {
   /** Bind access and principal using the MemoryObjectNamespace supplied by the application. */
   make: makeMemoryClient,
   /** Use a resolved Worker or Durable Object binding without manual service provisioning. */
-  fromBinding: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
+  fromBinding: <Namespace extends MemoryNamespace.Any>(
     binding: DurableObjectNamespace<MemoryObjectRpc>,
     options: {
       readonly access: MemoryAccess<Namespace>;
       readonly principal: Principal;
       readonly rpcLimits?: MemoryRpcLimits;
     },
-  ) {
-    return yield* makeMemoryClient(options.access, options.principal, options.rpcLimits).pipe(
+  ) =>
+    makeMemoryClient(options.access, options.principal, options.rpcLimits).pipe(
       Effect.provideService(MemoryObjectNamespace, { namespace: binding }),
-    );
-  }),
+    ),
 };
 
 /**

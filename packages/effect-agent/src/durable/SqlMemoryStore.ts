@@ -294,35 +294,32 @@ const query = <A extends object>(
   operation: string,
 ) => effect.pipe(Effect.mapError(() => storageError(operation)));
 
-const decodeRows = Effect.fnUntraced(function* <A, I>(
+const decodeRows = <A, I>(
   schema: Schema.Codec<A, I, never>,
   rows: ReadonlyArray<unknown>,
   operation: string,
-): Effect.fn.Return<ReadonlyArray<A>, MemoryStorageError> {
-  return yield* Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
+): Effect.Effect<ReadonlyArray<A>, MemoryStorageError> =>
+  Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
     Effect.mapError(() => storageError(operation, "corrupt")),
   );
-});
 
-const decodeInput = Effect.fnUntraced(function* <A, I>(
+const decodeInput = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: unknown,
   operation: string,
-): Effect.fn.Return<A, MemoryStorageError> {
-  return yield* Schema.decodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, MemoryStorageError> =>
+  Schema.decodeUnknownEffect(schema)(value).pipe(
     Effect.mapError(() => storageError(operation, "invalid-input")),
   );
-});
 
-const encodeJson = Effect.fnUntraced(function* <A, I>(
+const encodeJson = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: A,
   operation: string,
-): Effect.fn.Return<string, MemoryStorageError> {
-  return yield* Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(
+): Effect.Effect<string, MemoryStorageError> =>
+  Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(
     Effect.mapError(() => storageError(operation, "corrupt")),
   );
-});
 
 const validateEncodedChange = Effect.fnUntraced(function* (
   encoded: typeof EncodedMemoryChange.Type,

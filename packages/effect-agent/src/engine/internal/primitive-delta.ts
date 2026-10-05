@@ -35,7 +35,7 @@ const overheads = {
 };
 
 /**
- * Capture primitive text and reasoning encodings for the chunk's native Schema decoder.
+ * Capture primitive text and reasoning encodings for the native Schema decoder.
  * Descriptor checks select this optimization; they do not replace the native codec.
  * Extra fields, accessors, and nonempty metadata use the general ownership path.
  * No provider object survives, including an empty metadata object's hidden storage.

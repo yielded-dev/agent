@@ -281,7 +281,7 @@ const writeOutputs = Effect.fnUntraced(function* (
 });
 
 /** Count stale attempts only against the inspected commit, without publishing their findings. */
-export const publishHeadBoundReview = Effect.fnUntraced(function* (
+export const publishHeadBoundReview = (
   publish: Effect.Effect<string, GitHubApiFailure | StaleReviewHead>,
   staleAttempt: {
     readonly publish: (input: {
@@ -291,8 +291,8 @@ export const publishHeadBoundReview = Effect.fnUntraced(function* (
     readonly automatic: boolean;
     readonly failureSummary?: string | undefined;
   },
-) {
-  return yield* publish.pipe(
+) =>
+  publish.pipe(
     Effect.tapErrorTag(
       "StaleReviewHead",
       Effect.fnUntraced(function* (failure) {
@@ -322,7 +322,6 @@ export const publishHeadBoundReview = Effect.fnUntraced(function* (
       }),
     ),
   );
-});
 
 const skip = Effect.fnUntraced(function* (
   reason: string,

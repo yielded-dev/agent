@@ -19,6 +19,7 @@ import {
   Option,
   Ref,
   Schema,
+  SchemaGetter,
   Stream,
 } from "effect";
 import { LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
@@ -93,6 +94,76 @@ const testLayer = Layer.mergeAll(
 );
 
 layer(testLayer)("P5 WP1 durable Tool seams", (it) => {
+  // Regression in 1cefc3d7: a later parameter decoder can suspend after the same
+  // provider chunk's text was accepted. Real providers cannot reliably force this
+  // deadline window; control it at the public stream boundary.
+  it.effect("publishes accepted text before a later part is interrupted", () =>
+    Effect.gen(function* () {
+      const decoding = yield* Deferred.make<void>();
+      const events: Array<RunEvent> = [];
+
+      const Wait = Tool.make("wait", {
+        parameters: Schema.String.pipe(
+          Schema.decodeTo(Schema.String, {
+            decode: SchemaGetter.transformEffect(() =>
+              Deferred.succeed(decoding, undefined).pipe(Effect.andThen(Effect.never)),
+            ),
+            encode: SchemaGetter.passthrough(),
+          }),
+        ),
+        success: Schema.String,
+      });
+
+      const toolkit = Toolkit.make(Wait);
+
+      const model = Model.make(
+        "scripted",
+        "chunk-deadline",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: () =>
+              Stream.fromIterable<Response.StreamPartEncoded>([
+                { type: "text-start", id: "answer" },
+                { type: "text-delta", id: "answer", delta: "accepted" },
+                { type: "text-end", id: "answer" },
+                { type: "tool-call", id: "wait-1", name: "wait", params: "wait" },
+              ]),
+          }),
+        ),
+      );
+
+      const agent = Agent.withModel(
+        Agent.make("chunk-deadline", {
+          input: Schema.String,
+          output: Schema.String,
+          instructions: "Answer.",
+          toolkit,
+          policy: policy({ maxDuration: "5 seconds" }),
+        }),
+        model,
+      );
+
+      const fiber = yield* AgentRuntime.stream(agent, "begin").pipe(
+        Stream.tap((event) => Effect.sync(() => events.push(event))),
+        Stream.runDrain,
+        Effect.provide(toolkit.toLayer({ wait: () => Effect.succeed("unexpected") })),
+        Effect.forkChild,
+      );
+
+      yield* Deferred.await(decoding);
+      yield* TestClock.adjust("5 seconds");
+      expect(failureFrom(yield* Fiber.await(fiber))).toMatchObject({
+        _tag: "AgentPolicyError",
+        limit: "duration",
+      });
+      expect(
+        events.filter((event) => event._tag === "TextDelta").map((event) => event.text),
+      ).toEqual(["accepted"]);
+    }),
+  );
+
   it.effect("keeps one absolute deadline while the model emits text", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();

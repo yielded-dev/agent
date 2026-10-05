@@ -33,7 +33,7 @@ import type { SqlError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";
 
 import { sqliteJsonIsTrue, jsonIsValid } from "./internal/sql-json.ts";
-import { makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";
+import { makeRowDecoder, makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";
 
 const CountRow = Schema.Struct({ count: SqlInteger.check(Schema.isGreaterThanOrEqualTo(0)) });
 const SequenceRow = Schema.Struct({ sequence: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) });
@@ -71,11 +71,7 @@ const decode = <A, I>(schema: Schema.Codec<A, I>) => {
   return (value: string, code: string) => parse(value).pipe(Effect.mapError(() => corrupt(code)));
 };
 
-const decodeRows = <A, I>(schema: Schema.Codec<A, I>) => {
-  const parse = Schema.decodeUnknownEffect(Schema.Array(schema));
-
-  return (rows: unknown, code: string) => parse(rows).pipe(Effect.mapError(() => corrupt(code)));
-};
+const { decodeRows } = makeRowDecoder(({ rowKey }) => corrupt(rowKey));
 
 const sameDeliveryIdentity = (left: SubscriptionDelivery, right: SubscriptionDelivery): boolean =>
   subscriptionDeliveryKeyString(left.key) === subscriptionDeliveryKeyString(right.key) &&
@@ -167,50 +163,58 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     record_json: StoredJson,
   });
 
-  const decodeRegistrationRows = decodeRows(RegistrationRow);
-  const decodeEventRows = decodeRows(EventRow);
-  const decodeDeliveryRows = decodeRows(DeliveryRow);
-  const decodeCountRows = decodeRows(CountRow);
-  const decodeSequenceRows = decodeRows(SequenceRow);
-  const decodeRetentionHorizonRows = decodeRows(RetentionHorizonRow);
-  const decodeScanRows = decodeRows(ScanRow);
-  const decodeJsonRows = decodeRows(JsonRow);
+  const decodeRegistrationRows = decodeRows(Schema.Array(RegistrationRow));
+  const decodeEventRows = decodeRows(Schema.Array(EventRow));
+  const decodeDeliveryRows = decodeRows(Schema.Array(DeliveryRow));
+  const decodeCountRows = decodeRows(Schema.Array(CountRow));
+  const decodeSequenceRows = decodeRows(Schema.Array(SequenceRow));
+  const decodeRetentionHorizonRows = decodeRows(Schema.Array(RetentionHorizonRow));
+  const decodeScanRows = decodeRows(Schema.Array(ScanRow));
+  const decodeJsonRows = decodeRows(Schema.Array(JsonRow));
 
   const decodeRegistrationKeyRows = decodeRows(
-    Schema.Struct({
-      owner_id: Schema.String,
-      subscription_id: Schema.String,
-      ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-    }),
+    Schema.Array(
+      Schema.Struct({
+        owner_id: Schema.String,
+        subscription_id: Schema.String,
+        ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+      }),
+    ),
   );
 
-  const decodeEventKeyRows = decodeRows(Schema.Struct({ event_id: Schema.String }));
+  const decodeEventKeyRows = decodeRows(Schema.Array(Schema.Struct({ event_id: Schema.String })));
 
   const decodeDeliveryKeyRows = decodeRows(
-    Schema.Struct({
-      owner_id: Schema.String,
-      subscription_id: Schema.String,
-      event_id: Schema.String,
-    }),
+    Schema.Array(
+      Schema.Struct({
+        owner_id: Schema.String,
+        subscription_id: Schema.String,
+        event_id: Schema.String,
+      }),
+    ),
   );
 
-  const decodeDeadlineRows = decodeRows(Schema.Struct({ deadline: Schema.NullOr(SqlNumber) }));
+  const decodeDeadlineRows = decodeRows(
+    Schema.Array(Schema.Struct({ deadline: Schema.NullOr(SqlNumber) })),
+  );
 
   const decodeRetentionProgressRows = decodeRows(
-    Schema.Struct({
-      replay_horizon_millis: SqlNumber,
-      tombstone_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-      event_cursor: Schema.String,
-      delivery_cursor: Schema.String,
-    }),
+    Schema.Array(
+      Schema.Struct({
+        replay_horizon_millis: SqlNumber,
+        tombstone_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+        event_cursor: Schema.String,
+        delivery_cursor: Schema.String,
+      }),
+    ),
   );
 
   const decodeRetainedDeliveryRows = decodeRows(
-    Schema.Struct({ delivery_key: Schema.String, record_json: Schema.String }),
+    Schema.Array(Schema.Struct({ delivery_key: Schema.String, record_json: Schema.String })),
   );
 
   const decodeRetainedEventRows = decodeRows(
-    Schema.Struct({ event_id: Schema.String, record_json: Schema.String }),
+    Schema.Array(Schema.Struct({ event_id: Schema.String, record_json: Schema.String })),
   );
 
   const decodeSubscription = decode(SubscriptionRecord);
@@ -280,7 +284,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       code,
     );
 
-    const decodedRows = yield* decodeRegistrationRows(rows, code);
+    const decodedRows = yield* decodeRegistrationRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
@@ -316,7 +320,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       code,
     );
 
-    const decodedRows = yield* decodeEventRows(rows, code);
+    const decodedRows = yield* decodeEventRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
@@ -354,7 +358,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       code,
     );
 
-    const decodedRows = yield* decodeDeliveryRows(rows, code);
+    const decodedRows = yield* decodeDeliveryRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
@@ -381,7 +385,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     code: string,
   ) {
     const rows = yield* query(statement, code);
-    const decoded = yield* decodeCountRows(rows, code);
+    const decoded = yield* decodeCountRows("subscription", code, rows);
 
     if (decoded.length !== 1) return yield* corrupt(code);
 
@@ -398,7 +402,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       "advance subscription sequence",
     );
 
-    const decoded = yield* decodeSequenceRows(rows, "advance subscription sequence");
+    const decoded = yield* decodeSequenceRows(
+      "subscription",
+      "advance subscription sequence",
+      rows,
+    );
 
     if (decoded.length !== 1) return yield* corrupt("subscription sequence");
 
@@ -532,7 +540,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "list subscriptions",
       );
 
-      const decoded = yield* decodeRegistrationKeyRows(rows, "list subscriptions");
+      const decoded = yield* decodeRegistrationKeyRows("subscription", "list subscriptions", rows);
 
       return yield* Effect.forEach(
         decoded,
@@ -654,7 +662,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
               Record<string, unknown>
             >`SELECT replay_horizon_millis FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
             "retained horizon",
-          ).pipe(Effect.flatMap((rows) => decodeRetentionHorizonRows(rows, "retained horizon")));
+          ).pipe(
+            Effect.flatMap((rows) =>
+              decodeRetentionHorizonRows("subscription", "retained horizon", rows),
+            ),
+          );
 
           if (
             retainedPolicies.length > 0 &&
@@ -676,7 +688,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
               >`SELECT replay_horizon_millis FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
               "retained event horizon",
             ).pipe(
-              Effect.flatMap((rows) => decodeRetentionHorizonRows(rows, "retained event horizon")),
+              Effect.flatMap((rows) =>
+                decodeRetentionHorizonRows("subscription", "retained event horizon", rows),
+              ),
             );
 
             if (policies[0]?.replay_horizon_millis !== limits.retention.replayHorizonMillis)
@@ -726,9 +740,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     },
   );
 
-  const event: SubscriptionStore["Service"]["event"] = Effect.fnUntraced(function* (eventId) {
-    return yield* readEvent(eventId, "get event");
-  });
+  const event: SubscriptionStore["Service"]["event"] = (eventId) => readEvent(eventId, "get event");
 
   const pendingEvents: SubscriptionStore["Service"]["pendingEvents"] = Effect.fnUntraced(
     function* (nowMillis, after, limit) {
@@ -740,7 +752,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "pending events",
       );
 
-      return yield* decodeEventKeyRows(rows, "pending event keys").pipe(
+      return yield* decodeEventKeyRows("subscription", "pending event keys", rows).pipe(
         Effect.map((items) => items.map((item) => item.event_id)),
       );
     },
@@ -765,7 +777,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "subscription candidates",
       );
 
-      const decoded = yield* decodeRegistrationKeyRows(rows, "subscription candidates");
+      const decoded = yield* decodeRegistrationKeyRows(
+        "subscription",
+        "subscription candidates",
+        rows,
+      );
 
       return yield* Effect.forEach(
         decoded,
@@ -1016,7 +1032,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "pending deliveries",
       );
 
-      return yield* decodeDeliveryKeyRows(rows, "pending delivery keys").pipe(
+      return yield* decodeDeliveryKeyRows("subscription", "pending delivery keys", rows).pipe(
         Effect.map((items) =>
           items.map((item) => ({
             subscription: {
@@ -1043,7 +1059,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "list deliveries",
       );
 
-      const decoded = yield* decodeJsonRows(rows, "list deliveries");
+      const decoded = yield* decodeJsonRows("subscription", "list deliveries", rows);
 
       return yield* Effect.forEach(decoded, (row) =>
         decodeDelivery(row.record_json, "list delivery"),
@@ -1107,7 +1123,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "recovering subscriptions",
       );
 
-      return yield* decodeRegistrationKeyRows(rows, "recovering subscription keys").pipe(
+      return yield* decodeRegistrationKeyRows(
+        "subscription",
+        "recovering subscription keys",
+        rows,
+      ).pipe(
         Effect.map((items) =>
           items.map((item) => ({
             key: { partition, ownerId: item.owner_id, subscriptionId: item.subscription_id },
@@ -1149,7 +1169,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       "read subscription scan cursors",
     );
 
-    const decoded = yield* decodeScanRows(rows, "read subscription scan cursors");
+    const decoded = yield* decodeScanRows("subscription", "read subscription scan cursors", rows);
 
     if (decoded.length !== 1) return yield* corrupt("subscription scan cursors");
 
@@ -1198,7 +1218,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   `,
     "next subscription deadline",
   ).pipe(
-    Effect.flatMap((rows) => decodeDeadlineRows(rows, "next subscription deadline")),
+    Effect.flatMap((rows) =>
+      decodeDeadlineRows("subscription", "next subscription deadline", rows),
+    ),
     Effect.flatMap((rows) =>
       rows.length === 1
         ? Effect.succeed(rows[0].deadline)
@@ -1241,7 +1263,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
             >`SELECT replay_horizon_millis, tombstone_count, event_cursor, delivery_cursor FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
             "maintenance progress",
           ).pipe(
-            Effect.flatMap((rows) => decodeRetentionProgressRows(rows, "maintenance progress")),
+            Effect.flatMap((rows) =>
+              decodeRetentionProgressRows("subscription", "maintenance progress", rows),
+            ),
           );
 
           const cursor = progress[0];
@@ -1257,7 +1281,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
             >`SELECT delivery_key, record_json FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND delivery_key>${cursor.delivery_cursor} ORDER BY delivery_key LIMIT ${limit}`,
             "maintenance deliveries",
           ).pipe(
-            Effect.flatMap((rows) => decodeRetainedDeliveryRows(rows, "maintenance deliveries")),
+            Effect.flatMap((rows) =>
+              decodeRetainedDeliveryRows("subscription", "maintenance deliveries", rows),
+            ),
           );
 
           const eventRows = yield* query(
@@ -1265,7 +1291,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
               Record<string, unknown>
             >`SELECT event_id, record_json FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id>${cursor.event_cursor} ORDER BY event_id LIMIT ${limit}`,
             "maintenance events",
-          ).pipe(Effect.flatMap((rows) => decodeRetainedEventRows(rows, "maintenance events")));
+          ).pipe(
+            Effect.flatMap((rows) =>
+              decodeRetainedEventRows("subscription", "maintenance events", rows),
+            ),
+          );
 
           const protectedByRecovery = (event: AcceptedEvent) =>
             query(

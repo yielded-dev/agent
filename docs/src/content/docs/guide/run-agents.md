@@ -129,9 +129,10 @@ and one terminal classification. Provider SDK chunks do not enter this stable un
 For structured output, treat text deltas as provisional wire data. Show activity or received-character
 progress until the terminal output passes its Schema; do not display partial JSON as an answer.
 The demo follows this pattern. Plain-text output can render provisional text directly.
-Provider parts are copied into bounded, engine-owned data and Schema-validated in chunks. The engine
-publishes each chunk's semantic events in order; a later invalid part preserves previously accepted
-progress and reported usage. Transport fragmentation does not create an ownership span per delta.
+Provider parts are copied into bounded, engine-owned data and Schema-validated in order. The engine
+publishes each part's semantic events before processing the next part, even within a single provider
+chunk. A later invalid or interrupted part preserves earlier published progress and reported usage.
+Transport fragmentation does not create an ownership span per delta.
 
 Once stream consumption starts, a scoped producer advances until its bounded event buffer fills.
 Slow consumption backpressures publication, but individual pulls do not pace tool execution.
@@ -429,9 +430,11 @@ creating a second model-call span. The configured model and provider are recorde
 and token-usage annotations. Each retry and compaction summary has its own model span.
 These labels add identifiers, not prompts, instructions, or tool payloads.
 
-Library helpers use `Effect.fnUntraced` by default. Named `Effect.fn` is reserved for agent run/turn,
-model call, tool call, adapter storage append/claim/renew/release/publish/finalize, and recovery
-operation boundaries. Helpers for stream parts, individual records, per-tool batch orchestration,
+Library generators use `Effect.fnUntraced`; direct Effect-returning helpers need no wrapper.
+Spans are reserved for agent run/turn, model and tool calls, browser and transport operations,
+adapter storage operations, and recovery. The export check enforces their owning modules and
+names across `Effect.fn`, Effect and Stream span primitives, and the storage span wrapper.
+Helpers for stream parts, individual records, per-tool batch orchestration,
 and decoded rows are always untraced; actual tool calls retain their `execute_tool` spans.
 Use the enclosing operation spans for timing and failure diagnostics, and adjust filters that
 relied on private-helper span names.

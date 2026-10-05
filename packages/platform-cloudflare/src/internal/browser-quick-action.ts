@@ -100,15 +100,14 @@ export class BrowserQuickActionBrowserBinding extends Context.Service<
   ): Layer.Layer<BrowserQuickActionBrowserBinding> {
     const browser = options.browser;
 
-    const invoke = Effect.fnUntraced(function* (
+    const invoke = (
       action: "screenshot" | "content" | "markdown" | "links" | "scrape" | "json",
       evaluate: () => Promise<Response>,
-    ): Effect.fn.Return<Response, BrowserQuickActionRpcError> {
-      return yield* Effect.tryPromise({
+    ): Effect.Effect<Response, BrowserQuickActionRpcError> =>
+      Effect.tryPromise({
         try: evaluate,
         catch: (cause) => BrowserQuickActionRpcError.make({ action, cause }),
       });
-    });
 
     return Layer.succeed(BrowserQuickActionBrowserBinding)({
       screenshot: (request) =>

@@ -1682,8 +1682,8 @@ export class ThreadMaintenance extends Context.Service<
         yield* failpoint.hit("maintenance:retry:after");
       });
 
-      const beginNative = Effect.fnUntraced(function* (observed: MaintenanceObservation) {
-        return yield* mutations.withSnapshot((activeAtStart) =>
+      const beginNative = (observed: MaintenanceObservation) =>
+        mutations.withSnapshot((activeAtStart) =>
           Effect.gen(function* () {
             const generation = yield* beginPass(observed);
 
@@ -1696,7 +1696,6 @@ export class ThreadMaintenance extends Context.Service<
             return { ...generation, activeAtStart };
           }),
         );
-      });
 
       const attemptSelected = Effect.fnUntraced(function* (
         selected: SubmissionWorkItem,

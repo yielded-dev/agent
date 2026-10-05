@@ -1980,13 +1980,12 @@ const makeHandle = Effect.fnUntraced(function* (
       ),
     );
 
-  const decodeActionObservation = Effect.fnUntraced(function* (raw: unknown) {
-    return yield* Schema.decodeUnknownEffect(ActionObservation)(raw).pipe(
+  const decodeActionObservation = (raw: unknown) =>
+    Schema.decodeUnknownEffect(ActionObservation)(raw).pipe(
       Effect.mapError((cause) =>
         protocolError("The browser returned a malformed action observation", cause),
       ),
     );
-  });
 
   const logActionObservation = (
     operation: "fill" | "click" | "select-file",

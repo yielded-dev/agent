@@ -142,12 +142,12 @@ const runAssertion = Effect.fnUntraced(function* (
   });
 });
 
-const takeTurn = Effect.fnUntraced(function* (
+const takeTurn = (
   state: Ref.Ref<ScriptState>,
   kind: ScriptedRequestKind,
   options: LanguageModel.ProviderOptions,
-): Effect.fn.Return<ScriptedTurnInput, AiError.AiError> {
-  return yield* Ref.modify(state, (current) => {
+): Effect.Effect<ScriptedTurnInput, AiError.AiError> =>
+  Ref.modify(state, (current) => {
     const turn = current.remaining[0];
 
     if (turn === undefined) {
@@ -173,7 +173,6 @@ const takeTurn = Effect.fnUntraced(function* (
       () => scriptedError(kind, `Script exhausted before the ${kind} request`),
     ),
   );
-});
 
 const requireGenerateTurn = (
   turn: ScriptedTurnInput,

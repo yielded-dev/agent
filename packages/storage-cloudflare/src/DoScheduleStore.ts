@@ -116,15 +116,12 @@ const unavailable = (operation: string): ScheduleStorageError =>
 const corrupt = (operation: string): ScheduleStorageError =>
   ScheduleStorageError.make({ operation, reason: "corrupt" });
 
-const decodeRows = Effect.fnUntraced(function* <A, I, R>(
+const decodeRows = <A, I, R>(
   schema: Schema.Codec<A, I, R>,
   rows: ReadonlyArray<unknown>,
   operation: string,
-): Effect.fn.Return<A, ScheduleStorageError, R> {
-  return yield* Schema.decodeUnknownEffect(schema)(rows).pipe(
-    Effect.mapError(() => corrupt(operation)),
-  );
-});
+): Effect.Effect<A, ScheduleStorageError, R> =>
+  Schema.decodeUnknownEffect(schema)(rows).pipe(Effect.mapError(() => corrupt(operation)));
 
 const decodeBoundary = <A, I, R>(
   schema: Schema.Codec<A, I, R>,

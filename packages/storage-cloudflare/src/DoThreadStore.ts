@@ -148,11 +148,11 @@ const schemaStoreError = (operation: string, error: Schema.SchemaError) =>
     }),
   });
 
-const makeOffset = Effect.fnUntraced(function* (
+const makeOffset = (
   threadId: ThreadMaterialization["threadId"],
   sequence: number,
-): Effect.fn.Return<ObservationOffset, ThreadStoreError> {
-  return yield* Schema.decodeEffect(CanonicalSequence)(sequence).pipe(
+): Effect.Effect<ObservationOffset, ThreadStoreError> =>
+  Schema.decodeEffect(CanonicalSequence)(sequence).pipe(
     Effect.flatMap((validatedSequence) =>
       Schema.decodeEffect(ObservationOffset)(
         `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:${validatedSequence}`,
@@ -160,7 +160,6 @@ const makeOffset = Effect.fnUntraced(function* (
     ),
     Effect.mapError((error) => schemaStoreError("encode observation offset", error)),
   );
-});
 
 const parseOffset = Effect.fnUntraced(function* (
   threadId: ThreadMaterialization["threadId"],
@@ -201,13 +200,10 @@ const mapFence = (threadId: ThreadMaterialization["threadId"], error: DoFenceRej
     attemptedEpoch: error.producerEpoch,
   });
 
-const encodeCheckpoint = Effect.fnUntraced(function* (
-  checkpoint: ThreadCheckpoint,
-): Effect.fn.Return<string, ThreadStoreError> {
-  return yield* Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
+const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, ThreadStoreError> =>
+  Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
     Effect.mapError((error) => schemaStoreError("encode checkpoint", error)),
   );
-});
 
 const envelopes = new WeakMap<object, CanonicalRecordEnvelope>();
 
@@ -269,13 +265,12 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
   return envelope;
 });
 
-const decodeCheckpoint = Effect.fnUntraced(function* (
+const decodeCheckpoint = (
   checkpointJson: string,
-): Effect.fn.Return<ThreadCheckpoint, ThreadStoreError> {
-  return yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
+): Effect.Effect<ThreadCheckpoint, ThreadStoreError> =>
+  Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
     Effect.mapError((error) => schemaStoreError("decode checkpoint", error)),
   );
-});
 
 const requireThread = Effect.fnUntraced(function* (
   journal: DoJournal,
@@ -539,13 +534,12 @@ const makeServices = Effect.fnUntraced(function* () {
     yield* decodeStartupPayloads(journal, crypto);
   }
 
-  const hitFailpoint = Effect.fnUntraced(function* (
+  const hitFailpoint = (
     location: DoStorageFailpointLocation,
-  ): Effect.fn.Return<void, ThreadStoreError> {
-    return yield* failpoint
+  ): Effect.Effect<void, ThreadStoreError> =>
+    failpoint
       .hit(location)
       .pipe(Effect.mapError((error) => storeError(`storage failpoint ${location}`, error)));
-  });
 
   const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(
     function* (request: ThreadMaterialization) {

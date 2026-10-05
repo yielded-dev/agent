@@ -554,9 +554,8 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     resolveUnknown: runtime.resolveUnknown,
     submissionStatus: runtime.submissionStatus,
     repair,
-    executionId: Effect.fnUntraced(function* (receipt: Receipt) {
-      return yield* intentFor(receipt).pipe(Effect.map((intent) => intent.executionId));
-    }),
+    executionId: (receipt: Receipt) =>
+      intentFor(receipt).pipe(Effect.map((intent) => intent.executionId)),
   });
 });
 

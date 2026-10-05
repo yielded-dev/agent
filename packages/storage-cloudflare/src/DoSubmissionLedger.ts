@@ -692,34 +692,28 @@ const makeServices = Effect.fnUntraced(function* () {
    * Submission's lane; a superseded or missing token fails with OwnershipLost carrying the
    * Thread's current producer epoch (DUR-006).
    */
-  const requireOwnership = Effect.fnUntraced(
-    function* (
-      operation: string,
-      submission: SubmissionRow,
-      ownershipToken: string,
-    ): Effect.fn.Return<OwnershipRow, OwnershipLost | LedgerError> {
-      const ownership = yield* readOwnership(operation, submission.submission_id);
-      const actualEpoch = yield* threadEpoch(operation, submission.thread_id);
+  const requireOwnership = Effect.fnUntraced(function* (
+    operation: string,
+    submission: SubmissionRow,
+    ownershipToken: string,
+  ): Effect.fn.Return<OwnershipRow, OwnershipLost | LedgerError> {
+    const ownership = yield* readOwnership(operation, submission.submission_id);
+    const actualEpoch = yield* threadEpoch(operation, submission.thread_id);
 
-      if (
-        Option.isNone(ownership) ||
-        ownership.value.ownership_token !== ownershipToken ||
-        ownership.value.producer_epoch !== actualEpoch
-      ) {
-        const submissionId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.submissionId)(
-          submission.submission_id,
-        ).pipe(Effect.mapError(internalFailure(operation)));
+    if (
+      Option.isNone(ownership) ||
+      ownership.value.ownership_token !== ownershipToken ||
+      ownership.value.producer_epoch !== actualEpoch
+    ) {
+      const submissionId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.submissionId)(
+        submission.submission_id,
+      ).pipe(Effect.mapError(internalFailure(operation)));
 
-        return yield* OwnershipLost.make({ submissionId, actualEpoch });
-      }
+      return yield* OwnershipLost.make({ submissionId, actualEpoch });
+    }
 
-      return ownership.value;
-    },
-    withStorageSpan(
-      "DoSubmissionLedger.requireOwnership",
-      (error) => error._tag === "OwnershipLost",
-    ),
-  );
+    return ownership.value;
+  });
 
   const submissions = new WeakMap<SubmissionRow, SubmissionSnapshot>();
 
@@ -1025,11 +1019,11 @@ const makeServices = Effect.fnUntraced(function* () {
     );
   });
 
-  const approvalIntentFromRow = Effect.fnUntraced(function* (
+  const approvalIntentFromRow = (
     operation: string,
     row: ApprovalDecisionRow,
-  ): Effect.fn.Return<ApprovalDecisionIntent, LedgerError> {
-    return yield* decodeApprovalDecisionIntent({
+  ): Effect.Effect<ApprovalDecisionIntent, LedgerError> =>
+    decodeApprovalDecisionIntent({
       submissionId: row.submission_id,
       toolCallId: row.tool_call_id,
       decision: row.decision,
@@ -1046,7 +1040,6 @@ const makeServices = Effect.fnUntraced(function* () {
         ),
       ),
     );
-  });
 
   const readUnknownResolutions = Effect.fnUntraced(function* (
     operation: string,

@@ -361,16 +361,15 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       .export(ThreadExportRequest.make({ threadId }))
       .pipe(Effect.mapError(storageFailure(operation)));
 
-  const exactRecord = Effect.fnUntraced(function* (
+  const exactRecord = (
     threadId: ThreadId,
     recordId: RecordId,
     operation: WorkerError["operation"],
-  ) {
-    return yield* getRecord({ threadId, recordId }).pipe(
+  ) =>
+    getRecord({ threadId, recordId }).pipe(
       Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
       Effect.mapError(storageFailure(operation)),
     );
-  });
 
   const completedContinuation = Effect.fnUntraced(function* (
     source: WorkerContext["source"],
@@ -534,21 +533,17 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       return yield* failure("start", "denied");
   });
 
-  const readIdentity = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    operation: WorkerError["operation"],
-  ) {
-    return yield* deps.store
+  const readIdentity = (threadId: ThreadId, operation: WorkerError["operation"]) =>
+    deps.store
       .readIdentity(ThreadIdentityRequest.make({ threadId }))
       .pipe(Effect.mapError(storageFailure(operation)));
-  });
 
-  const readWorkerState = Effect.fnUntraced(function* (
+  const readWorkerState = (
     threadId: ThreadId,
     operation: WorkerError["operation"],
     sourceSubmissionId?: SubmissionId,
-  ) {
-    return yield* readNativeWorkerState({
+  ) =>
+    readNativeWorkerState({
       threadId,
       limit: MAX_THREAD_EXPORT_RECORDS,
       ...(sourceSubmissionId === undefined ? {} : { sourceSubmissionId }),
@@ -556,7 +551,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
       Effect.mapError(storageFailure(operation)),
     );
-  });
 
   const hit = (location: DurableRuntimeFailpointLocation, operation: WorkerError["operation"]) =>
     deps.failpoint.hit(location).pipe(Effect.mapError(storageFailure(operation)));

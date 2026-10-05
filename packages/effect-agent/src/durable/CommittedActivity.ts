@@ -80,18 +80,14 @@ const contiguous = () =>
   });
 
 /** Stable work identity independent of worker claims, retry count, extraction, and clocks. */
-export const activityWorkId = Effect.fnUntraced(function* (
-  key: ActivityProcessorKey,
-  sequence: CanonicalSequence,
-) {
-  return yield* digestJson([
+export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSequence) =>
+  digestJson([
     "effect-agent/activity@1",
     key.processorId,
     key.processorVersion,
     key.threadId,
     sequence,
   ]);
-});
 
 /**
  * Process one bounded committed prefix of one application-selected Thread. Nothing runs until

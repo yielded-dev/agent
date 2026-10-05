@@ -122,16 +122,15 @@ const storeError = (operation: string, message: string, cause?: unknown): Thread
     ? ThreadStoreError.make({ operation, message })
     : ThreadStoreError.make({ operation, message, cause });
 
-const validate = Effect.fnUntraced(function* <A, I>(
+const validate = <A, I>(
   schema: Schema.Codec<A, I>,
   operation: string,
   value: unknown,
-): Effect.fn.Return<A, ThreadStoreError> {
-  return yield* Schema.encodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, ThreadStoreError> =>
+  Schema.encodeUnknownEffect(schema)(value).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(schema)),
     Effect.mapError((error) => storeError(operation, `Invalid ${operation} request`, error)),
   );
-});
 
 const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const ZERO_CANONICAL_SEQUENCE = decodeCanonicalSequence(0);
@@ -515,12 +514,12 @@ const makeThreadStore = Effect.gen(function* () {
       return Math.min(thread.peerCount, request.limit);
     });
 
-  const readSnapshot = Effect.fnUntraced(function* (
+  const readSnapshot = (
     threadId: ThreadId,
     afterSequence: CanonicalSequence | undefined,
     limit: number,
-  ) {
-    return yield* Ref.get(state).pipe(
+  ) =>
+    Ref.get(state).pipe(
       Effect.flatMap((current) => findThread(current, threadId)),
       Effect.map((thread) => {
         // Append assigns gap-free sequences starting at 1, so the exclusive cursor is an index.
@@ -529,7 +528,6 @@ const makeThreadStore = Effect.gen(function* () {
         return thread.records.slice(start, start + limit);
       }),
     );
-  });
 
   const read: ThreadStore["Service"]["read"] = (unvalidated) =>
     Stream.unwrap(
