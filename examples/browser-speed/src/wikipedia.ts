@@ -549,15 +549,16 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       browser.native(async (page) => {
         // A condition check also observes navigation that finished during the
         // action's own read. It never subscribes too late to a navigation event.
-        const ready = await page.waitForFunction(
-          (previous) =>
-            performance.timeOrigin !== previous &&
-            document.readyState !== "loading" &&
-            document.body.classList.contains("ns-0") &&
-            document.querySelector("#mw-content-text .mw-parser-output") !== null,
-          { timeout: 12_000 },
-          currentDocument,
-        );
+        const arrived = (previous: number) =>
+          performance.timeOrigin !== previous &&
+          document.readyState !== "loading" &&
+          document.body.classList.contains("ns-0") &&
+          document.querySelector("#mw-content-text .mw-parser-output") !== null;
+
+        // The click's own observation usually waited for parsing already. A plain check
+        // avoids installing Puppeteer's polling helpers into every new article.
+        if (await page.evaluate(arrived, currentDocument)) return;
+        const ready = await page.waitForFunction(arrived, { timeout: 12_000 }, currentDocument);
 
         await ready.dispose();
       }),
