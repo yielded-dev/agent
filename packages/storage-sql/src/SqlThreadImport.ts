@@ -46,6 +46,7 @@ import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
   readonly offsetPrefix: string;
+  /** Per-value UTF-8 limit for imported canonical, admission, and command text. */
   readonly maxValueBytes?: number;
   readonly afterThreadRead?: Effect.Effect<void, E>;
   readonly afterImport?: (
@@ -76,6 +77,8 @@ const Row = Schema.Struct(Struct.pick(RecordRow.fields, ["batch_id", "sequence",
 const Batch = Schema.Struct(
   Struct.pick(BatchRow.fields, ["batch_id", "batch_json", "first_sequence", "last_sequence"]),
 );
+
+const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.fields.thread_id));
 
 const WireBatch = Schema.Struct({
   ...ThreadExportBatch.fields,
@@ -439,14 +442,84 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     const { threadId } = prepared.result;
     const maxBytes = options.maxValueBytes ?? 16 * 1024 * 1024;
 
+    const checkValues = (values: ReadonlyArray<string | undefined | null>) =>
+      values.some(
+        (value) => value !== undefined && value !== null && utf8ByteLength(value) > maxBytes,
+      )
+        ? Effect.fail(
+            ThreadImportRejected.make({
+              threadId,
+              reason: "unsupported-capacity",
+              message:
+                "An imported value exceeds this adapter's storage bound; import into an adapter with a sufficient value limit",
+            }),
+          )
+        : Effect.void;
+
+    const checkIdentifiers = (values: ReadonlyArray<string | undefined>) =>
+      decodeStoredIdentifiers(values.filter((value) => value !== undefined)).pipe(
+        Effect.mapError(() =>
+          ThreadImportRejected.make({
+            threadId,
+            reason: "unsupported-capacity",
+            message:
+              "An imported identifier exceeds the destination SQL row schema; use an adapter that supports the original identities",
+          }),
+        ),
+        Effect.andThen(checkValues(values)),
+      );
+
+    yield* checkIdentifiers([threadId]);
+    yield* checkValues([prepared.result.tailDigest]);
+
     for (const batch of prepared.batches) {
-      if ([batch.batchJson, ...batch.recordJson].some((value) => utf8ByteLength(value) > maxBytes))
-        return yield* ThreadImportRejected.make({
-          threadId,
-          reason: "unsupported-capacity",
-          message:
-            "A canonical value exceeds this adapter's storage bound; import into an adapter with a sufficient value limit",
-        });
+      yield* checkIdentifiers([
+        batch.batch.batchId,
+        ...batch.batch.records.map((record) => record.recordId),
+      ]);
+      yield* checkValues([batch.batchJson, ...batch.recordJson]);
+    }
+    for (const rebuilt of prepared.submissions) {
+      const admission = yield* encode(ThreadAdmission, rebuilt.admission);
+
+      yield* checkIdentifiers([
+        admission.submissionId,
+        admission.receiptId,
+        admission.principal,
+        admission.idempotencyKey,
+        admission.agentId,
+        admission.deploymentId,
+        rebuilt.inputApplied?.recordId,
+        rebuilt.joinedHostSubmissionId,
+        rebuilt.settlement?.recordId,
+        rebuilt.abort?.author,
+        rebuilt.abort?.canonicalRecordId,
+        ...rebuilt.approvals.flatMap((command) => [command.toolCallId, command.resolver]),
+        ...rebuilt.resolutions.flatMap((command) => [command.toolCallId, command.author]),
+      ]);
+
+      const suspension =
+        rebuilt.suspension === undefined
+          ? undefined
+          : yield* encode(SuspensionSnapshot, rebuilt.suspension);
+
+      yield* checkValues([
+        canonicalJson(admission.inputPayload),
+        canonicalJson(admission.agentDigests),
+        admission.admissionGroup,
+        admission.admissionFence === undefined
+          ? undefined
+          : canonicalJson(admission.admissionFence),
+        suspension === undefined ? undefined : canonicalJson(suspension.reason),
+        canonicalJson(rebuilt.unknownToolCallIds),
+        rebuilt.abort?.reason,
+        ...rebuilt.approvals.map((command) => command.reason),
+      ]);
+      for (const intent of rebuilt.resolutions) {
+        const command = yield* encode(UnknownResolutionIntent, intent);
+
+        yield* checkValues([command.reason, canonicalJson(command.resolution)]);
+      }
     }
     const now = yield* Clock.currentTimeMillis;
 

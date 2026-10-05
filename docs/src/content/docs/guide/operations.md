@@ -509,6 +509,8 @@ and admission time survive, including admitted inputs that have not reached the 
 preserves opaque admission fences and groups and applies the destination ledger's admission
 policy and active-group constraints. Provide that policy when acquiring the destination storage;
 policy conflicts and unavailable policy checks have distinct, actionable import errors.
+SQL imports reject identities that exceed the destination row schemas and values that exceed its
+byte limit, including queued inputs and accepted commands, before acquiring the writer.
 
 Execution ownership is never transferred. Ledger state is rebuilt from the log, projections
 replay, and both checkpoint caches start empty. Unresolved ordinary tool effects in an unfinished
