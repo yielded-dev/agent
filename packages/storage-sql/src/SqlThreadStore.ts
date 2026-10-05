@@ -60,7 +60,6 @@ export interface SqlThreadStoreOptions<
 /** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
 export const prepareSqlAppend = Effect.fnUntraced(function* (
   request: FencedAppendRequest,
-  crypto: Crypto.Crypto,
   requireMaterialized: (
     request: PreparedAppend,
   ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized> = () => Effect.void,
@@ -78,10 +77,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
 
   const tailDigest = yield* captured
     .digest()
-    .pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError(invalid("digest canonical append")),
-    );
+    .pipe(Effect.mapError(invalid("digest canonical append")));
 
   return {
     threadId: captured.threadId,
@@ -520,7 +516,9 @@ export const makeSqlThreadStoreKernel = Effect.fn("SqlThreadStore.make")(functio
     ) => Effect.Effect<unknown, ThreadStoreError | ThreadNotMaterialized>,
     commit: SqlJournal<S, C, W, F>["append"],
   ) {
-    const rawRequest = yield* prepareSqlAppend(request, crypto, requireMaterialized);
+    const rawRequest = yield* prepareSqlAppend(request, requireMaterialized).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
 
     yield* hitFailpoint("append:before");
 

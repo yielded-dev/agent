@@ -582,7 +582,10 @@ const makeServices = Effect.fn("DoThreadStore.makeServices")(function* () {
 
       const validated = yield* PreparedAppend.capture(checked);
       const observed = yield* requireThread(journal, validated.threadId);
-      const { raw: rawRequest } = yield* prepareCanonicalAppend(validated, crypto);
+
+      const { raw: rawRequest } = yield* prepareCanonicalAppend(validated).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
 
       yield* hitFailpoint("append:before");
 

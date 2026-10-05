@@ -1830,7 +1830,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fn("SqlSubmissionLedger.make
     const operation = "publish settlement";
     const { request, record, settlement } = yield* validatePublication(input);
 
-    const prepared = yield* prepareSqlAppend(request.append, crypto);
+    const prepared = yield* prepareSqlAppend(request.append).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
 
     yield* hitFailpoint("append:before", operation);
 

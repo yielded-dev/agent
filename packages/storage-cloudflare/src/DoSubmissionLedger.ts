@@ -2002,7 +2002,10 @@ const makeServices = Effect.fn("DoSubmissionLedger.makeServices")(function* () {
   )(function* (input) {
     const operation = "publish settlement";
     const { request, record, settlement } = yield* validatePublication(input);
-    const prepared = yield* prepareCanonicalAppend(request.append, crypto);
+
+    const prepared = yield* prepareCanonicalAppend(request.append).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
 
     const mapAppendError = (error: { readonly _tag: string; readonly message: string }) =>
       ThreadStoreError.make({ operation, message: error.message, cause: error });
