@@ -152,8 +152,8 @@ export const handleRequest = (verify = authenticate) =>
     }
     if (!url.pathname.startsWith("/travel/")) return new Response("Not found", { status: 404 });
 
-    // Start and the shared auth contract own their public base paths. Other handlers
-    // and the asset binding retain root-relative paths inside this Worker.
+    // Start, Auth, and Alchemy's asset manifest use the public base path.
+    // The remaining API handlers retain root-relative paths inside this Worker.
     const pageRequest = request;
 
     url.pathname = url.pathname.slice("/travel".length);
@@ -200,7 +200,7 @@ export const handleRequest = (verify = authenticate) =>
       );
     }
     if ((url.pathname.startsWith("/assets/") || url.pathname === "/favicon.svg") && env.ASSETS)
-      return yield* Effect.promise(() => env.ASSETS!.fetch(request));
+      return yield* Effect.promise(() => env.ASSETS!.fetch(pageRequest));
 
     const identity = yield* verify(request).pipe(
       Effect.match({

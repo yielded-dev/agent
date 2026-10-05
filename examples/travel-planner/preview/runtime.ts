@@ -23,6 +23,12 @@ export const localPreview = Effect.fn("localPreview")(function* (
   const server = assets.server;
   const files = yield* fs.readDirectory(server, { recursive: true });
 
+  // Alchemy uploads Vite assets under its base path; mirror that manifest in Miniflare.
+  const publicDirectory = `${directory}/public`;
+
+  yield* fs.makeDirectory(publicDirectory);
+  yield* fs.copy(assets.client, `${publicDirectory}/travel`);
+
   const modules = ["worker.js", ...files.filter((file) => file !== "worker.js")]
     .filter((file) => file.endsWith(".js") || file.endsWith(".css"))
     .map((file) => ({
@@ -89,7 +95,7 @@ export const localPreview = Effect.fn("localPreview")(function* (
                 },
                 email: { send_email: [{ name: "AUTH_EMAIL" }] },
                 assets: {
-                  directory: assets.client,
+                  directory: publicDirectory,
                   binding: "ASSETS",
                   run_worker_first: true,
                   routerConfig: { has_user_worker: true },
