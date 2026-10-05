@@ -59,7 +59,6 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
   "packages/storage-sqlite/src/internal/migrations.ts": ["SqliteStorage.upgradeLayout"],
   "packages/storage-postgres/src/PostgresStorage.ts": ["PostgresStorage.exportThread"],
   "packages/storage-postgres/src/internal/postgres-storage.ts": ["PostgresStorage.upgradeLayout"],
-  "packages/storage-cloudflare/src/DoThreadStore.ts": ["DoThreadStore.exportThread"],
   "packages/storage-cloudflare/src/internal/migrations.ts": ["DoStorage.upgradeLayout"],
   "packages/storage-sql/src/SqlRunStorage.ts": ["SqlRunStorage.claim"],
   "packages/storage-sql/src/SqlThreadStore.ts": ["SqlThreadStore.append"],
@@ -105,6 +104,7 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "DoThreadStore.materialize",
     "DoThreadStore.append",
     "DoThreadStore.observe",
+    "DoThreadStore.exportThread",
   ],
   "packages/storage-cloudflare/src/internal/do-journal.ts": [
     "DoJournal.withWriteTransaction",
