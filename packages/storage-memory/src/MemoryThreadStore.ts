@@ -283,6 +283,7 @@ const makeThreadStore = Effect.gen(function* () {
   const withMutation = gate.withPermits(1);
   const updates = yield* PubSub.sliding<void>(1);
   let ledgerTransfer: MemoryLedgerTransfer | undefined;
+  let hasMessageDeliveries: ((threadId: ThreadId) => Effect.Effect<boolean>) | undefined;
 
   yield* Effect.addFinalizer(() => PubSub.shutdown(updates));
 
@@ -683,10 +684,15 @@ const makeThreadStore = Effect.gen(function* () {
 
     const thread = (yield* Ref.get(state)).threads.get(request.threadId);
 
-    const facts =
+    const { externalObligations: ledgerObligations, ...facts } =
       ledgerTransfer === undefined
-        ? { admissions: [] }
+        ? { admissions: [], externalObligations: [] }
         : yield* ledgerTransfer.export(request.threadId);
+
+    const externalObligations = [...(ledgerObligations ?? [])];
+
+    if (hasMessageDeliveries !== undefined && (yield* hasMessageDeliveries(request.threadId)))
+      externalObligations.push("message-delivery");
 
     if (thread === undefined && (facts.admissions?.length ?? 0) === 0)
       return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
@@ -723,6 +729,7 @@ const makeThreadStore = Effect.gen(function* () {
         records,
         batches,
         ...facts,
+        ...(externalObligations.length === 0 ? {} : { externalObligations }),
       }),
     );
   });
@@ -748,6 +755,13 @@ const makeThreadStore = Effect.gen(function* () {
           const threadId = prepared.result.threadId;
           const existing = current.threads.get(threadId);
 
+          if (hasMessageDeliveries !== undefined && (yield* hasMessageDeliveries(threadId)))
+            return yield* ThreadImportRejected.make({
+              threadId,
+              reason: "target-not-empty",
+              message:
+                "The destination Thread already owns message deliveries; finish those deliveries or use a fresh destination store",
+            });
           if (
             existing !== undefined &&
             (existing.records.length > 0 ||
@@ -1114,6 +1128,14 @@ const makeThreadStore = Effect.gen(function* () {
             if (ledgerTransfer !== undefined)
               throw new Error("MemoryThreadStore already has a paired SubmissionLedger");
             ledgerTransfer = transfer;
+          }),
+        ),
+      registerMessageDeliveryStore: (hasRetained) =>
+        withMutation(
+          Effect.sync(() => {
+            if (hasMessageDeliveries !== undefined)
+              throw new Error("MemoryThreadStore already has a paired MessageDeliveryStore");
+            hasMessageDeliveries = hasRetained;
           }),
         ),
       prepareAppend,

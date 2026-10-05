@@ -2969,12 +2969,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         const codec = Schema.fromJsonString(RebuiltSubmission);
         const services = yield* Effect.context<never>();
 
-        const admissionKeys = new Set(
-          [...current.submissions.values()].map(({ row }) =>
-            JSON.stringify([row.principal, row.idempotencyKey]),
-          ),
-        );
-
         const activeGroups = new Set<string>();
 
         for (const unvalidated of prepared.submissions) {
@@ -2996,14 +2990,13 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           if (
             submissions.has(admission.submissionId) ||
             receipts.has(admission.receiptId) ||
-            admissionIndex.has(key) ||
-            admissionKeys.has(JSON.stringify([admission.principal, admission.idempotencyKey]))
+            admissionIndex.has(key)
           )
             return yield* ThreadImportRejected.make({
               threadId,
               reason: "destination-conflict",
               message:
-                "The destination ledger retains a Submission, Receipt, or principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
+                "The destination ledger retains a Submission, Receipt, or Thread/principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
             });
           if (rebuilt.state !== "settled") {
             // Match normal memory admission: the policy must finish in this critical section.

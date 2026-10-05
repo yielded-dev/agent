@@ -1,7 +1,6 @@
-import { EMPTY_TAIL_DIGEST, canonicalJson } from "@yielded/agent/digest";
+import { EMPTY_TAIL_DIGEST, canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
-  CanonicalSequence,
   CURRENT_RECORD_FORMAT,
   Digest,
   ObservationOffset,
@@ -31,7 +30,7 @@ import {
   ThreadStoreError,
   ThreadExportRequest,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, DateTime, Effect, Schema } from "effect";
+import { Clock, Crypto, DateTime, Effect, Schema, Struct } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import {
@@ -40,6 +39,7 @@ import {
   decodeApprovalFact,
   decodeResolutionFact,
 } from "./SqlAdmissionFacts.ts";
+import { BatchRow, RecordRow, ThreadRow } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 
@@ -67,24 +67,15 @@ const failure = (operation: string, cause: unknown) =>
   });
 
 const Header = Schema.Struct({
-  thread_id: Schema.String,
-  tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+  ...Struct.pick(ThreadRow.fields, ["thread_id", "tail_sequence", "producer_epoch"]),
   tail_digest: Digest,
-  producer_epoch: SqlInteger,
 });
 
-const Row = Schema.Struct({
-  batch_id: Schema.String,
-  sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-  record_json: Schema.String,
-});
+const Row = Schema.Struct(Struct.pick(RecordRow.fields, ["batch_id", "sequence", "record_json"]));
 
-const Batch = Schema.Struct({
-  batch_id: Schema.String,
-  batch_json: Schema.String,
-  first_sequence: SqlInteger,
-  last_sequence: SqlInteger,
-});
+const Batch = Schema.Struct(
+  Struct.pick(BatchRow.fields, ["batch_id", "batch_json", "first_sequence", "last_sequence"]),
+);
 
 const WireBatch = Schema.Struct({
   ...ThreadExportBatch.fields,
@@ -449,11 +440,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     const maxBytes = options.maxValueBytes ?? 16 * 1024 * 1024;
 
     for (const batch of prepared.batches) {
-      if (
-        [batch.batchJson, ...batch.recordJson].some(
-          (value) => new TextEncoder().encode(value).byteLength > maxBytes,
-        )
-      )
+      if ([batch.batchJson, ...batch.recordJson].some((value) => utf8ByteLength(value) > maxBytes))
         return yield* ThreadImportRejected.make({
           threadId,
           reason: "unsupported-capacity",
@@ -519,7 +506,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             });
           for (const { admission } of prepared.submissions) {
             const existing = yield* query(
-              sql`SELECT submission_id FROM ${table("effect_agent_submissions")} WHERE submission_id=${admission.submissionId} OR receipt_id=${admission.receiptId} OR (principal=${admission.principal} AND idempotency_key=${admission.idempotencyKey}) LIMIT 1`,
+              sql`SELECT submission_id FROM ${table("effect_agent_submissions")} WHERE submission_id=${admission.submissionId} OR receipt_id=${admission.receiptId} OR (thread_id=${threadId} AND principal=${admission.principal} AND idempotency_key=${admission.idempotencyKey}) LIMIT 1`,
             );
 
             if (existing.length > 0)
@@ -527,7 +514,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 threadId,
                 reason: "destination-conflict",
                 message:
-                  "The destination ledger retains a Submission, Receipt, or principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
+                  "The destination ledger retains a Submission, Receipt, or Thread/principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
               });
           }
           // The write itself arbitrates concurrent fresh imports on PostgreSQL. Conflicts roll back.

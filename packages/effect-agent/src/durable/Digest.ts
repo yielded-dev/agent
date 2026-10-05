@@ -5,6 +5,9 @@ import { Hex } from "effect/encoding";
 import type { DefinitionDigestInput } from "./Records.ts";
 import { CanonicalBatch, DefinitionDigests, Digest } from "./Records.ts";
 
+/** Measure persisted text without allocating a UTF-8 copy. */
+export { utf8ByteLength } from "../core/internal/utf8.ts";
+
 export class DigestError extends Schema.TaggedError<DigestError>()("DigestError", {
   message: Schema.String,
   cause: Schema.optionalKey(Schema.Defect()),

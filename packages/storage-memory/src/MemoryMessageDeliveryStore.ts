@@ -19,7 +19,9 @@ import {
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
 import { ScheduleInstant } from "@yielded/agent/schedule";
-import { Effect, Layer, Ref, Schema, Semaphore } from "effect";
+import { Effect, Layer, Ref, Schema } from "effect";
+
+import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 
 const codec = Schema.fromJsonString(MessageDeliveryRecord);
 
@@ -39,14 +41,18 @@ export interface MemoryMessageDeliveryStoreOptions {
   readonly maxStoredValueBytes?: number;
 }
 
-/** Reference adapter. All retained rows are bounded; completed deduplication evidence is never evicted. */
+/**
+ * Pair with MemoryThreadStoreLive so export/import sees every retained delivery obligation.
+ * All retained rows are bounded; completed deduplication evidence is never evicted.
+ */
 export const memoryMessageDeliveryStoreLayer = (
   limits: MessageDeliveryStoreLimits = defaultMessageDeliveryStoreLimits,
   options: MemoryMessageDeliveryStoreOptions = {},
-): Layer.Layer<MessageDeliveryStore, MessageDeliveryError> =>
+): Layer.Layer<MessageDeliveryStore, MessageDeliveryError, MemoryThreadStoreKernel> =>
   Layer.effect(
     MessageDeliveryStore,
     Effect.gen(function* () {
+      const journal = yield* MemoryThreadStoreKernel;
       const config = yield* validateMessageDelivery(MessageDeliveryStoreLimits, limits, "limits");
 
       const maxStoredValueBytes = yield* validateMessageDelivery(
@@ -57,9 +63,14 @@ export const memoryMessageDeliveryStoreLayer = (
 
       const state = yield* Ref.make({
         records: new Map<string, string>(),
+        owners: new Set<ThreadId>(),
         pending: new Map<ThreadId, ReadonlySet<MessageDeliveryKey["messageId"]>>(),
         workers: new Map<string, ReadonlySet<MessageDeliveryKey["messageId"]>>(),
       });
+
+      yield* journal.registerMessageDeliveryStore((threadId) =>
+        Ref.get(state).pipe(Effect.map((current) => current.owners.has(threadId))),
+      );
 
       const commit = (record: MessageDeliveryRecord, encoded: string) =>
         Ref.update(state, (current) => {
@@ -102,10 +113,16 @@ export const memoryMessageDeliveryStoreLayer = (
             workers.set(pendingKey, inputs);
           }
 
-          return { records: new Map(current.records).set(key, encoded), pending, workers };
+          return {
+            records: new Map(current.records).set(key, encoded),
+            owners: current.owners.has(record.key.ownerThreadId)
+              ? current.owners
+              : new Set(current.owners).add(record.key.ownerThreadId),
+            pending,
+            workers,
+          };
         });
 
-      const lock = yield* Semaphore.make(1);
       const failpoint = yield* MessageDeliveryFailpoint;
 
       const encode = Effect.fnUntraced(function* (record: MessageDeliveryRecord) {
@@ -162,7 +179,7 @@ export const memoryMessageDeliveryStoreLayer = (
           }
           yield* failpoint.hit("message-delivery:insert:before");
 
-          const inserted = yield* lock.withPermit(
+          const inserted = yield* journal.withMutation(
             Effect.uninterruptible(
               Effect.gen(function* () {
                 const { records } = yield* Ref.get(state);
@@ -226,7 +243,7 @@ export const memoryMessageDeliveryStoreLayer = (
 
           yield* failpoint.hit(`${point}:before`);
 
-          const changed = yield* lock.withPermit(
+          const changed = yield* journal.withMutation(
             Effect.uninterruptible(
               Effect.gen(function* () {
                 const existing = yield* get(decodedKey);

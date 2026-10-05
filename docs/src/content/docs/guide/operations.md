@@ -515,12 +515,14 @@ Run remain Unknown; settled submissions do not acquire new pending work.
 
 Single-Thread archives mark retained child, worker or message-delivery obligations owned by other
 stores; transfer those through their owning workflow before importing. Exports are bounded at
-131,072 records and read SQL history in pages. Archive records own their original wire JSON:
-copy them through the archive codec to preserve additive fields. Normalizing a record through the
+131,072 records and read SQL history in pages. `ThreadExportRecord` requires the original record
+wire alongside its typed view. Custom exporters decode stored envelopes through this codec;
+copy archive records through it to preserve additive fields. Normalizing a record through the
 ordinary record schema discards that wire, so archive encoding rejects the copy.
 Earlier archives lacking batch producer identities must be exported again from the original store.
 Keep the source when validation fails. Import never replaces a nonempty Thread or an existing
-Submission, Receipt, or principal/idempotency key in the destination ledger.
+Submission, Receipt, or Thread/principal/idempotency key in the destination ledger. Reusing a
+principal/idempotency key in another Thread is valid.
 
 Cloudflare's separate Schedule and Subscription stores still upgrade supported version 2 layouts to
 version 3. Each upgrade runs in one native transaction and advances its version marker last;

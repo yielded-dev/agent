@@ -35,12 +35,15 @@ export interface MemoryLedgerTransfer {
   ) => Effect.Effect<() => void, ThreadImportRejected>;
 }
 
-/** One journal's private mutation boundary, shared only with its paired ledger. */
+/** One journal's private mutation boundary, shared with its paired ledger and delivery store. */
 export class MemoryThreadStoreKernel extends Context.Service<
   MemoryThreadStoreKernel,
   {
     readonly withMutation: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     readonly registerLedgerTransfer: (transfer: MemoryLedgerTransfer) => Effect.Effect<void>;
+    readonly registerMessageDeliveryStore: (
+      hasRetained: (threadId: ThreadId) => Effect.Effect<boolean>,
+    ) => Effect.Effect<void>;
     readonly prepareAppend: (
       request: FencedAppendRequest,
     ) => Effect.Effect<PreparedMemoryAppend, ThreadStoreFailure>;

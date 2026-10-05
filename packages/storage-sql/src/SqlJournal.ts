@@ -55,7 +55,7 @@ export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
-class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
+export class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   batch_digest: BoundedStoredText,
   batch_id: BoundedIdentifier,
   batch_json: BoundedStoredText,
@@ -65,7 +65,7 @@ class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   tail_digest: BoundedStoredText,
 }) {}
 
-class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
+export class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
   batch_id: BoundedIdentifier,
   thread_id: BoundedIdentifier,
   record_id: BoundedIdentifier,

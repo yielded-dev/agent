@@ -123,12 +123,14 @@ const makeHarness = Effect.fn(function* (
 
   const originalShared = yield* Layer.build(
     Layer.mergeAll(
-      MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
-      memoryMessageDeliveryStoreLayer({
-        maxPendingPerOwner: options.maxPendingPerOwner ?? 100,
-        maxRetainedPerOwner: 100,
-        maxEnvelopeBytes: 262_144,
-      }),
+      Layer.mergeAll(
+        MemorySubmissionLedgerLive,
+        memoryMessageDeliveryStoreLayer({
+          maxPendingPerOwner: options.maxPendingPerOwner ?? 100,
+          maxRetainedPerOwner: 100,
+          maxEnvelopeBytes: 262_144,
+        }),
+      ).pipe(Layer.provideMerge(MemoryThreadStoreLive)),
       WakeScheduler.layerNoop,
       DurableRuntimeFailpoint.layer,
       ToolReconciler.uncertain,

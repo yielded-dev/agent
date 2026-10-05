@@ -1,14 +1,4 @@
-import {
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  Option,
-  Predicate,
-  Schema,
-  SchemaGetter,
-  Stream,
-} from "effect";
+import { Context, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { QueueSequence } from "../core/Receipt.ts";
@@ -507,22 +497,12 @@ export const ThreadExportBatch = Schema.Struct({ batchId: BatchId, producerId: P
 /** Other owning stores are required to restore these obligations; a single-Thread import refuses them. */
 export const ThreadExternalObligation = Schema.Literals(["child", "worker", "message-delivery"]);
 
-/** Archive codec preserves additive wire fields while exposing the current typed record view. */
-const ExportEnvelope = Schema.Struct({
-  ...CanonicalRecordEnvelope.fields,
+/** The wire is part of the export type: ordinary read envelopes are not lossless archives. */
+export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExportRecord>(
+  "@effect-agent/thread/ThreadExportRecord",
+)({
   record: ExportRecord,
-});
-
-export const ThreadExportRecord = ExportEnvelope.pipe(
-  Schema.decodeTo(Schema.toType(CanonicalRecordEnvelope), {
-    decode: SchemaGetter.transform((fields) => CanonicalRecordEnvelope.make(fields)),
-    encode: SchemaGetter.transformEffect((envelope) =>
-      Schema.decodeUnknownEffect(Schema.toType(ExportEnvelope))(envelope).pipe(
-        Effect.mapError((error) => error.issue),
-      ),
-    ),
-  }),
-);
+}) {}
 
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
   format: Schema.NonEmptyString,

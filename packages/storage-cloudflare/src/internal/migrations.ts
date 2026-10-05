@@ -168,7 +168,7 @@ const inspectStorage = Effect.fnUntraced(function* (
   const [legacy] = yield* decode(
     Legacy,
     yield* sql<Record<string, unknown>>`
-    SELECT * FROM effect_agent_meta
+    SELECT * FROM effect_agent_meta WHERE key = 'storage_version'
   `.pipe(Effect.mapError(storageError)),
     "effect_agent_meta",
   );

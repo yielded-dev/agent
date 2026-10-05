@@ -3,7 +3,7 @@ import { Context, Effect, Schema } from "effect";
 import { SubmissionId, ThreadId, ToolCallId, type RunId } from "../core/Identifiers.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
-import { decodeExportRecord } from "./RecordFormat.ts";
+import { decodeExportRecord, ExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
@@ -238,11 +238,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       tailDigest,
     });
   }
-  if (
-    index !== records.length ||
-    index !== archive.records.length ||
-    tailDigest !== archive.tailDigest
-  )
+  if (index !== archive.records.length || tailDigest !== archive.tailDigest)
     return yield* invalid("The canonical batch chain does not match the exported tail", threadId);
 
   // A fresh fence is not restored execution authority. Leave room for the next claim and
@@ -626,7 +622,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
             reason: ApprovalPendingSuspension.make({
               toolCallIds: [pendingApprovals[0], ...pendingApprovals.slice(1)],
             }),
-            suspendedAt: records.at(-1)?.record.createdAt ?? admission.createdAt,
+            suspendedAt: runRecords.at(-1)?.record.createdAt ?? admission.createdAt,
           });
 
     // An admitted input need not have reached the log. Its immutable fact is the work;
@@ -692,13 +688,17 @@ export const reencodeThread = Effect.fn("ThreadImport.reencodeThread")(function*
 ) {
   const exported = yield* source;
 
-  const encoded = yield* Schema.encodeEffect(ThreadExport)(exported).pipe(
-    Effect.mapError(() => invalid("Unable to encode the source export", exported.threadId)),
+  // Only the record view needs encoding here. Import captures and validates the complete
+  // archive once; admission and command facts are already in their decoded representation.
+  const records = yield* Effect.forEach(exported.records, (entry) =>
+    Schema.encodeEffect(ExportRecord)(entry.record).pipe(
+      Effect.map((record) => ({ ...entry, record })),
+    ),
+  ).pipe(Effect.mapError(() => invalid("Unable to encode the source export", exported.threadId)));
+
+  const request = yield* ThreadImportRequest.makeEffect({ archive: { ...exported, records } }).pipe(
+    Effect.mapError(() => invalid("The source export is malformed", exported.threadId)),
   );
 
-  const archive = yield* Schema.decodeEffect(ThreadArchive)(encoded).pipe(
-    Effect.mapError(() => invalid("Unable to decode the source export", exported.threadId)),
-  );
-
-  return yield* target.import(ThreadImportRequest.make({ archive }));
+  return yield* target.import(request);
 });
