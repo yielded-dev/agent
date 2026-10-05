@@ -161,6 +161,8 @@ export const inspectJevDom = pageFunction(
 
     const controls: Array<typeof Control.Type> = [];
     let truncated = candidates.length > 10_000;
+    // A modal dialog blocks background input; offer only its controls, as default observations do.
+    const modal = document.querySelector("dialog:modal");
 
     for (const node of Array.from(candidates).slice(0, 10_000)) {
       if (!(node instanceof HTMLElement)) continue;
@@ -171,6 +173,7 @@ export const inspectJevDom = pageFunction(
       if (
         !visible(node) ||
         !inView(node) ||
+        (modal !== null && !modal.contains(node)) ||
         node.matches(":disabled") ||
         node.closest('[aria-disabled="true"]')
       )

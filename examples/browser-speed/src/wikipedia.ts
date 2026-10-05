@@ -511,13 +511,18 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       })
       .pipe(Effect.mapError((error) => new LabError({ code: "browser", message: error.message })));
 
-    const control = current.controls.find(
-      (control) =>
+    const label = normalizeTitle(link.label);
+
+    const control = current.controls.find((control) => {
+      const name = normalizeTitle(control.name.slice(0, 300));
+
+      // Repeated link names carry a nearby caption, as in "Hope (Current missions)".
+      return (
         control.kind === "link" &&
         control.attributes?.href === link.href &&
-        (!control.name ||
-          normalizeTitle(control.name.slice(0, 180)) === normalizeTitle(link.label)),
-    );
+        (!control.name || name === label || name.startsWith(`${label} (`))
+      );
+    });
 
     if (current.tabs?.find((tab) => tab.active)?.url !== currentUrl || control === undefined)
       return yield* new LabError({
