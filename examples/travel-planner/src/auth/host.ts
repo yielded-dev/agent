@@ -1,9 +1,9 @@
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
-import * as Drizzle from "@yielded/auth-persistence-drizzle/SqliteDo";
 import { LifecycleHooks } from "@yielded/auth/Hooks";
 import type { OAuthProtocol } from "@yielded/auth/OAuth";
 import type { EmailProofDelivery } from "@yielded/auth/Proofs";
 import { layerWebCrypto } from "@yielded/auth/WebCrypto";
+import * as Drizzle from "drizzle-orm/effect-sqlite-do";
 import { Effect, Layer, Option, Schema } from "effect";
 import { HttpRouter, HttpServer, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
@@ -11,7 +11,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { FundingApi, FundingError } from "../funding-domain";
 import { makeFundingStore } from "./funding";
 import { makeGithubDiagnostics } from "./oauth-diagnostics";
-import { persistenceLayer } from "./persistence";
+import { AuthDatabase, persistenceLayer } from "./persistence";
 import { makeAuth, type AuthConfiguration } from "./server";
 import { initializeAuthStorage } from "./storage";
 
@@ -37,11 +37,15 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
   const { AppAuth, http, security, github } = makeAuth(config);
   const diagnostics = yield* makeGithubDiagnostics(AppAuth);
 
-  const database = persistenceLayer(AppAuth).pipe(
-    Layer.provideMerge(Drizzle.databaseLayer),
-    Layer.provide(SqliteClient.layer({ storage })),
-    Layer.provide(LifecycleHooks.empty),
-  );
+  const database = Layer.effectContext(
+    Effect.gen(function* () {
+      const db = yield* Drizzle.makeWithDefaults({ storage });
+
+      return yield* Layer.build(
+        persistenceLayer(AppAuth).pipe(Layer.provideMerge(Layer.succeed(AuthDatabase, db))),
+      );
+    }),
+  ).pipe(Layer.provide(SqliteClient.layer({ storage })), Layer.provide(LifecycleHooks.empty));
 
   const live = AppAuth.layer.pipe(
     Layer.provide([

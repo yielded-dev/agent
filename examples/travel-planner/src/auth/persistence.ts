@@ -8,7 +8,8 @@ import {
 import { ProofPersistence } from "@yielded/auth/Proofs";
 import { AuthenticationAuthority } from "@yielded/auth/Sessions";
 import { eq } from "drizzle-orm";
-import { Effect, Layer } from "effect";
+import type { EffectSQLiteDoDatabase } from "drizzle-orm/effect-sqlite-do";
+import { Context, Effect, Layer } from "effect";
 
 import { emailSignInMapping, emailRegistrationMapping } from "./email-schema";
 import { oauthSignInMapping, oauthIntentMapping, oauthRegistrationMapping } from "./oauth-schema";
@@ -17,27 +18,38 @@ import { subject, subjectMapping, subjectId, credentialMapping } from "./schema"
 import type { AppAuth } from "./server";
 import { sessionsMapping } from "./session-schema";
 
+export class AuthDatabase extends Context.Service<AuthDatabase, EffectSQLiteDoDatabase>()(
+  "travel-planner/AuthDatabase",
+) {}
+
 export const persistenceLayer = (AppAuth: AppAuth) =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const database = yield* Drizzle.Database;
-      const proof = yield* Drizzle.makeProofPersistenceServices(proofs);
-      const email = yield* Drizzle.makeEmailSignInServices(emailSignInMapping);
+      const database = yield* AuthDatabase;
+      const proof = yield* Drizzle.makeProofPersistenceServices(database, proofs);
+      const email = yield* Drizzle.makeEmailSignInServices(database, emailSignInMapping);
 
       const emailRegistration = yield* Drizzle.makeEmailRegistrationServices(
+        database,
         emailRegistrationMapping,
         proofs,
       );
 
-      const oauth = yield* Drizzle.makeOAuthSignInServices(oauthSignInMapping);
+      const oauth = yield* Drizzle.makeOAuthSignInServices(database, oauthSignInMapping);
 
-      const intents = yield* Drizzle.makeOAuthRegistrationIntentServices(oauthIntentMapping);
+      const intents = yield* Drizzle.makeOAuthRegistrationIntentServices(
+        database,
+        oauthIntentMapping,
+      );
 
-      const registration = yield* Drizzle.makeOAuthRegistrationServices(oauthRegistrationMapping);
+      const registration = yield* Drizzle.makeOAuthRegistrationServices(
+        database,
+        oauthRegistrationMapping,
+      );
 
-      const sessions = yield* Drizzle.makeStatefulSessionServices(sessionsMapping);
+      const sessions = yield* Drizzle.makeStatefulSessionServices(database, sessionsMapping);
 
-      const authority = yield* Drizzle.makeAuthenticationAuthorityServices({
+      const authority = yield* Drizzle.makeAuthenticationAuthorityServices(database, {
         subject: subjectMapping,
         credential: credentialMapping,
         subjectId,

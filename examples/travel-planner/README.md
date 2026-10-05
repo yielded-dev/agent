@@ -44,10 +44,9 @@ external actions. Existing current-agent records, saved trips, accounts, and rep
 Scouts already waiting for research-plan approval remain paused. Cancel their active run and
 start fresh research; removing the checkpoint does not approve existing requests.
 
-Authentication uses `@yielded/auth` beta.12 with its compatible crypto, OpenID Client, and
-Drizzle persistence companions. The app owns its SQLite tables and provides the adapter's
-`SqliteDo.Database` through `databaseLayer`. It supplies session claims through each strategy's
-`SessionClaims` service. The Atom client uses Fetch transport with
+Authentication uses `@yielded/auth` beta.11 with its compatible crypto, OpenID Client, and
+Drizzle persistence companions. The app owns its SQLite tables and supplies session claims
+through each strategy's `SessionClaims` service. The Atom client uses Fetch transport with
 a 30-second request and response-body deadline; timed-out mutations are not retried automatically.
 GitHub sign-in creates flow IDs on the server; the browser retains the returned ID for the
 callback. Email verification keys are supplied through `ProofKeys` using `AUTH_PROOF_KEY`.

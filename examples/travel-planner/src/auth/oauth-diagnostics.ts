@@ -1,9 +1,9 @@
-import { Database } from "@yielded/auth-persistence-drizzle/SqliteDo";
 import { OAuthPendingFlow, OAuthSignInPersistence } from "@yielded/auth/OAuth";
 import { and, eq } from "drizzle-orm";
 import { Effect, Layer, Ref, Schema } from "effect";
 
 import { oauthFlow } from "./oauth-schema";
+import { AuthDatabase } from "./persistence";
 import type { AppAuth } from "./server";
 
 export const GithubRejectionReason = Schema.Literals([
@@ -32,8 +32,8 @@ type ClaimInput = Parameters<OAuthSignInPersistence["Service"]["claim"]>[0];
  * the adapter remains the sole authority for authorization and durable mutation. */
 const describeRejectedClaim = Effect.fn("Auth.describeRejectedClaim")(function* (
   input: ClaimInput,
-): Effect.fn.Return<GithubRejectionReason, never, Database> {
-  const database = yield* Database;
+): Effect.fn.Return<GithubRejectionReason, never, AuthDatabase> {
+  const database = yield* AuthDatabase;
 
   return yield* Effect.gen(function* () {
     const rows = yield* database
@@ -105,7 +105,7 @@ export const makeGithubDiagnostics = Effect.fn("Auth.makeGithubDiagnostics")(fun
       OAuthSignInPersistence,
       Effect.gen(function* () {
         const original = yield* OAuthSignInPersistence;
-        const database = yield* Database;
+        const database = yield* AuthDatabase;
 
         return OAuthSignInPersistence.of({
           ...original,
@@ -123,7 +123,7 @@ export const makeGithubDiagnostics = Effect.fn("Auth.makeGithubDiagnostics")(fun
                 reason,
                 rejected
                   ? yield* describeRejectedClaim(input).pipe(
-                      Effect.provideService(Database, database),
+                      Effect.provideService(AuthDatabase, database),
                     )
                   : "after-claim",
               );
