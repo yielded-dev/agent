@@ -81,20 +81,6 @@ const deliveryMetadata = (record: MessageDeliveryRecord): string => {
   });
 };
 
-/** Mirrors the adapter's worker-control lookups without parsing arbitrary payload text on Postgres. */
-export const createWorkerControlIndexes = (namespace?: string) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const { table: relation, execute } = yield* makeSqlQuery(namespace);
-
-    yield* sql`CREATE INDEX effect_agent_worker_starts ON ${relation("effect_agent_message_deliveries")}(owner_thread_id, ${workerField(sql, "delegationId")}, ${workerField(sql, "targetAgentId")}, message_id) WHERE ${workerStart(sql)}`.pipe(
-      execute,
-    );
-    yield* sql`CREATE INDEX effect_agent_worker_pending ON ${relation("effect_agent_message_deliveries")}(owner_thread_id, ${workerField(sql, "threadId")}, message_id) WHERE state IN ('pending', 'parked') AND ${withoutReceipt(sql)}`.pipe(
-      execute,
-    );
-  });
-
 export interface SqlMessageDeliveryStoreOptions {
   readonly namespace?: string;
   /** UTF-8 bound on the complete persisted record, including a processed Settlement. */
@@ -652,14 +638,3 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
     }),
   });
 });
-
-/** Add the pending-only index within the adapter's format transaction. */
-export const createMessageDeliveryPendingIndex = (namespace?: string) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const { table: relation, execute } = yield* makeSqlQuery(namespace);
-
-    yield* sql`CREATE INDEX effect_agent_message_deliveries_pending ON ${relation("effect_agent_message_deliveries")}(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')`.pipe(
-      execute,
-    );
-  });

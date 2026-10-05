@@ -2,14 +2,9 @@ import type { Crypto } from "effect";
 import { Effect, Schema } from "effect";
 
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
-import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import {
-  CanonicalBatch,
-  CanonicalRecordEnvelope,
-  type BatchId,
-  type ProducerId,
-  type RecordEnvelope,
-} from "./Records.ts";
+import { digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
+import { ExportBatch } from "./RecordFormat.ts";
+import { type CanonicalRecordEnvelope, type BatchId, type ProducerId } from "./Records.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import {
   submissionInputRecordId,
@@ -17,6 +12,7 @@ import {
   type SubmissionSnapshot,
 } from "./SubmissionLedger.ts";
 import type { ThreadCheckpoint, ThreadExport } from "./ThreadStore.ts";
+import { ThreadExportRecord } from "./ThreadStore.ts";
 
 /**
  * The production thread invariant checker, shared by the durable coordinator, admin
@@ -35,12 +31,10 @@ import type { ThreadCheckpoint, ThreadExport } from "./ThreadStore.ts";
  * - `export` — the Thread's canonical export (`ThreadStore.export`).
  * - `submissions` — every known Submission row of the lane (ledger scan + lookups). Order is
  *   irrelevant; the checker sorts by `queueSequence`.
- * - `batchProducers` — OPTIONAL per-batch producer identity directory. The digest chain hashes
- *   each batch's Schema-encoded `CanonicalBatch` — including its `producerId`, which the
- *   `ThreadStore` port deliberately does not export — so full chain recomputation needs
- *   this directory (capture it at append time, or from adapter-private storage). Without it the
- *   `digest-chain` and `checkpoint-binding` checks report `skipped` with the honest reason;
- *   adapter-level `verifyOnOpen` remains the storage-side full audit.
+ * - `batchProducers` — optional producer identity directory for older exports lacking `batches`.
+ *   Current exports carry the directory and preserve the validated original record wire,
+ *   including additive fields unknown to this reader. Without either directory, `digest-chain`
+ *   and `checkpoint-binding` report `skipped`; adapter-level `verifyOnOpen` still audits storage.
  * - `checkpoint` — the stored checkpoint to bind against the recomputed chain, when one exists.
  * - `checkpointsSupported` — whether the caller inspected a supporting adapter. Without this
  *   evidence or a supplied checkpoint, checkpoint verification is skipped.
@@ -57,8 +51,8 @@ export interface ThreadInvariantInput {
   readonly requireAllSettled?: boolean | undefined;
 }
 
-const encodeEnvelope = Schema.encodeEffect(CanonicalRecordEnvelope);
-const decodeEnvelope = Schema.decodeUnknownEffect(CanonicalRecordEnvelope);
+const encodeEnvelope = Schema.encodeEffect(ThreadExportRecord);
+const decodeEnvelope = Schema.decodeUnknownEffect(ThreadExportRecord);
 
 const check = (
   name: IntegrityCheckName,
@@ -73,12 +67,12 @@ const check = (
 
 interface BatchRun {
   readonly batchId: BatchId;
-  readonly records: Array<RecordEnvelope>;
+  readonly records: Array<ThreadExport["records"][number]["record"]>;
   readonly lastSequence: number;
 }
 
 /** Group the export's records into their atomic append runs (batches append contiguously). */
-const batchRunsOf = (records: ReadonlyArray<CanonicalRecordEnvelope>): Array<BatchRun> => {
+const batchRunsOf = (records: ThreadExport["records"]): Array<BatchRun> => {
   const runs: Array<BatchRun> = [];
 
   for (const envelope of records) {
@@ -201,12 +195,18 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
   // 4. digest-chain (+ collect per-sequence chain digests for checkpoint binding)
   const chainDigestAtSequence = new Map<number, string>();
 
-  if (input.batchProducers === undefined) {
+  const batchProducers =
+    input.batchProducers ??
+    (exported.batches === undefined
+      ? undefined
+      : new Map(exported.batches.map((batch) => [batch.batchId, batch.producerId])));
+
+  if (batchProducers === undefined) {
     checks.push(
       check(
         "digest-chain",
         "skipped",
-        "the ThreadStore port does not export per-batch producer identity; supply batchProducers (captured at append time) to recompute the chain — adapter-level verifyOnOpen performs the storage-side audit",
+        "this older export has no batch producer directory; export the original store again or supply batchProducers to recompute the chain",
       ),
     );
   } else {
@@ -214,7 +214,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
     let chainFailure: string | undefined;
 
     for (const run of batchRunsOf(records)) {
-      const producerId = input.batchProducers.get(run.batchId);
+      const producerId = batchProducers.get(run.batchId);
 
       if (producerId === undefined) {
         chainFailure = `no producer identity supplied for batch ${run.batchId}`;
@@ -227,10 +227,14 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
         break;
       }
 
-      const digest = yield* digestCanonicalBatch(
-        chain,
-        CanonicalBatch.make({ batchId: run.batchId, producerId, records: [first, ...rest] }),
-      ).pipe(Effect.exit);
+      const digest = yield* Schema.encodeUnknownEffect(ExportBatch)({
+        batchId: run.batchId,
+        producerId,
+        records: [first, ...rest],
+      }).pipe(
+        Effect.flatMap((batch) => digestJson({ previousTailDigest: chain, batch })),
+        Effect.exit,
+      );
 
       if (digest._tag === "Failure") {
         chainFailure = `batch ${run.batchId} could not be re-digested`;
@@ -455,7 +459,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
         `checkpoint through-sequence ${input.checkpoint.throughSequence} is ahead of the tail ${exported.tailSequence}`,
       ),
     );
-  } else if (input.batchProducers === undefined) {
+  } else if (batchProducers === undefined) {
     checks.push(
       check(
         "checkpoint-binding",

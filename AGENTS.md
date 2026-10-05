@@ -160,10 +160,10 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Do not build persisted-format upgrades unless compatibility is explicitly required. When an
-  upgrade is required, keep it narrow, adapter-owned, atomic, and data-preserving. Reject
-  unsupported or ambiguous data clearly; do not silently reset it. Do not introduce a general
-  migration framework.
+- Change record formats through a one-time export/convert/import cutover; runtime accepts only the current format.
+  Preserve immutable admission and accepted-command facts; rebuild derivatives and digests without importing execution authority.
+  Import atomically into empty Threads under destination constraints; reject unsupported or ambiguous data without mutation or lost work.
+  Keep adapter layout steps separate, immutable, ordered and atomic; reject newer layouts. No payload rewrites, history shims or migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

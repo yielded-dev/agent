@@ -17,8 +17,8 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
 
 - `explain(submissionId)` and `explainThread(threadId)` return the recovery decision,
   operator meaning, and expected disposition. They write nothing.
-- `verify(threadId)` runs read-only integrity checks. The digest-chain check reports
-  `skipped` unless the host supplies producer identity.
+- `verify(threadId)` runs read-only integrity checks, including the exported batch digest chain.
+  Older exports without batch identities report that check as `skipped`.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
   decision. Repairs with a claim annotate their attempt using that claim's epoch; state-only wakes
   and marker repairs do not append canonical audit records. Retry refuses settled work and requests
@@ -89,9 +89,8 @@ accepted worker discovery to canonical worker inputs and recognize native comple
 reports without reconstructing transport validation. These reads grant no execution authority.
 
 Aborting a submission retains its unknown outcomes. A terminal settlement does not authorize
-retrying or resolving those operations. Current SQLite, PostgreSQL, and Cloudflare thread stores
-accept only fresh storage or format 16. Earlier beta formats fail before mutation; use a fresh
-store for this release.
+retrying or resolving those operations. Record-format changes require export and import into an
+empty Thread; see [adopting these contracts](#adopting-these-contracts).
 
 <a id="obligation-monitoring"></a>
 
@@ -476,11 +475,57 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 
 ### Adopting these contracts
 
-SQLite, PostgreSQL, and Cloudflare Thread adapters accept fresh storage or exactly format 16.
-Earlier Thread formats fail acquisition without mutation; this release provides no Thread migration.
-Preserve old stores and their compatible writer for retained work or inspection, and use fresh storage
-for this release. The same format requirement applies to combined SQLite files used by Schedule
-and Subscription adapters.
+Table layout and record meaning have independent versions. SQLite, PostgreSQL, and Cloudflare
+open fresh storage or layouts 16–17 with record format `effect-agent/thread@1`. Opening layout 16
+adds the separate headers in one transaction without rewriting payloads. Newer layouts, unsupported
+record formats, and ambiguous schemas fail acquisition.
+
+For the layout-16 cutover or a backup restore, quiesce the source, retain a backup, export each
+Thread, and import it into an empty destination Thread. Both layouts use record format
+`effect-agent/thread@1`, so this cutover preserves the records and tail digest. `ThreadStore.export`
+supplies the archive and the local `ThreadImport` service installs it. Each adapter also provides
+`exportThread` to read layout 16 without acquiring execution authority or upgrading its layout.
+`reencodeThread(source)` composes the export Effect with the destination `ThreadImport` service
+provided through its Effect environment. Switch the host only after checking the imported tail
+and resuming retained work with its original Agent bindings.
+
+Readers and importers accept only the current record format. A future change to record meaning
+requires a release-specific one-time archive conversion before import; the runtime carries no
+historical decoders or automatic upgrade hooks. Export with the source release before that cutover.
+
+For SQLite, the repository admin CLI uses the same operations:
+
+```sh
+vp run admin:durable export --database source.sqlite --thread THREAD --output thread.json
+vp run admin:durable import --database destination.sqlite --input thread.json
+# Or transfer directly between quiesced databases:
+vp run admin:durable reencode --database source.sqlite --thread THREAD --target destination.sqlite
+```
+
+Archives retain batch identities, immutable admission facts, and accepted operator commands.
+Import validates the complete digest chain and every canonical admission reference before writing.
+Same-format imports preserve the tail digest. Receipts, principals, keys, input, queue sequence,
+and admission time survive, including admitted inputs that have not reached the log. Import
+preserves opaque admission fences and groups and applies the destination ledger's admission
+policy and active-group constraints. Provide that policy when acquiring the destination storage;
+policy conflicts and unavailable policy checks have distinct, actionable import errors.
+SQL imports reject identities that exceed the destination row schemas and values that exceed its
+byte limit, including queued inputs and accepted commands, before acquiring the writer.
+
+Execution ownership is never transferred. Ledger state is rebuilt from the log, projections
+replay, and both checkpoint caches start empty. Unresolved ordinary tool effects in an unfinished
+Run remain Unknown; settled submissions do not acquire new pending work.
+
+Single-Thread archives mark retained child, worker or message-delivery obligations owned by other
+stores; transfer those through their owning workflow before importing. Exports are bounded at
+131,072 records and read SQL history in pages. `ThreadExportRecord` requires the original record
+wire alongside its typed view. Custom exporters decode stored envelopes through this codec;
+copy archive records through it to preserve additive fields. Normalizing a record through the
+ordinary record schema discards that wire, so archive encoding rejects the copy.
+Earlier archives lacking batch producer identities must be exported again from the original store.
+Keep the source when validation fails. Import never replaces a nonempty Thread or an existing
+Submission, Receipt, or Thread/principal/idempotency key in the destination ledger. Reusing a
+principal/idempotency key in another Thread is valid.
 
 Cloudflare's separate Schedule and Subscription stores still upgrade supported version 2 layouts to
 version 3. Each upgrade runs in one native transaction and advances its version marker last;

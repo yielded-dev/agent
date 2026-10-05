@@ -2,7 +2,8 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
 import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
-import { makeSqlThreadStore } from "@yielded/agent-storage-sql/sql-thread-store";
+import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
+import { makeSqlThreadStoreKernel } from "@yielded/agent-storage-sql/sql-thread-store";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { ProducerEpoch } from "@yielded/agent/records";
 import { RunStorage } from "@yielded/agent/run-storage";
@@ -11,12 +12,14 @@ import {
   DEFAULT_OWNERSHIP_LEASE_DURATION,
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
+import { ThreadImport } from "@yielded/agent/thread-import";
+import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
 import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 
-import { CurrentSqliteStorageVersion } from "./internal/migrations.ts";
+import { CurrentSqliteStorageVersion, readSqliteStorageHeader } from "./internal/migrations.ts";
 import {
   configureSqliteSynchronous,
   initializeSqliteJournal,
@@ -241,7 +244,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const failpoint = yield* SqliteStorageFailpoint;
   const journal = yield* initializeSqliteJournal();
 
-  return yield* makeSqlThreadStore(journal, {
+  return yield* makeSqlThreadStoreKernel(journal, {
     ...config,
     errors: sqliteErrors,
     hitFailpoint: failpoint.hit,
@@ -254,11 +257,17 @@ const makeServices = Effect.fnUntraced(function* () {
  * authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore | ThreadReader,
+  ThreadStore | ThreadReader | ThreadImport,
   SqliteStorageInitializationError,
   SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
 > = Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore)).pipe(
-  Layer.provideMerge(Layer.effect(ThreadStore, makeServices())),
+  Layer.provideMerge(
+    Layer.effectContext(
+      Effect.map(makeServices(), ({ store, importer }) =>
+        Context.make(ThreadStore, store).pipe(Context.add(ThreadImport, importer)),
+      ),
+    ),
+  ),
 );
 
 /**
@@ -306,6 +315,7 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
 
         return Context.make(ThreadStore, services.store).pipe(
           Context.add(ThreadReader, services.reader),
+          Context.add(ThreadImport, services.importer),
           Context.add(SubmissionLedger, services.ledger),
           Context.add(SettlementPublisher, services.publisher),
           Context.add(RunStorage, services.runStorage),
@@ -360,7 +370,7 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: SqliteStorageOptions,
-): Layer.Layer<ThreadStore | ThreadReader, SqliteStorageInitializationError> =>
+): Layer.Layer<ThreadStore | ThreadReader | ThreadImport, SqliteStorageInitializationError> =>
   Layer.unwrap(
     Effect.map(SqliteStorageConfig, (config) =>
       threadStoreLayer.pipe(
@@ -375,3 +385,50 @@ export const layer = (
       ),
     ),
   ).pipe(Layer.provide(storageConfigLayer(options)));
+
+/**
+ * Export a quiesced layout-16 or current database without initializing layout or retiring
+ * ownership. Its read-only connection closes before returning; the source remains untouched.
+ */
+export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function* (
+  options: Pick<SqliteStorageOptions, "filename" | "busyTimeout">,
+  request: ThreadExportRequest,
+) {
+  return yield* Effect.gen(function* () {
+    const sql = yield* SqlClientService.SqlClient;
+
+    return yield* makeSqlTransaction(sql, { begin: "BEGIN" })(
+      Effect.gen(function* () {
+        yield* readSqliteStorageHeader();
+
+        const transfer = yield* makeSqlThreadImport({
+          offsetPrefix: "effect-agent-sqlite@1:",
+          read: (body) => body,
+          write: () => Effect.die("A read-only exporter cannot import"),
+        });
+
+        return yield* transfer.export(request);
+      }),
+    ).pipe(
+      Effect.catchTag("SqlError", (cause) =>
+        SqliteStorageError.make({
+          operation: "export Thread snapshot",
+          message: cause.message,
+          cause,
+        }),
+      ),
+    );
+  }).pipe(
+    Effect.provide(
+      Layer.merge(
+        SqliteClient.layer({
+          filename: options.filename,
+          readonly: true,
+          disableWAL: true,
+          busyTimeout: options.busyTimeout ?? 5_000,
+        }),
+        NodeCrypto.layer,
+      ),
+    ),
+  );
+});

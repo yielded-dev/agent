@@ -45,6 +45,19 @@ not provide a non-atomic fallback. The [Node.js](/platforms/node/) and
 For another host, see [custom durable runtime composition](/guide/run-agents/#assemble-a-custom-durable-runtime).
 Storage alone does not start workers or recover unfinished Runs.
 
+## Back up or change record formats
+
+`ThreadStore.export` captures one complete, bounded Thread and its immutable admission facts.
+The local `ThreadImport` service validates that archive and atomically installs it into an empty
+Thread. Queued admissions keep their order, timestamps, and opaque policy facts. The destination
+checks its admission constraints. Import rebuilds ledger state from canonical records; projections
+and checkpoints are disposable.
+No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
+
+Layout upgrades run separately inside each adapter. Import accepts the current record format;
+layout 16 already uses that format. A future change to record meaning requires an explicit
+one-time archive conversion before import. See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
+
 ## Build another adapter
 
 `@yielded/agent-storage-sql` contains shared SQL implementations for thread history,

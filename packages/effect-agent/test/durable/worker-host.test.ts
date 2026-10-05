@@ -80,6 +80,7 @@ import {
   AppendResult,
   FenceRejected,
   ThreadExport,
+  ThreadExportRecord,
   ThreadIdentity,
   ThreadNotMaterialized,
   ThreadTail,
@@ -301,6 +302,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           const records = logs.get(threadId);
 
           if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
+
           const selected: Array<CanonicalRecordEnvelope> = [];
 
           for (const entry of [
@@ -376,20 +378,27 @@ const harness = Effect.fn("workerHostHarness")(function* (
           );
         }).pipe(Stream.onStart(Effect.suspend(() => options.beforeRead?.(request) ?? Effect.void))),
       export: ({ threadId }) =>
-        Effect.suspend(() => {
+        Effect.gen(function* () {
           const records = logs.get(threadId);
 
-          return records === undefined
-            ? ThreadNotMaterialized.make({ threadId })
-            : Effect.succeed(
-                ThreadExport.make({
-                  format: "effect-agent/thread@1",
-                  threadId,
-                  records: [...records],
-                  tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-                  tailDigest: digest,
-                }),
-              );
+          if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
+
+          const exported = yield* Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope))(
+            records,
+          ).pipe(
+            Effect.flatMap(Schema.decodeEffect(Schema.Array(ThreadExportRecord))),
+            Effect.mapError((cause) =>
+              ThreadStoreError.make({ operation: "export", message: "Invalid fixture log", cause }),
+            ),
+          );
+
+          return ThreadExport.make({
+            format: "effect-agent/thread@1",
+            threadId,
+            records: exported,
+            tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+            tailDigest: digest,
+          });
         }),
       inspectTail: ({ threadId }) =>
         Effect.suspend(() => {

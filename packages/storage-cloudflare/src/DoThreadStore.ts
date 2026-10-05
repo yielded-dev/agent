@@ -1,12 +1,13 @@
 import { BrowserCrypto } from "@effect/platform-browser";
 import { SqliteClient } from "@effect/sql-sqlite-do";
+import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
 import {
   makeSelectedReads,
   SelectedReadOwner,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
 import {
-  CanonicalBatch,
   CanonicalRecord,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -15,13 +16,13 @@ import {
 } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
+import { ThreadImport } from "@yielded/agent/thread-import";
 import {
+  type ThreadExportRequest,
   AppendConflict,
   AppendResult,
   CheckpointRejected,
   ThreadCheckpoint,
-  ThreadExport,
-  ThreadExportRequest,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
@@ -39,7 +40,6 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   SaveRecoveryCheckpointRequest,
-  MAX_THREAD_EXPORT_RECORDS,
   type ThreadRecoveryCheckpoints,
 } from "@yielded/agent/thread-store";
 import {
@@ -78,6 +78,7 @@ import {
   RawReadRequest,
   type DoJournal,
 } from "./internal/do-journal.ts";
+import { readDoStorageHeader } from "./internal/migrations.ts";
 import { invalidateOwnedState, ownedState } from "./internal/owned-state.ts";
 import { isAppendContention, withStorageSpan } from "./internal/storage-span.ts";
 
@@ -341,7 +342,7 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (
   const stored = yield* journal.scanStoredPayloads();
 
   const batches = yield* Effect.forEach(stored.batches, (batch) =>
-    Schema.decodeEffect(Schema.fromJsonString(CanonicalBatch))(batch.batch_json).pipe(
+    Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(batch.batch_json).pipe(
       Effect.map((decoded) => ({ decoded, row: batch })),
       Effect.mapError((error) =>
         DoStorageCorruptionError.make({
@@ -354,7 +355,7 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (
   );
 
   const records = yield* Effect.forEach(stored.records, (record) =>
-    Schema.decodeEffect(Schema.fromJsonString(CanonicalRecord))(record.record_json).pipe(
+    Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(record.record_json).pipe(
       Effect.map((decoded) => ({ decoded, row: record })),
       Effect.mapError((error) =>
         DoStorageCorruptionError.make({
@@ -408,7 +409,10 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (
         });
       }
 
-      const digest = yield* digestCanonicalBatch(previousDigest, canonicalBatch).pipe(
+      const digest = yield* Schema.encodeEffect(ExportBatch)(canonicalBatch).pipe(
+        Effect.flatMap((encoded) =>
+          digestJson({ previousTailDigest: previousDigest, batch: encoded }),
+        ),
         Effect.provideService(Crypto.Crypto, crypto),
         Effect.mapError((error) =>
           DoStorageCorruptionError.make({
@@ -440,9 +444,8 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (
         const expectedRecord = canonicalBatch.records[index];
         const storedRecord = batchRecords[index];
 
-        const expectedJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalRecord))(
-          expectedRecord,
-        ).pipe(
+        const expectedJson = yield* Schema.encodeEffect(ExportRecord)(expectedRecord).pipe(
+          Effect.map(canonicalJson),
           Effect.mapError((error) =>
             DoStorageCorruptionError.make({
               table: "effect_agent_canonical_batches",
@@ -452,9 +455,8 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (
           ),
         );
 
-        const storedJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalRecord))(
-          storedRecord.decoded,
-        ).pipe(
+        const storedJson = yield* Schema.encodeEffect(ExportRecord)(storedRecord.decoded).pipe(
+          Effect.map(canonicalJson),
           Effect.mapError((error) =>
             DoStorageCorruptionError.make({
               table: "effect_agent_canonical_records",
@@ -713,39 +715,28 @@ const makeServices = Effect.fnUntraced(function* () {
   const observe: ThreadStore["Service"]["observe"] = (request) =>
     Stream.unwrap(observeEffect(request)).pipe(Stream.withSpan("DoThreadStore.observe"));
 
-  const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (
-    request: ThreadExportRequest,
-  ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadExportRequest))(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate thread export", error)),
-    );
-
-    yield* requireThread(journal, validated.threadId);
-
-    const exported = yield* journal
-      .exportThread(validated.threadId)
-      .pipe(Effect.mapError((error) => storeError("export thread", error)));
-
-    const records = yield* Effect.forEach(exported.records, decodeEnvelope);
-
-    if (records.length > MAX_THREAD_EXPORT_RECORDS) {
-      return yield* ThreadStoreError.make({
-        operation: "decode thread export",
-        message: "The thread exceeds the current export record limit.",
-      });
-    }
-
-    const tailDigest = yield* Schema.decodeEffect(Digest)(exported.thread.tail_digest).pipe(
-      Effect.mapError((error) => schemaStoreError("decode export tail digest", error)),
-    );
-
-    return ThreadExport.make({
-      format: "effect-agent/thread@1",
-      threadId: validated.threadId,
-      tailSequence: exported.thread.tail_sequence,
-      tailDigest,
-      records,
-    });
+  const transfer = yield* makeSqlThreadImport({
+    offsetPrefix: DO_OFFSET_PREFIX,
+    maxValueBytes: config.maxStoredValueBytes,
+    // A zero cursor lets the normal publication source regenerate intent from the imported log.
+    afterImport: ({ result }) =>
+      journal.lifecycle === undefined
+        ? Effect.void
+        : sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, 0)`.pipe(
+            Effect.asVoid,
+            Effect.catchTag("SqlError", (cause) => storeError("rebuild lifecycle cursor", cause)),
+          ),
+    afterThreadRead: hitFailpoint("export:after-thread-read"),
+    read: (body) =>
+      journal.owner.transaction(body).pipe(
+        Effect.provideService(SqlClientService.SqlClient, sql),
+        Effect.catchTag("SqlError", (cause) => storeError("export transaction", cause)),
+      ),
+    write: (body) =>
+      journal.owner.transaction(body.pipe(Effect.tap(() => journal.state.invalidate))).pipe(
+        Effect.provideService(SqlClientService.SqlClient, sql),
+        Effect.catchTag("SqlError", (cause) => storeError("import transaction", cause)),
+      ),
   });
 
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
@@ -983,7 +974,7 @@ const makeServices = Effect.fnUntraced(function* () {
     readIdentity: selectedReads.readIdentity,
     countPeerMessages: selectedReads.countPeerMessages,
     append,
-    export: exportThread,
+    export: transfer.export,
     inspectTail,
     materialize,
     observe,
@@ -992,7 +983,7 @@ const makeServices = Effect.fnUntraced(function* () {
     recoveryCheckpoints: { save: saveRecoveryCheckpoint, load: loadRecoveryCheckpoint },
   });
 
-  return Context.make(ThreadStore, threadStore);
+  return Context.make(ThreadStore, threadStore).pipe(Context.add(ThreadImport, transfer.importer));
 });
 
 /**
@@ -1000,7 +991,7 @@ const makeServices = Effect.fnUntraced(function* () {
  * Crypto authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore | ThreadReader,
+  ThreadStore | ThreadReader | ThreadImport,
   DoStorageInitializationError,
   DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
 > = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
@@ -1047,7 +1038,7 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: DoStorageOptions,
-): Layer.Layer<ThreadStore | ThreadReader, DoStorageInitializationError> =>
+): Layer.Layer<ThreadStore | ThreadReader | ThreadImport, DoStorageInitializationError> =>
   Layer.unwrap(
     Effect.map(DoStorageConfig, (config) =>
       threadStoreLayer.pipe(
@@ -1062,6 +1053,45 @@ export const layer = (
       ),
     ),
   ).pipe(Layer.provide(storageConfigLayer(options)));
+
+/** Read a quiesced layout-16 or current Object without initializing its layout or ownership. */
+export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
+  options: Pick<DoStorageOptions, "storage">,
+  request: ThreadExportRequest,
+) {
+  return yield* Effect.gen(function* () {
+    const sql = yield* SqlClientService.SqlClient;
+    const state = yield* ownedState(sql);
+
+    return yield* state
+      .transaction(
+        Effect.gen(function* () {
+          yield* readDoStorageHeader();
+
+          const transfer = yield* makeSqlThreadImport({
+            offsetPrefix: DO_OFFSET_PREFIX,
+            read: (body) => body,
+            write: () => Effect.die("A read-only exporter cannot import"),
+          });
+
+          return yield* transfer.export(request);
+        }),
+      )
+      .pipe(
+        Effect.catchTag("SqlError", (cause) =>
+          DoStorageError.make({
+            operation: "export Thread snapshot",
+            message: cause.message,
+            cause,
+          }),
+        ),
+      );
+  }).pipe(
+    Effect.provide(
+      Layer.merge(SqliteClient.layer({ storage: options.storage }), BrowserCrypto.layer),
+    ),
+  );
+});
 
 /**
  * Discard the Object's derived thread and ledger state after direct SQL maintenance.

@@ -2,15 +2,75 @@ import { NodeCrypto } from "@effect/platform-node";
 import { PgClient } from "@effect/sql-pg";
 import { expect, it } from "@effect/vitest";
 import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
-import { PostgresStorageError } from "@yielded/agent-storage-postgres/postgres-storage-error";
+import {
+  PostgresStorageCompatibilityError,
+  PostgresStorageError,
+} from "@yielded/agent-storage-postgres/postgres-storage-error";
 import { ThreadStore } from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Redacted, Schema, String } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
 
+import { postgresLayoutSteps } from "../src/internal/storage-layout.ts";
 import { withTemporaryDatabase } from "./harness.ts";
 
 const Session = Schema.Array(Schema.Struct({ name: Schema.String, pid: Schema.Int }));
+
+// 87e5dad4: rendered definitions reject physical tuning and quote_all_identifiers.
+// Fresh-database conformance never exercises these equivalent layouts during an upgrade.
+it.effect(
+  "opens equivalent layout16 definitions but rejects a changed predicate without upgrading",
+  () =>
+    withTemporaryDatabase((url) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        for (const statement of postgresLayoutSteps[0].statements)
+          yield* sql.unsafe(statement.replaceAll("__NAMESPACE__", '"public"'));
+
+        yield* sql`INSERT INTO effect_agent_threads VALUES ('retained', '2026-10-05', 0, 'digest', 0)`;
+        const retained = yield* sql`SELECT * FROM effect_agent_threads`;
+
+        yield* sql`ALTER INDEX effect_agent_submissions_nonterminal SET (fillfactor = 80)`;
+
+        const open = ThreadStore.pipe(
+          Effect.asVoid,
+          Effect.provide(PostgresStorage.threadStoreLayer()),
+        );
+
+        yield* open;
+        expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
+          { version: 17n },
+        ]);
+        expect(yield* sql`SELECT * FROM effect_agent_threads`).toEqual(retained);
+        yield* open;
+
+        yield* sql`DROP TABLE effect_agent_schema`;
+        yield* sql`UPDATE effect_agent_storage_version SET version = 16`;
+        yield* sql`DROP INDEX effect_agent_submissions_nonterminal`;
+        yield* sql`CREATE INDEX effect_agent_submissions_nonterminal
+        ON effect_agent_submissions (thread_id, queue_sequence) WHERE state = 'settled'`;
+        const rejected = yield* Effect.flip(open);
+
+        expect(rejected).toBeInstanceOf(PostgresStorageCompatibilityError);
+        expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
+          { version: 16n },
+        ]);
+        expect(yield* sql`SELECT to_regclass('public.effect_agent_schema') AS header`).toEqual([
+          { header: null },
+        ]);
+        expect(yield* sql`SELECT * FROM effect_agent_threads`).toEqual(retained);
+      }).pipe(
+        Effect.provide([
+          PgClient.layer({
+            url: Redacted.make(url),
+            startupParameters: { quote_all_identifiers: "on" },
+          }),
+          NodeCrypto.layer,
+        ]),
+      ),
+    ),
+);
 
 it.effect(
   "qualifies storage tables without changing the native client across concurrent and replaced connections",

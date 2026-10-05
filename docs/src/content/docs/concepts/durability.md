@@ -32,6 +32,15 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
+Record-format cutovers use the same boundary: export the log, convert the archive explicitly,
+and import into an empty Thread. Import accepts only the current record format. Archives also
+retain immutable admission facts that the log cannot reconstruct, including receipt identities,
+principals, keys and queued input, with their original admission order and time. Every canonical
+admission reference must have its matching fact; pending admissions need not have reached the log.
+Import rebuilds execution state without transferring ownership;
+unresolved mutating tools in unfinished Runs remain Unknown. Table-layout steps are independent of record meaning.
+See [backup and re-encoding](/guide/operations/#adopting-these-contracts) for the procedure and limits.
+
 An Attempt captures a fixed canonical tail and validates contiguous pages. Without a recovery
 checkpoint, it gathers control and journal metadata together, including compaction boundaries.
 Later appends enter through a separately captured suffix; a gap or short page fails before that

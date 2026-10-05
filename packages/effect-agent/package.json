@@ -127,7 +127,9 @@
     "./worker": "./src/core/Worker.ts",
     "./worker-admission": "./src/durable/WorkerAdmission.ts",
     "./worker-host": "./src/durable/WorkerHost.ts",
-    "./lifecycle-publication": "./src/durable/LifecyclePublication.ts"
+    "./lifecycle-publication": "./src/durable/LifecyclePublication.ts",
+    "./record-format": "./src/durable/RecordFormat.ts",
+    "./thread-import": "./src/durable/ThreadImport.ts"
   },
   "publishConfig": {
     "access": "public"

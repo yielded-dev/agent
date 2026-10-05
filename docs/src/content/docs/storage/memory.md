@@ -50,6 +50,10 @@ thread store's mutation boundary. Assemble them with
 assembly owns one store. They are separate from the conversation store supplied by
 `InMemory.layer`; the submission ledger reports itself as non-durable.
 
+When using `memoryMessageDeliveryStoreLayer`, merge it with the ledger before
+providing the same `MemoryThreadStoreLive`. Thread exports then identify retained
+deliveries as external obligations, and import refuses to overwrite delivery work.
+
 `MemoryThreadStoreLive`, imported from
 `@yielded/agent-storage-memory/memory-thread-store`, provides `ThreadStore` and
 requires a platform Crypto Layer. Providing it to `PersistentHistory.layer` uses

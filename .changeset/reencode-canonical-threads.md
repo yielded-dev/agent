@@ -1,0 +1,12 @@
+---
+"@yielded/agent": patch
+"@yielded/agent-storage-memory": patch
+"@yielded/agent-storage-sql": patch
+"@yielded/agent-storage-sqlite": patch
+"@yielded/agent-storage-postgres": patch
+"@yielded/agent-storage-cloudflare": patch
+---
+
+Export complete Thread archives and atomically import them into empty Threads with rebuilt ledger state and preserved admission facts.
+
+BEHAVIOR CHANGE: Quiesce the source and export/import into fresh storage for the layout-16 cutover; import only the current record format and convert archives explicitly for future semantic changes. Keep the source on destination admission conflicts or unsupported external obligations, and re-export older archives that lack batch identities. Decode custom exports through `ThreadExportRecord` to retain their wire, and pair the memory ledger and delivery store with the same `MemoryThreadStoreLive`.

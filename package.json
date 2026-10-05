@@ -20,11 +20,12 @@
     "docs:dev": "vp run -F @yielded/agent-docs dev",
     "docs:build": "vp run -F @yielded/agent-docs build",
     "docs:preview": "vp run -F @yielded/agent-docs preview",
-    "check": "vp check && vp run -r --concurrency-limit 1 check && tsc --noEmit -p scripts/tsconfig.json && vp run check:exports && vp run check:deploy && bun scripts/verify-package-purity.ts",
+    "check": "vp check && vp run -r --concurrency-limit 1 check && tsc --noEmit -p scripts/tsconfig.json && vp run check:exports && vp run check:record-format && vp run check:deploy && bun scripts/verify-package-purity.ts",
     "check:exports": "bun scripts/verify-package-exports.ts",
     "test": "vp run -r --parallel --concurrency-limit 4 test",
     "build": "vp run -r build && vp run action:build",
-    "ready": "vp run check && vp run test && vp run build"
+    "ready": "vp run check && vp run test && vp run build",
+    "check:record-format": "bun scripts/verify-record-format.ts"
   },
   "devDependencies": {
     "@changesets/changelog-github": "0.7.0",

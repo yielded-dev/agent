@@ -62,6 +62,22 @@ const encodeMetadata = Schema.encodeSync(
 export const canonicalRecordMetadata = (record: CanonicalRecord): string => {
   const payload = record.payload;
 
+  if (payload._tag === "UnknownRecord") {
+    const value = payload.value;
+
+    return encodeMetadata({
+      tag: value._tag,
+      runId: typeof value.runId === "string" ? JSON.stringify(value.runId) : null,
+      toolCallId: typeof value.toolCallId === "string" ? JSON.stringify(value.toolCallId) : null,
+      kind: typeof value.kind === "string" ? value.kind : null,
+      sourceSubmissionId:
+        typeof value.sourceSubmissionId === "string"
+          ? JSON.stringify(value.sourceSubmissionId)
+          : null,
+      messageId: null,
+    });
+  }
+
   return encodeMetadata({
     tag: payload._tag,
     runId: "runId" in payload ? JSON.stringify(payload.runId) : null,
@@ -81,40 +97,6 @@ const failure = (operation: string, cause?: unknown) =>
     operation,
     message: "Native canonical read is incomplete or corrupt",
     ...(cause === undefined ? {} : { cause }),
-  });
-
-/** Adapter-owned metadata on canonical rows, never a second copy of execution records. */
-export const createNativeReadIndexes = (namespace?: string) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const { table: relation, execute } = yield* makeSqlQuery(namespace);
-
-    yield* sql.onDialectOrElse({
-      orElse: () => Effect.void,
-      pg: () =>
-        sql`ALTER TABLE ${relation("effect_agent_canonical_records")} ADD COLUMN read_metadata JSONB NOT NULL`.pipe(
-          execute,
-        ),
-    });
-    yield* sql`CREATE INDEX effect_agent_records_call ON ${relation("effect_agent_canonical_records")}(thread_id, ${canonicalField(sql, "tag")}, ${canonicalField(sql, "runId")}, ${canonicalField(sql, "toolCallId")})`.pipe(
-      execute,
-    );
-    yield* sql`CREATE INDEX effect_agent_records_run_input ON ${relation("effect_agent_canonical_records")}(thread_id, ${canonicalField(sql, "runId")}) WHERE ${canonicalField(sql, "tag")} = 'UserInputRecorded' AND ${canonicalField(sql, "kind")} = 'user'`.pipe(
-      execute,
-    );
-    yield* sql`CREATE INDEX effect_agent_records_subtree ON ${relation("effect_agent_canonical_records")}(thread_id, ${canonicalField(sql, "sourceSubmissionId")}, sequence) WHERE ${canonicalField(sql, "tag")} = 'SubtreeBudgetReserved'`.pipe(
-      execute,
-    );
-    yield* sql`CREATE INDEX effect_agent_records_worker_input ON ${relation("effect_agent_canonical_records")}(thread_id, ${canonicalField(sql, "messageId")}) WHERE ${canonicalField(sql, "tag")} = 'WorkerInputRequested'`.pipe(
-      execute,
-    );
-    yield* sql.onDialectOrElse({
-      orElse: () => Effect.void,
-      pg: () =>
-        sql`CREATE INDEX effect_agent_worker_execution ON ${relation("effect_agent_canonical_records")}(thread_id, ${canonicalField(sql, "tag")}, sequence) WHERE ${canonicalField(sql, "runId")} IS NOT NULL`.pipe(
-          execute,
-        ),
-    });
   });
 
 const Row = Schema.Struct({

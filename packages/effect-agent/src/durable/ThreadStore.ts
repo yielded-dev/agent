@@ -1,8 +1,10 @@
 import { Context, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 
-import { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { ReceiptId, RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { QueueSequence } from "../core/Receipt.ts";
 import { canonicalJson, digestCanonicalBatchJson } from "./Digest.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
+import { ExportRecord } from "./RecordFormat.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -13,10 +15,17 @@ import {
   ObservationOffset,
   PersistedJson,
   ProducerEpoch,
+  ProducerId,
   RecordEnvelope,
   RecordId,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
+import {
+  AbortIntent,
+  AdmissionRequest,
+  ApprovalDecisionIntent,
+  UnknownResolutionIntent,
+} from "./SubmissionLedger.ts";
 
 export const MAX_THREAD_EXPORT_RECORDS = 131_072;
 
@@ -459,15 +468,58 @@ export class ThreadIdentity extends Schema.Class<ThreadIdentity>(
   ),
 ) {}
 
-/** Maximum canonical records represented by one Thread export. */
+/** Immutable accepted input, distinct from all regenerable ledger execution state. */
+export class ThreadAdmission extends Schema.Class<ThreadAdmission>(
+  "@effect-agent/thread/ThreadAdmission",
+)({
+  ...AdmissionRequest.fields,
+  submissionId: SubmissionId,
+  receiptId: ReceiptId,
+  queueSequence: QueueSequence,
+  createdAt: Schema.DateTimeUtcFromString,
+}) {}
+
+/** Accepted operator commands are facts; their application markers are deliberately omitted. */
+export const ThreadCommands = Schema.Struct({
+  aborts: Schema.Array(
+    AbortIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  approvals: Schema.Array(
+    ApprovalDecisionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  resolutions: Schema.Array(
+    UnknownResolutionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+});
+
+export const ThreadExportBatch = Schema.Struct({ batchId: BatchId, producerId: ProducerId });
+
+/** Other owning stores are required to restore these obligations; a single-Thread import refuses them. */
+export const ThreadExternalObligation = Schema.Literals(["child", "worker", "message-delivery"]);
+
+/** The wire is part of the export type: ordinary read envelopes are not lossless archives. */
+export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExportRecord>(
+  "@effect-agent/thread/ThreadExportRecord",
+)({
+  record: ExportRecord,
+}) {}
 
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
-  format: Schema.Literal("effect-agent/thread@1"),
+  format: Schema.NonEmptyString,
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
   tailDigest: Digest,
-  records: Schema.Array(CanonicalRecordEnvelope).check(
-    Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS),
+  records: Schema.Array(ThreadExportRecord).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  /** Required for import of a non-empty log; earlier exports must be taken again. */
+  batches: Schema.optionalKey(
+    Schema.Array(ThreadExportBatch).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  ),
+  admissions: Schema.optionalKey(
+    Schema.Array(ThreadAdmission).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  ),
+  commands: Schema.optionalKey(ThreadCommands),
+  externalObligations: Schema.optionalKey(
+    Schema.Array(ThreadExternalObligation).check(Schema.isMaxLength(3)),
   ),
 }) {}
 

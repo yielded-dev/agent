@@ -4,6 +4,8 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
+      "src/durable/ThreadImport.ts",
+      "src/durable/RecordFormat.ts",
       "src/core/Agent.ts",
       "src/core/AgentError.ts",
       "src/core/AgentPolicy.ts",

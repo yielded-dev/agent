@@ -1,5 +1,4 @@
-import { SettlementFailureDiagnostic } from "@yielded/agent/records";
-import type { ThreadExport } from "@yielded/agent/thread-store";
+import { type RecordEnvelope, SettlementFailureDiagnostic } from "@yielded/agent/records";
 import { FrameworkMessage } from "@yielded/agent/worker";
 import { DateTime, Schema } from "effect";
 import { Prompt } from "effect/ai";
@@ -25,7 +24,7 @@ const renderDetail = ({ label, value }: PendingDetail, failure: boolean) => ({
 /** Combine canonical events and private diagnostics from the selected conversation only. */
 export const plannerActivity = (
   records: ReadonlyArray<{
-    readonly record: ThreadExport["records"][number]["record"];
+    readonly record: RecordEnvelope;
     readonly sequence: number;
   }>,
   diagnostics: typeof RecordedDiagnostics.Type = [],

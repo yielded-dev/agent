@@ -1,2 +1,2 @@
-/** Public SqliteStorageVersion API. Implementation helpers remain private. */
+/** Current adapter layout version; record encoding is versioned independently. */
 export { CurrentSqliteStorageVersion } from "./internal/migrations.ts";

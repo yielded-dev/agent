@@ -217,9 +217,9 @@ preserving one captured snapshot; the returned export still contains the complet
 ## Choose storage
 
 The [Storage guides](/storage/) compare backends and show how to connect each one.
-SQLite and Cloudflare adapters upgrade supported predecessor formats atomically;
-PostgreSQL rejects incompatible stored versions. See
-[supported storage upgrades](/guide/operations/#adopting-these-contracts) before adopting a new
+SQLite, PostgreSQL, and Cloudflare apply supported table-layout steps atomically and accept only
+the current record format. See the
+[storage cutover procedure](/guide/operations/#adopting-these-contracts) before adopting a new
 version, and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.
 
 For a custom adapter, follow the [store contract and certification guide](/guide/certify-adapters/#store-contract).

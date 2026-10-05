@@ -1,7 +1,10 @@
 import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
+import { ExportBatch } from "@yielded/agent/record-format";
 import {
-  type ProducerEpoch,
+  ProducerEpoch,
+  CURRENT_RECORD_FORMAT,
+  CanonicalBatch,
   type RecordId,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -15,6 +18,11 @@ import {
   workerOriginRecordId,
 } from "@yielded/agent/run-journal";
 import {
+  prepareThreadImport,
+  ThreadImport,
+  ThreadImportRejected,
+} from "@yielded/agent/thread-import";
+import {
   type ThreadCheckpoint,
   ThreadPeerCountRequest,
   ThreadIdentity,
@@ -24,6 +32,7 @@ import {
   CheckpointRejected,
   ThreadExportRequest,
   ThreadExport,
+  ThreadExportRecord,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
@@ -47,6 +56,7 @@ import {
   Crypto,
   Effect,
   Layer,
+  MutableRef,
   Option,
   PubSub,
   Ref,
@@ -58,6 +68,7 @@ import { Base64 } from "effect/encoding";
 
 import {
   MemoryThreadStoreKernel,
+  type MemoryLedgerTransfer,
   type PreparedMemoryAppend,
 } from "./internal/MemoryThreadStoreKernel.ts";
 
@@ -71,6 +82,8 @@ const ThreadCapacity = Context.Reference<number>(
 );
 
 interface StoredBatch {
+  /** Preserve the exact destination wire, including additive fields unknown to this reader. */
+  readonly batchJson: string;
   readonly digest: Digest;
   readonly result: AppendResult;
 }
@@ -94,6 +107,55 @@ interface StoredThread {
 interface MemoryState {
   readonly threads: ReadonlyMap<ThreadId, StoredThread>;
 }
+
+const indexRecords = (
+  previous: Pick<StoredThread, "peerCount" | "workerRecords" | "byId" | "runInputs">,
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+) => {
+  let peerCount = previous.peerCount;
+  const workerRecords = new Map(previous.workerRecords);
+  const byId = new Map(previous.byId);
+  const runInputs = new Map(previous.runInputs);
+
+  for (const entry of records) {
+    byId.set(entry.record.recordId, entry);
+    const payload = entry.record.payload;
+
+    if (payload._tag === "PeerMessagePrepared") peerCount++;
+    if (
+      (payload._tag === "UserInputRecorded" || payload._tag === "RunStarted") &&
+      payload.runId !== undefined
+    )
+      workerRecords.set(`execution:${payload._tag}`, [entry]);
+
+    const workerKey =
+      payload._tag === "SubtreeBudgetReserved"
+        ? `subtree:${payload.sourceSubmissionId ?? ""}`
+        : payload._tag === "SubagentJoined"
+          ? `joined:${payload.runId}`
+          : [
+                "ThreadCreated",
+                "WorkerOriginRecorded",
+                "SubagentLineageRecorded",
+                "WorkerInputRequested",
+                "WorkerInputCompleted",
+                "WorkerStopRequested",
+              ].includes(payload._tag)
+            ? "worker"
+            : undefined;
+
+    if (workerKey !== undefined)
+      workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
+    if (
+      payload._tag === "UserInputRecorded" &&
+      payload.kind === "user" &&
+      payload.runId !== undefined
+    )
+      runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
+  }
+
+  return { peerCount, workerRecords, byId, runInputs };
+};
 
 type AppendDecision =
   | {
@@ -158,6 +220,28 @@ const offsetSequence = Effect.fnUntraced(function* (
 const observationOffset = (threadId: ThreadId, sequence: CanonicalSequence): ObservationOffset =>
   Schema.decodeSync(ObservationOffset)(`memory:v1:${Base64.encode(threadId)}:${sequence}`);
 
+const batchEnvelopes = (
+  threadId: ThreadId,
+  batch: CanonicalBatch,
+  firstSequence: CanonicalSequence,
+): ReadonlyArray<CanonicalRecordEnvelope> =>
+  batch.records.map((record, index) => {
+    const sequence = decodeCanonicalSequence(firstSequence + index);
+
+    return CanonicalRecordEnvelope.make({
+      threadId,
+      batchId: batch.batchId,
+      sequence,
+      offset: observationOffset(threadId, sequence),
+      record,
+    });
+  });
+
+const decodeStoredBatch = (batchJson: string, operation: string) =>
+  Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(batchJson).pipe(
+    Effect.mapError((cause) => storeError(operation, "Invalid canonical batch JSON", cause)),
+  );
+
 const findThread = Effect.fnUntraced(function* (
   state: MemoryState,
   threadId: ThreadId,
@@ -198,6 +282,8 @@ const makeThreadStore = Effect.gen(function* () {
   const gate = yield* Semaphore.make(1);
   const withMutation = gate.withPermits(1);
   const updates = yield* PubSub.sliding<void>(1);
+  let ledgerTransfer: MemoryLedgerTransfer | undefined;
+  let hasMessageDeliveries: ((threadId: ThreadId) => Effect.Effect<boolean>) | undefined;
 
   yield* Effect.addFinalizer(() => PubSub.shutdown(updates));
 
@@ -283,10 +369,20 @@ const makeThreadStore = Effect.gen(function* () {
       Effect.mapError((error) => storeError("append", error.message, error)),
     );
 
-    return { request, digest };
+    const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(
+      request.batch,
+    ).pipe(
+      Effect.mapError((cause) => storeError("append", "Unable to encode canonical batch", cause)),
+    );
+
+    return { request, digest, batchJson };
   });
 
-  const appendPrepared = Effect.fnUntraced(function* ({ request, digest }: PreparedMemoryAppend) {
+  const appendPrepared = Effect.fnUntraced(function* ({
+    request,
+    digest,
+    batchJson,
+  }: PreparedMemoryAppend) {
     const decision = yield* Effect.uninterruptible(
       Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
         const thread = current.threads.get(request.threadId);
@@ -396,17 +492,11 @@ const makeThreadStore = Effect.gen(function* () {
           batchRecordIds.add(record.recordId);
         }
 
-        const records = request.batch.records.map((record, index) => {
-          const sequence = decodeCanonicalSequence(thread.tailSequence + index + 1);
-
-          return CanonicalRecordEnvelope.make({
-            threadId: request.threadId,
-            batchId: request.batch.batchId,
-            sequence,
-            offset: observationOffset(request.threadId, sequence),
-            record,
-          });
-        });
+        const records = batchEnvelopes(
+          request.threadId,
+          request.batch,
+          decodeCanonicalSequence(thread.tailSequence + 1),
+        );
 
         const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
 
@@ -419,7 +509,11 @@ const makeThreadStore = Effect.gen(function* () {
 
         const batches = new Map(thread.batches);
 
-        batches.set(request.batch.batchId, { digest, result });
+        batches.set(request.batch.batchId, {
+          digest,
+          result,
+          batchJson,
+        });
         const recordIds = new Set(thread.recordIds);
 
         for (const recordId of batchRecordIds) recordIds.add(recordId);
@@ -428,54 +522,9 @@ const makeThreadStore = Effect.gen(function* () {
         tailDigests.set(lastSequence, digest);
         const threads = new Map(current.threads);
 
-        let peerCount = thread.peerCount;
-        const workerRecords = new Map(thread.workerRecords);
-        const byId = new Map(thread.byId);
-        const runInputs = new Map(thread.runInputs);
-
-        for (const entry of records) {
-          byId.set(entry.record.recordId, entry);
-          const payload = entry.record.payload;
-
-          if (payload._tag === "PeerMessagePrepared") peerCount++;
-          if (
-            (payload._tag === "UserInputRecorded" || payload._tag === "RunStarted") &&
-            payload.runId !== undefined
-          )
-            workerRecords.set(`execution:${payload._tag}`, [entry]);
-
-          const workerKey =
-            payload._tag === "SubtreeBudgetReserved"
-              ? `subtree:${payload.sourceSubmissionId ?? ""}`
-              : payload._tag === "SubagentJoined"
-                ? `joined:${payload.runId}`
-                : [
-                      "ThreadCreated",
-                      "WorkerOriginRecorded",
-                      "SubagentLineageRecorded",
-                      "WorkerInputRequested",
-                      "WorkerInputCompleted",
-                      "WorkerStopRequested",
-                    ].includes(payload._tag)
-                  ? "worker"
-                  : undefined;
-
-          if (workerKey !== undefined)
-            workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
-
-          if (
-            payload._tag === "UserInputRecorded" &&
-            payload.kind === "user" &&
-            payload.runId !== undefined
-          )
-            runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
-        }
         threads.set(request.threadId, {
           ...thread,
-          byId,
-          workerRecords,
-          peerCount,
-          runInputs,
+          ...indexRecords(thread, records),
           tailSequence: lastSequence,
           tailDigest: digest,
           records: [...thread.records, ...records],
@@ -633,18 +682,176 @@ const makeThreadStore = Effect.gen(function* () {
   const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (unvalidated) {
     const request = yield* validate(ThreadExportRequest, "export", unvalidated);
 
-    const thread = yield* Ref.get(state).pipe(
-      Effect.flatMap((current) => findThread(current, request.threadId)),
-    );
+    const thread = (yield* Ref.get(state)).threads.get(request.threadId);
 
-    return ThreadExport.make({
-      format: "effect-agent/thread@1",
-      threadId: request.threadId,
-      tailSequence: thread.tailSequence,
-      tailDigest: thread.tailDigest,
-      records: thread.records,
-    });
+    const { externalObligations: ledgerObligations, ...facts } =
+      ledgerTransfer === undefined
+        ? { admissions: [], externalObligations: [] }
+        : yield* ledgerTransfer.export(request.threadId);
+
+    const externalObligations = [...(ledgerObligations ?? [])];
+
+    if (hasMessageDeliveries !== undefined && (yield* hasMessageDeliveries(request.threadId)))
+      externalObligations.push("message-delivery");
+
+    if (thread === undefined && (facts.admissions?.length ?? 0) === 0)
+      return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
+    const records: Array<typeof ThreadExportRecord.Type> = [];
+    const batches: Array<Pick<CanonicalBatch, "batchId" | "producerId">> = [];
+
+    for (const stored of thread?.batches.values() ?? []) {
+      const batch = yield* decodeStoredBatch(stored.batchJson, "export");
+
+      records.push(
+        ...batch.records.map((record, index) => {
+          const sequence = decodeCanonicalSequence(stored.result.firstSequence + index);
+
+          return ThreadExportRecord.make({
+            threadId: request.threadId,
+            batchId: batch.batchId,
+            sequence,
+            offset: observationOffset(request.threadId, sequence),
+            record,
+          });
+        }),
+      );
+      batches.push({ batchId: batch.batchId, producerId: batch.producerId });
+    }
+
+    return yield* validate(
+      ThreadExport,
+      "export",
+      ThreadExport.make({
+        format: CURRENT_RECORD_FORMAT,
+        threadId: request.threadId,
+        tailSequence: thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE,
+        tailDigest: thread?.tailDigest ?? EMPTY_TAIL_DIGEST,
+        records,
+        batches,
+        ...facts,
+        ...(externalObligations.length === 0 ? {} : { externalObligations }),
+      }),
+    );
   });
+
+  const importThread: ThreadImport["Service"]["import"] = Effect.fn("MemoryThreadStore.import")(
+    function* (request) {
+      const prepared = yield* prepareThreadImport(request).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
+
+      // Rebuild native observation offsets from owned destination batches.
+      const records: Array<CanonicalRecordEnvelope> = [];
+
+      for (const batch of prepared.batches) {
+        const decoded = yield* decodeStoredBatch(batch.batchJson, "import");
+
+        records.push(...batchEnvelopes(prepared.result.threadId, decoded, batch.firstSequence));
+      }
+
+      return yield* withMutation(
+        Effect.gen(function* () {
+          const current = yield* Ref.get(state);
+          const threadId = prepared.result.threadId;
+          const existing = current.threads.get(threadId);
+
+          if (hasMessageDeliveries !== undefined && (yield* hasMessageDeliveries(threadId)))
+            return yield* ThreadImportRejected.make({
+              threadId,
+              reason: "target-not-empty",
+              message:
+                "The destination Thread already owns message deliveries; finish those deliveries or use a fresh destination store",
+            });
+          if (
+            existing !== undefined &&
+            (existing.records.length > 0 ||
+              existing.batches.size > 0 ||
+              existing.checkpoints.size > 0 ||
+              existing.recoveryCheckpoint !== undefined)
+          )
+            return yield* ThreadImportRejected.make({
+              threadId,
+              reason: "target-not-empty",
+              message:
+                "The destination Thread already contains canonical or checkpoint data; import into a fresh destination store",
+            });
+          if (existing === undefined && current.threads.size >= maxThreads)
+            return yield* storeError("import", `In-memory Thread limit ${maxThreads} exceeded`);
+          if (ledgerTransfer === undefined && prepared.submissions.length > 0)
+            return yield* ThreadImportRejected.make({
+              threadId,
+              reason: "unsupported-obligations",
+              message:
+                "Provide the paired MemorySubmissionLedger layer before importing admissions",
+            });
+
+          const producerEpoch = yield* Schema.decodeEffect(
+            ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER)),
+          )(
+            Math.max(
+              prepared.producerEpoch,
+              existing === undefined ? 1 : existing.producerEpoch + 1,
+            ),
+          ).pipe(
+            Effect.mapError((cause) =>
+              storeError("import", "Unable to advance the destination producer epoch", cause),
+            ),
+          );
+
+          const batches = new Map<BatchId, StoredBatch>();
+
+          const tailDigests = new Map<CanonicalSequence, Digest>([
+            [ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST],
+          ]);
+
+          for (const batch of prepared.batches) {
+            batches.set(batch.batch.batchId, {
+              batchJson: batch.batchJson,
+              digest: batch.tailDigest,
+              result: AppendResult.make({
+                firstSequence: batch.firstSequence,
+                lastSequence: batch.lastSequence,
+                tailDigest: batch.tailDigest,
+                replayed: false,
+              }),
+            });
+            tailDigests.set(batch.lastSequence, batch.tailDigest);
+          }
+          const threads = new Map(current.threads);
+
+          threads.set(threadId, {
+            ...indexRecords(
+              { peerCount: 0, workerRecords: new Map(), byId: new Map(), runInputs: new Map() },
+              records,
+            ),
+            producerEpoch,
+            records,
+            batches,
+            tailDigests,
+            tailSequence: prepared.result.tailSequence,
+            tailDigest: prepared.result.tailDigest,
+            recordIds: new Set(records.map((entry) => entry.record.recordId)),
+            checkpoints: new Map(),
+          });
+
+          const commitLedger =
+            ledgerTransfer === undefined
+              ? undefined
+              : yield* ledgerTransfer.prepareImport(prepared, producerEpoch);
+
+          // Readers do not take the gate. No Effect yield may separate these two publications.
+          yield* Effect.uninterruptible(
+            Effect.sync(() => {
+              commitLedger?.();
+              MutableRef.set(state.ref, { threads });
+            }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
+          );
+
+          return prepared.result;
+        }),
+      );
+    },
+  );
 
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(
     function* (unvalidated) {
@@ -902,7 +1109,7 @@ const makeThreadStore = Effect.gen(function* () {
     append,
     read,
     observe,
-    export: exportThread,
+    export: (request) => withMutation(exportThread(request)),
     inspectTail,
     checkpoints: { save: (request) => withMutation(saveCheckpoint(request)), load: loadCheckpoint },
     recoveryCheckpoints: {
@@ -912,8 +1119,25 @@ const makeThreadStore = Effect.gen(function* () {
   });
 
   return Context.make(ThreadStore, threadStore).pipe(
+    Context.add(ThreadImport, { import: importThread }),
     Context.add(MemoryThreadStoreKernel, {
       withMutation,
+      registerLedgerTransfer: (transfer) =>
+        withMutation(
+          Effect.sync(() => {
+            if (ledgerTransfer !== undefined)
+              throw new Error("MemoryThreadStore already has a paired SubmissionLedger");
+            ledgerTransfer = transfer;
+          }),
+        ),
+      registerMessageDeliveryStore: (hasRetained) =>
+        withMutation(
+          Effect.sync(() => {
+            if (hasMessageDeliveries !== undefined)
+              throw new Error("MemoryThreadStore already has a paired MessageDeliveryStore");
+            hasMessageDeliveries = hasRetained;
+          }),
+        ),
       prepareAppend,
       appendPrepared,
       record: (threadId, recordId) =>
@@ -927,7 +1151,8 @@ const makeThreadStore = Effect.gen(function* () {
 
 /**
  * In-memory canonical Thread persistence. Durable accepted work is served by the separate
- * SubmissionLedger port; this Layer provides ThreadStore and its ThreadReader.
+ * SubmissionLedger port; this Layer provides ThreadStore, ThreadReader, and ThreadImport.
+ * Importing admissions requires a MemorySubmissionLedger paired with this store.
  */
 export const MemoryThreadStoreLive = ThreadReader.layer().pipe(
   Layer.provideMerge(Layer.effectContext(makeThreadStore)),

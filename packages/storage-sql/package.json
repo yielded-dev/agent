@@ -22,15 +22,17 @@
     "./sql-journal": "./src/SqlJournal.ts",
     "./sql-thread-store": "./src/SqlThreadStore.ts",
     "./sql-submission-ledger": "./src/SqlSubmissionLedger.ts",
+    "./sql-admission-facts": "./src/SqlAdmissionFacts.ts",
     "./sql-activity-store": "./src/SqlActivityStore.ts",
     "./sql-schedule-store": "./src/SqlScheduleStore.ts",
-    "./sql-storage-schema": "./src/SqlStorageSchema.ts",
+    "./sqlite-layout-inspection": "./src/SqliteLayoutInspection.ts",
     "./sql-thread-native-reads": "./src/SqlThreadNativeReads.ts",
     "./sql-message-delivery-store": "./src/SqlMessageDeliveryStore.ts",
     "./sql-subscription-store": "./src/SqlSubscriptionStore.ts",
     "./sql-storage-v2-upgrade": "./src/SqlStorageV2Upgrade.ts",
     "./sql-lifecycle-publication": "./src/SqlLifecyclePublication.ts",
-    "./sql-storage-progress": "./src/SqlStorageProgress.ts"
+    "./sql-storage-progress": "./src/SqlStorageProgress.ts",
+    "./sql-thread-import": "./src/SqlThreadImport.ts"
   },
   "publishConfig": {
     "access": "public"

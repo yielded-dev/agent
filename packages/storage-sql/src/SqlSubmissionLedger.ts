@@ -104,6 +104,12 @@ import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream, Struct } from 
 import * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
+import {
+  decodeAbortFact,
+  decodeAdmissionFact,
+  decodeApprovalFact,
+  decodeResolutionFact,
+} from "./SqlAdmissionFacts.ts";
 import type { SqlJournal, ThreadRow } from "./SqlJournal.ts";
 import {
   makeRowDecoder,
@@ -321,7 +327,12 @@ const decodeSettlement = Schema.decodeUnknownEffect(Settlement);
 const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeOwnershipSnapshot = Schema.decodeUnknownEffect(OwnershipSnapshot);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
-const decodeSubmissionSnapshotUnknown = Schema.decodeUnknownEffect(SubmissionSnapshot);
+
+const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
+  Schema.decodeEffect(Schema.toType(Schema.Struct(SubmissionSnapshot.fields)))(input).pipe(
+    Effect.map((fields) => SubmissionSnapshot.make(fields)),
+  );
+
 const decodeSubmissionId = Schema.decodeUnknownEffect(SubmissionSnapshot.fields.submissionId);
 const decodeQueueSequence = Schema.decodeUnknownEffect(QueueSequence);
 const decodeUtcInstant = Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString);
@@ -658,17 +669,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     operation: string,
     row: SubmissionRow,
   ): Effect.fn.Return<SubmissionSnapshot, LedgerError> {
-    const agentDigests = yield* parseStoredJsonText(row.agent_digests_json).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
-      ),
-    );
-
-    const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
-      ),
-    );
+    const rowFailure = (error: Schema.SchemaError) =>
+      corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message);
 
     if ((row.parent_submission_id === null) !== (row.parent_tool_call_id === null)) {
       return yield* corruptionFailure(
@@ -679,57 +681,19 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       );
     }
 
-    return yield* decodeSubmissionSnapshotUnknown({
-      submissionId: row.submission_id,
-      threadId: row.thread_id,
-      queueSequence: row.queue_sequence,
-      principal: row.principal,
-      idempotencyKey: row.idempotency_key,
-      agentId: row.agent_id,
-      agentDigests,
-      deploymentId: row.deployment_id,
-      inputPayload,
-      inputDigest: row.input_digest,
-      receiptId: row.receipt_id,
+    const admission = yield* decodeAdmissionFact(row).pipe(Effect.mapError(rowFailure));
+
+    const readyAt =
+      row.ready_at === null
+        ? undefined
+        : yield* decodeUtcInstant(row.ready_at).pipe(Effect.mapError(rowFailure));
+
+    return yield* decodeSubmissionSnapshotType({
+      ...admission,
       state: row.state,
-      createdAt: row.created_at,
-      ...(row.admission_group === null ? {} : { admissionGroup: row.admission_group }),
-      ...(row.worker_admission_json === null
-        ? {}
-        : {
-            workerAdmission: yield* parseStoredJsonText(row.worker_admission_json).pipe(
-              Effect.mapError(internalFailure(operation)),
-            ),
-          }),
-      ...(row.message_admission_json === null
-        ? {}
-        : {
-            messageAdmission: yield* parseStoredJsonText(row.message_admission_json).pipe(
-              Effect.mapError(internalFailure(operation)),
-            ),
-          }),
-      ...(row.admission_fence_json === null
-        ? {}
-        : {
-            admissionFence: yield* parseStoredJsonText(row.admission_fence_json).pipe(
-              Effect.mapError(internalFailure(operation)),
-            ),
-          }),
       ...(row.settled_outcome === null ? {} : { settledOutcome: row.settled_outcome }),
-      ...(row.ready_at === null ? {} : { readyAt: row.ready_at }),
-      ...(row.parent_submission_id === null || row.parent_tool_call_id === null
-        ? {}
-        : {
-            parentLinkage: {
-              parentSubmissionId: row.parent_submission_id,
-              parentToolCallId: row.parent_tool_call_id,
-            },
-          }),
-    }).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(operation, "effect_agent_submissions", row.submission_id, error.message),
-      ),
-    );
+      ...(readyAt === undefined ? {} : { readyAt }),
+    }).pipe(Effect.mapError(rowFailure));
   });
 
   const readCanonicalSettlement = Effect.fnUntraced(function* (
@@ -924,14 +888,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     operation: string,
     row: ApprovalDecisionRow,
   ): Effect.Effect<ApprovalDecisionIntent, LedgerError> =>
-    decodeApprovalDecisionIntent({
-      submissionId: row.submission_id,
-      toolCallId: row.tool_call_id,
-      decision: row.decision,
-      resolver: row.resolver,
-      reason: row.reason,
-      decidedAt: row.decided_at,
-    }).pipe(
+    decodeApprovalFact(row).pipe(
       Effect.mapError((error) =>
         corruptionFailure(
           operation,
@@ -970,25 +927,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     operation: string,
     row: UnknownResolutionRow,
   ): Effect.fn.Return<UnknownResolutionIntent, LedgerError> {
-    const resolution = yield* parseStoredJsonText(row.resolution_json).pipe(
-      Effect.mapError((error) =>
-        corruptionFailure(
-          operation,
-          "effect_agent_unknown_resolutions",
-          `${row.submission_id}/${row.tool_call_id}`,
-          error.message,
-        ),
-      ),
-    );
-
-    return yield* decodeUnknownResolutionIntent({
-      submissionId: row.submission_id,
-      toolCallId: row.tool_call_id,
-      author: row.author,
-      reason: row.reason,
-      resolution,
-      resolvedAt: row.resolved_at,
-    }).pipe(
+    return yield* decodeResolutionFact(row).pipe(
       Effect.mapError((error) =>
         corruptionFailure(
           operation,
@@ -1028,7 +967,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     operation: string,
     threadId: string,
     submissionId: SubmissionId,
-  ): Effect.fn.Return<string | undefined, LedgerError> {
+  ): Effect.fn.Return<AbortIntent["canonicalRecordId"], LedgerError> {
     const recordId = submissionAbortRecordId(submissionId);
 
     const rows = yield* sql<Record<string, unknown>>`
@@ -1059,13 +998,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       submissionId,
     );
 
-    return yield* decodeAbortIntent({
-      submissionId: row.submission_id,
-      author: row.author,
-      reason: row.reason,
-      requestedAt: row.requested_at,
-      ...(canonicalRecordId === undefined ? {} : { canonicalRecordId }),
-    }).pipe(
+    const fact = yield* decodeAbortFact(row).pipe(
       Effect.mapError((error) =>
         corruptionFailure(
           operation,
@@ -1075,6 +1008,11 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         ),
       ),
     );
+
+    return AbortIntent.make({
+      ...fact,
+      ...(canonicalRecordId === undefined ? {} : { canonicalRecordId }),
+    });
   });
 
   const capabilities = Effect.succeed(LedgerCapabilities.make({ durability: "durable-node" }));

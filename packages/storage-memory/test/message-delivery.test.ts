@@ -1,6 +1,7 @@
 import { NodeCrypto } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { memoryMessageDeliveryStoreLayer } from "@yielded/agent-storage-memory/memory-message-delivery-store";
+import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import { digestJson } from "@yielded/agent/digest";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import {
@@ -93,10 +94,9 @@ const dependencies = (
   limits?: MessageDeliveryStoreLimits,
 ) =>
   Layer.mergeAll(
-    memoryMessageDeliveryStoreLayer(limits),
-    NodeCrypto.layer,
+    memoryMessageDeliveryStoreLayer(limits).pipe(Layer.provideMerge(MemoryThreadStoreLive)),
     Layer.succeed(PreparedInputAdmission, admission),
-  );
+  ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
 const layer = (
   admission: PreparedInputAdmission["Service"] = {
@@ -279,9 +279,9 @@ describe("direct message delivery", () => {
         });
       }).pipe(
         Effect.provide(
-          Layer.mergeAll(
-            NodeCrypto.layer,
-            memoryMessageDeliveryStoreLayer(undefined, { maxStoredValueBytes: 4_096 }),
+          memoryMessageDeliveryStoreLayer(undefined, { maxStoredValueBytes: 4_096 }).pipe(
+            Layer.provideMerge(MemoryThreadStoreLive),
+            Layer.provideMerge(NodeCrypto.layer),
           ),
         ),
       ),

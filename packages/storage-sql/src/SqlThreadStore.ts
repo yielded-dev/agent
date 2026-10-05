@@ -1,6 +1,7 @@
-import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
+import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
 import {
-  CanonicalBatch,
   CanonicalRecord,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -12,8 +13,6 @@ import {
   AppendResult,
   CheckpointRejected,
   ThreadCheckpoint,
-  ThreadExport,
-  ThreadExportRequest,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
@@ -29,7 +28,6 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   SaveRecoveryCheckpointRequest,
-  MAX_THREAD_EXPORT_RECORDS,
   type ThreadRecoveryCheckpoints,
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
@@ -42,6 +40,7 @@ import {
 } from "./SqlJournal.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
+import { makeSqlThreadImport } from "./SqlThreadImport.ts";
 import { makeSelectedReads } from "./SqlThreadNativeReads.ts";
 
 export interface SqlThreadStoreOptions<
@@ -100,7 +99,10 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const isCheckpointRejected = Schema.is(CheckpointRejected);
   const canonicalRecordJson = Schema.fromJsonString(CanonicalRecord);
   const decodeRecordJson = Schema.decodeEffect(canonicalRecordJson);
-  const encodeRecordJson = Schema.encodeEffect(canonicalRecordJson);
+
+  const encodeRecordJson = (record: typeof ExportRecord.Type) =>
+    Schema.encodeEffect(ExportRecord)(record).pipe(Effect.map(canonicalJson));
+
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
   const decodeSequence = Schema.decodeEffect(CanonicalSequence);
@@ -282,7 +284,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     const stored = yield* journal.scanStoredPayloads();
 
     const batches = yield* Effect.forEach(stored.batches, (batch) =>
-      Schema.decodeEffect(Schema.fromJsonString(CanonicalBatch))(batch.batch_json).pipe(
+      Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(batch.batch_json).pipe(
         Effect.map((decoded) => ({ decoded, row: batch })),
         Effect.mapError((error) =>
           options.errors.corruption({
@@ -295,7 +297,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     );
 
     const records = yield* Effect.forEach(stored.records, (record) =>
-      decodeRecordJson(record.record_json).pipe(
+      Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(record.record_json).pipe(
         Effect.map((decoded) => ({ decoded, row: record })),
         Effect.mapError((error) =>
           options.errors.corruption({
@@ -349,7 +351,10 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
           });
         }
 
-        const digest = yield* digestCanonicalBatch(previousDigest, canonicalBatch).pipe(
+        const digest = yield* Schema.encodeEffect(ExportBatch)(canonicalBatch).pipe(
+          Effect.flatMap((encoded) =>
+            digestJson({ previousTailDigest: previousDigest, batch: encoded }),
+          ),
           Effect.provideService(Crypto.Crypto, crypto),
           Effect.mapError((error) =>
             options.errors.corruption({
@@ -595,39 +600,35 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const observe: ThreadStore["Service"]["observe"] = (request) =>
     Stream.unwrap(observeEffect(request));
 
-  const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (
-    request: ThreadExportRequest,
-  ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadExportRequest))(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate thread export", error)),
-    );
+  const transfer = yield* makeSqlThreadImport<S | W | F>({
+    namespace: options.namespace,
+    offsetPrefix: options.offsetPrefix,
+    read: journal.withReadTransaction("export transaction"),
+    write: journal.withWriteTransaction("import transaction"),
+    afterThreadRead: options.hitFailpoint("export:after-thread-read"),
+    afterImport: (prepared) =>
+      Effect.forEach(
+        prepared.records,
+        (entry) => {
+          const fact = entry.record.payload;
 
-    yield* requireThread(journal, validated.threadId);
-
-    const exported = yield* journal
-      .exportThread(validated.threadId)
-      .pipe(Effect.mapError((error) => storeError("export thread", error)));
-
-    const records = yield* Effect.forEach(exported.records, decodeEnvelope);
-
-    if (records.length > MAX_THREAD_EXPORT_RECORDS) {
-      return yield* ThreadStoreError.make({
-        operation: "decode thread export",
-        message: "The thread exceeds the current export record limit.",
-      });
-    }
-
-    const tailDigest = yield* Schema.decodeEffect(Digest)(exported.thread.tail_digest).pipe(
-      Effect.mapError((error) => schemaStoreError("decode export tail digest", error)),
-    );
-
-    return ThreadExport.make({
-      format: "effect-agent/thread@1",
-      threadId: validated.threadId,
-      tailSequence: exported.thread.tail_sequence,
-      tailDigest,
-      records,
-    });
+          return journal.lifecycle !== undefined &&
+            Schema.is(Schema.toType(LifecyclePublicationFact))(fact)
+            ? journal.lifecycle
+                .retain({
+                  id: JSON.stringify([prepared.result.threadId, "record", entry.record.recordId]),
+                  ownerThreadId: prepared.result.threadId,
+                  canonicalSequence: entry.sequence,
+                  createdAt: entry.record.createdAt,
+                  fact,
+                })
+                .pipe(
+                  Effect.mapError((cause) => storeError("rebuild lifecycle publication", cause)),
+                )
+            : Effect.void;
+        },
+        { discard: true },
+      ),
   });
 
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
@@ -843,7 +844,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     countPeerMessages: selectedReads.countPeerMessages,
     readIdentity: selectedReads.readIdentity,
     append: makeAppend(journal.append, true),
-    export: exportThread,
+    export: transfer.export,
     inspectTail,
     materialize,
     observe,
@@ -854,6 +855,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   return {
     store,
+    importer: transfer.importer,
     /** Bind the writer once when constructing a claimed Run session. */
     makeOwnedAppend: (commit: SqlJournal<S, C, W, F>["append"]) => makeAppend(commit, false),
   };

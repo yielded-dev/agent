@@ -1,25 +1,24 @@
 import { makeSqlJournal } from "@yielded/agent-storage-sql/sql-journal";
 import {
-  makeRowDecoder,
   makeSqlQuery,
   makeSqlTransaction,
-  SqlInteger,
   type StorageErrorFields,
   type CorruptionErrorFields,
 } from "@yielded/agent-storage-sql/sql-storage";
-import { createStorageSchema } from "@yielded/agent-storage-sql/sql-storage-schema";
 import { Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { isSqlError, type SqlError } from "effect/sql/SqlError";
 
 import {
-  PostgresStorageCompatibilityError,
   PostgresStorageCorruptionError,
   PostgresStorageError,
   PostgresWriteContention,
   type PostgresStorageFailpointLocation,
   type PostgresStorageFailpointError,
 } from "../PostgresStorageError.ts";
+import { applyPostgresLayout, inspectPostgresStorage } from "./storage-layout.ts";
+
+export { CurrentPostgresStorageVersion, readPostgresStorageHeader } from "./storage-layout.ts";
 
 /**
  * This exact FNV-1a hash, including its tag and UTF-8 encoding, is a persistent advisory-lock
@@ -84,84 +83,18 @@ export const ensurePostgresSchema = Effect.fnUntraced(function* (schema: string)
   }
 });
 
-export const CurrentPostgresStorageVersion = 16;
-
-/** Initialize empty storage with the complete current schema. */
-const createPostgresStorageSchema = Effect.fnUntraced(function* (namespace: string) {
-  const sql = yield* SqlClient.SqlClient;
-  const { execute, table } = yield* makeSqlQuery(namespace);
-
-  // The boolean primary key is what keeps the version marker single-row: no second value can
-  // satisfy the constraint. SQLite records its format in `PRAGMA user_version` instead.
-  yield* execute(sql`
-    CREATE TABLE ${table("effect_agent_storage_version")} (
-      id BOOLEAN PRIMARY KEY NOT NULL,
-      version BIGINT NOT NULL,
-      CONSTRAINT effect_agent_storage_version_single_row CHECK (id)
-    )
-  `);
-  yield* createStorageSchema(namespace);
-  yield* execute(sql`
-    INSERT INTO ${table("effect_agent_storage_version")} (id, version)
-    VALUES (TRUE, ${CurrentPostgresStorageVersion})
-  `);
-});
-
-const VERSION_TABLE = "effect_agent_storage_version";
-
-const REQUIRED_OBJECTS = [
-  "effect_agent_abort_intents",
-  "effect_agent_approval_decisions",
-  "effect_agent_attempts",
-  "effect_agent_canonical_batches",
-  "effect_agent_canonical_records",
-  "effect_agent_checkpoints",
-  "effect_agent_message_deliveries",
-  "effect_agent_message_deliveries_pending",
-  "effect_agent_recovery_checkpoints",
-  "effect_agent_records_call",
-  "effect_agent_records_run_input",
-  "effect_agent_records_subtree",
-  "effect_agent_records_worker_input",
-  "effect_agent_schedules",
-  "effect_agent_submission_ownership",
-  "effect_agent_submissions",
-  "effect_agent_submissions_nonterminal",
-  "effect_agent_threads",
-  "effect_agent_unknown_resolutions",
-  "effect_agent_child_reservations",
-  "effect_agent_subscription_sequences",
-  "effect_agent_subscriptions",
-  "effect_agent_subscription_events",
-  "effect_agent_subscription_deliveries",
-  "effect_agent_worker_stops",
-  "effect_agent_worker_execution",
-  "effect_agent_worker_starts",
-  "effect_agent_worker_pending",
-] as const;
-
-const PostgresVersionRow = Schema.Struct({
-  version: SqlInteger.check(Schema.isGreaterThanOrEqualTo(0)),
-});
-
-const PostgresNameRow = Schema.Struct({ name: Schema.NonEmptyString });
-
 export const postgresStorageErrors = {
   storage: (fields: StorageErrorFields) => PostgresStorageError.make(fields),
   corruption: (fields: CorruptionErrorFields) => PostgresStorageCorruptionError.make(fields),
   isCorruption: Schema.is(PostgresStorageCorruptionError),
 };
 
-const { decodeRows, decodeSingleRow } = makeRowDecoder(postgresStorageErrors.corruption);
-const decodeNameRows = decodeRows(Schema.Array(PostgresNameRow));
-const decodeVersionRow = decodeSingleRow(Schema.Array(PostgresVersionRow));
-
 const isTransactionFailure = Schema.is(
   Schema.Union([PostgresStorageError, PostgresWriteContention]),
 );
 
-/** PostgreSQL owns schema/version checks; relational state transitions belong to storage-sql. */
-export const initializePostgresStorage = Effect.fnUntraced(function* ({
+/** Inspect under the writer lock before any DDL; header and legacy marker commit together. */
+export const initializePostgresStorage = Effect.fn("PostgresStorage.upgradeLayout")(function* ({
   lockTimeout,
   schema,
 }: {
@@ -169,83 +102,16 @@ export const initializePostgresStorage = Effect.fnUntraced(function* ({
   readonly schema: string;
 }) {
   const sql = yield* SqlClient.SqlClient;
-  const { execute, table } = yield* makeSqlQuery(schema);
-  const write = withWriterLockTransaction(sql, lockTimeout);
 
-  yield* write(
+  yield* withWriterLockTransaction(
+    sql,
+    lockTimeout,
+  )(
     Effect.gen(function* () {
-      yield* ensurePostgresSchema(schema);
+      const header = yield* inspectPostgresStorage(schema);
 
-      const existingRows = yield* execute(sql<Record<string, unknown>>`
-        SELECT c.relname AS name
-        FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = ${schema}
-          AND c.relkind IN ('r', 'p')
-          AND starts_with(c.relname, 'effect_agent_')
-          AND c.relname NOT IN ('effect_agent_activity_metadata', 'effect_agent_activity_processor_state_v1')
-        ORDER BY c.relname
-      `).pipe(Effect.mapError(storageError("inspect storage schema")));
-
-      const existing = yield* decodeNameRows("pg_class", "effect_agent_%", existingRows);
-
-      if (existing.every((relation) => relation.name !== VERSION_TABLE)) {
-        if (existing.length > 0) {
-          return yield* PostgresStorageCompatibilityError.make({
-            actualVersion: 0,
-            supportedVersion: CurrentPostgresStorageVersion,
-            message:
-              `Schema ${schema} contains unversioned Effect Agent tables. Refusing to mutate ` +
-              "ambiguous stored data; retain it for inspection with its original writer.",
-          });
-        }
-
-        yield* createPostgresStorageSchema(schema).pipe(
-          Effect.mapError(storageError("initialize current storage")),
-        );
-      } else {
-        const versionRows = yield* execute(sql<Record<string, unknown>>`
-          SELECT version
-          FROM ${table("effect_agent_storage_version")}
-          WHERE id
-        `).pipe(Effect.mapError(storageError("read storage version")));
-
-        const version = yield* decodeVersionRow(VERSION_TABLE, "singleton", versionRows);
-
-        // One adapter, one format: there is no predecessor layout to upgrade from.
-        if (version.version !== CurrentPostgresStorageVersion) {
-          return yield* PostgresStorageCompatibilityError.make({
-            actualVersion: version.version,
-            supportedVersion: CurrentPostgresStorageVersion,
-            message:
-              `Schema ${schema} uses storage version ${version.version}; this build supports ` +
-              `exactly version ${CurrentPostgresStorageVersion}. Keep the original database and ` +
-              "use a compatible library version.",
-          });
-        }
-      }
-
-      const requiredRows = yield* execute(sql<Record<string, unknown>>`
-    SELECT c.relname AS name
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = ${schema}
-      AND c.relkind IN ('r', 'p', 'i')
-      AND c.relname IN ${sql.in(REQUIRED_OBJECTS)}
-    ORDER BY c.relname
-  `).pipe(Effect.mapError(storageError("verify storage tables")));
-
-      const required = yield* decodeNameRows("pg_class", "required_tables", requiredRows);
-
-      if (required.length !== REQUIRED_OBJECTS.length) {
-        return yield* PostgresStorageCompatibilityError.make({
-          actualVersion: CurrentPostgresStorageVersion,
-          supportedVersion: CurrentPostgresStorageVersion,
-          message:
-            `Schema ${schema} claims the current format but is missing required tables or ` +
-            "indexes. Retain the original database for inspection.",
-        });
-      }
+      if (header === undefined) yield* ensurePostgresSchema(schema);
+      yield* applyPostgresLayout(schema, header);
     }),
   ).pipe(
     Effect.catchTag("SqlError", (error) =>

@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Option, Schema, SchemaGetter } from "effect";
 import { Prompt } from "effect/ai";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
@@ -1052,8 +1052,12 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Current canonical payload family. Storage adapters reject unsupported predecessor formats. */
-export const CanonicalRecordPayload = Schema.Union([
+/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
+export const CURRENT_RECORD_VERSION = 1;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@1";
+
+/** Known record kinds. New kinds must be safe for older readers to ignore. */
+export const KnownRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
   RunStartedRecord,
@@ -1088,6 +1092,36 @@ export const CanonicalRecordPayload = Schema.Union([
   PeerMessagePrepared,
   SubtreeBudgetReserved,
   RepairAnnotated,
+]);
+
+const knownRecordTags = new Set(
+  KnownRecordPayload.members.map(
+    (member) => ("fields" in member ? member.fields : member.schema.fields)._tag.ast.literal,
+  ),
+);
+
+const IgnorablePayload = Schema.StructWithRest(
+  Schema.Struct({
+    _tag: Schema.NonEmptyString.check(
+      Schema.makeFilter((tag) => !knownRecordTags.has(tag) && tag !== "UnknownRecord"),
+    ),
+  }),
+  [Schema.Record(Schema.String, PersistedJson)],
+);
+
+/** An unfamiliar, ignorable fact. Its original wire value survives export and re-encoding. */
+export class UnknownRecord extends Schema.TaggedClass<UnknownRecord>()("UnknownRecord", {
+  value: IgnorablePayload,
+}) {}
+
+export const CanonicalRecordPayload = Schema.Union([
+  KnownRecordPayload,
+  IgnorablePayload.pipe(
+    Schema.decodeTo(UnknownRecord, {
+      decode: SchemaGetter.transform((value) => ({ _tag: "UnknownRecord" as const, value })),
+      encode: SchemaGetter.transform((record) => record.value),
+    }),
+  ),
 ]);
 
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;

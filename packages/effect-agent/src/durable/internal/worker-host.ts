@@ -61,6 +61,7 @@ import { PreparedInputAdmission } from "../PreparedInputAdmission.ts";
 import {
   BatchId,
   CanonicalBatch,
+  type CanonicalRecordEnvelope,
   CanonicalSequence,
   type Digest,
   type DeploymentId,
@@ -114,7 +115,7 @@ import {
   readWorkerState as readNativeWorkerState,
   FencedAppendRequest,
   ThreadExportRequest,
-  type ThreadExport,
+  type ThreadIdentity,
   MAX_THREAD_EXPORT_RECORDS,
   ThreadRead,
   type ThreadTail,
@@ -566,7 +567,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         | WorkerReportPrepared
         | WorkerReportRefused
         | SubtreeBudgetReserved,
-      current: Pick<ThreadExport, "tailSequence" | "tailDigest" | "records"> &
+      current: Pick<ThreadIdentity, "tailSequence" | "tailDigest" | "records"> &
         Partial<Pick<ThreadTail, "producerEpoch">>,
       phase: "source" | "completion" | "subtree" | "report" | "stop",
       acknowledgements: ReadonlyArray<WorkerInputCompleted> = [],
@@ -638,12 +639,12 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     Effect.mapError(storageFailure("start")),
   );
 
-  const requests = (records: Effect.Success<ReturnType<typeof read>>["records"]) =>
+  const requests = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
     records.flatMap(({ record }) =>
       record.payload._tag === "WorkerInputRequested" ? [record.payload] : [],
     );
 
-  const completedMessageIds = (records: ThreadExport["records"]) =>
+  const completedMessageIds = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
     new Set<string>(
       records.flatMap(({ record }) =>
         record.payload._tag === "WorkerInputCompleted" && record.payload.effectsResolved
@@ -656,7 +657,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
   // parallel foreign reads cannot change the canonical acknowledgement batch order.
   const completedInputs = Effect.fnUntraced(function* (
     rows: ReadonlyArray<WorkerInputRequested>,
-    sourceRecords: ThreadExport["records"],
+    sourceRecords: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
     const completed = completedMessageIds(sourceRecords);
 
