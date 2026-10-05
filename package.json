@@ -28,8 +28,8 @@
     "check:record-format": "bun scripts/verify-record-format.ts"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "0.7.0",
-    "@changesets/cli": "2.31.0",
+    "@changesets/changelog-github": "1.0.1",
+    "@changesets/cli": "3.0.3",
     "@effect/ai-anthropic": "catalog:",
     "@effect/ai-openai": "catalog:",
     "@effect/ai-typesafe": "catalog:",
@@ -59,8 +59,8 @@
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "esbuild": "catalog:",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
     "typescript": "catalog:",
     "typescript-twoslash": "catalog:",
     "vite": "catalog:",
