@@ -174,7 +174,7 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         );
 
         const reply = yield* Effect.tryPromise({
-          try: () => env.ACCOUNT_THREADS.getByName(privateId).plannerWorker(request),
+          try: () => env.PLANNER_THREADS.getByName(privateId).plannerWorker(request),
           catch: () =>
             new PlannerError({
               code: "unavailable",
@@ -204,7 +204,7 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const env = yield* WorkerEnvironment;
 
         const reply = yield* Effect.tryPromise({
-          try: () => env.ACCOUNT_THREADS.getByName(privateId).plannerState(),
+          try: () => env.PLANNER_THREADS.getByName(privateId).plannerState(),
           catch: () =>
             new PlannerError({
               code: "unavailable",
@@ -462,7 +462,7 @@ export const makeTravelPlannerThread = <E>(
   return class extends ThreadObject.make(application.pipe(Layer.provideMerge(sites)), {
     ...ownership,
     eventLayer: CloudflareTracer.layer,
-    namespaceBinding: "ACCOUNT_THREADS",
+    namespaceBinding: "PLANNER_THREADS",
     deploymentId: "travel-planner-v1",
     producerPrefix: "travel-planner",
     settlementPollInterval: 100,

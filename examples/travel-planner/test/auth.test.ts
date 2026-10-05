@@ -45,7 +45,7 @@ beforeAll(async () => {
       r2Buckets: ["APP_BUILDS"],
       serviceBindings: { ASSETS: () => new Response("Fixture asset") },
       durableObjects: {
-        ACCOUNT_THREADS: { className: "TravelPlannerThread", useSQLite: true },
+        PLANNER_THREADS: { className: "TravelPlannerThread", useSQLite: true },
         AUTH: { className: "AuthFixture", useSQLite: true },
       },
       durableObjectsPersist: directory,

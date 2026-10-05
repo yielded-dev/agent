@@ -103,7 +103,7 @@ export default {
           Effect.provide(
             credentialSourceLayer({
               SERVER_OPENAI_KEY: "sk-fixture-server-key-9876",
-              ACCOUNT_THREADS: { getByName: () => ({ modelCredential: async () => "null" }) },
+              PLANNER_THREADS: { getByName: () => ({ modelCredential: async () => "null" }) },
               AUTH: {
                 getByName: () => ({
                   fetch: (internal) => {

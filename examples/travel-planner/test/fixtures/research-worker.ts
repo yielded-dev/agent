@@ -232,7 +232,7 @@ export default {
       if (url.pathname === "/__research/journal") {
         const threadId = url.searchParams.get("thread") ?? "";
 
-        return env.ACCOUNT_THREADS.getByName(
+        return env.PLANNER_THREADS.getByName(
           threadId.startsWith("worker:") ? threadId : ownerOfThread(threadId),
         ).fetch(request);
       }

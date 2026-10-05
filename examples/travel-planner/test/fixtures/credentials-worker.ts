@@ -73,7 +73,7 @@ export default {
 
         return Response.json(resolved);
       }
-      const response = await env.ACCOUNT_THREADS.getByName(owner).fetch(request);
+      const response = await env.PLANNER_THREADS.getByName(owner).fetch(request);
 
       return new Response(await response.arrayBuffer(), {
         status: response.status,
