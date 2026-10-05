@@ -22,7 +22,14 @@ export interface Env {
   readonly TYPESAFE_API_KEY?: string;
   /** Mercury 2.5 writes Jev field text when set; otherwise GPT-6 Luna through OPENAI_API_KEY. */
   readonly OPENROUTER_API_KEY?: string;
+  /** "true" runs on visitor keys only, without the scripted baseline. */
+  readonly LAB_PUBLIC?: string;
+  /** Per-address run admission for public labs. */
+  readonly RUN_LIMIT?: RateLimit;
 }
+
+/** Served under this path on agent.yielded.dev; the unprefixed API remains for local tools. */
+const basePath = "/browser-use";
 
 const codec = Schema.fromJsonString(Control);
 
@@ -83,6 +90,7 @@ export class BrowserLab extends DurableObject<Env> {
           apiType: id.startsWith("@cf/") ? "chat-completions" : "responses",
         })),
         jevApiKey: env.TYPESAFE_API_KEY,
+        public: env.LAB_PUBLIC === "true",
         ...(env.OPENROUTER_API_KEY
           ? {
               jevText: {
@@ -143,7 +151,15 @@ export class BrowserLab extends DurableObject<Env> {
     const handlers = HttpApiBuilder.group(LabApi, "lab", (group) =>
       group
         .handle("snapshot", () => this.owner.snapshot())
-        .handle("run", ({ payload }) => this.withBrowser(this.owner.run(payload)))
+        .handle("run", ({ payload, headers }) =>
+          this.withBrowser(
+            this.owner.run(payload, {
+              openai: headers["x-lab-openai-key"],
+              typesafe: headers["x-lab-typesafe-key"],
+              openrouter: headers["x-lab-openrouter-key"],
+            }),
+          ),
+        )
         .handle("stop", () => this.owner.stop())
         .handle("close", () => this.withBrowser(this.owner.close())),
     );
@@ -178,19 +194,28 @@ export class BrowserLab extends DurableObject<Env> {
   }
 }
 
-const errorResponse = (message: string, status: number) =>
+const errorResponse = (
+  message: string,
+  status: number,
+  code: (typeof LabError.fields.code)["Type"] = "configuration",
+) =>
   new Response(
-    Schema.encodeSync(Schema.fromJsonString(LabError))(
-      new LabError({ code: "configuration", message }),
-    ),
+    Schema.encodeSync(Schema.fromJsonString(LabError))(new LabError({ code, message })),
     { status, headers: { "content-type": "application/json", "cache-control": "no-store" } },
   );
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+    const original = new URL(request.url);
 
-    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (original.pathname === "/") return Response.redirect(new URL(`${basePath}/`, original), 302);
+    const prefixed = original.pathname.startsWith(`${basePath}/api/`);
+
+    if (!prefixed && !original.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    const url = new URL(original);
+
+    if (prefixed) url.pathname = url.pathname.slice(basePath.length);
+    request = prefixed ? new Request(url, request) : request;
     if (
       request.method !== "GET" &&
       request.headers.has("origin") &&
@@ -211,6 +236,19 @@ export default {
         "Set CLOUDFLARE_ACCOUNT_ID and BROWSER_RENDERING_API_TOKEN in the Worker.",
         400,
       );
+
+    if (env.RUN_LIMIT !== undefined && url.pathname === "/api/run") {
+      const { success } = await env.RUN_LIMIT.limit({
+        key: request.headers.get("cf-connecting-ip") ?? "unknown",
+      });
+
+      if (!success)
+        return errorResponse(
+          "Too many runs from your address. Wait a minute, then try again.",
+          429,
+          "busy",
+        );
+    }
 
     return env.LAB.get(env.LAB.idFromName(session.value)).fetch(request);
   },

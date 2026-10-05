@@ -184,6 +184,8 @@ export const Snapshot = Schema.Struct({
   jevConfigured: Schema.Boolean,
   /** The field-text model a Jev task-board run would use; null when none is configured. */
   jevTextModel: Schema.NullOr(Schema.String),
+  /** Public labs run only with visitor keys and have no scripted baseline. */
+  public: Schema.Boolean,
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
   image: Schema.NullOr(Schema.String),
@@ -211,6 +213,15 @@ const headers = {
   "x-lab-session": Schema.String.check(Schema.isUUID()),
 };
 
+/** Visitor-owned provider keys for one run. The lab never stores or reports them. */
+export const VisitorKey = Schema.String.check(Schema.isPattern(/^[\x21-\x7e]{16,512}$/));
+
+const visitorKeyHeaders = {
+  "x-lab-openai-key": Schema.optionalKey(VisitorKey),
+  "x-lab-typesafe-key": Schema.optionalKey(VisitorKey),
+  "x-lab-openrouter-key": Schema.optionalKey(VisitorKey),
+};
+
 export const LabApi = HttpApi.make("BrowserSpeedLab").add(
   HttpApiGroup.make("lab").add(
     HttpApiEndpoint.get("snapshot", "/api/snapshot", {
@@ -219,7 +230,7 @@ export const LabApi = HttpApi.make("BrowserSpeedLab").add(
       error: LabError,
     }),
     HttpApiEndpoint.post("run", "/api/run", {
-      headers,
+      headers: { ...headers, ...visitorKeyHeaders },
       payload: RunInput,
       success: Report,
       error: LabError,

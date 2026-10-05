@@ -25,6 +25,7 @@ import {
 type Details = Partial<
   Pick<
     Span,
+    | "name"
     | "inputTokens"
     | "outputTokens"
     | "reasoningTokens"
@@ -250,7 +251,23 @@ export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.
           return span.status;
         },
         end(time, exit) {
-          finish.end(exit, jev?.[0] === "decision" ? { model: "jev-latest" } : {});
+          const operation = span.attributes.get("browser.jev.operation");
+          const target = span.attributes.get("browser.jev.target");
+
+          finish.end(
+            exit,
+            jev?.[0] === "decision"
+              ? {
+                  model: "jev-latest",
+                  // Name the decision by the action Jev chose, such as "Jev · CLICK · Save task".
+                  ...(typeof operation === "string"
+                    ? {
+                        name: `Jev · ${operation}${typeof target === "string" && target ? ` · ${target}` : ""}`,
+                      }
+                    : {}),
+                }
+              : {},
+          );
           span.end(time, exit);
         },
       };

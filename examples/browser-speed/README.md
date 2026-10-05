@@ -1,5 +1,7 @@
 # Browser speed lab
 
+Live at **[agent.yielded.dev/browser-use](https://agent.yielded.dev/browser-use/)**: visitors bring their own keys.
+
 Ask **Jev** or a model agent: **“Starting at the Wikipedia page for Mars, get to Nelson Mandela.”**
 Watch a real Cloudflare browser follow article links and inspect the route, hop count, and
 decision/action timings. The browser independently verifies arrival; claiming success cannot win.
@@ -151,7 +153,7 @@ vp run -F @yielded/agent-example-browser-speed worker
 vp run -F @yielded/agent-example-browser-speed dev
 ```
 
-Open **http://127.0.0.1:5191** and press **Start race**. Mars → Nelson Mandela is already filled in,
+Open **http://127.0.0.1:5191/browser-use/** and press **Start race**. Mars → Nelson Mandela is already filled in,
 and Jev drives by default; choose **Model agent** to compare.
 A real Cloudflare browser opens Wikipedia; its route and timings appear beside the live view.
 The app connects automatically; there is no login or app token. Cloudflare and model credentials
@@ -312,3 +314,10 @@ entire hostname with Cloudflare Access before deploying, including `/api/*`. The
 application authentication. If using a custom domain instead, set `workers_dev: false` and
 protect the custom hostname; an Access policy on a custom domain does not protect `workers.dev`.
 Preview URLs are disabled so they cannot bypass that policy.
+
+The public lab is the `public` environment: `vp run -F @yielded/agent-example-browser-speed deploy:public`
+serves `agent.yielded.dev/browser-use` with no model keys of its own. Give it only
+`CLOUDFLARE_ACCOUNT_ID` and a Browser Run Write token as `BROWSER_RENDERING_API_TOKEN`. Visitors
+add TypeSafe, OpenRouter and OpenAI keys in the page; each run sends them as request headers, and
+the lab uses them for that run without storing or reporting them. The public lab has no scripted
+baseline or Workers AI model, and admits at most six runs per minute per address.

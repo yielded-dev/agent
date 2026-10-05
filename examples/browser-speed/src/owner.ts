@@ -23,6 +23,13 @@ import { makeTrace, Trace } from "./telemetry.ts";
 import type { textModelLayer } from "./text-model.ts";
 import { normalizeTitle } from "./wikipedia.ts";
 
+/** Validated provider keys supplied with one run request. */
+export interface VisitorKeys {
+  readonly openai?: string;
+  readonly typesafe?: string;
+  readonly openrouter?: string;
+}
+
 export const Control = Schema.Struct({
   version: Schema.Literal(1),
   reference: Schema.NullOr(Schema.toCodecJson(BrowserSessionReference)),
@@ -69,6 +76,8 @@ export const makeOwner = (
     jevApiKey?: string;
     /** Field-text model for Jev task-board runs. */
     jevText?: Parameters<typeof textModelLayer>[0];
+    /** Public labs accept only visitor keys and refuse the scripted baseline. */
+    public?: boolean;
     kitesurf?: (
       retainClose: Parameters<typeof connectKitesurf>[1],
     ) => ReturnType<typeof connectKitesurf>;
@@ -117,6 +126,7 @@ export const makeOwner = (
       })),
       jevConfigured: Boolean(config.jevApiKey),
       jevTextModel: config.jevText?.model ?? null,
+      public: config.public ?? false,
       report: trace?.snapshot() ?? state.report,
       liveViewUrl,
       image,
@@ -195,7 +205,8 @@ export const makeOwner = (
     trace = undefined;
   });
 
-  const run = Effect.fnUntraced(function* (requested: RunInput) {
+  /** Visitor keys apply to one run only; they never enter owner state, reports or telemetry. */
+  const run = Effect.fnUntraced(function* (requested: RunInput, keys: VisitorKeys = {}) {
     const challenge = requested.wikipedia ?? defaultChallenge;
 
     const wikipedia = {
@@ -217,6 +228,12 @@ export const makeOwner = (
       });
 
     const jev = requested.driver === "jev";
+
+    if (config.public && requested.mode === "scripted")
+      return yield* new LabError({
+        code: "invalid",
+        message: "The public lab runs Jev and model agents only. Choose a driver and add your key.",
+      });
 
     if (
       jev &&
@@ -293,20 +310,42 @@ export const makeOwner = (
         code: "configuration",
         message: "This model is not available in the lab.",
       });
-    if (!jev && input.mode !== "scripted" && !selectedModel.apiKey)
+    const cloudflareModel = selectedModel.model.startsWith("@cf/");
+    const modelKey = cloudflareModel ? selectedModel.apiKey : (keys.openai ?? selectedModel.apiKey);
+    const jevKey = keys.typesafe ?? config.jevApiKey ?? "";
+
+    const jevText: Parameters<typeof textModelLayer>[0] | undefined = keys.openrouter
+      ? {
+          provider: "openrouter",
+          model: "inception/mercury-2.5",
+          reasoning: "none",
+          apiKey: Redacted.make(keys.openrouter),
+        }
+      : keys.openai
+        ? {
+            provider: "openai",
+            model: "gpt-6-luna",
+            reasoning: "low",
+            apiKey: Redacted.make(keys.openai),
+          }
+        : config.jevText;
+
+    if (!jev && input.mode !== "scripted" && !modelKey)
       return yield* new LabError({
         code: "configuration",
-        message: "The selected model's API key is not configured in the Worker.",
+        message: cloudflareModel
+          ? "This model is not available in the lab."
+          : "Add your OpenAI key to run the model agent.",
       });
-    if (jev && !config.jevApiKey)
+    if (jev && !jevKey)
       return yield* new LabError({
         code: "configuration",
-        message: "Set TYPESAFE_API_KEY in the Worker to use Jev.",
+        message: "Add your TypeSafe key to run Jev.",
       });
-    if (jev && input.scenario !== "wikipedia" && config.jevText === undefined)
+    if (jev && input.scenario !== "wikipedia" && jevText === undefined)
       return yield* new LabError({
         code: "configuration",
-        message: "Set OPENROUTER_API_KEY or OPENAI_API_KEY in the Worker for Jev field text.",
+        message: "Add an OpenRouter or OpenAI key so Jev can type into fields.",
       });
     if (input.scenario === "custom" && (input.mode === "scripted" || !input.prompt.trim()))
       return yield* new LabError({
@@ -318,7 +357,7 @@ export const makeOwner = (
       jev
         ? input.scenario === "wikipedia"
           ? "jev-latest"
-          : `jev-latest · ${config.jevText?.model ?? ""}`
+          : `jev-latest · ${jevText?.model ?? ""}`
         : input.mode === "scripted"
           ? "none"
           : selectedModel.model,
@@ -452,11 +491,11 @@ export const makeOwner = (
       yield* executeTask(
         input,
         selectedModel.model,
-        selectedModel.apiKey,
+        modelKey,
         selectedModel.apiUrl,
         selectedModel.apiType,
-        config.jevApiKey,
-        config.jevText,
+        jevKey,
+        jevText,
       ).pipe(Effect.provideService(Browser, browser));
       current.update({ finishedAt: current.now() });
       yield* browser.capture(true).pipe(Effect.catch(() => Effect.void));

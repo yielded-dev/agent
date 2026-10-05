@@ -2,12 +2,19 @@ import { Cause, Effect, Option, Predicate, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
-import { LabApi, Report, type BrowserEngine, type ModelId, type RunInput } from "./contract.ts";
+import {
+  LabApi,
+  Report,
+  VisitorKey,
+  type BrowserEngine,
+  type ModelId,
+  type RunInput,
+} from "./contract.ts";
 
 export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/client", {
   api: LabApi,
   httpClient: FetchHttpClient.layer,
-  baseUrl: "",
+  baseUrl: import.meta.env.BASE_URL.replace(/\/$/, ""),
 }) {}
 
 const sessionId = crypto.randomUUID();
@@ -23,6 +30,61 @@ export const historyAtom = Atom.make<ReadonlyArray<ClientSample>>([]);
 export const selectedAtom = Atom.make<string | null>(null);
 
 const headers = { "x-lab-session": sessionId };
+
+/** Visitor keys stay in this browser and travel only as headers on run requests. */
+export const ProviderKeys = Schema.Struct({
+  typesafe: Schema.String,
+  openrouter: Schema.String,
+  openai: Schema.String,
+  remember: Schema.Boolean,
+});
+
+export type ProviderKeys = typeof ProviderKeys.Type;
+
+const keyStorage = "yielded-browser-use-keys-v1";
+const emptyKeys: ProviderKeys = { typesafe: "", openrouter: "", openai: "", remember: false };
+const decodeKeys = Schema.decodeUnknownOption(Schema.fromJsonString(ProviderKeys));
+const encodeKeys = Schema.encodeSync(Schema.fromJsonString(ProviderKeys));
+
+// Storage can be missing or blocked (private windows, tests); keys then last for this page only.
+const storedKeys = (): ProviderKeys => {
+  try {
+    const value = localStorage.getItem(keyStorage) ?? sessionStorage.getItem(keyStorage);
+
+    return value === null ? emptyKeys : Option.getOrElse(decodeKeys(value), () => emptyKeys);
+  } catch {
+    return emptyKeys;
+  }
+};
+
+export const keysAtom = Atom.make(storedKeys()).pipe(Atom.keepAlive);
+
+export const saveKeysAtom = Atom.fn<ProviderKeys>()(
+  Effect.fnUntraced(function* (keys, get) {
+    get.set(keysAtom, keys);
+    yield* Effect.sync(() => {
+      try {
+        if (keys.remember) {
+          localStorage.setItem(keyStorage, encodeKeys(keys));
+          sessionStorage.removeItem(keyStorage);
+        } else {
+          localStorage.removeItem(keyStorage);
+          sessionStorage.setItem(keyStorage, encodeKeys(keys));
+        }
+      } catch {
+        // Keys remain in memory for this page.
+      }
+    });
+  }),
+);
+
+export const validKey = (value: string) => Schema.is(VisitorKey)(value.trim());
+
+const keyHeaders = (keys: ProviderKeys) => ({
+  ...(validKey(keys.openai) ? { "x-lab-openai-key": keys.openai.trim() } : {}),
+  ...(validKey(keys.typesafe) ? { "x-lab-typesafe-key": keys.typesafe.trim() } : {}),
+  ...(validKey(keys.openrouter) ? { "x-lab-openrouter-key": keys.openrouter.trim() } : {}),
+});
 
 const snapshotQuery = LabClient.query("lab", "snapshot", {
   headers,
@@ -88,7 +150,7 @@ export const runAtom = LabClient.runtime.fn<
 
         const report = yield* Reactivity.mutation(
           client.lab.run({
-            headers,
+            headers: { ...headers, ...keyHeaders(get(keysAtom)) },
             payload: {
               ...request,
               engine,
