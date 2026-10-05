@@ -58,7 +58,7 @@ Alchemy and its Cloudflare runtime advance together. Their published beta.80 pac
 Distilled rc.13 clients support stable Effect 4 directly, without repository compatibility
 patches. Verify upgrades with a frozen install and `vp run check:deploy`.
 
-The demo uses Auth beta.11 and its compatible Drizzle, GitHub, and crypto companions,
+The demo uses Auth beta.12 and its compatible Drizzle, GitHub, and crypto companions,
 which support stable Effect directly. Verify auth upgrades with the existing integration checks
 and review their changelogs for API and stored-format changes.
 
