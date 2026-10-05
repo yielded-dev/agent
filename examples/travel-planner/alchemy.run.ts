@@ -46,7 +46,10 @@ export default Alchemy.Stack(
     const app = yield* Cloudflare.Website.Vite("Planner", {
       name: "effect-agent-travel-planner",
       domain: "travel.effect-agent.com",
-      routes: [{ pattern: "*-trip.effect-agent.com/*", zoneId }],
+      routes: [
+        { pattern: "agent.yielded.dev/travel*", zoneName: "yielded.dev" },
+        { pattern: "*-trip.effect-agent.com/*", zoneId },
+      ],
       workersDev: { enabled: false, previewsEnabled: false },
       rootDir: fileURLToPath(new URL(".", import.meta.url)),
       main: "src/worker.ts",

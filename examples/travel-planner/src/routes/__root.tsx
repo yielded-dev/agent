@@ -19,14 +19,14 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/svg+xml", href: "/travel/favicon.svg" },
     ],
   }),
   shellComponent: Document,
   notFoundComponent: () => (
     <main className="empty">
       <h1>This place is off the map.</h1>
-      <a href="/">Back to your trips</a>
+      <a href="/travel/">Back to your trips</a>
     </main>
   ),
 });

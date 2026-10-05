@@ -86,7 +86,7 @@ afterAll(async () => {
 const headers = (email: string) => ({ authorization: `Bearer ${token}`, "x-test-email": email });
 
 const rpcExit = async (tag: string, payload?: unknown, email = ownerEmail) => {
-  const response = await runtime.dispatchFetch("http://planner/api/rpc", {
+  const response = await runtime.dispatchFetch("http://planner/travel/api/rpc", {
     method: "POST",
     headers: { ...headers(email), "content-type": "application/ndjson" },
     body: `${JSON.stringify({ _tag: "Request", id: "1", tag, payload: payload ?? null, headers: [] })}\n`,

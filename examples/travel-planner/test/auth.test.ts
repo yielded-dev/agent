@@ -92,7 +92,7 @@ const makeClient = () => {
 
     headers.set("cookie", [...cookies].map(([k, v]) => `${k}=${v}`).join("; "));
 
-    const response = await mf.dispatchFetch(`https://planner.test${path}`, {
+    const response = await mf.dispatchFetch(`https://planner.test/travel${path}`, {
       ...init,
       redirect: "manual",
       headers: Object.fromEntries(headers),
@@ -189,7 +189,7 @@ const githubStart = async (client: ReturnType<typeof makeClient>) => {
   const started = Schema.decodeUnknownSync(OAuthSignInAuthorization)(
     await client.call("signIn", {
       provider: "github",
-      returnTarget: "/",
+      returnTarget: "/travel/",
     }),
   );
 
@@ -283,7 +283,7 @@ it("serves funding administration only to the verified owner and fences cross-or
       const start = Schema.decodeUnknownSync(OAuthSignInAuthorization)(
         await client.call("signIn", {
           provider: "github",
-          returnTarget: "/",
+          returnTarget: "/travel/",
         }),
       );
 

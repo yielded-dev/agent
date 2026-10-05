@@ -4,6 +4,8 @@ import { Atom } from "effect/reactivity";
 import { useEffect, useState } from "react";
 
 import {
+  loginTarget,
+  leaveLogin,
   consumeCallback,
   githubLogin,
   loginView,
@@ -14,8 +16,10 @@ import {
 
 export function Login({ callback = false }: { readonly callback?: boolean }) {
   const view = useAtomValue(loginView(callback));
+  const returnTarget = useAtomValue(loginTarget(callback));
   const startGithub = useAtomSet(githubLogin);
   const consume = useAtomSet(consumeCallback);
+  const leave = useAtomSet(leaveLogin);
   const requestCode = useAtomSet(requestEmailCode);
   const verifyCode = useAtomSet(verifyEmailCode);
   const [mode, setMode] = useState<"register" | "signin">("signin");
@@ -25,7 +29,15 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   useEffect(() => {
     if (callback) consume();
   }, [callback, consume]);
-  if (view._tag === "Authenticated") return <Navigate to="/" replace />;
+  useEffect(() => {
+    if (view._tag === "Authenticated") leave(view.returnTarget);
+  }, [view, leave]);
+  if (view._tag === "Authenticated")
+    return view.returnTarget === "/travel/" ? (
+      <Navigate to="/" replace />
+    ) : (
+      <LoginLoading step="session" />
+    );
   if (view._tag === "Loading") return <LoginLoading step={view.step} />;
 
   const { pending, busy } = view;
@@ -33,12 +45,12 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   return (
     <main className="login-page">
       <section className="login-card">
-        <a className="wordmark" href="/login">
+        <a className="wordmark" href="/travel/login">
           elsewhere<span>↗</span>
         </a>
         <h1>Your next trip starts here.</h1>
         <p>Plan somewhere wonderful. Bring your own OpenAI key to start a conversation.</p>
-        <button className="login-github" disabled={busy} onClick={() => startGithub()}>
+        <button className="login-github" disabled={busy} onClick={() => startGithub(returnTarget)}>
           Continue with GitHub
         </button>
         <div className="login-divider">or use your email</div>
@@ -46,7 +58,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              requestCode({ mode, email });
+              requestCode({ mode, email, returnTarget });
             }}
           >
             <div className="login-modes" aria-label="Email account action">
@@ -161,7 +173,7 @@ export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
   return (
     <main className="login-page">
       <section className="login-card login-loading" aria-labelledby="login-loading-title">
-        <a className="wordmark" href="/login">
+        <a className="wordmark" href="/travel/login">
           elsewhere<span>↗</span>
         </a>
         <div className="login-loading-content" role="status" aria-live="polite">

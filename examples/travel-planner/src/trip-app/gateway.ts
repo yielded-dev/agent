@@ -90,7 +90,7 @@ export const serveTripApp = Effect.fn("serveTripApp")(function* (
     const building = app.status === "building";
 
     return new Response(
-      `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${building ? '<meta http-equiv="refresh" content="5">' : ""}<title>Your trip app</title><style>body{margin:10vh auto;padding:24px;max-width:600px;font:18px system-ui;color:#30463a;background:#fbfbf7}a{color:inherit}</style></head><body><h1>${building ? "Your trip app is being built" : "This app needs a build"}</h1><p>${building ? "This page will open automatically when it is ready." : "Open your planner to review the build error and retry."}</p><a href="https://travel.effect-agent.com">Back to your planner</a></body></html>`,
+      `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${building ? '<meta http-equiv="refresh" content="5">' : ""}<title>Your trip app</title><style>body{margin:10vh auto;padding:24px;max-width:600px;font:18px system-ui;color:#30463a;background:#fbfbf7}a{color:inherit}</style></head><body><h1>${building ? "Your trip app is being built" : "This app needs a build"}</h1><p>${building ? "This page will open automatically when it is ready." : "Open your planner to review the build error and retry."}</p><a href="https://agent.yielded.dev/travel/">Back to your planner</a></body></html>`,
       {
         status: building ? 202 : 503,
         headers: secureHeaders(new Headers({ "content-type": "text/html; charset=utf-8" })),

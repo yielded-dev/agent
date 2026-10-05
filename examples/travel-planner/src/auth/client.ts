@@ -9,7 +9,7 @@ import { LoginApi } from "./contract";
 export const runtime = Atom.context();
 
 export const AppClient = Client.make(LoginApi, {
-  baseUrl: typeof location === "undefined" ? "https://travel.effect-agent.com" : location.origin,
+  baseUrl: typeof location === "undefined" ? "https://agent.yielded.dev" : location.origin,
 });
 
 export const auth = AuthAtom.make(AppClient, { runtime });
@@ -71,14 +71,37 @@ const browser = <A>(run: () => A) =>
   Effect.try({ try: run, catch: () => new BrowserFlowUnavailable() });
 
 const id = () => browser(() => crypto.randomUUID());
-const PendingGithub = Schema.fromJsonString(Schema.Struct({ flowId: Schema.NonEmptyString }));
+const ReturnTarget = Schema.Literals(["/travel/", "/browser-use/"]);
 
-const startGithub = Effect.gen(function* () {
+type ReturnTarget = typeof ReturnTarget.Type;
+
+const loginReturnTarget = (value: unknown): ReturnTarget =>
+  Schema.is(ReturnTarget)(value) ? value : "/travel/";
+
+const callbackReturnTarget = Atom.make<ReturnTarget>("/travel/");
+
+export const loginTarget = Atom.family((callback: boolean) =>
+  Atom.make((get) =>
+    callback
+      ? get(callbackReturnTarget)
+      : loginReturnTarget(
+          typeof window === "undefined"
+            ? null
+            : new URLSearchParams(window.location.search).get("return"),
+        ),
+  ).pipe(Atom.setIdleTTL(0)),
+);
+
+const PendingGithub = Schema.fromJsonString(
+  Schema.Struct({ flowId: Schema.NonEmptyString, returnTarget: ReturnTarget }),
+);
+
+const startGithub = Effect.fn("Login.startGithub")(function* (returnTarget: ReturnTarget) {
   const registry = yield* AtomRegistry.AtomRegistry;
 
   registry.set(auth.signIn, {
     provider: "github",
-    returnTarget: "/",
+    returnTarget,
   });
 
   const started = yield* AtomRegistry.getResult(registry, auth.signIn, { suspendOnWaiting: true });
@@ -86,14 +109,14 @@ const startGithub = Effect.gen(function* () {
   yield* browser(() =>
     sessionStorage.setItem(
       "elsewhere:github",
-      Schema.encodeSync(PendingGithub)({ flowId: started.flowId }),
+      Schema.encodeSync(PendingGithub)({ flowId: started.flowId, returnTarget }),
     ),
   );
   yield* browser(() => location.assign(Redacted.value(started.authorizationUrl)));
-}).pipe(Effect.withSpan("Login.startGithub"));
+});
 
-export const githubLogin = Atom.fn<void>()((_, get) =>
-  startGithub.pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
+export const githubLogin = Atom.fn<ReturnTarget>()((returnTarget, get) =>
+  startGithub(returnTarget).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
 ).pipe(Atom.setIdleTTL(0));
 
 // The Worker captures callback credentials in memory before loading page resources.
@@ -150,7 +173,9 @@ export const callbackInput = Effect.gen(function* () {
 // retain their own success or rejection while Auth replaces the private account registry.
 export const completeGithub = Atom.fn<void>()((_, get) =>
   Effect.gen(function* () {
-    const input = yield* callbackInput;
+    const { returnTarget, ...input } = yield* callbackInput;
+
+    get.set(callbackReturnTarget, returnTarget);
     const result = yield* get.setResult(auth.completeSignIn, input);
 
     if ("_tag" in result && result._tag === "RegistrationRequired") {
@@ -163,7 +188,7 @@ export const completeGithub = Atom.fn<void>()((_, get) =>
 
       if (registered._tag !== "RegistrationAccepted") return yield* new BrowserFlowUnavailable();
       // Accepted registration creates an account, not a session. Start a NEW authorized flow.
-      yield* startGithub;
+      yield* startGithub(returnTarget);
     }
 
     return result;
@@ -180,12 +205,16 @@ export const consumeCallback = Atom.fnSync<void>()((_, get) => {
 
 export type EmailPending = {
   readonly mode: "register" | "signin";
+  readonly returnTarget: ReturnTarget;
   readonly flowId: string;
   readonly email: string;
   readonly reference: typeof ProofReference.Encoded;
 };
 
-const sendSignInCode = Effect.fn("Login.sendSignInCode")(function* (email: string) {
+const sendSignInCode = Effect.fn("Login.sendSignInCode")(function* (
+  email: string,
+  returnTarget: ReturnTarget,
+) {
   const registry = yield* AtomRegistry.AtomRegistry;
   const flowId = yield* id();
 
@@ -196,7 +225,7 @@ const sendSignInCode = Effect.fn("Login.sendSignInCode")(function* (email: strin
     flowId,
     email,
     requestId: yield* id(),
-    returnTarget: "/",
+    returnTarget,
     locale: "en",
   });
 
@@ -204,17 +233,25 @@ const sendSignInCode = Effect.fn("Login.sendSignInCode")(function* (email: strin
     suspendOnWaiting: true,
   });
 
-  return { mode: "signin", flowId, email, reference: receipt.reference } satisfies EmailPending;
+  return {
+    mode: "signin",
+    flowId,
+    email,
+    returnTarget,
+    reference: receipt.reference,
+  } satisfies EmailPending;
 });
 
 export const requestEmailCode = Atom.fn<{
   readonly mode: "register" | "signin";
+  readonly returnTarget: ReturnTarget;
   readonly email: string;
 }>()((input, get) =>
   Effect.gen(function* () {
     const email = input.email.trim().toLowerCase();
+    const returnTarget = input.returnTarget;
 
-    if (input.mode === "signin") return yield* sendSignInCode(email);
+    if (input.mode === "signin") return yield* sendSignInCode(email, returnTarget);
     const flowId = yield* id();
 
     yield* get.setResult(auth.beginEmailRegistration, { flowId });
@@ -227,7 +264,13 @@ export const requestEmailCode = Atom.fn<{
       locale: "en",
     });
 
-    return { mode: "register", flowId, email, reference: receipt.reference } satisfies EmailPending;
+    return {
+      mode: "register",
+      flowId,
+      email,
+      returnTarget,
+      reference: receipt.reference,
+    } satisfies EmailPending;
   }).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
 ).pipe(Atom.setIdleTTL(0));
 
@@ -236,7 +279,7 @@ export const verifyEmailCode = Atom.fn<{
   readonly code: string;
 }>()((input, get) =>
   Effect.gen(function* () {
-    const { flowId, email, reference, mode } = input.pending;
+    const { flowId, email, reference, mode, returnTarget } = input.pending;
 
     if (mode === "register") {
       const base = { flowId, email, registration: { displayName: "Traveler" } };
@@ -255,9 +298,9 @@ export const verifyEmailCode = Atom.fn<{
 
       if (result._tag !== "RegistrationAccepted") return yield* new BrowserFlowUnavailable();
 
-      return yield* sendSignInCode(email);
+      return yield* sendSignInCode(email, returnTarget);
     }
-    const base = { flowId, email, returnTarget: "/" };
+    const base = { flowId, email, returnTarget };
 
     const verified = yield* get.setResult(auth.verifyEmailCode, {
       ...base,
@@ -276,7 +319,10 @@ export const verifyEmailCode = Atom.fn<{
 export type LoginLoadingStep = "session" | "github" | "callback";
 
 type LoginView =
-  | { readonly _tag: "Authenticated" }
+  | {
+      readonly _tag: "Authenticated";
+      readonly returnTarget: ReturnTarget;
+    }
   | { readonly _tag: "Loading"; readonly step: LoginLoadingStep }
   | {
       readonly _tag: "Form";
@@ -302,7 +348,11 @@ export const loginView = Atom.family((callback: boolean) =>
     const requested = get(requestEmailCode);
     const verified = get(verifyEmailCode);
 
-    if (AsyncResult.isSuccess(session) && session.value !== null) return { _tag: "Authenticated" };
+    if (AsyncResult.isSuccess(session) && session.value !== null)
+      return {
+        _tag: "Authenticated",
+        returnTarget: get(loginTarget(callback)),
+      };
 
     if (github.waiting || AsyncResult.isSuccess(github)) return { _tag: "Loading", step: "github" };
     if (
@@ -350,3 +400,8 @@ export const loginView = Atom.family((callback: boolean) =>
     };
   }).pipe(Atom.setIdleTTL(0)),
 );
+
+/** The browser lab is outside this router; internal returns stay client-side. */
+export const leaveLogin = Atom.fnSync<ReturnTarget>()((returnTarget) => {
+  if (returnTarget === "/browser-use/") window.location.replace(returnTarget);
+});

@@ -72,7 +72,7 @@ afterAll(async () => {
 });
 
 const rpc = async (tag: string, payload: unknown, email = "research@example.com") => {
-  const response = await runtime.dispatchFetch("http://planner/api/rpc", {
+  const response = await runtime.dispatchFetch("http://planner/travel/api/rpc", {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,

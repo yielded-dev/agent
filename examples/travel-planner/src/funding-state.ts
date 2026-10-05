@@ -11,7 +11,7 @@ export class FundingClient extends AtomHttpApi.Service<FundingClient>()(
   {
     api: FundingApi,
     runtime,
-    baseUrl: "",
+    baseUrl: "/travel",
     httpClient: FetchHttpClient.layer,
   },
 ) {}

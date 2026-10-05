@@ -134,7 +134,7 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
   const body = yield* Effect.promise(() => response.arrayBuffer());
 
   if (
-    new URL(request.url).pathname === "/auth/completeSignIn" &&
+    new URL(request.url).pathname === "/travel/auth/completeSignIn" &&
     response.status === 400 &&
     Option.isSome(rejectedCallback(new TextDecoder().decode(body)))
   )
