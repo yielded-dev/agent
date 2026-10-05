@@ -246,7 +246,10 @@ pins stay unchanged during
 versioning. Upgrade those consumers and their import paths separately after publication; otherwise the version task's
 install would request packages that have not been published yet.
 The project is in prerelease mode. Leaving it requires an explicit release decision and
-`vp run changeset pre exit`.
+`vp run changeset pre exit`. Inspect pending changes with
+`vp run changeset status`. Consumed beta notes live in `.changeset/pre/`;
+`pre.json` keeps only the prerelease mode and tag. Retain the archived notes
+for the stable release.
 
 Use `vp run changeset` to describe a consumer-visible change.
 Each push to `main` starts `.github/workflows/release.yml` updating the version PR alongside
@@ -294,7 +297,11 @@ proven ordinary source checks through the [release metadata proof](#release-meta
 The workflow uses the existing Effect Agent GitHub App to create and update it, so those pushes trigger
 PR CI. Keep the App's contents and pull-request write permissions enabled and configure
 the `EFFECT_AGENT_APP_ID` and `EFFECT_AGENT_APP_PRIVATE_KEY` repository secrets.
-The checkout disables persisted credentials so Changesets uses the App token.
+The checkout disables persisted credentials. The Changesets `version` and
+`publish` actions receive the App token through `github-token`; `select-mode`
+runs versioning for pending changesets and chooses publication only when there are
+no pending changesets. Only the publish
+job receives npm OIDC permission.
 
 After merge, Changesets handles registry version checks, publishing, package tags, and GitHub
 releases. CI transfers the exact validated package build to publication without repeating its
@@ -652,11 +659,11 @@ successful main CI -> publication: restore main build + reuse or rerun release g
 The supported delta is deliberately narrow: every public package in the single fixed group
 advances by one beta number, changelogs prepend the corresponding entry without rewriting history,
 and `bun.lock` changes only the matching workspace version fields. Manifests and the lockfile
-must otherwise remain byte-identical. Prerelease state must record all existing changeset IDs and
-initialize each newly included public package at its base version; mode, tag and existing initial
-versions stay fixed. Changeset files themselves, dependencies, exports, scripts, module type,
-source, tests, configuration and workflow policy cannot change. Stable releases, other prerelease
-transitions and unfamiliar layouts run ordinary CI.
+must otherwise remain byte-identical. Every pending changeset must move from
+`.changeset/` to `.changeset/pre/` with identical contents and file mode.
+Prerelease mode and tag, previously archived notes, dependencies, exports, scripts,
+module type, source, tests, configuration and workflow policy cannot change.
+Stable releases, other prerelease transitions and unfamiliar layouts run ordinary CI.
 
 The proof checks the current PR head and base, current `main`, the synthetic merge commit's exact
 two parents, and equality of the merge and head trees. It queries the latest base push run of
