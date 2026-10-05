@@ -18,7 +18,33 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/ai-anthropic",
+          "@effect/ai-openai",
+          "@effect/ai-openai-compat",
+          "@effect/ai-typesafe",
+          "@effect/platform-node/NodeHttpClient",
+          "@effect/sql-sqlite-do",
+          "effect/Arbitrary",
+          "effect/ai",
+          "effect/cli",
+          "effect/cluster",
+          "effect/encoding/Yaml#parse",
+          "effect/http",
+          "effect/http-api",
+          "effect/observability",
+          "effect/process",
+          "effect/reactivity",
+          "effect/rpc",
+          "effect/socket",
+          "effect/sql",
+          "effect/workflow"
+        ],
         "diagnosticSeverity": {
+          "unknownRuleName": "error",
+          "catchIfTagToCatchTag": "warning",
+          "catchRefailToTapError": "warning",
+          "flatMapIgnoredParamToAndThen": "warning",
           "allOfMapToForEach": "warning",
           "anyUnknownInErrorContext": "suggestion",
           "catchAllTagDispatchToCatchTag": "warning",
