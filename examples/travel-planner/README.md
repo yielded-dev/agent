@@ -10,9 +10,11 @@ only `/travel/` (the default) and `/browser-use/` are accepted return targets.
 Generated trip apps stay on `*-trip.effect-agent.com`, outside the session origin.
 
 `travel.effect-agent.com` redirects paths and queries to `/travel` with HTTP 301.
-Users must sign in again; accounts, threads, and funding grants remain in the same
-Worker and Durable Objects. Keep the `AUTH`/`AuthV1`/`PlannerAuth` and
-`ACCOUNT_THREADS`/`AccountThreadsV1`/`AccountPlannerThread` identities unchanged.
+Users must sign in again; accounts and funding grants remain in `AUTH`/`AuthV1`/`PlannerAuth`.
+Planner threads live in `PLANNER_THREADS`/`PlannerThreadsV2`/`PlannerThread`. Stores written
+before thread storage format 16 stay in the retired `ACCOUNT_THREADS`/`AccountThreadsV1`/
+`AccountPlannerThread` namespace, which current storage cannot open; it remains bound only so
+Cloudflare keeps that data. Keep all three identities unchanged: changing one deletes its data.
 The lab binds `PlannerAuth` on script `effect-agent-travel-planner`, instance
 `auth-v1`; `/_internal/session` and `/_internal/funding/<id>` remain private.
 

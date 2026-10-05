@@ -22,18 +22,22 @@ export { Sandbox } from "@cloudflare/sandbox";
 export { SiteBuild } from "./trip-app/build.ts";
 export { TripData } from "./trip-app/gateway.ts";
 
-export class AccountPlannerThread extends makeTravelPlannerThread(
+export class PlannerThread extends makeTravelPlannerThread(
   Layer.unwrap(
     Effect.map(WorkerEnvironment, (env) => artifactsLayer(env.ARTIFACTS, env.ARTIFACTS_GIT_BASE)),
   ),
 ) {}
+
+/** Retired: its stores use thread storage format 9, which current storage refuses to open.
+ * Exported only so Cloudflare keeps that data; nothing addresses it. */
+export class AccountPlannerThread extends PlannerThread {}
 
 declare global {
   namespace Cloudflare {
     interface Env extends AuthConfiguration, CredentialEnvironment {
       AUTH: DurableObjectNamespace<PlannerAuth>;
       AUTH_EMAIL: SendEmail;
-      ACCOUNT_THREADS: DurableObjectNamespace<AccountPlannerThread>;
+      PLANNER_THREADS: DurableObjectNamespace<PlannerThread>;
       ARTIFACTS: Artifacts;
       ARTIFACTS_GIT_BASE: string;
       ASSETS?: Fetcher;
@@ -305,7 +309,7 @@ export const handleRequest = (verify = authenticate) =>
           const owner = yield* plannerOwner(identity.session.subjectId);
 
           return yield* Effect.promise(async () => {
-            using response = await env.ACCOUNT_THREADS.getByName(owner).plannerFetch(bounded);
+            using response = await env.PLANNER_THREADS.getByName(owner).plannerFetch(bounded);
             const headers = new Headers(response.headers);
 
             headers.set("cache-control", "no-store");

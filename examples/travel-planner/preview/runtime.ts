@@ -87,7 +87,7 @@ export const localPreview = Effect.fn("localPreview")(function* (
                 bindings,
                 durableObjects: {
                   AUTH: { className: "PlannerAuth", useSQLite: true },
-                  ACCOUNT_THREADS: {
+                  PLANNER_THREADS: {
                     className: "TravelPlannerThread",
                     scriptName: "preview-planner",
                     useSQLite: true,
@@ -112,7 +112,7 @@ export const localPreview = Effect.fn("localPreview")(function* (
                 compatibilityFlags: ["nodejs_compat"],
                 bindings,
                 durableObjects: {
-                  ACCOUNT_THREADS: { className: "TravelPlannerThread", useSQLite: true },
+                  PLANNER_THREADS: { className: "TravelPlannerThread", useSQLite: true },
                   AUTH: { className: "PlannerAuth", scriptName: "preview-ui", useSQLite: true },
                 },
                 r2Buckets: ["APP_BUILDS"],

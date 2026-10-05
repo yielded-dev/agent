@@ -39,7 +39,7 @@ const makeRuntime = () =>
         BYOK_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       },
       r2Buckets: ["APP_BUILDS"],
-      durableObjects: { ACCOUNT_THREADS: { className: "TravelPlannerThread", useSQLite: true } },
+      durableObjects: { PLANNER_THREADS: { className: "TravelPlannerThread", useSQLite: true } },
       resourcePersistencePath: directory,
       outboundService: async (request) => {
         expect(request.url).toBe("https://api.openai.com/v1/models");

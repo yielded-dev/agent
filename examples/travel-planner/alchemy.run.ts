@@ -58,8 +58,12 @@ export default Alchemy.Stack(
       env: {
         ...(Redacted.value(serverOpenAiKey) ? { SERVER_OPENAI_KEY: serverOpenAiKey } : {}),
         // Alchemy keys env-bound Objects by the binding name, overriding the
-        // declaration ID. Change both binding and class for this clean start.
-        // Keep both stable after release; changing them deletes account data.
+        // declaration ID. Keep each binding and class stable; changing one deletes its data.
+        PLANNER_THREADS: Cloudflare.DurableObject("PlannerThreadsV2", {
+          className: "PlannerThread",
+        }),
+        // Retired stores in thread storage format 9, which current storage cannot open. The
+        // binding only keeps Cloudflare from deleting them; nothing reads it.
         ACCOUNT_THREADS: Cloudflare.DurableObject("AccountThreadsV1", {
           className: "AccountPlannerThread",
         }),

@@ -109,7 +109,7 @@ export const plannerWorker = Effect.fn("plannerWorker")(
     const env = yield* WorkerEnvironment;
 
     const reply = yield* Effect.tryPromise({
-      try: () => env.ACCOUNT_THREADS.getByName(input.workerId).plannerWorkerStatus(request),
+      try: () => env.PLANNER_THREADS.getByName(input.workerId).plannerWorkerStatus(request),
       catch: unavailable,
     });
 

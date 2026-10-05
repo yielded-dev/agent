@@ -17,7 +17,7 @@ export interface CredentialBindings extends CredentialEnvironment {
       readonly fetch: (request: Request) => Promise<Response>;
     };
   };
-  readonly ACCOUNT_THREADS: {
+  readonly PLANNER_THREADS: {
     readonly getByName: (owner: string) => {
       readonly modelCredential: () => Promise<string>;
     };
@@ -93,7 +93,7 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
       }).pipe(Effect.timeout("10 seconds"), Effect.mapError(unavailable)),
     stored: (owner) =>
       Effect.tryPromise({
-        try: () => env.ACCOUNT_THREADS.getByName(owner).modelCredential(),
+        try: () => env.PLANNER_THREADS.getByName(owner).modelCredential(),
         catch: unavailable,
       }).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(StoredCredential))),
