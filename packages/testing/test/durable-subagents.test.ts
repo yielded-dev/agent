@@ -811,6 +811,19 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const unavailable = ThreadStore.of({
           ...store,
+          readIdentity: (request) =>
+            request.threadId !== childThread
+              ? store.readIdentity(request)
+              : Effect.suspend(() => {
+                  childReads++;
+
+                  return Effect.fail(
+                    ThreadStoreError.make({
+                      operation: "read child history",
+                      message: "private child history is unavailable",
+                    }),
+                  );
+                }),
           read: (request) =>
             request.threadId !== childThread
               ? store.read(request)
@@ -923,7 +936,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         const result = yield* Effect.exit(hostileRuntime.processThreadResolved(parent.threadId));
 
         // A declaration contradicting the canonical child request cannot authorize admission.
-        expect(failureTag(result)).toBe("RunJournalError");
+        expect(failureTag(result)).toBe("ThreadStoreError");
         expect(yield* readLog(parent.threadId)).toEqual(before);
         expect(yield* harness.childInvocations).toBe(0);
       }

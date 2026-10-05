@@ -144,6 +144,7 @@ const compareMessageIds = (left: string, right: string): number => {
   const b = new TextEncoder().encode(right);
 
   for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- i is bounded by both byte-array lengths
     if (a[i] !== b[i]) return a[i]! - b[i]!;
   }
 

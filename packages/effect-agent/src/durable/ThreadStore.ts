@@ -18,6 +18,7 @@ import {
   ProducerId,
   RecordEnvelope,
   RecordId,
+  RecordJson,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import {
@@ -189,6 +190,7 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
 }) {}
 
 const encodeAppend = Schema.encodeSync(FencedAppendRequest);
+const validateRecordJson = Schema.decodeSync(RecordJson);
 const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
 
 /** Own only lifecycle graphs consumed after SQL INSERT suspension; keep Schema/Duration prototypes. */
@@ -237,7 +239,7 @@ const capturePayload = (payload: CanonicalRecordPayload): CanonicalRecordPayload
 
 /**
  * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
- * is serialized once and shared by the digest, batch and record rows. Owned shallow metadata
+ * is shared by the digest, batch and record rows. Owned shallow metadata
  * keeps row identities and authority stable; lifecycle payloads are detached where storage
  * consumes them after suspension. Other nested typed values retain their readonly contract:
  * adapters persist the captured strings rather than reconstructing bytes from those values.
@@ -263,7 +265,11 @@ export const PreparedAppend = {
       return Effect.try({
         try: () => {
           const encoded = encodeAppend(input);
-          const recordJson = encoded.batch.records.map(canonicalJson);
+
+          const recordJson = encoded.batch.records.map((record) =>
+            canonicalJson(validateRecordJson(record)),
+          );
+
           const batchJson = `{"batchId":${JSON.stringify(encoded.batch.batchId)},"producerId":${JSON.stringify(encoded.batch.producerId)},"records":[${recordJson.join(",")}]}`;
 
           const captureRecord = (record: RecordEnvelope) =>
@@ -355,6 +361,24 @@ export class ThreadRead extends Schema.Class<ThreadRead>("@effect-agent/thread/T
 export const ThreadSelection = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("RecordId"), recordId: RecordId }),
   Schema.Struct({ _tag: Schema.Literal("RunInput"), runId: RunId }),
+  /** Canonical progress lookup. An absent locator never authorizes full-history fallback. */
+  Schema.Struct({
+    _tag: Schema.Literal("RunContinuation"),
+    runId: RunId,
+    throughSequence: CanonicalSequence,
+  }),
+  /** Only the selected Run's facts; unrelated Thread traffic cannot enlarge its suffix. */
+  Schema.Struct({
+    _tag: Schema.Literal("RunEvidence"),
+    runId: RunId,
+    submissionId: SubmissionId,
+    throughSequence: CanonicalSequence,
+  }),
+  /** Canonical creation/handoff intents retained independently of Run settlement. */
+  Schema.Struct({
+    _tag: Schema.Literal("WorkHandoffs"),
+    throughSequence: CanonicalSequence,
+  }),
   Schema.Struct({
     _tag: Schema.Literal("WorkerExecution"),
     expectedTailSequence: CanonicalSequence,
@@ -526,8 +550,7 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
 /**
  * A disposable projection snapshot. Adapters bind its sequence and digest to the canonical
  * log; consumers decode `state` and decide projection compatibility before suffix replay.
- * Legacy metadata is optional for application projections and preserved when supplied.
- * Runtime-owned recovery checkpoints populate and compare it before using cached state.
+ * Run recovery uses canonical continuations independently of these application snapshots.
  */
 export class ThreadCheckpoint extends Schema.Class<ThreadCheckpoint>(
   "@effect-agent/thread/ThreadCheckpoint",
@@ -536,14 +559,6 @@ export class ThreadCheckpoint extends Schema.Class<ThreadCheckpoint>(
   threadId: ThreadId,
   throughSequence: CanonicalSequence,
   tailDigest: Digest,
-  /** @deprecated For application projections; retained for existing data and runtime recovery. */
-  engineVersion: Schema.optionalKey(Schema.NonEmptyString),
-  /** @deprecated For application projections; retained for existing data and runtime recovery. */
-  agentDefinitionDigest: Schema.optionalKey(Digest),
-  /** @deprecated For application projections; retained for existing data and runtime recovery. */
-  modelDigest: Schema.optionalKey(Digest),
-  /** @deprecated For application projections; retained for existing data and runtime recovery. */
-  toolDigest: Schema.optionalKey(Digest),
   state: PersistedJson,
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
@@ -552,14 +567,6 @@ export class SaveCheckpointRequest extends Schema.Class<SaveCheckpointRequest>(
   "@effect-agent/thread/SaveCheckpointRequest",
 )({
   checkpoint: ThreadCheckpoint,
-}) {}
-
-/** Replace the disposable recovery view only under the current canonical producer fence. */
-export class SaveRecoveryCheckpointRequest extends Schema.Class<SaveRecoveryCheckpointRequest>(
-  "@effect-agent/thread/SaveRecoveryCheckpointRequest",
-)({
-  checkpoint: ThreadCheckpoint,
-  producerEpoch: ProducerEpoch,
 }) {}
 
 export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
@@ -646,24 +653,6 @@ export interface ThreadCheckpoints {
   >;
 }
 
-/**
- * Optional latest-only recovery cache, independent of application projection checkpoints.
- * Saves atomically validate the producer epoch and canonical batch tail. An older snapshot
- * cannot replace a newer one; equal-tail replacement repairs disposable state. Invalid cached
- * data fails with CheckpointRejected, while infrastructure failures remain ThreadStoreError.
- * Loading at an earlier tail or outside the adapter's cache locality may return none so callers
- * can replay canonical records. Canonical records and the ledger remain authority.
- */
-export interface ThreadRecoveryCheckpoints {
-  readonly save: (
-    request: SaveRecoveryCheckpointRequest,
-  ) => Effect.Effect<
-    void,
-    ThreadStoreError | ThreadNotMaterialized | CheckpointRejected | FenceRejected
-  >;
-  readonly load: ThreadCheckpoints["load"];
-}
-
 export class ThreadStore extends Context.Service<
   ThreadStore,
   {
@@ -694,7 +683,6 @@ export class ThreadStore extends Context.Service<
     ) => Effect.Effect<ThreadIdentity, ThreadStoreError | ThreadNotMaterialized>;
     /** Absent when this adapter does not support disposable checkpoints. */
     readonly checkpoints?: ThreadCheckpoints | undefined;
-    readonly recoveryCheckpoints?: ThreadRecoveryCheckpoints | undefined;
     /** Indexed scalar count; unsupported adapters fail closed at the caller. */
     readonly countPeerMessages?:
       | ((

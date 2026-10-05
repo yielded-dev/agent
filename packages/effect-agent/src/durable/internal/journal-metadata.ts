@@ -4,12 +4,10 @@ import {
   type CompactionCreated,
   type ToolCallSettled,
 } from "../Records.ts";
-import { type JournalCheckpointSeed } from "./journal-checkpoint.ts";
 
-/** Metadata for one exact canonical prefix, including the same optional checkpoint seed. */
+/** Metadata for one exact canonical prefix, including the exact selected Run evidence. */
 export interface JournalMetadata {
   readonly ownerRunId: RunId | undefined;
-  readonly seed: JournalCheckpointSeed | undefined;
   readonly firstSequenceByRun: ReadonlyMap<string, number>;
   readonly lastResponseSequenceByRun: ReadonlyMap<string, number>;
   readonly terminalSequenceByRun: ReadonlyMap<string, number>;
@@ -34,13 +32,9 @@ export interface JournalMetadata {
  * including records omitted from the control view. A snapshot is independent of later suffix
  * additions and may only accompany a replay stream bounded at that same captured tail.
  */
-export const makeJournalMetadata = (
-  ownerRunId: RunId | undefined,
-  seed?: JournalCheckpointSeed,
-) => {
+export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
   const firstSequenceByRun = new Map<string, number>();
 
-  if (seed?.firstSequence !== undefined) firstSequenceByRun.set(seed.runId, seed.firstSequence);
   const lastResponseSequenceByRun = new Map<string, number>();
   const terminalSequenceByRun = new Map<string, number>();
 
@@ -101,7 +95,6 @@ export const makeJournalMetadata = (
     },
     snapshot: (): JournalMetadata => ({
       ownerRunId,
-      seed,
       firstSequenceByRun: new Map(firstSequenceByRun),
       lastResponseSequenceByRun: new Map(lastResponseSequenceByRun),
       terminalSequenceByRun: new Map(terminalSequenceByRun),

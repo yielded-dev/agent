@@ -29,35 +29,24 @@ must run the generic checkpoint conformance suite. Retained-history execution do
 A new `ThreadCheckpoint` needs only `schemaVersion`, `threadId`,
 `throughSequence`, `tailDigest`, `state`, and `createdAt`. Adapters bind the sequence and digest
 to a canonical batch tail; consumers decode `state` and decide whether its projection version
-supports suffix replay. `ThreadProjection` retains version 2 and rejects older snapshots so
+supports suffix replay. `ThreadProjection` uses version 3 and rejects older snapshots so
 consumers can rebuild from canonical records.
 
-The optional `engineVersion`, `agentDefinitionDigest`, `modelDigest`, and `toolDigest` fields are
-deprecated for application projections; adapters retain them without interpreting them. Supplied
-values remain validated and survive decoding and encoding, including historical checkpoint
-load/save. SQLite and Cloudflare retain immutable byte comparisons for generic projection
-checkpoints: changing or removing metadata from an existing checkpoint can conflict.
+Canonical execution progress is separate from application checkpoints. Implement native
+`RunContinuation` reads for the newest owner record at or before a captured tail, bounded sorted
+`RunEvidence` pages, and retained `WorkHandoffs` pages. Publish their indexes with the canonical
+facts under the same epoch, expected-tail, and idempotency checks. Exact evidence references use
+logical record identities and content digests; physical storage layout cannot change their meaning.
 
-The separate optional `ThreadStore.recoveryCheckpoints` capability stores one latest recovery
-snapshot per Thread. The runtime populates and compares all four metadata fields in this
-slot; absent or incompatible metadata falls back to canonical replay.
-`SaveRecoveryCheckpointRequest` carries the checkpoint and producer epoch.
-In one transaction, validate epoch equality and the canonical batch tail sequence and digest,
-then replace the cached value. An older snapshot must not replace a newer one; equal-tail
-replacement permits repair. Keep generic projection checkpoints independent of this slot.
+An append containing progress must reject conflicting revisions, changed original references,
+regressed accounting, or a frontier outside the same batch before writing. Preparations stay
+indexed after Run settlement; destination acknowledgement owns closure. An index grants no
+execution authority, and missing required evidence is a typed fault, not an empty completed Run.
+See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-Decode stored recovery checkpoints and verify their canonical binding on load. Invalid cache data
-returns `CheckpointRejected`; infrastructure failures remain `ThreadStoreError`. A lookup before
-the latest checkpoint may return no checkpoint. The runtime validates its versioned continuation
-state and falls back to canonical replay when the cache is absent or incompatible. Neither a
-checkpoint nor an evidence index grants ownership or replaces canonical tool and Durable Step
-evidence. See [recovery checkpoints](/concepts/durability/#recovery-checkpoints) for eligibility
-and suffix bounds.
-
-Test recovery checkpoint replacement, stale producers, corruption, absence, and reopen after failure,
-interruption, and timeout. Persistent format upgrades must preserve supported stored data in one
-transaction, advance the version marker last, and refuse unsupported or ambiguous layouts without
-resetting them.
+This unreleased format accepts only fresh layout-18 storage and `effect-agent/thread@2` archives.
+Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
+rejected store; there is no layout upgrade or historical record decoder.
 
 The supplied adapters and `ThreadExport` support 131,072 canonical records per Thread. Keep each
 `ThreadRead` page at or below 1,024 records and each `CanonicalBatch` at or below 256. An export

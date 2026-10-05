@@ -475,23 +475,17 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 
 ### Adopting these contracts
 
-Table layout and record meaning have independent versions. SQLite, PostgreSQL, and Cloudflare
-open fresh storage or layouts 16–17 with record format `effect-agent/thread@1`. Opening layout 16
-adds the separate headers in one transaction without rewriting payloads. Newer layouts, unsupported
-record formats, and ambiguous schemas fail acquisition.
+Table layout and record meaning have independent versions. The unreleased execution protocol
+uses fresh layout-18 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
+Cloudflare. Opening predecessor or ambiguous stores fails before DDL or payload mutation. Keep
+them with their matching release; this protocol has no historical decoder, layout upgrade,
+archive converter, or mixed-format runtime.
 
-For the layout-16 cutover or a backup restore, quiesce the source, retain a backup, export each
-Thread, and import it into an empty destination Thread. Both layouts use record format
-`effect-agent/thread@1`, so this cutover preserves the records and tail digest. `ThreadStore.export`
-supplies the archive and the local `ThreadImport` service installs it. Each adapter also provides
-`exportThread` to read layout 16 without acquiring execution authority or upgrading its layout.
-`reencodeThread(source)` composes the export Effect with the destination `ThreadImport` service
-provided through its Effect environment. Switch the host only after checking the imported tail
-and resuming retained work with its original Agent bindings.
-
-Readers and importers accept only the current record format. A future change to record meaning
-requires a release-specific one-time archive conversion before import; the runtime carries no
-historical decoders or automatic upgrade hooks. Export with the source release before that cutover.
+For a same-format backup restore, quiesce the source, retain a backup, export each Thread, and
+import into an empty destination Thread. `ThreadStore.export` supplies the archive and the local
+`ThreadImport` service installs it. `reencodeThread(source)` composes these operations through its
+Effect environment. Check the imported tail before resuming accepted work under current compatible
+Bindings. This format stays unreleased until work discovery and long-history storage are complete.
 
 For SQLite, the repository admin CLI uses the same operations:
 
@@ -513,7 +507,7 @@ SQL imports reject identities that exceed the destination row schemas and values
 byte limit, including queued inputs and accepted commands, before acquiring the writer.
 
 Execution ownership is never transferred. Ledger state is rebuilt from the log, projections
-replay, and both checkpoint caches start empty. Unresolved ordinary tool effects in an unfinished
+replay, canonical continuation indexes rebuild, and application checkpoints start empty. Unresolved ordinary tool effects in an unfinished
 Run remain Unknown; settled submissions do not acquire new pending work.
 
 Single-Thread archives mark retained child, worker or message-delivery obligations owned by other
@@ -527,22 +521,14 @@ Keep the source when validation fails. Import never replaces a nonempty Thread o
 Submission, Receipt, or Thread/principal/idempotency key in the destination ledger. Reusing a
 principal/idempotency key in another Thread is valid.
 
-Cloudflare's separate Schedule and Subscription stores still upgrade supported version 2 layouts to
-version 3. Each upgrade runs in one native transaction and advances its version marker last;
-interruption retries the uncommitted upgrade. Unsupported layouts or invalid retained values fail
-without committing a partial conversion. Preserve the original store if an upgrade fails.
+Cloudflare's separate Schedule and Subscription stores use their current fresh layouts and reject
+predecessor schemas without mutation. Their retained input and destination ownership remain
+independent of canonical Run progress.
 
-For these upgrades, subscription configurations become revision 1 and remain pinned for already
-selected deliveries. Retained retry counts become the initial generation's automatic attempt count.
-Existing runnable work stays runnable; its next failure applies the current retry cap. No admission
-group or fence is inferred. Missing historical occurrence and settlement timestamps remain absent;
-replay returns the retained event and receipt, and retention keeps history of unknown age.
-
-Application projection checkpoints may omit compatibility metadata; consumers must validate their
-state with Schema. Runtime recovery checkpoints retain and check their metadata, and incompatible
-cache state falls back to canonical history. `verifyOnOpen` audits canonical history and application
-projection checkpoints; recovery caches are validated when loaded. See
-[recovery checkpoints](/concepts/durability/#recovery-checkpoints).
+Application checkpoint consumers validate their own Schema. `verifyOnOpen` audits canonical history
+and application projections. Canonical continuation references, revisions, and original context are
+validated before import and recovery; missing or corrupt progress leaves work owed. See
+[Run continuations](/concepts/durability/#run-continuations).
 
 Keep the source versions and input bindings needed to finish retained deliveries. Register the
 current binding for each stable Agent ID; unfinished operations retain their original replay

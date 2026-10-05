@@ -277,7 +277,7 @@ eviction beyond replacement.
 
 The runtime records the actual request exposure with each canonical model response and each
 successful selection with its tool settlement, before result truncation. `ToolCallSucceeded`
-also carries `toolSelection`. Durable recovery, compaction and checkpoints restore this metadata
+also carries `toolSelection`. Durable recovery and compaction restore this canonical metadata
 without searching again for a committed result. A crash before a result is committed follows the
 ordinary readonly recovery contract. Resumed calls retain their original exposure and recheck
 current eligibility before unfinished handlers run; already settled siblings remain canonical.

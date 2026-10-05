@@ -6,7 +6,7 @@ import {
   SqlLifecycleRetainer,
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { makeProgressAppendValidation } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   LifecyclePublicationFact,
@@ -14,14 +14,8 @@ import {
 } from "@yielded/agent/lifecycle-publication";
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import {
-  MAX_THREAD_EXPORT_RECORDS,
-  CheckpointRejected,
-  FenceRejected,
-  ThreadNotMaterialized,
-  ThreadStoreDiagnostic,
-  type SaveRecoveryCheckpointRequest,
-} from "@yielded/agent/thread-store";
+import type { ThreadStoreError } from "@yielded/agent/thread-store";
+import { MAX_THREAD_EXPORT_RECORDS, ThreadStoreDiagnostic } from "@yielded/agent/thread-store";
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
@@ -193,13 +187,6 @@ class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
   through_sequence: CanonicalSequence,
 }) {}
 
-const recoveryRows = ownedRows(
-  CheckpointRow,
-  "effect_agent_recovery_checkpoints",
-  (row) => row.thread_id,
-  "thread_id",
-);
-
 const LifecycleCursorRow = Schema.Struct({
   thread_id: BoundedIdentifier,
   through_sequence: CanonicalSequence,
@@ -243,6 +230,7 @@ export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
 }) {}
 
 type AppendError =
+  | ThreadStoreError
   | DoAppendConflict
   | DoFenceRejected
   | DoStorageCorruptionError
@@ -384,8 +372,12 @@ const makeJournal = (
   Effect.gen(function* () {
     const owner = (yield* SqlStorageOwner) ?? state;
     const progress = yield* SqlStorageProgress;
+
+    const validateProgress = yield* makeProgressAppendValidation().pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+    );
+
     const threads = threadRows(state, sql);
-    const recovery = recoveryRows(state, sql);
     const cursors = lifecycleCursorRows(state, sql);
     let records = recordCaches.get(state);
 
@@ -762,6 +754,7 @@ const makeJournal = (
         ),
       );
 
+      yield* validateProgress(request);
       yield* sql`
           INSERT INTO effect_agent_canonical_batches (
             thread_id,
@@ -1108,80 +1101,6 @@ const makeJournal = (
       );
     });
 
-    const saveRecoveryCheckpoint = Effect.fnUntraced(function* (
-      request: SaveRecoveryCheckpointRequest,
-      checkpointJson: string,
-    ) {
-      const { checkpoint } = request;
-
-      if (checkpoint.threadId.length > MAX_IDENTIFIER_LENGTH) {
-        return yield* DoStorageError.make({
-          operation: "save recovery checkpoint",
-          message: "Checkpoint identity exceeds the Durable Object storage bounds.",
-        });
-      }
-      yield* checkValueBound("save recovery checkpoint", checkpointJson);
-      // Keep injected waits outside the storage-backed transaction callback.
-      yield* failpoint("save-recovery-checkpoint:before");
-      yield* withWriteTransaction("recovery checkpoint transaction")(
-        Effect.gen(function* () {
-          const threads = yield* getThread(checkpoint.threadId);
-          const thread = threads[0];
-
-          if (thread === undefined)
-            return yield* ThreadNotMaterialized.make({ threadId: checkpoint.threadId });
-          if (request.producerEpoch !== thread.producer_epoch)
-            return yield* FenceRejected.make({
-              threadId: checkpoint.threadId,
-              actualEpoch: thread.producer_epoch,
-              attemptedEpoch: request.producerEpoch,
-            });
-          if (checkpoint.throughSequence > thread.tail_sequence)
-            return yield* CheckpointRejected.make({
-              threadId: checkpoint.threadId,
-              reason: "ahead-of-tail",
-            });
-
-          const digests =
-            checkpoint.throughSequence === 0
-              ? [EMPTY_TAIL_DIGEST]
-              : yield* getTailDigestAt(checkpoint.threadId, checkpoint.throughSequence);
-
-          if (digests.length !== 1 || digests[0] !== checkpoint.tailDigest)
-            return yield* CheckpointRejected.make({
-              threadId: checkpoint.threadId,
-              reason: "digest-mismatch",
-            });
-
-          yield* sql`
-          INSERT INTO effect_agent_recovery_checkpoints (thread_id, through_sequence, tail_digest, checkpoint_json)
-          VALUES (${checkpoint.threadId}, ${checkpoint.throughSequence}, ${checkpoint.tailDigest}, ${checkpointJson})
-          ON CONFLICT (thread_id) DO UPDATE SET
-            through_sequence = excluded.through_sequence,
-            tail_digest = excluded.tail_digest,
-            checkpoint_json = excluded.checkpoint_json
-          WHERE excluded.through_sequence >= effect_agent_recovery_checkpoints.through_sequence
-          RETURNING *
-        `.pipe(
-            recovery.write,
-            Effect.mapError((error) =>
-              error._tag === "SqlError" ? storageError("save recovery checkpoint")(error) : error,
-            ),
-          );
-        }),
-      );
-      yield* failpoint("save-recovery-checkpoint:after");
-    });
-
-    const loadRecoveryCheckpoint = (threadId: string) =>
-      recovery
-        .by("thread_id", threadId)
-        .pipe(
-          Effect.mapError((error) =>
-            error._tag === "SqlError" ? storageError("load recovery checkpoint")(error) : error,
-          ),
-        );
-
     const loadCheckpoint = Effect.fnUntraced(function* (
       threadId: string,
       atOrBeforeSequence: CanonicalSequence,
@@ -1517,8 +1436,6 @@ const makeJournal = (
       hasRecord,
       getTailDigestAt,
       loadCheckpoint,
-      loadRecoveryCheckpoint,
-      saveRecoveryCheckpoint,
       materialize,
       read: (request: RawReadRequest) => state.read(read(request)),
       saveCheckpoint,

@@ -203,7 +203,7 @@ completion or failure, and repairs. Partial tool argument deltas and live queue 
 
 `PersistentHistory.layer` appends `UserInputRecorded`, `ModelCompleted`, and `RunCompleted` together.
 Durable execution records each turn and tool result separately for recovery. It can resume from a
-[disposable recovery checkpoint](/concepts/durability/#recovery-checkpoints) plus a bounded suffix;
+[canonical Run continuation](/concepts/durability/#run-continuations) and bounded exact Run evidence;
 retained-history execution still loads the complete export.
 
 `ThreadStore.read` returns at most 1,024 records per request, and each atomic `CanonicalBatch`

@@ -29,7 +29,6 @@
     "./sql-thread-native-reads": "./src/SqlThreadNativeReads.ts",
     "./sql-message-delivery-store": "./src/SqlMessageDeliveryStore.ts",
     "./sql-subscription-store": "./src/SqlSubscriptionStore.ts",
-    "./sql-storage-v2-upgrade": "./src/SqlStorageV2Upgrade.ts",
     "./sql-lifecycle-publication": "./src/SqlLifecyclePublication.ts",
     "./sql-storage-progress": "./src/SqlStorageProgress.ts",
     "./sql-thread-import": "./src/SqlThreadImport.ts"

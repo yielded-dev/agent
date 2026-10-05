@@ -157,7 +157,7 @@ or paid execution is configured here.
 | Prompt history            | A small answer with 64 KiB or 1 MiB of prior text. History creation occurs before timing.                                                                                                                                                                                                                                                                          |
 | Parallel tools and rounds | Eight 2 ms tools per round, concurrency four, one or four rounds. Subsequent normalized provider requests must contain every successful result. Actual overlap, call bounds, and finalizers are checked.                                                                                                                                                           |
 | Fresh durable submission  | A new Submission after 0/256/2,048 retained canonical records in a file-backed SQLite database. Each sample creates its own database; setup/seeding is excluded. Timing includes reopening the full Node durable runtime, admission, execution, and settlement.                                                                                                    |
-| Checkpoint recovery       | Persist a native rollover checkpoint, inject the public after-save fault, close the runtime, and reopen the same file. Measure resuming that same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                                        |
+| Run recovery              | Commit a native rollover and canonical continuation, inject the public after-append fault, close the runtime, and reopen the same file. Measure resuming the same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                        |
 | Settled ledger            | Seed settled adapter rows in a separate lane without growing canonical history. Measure reopening the Node runtime, fresh admission, a full public nonterminal scan, execution, and settlement. The scan must return only the new Submission. Seed construction uses each revision’s public settlement protocol and retains one canonical settlement per seed row. |
 
 Retained-history seeds contain ThreadCreated followed by complete input/model/completion triples
@@ -165,20 +165,20 @@ matching the immediate PersistentHistory format, with shared Run identities and 
 user/assistant message suffixes. At most two RepairAnnotated records pad the requested exact
 record count. These are adapter fixtures of completed retained Runs, with no outstanding seed
 Submissions. The provider callback must receive every seeded question and answer before fresh
-inference; checkpoint resume must receive the handoff without retired history. The separate
+inference; Run resume must receive the handoff without retired history. The separate
 64 KiB/1 MiB prompt cases assert their exact history text at the same callback. Each measured
 durable completion must have one new canonical RunCompleted with the exact output and retain
 the entire original archive. Seed writes use the adapters' normal public
 operations and existing failpoints. The benchmark introduces no persisted format or migration.
 SQLite uses the production Node assembly and its default scheduling, lease, and durability
-configuration; checkpoint cases additionally install the documented host rollover preparation.
+configuration; recovery cases additionally install the documented host rollover preparation.
 Database teardown and evidence reads are outside the warm-operation interval.
 
-Fixture `runtime-v4` builds worker-local seed templates through those same public adapter
+Fixture `runtime-v5` builds worker-local seed templates through those same public adapter
 operations, once per history/ledger size and revision. It closes the full seed runtime and rejects
 any remaining WAL or SHM sidecar before copying the database to each sample's fresh directory.
-Copies share no mutable database state. Fresh submission and checkpoint recovery can reuse the
-same retained-history seed; every recovery sample still constructs and saves its own checkpoint,
+Copies share no mutable database state. Fresh submission and Run recovery can reuse the
+same retained-history seed; every recovery sample still commits its own rollover and progress,
 injects the fault, closes the runtime, and resumes its own Submission. Templates are discarded
 when the worker closes and never cross a cohort or revision. This removes repeated fixture setup;
 it does not measure or change the cost of production mutations.
@@ -192,12 +192,12 @@ normalized provider callback. It does not use ModelStarted events. `totalMs` end
 completion or durable settlement; it includes the operation's correctness checks where those
 checks are inline. Every sample uses a new finite script, verifies exhaustion, and counts model
 stream finalizers. The first recovery attempt is verified before its counters are reset.
-If that attempt misses the expected checkpoint fault, its diagnostic includes bounded returned
-settlement outcomes/failures and the observed compaction/checkpoint phase. A successful worker
+If that attempt misses the expected recovery fault, its diagnostic includes bounded returned
+settlement outcomes/failures and the observed compaction phase. A successful worker
 Effect can return a failed settlement; it does not by itself prove a successful Attempt.
-`checkpointCreationMs` separately measures native checkpoint construction and persistence from
-`compaction:after-canonical-append` through `checkpoint:after-save`, before injecting the fault.
-It includes checkpoint scans/encoding/save but excludes the already committed compaction append
+`compactionCommitMs` measures the atomic compaction and progress publication from
+`compaction:before-canonical-append` through `compaction:after-canonical-append`, before the fault.
+It includes the original compaction fact, continuation preparation and their shared append
 and is never added to the later recovery interval. Raw samples include observed retained prompt
 message counts. Incomplete or mismatched-runtime batches are explicitly reported and excluded
 from comparison summaries.
@@ -224,7 +224,7 @@ own installation. Reports identify exact commits, dirty state, lockfile hashes, 
 hashes, fixture hash/version, runtime, operating system, CPU, memory, sample counts, median,
 interquartile range, and process failures. The artifact includes the exact transpiled fixture.
 
-The `runtime-v4` artifact identifies Base and Head, the selected cases, and ordinary comparison,
+The `runtime-v5` artifact identifies Base and Head, the selected cases, and ordinary comparison,
 resident timing, or profiling mode. Resident timing uses mode `steady-state` and measurement
 `resident-operation-v1`, identifying the new per-operation timing boundary while retaining the
 existing workload inputs and correctness checks. Profile results retain their existing capture

@@ -77,6 +77,7 @@ export * as MessageDelivery from "./durable/MessageDelivery.ts";
 export * as Records from "./durable/Records.ts";
 export * as Recovery from "./durable/Recovery.ts";
 export * as RunJournal from "./durable/RunJournal.ts";
+export * as RunContinuation from "./durable/RunContinuation.ts";
 export * as Schedule from "./durable/Schedule.ts";
 export * as ScheduleTransition from "./durable/ScheduleTransition.ts";
 export * as Scheduling from "./durable/Scheduling.ts";

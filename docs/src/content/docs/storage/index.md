@@ -54,9 +54,9 @@ checks its admission constraints. Import rebuilds ledger state from canonical re
 and checkpoints are disposable.
 No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
 
-Layout upgrades run separately inside each adapter. Import accepts the current record format;
-layout 16 already uses that format. A future change to record meaning requires an explicit
-one-time archive conversion before import. See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
+The unreleased protocol accepts only fresh layout-18 stores and `effect-agent/thread@2` archives.
+Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
+See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 
 ## Build another adapter
 

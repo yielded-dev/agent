@@ -44,6 +44,9 @@ const withFixture = <A, E>(
   );
 
 describe("Durable Object ledger read contracts", () => {
-  for (const [index, test] of ledgerReadCases().entries())
-    it(test.name, () => withFixture((storage) => ledgerReadCases(invalidate(storage))[index].run));
+  for (const [index, test] of ledgerReadCases().entries()) {
+    // oxlint-disable-next-line vitest/expect-expect -- ledgerReadCases owns the shared contract assertions
+    it(`${test.name}`, () =>
+      withFixture((storage) => ledgerReadCases(invalidate(storage))[index].run));
+  }
 });

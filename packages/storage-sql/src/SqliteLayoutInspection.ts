@@ -23,13 +23,9 @@ export interface SqliteLayoutHeader {
 }
 
 export interface SqliteLayoutInspectionOptions<C, K, S> {
-  readonly baseline: {
-    readonly version: number;
-    readonly recordFormat: string;
-    readonly statements: ReadonlyArray<string>;
-    readonly objects: ReadonlyArray<readonly [type: string, name: string, statementIndex: number]>;
-  };
-  readonly steps: ReadonlyArray<{ readonly version: number }>;
+  readonly version: number;
+  readonly statements: ReadonlyArray<string>;
+  readonly objects: ReadonlyArray<readonly [type: string, name: string, statementIndex: number]>;
   readonly headerStatement: string;
   readonly corruption: (table: string) => C;
   readonly incompatible: (actualVersion: number, message: string) => K;
@@ -47,7 +43,7 @@ const normalize = (statement: string) =>
   );
 
 /**
- * Inspect an adapter's frozen SQLite layout. The adapter owns legacy version discovery,
+ * Inspect an adapter's current SQLite layout. The adapter owns version discovery,
  * empty-store detection, the surrounding snapshot/transaction, and every layout statement.
  */
 export const makeSqliteLayoutInspection = <C, K, S>(
@@ -75,57 +71,48 @@ export const makeSqliteLayoutInspection = <C, K, S>(
     version: number,
   ): Effect.fn.Return<SqliteLayoutHeader, C | K | S, SqlClient.SqlClient> {
     const sql = (yield* SqlClient.SqlClient).withoutTransforms();
-    const { baseline, steps, incompatible } = options;
+    const { incompatible } = options;
 
-    if (!steps.some((step) => step.version === version))
+    if (version !== options.version)
       return yield* Effect.fail(incompatible(version, `Unsupported storage version ${version}.`));
-
     const schema = objects.find((row) => row.name === "effect_agent_schema");
-    let header: SqliteLayoutHeader;
 
-    if (schema === undefined) {
-      if (version !== baseline.version)
-        return yield* Effect.fail(incompatible(version, "Missing singleton schema header."));
-      header = { layoutVersion: baseline.version, recordFormat: baseline.recordFormat };
-    } else {
-      if (
-        schema.type !== "table" ||
-        schema.sql === null ||
-        normalize(schema.sql) !== normalize(options.headerStatement)
-      )
-        return yield* Effect.fail(incompatible(version, "Malformed singleton schema table."));
-
-      const [row] = yield* decode(
-        Schema.Tuple([Header]),
-        yield* sql<Record<string, unknown>>`
-          SELECT * FROM effect_agent_schema
-        `.pipe(Effect.mapError(options.storageError)),
-        "effect_agent_schema",
+    if (
+      schema?.type !== "table" ||
+      schema.sql === null ||
+      schema.sql === undefined ||
+      normalize(schema.sql) !== normalize(options.headerStatement)
+    )
+      return yield* Effect.fail(
+        incompatible(version, "Missing or malformed singleton schema table."),
       );
 
-      if (
-        row.layout_version <= baseline.version ||
-        !steps.some((step) => step.version === row.layout_version) ||
-        row.layout_version !== version
-      )
-        return yield* Effect.fail(
-          incompatible(row.layout_version, "Unsupported or conflicting layout headers."),
-        );
-      header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
-    }
+    const [row] = yield* decode(
+      Schema.Tuple([Header]),
+      yield* sql<Record<string, unknown>>`SELECT * FROM effect_agent_schema`.pipe(
+        Effect.mapError(options.storageError),
+      ),
+      "effect_agent_schema",
+    );
+
+    if (row.layout_version !== version)
+      return yield* Effect.fail(
+        incompatible(row.layout_version, "Unsupported or conflicting layout headers."),
+      );
+    const header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
 
     if (header.recordFormat !== CURRENT_RECORD_FORMAT)
       return yield* Effect.fail(
         incompatible(header.layoutVersion, `Unsupported record format ${header.recordFormat}.`),
       );
 
-    for (const [type, name, index] of baseline.objects) {
+    for (const [type, name, index] of options.objects) {
       const actual = objects.find((row) => row.name === name);
 
       if (
         actual?.type !== type ||
         actual.sql === null ||
-        normalize(actual.sql) !== normalize(baseline.statements[index])
+        normalize(actual.sql) !== normalize(options.statements[index])
       )
         return yield* Effect.fail(
           incompatible(version, `Missing or incompatible layout object ${name}.`),

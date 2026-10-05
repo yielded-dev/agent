@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -189,6 +189,12 @@
           },
           {
             "$ref": "#/$defs/@effect-agent~1thread~1RepairAnnotatedEncoded"
+          },
+          {
+            "$ref": "#/$defs/RunContextRecordedEncoded"
+          },
+          {
+            "$ref": "#/$defs/RunContinuationEncoded"
           }
         ]
       }
@@ -2929,6 +2935,56 @@
           "minLength": 1,
           "maxLength": 256
         },
+        "source": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["tool"]
+                },
+                "agentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "runId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "toolCallId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["_tag", "agentId", "threadId", "runId", "toolCallId"],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["programmatic"]
+                },
+                "agentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["_tag", "agentId", "threadId"],
+              "additionalProperties": true
+            }
+          ]
+        },
         "sourcePrincipal": {
           "type": "string",
           "minLength": 1,
@@ -2949,6 +3005,7 @@
       "required": [
         "_tag",
         "messageId",
+        "source",
         "sourcePrincipal",
         "operation",
         "deadlineAtMillis",
@@ -3036,6 +3093,290 @@
         }
       },
       "required": ["_tag", "reason", "details"],
+      "additionalProperties": true
+    },
+    "RunContextRecordedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunContextRecorded"]
+        },
+        "version": {
+          "type": "number",
+          "enum": [1]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "priorHistoryLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["ModelResponseRecorded", "ToolCallSettled"]
+              },
+              "promptLength": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "incomplete": {
+                "type": "boolean",
+                "enum": [true]
+              },
+              "terminalPriorRun": {
+                "type": "boolean",
+                "enum": [true]
+              }
+            },
+            "required": ["sequence", "tag", "promptLength"],
+            "additionalProperties": true
+          },
+          "maxItems": 4096
+        },
+        "contextWindowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": ["_tag", "version", "runId", "prompt", "priorHistoryLength", "boundaries"],
+      "additionalProperties": true
+    },
+    "RunContinuationEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["RunContinuation"]
+        },
+        "version": {
+          "type": "number",
+          "enum": [1]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 0
+        },
+        "recordCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "recordBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "turnBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4194304
+        },
+        "originalInput": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string"
+            }
+          },
+          "required": ["recordId", "digest"],
+          "additionalProperties": true
+        },
+        "savedContext": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string"
+            }
+          },
+          "required": ["recordId", "digest"],
+          "additionalProperties": true
+        },
+        "latestResponse": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string"
+            }
+          },
+          "required": ["recordId", "digest"],
+          "additionalProperties": true
+        },
+        "terminal": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string"
+            }
+          },
+          "required": ["recordId", "digest"],
+          "additionalProperties": true
+        },
+        "lastFact": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string"
+            }
+          },
+          "required": ["recordId", "digest"],
+          "additionalProperties": true
+        },
+        "position": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "awaiting-model",
+            "processing-operations",
+            "waiting-approval",
+            "waiting-dependency",
+            "unknown",
+            "settling",
+            "settled"
+          ]
+        },
+        "accounting": {
+          "type": "object",
+          "properties": {
+            "committedTurns": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "programmaticToolCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "consecutiveToolFailures": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "finalizationUsed": {
+              "type": "boolean"
+            },
+            "modelRestarts": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "modelCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unobservedModelCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lastInputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lastOutputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "costMicrousd": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "accountedToolTurn": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "committedTurns",
+            "toolCalls",
+            "programmaticToolCalls",
+            "consecutiveToolFailures",
+            "finalizationUsed",
+            "modelRestarts",
+            "modelCalls",
+            "unobservedModelCalls",
+            "inputTokens",
+            "outputTokens",
+            "lastInputTokens",
+            "lastOutputTokens",
+            "costMicrousd",
+            "accountedToolTurn"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "_tag",
+        "version",
+        "runId",
+        "submissionId",
+        "revision",
+        "recordCount",
+        "recordBytes",
+        "turn",
+        "turnBytes",
+        "originalInput",
+        "lastFact",
+        "position",
+        "accounting"
+      ],
       "additionalProperties": true
     }
   }

@@ -52,7 +52,6 @@ import { IdGenerator } from "../core/IdGenerator.ts";
 import { copyJson } from "../core/internal/json.ts";
 import { Receipt } from "../core/Receipt.ts";
 import type { ExhaustedLimit } from "../core/RunEvent.ts";
-import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import {
   SubagentBudgetReservation,
   SubagentReservationAmounts,
@@ -156,17 +155,7 @@ import {
 } from "./internal/agent-registration.ts";
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
-import {
-  JournalCheckpointSeed,
-  MAX_RUN_TOOL_CALL_IDENTITIES,
-  RecoveryCheckpointState,
-  RecoveryCheckpointContents,
-  ThreadContextCheckpoint,
-  RECOVERY_ENGINE_VERSION,
-  checkpointSuffixCompatible,
-  makeThreadContextCertificate,
-} from "./internal/journal-checkpoint.ts";
-import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
+import { type makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
@@ -183,6 +172,7 @@ import {
   OperationDenied,
 } from "./OperationAuthorizer.ts";
 import {
+  type RunContinuation,
   type CanonicalRecordEnvelope,
   type CanonicalRecordPayload,
   type DeploymentId,
@@ -202,6 +192,8 @@ import {
   RecordId,
   RepairAnnotated,
   RunStartedRecord,
+  RunContextRecorded,
+  MAX_RUN_TOOL_CALL_IDENTITIES,
   RunDurationExhausted,
   SettlementFailureDiagnostic,
   SubagentJoined,
@@ -239,6 +231,17 @@ import {
   type MarkUnknown as MarkUnknownDecision,
   type SettleAborted as SettleAbortedDecision,
 } from "./Recovery.ts";
+import {
+  canonicalRecordBytes,
+  canonicalRunIds,
+  isPreContinuationFact,
+  makeProgressWriter,
+  readContinuation,
+  reference,
+  resolveEvidence,
+  runEvidence,
+  validateSuffix,
+} from "./RunContinuation.ts";
 import {
   RunJournalError,
   approvalDecisionBatchId,
@@ -362,6 +365,7 @@ import {
 import { PendingSubmission, SettledSubmission, type SubmissionStatus } from "./SubmissionStatus.ts";
 import { verifyThreadInvariants } from "./ThreadInvariants.ts";
 import {
+  type ThreadCheckpoint,
   type AppendConflict,
   type ThreadNotMaterialized,
   type FenceRejected,
@@ -369,17 +373,15 @@ import {
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
+  ThreadIdentityRequest,
   ThreadStore,
   ThreadStoreDiagnostic,
   ThreadStoreError,
   ThreadTailRequest,
   FencedAppendRequest,
   LoadCheckpointRequest,
-  ThreadCheckpoint,
-  SaveRecoveryCheckpointRequest,
   getRecord,
   ThreadReader,
-  getRunInput,
 } from "./ThreadStore.ts";
 import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
 import { WakeScheduler } from "./WakeScheduler.ts";
@@ -1270,14 +1272,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
   // Disposable: canonical tail and owner identify the exact projection, never ownership.
-  // Retain only the most recent view; persisted checkpoints still govern cold recovery.
+  // Retain only the most recent view; canonical continuations govern cold recovery.
   let projectedJournal:
     | {
         readonly threadId: ThreadId;
         readonly through: CanonicalSequence;
         readonly runId: RunId;
-        readonly seedThrough: CanonicalSequence | undefined;
-        readonly contextThrough: CanonicalSequence | undefined;
+        readonly contextRecord: RunContextRecorded | undefined;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
       }
@@ -1512,13 +1513,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       return next();
     });
 
-  /**
-   * Retain addressed runs and their deterministic identities independently of payload claims.
-   * Marker matching deliberately errs toward retaining malformed/conflicting identity evidence.
-   */
+  /** Canonical owner fields and exact admission identities define the control view. */
   const controlRecords = (submissionIds: ReadonlyArray<SubmissionId>) => {
     const runIds = new Set(submissionIds.map(runIdForSubmission));
-    const runMarkers = [...runIds].map((runId) => `:${runId}:`);
 
     const recordIds = new Set(
       submissionIds.flatMap((id) => [
@@ -1532,14 +1529,195 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     return ({ record }: CanonicalRecordEnvelope): boolean =>
       recordIds.has(record.recordId) ||
-      runMarkers.some((marker) => record.recordId.includes(marker)) ||
-      record.recordId.startsWith("subagent-lineage:") ||
       record.payload._tag === "SubagentLineageRecorded" ||
       record.payload._tag === "WorkerOriginRecorded" ||
-      ("runId" in record.payload &&
-        record.payload.runId !== undefined &&
-        runIds.has(record.payload.runId));
+      canonicalRunIds(record).some((runId) => runIds.has(runId));
   };
+
+  const selectedRange = (
+    threadId: ThreadId,
+    submissionIds: ReadonlyArray<SubmissionId>,
+    through: CanonicalSequence,
+    after: CanonicalSequence = ZERO_SEQUENCE,
+  ) =>
+    Effect.forEach(submissionIds, (submissionId) =>
+      Stream.runCollect(runEvidence(threadId, submissionId, through, after)).pipe(
+        Effect.provideService(ThreadReader, reader),
+      ),
+    ).pipe(
+      Effect.map((groups) =>
+        [...new Map(groups.flat().map((entry) => [entry.sequence, entry])).values()].sort(
+          (left, right) => left.sequence - right.sequence,
+        ),
+      ),
+    );
+
+  /**
+   * A continuation locates immutable semantic evidence, independently of Thread age or a
+   * disposable checkpoint. Missing locators and broken references fail before any mutation.
+   */
+  const recoveryView = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    throughSequence: CanonicalSequence,
+    submissionIds: ReadonlyArray<SubmissionId>,
+    journalOwner?: RunId,
+  ) {
+    const identity = yield* reader.readIdentity(ThreadIdentityRequest.make({ threadId }));
+    const selected = yield* selectedRange(threadId, submissionIds, throughSequence);
+    const byId = new Map(selected.map((entry) => [entry.record.recordId, entry]));
+    let context: RunContextRecorded | undefined;
+    let progress: RunContinuation | undefined;
+    let progressThrough: CanonicalSequence | undefined;
+
+    const invalid = (message: string) =>
+      ThreadStoreError.make({
+        operation: "read Run continuation",
+        message,
+      });
+
+    for (const submissionId of submissionIds) {
+      const runId = runIdForSubmission(submissionId);
+      const own = selected.filter((entry) => canonicalRunIds(entry.record).includes(runId));
+
+      const loaded = yield* readContinuation(threadId, runId, throughSequence).pipe(
+        Effect.provideService(ThreadReader, reader),
+      );
+
+      if (Option.isNone(loaded)) {
+        if (own.some(({ record }) => !isPreContinuationFact(record)))
+          return yield* invalid(
+            "Run execution has no canonical continuation; repair its locator explicitly",
+          );
+        continue;
+      }
+      const envelope = loaded.value;
+      const cursor = envelope.continuation;
+
+      if (cursor.submissionId !== submissionId)
+        return yield* invalid("Run continuation differs from its admitted owner");
+
+      const resolve = Effect.fnUntraced(function* (ref: typeof cursor.originalInput) {
+        const found = byId.get(ref.recordId);
+
+        if (found === undefined) {
+          // An exact lookup distinguishes missing evidence from an incomplete native index.
+          yield* resolveEvidence(threadId, ref).pipe(
+            Effect.provideService(ThreadReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
+          return yield* invalid(
+            "Required Run evidence is absent from its locator; rebuild the index explicitly",
+          );
+        }
+        if (
+          (yield* reference(found.record).pipe(Effect.provideService(Crypto.Crypto, crypto)))
+            .digest !== ref.digest
+        )
+          return yield* invalid("Run continuation evidence has invalid integrity");
+        if (!canonicalRunIds(found.record).includes(runId))
+          return yield* invalid("Run continuation references another owner");
+
+        return found;
+      });
+
+      const input = yield* resolve(cursor.originalInput);
+
+      if (
+        input.record.payload._tag !== "UserInputRecorded" ||
+        input.record.payload.kind !== "user" ||
+        input.record.payload.submissionId !== submissionId ||
+        input.record.payload.runId !== runId
+      )
+        return yield* invalid("Run continuation has no exact original admitted input");
+      const frontier = yield* resolve(cursor.lastFact);
+      const prefix = own.filter((entry) => entry.sequence <= frontier.sequence);
+
+      if (
+        frontier.batchId !== envelope.batchId ||
+        frontier.sequence >= envelope.sequence ||
+        prefix.length !== cursor.recordCount ||
+        prefix.reduce((bytes, entry) => bytes + canonicalRecordBytes(entry.record), 0) !==
+          cursor.recordBytes ||
+        !validateSuffix(own, envelope.sequence)
+      )
+        return yield* invalid(
+          "Run continuation has an invalid frontier or exceeds its selected suffix bound",
+        );
+      let saved: RunContextRecorded | undefined;
+
+      if (cursor.savedContext !== undefined) {
+        const savedEnvelope = yield* resolve(cursor.savedContext);
+
+        if (
+          savedEnvelope.record.payload._tag !== "RunContextRecorded" ||
+          savedEnvelope.sequence <= input.sequence
+        )
+          return yield* invalid("Run continuation has invalid saved original context");
+        const initial = savedEnvelope.record.payload;
+
+        saved = initial;
+
+        const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(initial.prompt).pipe(
+          Effect.mapError(() => invalid("Saved original model context is malformed")),
+        );
+
+        if (
+          initial.priorHistoryLength > prompt.content.length ||
+          initial.boundaries.some(
+            (boundary) =>
+              boundary.sequence >= input.sequence ||
+              boundary.promptLength > initial.priorHistoryLength,
+          )
+        )
+          return yield* invalid("Saved original context has an invalid canonical boundary");
+        if (own.filter(({ record }) => record.payload._tag === "RunContextRecorded").length !== 1)
+          return yield* invalid("Run has conflicting saved original contexts");
+      }
+      if (cursor.latestResponse !== undefined) {
+        const response = yield* resolve(cursor.latestResponse);
+
+        if (
+          response.record.payload._tag !== "ModelResponseRecorded" ||
+          saved === undefined ||
+          response.record.payload.turn !== cursor.accounting.committedTurns ||
+          own.some(
+            (entry) =>
+              entry.record.payload._tag === "ModelResponseRecorded" &&
+              entry.sequence <= frontier.sequence &&
+              entry.sequence > response.sequence,
+          )
+        )
+          return yield* invalid("Run continuation has invalid declared-operation evidence");
+      } else if (cursor.accounting.committedTurns !== 0)
+        return yield* invalid("Run continuation accounting has no corresponding response");
+      if (cursor.terminal !== undefined) {
+        const terminal = yield* resolve(cursor.terminal);
+
+        if (
+          terminal.record.payload._tag !== "RunCompleted" &&
+          terminal.record.payload._tag !== "RunFailed" &&
+          terminal.record.payload._tag !== "SubmissionSettled"
+        )
+          return yield* invalid("Run continuation has invalid terminal evidence");
+      }
+      if (journalOwner === runId) {
+        context = saved;
+        progress = cursor;
+        progressThrough = frontier.sequence;
+      }
+    }
+
+    const records = [
+      ...new Map(
+        [...identity.records.filter((entry) => entry.sequence <= throughSequence), ...selected].map(
+          (entry) => [entry.sequence, entry],
+        ),
+      ).values(),
+    ].sort((left, right) => left.sequence - right.sequence);
+
+    return { canonical: Stream.fromIterable(records), context, progress, progressThrough };
+  });
 
   const readControl = Effect.fnUntraced(function* (
     threadId: ThreadId,
@@ -1551,408 +1729,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     return yield* Stream.runCollect(
       view.canonical.pipe(Stream.filter(controlRecords(submissionIds))),
     );
-  });
-
-  const loadRecoveryCheckpoint = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    throughSequence: CanonicalSequence,
-  ) {
-    if (store.recoveryCheckpoints === undefined) return Option.none();
-
-    const loaded = yield* store.recoveryCheckpoints
-      .load(LoadCheckpointRequest.make({ threadId, atOrBeforeSequence: throughSequence }))
-      .pipe(Effect.catchTag("CheckpointRejected", () => Effect.succeed(Option.none())));
-
-    if (Option.isNone(loaded)) return Option.none();
-    const checkpoint = loaded.value;
-
-    if (
-      checkpoint.engineVersion !== RECOVERY_ENGINE_VERSION ||
-      checkpoint.threadId !== threadId ||
-      checkpoint.throughSequence > throughSequence
-    )
-      return Option.none();
-
-    const decoded = yield* Schema.decodeUnknownEffect(RecoveryCheckpointContents)(
-      checkpoint.state,
-    ).pipe(Effect.option);
-
-    if (Option.isNone(decoded)) return Option.none();
-    const { state, digest } = decoded.value;
-
-    if (
-      (state.seed === undefined && state.context === undefined) ||
-      state.records.some(
-        (record) => record.threadId !== threadId || record.sequence > checkpoint.throughSequence,
-      ) ||
-      (state.context !== undefined && state.context.throughSequence !== checkpoint.throughSequence)
-    )
-      return Option.none();
-
-    const encoded = yield* Schema.encodeEffect(RecoveryCheckpointState)(state).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "decode recovery checkpoint",
-          message: "Invalid recovery state",
-          cause,
-        }),
-      ),
-    );
-
-    const actualDigest = yield* withCrypto(digestJson(encoded)).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "decode recovery checkpoint",
-          message: cause.message,
-          cause,
-        }),
-      ),
-    );
-
-    if (digest !== actualDigest) return Option.none();
-
-    if (state.context !== undefined) {
-      const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(state.context.prompt).pipe(
-        Effect.option,
-      );
-
-      if (Option.isNone(prompt)) return Option.none();
-    }
-
-    const owner = yield* ledger
-      .lookup(SubmissionLookupById.make({ submissionId: state.submissionId }))
-      .pipe(
-        Effect.mapError((cause) =>
-          ThreadStoreError.make({
-            operation: "recovery checkpoint compatibility",
-            message: cause.message,
-            cause,
-          }),
-        ),
-      );
-
-    if (
-      Option.isNone(owner) ||
-      owner.value.threadId !== threadId ||
-      owner.value.agentDigests.agent !== checkpoint.agentDefinitionDigest ||
-      owner.value.agentDigests.model !== checkpoint.modelDigest ||
-      owner.value.agentDigests.tools !== checkpoint.toolDigest
-    )
-      return Option.none();
-
-    return Option.some({ checkpoint, state });
-  });
-
-  const retainThreadIdentity = ({ record }: CanonicalRecordEnvelope): boolean =>
-    record.payload._tag === "ThreadCreated" ||
-    record.payload._tag === "SubagentLineageRecorded" ||
-    record.payload._tag === "WorkerOriginRecorded" ||
-    record.recordId.startsWith("subagent-lineage:");
-
-  /** Late/foreign evidence and new compactions require the original canonical proof. */
-  const contextSuffixCompatible = (
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-    submissionId: SubmissionId,
-  ): boolean => {
-    const runId = runIdForSubmission(submissionId);
-    const certificate = makeThreadContextCertificate(runId.length);
-
-    for (const entry of records) {
-      const { payload, recordId } = entry.record;
-
-      if (payload._tag === "CompactionCreated" || retainThreadIdentity(entry)) return false;
-      if ("runId" in payload && payload.runId !== undefined) {
-        if (payload.runId !== runId) return false;
-      } else if (payload._tag === "AbortRequested") {
-        if (
-          payload.submissionId !== submissionId ||
-          recordId !== submissionAbortRecordId(submissionId)
-        )
-          return false;
-      } else if (payload._tag === "SubmissionSettled") {
-        if (
-          payload.submissionId !== submissionId ||
-          recordId !== submissionSettlementRecordId(submissionId)
-        )
-          return false;
-      } else return false;
-      certificate.add(entry);
-    }
-
-    return certificate.isValid();
-  };
-
-  /** Run seeds retain their owner; certified Thread context serves only provably later Runs. */
-  const recoveryView = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    throughSequence: CanonicalSequence,
-    submissionIds: ReadonlyArray<SubmissionId>,
-    journalOwner?: RunId,
-  ): Effect.fn.Return<
-    {
-      readonly canonical: Stream.Stream<
-        CanonicalRecordEnvelope,
-        ThreadStoreError | ThreadNotMaterialized
-      >;
-      readonly seed?: JournalCheckpointSeed;
-      readonly context?: ThreadContextCheckpoint;
-    },
-    ThreadStoreError | ThreadNotMaterialized
-  > {
-    const full = { canonical: canonicalRange(threadId, throughSequence) };
-    const loaded = yield* loadRecoveryCheckpoint(threadId, throughSequence);
-
-    if (Option.isNone(loaded)) return full;
-    const { checkpoint, state } = loaded.value;
-
-    if (throughSequence - checkpoint.throughSequence > 4_096) return full;
-
-    const submissionId = submissionIds.length === 1 ? submissionIds[0] : undefined;
-
-    if (
-      state.context !== undefined &&
-      submissionId !== undefined &&
-      submissionId.length === state.submissionId.length &&
-      (journalOwner === undefined || journalOwner === runIdForSubmission(submissionId))
-    ) {
-      const runId = runIdForSubmission(submissionId);
-
-      const input = yield* getRunInput({ threadId, runId }).pipe(
-        Effect.provideService(ThreadReader, reader),
-      );
-
-      const controls = yield* Effect.forEach(
-        [
-          submissionInputRecordId(submissionId),
-          submissionAbortRecordId(submissionId),
-          submissionSettlementRecordId(submissionId),
-          runStartedRecordId(runId),
-          runCompletedRecordId(runId),
-        ],
-        (recordId) =>
-          getRecord({ threadId, recordId }).pipe(Effect.provideService(ThreadReader, reader)),
-      );
-
-      const fresh = [input, ...controls].every(
-        (record) =>
-          Option.isNone(record) ||
-          (record.value.sequence > checkpoint.throughSequence &&
-            record.value.sequence <= throughSequence),
-      );
-
-      if (fresh) {
-        const suffix = yield* Stream.runCollect(
-          canonicalRange(threadId, throughSequence, checkpoint.throughSequence),
-        );
-
-        if (contextSuffixCompatible(suffix, submissionId))
-          return {
-            canonical: Stream.fromIterable([
-              ...state.records.filter(retainThreadIdentity),
-              ...suffix,
-            ]),
-            context: state.context,
-          };
-      }
-    }
-
-    if (
-      state.seed === undefined ||
-      !submissionIds.every((id) => state.submissionIds.includes(id)) ||
-      state.seed.runId !== runIdForSubmission(state.submissionId) ||
-      (journalOwner !== undefined && state.seed.runId !== journalOwner)
-    )
-      return full;
-    const replacement = state.seed.compaction;
-
-    if (
-      replacement.threadId !== threadId ||
-      replacement.sequence > checkpoint.throughSequence ||
-      replacement.record.payload._tag !== "CompactionCreated" ||
-      replacement.record.payload.kind === "clear-tool-results" ||
-      replacement.record.payload.coversThrough < state.seed.throughSequence ||
-      replacement.record.payload.coversThrough >= replacement.sequence ||
-      !state.records.some(
-        (record) =>
-          record.sequence === replacement.sequence &&
-          record.record.recordId === replacement.record.recordId,
-      )
-    )
-      return full;
-
-    const suffix = yield* Stream.runCollect(
-      canonicalRange(threadId, throughSequence, checkpoint.throughSequence),
-    );
-
-    if (!checkpointSuffixCompatible(state.seed, suffix, state.records)) return full;
-
-    return { canonical: Stream.fromIterable([...state.records, ...suffix]), seed: state.seed };
-  });
-
-  const encodeRecoveryCheckpoint = Effect.fnUntraced(function* (
-    state: RecoveryCheckpointState,
-  ): Effect.fn.Return<Option.Option<PersistedJson>, DurableWorkerFailure> {
-    const encoded = yield* Schema.encodeEffect(RecoveryCheckpointState)(state).pipe(Effect.option);
-
-    if (Option.isNone(encoded)) return Option.none();
-    const digest = yield* withCrypto(digestJson(encoded.value));
-
-    // Serialization removes shared in-memory references before applying persisted JSON bounds.
-    return yield* Schema.encodeEffect(Schema.fromJsonString(RecoveryCheckpointContents))(
-      RecoveryCheckpointContents.make({ state, digest }),
-    ).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(PersistedJson))),
-      Effect.option,
-    );
-  });
-
-  const persistRecoveryCheckpoint = Effect.fnUntraced(function* (
-    ctx: AttemptAppendContext,
-    submission: SubmissionSnapshot,
-    contents: PersistedJson,
-    tail: { readonly sequence: CanonicalSequence; readonly digest: Digest },
-    createdAt: DateTime.Utc,
-  ): Effect.fn.Return<void, DurableWorkerFailure> {
-    if (store.recoveryCheckpoints === undefined) return;
-
-    const checkpoint = ThreadCheckpoint.make({
-      schemaVersion: 1,
-      threadId: ctx.threadId,
-      throughSequence: tail.sequence,
-      tailDigest: tail.digest,
-      engineVersion: RECOVERY_ENGINE_VERSION,
-      agentDefinitionDigest: submission.agentDigests.agent,
-      modelDigest: submission.agentDigests.model,
-      toolDigest: submission.agentDigests.tools,
-      state: contents,
-      createdAt,
-    });
-
-    yield* hit("checkpoint:before-save");
-    yield* store.recoveryCheckpoints
-      .save(SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch: ctx.producerEpoch }))
-      .pipe(Effect.catchTag("CheckpointRejected", () => Effect.void));
-    yield* hit("checkpoint:after-save");
-  });
-
-  /** Refresh before settlement finalization, so completed processing includes the cache's cost. */
-  const saveThreadContext = Effect.fnUntraced(function* (
-    ctx: AttemptAppendContext,
-    submission: SubmissionSnapshot,
-    priorContext?: ThreadContextCheckpoint,
-  ): Effect.fn.Return<void, DurableWorkerFailure> {
-    if (store.recoveryCheckpoints === undefined) return;
-    const tail = yield* ctx.tail;
-    const loaded = yield* loadRecoveryCheckpoint(ctx.threadId, tail.sequence);
-
-    // Start certification only after compaction has produced an eligible runtime checkpoint.
-    if (Option.isNone(loaded)) return;
-    const previous = loaded.value;
-
-    let identities: ReadonlyArray<CanonicalRecordEnvelope> =
-      previous.state.records.filter(retainThreadIdentity);
-
-    let projection: RunJournalProjection | undefined;
-
-    if (priorContext !== undefined && tail.sequence - priorContext.throughSequence <= 4_096) {
-      const suffix = yield* Stream.runCollect(
-        canonicalRange(ctx.threadId, tail.sequence, priorContext.throughSequence),
-      );
-
-      if (contextSuffixCompatible(suffix, submission.submissionId)) {
-        projection = yield* projectRunJournalStream(
-          Stream.fromIterable(suffix),
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          priorContext,
-        ).pipe(Effect.catchTag("RunJournalError", () => Effect.succeed(undefined)));
-      }
-    }
-
-    if (projection === undefined) {
-      const source = canonicalRange(ctx.threadId, tail.sequence);
-
-      const certificate = makeThreadContextCertificate(
-        runIdForSubmission(submission.submissionId).length,
-      );
-
-      const metadata = makeJournalMetadata(undefined);
-      const retained: Array<CanonicalRecordEnvelope> = [];
-
-      yield* Stream.runForEach(source, (entry) =>
-        Effect.sync(() => {
-          certificate.add(entry);
-          metadata.add(entry);
-          if (retainThreadIdentity(entry) && retained.length <= 4_096) retained.push(entry);
-        }),
-      );
-      if (!certificate.isValid() || retained.length > 4_096) return;
-      identities = retained;
-      projection = yield* projectRunJournalStream(
-        source,
-        undefined,
-        undefined,
-        undefined,
-        metadata.snapshot(),
-      ).pipe(Effect.catchTag("RunJournalError", () => Effect.succeed(undefined)));
-    }
-
-    if (projection === undefined) return;
-
-    const prompt = yield* Schema.encodeEffect(Prompt.Prompt)(projection.prompt).pipe(
-      Effect.flatMap(decodePersisted),
-      Effect.option,
-    );
-
-    if (Option.isNone(prompt)) return;
-
-    const contextState = RecoveryCheckpointState.make({
-      schemaVersion: 2,
-      policyAccountingVersion: 1,
-      submissionId: submission.submissionId,
-      submissionIds: [submission.submissionId],
-      context: ThreadContextCheckpoint.make({
-        throughSequence: tail.sequence,
-        prompt: prompt.value,
-        ...(projection.contextWindowId === undefined
-          ? {}
-          : { contextWindowId: projection.contextWindowId }),
-      }),
-      records: identities,
-    });
-
-    let state = contextState;
-
-    if (
-      previous.state.submissionId === submission.submissionId &&
-      previous.state.seed !== undefined &&
-      tail.sequence - previous.checkpoint.throughSequence + previous.state.records.length <= 4_096
-    ) {
-      const suffix = yield* Stream.runCollect(
-        canonicalRange(ctx.threadId, tail.sequence, previous.checkpoint.throughSequence),
-      );
-
-      if (checkpointSuffixCompatible(previous.state.seed, suffix, previous.state.records)) {
-        state = RecoveryCheckpointState.make({
-          ...contextState,
-          seed: previous.state.seed,
-          records: [...previous.state.records, ...suffix],
-          submissionIds: previous.state.submissionIds,
-        });
-      }
-    }
-
-    let contents = yield* encodeRecoveryCheckpoint(state);
-
-    // Prefer retaining same-Run recovery, but keep eligible Thread context when the combined
-    // cache exceeds bounds. That Run can still recover from its unchanged canonical history.
-    if (Option.isNone(contents) && state.seed !== undefined)
-      contents = yield* encodeRecoveryCheckpoint(contextState);
-    if (Option.isNone(contents)) return;
-
-    yield* persistRecoveryCheckpoint(ctx, submission, contents.value, tail, yield* DateTime.now);
   });
 
   const readAllTolerant = (
@@ -1977,22 +1753,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     readonly throughSequence: CanonicalSequence;
     readonly submissionIds: ReadonlyArray<SubmissionId>;
   }
-
-  /**
-   * Read one exact canonical prefix. The authoritative tail captured by the caller bounds both
-   * work and visibility: appends racing the read receive higher sequences and are deliberately
-   * left for a later snapshot, while a short page or sequence gap fails typed before recovery
-   * mutates anything. At most `ceil((through - after) / READ_PAGE)` store pages are requested.
-   */
-  const readCanonicalRange = (
-    threadId: ThreadId,
-    afterSequence: CanonicalSequence,
-    throughSequence: CanonicalSequence,
-    retain: (record: CanonicalRecordEnvelope) => boolean,
-  ): Effect.Effect<Array<CanonicalRecordEnvelope>, ThreadStoreError | ThreadNotMaterialized> =>
-    Stream.runCollect(
-      canonicalRange(threadId, throughSequence, afterSequence).pipe(Stream.filter(retain)),
-    );
 
   /**
    * Capture one strongly-consistent pass-start tail and read exactly that prefix. This snapshot
@@ -2043,20 +1803,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     if (tail.tailSequence <= after) return records;
 
-    const suffix = yield* readCanonicalRange(
-      threadId,
-      after,
-      tail.tailSequence,
-      controlRecords(submissionIds),
-    ).pipe(
-      Effect.catchTag("ThreadNotMaterialized", (error) =>
-        ThreadStoreError.make({
-          operation: "read recovery history",
-          message: `Thread ${threadId} disappeared after its recovery suffix tail was captured`,
-          cause: error,
-        }),
-      ),
-    );
+    const suffix = yield* selectedRange(threadId, submissionIds, tail.tailSequence, after);
 
     return [...records, ...suffix];
   });
@@ -2686,8 +2433,97 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       definitions,
     ).pipe(Effect.provideService(ThreadStore, store), Effect.provideService(WakeScheduler, wake));
 
+  type ProgressWriter = Effect.Success<ReturnType<typeof makeProgressWriter>>;
+  const progressWriters = new WeakMap<RunWriter, ProgressWriter>();
+
+  const activeProgress = new Map<
+    ThreadId,
+    { readonly epoch: ProducerEpoch; readonly writer: ProgressWriter }
+  >();
+
+  const withProgress = Effect.fnUntraced(function* (writer: RunWriter) {
+    const active = activeProgress.get(writer.threadId);
+
+    const progress =
+      active?.epoch === writer.producerEpoch
+        ? active.writer
+        : yield* makeProgressWriter(writer.threadId).pipe(
+            Effect.provideService(ThreadReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
+    const owned: RunWriter = {
+      ...writer,
+      append: (batch) =>
+        progress.commit(
+          batch,
+          Effect.map(writer.tail, (tail) => tail.sequence),
+          writer.append,
+        ),
+    };
+
+    progressWriters.set(owned, progress);
+
+    return { owned, progress };
+  });
+
   const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
-    makeRunWriter(threadId, producerEpoch).pipe(Effect.provideService(ThreadStore, store));
+    makeRunWriter(threadId, producerEpoch).pipe(
+      Effect.provideService(ThreadStore, store),
+      Effect.flatMap(withProgress),
+      Effect.map(({ owned }) => owned),
+    );
+
+  const withProgressSession = Effect.fnUntraced(function* (session: RunStorageSession) {
+    const { owned, progress } = yield* withProgress(session);
+
+    activeProgress.set(session.threadId, { epoch: session.producerEpoch, writer: progress });
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        if (activeProgress.get(session.threadId)?.writer === progress)
+          activeProgress.delete(session.threadId);
+      }),
+    );
+
+    const wrapped: RunStorageSession = {
+      ...session,
+      append: owned.append,
+      publishSettlement: (batch) =>
+        progress.commit(
+          batch,
+          Effect.map(session.tail, (tail) => tail.sequence),
+          session.publishSettlement,
+        ),
+    };
+
+    progressWriters.set(wrapped, progress);
+
+    return wrapped;
+  });
+
+  // Preparations and emitted updates use the same progress gate as their active Run. This
+  // also covers a destination handoff written before dispatch or after Run settlement.
+  const progressStore = ThreadStore.of({
+    ...store,
+    append: (request) =>
+      Effect.gen(function* () {
+        const active = activeProgress.get(request.threadId);
+
+        const progress =
+          active?.epoch === request.producerEpoch
+            ? active.writer
+            : yield* makeProgressWriter(request.threadId).pipe(
+                Effect.provideService(ThreadReader, reader),
+                Effect.provideService(Crypto.Crypto, crypto),
+              );
+
+        return yield* progress.commit(
+          request.batch,
+          Effect.succeed(request.expectedTailSequence),
+          (batch) => store.append(FencedAppendRequest.make({ ...request, batch })),
+        );
+      }),
+  });
 
   const recoveryOwnership = (
     threadId: ThreadId,
@@ -2708,50 +2544,72 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
     ctx.append(batch).pipe(Effect.tap(() => wake.notify(ctx.threadId, "progress")));
 
-  const publicationFor = (
-    ctx: AttemptAppendContext,
-    submissionId: SubmissionId,
-    authority: SettlementPublicationAuthority,
-  ): PublishSettlement =>
-    Effect.fnUntraced(function* (batch: CanonicalBatch) {
-      let tail = yield* ctx.tail;
+  const publicationFor =
+    (
+      ctx: AttemptAppendContext,
+      submissionId: SubmissionId,
+      authority: SettlementPublicationAuthority,
+    ): PublishSettlement =>
+    (batch) =>
+      Effect.suspend(() => {
+        const progress = progressWriters.get(ctx);
 
-      for (let retries = 0; ; retries++) {
-        const result = yield* runStorage
-          .publishSettlement(
-            SettlementPublication.make({
-              submissionId,
-              authority,
-              append: FencedAppendRequest.make({
-                threadId: ctx.threadId,
-                producerEpoch: ctx.producerEpoch,
-                expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
-                batch,
-              }),
-            }),
-          )
-          .pipe(
-            Effect.catchTag("AppendConflict", (conflict) => {
-              if (
-                conflict.reason !== "tail" ||
-                conflict.actualTailSequence === undefined ||
-                conflict.actualTailDigest === undefined ||
-                retries >= 8
-              )
-                return Effect.fail(conflict);
-              tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
-
-              return Effect.succeed(undefined);
+        if (progress === undefined)
+          return Effect.fail(
+            ThreadStoreError.make({
+              operation: "publish Run continuation",
+              message: "Settlement has no scoped progress writer",
             }),
           );
 
-        if (result === undefined) continue;
-        yield* ctx.checkFence;
+        return progress.commit(
+          batch,
+          Effect.map(ctx.tail, (tail) => tail.sequence),
+          (prepared) =>
+            Effect.gen(function* () {
+              let tail = yield* ctx.tail;
 
-        return result;
-      }
-    });
+              for (let retries = 0; ; retries++) {
+                const result = yield* runStorage
+                  .publishSettlement(
+                    SettlementPublication.make({
+                      submissionId,
+                      authority,
+                      append: FencedAppendRequest.make({
+                        threadId: ctx.threadId,
+                        producerEpoch: ctx.producerEpoch,
+                        expectedTailSequence: tail.sequence,
+                        expectedTailDigest: tail.digest,
+                        batch: prepared,
+                      }),
+                    }),
+                  )
+                  .pipe(
+                    Effect.catchTag("AppendConflict", (conflict) => {
+                      if (
+                        conflict.reason !== "tail" ||
+                        conflict.actualTailSequence === undefined ||
+                        conflict.actualTailDigest === undefined ||
+                        retries >= 8
+                      )
+                        return Effect.fail(conflict);
+                      tail = {
+                        sequence: conflict.actualTailSequence,
+                        digest: conflict.actualTailDigest,
+                      };
+
+                      return Effect.succeed(undefined);
+                    }),
+                  );
+
+                if (result === undefined) continue;
+                yield* ctx.checkFence;
+
+                return result;
+              }
+            }),
+        );
+      });
 
   /** Append the canonical `AbortRequested` record; an identity conflict means it already exists. */
   const appendAbortRecord = Effect.fnUntraced(function* (
@@ -3241,7 +3099,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     } else {
       const executionStarted = records.some(
         ({ record: { payload } }) =>
-          payload._tag !== "UserInputRecorded" && "runId" in payload && payload.runId === runId,
+          payload._tag !== "UserInputRecorded" &&
+          payload._tag !== "RunContinuation" &&
+          payload._tag !== "RunContextRecorded" &&
+          "runId" in payload &&
+          payload.runId === runId,
       );
 
       if (executionStarted) {
@@ -4677,8 +4539,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     canonical: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     canonicalThrough: CanonicalSequence,
-    journalSeed: JournalCheckpointSeed | undefined,
-    priorContext: ThreadContextCheckpoint | undefined,
+    continuation: RunContinuation | undefined,
+    priorContext: RunContextRecorded | undefined,
     journalMetadata: JournalMetadata | undefined,
     lineage: AttemptLineage,
     approvalDecisions: ReadonlyArray<ApprovalDecisionIntent>,
@@ -4699,16 +4561,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         cached.threadId === ctx.threadId &&
         cached.through === canonicalThrough &&
         cached.runId === runId &&
-        cached.seedThrough === journalSeed?.throughSequence &&
-        cached.contextThrough === priorContext?.throughSequence
+        cached.contextRecord === priorContext
           ? (boundaries.push(...cached.boundaries), cached.journal)
           : yield* projectRunJournalStream(
               canonical,
               runId,
               (boundary) => boundaries.push(boundary),
-              journalSeed,
-              journalMetadata,
               priorContext,
+              journalMetadata,
             );
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.
@@ -4719,270 +4579,41 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         threadId: ctx.threadId,
         through: canonicalThrough,
         runId,
-        seedThrough: journalSeed?.throughSequence,
-        contextThrough: priorContext?.throughSequence,
+        contextRecord: priorContext,
         journal,
         boundaries,
       };
 
-      const saveRecoveryCheckpoint = Effect.fnUntraced(function* (
-        compactionId: RecordId,
-      ): Effect.fn.Return<void, DurableWorkerFailure> {
-        if (store.recoveryCheckpoints === undefined) return;
-        const tail = yield* ctx.tail;
+      if (continuation !== undefined) {
+        const accounting = continuation.accounting;
 
-        const source =
-          priorContext === undefined
-            ? Stream.concat(
-                canonical,
-                canonicalRange(ctx.threadId, tail.sequence, canonicalThrough),
-              )
-            : canonicalRange(ctx.threadId, tail.sequence);
+        const policyFields = [
+          "committedTurns",
+          "toolCalls",
+          "programmaticToolCalls",
+          "consecutiveToolFailures",
+          "finalizationUsed",
+          "modelRestarts",
+        ] as const;
 
-        let compaction: CanonicalRecordEnvelope | undefined;
-        let latestResponse: CanonicalSequence | undefined;
-        let firstSequence = journalSeed?.firstSequence;
-        const protectedCalls = new Set<string>();
-        const protectedTurns = new Set<number>();
-        const operationRecords: Array<CanonicalRecordEnvelope> = [];
+        const usageFields = [
+          "modelCalls",
+          "inputTokens",
+          "outputTokens",
+          "lastInputTokens",
+          "lastOutputTokens",
+          "costMicrousd",
+        ] as const;
 
-        yield* Stream.runForEach(source, (entry) =>
-          Effect.sync(() => {
-            const payload = entry.record.payload;
-
-            if (entry.record.recordId === compactionId) compaction = entry;
-            if (!("runId" in payload) || payload.runId !== runId) return;
-            firstSequence ??= entry.sequence;
-            operationRecords.push(entry);
-            if (payload._tag === "ModelResponseRecorded") {
-              latestResponse = entry.sequence;
-              for (const operation of payload.toolOperations)
-                if (
-                  operation.executionKind === "delegation" ||
-                  operation.executionKind === "orchestration"
-                ) {
-                  protectedCalls.add(operation.toolCallId);
-                  protectedTurns.add(payload.turn);
-                }
-            }
-          }),
-        );
-        for (const state of unresolvedToolOperations(operationRecords, runId)) {
-          protectedCalls.add(state.operation.toolCallId);
-          protectedTurns.add(state.turn);
-        }
         if (
-          compaction === undefined ||
-          compaction.record.payload._tag !== "CompactionCreated" ||
-          compaction.record.payload.kind === "clear-tool-results"
+          policyFields.some((field) => (journal.policyUsage[field] ?? 0) !== accounting[field]) ||
+          usageFields.some((field) => journal.usage[field] !== accounting[field]) ||
+          (journal.usage.unobservedModelCalls ?? 0) !== accounting.unobservedModelCalls
         )
-          return;
-        const replacement = compaction;
-        const covered = compaction.record.payload.coversThrough;
-
-        const retiredThrough = decodeCanonicalSequence(
-          Math.min(covered, (latestResponse ?? covered + 1) - 1),
-        );
-
-        if (retiredThrough <= (journalSeed?.throughSequence ?? 0)) return;
-
-        const retired = yield* projectRunJournalStream(
-          source.pipe(Stream.filter((entry) => entry.sequence <= retiredThrough)),
-          runId,
-          undefined,
-          journalSeed,
-        );
-
-        const detailed = yield* summarizeModelUsage(
-          retired.usage.modelUsage,
-          retired.usage.summarizedModelUsage,
-        ).pipe(
-          Effect.mapError((cause) =>
-            RunJournalError.make({ message: "Retired usage exceeds accounting bounds", cause }),
-          ),
-        );
-
-        const protectedContext = retired.protectedContext ?? journal.protectedContext;
-        // The first native rollover may precede this Attempt's first journal snapshot response.
-        const current = yield* projectRunJournalStream(source, runId, undefined, journalSeed);
-        const protectedMessages = protectedContext ?? current.protectedContext;
-
-        const encodedContext =
-          protectedMessages === undefined
-            ? undefined
-            : yield* Schema.encodeEffect(Prompt.Prompt)(protectedMessages).pipe(
-                Effect.flatMap(decodePersisted),
-                Effect.mapError((cause) =>
-                  RunJournalError.make({ message: "Cannot checkpoint protected context", cause }),
-                ),
-              );
-
-        let frontier = journalSeed?.frontier;
-        const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
-        let retiredIdentitiesExceeded = false;
-
-        const retained = yield* Stream.runCollect(
-          source.pipe(
-            Stream.filter((entry) => {
-              if (entry.sequence > retiredThrough) return true;
-              const payload = entry.record.payload;
-
-              if (payload._tag === "ModelResponseRecorded" || payload._tag === "ToolCallSettled")
-                frontier = { sequence: entry.sequence, tag: payload._tag };
-              if (
-                payload._tag === "ThreadCreated" ||
-                payload._tag === "SubagentLineageRecorded" ||
-                payload._tag === "WorkerOriginRecorded"
-              )
-                return true;
-              if (!("runId" in payload) || payload.runId !== runId) return false;
-              if ("toolCallId" in payload && protectedCalls.has(payload.toolCallId)) return true;
-              switch (payload._tag) {
-                case "ModelResponseRecorded":
-                  if (protectedTurns.has(payload.turn)) return true;
-                  for (const operation of payload.toolOperations) {
-                    if (retiredToolCallIds.has(operation.toolCallId)) continue;
-                    if (retiredToolCallIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
-                      retiredIdentitiesExceeded = true;
-                    else retiredToolCallIds.add(operation.toolCallId);
-                  }
-
-                  return false;
-                case "ToolCallSettled":
-                case "ToolCallUnknown":
-                case "ToolCallResolved":
-                case "ToolApprovalRequested":
-                case "ToolApprovalDecided":
-                case "CompactionCreated":
-                case "RunPolicyUsageReserved":
-                  return false;
-                default:
-                  return true;
-              }
-            }),
-          ),
-        );
-
-        if (retiredIdentitiesExceeded)
           return yield* RunJournalError.make({
-            message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+            message: "Canonical continuation accounting differs from its exact execution evidence",
           });
-
-        const ids = new Set<SubmissionId>([submissionId]);
-
-        for (const {
-          record: { payload },
-        } of retained)
-          if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined)
-            ids.add(payload.submissionId);
-
-        const validated = yield* Effect.try({
-          try: () =>
-            RecoveryCheckpointState.make({
-              schemaVersion: 2,
-              policyAccountingVersion: 1,
-              submissionId,
-              submissionIds: [...ids],
-              seed: JournalCheckpointSeed.make({
-                runId,
-                retiredToolCallIds: [...retiredToolCallIds],
-                throughSequence: retiredThrough,
-                ...(firstSequence === undefined ? {} : { firstSequence }),
-                committedTurns: retired.committedTurns,
-                ...(retired.toolSelection === undefined
-                  ? {}
-                  : { toolSelection: retired.toolSelection }),
-                policyUsage: retired.policyUsage,
-                modelCalls: retired.usage.modelCalls,
-                unobservedModelCalls: retired.usage.unobservedModelCalls ?? 0,
-                inputTokens: retired.usage.inputTokens,
-                outputTokens: retired.usage.outputTokens,
-                lastInputTokens: retired.usage.lastInputTokens,
-                lastOutputTokens: retired.usage.lastOutputTokens,
-                costMicrousd: retired.usage.costMicrousd,
-                summarizedModelUsage: detailed,
-                ...(current.contextWindowId === undefined
-                  ? {}
-                  : { contextWindowId: current.contextWindowId }),
-                ...(frontier === undefined ? {} : { frontier }),
-                ...(encodedContext === undefined ? {} : { protectedContext: encodedContext }),
-                compaction: replacement,
-              }),
-              records: retained,
-            }),
-          catch: (cause) =>
-            RunJournalError.make({ message: "Recovery checkpoint exceeds cache bounds", cause }),
-        }).pipe(Effect.option);
-
-        // Capacity is a cache eligibility limit, never a reason to truncate canonical evidence.
-        if (Option.isNone(validated)) return;
-
-        // Removing proof must not make a previously invalid historical compaction valid.
-        // Check the disposable projection against the canonical source before publishing it.
-        const replayed = yield* projectRunJournalStream(
-          Stream.fromIterable(retained),
-          runId,
-          undefined,
-          validated.value.seed,
-        ).pipe(Effect.option);
-
-        if (Option.isNone(replayed)) return;
-        const candidate = replayed.value;
-        const equalPrompt = Schema.toEquivalence(Prompt.Prompt);
-
-        if (
-          !equalPrompt(current.prompt, candidate.prompt) ||
-          !equalPrompt(current.historyBefore, candidate.historyBefore) ||
-          !Schema.toEquivalence(Schema.optional(Prompt.Prompt))(
-            current.protectedContext,
-            candidate.protectedContext,
-          ) ||
-          current.contextWindowId !== candidate.contextWindowId ||
-          current.pendingContextToolCallId !== candidate.pendingContextToolCallId ||
-          !Schema.toEquivalence(Schema.optional(Selection))(
-            current.toolSelection,
-            candidate.toolSelection,
-          ) ||
-          current.committedTurns !== candidate.committedTurns ||
-          !Schema.toEquivalence(RunPolicyUsage)(current.policyUsage, candidate.policyUsage) ||
-          (
-            [
-              "modelCalls",
-              "inputTokens",
-              "outputTokens",
-              "lastInputTokens",
-              "lastOutputTokens",
-              "costMicrousd",
-            ] as const
-          ).some((field) => current.usage[field] !== candidate.usage[field]) ||
-          (current.usage.unobservedModelCalls ?? 0) !== (candidate.usage.unobservedModelCalls ?? 0)
-        )
-          return;
-
-        const summaries = yield* Effect.forEach([current, candidate], (projection) =>
-          summarizeModelUsage(projection.usage.modelUsage, projection.usage.summarizedModelUsage),
-        ).pipe(Effect.option);
-
-        if (
-          Option.isNone(summaries) ||
-          summaries.value[0] === undefined ||
-          summaries.value[1] === undefined ||
-          !Schema.toEquivalence(RunUsageSummary)(summaries.value[0], summaries.value[1])
-        )
-          return;
-
-        const contents = yield* encodeRecoveryCheckpoint(validated.value);
-
-        if (Option.isNone(contents)) return;
-
-        yield* persistRecoveryCheckpoint(
-          ctx,
-          submission,
-          contents.value,
-          tail,
-          replacement.record.createdAt,
-        );
-      });
+      }
 
       const childLineage = records.find(
         ({ record }) => record.recordId === subagentLineageRecordId(submission.threadId),
@@ -5028,8 +4659,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           : yield* projectRunJournalStream(
               withoutPendingBatch(canonical, pending, runId),
               runId,
-              undefined,
-              journalSeed,
               undefined,
               priorContext,
             );
@@ -5521,10 +5150,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // identical establishment converges on the one existing child.
       const subagentState = subagentRecordsOf(records, runId);
 
-      const declaredToolIds = new Set([
-        ...(journalSeed?.retiredToolCallIds ?? []),
-        ...subagentState.declaredNames.keys(),
-      ]);
+      const declaredToolIds = new Set(subagentState.declaredNames.keys());
 
       if (declaredToolIds.size > MAX_RUN_TOOL_CALL_IDENTITIES)
         return yield* RunJournalError.make({
@@ -5679,9 +5305,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         nextTurnId: Ref.modify(turnCounter, (turn) => [turnIdForRun(runId, turn + 1), turn + 1]),
       };
 
-      // Current instructions govern the continuation; the original user intent, steering and
-      // committed history survive. The pending Turn re-enters through the batch continuation,
-      // without duplicating the engine's freshly rendered input.
+      // Original evaluated instructions and input survive changes of ownership and Binding.
+      // The pending Turn re-enters through its native batch without duplicating that input.
       // Retained immediate history can contain system messages. Its prefix stays untouched;
       // only this Run's instruction slots receive the freshly evaluated instructions.
       const instructionView = (
@@ -5760,12 +5385,56 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const durability: RunDurabilityHook<CoordinatorHalt | CompactionError, never> = {
         checkpoint,
         initialize: ({ initialHistory, priorHistoryLength }) =>
-          Effect.sync(() => {
-            initialHistoryLength = initialHistory.content.length;
-            initialInstructions = initialHistory.content
-              .slice(priorHistoryLength)
-              .filter((message) => message.role === "system");
-          }),
+          recordHalt(
+            Effect.gen(function* () {
+              initialHistoryLength = initialHistory.content.length;
+              initialInstructions = initialHistory.content
+                .slice(priorHistoryLength)
+                .filter((message) => message.role === "system");
+              if (priorContext !== undefined) return;
+              const recordId = decodeRecordIdSync(JSON.stringify(["run-context@1", runId]));
+
+              const prompt = yield* Schema.encodeEffect(Prompt.Prompt)(initialHistory).pipe(
+                Effect.flatMap(decodePersisted),
+                Effect.mapError((cause) =>
+                  RunJournalError.make({
+                    message: "Original Run context exceeds persistence bounds",
+                    cause,
+                  }),
+                ),
+              );
+
+              const payload = yield* RunContextRecorded.makeEffect({
+                version: 1,
+                runId,
+                prompt,
+                priorHistoryLength,
+                boundaries: boundaries.filter(
+                  (boundary) => boundary.promptLength <= priorHistoryLength,
+                ),
+                ...(journal.contextWindowId === undefined
+                  ? {}
+                  : { contextWindowId: journal.contextWindowId }),
+              }).pipe(
+                Effect.mapError((cause) =>
+                  RunJournalError.make({
+                    message: "Original Run context mapping exceeds its bounds",
+                    cause,
+                  }),
+                ),
+              );
+
+              yield* appendBatch(
+                ctx,
+                CanonicalBatch.make({
+                  batchId: decodeBatchIdSync(recordId),
+                  producerId: config.producerId,
+                  records: [yield* makeEnvelope(recordId, payload)],
+                }),
+              );
+              knownIds.add(recordId);
+            }),
+          ),
         commitModelRestart: (restart) =>
           recordHalt(
             Effect.gen(function* () {
@@ -6210,7 +5879,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             let sourceJournal = journal;
             let sourceBoundaries = boundaries;
 
-            if (commit.kind !== "summarize" || priorContext !== undefined) {
+            if (commit.kind !== "summarize") {
               // Results must be canonical before pruning or rollover can cover them. Newly committed
               // compactions remain overlays on this Attempt's append-only source, so omit those
               // overlays while reconstructing the exact source-to-record mapping.
@@ -6219,15 +5888,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               sourceBoundaries = [];
               sourceJournal = yield* recordHalt(
                 projectRunJournalStream(
-                  (priorContext === undefined
-                    ? Stream.concat(
-                        canonical,
-                        canonicalRange(ctx.threadId, tail.sequence, canonicalThrough),
-                      )
-                    : canonicalRange(
-                        ctx.threadId,
-                        commit.kind === "summarize" ? canonicalThrough : tail.sequence,
-                      )
+                  Stream.concat(
+                    canonical,
+                    Stream.fromIterable(
+                      yield* recordHalt(
+                        selectedRange(
+                          ctx.threadId,
+                          [submissionId],
+                          tail.sequence,
+                          canonicalThrough,
+                        ),
+                      ),
+                    ),
                   ).pipe(
                     Stream.filter(
                       (envelope) =>
@@ -6237,7 +5909,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   ),
                   runId,
                   (boundary) => sourceBoundaries.push(boundary),
-                  journalSeed,
+                  priorContext,
                 ),
               );
             }
@@ -6387,8 +6059,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             );
             knownIds.add(recordId);
             yield* recordHalt(hit("compaction:after-canonical-append"));
-            if (commit.kind !== "clear-tool-results")
-              yield* recordHalt(saveRecoveryCheckpoint(recordId));
           }),
       };
 
@@ -7444,9 +7114,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",
-        ...(journal.committedTurns > 0 || Schema.is(FrameworkMessage)(submission.messageAdmission)
+        ...(priorContext !== undefined ||
+        journal.committedTurns > 0 ||
+        Schema.is(FrameworkMessage)(submission.messageAdmission)
           ? { retainedInput: submission.inputPayload }
           : {}),
+        ...(priorContext === undefined
+          ? {}
+          : {
+              retainedContext: Prompt.fromMessages(
+                (yield* Schema.decodeUnknownEffect(Prompt.Prompt)(priorContext.prompt).pipe(
+                  Effect.mapError((cause) =>
+                    RunJournalError.make({ message: "Saved original context is invalid", cause }),
+                  ),
+                )).content.slice(priorContext.priorHistoryLength),
+              ),
+            }),
         ...(Schema.is(FrameworkMessage)(submission.messageAdmission)
           ? { frameworkMessage: submission.messageAdmission }
           : {}),
@@ -7936,6 +7619,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      session = yield* withProgressSession(session);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
@@ -7981,10 +7665,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         runIdForSubmission(submissionId),
       );
 
-      let journalMetadata =
-        initialView.seed === undefined
-          ? makeJournalMetadata(runIdForSubmission(submissionId))
-          : undefined;
+      let journalMetadata: ReturnType<typeof makeJournalMetadata> | undefined;
 
       const retainControl = controlRecords([submissionId]);
 
@@ -8016,12 +7697,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           (yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence;
 
         if (through > controlThrough) {
-          const suffix = yield* readCanonicalRange(
+          const suffix = yield* selectedRange(
             threadId,
-            controlThrough,
+            [submissionId],
             through,
-            collectControl,
-          );
+            controlThrough,
+          ).pipe(Effect.map((entries) => entries.filter(collectControl)));
 
           records = [...records, ...suffix];
           controlThrough = through;
@@ -8330,24 +8011,44 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       };
 
       let approvalDecisionIntents = snapshot.approvalDecisions;
-      let priorContext = initialView.context;
 
       while (true) {
         yield* session.refresh;
         const tail = yield* session.tail;
 
-        // An immediate resume may include a newly committed compaction. Rebuild its canonical
-        // proof rather than carrying the initial Thread context across that boundary.
-        const fullContextReplay = initialView.context !== undefined && priorContext === undefined;
-
-        const canonical = fullContextReplay
-          ? canonicalRange(threadId, tail.sequence)
-          : Stream.concat(
-              initialView.canonical,
-              canonicalRange(threadId, tail.sequence, initialThrough),
-            );
-
         const currentRecords = yield* refreshControl(tail.sequence);
+
+        const view = yield* recoveryView(
+          threadId,
+          tail.sequence,
+          [submissionId],
+          runIdForSubmission(submissionId),
+        );
+
+        let canonical: Stream.Stream<
+          CanonicalRecordEnvelope,
+          ThreadStoreError | ThreadNotMaterialized
+        > = view.canonical;
+
+        if (view.context === undefined) {
+          const original = currentRecords.find(
+            ({ record }) =>
+              record.payload._tag === "UserInputRecorded" &&
+              record.payload.kind === "user" &&
+              record.payload.submissionId === submissionId,
+          );
+
+          if (original === undefined)
+            return yield* RunJournalError.make({
+              message: "Run has no exact original input context boundary",
+            });
+          // Context assembly is paid once, bounded at the ORIGINAL admission, never the later
+          // Thread tail. Subsequent recovery uses the immutable saved context and selected Run.
+          canonical = Stream.concat(
+            canonicalRange(threadId, original.sequence),
+            view.canonical.pipe(Stream.filter((entry) => entry.sequence > original.sequence)),
+          );
+        }
 
         const outcome = yield* runModel(
           agent,
@@ -8357,17 +8058,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentRecords,
           canonical,
           tail.sequence,
-          initialView.seed,
-          priorContext,
-          fullContextReplay ? undefined : takeJournalMetadata(),
+          view.progress,
+          view.context,
+          takeJournalMetadata(),
           lineage,
           approvalDecisionIntents,
           currentContracts,
           runTiming,
           yieldAfter,
         );
-
-        priorContext = undefined;
 
         if (outcome._tag === "yielded") {
           if (outcome.nextSubmissionId !== undefined) onHandoff(outcome.nextSubmissionId);
@@ -8507,16 +8206,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }
 
         return Option.some(
-          yield* terminalize(
-            ctx,
-            submission,
-            session.publishSettlement,
-            outcome,
-            true,
-            outcome._tag === "completed"
-              ? saveThreadContext(ctx, submission, initialView.context)
-              : undefined,
-          ),
+          yield* terminalize(ctx, submission, session.publishSettlement, outcome, true),
         );
       }
     }).pipe(Effect.scoped);
@@ -10957,7 +10647,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     bindings: registeredBindings,
     deploymentId: config.deploymentId,
     producerId: config.producerId,
-  });
+  }).pipe(Effect.provideService(ThreadStore, progressStore));
 
   const workerRuntime = yield* makeWorkerRuntime({
     bindings: registeredBindings,
@@ -10965,6 +10655,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     producerId: config.producerId,
     settlementPollInterval: config.settlementPollInterval,
   }).pipe(
+    Effect.provideService(ThreadStore, progressStore),
     Effect.provideService(WorkerInputControl, {
       status: readSubmissionStatus,
       abort,
@@ -10987,7 +10678,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const updateRuntime = yield* makeAgentUpdateRuntime({
     deploymentId: config.deploymentId,
     producerId: config.producerId,
-  }).pipe(Effect.provideService(WorkerRuntime, workerRuntime));
+  }).pipe(
+    Effect.provideService(WorkerRuntime, workerRuntime),
+    Effect.provideService(ThreadStore, progressStore),
+  );
 
   return DurableAgentRuntime.of({
     bindingRegistryKey: yield* withCrypto(

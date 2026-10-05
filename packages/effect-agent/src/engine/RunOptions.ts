@@ -1020,6 +1020,13 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
    */
   readonly retainedInput?: Schema.Json | undefined;
 
+  /**
+   * Canonical evaluated instructions and input messages of an unfinished Run. Reuse their
+   * exact model context under a compatible current Binding; do not reevaluate instructions
+   * or render the original input again. Input-dependent Bindings still decode retainedInput.
+   */
+  readonly retainedContext?: Prompt.Prompt | undefined;
+
   /** Initial or canonically restored run-scoped native selection. */
   readonly toolSelection?: Selection | undefined;
   /**

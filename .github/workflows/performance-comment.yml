@@ -37,7 +37,7 @@ jobs:
               return fs.readFileSync(file, 'utf8');
             };
             const report = JSON.parse(read('report.json', 3000000));
-            if (report.fixture !== 'runtime-v4' || report.profile !== 'pr' ||
+            if (report.fixture !== 'runtime-v5' || report.profile !== 'pr' ||
                 !/^(?:effect-agent|@yielded\/agent)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(report.baselineTag) ||
                 report.activeBatch !== null || report.failure !== null ||
                 report.settings?.batches !== 3 || report.settings?.warmupsPerBatch !== 2 || report.settings?.samplesPerBatch !== 3 ||

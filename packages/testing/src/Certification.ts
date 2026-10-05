@@ -184,9 +184,6 @@ export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLoc
   // Active timeout recording is covered before/after append by durable-runtime.test.ts.
   "run:before-duration-append",
   "run:after-duration-append",
-  // Tier 2 has no native compaction; dedicated checkpoint process-loss tests cover these.
-  "checkpoint:before-save",
-  "checkpoint:after-save",
   "abort:after-intent",
   // Compaction requires a `contextTokenLimit` policy plus prior-Run history
   // none of the six scenario shapes carries; pinned in-process by the

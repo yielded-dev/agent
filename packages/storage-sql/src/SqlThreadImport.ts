@@ -4,7 +4,7 @@ import {
   CURRENT_RECORD_FORMAT,
   Digest,
   ObservationOffset,
-  PersistedJson,
+  RecordJson,
 } from "@yielded/agent/records";
 import {
   ApprovalDecisionIntent,
@@ -82,7 +82,7 @@ const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.field
 
 const WireBatch = Schema.Struct({
   ...ThreadExportBatch.fields,
-  records: Schema.NonEmptyArray(PersistedJson).check(Schema.isMaxLength(256)),
+  records: Schema.NonEmptyArray(RecordJson).check(Schema.isMaxLength(256)),
 });
 
 const AdmissionRow = Schema.Struct({
@@ -269,7 +269,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     "export complete Thread",
                     "Overlapping or non-contiguous canonical prefix",
                   );
-                const encoded = yield* json(PersistedJson, row.record_json);
+                const encoded = yield* json(RecordJson, row.record_json);
 
                 if (canonicalJson(encoded) !== canonicalJson(wire))
                   return yield* failure(
@@ -538,7 +538,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             "effect_agent_canonical_records",
             "effect_agent_canonical_batches",
             "effect_agent_checkpoints",
-            "effect_agent_recovery_checkpoints",
             "effect_agent_worker_stops",
             "effect_agent_attempts",
           ]) {

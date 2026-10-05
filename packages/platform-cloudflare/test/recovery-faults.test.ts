@@ -7,6 +7,11 @@ import {
 } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { DurableAgentRuntime, type RecoveryFailure } from "@yielded/agent/durable-agent-runtime";
 import {
+  DurableRuntimeFailpoint,
+  DurableRuntimeFailpointError,
+  type DurableRuntimeFailpointHandler,
+} from "@yielded/agent/durable-failpoint";
+import {
   type OperationAuthorizerService,
   operationAuthorizerLayer,
   possessionOperationAuthorizer,
@@ -20,6 +25,7 @@ import {
   SubmissionLedger,
   SubmissionLookupById,
   SubmissionLookupByKey,
+  submissionAbortRecordId,
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -62,6 +68,7 @@ const localRun =
     reads: Array<string>,
     options: {
       readonly hit?: ThreadMaintenanceFailpointHandler;
+      readonly runtimeHit?: DurableRuntimeFailpointHandler;
       readonly withoutBinding?: string;
       readonly authorizer?: OperationAuthorizerService;
       readonly readFailureDefect?: Error;
@@ -142,6 +149,12 @@ const localRun =
               Layer.provideMerge(
                 DurableAgentRuntime.layerWithBindings(
                   bindings.filter((binding) => binding.agentId !== options.withoutBinding),
+                ).pipe(
+                  Layer.provide(
+                    Layer.succeed(DurableRuntimeFailpoint, {
+                      hit: options.runtimeHit ?? (() => Effect.void),
+                    }),
+                  ),
                 ),
               ),
               Layer.provide(runStorageLayer()),
@@ -215,9 +228,21 @@ const corruptHistory = (owner: string, thread: string, sequence = 1) =>
       )
       .one();
 
+    const record = JSON.parse(row.record_json);
+
+    // Keep native ownership selectors addressable while corrupting the required evidence.
+    const corrupted = JSON.stringify({
+      ...record,
+      payload: {
+        _tag: record.payload._tag,
+        ...("runId" in record.payload ? { runId: record.payload.runId } : {}),
+        private_fixture_payload: "never expose this value",
+      },
+    });
+
     state.storage.sql.exec(
       "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
-      '{"private_fixture_payload":"never expose this value"}',
+      corrupted,
       thread,
       sequence,
     );
@@ -561,8 +586,38 @@ describe("recovery faults independent of execution history", () => {
         yield* run(pass);
         expect(events).toEqual([]);
         const first = yield* run(submit(thread, "first"));
+
+        const interrupted = yield* localRun(owner, [], {
+          ...options,
+          runtimeHit: (location) =>
+            location === "run:after-start-append"
+              ? Effect.fail(DurableRuntimeFailpointError.make({ location }))
+              : Effect.void,
+        })(
+          DurableAgentRuntime.use((runtime) => runtime.processThreadHead(decodeThreadId(thread))),
+        ).pipe(Effect.exit);
+
+        expect(interrupted).toMatchObject({ _tag: "Failure" });
+        yield* TestClock.adjust(5_000);
         const second = yield* run(submit(thread, "second"));
-        const original = yield* corruptHistory(owner, thread, 2);
+
+        const records = yield* run(
+          ThreadStore.use((store) =>
+            Stream.runCollect(
+              store.read(ThreadRead.make({ threadId: decodeThreadId(thread), limit: 100 })),
+            ),
+          ),
+        );
+
+        const continuation = records.findLast(
+          ({ record }) =>
+            record.payload._tag === "RunContinuation" &&
+            record.payload.submissionId === first.submissionId,
+        );
+
+        if (continuation === undefined) throw new Error("Expected unfinished Run continuation");
+        // Fault the selected Run's canonical progress, independently of prior settled Runs.
+        const original = yield* corruptHistory(owner, thread, continuation.sequence);
 
         // Interrupt after fault commit but before notification, then reconstruct maintenance.
         yield* localRun(owner, [], {
@@ -572,6 +627,7 @@ describe("recovery faults independent of execution history", () => {
               ? Effect.die(new Error("fixture restart after commit"))
               : Effect.void,
         })(pass).pipe(Effect.exit);
+        expect(yield* retainedFault(owner, thread)).toMatchObject({ _tag: "Some" });
         expect(events).toEqual([]);
         yield* TestClock.adjust(5_000);
         yield* run(pass);
@@ -630,9 +686,10 @@ describe("recovery faults independent of execution history", () => {
 
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = 2",
+            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
             original,
             thread,
+            continuation.sequence,
           );
 
           return Effect.runPromise(invalidate(state.storage));
@@ -1003,7 +1060,10 @@ describe("recovery faults independent of execution history", () => {
               ),
             ),
           ),
-        ).toEqual(queuedIntent);
+        ).toEqual({
+          ...queuedIntent,
+          canonicalRecordId: submissionAbortRecordId(queued.submissionId),
+        });
         expect(await run(submit(stoppedReady, "retired-before-claim"))).toEqual(queued);
         expect(await run(submit(fresh, "after-clear"))).toEqual(freshReceipt);
         expect(
@@ -1040,7 +1100,11 @@ describe("recovery faults independent of execution history", () => {
           before,
         );
         expect(await run(SubmissionLedger.use((ledger) => ledger.lookup(queuedLookup)))).toEqual(
-          queuedBefore,
+          Option.map(queuedBefore, (row) => ({
+            ...row,
+            state: "settled",
+            settledOutcome: "aborted",
+          })),
         );
         expect(supplierCountsFor(old)).toEqual({ book: 1 });
         expect(await scheduledAlarm(owner)).not.toBeNull();

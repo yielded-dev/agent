@@ -11,12 +11,10 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 17;
-// Frozen legacy record format: never replace this with a future CURRENT_RECORD_FORMAT.
-const LEGACY_RECORD_FORMAT = "effect-agent/thread@1";
+export const CurrentSqliteStorageVersion = 18;
 
-// Captured from the shipped layout16 initializer. Historical statements never call current DDL helpers.
-const baseline16 = [
+/** Fresh layout only. Unsupported stores are rejected before these statements execute. */
+const layoutStatements = [
   'CREATE TABLE "effect_agent_threads" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )',
   'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_canonical_records" ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES "effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
@@ -47,7 +45,6 @@ const baseline16 = [
   'CREATE INDEX effect_agent_subscription_deliveries_registration ON "effect_agent_subscription_deliveries" (tenant_id, source_address, owner_id, subscription_id, delivery_key)',
   'CREATE TABLE "effect_agent_message_deliveries" ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
   'CREATE INDEX effect_agent_message_deliveries_due ON "effect_agent_message_deliveries" (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL',
-  'CREATE TABLE "effect_agent_recovery_checkpoints" ( thread_id TEXT PRIMARY KEY NOT NULL, through_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, checkpoint_json TEXT NOT NULL, FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   "CREATE INDEX effect_agent_submissions_nonterminal ON \"effect_agent_submissions\" (thread_id, queue_sequence) WHERE state <> 'settled'",
   "CREATE INDEX effect_agent_records_call ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload._tag'), json_extract(record_json, '$.payload.runId'), json_extract(record_json, '$.payload.toolCallId'))",
   "CREATE INDEX effect_agent_records_run_input ON \"effect_agent_canonical_records\"(thread_id, json_extract(record_json, '$.payload.runId')) WHERE json_extract(record_json, '$.payload._tag') = 'UserInputRecorded' AND json_extract(record_json, '$.payload.kind') = 'user'",
@@ -58,67 +55,27 @@ const baseline16 = [
   "CREATE INDEX effect_agent_worker_starts ON effect_agent_message_deliveries(owner_thread_id, json_extract(record_json, '$.envelope.workerAdmission.origin.worker.delegationId'), json_extract(record_json, '$.envelope.workerAdmission.origin.worker.targetAgentId'), message_id) WHERE message_id = json_extract(record_json, '$.envelope.workerAdmission.origin.firstMessageId')",
   "CREATE INDEX effect_agent_worker_pending ON effect_agent_message_deliveries(owner_thread_id, json_extract(record_json, '$.envelope.workerAdmission.origin.worker.threadId'), message_id) WHERE state IN ('pending', 'parked') AND json_extract(record_json, '$.receipt') IS NULL",
   "CREATE INDEX effect_agent_worker_execution ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload._tag'), sequence) WHERE json_extract(record_json, '$.payload.runId') IS NOT NULL",
-] as const;
-
-const baselineObjects = [
-  ["table", "effect_agent_abort_intents", 9],
-  ["table", "effect_agent_approval_decisions", 11],
-  ["table", "effect_agent_attempts", 8],
-  ["table", "effect_agent_canonical_batches", 1],
-  ["table", "effect_agent_canonical_records", 2],
-  ["index", "effect_agent_canonical_records_batch", 3],
-  ["table", "effect_agent_checkpoints", 4],
-  ["table", "effect_agent_child_reservations", 14],
-  ["table", "effect_agent_message_deliveries", 28],
-  ["index", "effect_agent_message_deliveries_due", 29],
-  ["index", "effect_agent_message_deliveries_pending", 36],
-  ["index", "effect_agent_records_call", 32],
-  ["index", "effect_agent_records_run_input", 33],
-  ["index", "effect_agent_records_subtree", 34],
-  ["index", "effect_agent_records_worker_input", 35],
-  ["table", "effect_agent_recovery_checkpoints", 30],
-  ["table", "effect_agent_schedules", 15],
-  ["index", "effect_agent_schedules_deadline", 16],
-  ["index", "effect_agent_schedules_owner_deadline", 17],
-  ["table", "effect_agent_submission_ownership", 7],
-  ["table", "effect_agent_submissions", 5],
-  ["index", "effect_agent_submissions_group", 6],
-  ["index", "effect_agent_submissions_joined_host", 10],
-  ["index", "effect_agent_submissions_nonterminal", 31],
-  ["index", "effect_agent_submissions_parent", 13],
-  ["table", "effect_agent_subscription_deliveries", 25],
-  ["index", "effect_agent_subscription_deliveries_pending", 26],
-  ["index", "effect_agent_subscription_deliveries_registration", 27],
-  ["table", "effect_agent_subscription_events", 23],
-  ["index", "effect_agent_subscription_events_pending", 24],
-  ["table", "effect_agent_subscription_sequences", 18],
-  ["table", "effect_agent_subscriptions", 19],
-  ["index", "effect_agent_subscriptions_candidates", 21],
-  ["index", "effect_agent_subscriptions_owner", 20],
-  ["index", "effect_agent_subscriptions_recovery", 22],
-  ["table", "effect_agent_threads", 0],
-  ["table", "effect_agent_unknown_resolutions", 12],
-  ["index", "effect_agent_worker_execution", 40],
-  ["index", "effect_agent_worker_pending", 39],
-  ["index", "effect_agent_worker_starts", 38],
-  ["table", "effect_agent_worker_stops", 37],
+  "CREATE INDEX effect_agent_records_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.runId'), json_extract(record_json, '$.payload._tag'), sequence)",
+  "CREATE INDEX effect_agent_records_run_sequence ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.runId'), sequence)",
+  "CREATE INDEX effect_agent_records_tag ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload._tag'), sequence)",
+  "CREATE INDEX effect_agent_records_submission ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.submissionId'), sequence)",
+  "CREATE INDEX effect_agent_records_source ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.sourceSubmissionId'), sequence)",
+  "CREATE INDEX effect_agent_records_worker_source ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.admission.sourceSubmissionId'), sequence)",
+  "CREATE INDEX effect_agent_records_worker_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.admission.origin.source.runId'), sequence) WHERE json_extract(record_json, '$.payload.admission.origin.source._tag') = 'tool'",
+  "CREATE INDEX effect_agent_records_update_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.update.runId'), sequence)",
+  "CREATE INDEX effect_agent_records_peer_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.source.runId'), sequence) WHERE json_extract(record_json, '$.payload.source._tag') = 'tool'",
 ] as const;
 
 const headerStatement =
   "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
 
-/** Ordered, immutable adapter layout steps. Record payloads are never rewritten. */
-export const sqliteLayoutSteps = [
-  { version: 16, statements: [...baseline16, "PRAGMA user_version = 16"] },
-  {
-    version: 17,
-    statements: [
-      headerStatement,
-      "INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 17, 'effect-agent/thread@1')",
-      "PRAGMA user_version = 17",
-    ],
-  },
-] as const;
+const layoutObjects = layoutStatements.map((statement, index) => {
+  const name = /^CREATE (TABLE|INDEX) "?([a-z_]+)"?/.exec(statement);
+
+  if (name === null) throw new Error("Invalid fresh layout statement");
+
+  return [name[1].toLowerCase(), name[2], index] as const;
+});
 
 const Legacy = Schema.Tuple([Schema.Struct({ user_version: Schema.Int })]);
 
@@ -131,20 +88,16 @@ const incompatible = (actualVersion: number, message: string) =>
   SqliteStorageCompatibilityError.make({
     actualVersion,
     supportedVersion: CurrentSqliteStorageVersion,
-    message: `${message} Keep the original file; no layout upgrade was committed.`,
+    message: `${message} Keep the original file; the store was not changed.`,
   });
 
 const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  baseline: {
-    version: 16,
-    recordFormat: LEGACY_RECORD_FORMAT,
-    statements: baseline16,
-    objects: baselineObjects,
-  },
-  steps: sqliteLayoutSteps,
+  version: 18,
+  statements: layoutStatements,
+  objects: layoutObjects,
   headerStatement,
   incompatible,
   storageError,
@@ -188,12 +141,12 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Validate under the writer transaction before any DDL; commit every pending step together. */
-export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout")(function* () {
+/** Validate under the writer transaction before any DDL; initialize only a fresh store. */
+export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   // Current storage opens through a read snapshot even while another connection is writing.
-  // Only a pending layout acquires the writer lock, then repeats every check under that lock.
+  // A fresh store acquires the writer lock and repeats inspection before initialization.
   const current = yield* makeSqlTransaction(sql, { begin: "BEGIN" })(inspectStorage()).pipe(
     Effect.catchTag("SqlError", storageError),
   );
@@ -203,16 +156,12 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.upgradeLayout"
   return yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(
     Effect.gen(function* () {
       const header = yield* inspectStorage();
-      const version = header?.layoutVersion ?? 0;
 
-      for (const step of sqliteLayoutSteps) {
-        if (step.version <= version) continue;
-        for (const statement of step.statements) yield* sql.unsafe(statement).withoutTransform;
-      }
-
-      // Fresh storage uses today's record format; frozen steps retain the legacy format.
-      if (header === undefined)
-        yield* sql`UPDATE effect_agent_schema SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`;
+      if (header !== undefined) return header;
+      for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
+      yield* sql.unsafe(headerStatement).withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 18").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

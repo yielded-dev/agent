@@ -265,12 +265,11 @@ describe("DoSubmissionLedger", () => {
 
     expect(reread.capabilities.durability).toBe("durable-cloudflare");
     expect(reread.replayed.replayed).toBe(true);
-    expect(Option.isSome(reread.byKey)).toBe(true);
-    if (Option.isSome(reread.byKey)) {
-      expect(reread.byKey.value.submissionId).toBe(reread.replayed.submissionId);
-      expect(reread.byKey.value.receiptId).toBe(reread.replayed.receiptId);
-      expect(reread.byKey.value.state).toBe("admitted");
-    }
+    expect(Option.getOrUndefined(reread.byKey)).toMatchObject({
+      submissionId: reread.replayed.submissionId,
+      receiptId: reread.replayed.receiptId,
+      state: "admitted",
+    });
     expect(reread.nonterminal.map((snapshot) => snapshot.submissionId)).toEqual([
       reread.replayed.submissionId,
     ]);

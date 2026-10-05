@@ -1,5 +1,4 @@
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
 import { NodeFileSystem } from "@effect/platform-node";
 import { expect, layer } from "@effect/vitest";
@@ -24,7 +23,16 @@ import {
   makeCheckpointToolLayer,
   supplierCounts,
 } from "./fixtures.ts";
-import { assertConvergence, lookupByKey, readLog, withCrashSite, withHost } from "./harness.ts";
+import {
+  CHILD_LEASE_MS,
+  assertConvergence,
+  expectKilled,
+  lookupByKey,
+  readLog,
+  runWorkerToExit,
+  withCrashSite,
+  withHost,
+} from "./harness.ts";
 
 const openDatabase = (filename: string) =>
   Effect.acquireRelease(
@@ -33,27 +41,23 @@ const openDatabase = (filename: string) =>
   );
 
 const derivativeCounts = (db: DatabaseSync) =>
-  Schema.decodeUnknownSync(
-    Schema.Struct({ ownership: Schema.Int, attempts: Schema.Int, recovery: Schema.Int }),
-  )(
+  Schema.decodeUnknownSync(Schema.Struct({ ownership: Schema.Int, attempts: Schema.Int }))(
     db
       .prepare(
         `SELECT
           (SELECT COUNT(*) FROM effect_agent_submission_ownership) AS ownership,
-          (SELECT COUNT(*) FROM effect_agent_attempts) AS attempts,
-          (SELECT COUNT(*) FROM effect_agent_recovery_checkpoints) AS recovery`,
+          (SELECT COUNT(*) FROM effect_agent_attempts) AS attempts`,
       )
       .get(),
   );
 
-// Requested transfer proof: the fixture is a real format-16 worker killed after persisting
-// a recovery checkpoint. Same-file recovery tests cannot prove that import discards authority
-// and caches while preserving the log, admission facts and the unfinished Run.
+// A real current-format worker loses its process after canonical compaction. Transfer must
+// discard execution authority while preserving original input, context, progress and admissions.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
   "Thread transfer after process loss",
   (it) => {
     it.effect(
-      "exports format 16, imports a fresh store, and resumes the original Run",
+      "exports current canonical progress, imports a fresh store, and resumes the original Run",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -62,18 +66,24 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             const request = ThreadExportRequest.make({ threadId });
             const target = `${site.db}.imported`;
 
-            const fixture = yield* fs.readFileString(
-              fileURLToPath(new URL("./fixtures/format16-checkpoint.sql", import.meta.url)),
-            );
+            const child = yield* runWorkerToExit({
+              db: site.db,
+              scenario: "run-checkpoint",
+              thread: "checkpoint-crash",
+              key: "checkpoint-crash",
+              supplierDir: site.supplier,
+              leaseMillis: CHILD_LEASE_MS,
+              killAt: "compaction:after-canonical-append",
+            });
 
+            expectKilled(child);
             yield* Effect.scoped(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                db.exec(fixture);
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 16 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 18 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-                expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1, recovery: 1 });
+                expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
               }),
             );
             const sourceBytes = yield* fs.readFile(site.db);
@@ -87,7 +97,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               archiveJson,
             );
 
-            expect(exported.tailSequence).toBe(8);
+            expect(
+              exported.records.some(({ record }) => record.payload._tag === "RunContinuation"),
+            ).toBe(true);
 
             const imported = yield* Effect.gen(function* () {
               const importer = yield* ThreadImport;
@@ -107,7 +119,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(target);
 
-                expect(derivativeCounts(db)).toEqual({ ownership: 0, attempts: 0, recovery: 0 });
+                expect(derivativeCounts(db)).toEqual({ ownership: 0, attempts: 0 });
               }),
             );
 
@@ -169,6 +181,8 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   records.filter(({ record }) => record.payload._tag === "RunStarted"),
                 ).toHaveLength(1);
                 expect(supplierCounts(site.supplier)).toEqual({
+                  "checkpoint-read:checkpoint-read-1": 1,
+                  "checkpoint-read:checkpoint-read-2": 1,
                   "checkpoint-read:checkpoint-read-3": 1,
                 });
                 yield* assertConvergence("checkpoint-crash", [submission.submissionId]);

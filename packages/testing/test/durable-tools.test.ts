@@ -1675,10 +1675,17 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       expect(logTags(records)).toEqual([
         "ThreadCreated",
         "UserInputRecorded",
+        "RunContinuation",
         "RunStarted",
+        "RunContinuation",
+        "RunContextRecorded",
+        "RunContinuation",
         "ModelResponseRecorded",
+        "RunContinuation",
         "AbortRequested",
+        "RunContinuation",
         "SubmissionSettled",
+        "RunContinuation",
       ]);
       expect(
         records.find(({ record }) => record.payload._tag === "AbortRequested")?.record.payload,

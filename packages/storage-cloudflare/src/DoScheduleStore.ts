@@ -1,4 +1,3 @@
-import { upgradeV2Schedules } from "@yielded/agent-storage-sql/sql-storage-v2-upgrade";
 import {
   ScheduleCapacityError,
   ScheduleDueCursor,
@@ -233,42 +232,6 @@ const initializeScheduleStore = Effect.fnUntraced(function* () {
   `.pipe(Effect.mapError(() => unavailable(operation)));
 
   const state = yield* decodeRows(Schema.Array(ScheduleStoreStateRow), rawState, operation);
-
-  if (state.length === 1 && state[0].storage_version === 2) {
-    const failpoint = yield* ScheduleFailpoint;
-
-    yield* sql
-      .withTransaction(
-        Effect.gen(function* () {
-          const current = yield* sql<{
-            storage_version: number;
-          }>`SELECT storage_version FROM effect_agent_schedule_store_state WHERE singleton=1`;
-
-          if (current.length === 1 && current[0].storage_version === 3) return;
-          if (current.length !== 1 || current[0].storage_version !== 2)
-            return yield* corrupt("schedule version changed during upgrade");
-          yield* upgradeV2Schedules(MAX_STORED_SCHEDULE_BYTES);
-          yield* failpoint.hit("upgrade:before-version");
-          yield* sql`UPDATE effect_agent_schedule_store_state SET storage_version=3 WHERE singleton=1`;
-          yield* failpoint.hit("upgrade:after-version");
-        }),
-      )
-      .pipe(
-        Effect.catchTag("StorageUpgradeError", (error) =>
-          ScheduleStorageError.make({
-            reason: "corrupt",
-            operation: "upgrade v2 schedules",
-            cause: error,
-          }),
-        ),
-        Effect.catchTag("SqlError", () => unavailable("upgrade v2 schedules")),
-        Effect.catchTag("ScheduleFailpointError", () =>
-          unavailable("upgrade v2 schedules failpoint"),
-        ),
-      );
-
-    return;
-  }
 
   if (state.length !== 1 || state[0].storage_version !== CURRENT_SCHEDULE_STORE_VERSION) {
     return yield* corrupt(

@@ -1,4 +1,3 @@
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { CanonicalSequence, Digest, ProducerEpoch } from "@yielded/agent/records";
@@ -8,8 +7,7 @@ import {
   CheckpointRejected,
   FenceRejected,
   type PreparedAppend,
-  ThreadNotMaterialized,
-  type SaveRecoveryCheckpointRequest,
+  type ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -25,7 +23,7 @@ import {
   type SqlStorageFailpoint,
   type SqlTransactions,
 } from "./SqlStorage.ts";
-import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
+import { canonicalRecordMetadata, makeProgressAppendValidation } from "./SqlThreadNativeReads.ts";
 
 export interface SqlJournalOptions<
   S extends Diagnostic,
@@ -132,6 +130,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 >(options: SqlJournalOptions<S, C, W, F>) {
   const sql = yield* SqlClient.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
+  const validateProgress = yield* makeProgressAppendValidation(options.namespace);
 
   const lifecycle = yield* makeSqlLifecyclePublication(options.namespace).pipe(
     Effect.mapError((cause) =>
@@ -268,7 +267,10 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const appendInTransaction = Effect.fnUntraced(function* (
     request: RawAppendRequest,
     readThread: Effect.Effect<ThreadRow, C | S>,
-  ): Effect.fn.Return<RawAppendResult, AppendConflict | FenceRejected | C | S | F | W> {
+  ): Effect.fn.Return<
+    RawAppendResult,
+    AppendConflict | FenceRejected | ThreadStoreError | C | S | F | W
+  > {
     if (
       request.threadId.length > MAX_IDENTIFIER_LENGTH ||
       request.batchId.length > MAX_IDENTIFIER_LENGTH ||
@@ -428,6 +430,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       ),
     );
 
+    yield* validateProgress(request);
     yield* sql`
         INSERT INTO ${relation("effect_agent_canonical_batches")} (
           thread_id,
@@ -634,76 +637,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const saveRecoveryCheckpoint = Effect.fnUntraced(function* (
-    request: SaveRecoveryCheckpointRequest,
-    checkpointJson: string,
-  ) {
-    const { checkpoint } = request;
-
-    if (
-      checkpoint.threadId.length > MAX_IDENTIFIER_LENGTH ||
-      storedTextBytes(checkpointJson) > MAX_STORED_TEXT_BYTES
-    ) {
-      return yield* options.errors.storage({
-        operation: "save recovery checkpoint",
-        message: "Checkpoint identity or encoded JSON exceeds the SQL storage bounds.",
-      });
-    }
-    yield* withWriteTransaction("recovery checkpoint transaction")(
-      Effect.gen(function* () {
-        const threads = yield* getThread(checkpoint.threadId);
-        const thread = threads[0];
-
-        if (thread === undefined)
-          return yield* ThreadNotMaterialized.make({ threadId: checkpoint.threadId });
-        if (request.producerEpoch !== thread.producer_epoch)
-          return yield* FenceRejected.make({
-            threadId: checkpoint.threadId,
-            actualEpoch: thread.producer_epoch,
-            attemptedEpoch: request.producerEpoch,
-          });
-        if (checkpoint.throughSequence > thread.tail_sequence)
-          return yield* CheckpointRejected.make({
-            threadId: checkpoint.threadId,
-            reason: "ahead-of-tail",
-          });
-
-        const digests =
-          checkpoint.throughSequence === 0
-            ? [EMPTY_TAIL_DIGEST]
-            : yield* getTailDigestAt(checkpoint.threadId, checkpoint.throughSequence);
-
-        if (digests.length !== 1 || digests[0] !== checkpoint.tailDigest)
-          return yield* CheckpointRejected.make({
-            threadId: checkpoint.threadId,
-            reason: "digest-mismatch",
-          });
-
-        yield* failpoint("save-recovery-checkpoint:before");
-        yield* sql`
-          INSERT INTO ${relation("effect_agent_recovery_checkpoints")} (thread_id, through_sequence, tail_digest, checkpoint_json)
-          VALUES (${checkpoint.threadId}, ${checkpoint.throughSequence}, ${checkpoint.tailDigest}, ${checkpointJson})
-          ON CONFLICT (thread_id) DO UPDATE SET
-            through_sequence = excluded.through_sequence,
-            tail_digest = excluded.tail_digest,
-            checkpoint_json = excluded.checkpoint_json
-          WHERE excluded.through_sequence >= ${relation("effect_agent_recovery_checkpoints")}.through_sequence
-        `.pipe(execute, Effect.mapError(storageError("save recovery checkpoint")));
-      }),
-    );
-    yield* failpoint("save-recovery-checkpoint:after");
-  });
-
-  const loadRecoveryCheckpoint = Effect.fnUntraced(function* (threadId: string) {
-    const rows = yield* sql<Record<string, unknown>>`
-      SELECT thread_id, through_sequence, tail_digest, checkpoint_json
-      FROM ${relation("effect_agent_recovery_checkpoints")}
-      WHERE thread_id = ${threadId}
-    `.pipe(execute, Effect.mapError(storageError("load recovery checkpoint")));
-
-    return yield* decodeCheckpointRows("effect_agent_recovery_checkpoints", threadId, rows);
-  });
-
   const loadCheckpoint = Effect.fnUntraced(function* (
     threadId: string,
     atOrBeforeSequence: CanonicalSequence,
@@ -856,8 +789,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     getThread,
     getTailDigestAt,
     loadCheckpoint,
-    loadRecoveryCheckpoint,
-    saveRecoveryCheckpoint,
     materialize,
     read,
     saveCheckpoint,

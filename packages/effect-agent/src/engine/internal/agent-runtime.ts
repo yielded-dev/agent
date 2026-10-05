@@ -8737,6 +8737,12 @@ function executeWithCompletion<
 
                     const source = agent.definition.instructions;
 
+                    if (options.retainedContext !== undefined) {
+                      if (typeof source === "function") yield* decodeInput(agent, encodedInput);
+
+                      return { instructions: "", encodedInput, inputPrompt: undefined };
+                    }
+
                     const instructions =
                       typeof source === "function"
                         ? yield* evaluateInstructions<
@@ -8798,7 +8804,14 @@ function executeWithCompletion<
                     );
 
               const priorHistoryLength = context.history.content.length;
-              const prompt = yield* makeInitialPrompt(instructions, inputPrompt, context.history);
+
+              const prompt =
+                options.retainedContext === undefined
+                  ? yield* makeInitialPrompt(instructions, inputPrompt, context.history)
+                  : Prompt.fromMessages([
+                      ...context.history.content,
+                      ...options.retainedContext.content,
+                    ]);
 
               if (options.durability !== undefined) {
                 if ((resumeUsage?.committedTurns ?? 0) === 0) {
@@ -8819,14 +8832,16 @@ function executeWithCompletion<
                 const currentPrefix = prompt.content.slice(priorHistoryLength);
 
                 const protectedMessages =
-                  options.protectedContext === undefined
-                    ? currentPrefix
-                    : [
-                        ...currentPrefix.filter((message) => message.role === "system"),
-                        ...options.protectedContext.content.filter(
-                          (message) => message.role !== "system",
-                        ),
-                      ];
+                  options.retainedContext !== undefined
+                    ? options.retainedContext.content
+                    : options.protectedContext === undefined
+                      ? currentPrefix
+                      : [
+                          ...currentPrefix.filter((message) => message.role === "system"),
+                          ...options.protectedContext.content.filter(
+                            (message) => message.role !== "system",
+                          ),
+                        ];
 
                 context.preparedCompactionSource = {
                   protectedReferences: protectedMessages,

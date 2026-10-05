@@ -814,9 +814,11 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
         expect(settlements).toHaveLength(1);
         expect(settlements[0]?.outcome).toBe("failed");
         expect(yield* lookupState(receipt.submissionId)).toBe("settled");
-        expect((yield* readLog(testCase.thread)).at(-1)?.record.payload._tag).toBe(
-          "SubmissionSettled",
-        );
+        expect(
+          (yield* readLog(testCase.thread)).findLast(
+            ({ record }) => record.payload._tag === "SubmissionSettled",
+          )?.record.payload._tag,
+        ).toBe("SubmissionSettled");
       }
     }),
   );
@@ -993,7 +995,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
       expect(payloads.filter((payload) => payload._tag === "ToolCallSettled")).toHaveLength(1);
       expect(payloads.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(1);
       expect(payloads.filter((payload) => payload._tag === "SubmissionSettled")).toHaveLength(1);
-      expect(payloads.at(-1)).toMatchObject({
+      expect(payloads.findLast((payload) => payload._tag === "SubmissionSettled")).toMatchObject({
         _tag: "SubmissionSettled",
         result: { answer: "Created Committed name: /projects/created-1" },
       });
@@ -1090,7 +1092,10 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
         expect(records.filter(({ record }) => record.payload._tag === "RunCompleted")).toHaveLength(
           1,
         );
-        expect(records.at(-1)?.record.payload).toMatchObject({
+        expect(
+          records.findLast(({ record }) => record.payload._tag === "SubmissionSettled")?.record
+            .payload,
+        ).toMatchObject({
           _tag: "SubmissionSettled",
           result: { answer: "Created Project: /project/1" },
         });
@@ -1332,7 +1337,7 @@ layer(corruptedCompletionTestLayer)("RUN-032 recovered completion validation", (
         runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
       );
 
-      expect(failureTag(recovered)).toBe("RunJournalError");
+      expect(failureTag(recovered)).toBe("ThreadStoreError");
       expect(yield* Ref.get(createCalls)).toBe(1);
       expect(yield* Ref.get(respondCalls)).toBe(0);
       expect(scripted.prompts).toHaveLength(1);
@@ -1567,7 +1572,11 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         expect(settlements[0]?.outcome).toBe("failed");
         expect(yield* Ref.get(executions)).toBe(2);
         expect(scripted.prompts.length).toBe(3);
-        expect((yield* readLog(receipt.threadId)).at(-1)?.record.payload).toMatchObject({
+        expect(
+          (yield* readLog(receipt.threadId)).findLast(
+            ({ record }) => record.payload._tag === "SubmissionSettled",
+          )?.record.payload,
+        ).toMatchObject({
           policyLimit: limit,
         });
       }

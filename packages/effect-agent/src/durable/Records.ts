@@ -1,4 +1,4 @@
-import { Option, Schema, SchemaGetter } from "effect";
+import { Option, Schema } from "effect";
 import { Prompt } from "effect/ai";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
@@ -110,6 +110,8 @@ export const MAX_PERSISTED_JSON_DEPTH = 64;
 export const MAX_PERSISTED_JSON_COLLECTION_LENGTH = 4_096;
 export const MAX_PERSISTED_JSON_NODES = 65_536;
 export const MAX_PERSISTED_JSON_BYTES = 1024 * 1024;
+/** Whole record wire includes bounded payloads and their canonical envelope. */
+export const MAX_CANONICAL_RECORD_BYTES = 4 * 1024 * 1024;
 
 /**
  * Iteratively preflights an unknown value before Schema's recursive JSON validation. This is the
@@ -121,75 +123,83 @@ const isJson = Schema.is(Schema.Json);
 // No Unicode flag: match surrogate code units so astral characters take the UTF-8 path too.
 const nonAscii = /[\u0080-\uFFFF]/;
 
-const isPersistedJson = (input: unknown): input is Schema.Json => {
-  const pending: Array<
-    | { readonly _tag: "visit"; readonly value: unknown; readonly depth: number }
-    | { readonly _tag: "leave"; readonly value: object }
-  > = [{ _tag: "visit", value: input, depth: 0 }];
+const boundedJson =
+  (limits: { readonly depth: number; readonly nodes: number; readonly bytes: number }) =>
+  (input: unknown): input is Schema.Json => {
+    const pending: Array<
+      | { readonly _tag: "visit"; readonly value: unknown; readonly depth: number }
+      | { readonly _tag: "leave"; readonly value: object }
+    > = [{ _tag: "visit", value: input, depth: 0 }];
 
-  // Only ancestors indicate a cycle. Shared acyclic values serialize once per occurrence,
-  // so revisit them and charge every occurrence against the same resource limits.
-  const ancestors = new WeakSet<object>();
-  let nodes = 0;
-  let textUnits = 0;
+    // Only ancestors indicate a cycle. Shared acyclic values serialize once per occurrence,
+    // so revisit them and charge every occurrence against the same resource limits.
+    const ancestors = new WeakSet<object>();
+    let nodes = 0;
+    let textUnits = 0;
 
-  try {
-    while (pending.length > 0) {
-      const current = pending.pop();
+    try {
+      while (pending.length > 0) {
+        const current = pending.pop();
 
-      if (current === undefined) return false;
-      if (current._tag === "leave") {
-        ancestors.delete(current.value);
-        continue;
+        if (current === undefined) return false;
+        if (current._tag === "leave") {
+          ancestors.delete(current.value);
+          continue;
+        }
+        if (current.depth > limits.depth || ++nodes > limits.nodes) {
+          return false;
+        }
+
+        const value = current.value;
+
+        if (value === null || typeof value === "boolean") continue;
+        if (typeof value === "number") {
+          if (!Number.isFinite(value)) return false;
+          continue;
+        }
+        if (typeof value === "string") {
+          textUnits += value.length;
+          if (textUnits > limits.bytes) return false;
+          continue;
+        }
+        if (typeof value !== "object" || ancestors.has(value)) return false;
+        ancestors.add(value);
+        pending.push({ _tag: "leave", value });
+
+        const entries = Array.isArray(value)
+          ? Array.from(value, (entry, index) => [index, entry] as const)
+          : Object.entries(value);
+
+        if (entries.length > MAX_PERSISTED_JSON_COLLECTION_LENGTH) return false;
+        for (const [key, entry] of entries) {
+          textUnits += typeof key === "string" ? key.length : 0;
+          if (textUnits > limits.bytes) return false;
+          pending.push({ _tag: "visit", value: entry, depth: current.depth + 1 });
+        }
       }
-      if (current.depth > MAX_PERSISTED_JSON_DEPTH || ++nodes > MAX_PERSISTED_JSON_NODES) {
-        return false;
-      }
 
-      const value = current.value;
+      if (!isJson(input)) return false;
+      const encoded = JSON.stringify(input);
 
-      if (value === null || typeof value === "boolean") continue;
-      if (typeof value === "number") {
-        if (!Number.isFinite(value)) return false;
-        continue;
-      }
-      if (typeof value === "string") {
-        textUnits += value.length;
-        if (textUnits > MAX_PERSISTED_JSON_BYTES) return false;
-        continue;
-      }
-      if (typeof value !== "object" || ancestors.has(value)) return false;
-      ancestors.add(value);
-      pending.push({ _tag: "leave", value });
-
-      const entries = Array.isArray(value)
-        ? Array.from(value, (entry, index) => [index, entry] as const)
-        : Object.entries(value);
-
-      if (entries.length > MAX_PERSISTED_JSON_COLLECTION_LENGTH) return false;
-      for (const [key, entry] of entries) {
-        textUnits += typeof key === "string" ? key.length : 0;
-        if (textUnits > MAX_PERSISTED_JSON_BYTES) return false;
-        pending.push({ _tag: "visit", value: entry, depth: current.depth + 1 });
-      }
+      // Escaping is already reflected in the serialized text. UTF-8 uses one to three bytes per
+      // UTF-16 code unit; ASCII uses exactly one. Only ambiguous Unicode needs the exact count.
+      return (
+        encoded !== undefined &&
+        encoded.length <= limits.bytes &&
+        (encoded.length <= limits.bytes / 3 ||
+          !nonAscii.test(encoded) ||
+          utf8ByteLength(encoded) <= limits.bytes)
+      );
+    } catch {
+      return false;
     }
+  };
 
-    if (!isJson(input)) return false;
-    const encoded = JSON.stringify(input);
-
-    // Escaping is already reflected in the serialized text. UTF-8 uses one to three bytes per
-    // UTF-16 code unit; ASCII uses exactly one. Only ambiguous Unicode needs the exact count.
-    return (
-      encoded !== undefined &&
-      encoded.length <= MAX_PERSISTED_JSON_BYTES &&
-      (encoded.length <= MAX_PERSISTED_JSON_BYTES / 3 ||
-        !nonAscii.test(encoded) ||
-        utf8ByteLength(encoded) <= MAX_PERSISTED_JSON_BYTES)
-    );
-  } catch {
-    return false;
-  }
-};
+const isPersistedJson = boundedJson({
+  depth: MAX_PERSISTED_JSON_DEPTH,
+  nodes: MAX_PERSISTED_JSON_NODES,
+  bytes: MAX_PERSISTED_JSON_BYTES,
+});
 
 /** Canonical JSON admitted to persisted records and checkpoints under explicit resource limits. */
 export const PersistedJson = Schema.declare(isPersistedJson, {
@@ -198,6 +208,21 @@ export const PersistedJson = Schema.declare(isPersistedJson, {
 });
 
 export type PersistedJson = typeof PersistedJson.Type;
+
+/** Whole record wire reserves room for the payload's envelope and additional bounded fields. */
+export const RecordJson = Schema.declare(
+  boundedJson({
+    depth: MAX_PERSISTED_JSON_DEPTH + 4,
+    nodes: MAX_PERSISTED_JSON_NODES * 4,
+    bytes: MAX_CANONICAL_RECORD_BYTES,
+  }),
+  {
+    identifier: "@effect-agent/thread/RecordJson",
+    description: "Canonical record JSON bounded by depth, collection, node, and 4 MiB byte limits",
+  },
+);
+
+export type RecordJson = typeof RecordJson.Type;
 
 /** Schema-owned replay inputs whose individual definitions are incorporated into digests. */
 export class DefinitionDigestInput extends Schema.Class<DefinitionDigestInput>(
@@ -349,20 +374,18 @@ const ModelResponseRecordedFields = Schema.Struct({
   messagesDigest: Digest,
   /**
    * Number of leading messages that belong only to this Run's evaluated instructions and wake
-   * input. They remain canonical. Continuations replace the instruction messages with current
-   * instructions while retaining user input; later Runs also retain that original user intent.
-   * Records without this field retain their full history.
+   * input. They remain canonical. An unfinished Run retains this exact evaluated prefix;
+   * subsequent Runs retain its original user intent in conversation history.
    */
   runScopedPrefixLength: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
   /**
    * Exact normalized usage for every model call staged into this Turn. A
-   * summarizer and the Turn response are distinct entries. Absent on legacy
-   * records, whose aggregate totals below retain the old resume behavior.
+   * summarizer and the Turn response are distinct entries. Unmetered responses can omit it.
    */
   modelUsage: Schema.optionalKey(Schema.Array(ModelCallUsage)),
   /** Observed invocations without retained accounting before this Turn committed. */
   unobservedModelCalls: Schema.optionalKey(Schema.Natural),
-  /** Aggregate compatibility fields used by older projections. */
+  /** Aggregate observed usage when per-call accounting is unavailable. */
   inputTokens: Schema.optionalKey(Schema.Natural),
   outputTokens: Schema.optionalKey(Schema.Natural),
   /** Estimated spend staged with the usage; recovery re-seeds the cost budget (RUN-023). */
@@ -1025,6 +1048,7 @@ export class PeerMessagePrepared extends Schema.TaggedClass<PeerMessagePrepared>
   "PeerMessagePrepared",
   {
     messageId: IdempotencyKey,
+    source: WorkerSource,
     sourcePrincipal: Principal,
     operation: Schema.Literals(["send", "reply"]),
     deadlineAtMillis: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -1052,11 +1076,114 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 1;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@1";
+/** Logical canonical identity and content integrity, independent of hot-storage location. */
+export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
+export type EvidenceReference = typeof EvidenceReference.Type;
 
-/** Known record kinds. New kinds must be safe for older readers to ignore. */
+export const MAX_RUN_CONTINUATION_BYTES = 8_192;
+/** Incremental record JSON per Turn, including progress and the first Turn's initial context. */
+export const MAX_TURN_CANONICAL_BYTES = MAX_CANONICAL_RECORD_BYTES;
+export const MAX_RUN_EVIDENCE_RECORDS = 16_384;
+export const MAX_RUN_EVIDENCE_BYTES = 32 * 1024 * 1024;
+export const MAX_RUN_RECOVERY_SUFFIX_RECORDS = 64;
+export const MAX_RUN_RECOVERY_SUFFIX_BYTES = 2 * 1024 * 1024;
+export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
+
+/** Saved model context has its own canonical owner; execution progress only references it. */
+export const ContextBoundary = Schema.Struct({
+  sequence: CanonicalSequence,
+  tag: Schema.Literals(["ModelResponseRecorded", "ToolCallSettled"]),
+  promptLength: Schema.Natural,
+  incomplete: Schema.optionalKey(Schema.Literal(true)),
+  terminalPriorRun: Schema.optionalKey(Schema.Literal(true)),
+});
+
+export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()(
+  "RunContextRecorded",
+  {
+    version: Schema.Literal(1),
+    runId: RunId,
+    /** Exact initial history, including evaluated instructions and the original input. */
+    prompt: PersistedJson,
+    priorHistoryLength: Schema.Natural,
+    boundaries: Schema.Array(ContextBoundary).check(Schema.isMaxLength(4_096)),
+    contextWindowId: Schema.optionalKey(BoundedName),
+  },
+) {}
+
+/** Accumulated charges; replacement Attempts never replenish or charge these again. */
+export const ContinuationAccounting = Schema.Struct({
+  ...RunPolicyUsage.fields,
+  modelRestarts: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
+  modelCalls: Schema.Natural,
+  unobservedModelCalls: Schema.Natural,
+  inputTokens: Schema.Natural,
+  outputTokens: Schema.Natural,
+  lastInputTokens: Schema.Natural,
+  lastOutputTokens: Schema.Natural,
+  costMicrousd: Schema.Natural,
+  /** The last complete operation batch whose declaration-ordered failure streak was charged. */
+  accountedToolTurn: Schema.Natural,
+});
+
+export type ContinuationAccounting = typeof ContinuationAccounting.Type;
+
+/** Semantic execution boundaries, never engine stacks, fibers, or program counters. */
+export const RunPosition = Schema.Literals([
+  "starting",
+  "awaiting-model",
+  "processing-operations",
+  "waiting-approval",
+  "waiting-dependency",
+  "unknown",
+  "settling",
+  "settled",
+]);
+
+/**
+ * Canonical interpreter progress, co-committed with lastFact under the Thread fence.
+ * lastFact is the exact accounted frontier in the same atomic batch; its logical
+ * sequence is resolved from canonical evidence rather than predicted by a producer.
+ * References resolve within this Thread. Operation results, call identities, approvals,
+ * delivery obligations, and context payloads stay in their own canonical owners.
+ * Neither this record nor its latest-record index grants execution authority.
+ */
+export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
+  "RunContinuation",
+  Schema.Struct({
+    version: Schema.Literal(1),
+    runId: RunId,
+    submissionId: SubmissionId,
+    revision: Schema.Natural.check(Schema.isGreaterThan(0)),
+    /** Number of this Run's non-continuation facts accounted for at the frontier. */
+    recordCount: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_RECORDS)),
+    /** Cumulative owning fact bytes, excluding continuation records. */
+    recordBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
+    /** Logical Turn whose incremental canonical bytes are currently being charged. */
+    turn: Schema.Natural,
+    turnBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES)),
+    originalInput: EvidenceReference,
+    savedContext: Schema.optionalKey(EvidenceReference),
+    latestResponse: Schema.optionalKey(EvidenceReference),
+    terminal: Schema.optionalKey(EvidenceReference),
+    lastFact: EvidenceReference,
+    position: RunPosition,
+    accounting: ContinuationAccounting,
+  }).check(
+    Schema.makeFilter(
+      (value) => utf8ByteLength(JSON.stringify(value)) <= MAX_RUN_CONTINUATION_BYTES,
+      {
+        title: "Run continuation is at most 8192 encoded UTF-8 bytes",
+      },
+    ),
+  ),
+) {}
+
+/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
+export const CURRENT_RECORD_VERSION = 2;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@2";
+
+/** Supported canonical facts. Unsupported control records must fail before execution. */
 export const KnownRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
@@ -1092,37 +1219,12 @@ export const KnownRecordPayload = Schema.Union([
   PeerMessagePrepared,
   SubtreeBudgetReserved,
   RepairAnnotated,
+  RunContextRecorded,
+  RunContinuation,
 ]);
 
-const knownRecordTags = new Set(
-  KnownRecordPayload.members.map(
-    (member) => ("fields" in member ? member.fields : member.schema.fields)._tag.ast.literal,
-  ),
-);
-
-const IgnorablePayload = Schema.StructWithRest(
-  Schema.Struct({
-    _tag: Schema.NonEmptyString.check(
-      Schema.makeFilter((tag) => !knownRecordTags.has(tag) && tag !== "UnknownRecord"),
-    ),
-  }),
-  [Schema.Record(Schema.String, PersistedJson)],
-);
-
-/** An unfamiliar, ignorable fact. Its original wire value survives export and re-encoding. */
-export class UnknownRecord extends Schema.TaggedClass<UnknownRecord>()("UnknownRecord", {
-  value: IgnorablePayload,
-}) {}
-
-export const CanonicalRecordPayload = Schema.Union([
-  KnownRecordPayload,
-  IgnorablePayload.pipe(
-    Schema.decodeTo(UnknownRecord, {
-      decode: SchemaGetter.transform((value) => ({ _tag: "UnknownRecord" as const, value })),
-      encode: SchemaGetter.transform((record) => record.value),
-    }),
-  ),
-]);
+/** This format accepts only understood facts; unknown control cannot grant permission. */
+export const CanonicalRecordPayload = KnownRecordPayload;
 
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;
 

@@ -230,7 +230,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   });
 
   const checkpoints = rawStore.checkpoints;
-  const recoveryCheckpoints = rawStore.recoveryCheckpoints;
   const countPeerMessages = rawStore.countPeerMessages;
 
   const store: ThreadStore["Service"] = {
@@ -272,13 +271,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         : {
             save: (request) => bind(checkpoints.save(request)),
             load: (request) => bind(checkpoints.load(request)),
-          },
-    recoveryCheckpoints:
-      recoveryCheckpoints === undefined
-        ? undefined
-        : {
-            save: (request) => bind(recoveryCheckpoints.save(request)),
-            load: (request) => bind(recoveryCheckpoints.load(request)),
           },
   };
 
@@ -465,10 +457,20 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       Effect.fnUntraced(function* (raw: RawAppendRequest) {
         const record = raw.records[0]?.canonical;
 
+        // Original input and its own progress share the existing applied-input transaction.
+        // The journal validates sidecar revision, frontier and charges before either write.
         if (
           !authority.owned ||
           authority.submission.input_applied_record_id !== null ||
-          raw.records.length !== 1 ||
+          raw.records
+            .slice(1)
+            .some(
+              ({ canonical: sidecar }) =>
+                sidecar.payload._tag !== "RunContinuation" ||
+                sidecar.payload.runId !== runIdForSubmission(submissionId) ||
+                sidecar.payload.submissionId !== submissionId ||
+                sidecar.payload.lastFact.recordId !== record?.recordId,
+            ) ||
           raw.batchId !== submissionInputBatchId(submissionId) ||
           record?.recordId !== submissionInputRecordId(submissionId) ||
           record.payload._tag !== "UserInputRecorded" ||

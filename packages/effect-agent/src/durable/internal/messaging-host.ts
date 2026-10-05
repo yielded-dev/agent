@@ -445,6 +445,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
                       deploymentId: deps.deploymentId,
                       payload: PeerMessagePrepared.make({
                         messageId: message.messageId,
+                        source: toolSource ?? { _tag: "programmatic", ...initial.address },
                         encodedEnvelope,
                         sourcePrincipal: principal,
                         operation,

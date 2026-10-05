@@ -8,6 +8,7 @@ import {
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { SubmissionId } from "@yielded/agent/identifiers";
+import { ReadRecord } from "@yielded/agent/record-format";
 import {
   CanonicalBatch,
   CanonicalRecord,
@@ -203,7 +204,11 @@ describe("PostgresThreadStore faults", () => {
                 } satisfies SelectedThreadRead)
                 .pipe(Stream.runCollect);
 
-              expect(selected.map((envelope) => envelope.record)).toEqual([record]);
+              expect(
+                yield* Effect.forEach(selected, (envelope) =>
+                  Schema.encodeEffect(ReadRecord)(envelope.record),
+                ),
+              ).toEqual(yield* encodeRecords([record]));
 
               const exported = yield* store
                 .export(ThreadExportRequest.make({ threadId }))
@@ -417,7 +422,7 @@ describe("PostgresThreadStore faults", () => {
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
-            yield* sql`UPDATE effect_agent_storage_version SET version = 999`;
+            yield* sql`UPDATE effect_agent_storage_version SET version = 17`;
           }),
         );
 
@@ -429,7 +434,7 @@ describe("PostgresThreadStore faults", () => {
 
           expect(error).toBeInstanceOf(PostgresStorageCompatibilityError);
           if (isCompatibilityError(error)) {
-            expect(error.actualVersion).toBe(999);
+            expect(error.actualVersion).toBe(17);
           }
         }
 
@@ -445,7 +450,7 @@ describe("PostgresThreadStore faults", () => {
               `;
             }),
           ),
-        ).toEqual([{ version: 999n }]);
+        ).toEqual([{ version: 17n }]);
       }),
     ),
   );

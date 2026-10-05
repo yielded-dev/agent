@@ -281,18 +281,19 @@ submission's recovery decision with `recoverSubmission`. `submissionStatus` is t
 nonblocking read; `inspectSubmissionStatus` is reserved for trusted workers. Pending status and
 an empty processing result do not imply completion.
 
-| Import                                                  | Use                               |
-| ------------------------------------------------------- | --------------------------------- |
-| `@yielded/agent/persistent-history`                     | Persistent history implementation |
-| `@yielded/agent/thread-store`                           | History storage contracts         |
-| `@yielded/agent/thread-history`                         | Interpreter history service       |
-| `@yielded/agent/durable-agent-runtime`                  | Durable runtime                   |
-| `@yielded/agent/submission-ledger`                      | Accepted-work storage contracts   |
-| `@yielded/agent/git-hub-workflow-source`                | GitHub event source               |
-| `@yielded/agent/testing/certification`                  | Adapter certification             |
-| `@yielded/agent/testing/thread-store-conformance`       | History conformance               |
-| `@yielded/agent/testing/submission-ledger-conformance`  | Accepted-work conformance         |
-| `@yielded/agent/testing/durable-failpoint-test-control` | Runtime failpoint controls        |
+| Import                                                  | Use                                                 |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| `@yielded/agent/persistent-history`                     | Persistent history implementation                   |
+| `@yielded/agent/thread-store`                           | History storage contracts                           |
+| `@yielded/agent/run-continuation`                       | Canonical Run progress and work discovery contracts |
+| `@yielded/agent/thread-history`                         | Interpreter history service                         |
+| `@yielded/agent/durable-agent-runtime`                  | Durable runtime                                     |
+| `@yielded/agent/submission-ledger`                      | Accepted-work storage contracts                     |
+| `@yielded/agent/git-hub-workflow-source`                | GitHub event source                                 |
+| `@yielded/agent/testing/certification`                  | Adapter certification                               |
+| `@yielded/agent/testing/thread-store-conformance`       | History conformance                                 |
+| `@yielded/agent/testing/submission-ledger-conformance`  | Accepted-work conformance                           |
+| `@yielded/agent/testing/durable-failpoint-test-control` | Runtime failpoint controls                          |
 
 <a id="effect-agent-workflow"></a>
 

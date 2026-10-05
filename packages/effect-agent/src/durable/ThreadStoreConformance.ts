@@ -983,6 +983,7 @@ const nativeWorkerAccounting = conformanceCase(
           `peer-${n}`,
           PeerMessagePrepared.make({
             messageId: Schema.decodeSync(IdempotencyKey)(`peer-${n}`),
+            source: { _tag: "programmatic", threadId, agentId },
             encodedEnvelope: {},
             sourcePrincipal: Schema.decodeSync(PeerMessagePrepared.fields.sourcePrincipal)("owner"),
             operation: "send",

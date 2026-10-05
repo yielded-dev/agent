@@ -142,10 +142,10 @@ it("runs the same pressure and evidence gate through the public Cloudflare host 
     expect(report.phases.flatMap((p) => p.checks.filter((c) => !c.passed))).toEqual([]);
     expect(report.checks.filter((c) => !c.passed)).toEqual([]);
     expect(report.status).toBe("passed");
-    expect(snapshot.recoveryCheckpoint.status).toBe("present");
-    if (snapshot.recoveryCheckpoint.status !== "present")
-      throw new Error("Native Cloudflare checkpoint absent");
-    expect(snapshot.recoveryCheckpoint.throughSequence).toBeGreaterThanOrEqual(
+    expect(snapshot.runContinuation.status).toBe("present");
+    if (snapshot.runContinuation.status !== "present")
+      throw new Error("Canonical Cloudflare Run continuation absent");
+    expect(snapshot.runContinuation.sequence).toBeGreaterThanOrEqual(
       report.windows.at(-1)?.sequence ?? 1,
     );
 

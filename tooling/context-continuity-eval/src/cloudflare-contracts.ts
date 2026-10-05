@@ -8,7 +8,7 @@ import {
   ModelUsage,
   ProjectStatus,
   RestartEvidence,
-  RecoveryCheckpointEvidence,
+  RunContinuationEvidence,
 } from "./contracts.ts";
 import { ModelId, MAX_OUTPUT_TOKENS } from "./live-model.ts";
 import { pressureInstructions, pressureToolkit } from "./pressure.ts";
@@ -33,7 +33,7 @@ export const CloudflareSnapshot = Schema.Struct({
   audits: Schema.Array(RequestAudit),
   compactions: Schema.Array(CompactionEvidence),
   restarts: Schema.Array(RestartEvidence),
-  recoveryCheckpoint: RecoveryCheckpointEvidence,
+  runContinuation: RunContinuationEvidence,
 });
 
 export const cloudflareDefinition = Agent.make("context-continuity-cloudflare", {

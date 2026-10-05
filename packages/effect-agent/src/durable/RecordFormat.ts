@@ -1,6 +1,12 @@
 import { Effect, Schema, SchemaGetter, SchemaIssue } from "effect";
 
-import { CanonicalBatch, CURRENT_RECORD_FORMAT, PersistedJson, RecordEnvelope } from "./Records.ts";
+import {
+  CanonicalBatch,
+  CanonicalRecordEnvelope,
+  CURRENT_RECORD_FORMAT,
+  RecordEnvelope,
+  RecordJson,
+} from "./Records.ts";
 
 export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
   "RecordFormatError",
@@ -13,16 +19,13 @@ export class RecordFormatError extends Schema.TaggedError<RecordFormatError>()(
 /** An archive owns its wire JSON explicitly; the typed fields are only a read view. */
 export class ExportedRecord extends RecordEnvelope.extend<ExportedRecord>(
   "@effect-agent/thread/ExportedRecord",
-)({ wire: PersistedJson }) {}
+)({ wire: RecordJson }) {}
 
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
 const sameRecord = Schema.toEquivalence(RecordEnvelope);
 
 /** Decode at the archive boundary, retaining unknown additive fields for a lossless backup. */
-export const decodeExportRecord = Effect.fnUntraced(function* (
-  format: string,
-  input: PersistedJson,
-) {
+export const decodeExportRecord = Effect.fnUntraced(function* (format: string, input: RecordJson) {
   if (format !== CURRENT_RECORD_FORMAT)
     return yield* RecordFormatError.make({ format, message: "Unsupported record format" });
 
@@ -36,7 +39,7 @@ export const decodeExportRecord = Effect.fnUntraced(function* (
  * or this codec. Normalizing through RecordEnvelope discards the wire and cannot be encoded
  * as an archive record. Editing the typed view also fails rather than silently changing a log.
  */
-export const ExportRecord = PersistedJson.pipe(
+export const ExportRecord = RecordJson.pipe(
   Schema.decodeTo(Schema.toType(ExportedRecord), {
     decode: SchemaGetter.transformEffect((value) =>
       decodeRecord(value).pipe(
@@ -59,6 +62,31 @@ export const ExportRecord = PersistedJson.pipe(
         ),
       ),
     ),
+  }),
+);
+
+/** Canonical read transport preserves exact evidence while exposing the supported typed view. */
+export const ReadRecord = RecordJson.pipe(
+  Schema.decodeTo(Schema.toType(RecordEnvelope), {
+    decode: SchemaGetter.transformEffect((value) =>
+      Schema.decodeEffect(ExportRecord)(value).pipe(Effect.mapError((error) => error.issue)),
+    ),
+    encode: SchemaGetter.transformEffect((record) =>
+      (record instanceof ExportedRecord
+        ? Schema.encodeEffect(ExportRecord)(record)
+        : Schema.encodeEffect(RecordEnvelope)(record)
+      ).pipe(Effect.mapError((error) => error.issue)),
+    ),
+  }),
+);
+
+export const ReadEnvelope = Schema.Struct({
+  ...CanonicalRecordEnvelope.fields,
+  record: ReadRecord,
+}).pipe(
+  Schema.decodeTo(Schema.toType(CanonicalRecordEnvelope), {
+    decode: SchemaGetter.transform((fields) => CanonicalRecordEnvelope.make(fields)),
+    encode: SchemaGetter.transform((envelope) => envelope),
   }),
 );
 

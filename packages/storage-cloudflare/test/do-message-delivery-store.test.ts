@@ -251,11 +251,10 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
   ));
 
 for (const [index, testCase] of messageDeliveryStoreConformanceCases.entries()) {
-  it(String(testCase.name), () =>
+  it(`${testCase.name}`, () =>
     expect(
       withThreadStorage(`message-conformance-${index}`, (storage) =>
         testCase.run.pipe(Effect.provide([storeLayer(storage), BrowserCrypto.layer])),
       ),
-    ).resolves.toBeUndefined(),
-  );
+    ).resolves.toBeUndefined());
 }
