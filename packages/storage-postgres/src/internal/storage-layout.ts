@@ -7,6 +7,7 @@ import {
   PostgresStorageCompatibilityError,
   PostgresStorageCorruptionError,
 } from "../PostgresStorageError.ts";
+import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
 export const CurrentPostgresStorageVersion = 17;
 const LEGACY_RECORD_FORMAT = "effect-agent/thread@1";
@@ -58,10 +59,35 @@ const baseline16 = [
   "CREATE INDEX effect_agent_message_deliveries_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
 ] as const;
 
+type LayoutConstraint =
+  | readonly [kind: "p" | "u", columns: ReadonlyArray<string>]
+  | readonly [
+      kind: "f",
+      columns: ReadonlyArray<string>,
+      targetTable: string,
+      targetColumns: ReadonlyArray<string>,
+    ]
+  | readonly [kind: "c", columns: ReadonlyArray<string>, expression: LayoutExpression];
+
+interface LayoutIndex {
+  readonly table: string;
+  readonly columns: ReadonlyArray<string | null>;
+  readonly unique?: boolean;
+  readonly primary?: boolean;
+  readonly expressions?: ReadonlyArray<string>;
+  readonly predicate?: LayoutExpression;
+}
+
+// Logical layout expectations. Physical index storage parameters and tablespaces are not
+// part of compatibility. Expression expectations are canonical data; a closed recognizer
+// accepts the deparser spellings of these forms and rejects every other form.
 const baselineShape: Readonly<
   Record<
     string,
-    { readonly columns: ReadonlyArray<string>; readonly constraints: ReadonlyArray<string> }
+    {
+      readonly columns: ReadonlyArray<string>;
+      readonly constraints: Readonly<Record<string, LayoutConstraint>>;
+    }
   >
 > = {
   effect_agent_abort_intents: {
@@ -72,10 +98,15 @@ const baselineShape: Readonly<
       "requested_at:text:true",
       "canonical_record_id:text:false",
     ],
-    constraints: [
-      "FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (submission_id)",
-    ],
+    constraints: {
+      effect_agent_abort_intents_pkey: ["p", ["submission_id"]],
+      effect_agent_abort_intents_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
   },
   effect_agent_approval_decisions: {
     columns: [
@@ -86,10 +117,15 @@ const baselineShape: Readonly<
       "reason:text:true",
       "decided_at:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (submission_id, tool_call_id)",
-    ],
+    constraints: {
+      effect_agent_approval_decisions_pkey: ["p", ["submission_id", "tool_call_id"]],
+      effect_agent_approval_decisions_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
   },
   effect_agent_attempts: {
     columns: [
@@ -100,10 +136,15 @@ const baselineShape: Readonly<
       "producer_epoch:bigint:true",
       "claimed_at:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (attempt_id)",
-    ],
+    constraints: {
+      effect_agent_attempts_pkey: ["p", ["attempt_id"]],
+      effect_agent_attempts_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
   },
   effect_agent_canonical_batches: {
     columns: [
@@ -115,10 +156,15 @@ const baselineShape: Readonly<
       "tail_digest:text:true",
       "batch_json:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (thread_id, batch_id)",
-    ],
+    constraints: {
+      effect_agent_canonical_batches_pkey: ["p", ["thread_id", "batch_id"]],
+      effect_agent_canonical_batches_thread_id_fkey: [
+        "f",
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
+      ],
+    },
   },
   effect_agent_canonical_records: {
     columns: [
@@ -129,11 +175,16 @@ const baselineShape: Readonly<
       "record_json:text:true",
       "read_metadata:jsonb:true",
     ],
-    constraints: [
-      "FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (thread_id, sequence)",
-      "UNIQUE (thread_id, record_id)",
-    ],
+    constraints: {
+      effect_agent_canonical_records_pkey: ["p", ["thread_id", "sequence"]],
+      effect_agent_canonical_records_thread_id_batch_id_fkey: [
+        "f",
+        ["thread_id", "batch_id"],
+        "effect_agent_canonical_batches",
+        ["thread_id", "batch_id"],
+      ],
+      effect_agent_canonical_records_thread_id_record_id_key: ["u", ["thread_id", "record_id"]],
+    },
   },
   effect_agent_checkpoints: {
     columns: [
@@ -142,10 +193,15 @@ const baselineShape: Readonly<
       "tail_digest:text:true",
       "checkpoint_json:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (thread_id, through_sequence)",
-    ],
+    constraints: {
+      effect_agent_checkpoints_pkey: ["p", ["thread_id", "through_sequence"]],
+      effect_agent_checkpoints_thread_id_fkey: [
+        "f",
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
+      ],
+    },
   },
   effect_agent_child_reservations: {
     columns: [
@@ -161,11 +217,19 @@ const baselineShape: Readonly<
       "release_began_at:text:false",
       "released_at:text:false",
     ],
-    constraints: [
-      "FOREIGN KEY (parent_submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (reservation_id)",
-      "UNIQUE (parent_submission_id, parent_tool_call_id)",
-    ],
+    constraints: {
+      effect_agent_child_reservatio_parent_submission_id_parent_t_key: [
+        "u",
+        ["parent_submission_id", "parent_tool_call_id"],
+      ],
+      effect_agent_child_reservations_parent_submission_id_fkey: [
+        "f",
+        ["parent_submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+      effect_agent_child_reservations_pkey: ["p", ["reservation_id"]],
+    },
   },
   effect_agent_message_deliveries: {
     columns: [
@@ -177,7 +241,7 @@ const baselineShape: Readonly<
       "record_json:text:true",
       "read_metadata:jsonb:true",
     ],
-    constraints: ["PRIMARY KEY (owner_thread_id, message_id)"],
+    constraints: { effect_agent_message_deliveries_pkey: ["p", ["owner_thread_id", "message_id"]] },
   },
   effect_agent_recovery_checkpoints: {
     columns: [
@@ -186,10 +250,15 @@ const baselineShape: Readonly<
       "tail_digest:text:true",
       "checkpoint_json:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (thread_id)",
-    ],
+    constraints: {
+      effect_agent_recovery_checkpoints_pkey: ["p", ["thread_id"]],
+      effect_agent_recovery_checkpoints_thread_id_fkey: [
+        "f",
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
+      ],
+    },
   },
   effect_agent_schedules: {
     columns: [
@@ -200,11 +269,14 @@ const baselineShape: Readonly<
       "record_json:text:true",
       "uses_capacity:boolean:true",
     ],
-    constraints: ["PRIMARY KEY (tenant_id, owner_id, schedule_id)"],
+    constraints: { effect_agent_schedules_pkey: ["p", ["tenant_id", "owner_id", "schedule_id"]] },
   },
   effect_agent_storage_version: {
     columns: ["id:boolean:true", "version:bigint:true"],
-    constraints: ["CHECK (id)", "PRIMARY KEY (id)"],
+    constraints: {
+      effect_agent_storage_version_pkey: ["p", ["id"]],
+      effect_agent_storage_version_single_row: ["c", ["id"], ["column", "id"]],
+    },
   },
   effect_agent_submission_ownership: {
     columns: [
@@ -215,10 +287,15 @@ const baselineShape: Readonly<
       "owner_producer_id:text:true",
       "lease_expires_at:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (submission_id)",
-    ],
+    constraints: {
+      effect_agent_submission_ownership_pkey: ["p", ["submission_id"]],
+      effect_agent_submission_ownership_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
   },
   effect_agent_submissions: {
     columns: [
@@ -253,11 +330,14 @@ const baselineShape: Readonly<
       "worker_admission_json:text:false",
       "message_admission_json:text:false",
     ],
-    constraints: [
-      "PRIMARY KEY (submission_id)",
-      "UNIQUE (thread_id, principal, idempotency_key)",
-      "UNIQUE (thread_id, queue_sequence)",
-    ],
+    constraints: {
+      effect_agent_submissions_pkey: ["p", ["submission_id"]],
+      effect_agent_submissions_thread_id_principal_idempotency_ke_key: [
+        "u",
+        ["thread_id", "principal", "idempotency_key"],
+      ],
+      effect_agent_submissions_thread_id_queue_sequence_key: ["u", ["thread_id", "queue_sequence"]],
+    },
   },
   effect_agent_subscription_deliveries: {
     columns: [
@@ -273,10 +353,16 @@ const baselineShape: Readonly<
       "retry_parked:boolean:true",
       "observe_settlement:boolean:true",
     ],
-    constraints: [
-      "PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id)",
-      "UNIQUE (tenant_id, source_address, delivery_key)",
-    ],
+    constraints: {
+      effect_agent_subscription_del_tenant_id_source_address_deli_key: [
+        "u",
+        ["tenant_id", "source_address", "delivery_key"],
+      ],
+      effect_agent_subscription_deliveries_pkey: [
+        "p",
+        ["tenant_id", "source_address", "owner_id", "subscription_id", "event_id"],
+      ],
+    },
   },
   effect_agent_subscription_events: {
     columns: [
@@ -294,7 +380,9 @@ const baselineShape: Readonly<
       "next_attempt_at_millis:bigint:true",
       "record_json:text:true",
     ],
-    constraints: ["PRIMARY KEY (tenant_id, source_address, event_id)"],
+    constraints: {
+      effect_agent_subscription_events_pkey: ["p", ["tenant_id", "source_address", "event_id"]],
+    },
   },
   effect_agent_subscription_sequences: {
     columns: [
@@ -305,7 +393,9 @@ const baselineShape: Readonly<
       "delivery_scan_cursor:text:true",
       "recovery_scan_cursor:bigint:true",
     ],
-    constraints: ["PRIMARY KEY (tenant_id, source_address)"],
+    constraints: {
+      effect_agent_subscription_sequences_pkey: ["p", ["tenant_id", "source_address"]],
+    },
   },
   effect_agent_subscriptions: {
     columns: [
@@ -323,10 +413,16 @@ const baselineShape: Readonly<
       "recovery_present:bigint:true",
       "record_json:text:true",
     ],
-    constraints: [
-      "PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id)",
-      "UNIQUE (tenant_id, source_address, ordinal)",
-    ],
+    constraints: {
+      effect_agent_subscriptions_pkey: [
+        "p",
+        ["tenant_id", "source_address", "owner_id", "subscription_id"],
+      ],
+      effect_agent_subscriptions_tenant_id_source_address_ordinal_key: [
+        "u",
+        ["tenant_id", "source_address", "ordinal"],
+      ],
+    },
   },
   effect_agent_threads: {
     columns: [
@@ -336,7 +432,7 @@ const baselineShape: Readonly<
       "tail_digest:text:true",
       "producer_epoch:bigint:true",
     ],
-    constraints: ["PRIMARY KEY (thread_id)"],
+    constraints: { effect_agent_threads_pkey: ["p", ["thread_id"]] },
   },
   effect_agent_unknown_resolutions: {
     columns: [
@@ -347,114 +443,155 @@ const baselineShape: Readonly<
       "resolution_json:text:true",
       "resolved_at:text:true",
     ],
-    constraints: [
-      "FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT",
-      "PRIMARY KEY (submission_id, tool_call_id)",
-    ],
+    constraints: {
+      effect_agent_unknown_resolutions_pkey: ["p", ["submission_id", "tool_call_id"]],
+      effect_agent_unknown_resolutions_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
   },
   effect_agent_worker_stops: {
     columns: ["thread_id:text:true", "terminal:text:false"],
-    constraints: ["PRIMARY KEY (thread_id)"],
+    constraints: { effect_agent_worker_stops_pkey: ["p", ["thread_id"]] },
   },
 };
 
-const baselineIndexes: Readonly<Record<string, string>> = {
-  effect_agent_abort_intents_pkey:
-    "CREATE UNIQUE INDEX effect_agent_abort_intents_pkey ON effect_agent_abort_intents USING btree (submission_id)",
-  effect_agent_approval_decisions_pkey:
-    "CREATE UNIQUE INDEX effect_agent_approval_decisions_pkey ON effect_agent_approval_decisions USING btree (submission_id, tool_call_id)",
-  effect_agent_attempts_pkey:
-    "CREATE UNIQUE INDEX effect_agent_attempts_pkey ON effect_agent_attempts USING btree (attempt_id)",
-  effect_agent_canonical_batches_pkey:
-    "CREATE UNIQUE INDEX effect_agent_canonical_batches_pkey ON effect_agent_canonical_batches USING btree (thread_id, batch_id)",
-  effect_agent_canonical_records_batch:
-    "CREATE INDEX effect_agent_canonical_records_batch ON effect_agent_canonical_records USING btree (thread_id, batch_id, sequence)",
-  effect_agent_canonical_records_pkey:
-    "CREATE UNIQUE INDEX effect_agent_canonical_records_pkey ON effect_agent_canonical_records USING btree (thread_id, sequence)",
-  effect_agent_canonical_records_thread_id_record_id_key:
-    "CREATE UNIQUE INDEX effect_agent_canonical_records_thread_id_record_id_key ON effect_agent_canonical_records USING btree (thread_id, record_id)",
-  effect_agent_checkpoints_pkey:
-    "CREATE UNIQUE INDEX effect_agent_checkpoints_pkey ON effect_agent_checkpoints USING btree (thread_id, through_sequence)",
-  effect_agent_child_reservatio_parent_submission_id_parent_t_key:
-    "CREATE UNIQUE INDEX effect_agent_child_reservatio_parent_submission_id_parent_t_key ON effect_agent_child_reservations USING btree (parent_submission_id, parent_tool_call_id)",
-  effect_agent_child_reservations_pkey:
-    "CREATE UNIQUE INDEX effect_agent_child_reservations_pkey ON effect_agent_child_reservations USING btree (reservation_id)",
-  effect_agent_message_deliveries_due:
-    "CREATE INDEX effect_agent_message_deliveries_due ON effect_agent_message_deliveries USING btree (deadline_at_millis, owner_thread_id, message_id) WHERE (deadline_at_millis IS NOT NULL)",
-  effect_agent_message_deliveries_pending:
-    "CREATE INDEX effect_agent_message_deliveries_pending ON effect_agent_message_deliveries USING btree (owner_thread_id, message_id) WHERE (state <> ALL (ARRAY['processed'::text, 'refused'::text]))",
-  effect_agent_message_deliveries_pkey:
-    "CREATE UNIQUE INDEX effect_agent_message_deliveries_pkey ON effect_agent_message_deliveries USING btree (owner_thread_id, message_id)",
-  effect_agent_records_call:
-    "CREATE INDEX effect_agent_records_call ON effect_agent_canonical_records USING btree (thread_id, ((read_metadata ->> 'tag'::text)), ((read_metadata ->> 'runId'::text)), ((read_metadata ->> 'toolCallId'::text)))",
-  effect_agent_records_run_input:
-    "CREATE INDEX effect_agent_records_run_input ON effect_agent_canonical_records USING btree (thread_id, ((read_metadata ->> 'runId'::text))) WHERE (((read_metadata ->> 'tag'::text) = 'UserInputRecorded'::text) AND ((read_metadata ->> 'kind'::text) = 'user'::text))",
-  effect_agent_records_subtree:
-    "CREATE INDEX effect_agent_records_subtree ON effect_agent_canonical_records USING btree (thread_id, ((read_metadata ->> 'sourceSubmissionId'::text)), sequence) WHERE ((read_metadata ->> 'tag'::text) = 'SubtreeBudgetReserved'::text)",
-  effect_agent_records_worker_input:
-    "CREATE INDEX effect_agent_records_worker_input ON effect_agent_canonical_records USING btree (thread_id, ((read_metadata ->> 'messageId'::text))) WHERE ((read_metadata ->> 'tag'::text) = 'WorkerInputRequested'::text)",
-  effect_agent_recovery_checkpoints_pkey:
-    "CREATE UNIQUE INDEX effect_agent_recovery_checkpoints_pkey ON effect_agent_recovery_checkpoints USING btree (thread_id)",
-  effect_agent_schedules_deadline:
-    "CREATE INDEX effect_agent_schedules_deadline ON effect_agent_schedules USING btree (deadline_at_millis, tenant_id, owner_id, schedule_id) WHERE (deadline_at_millis IS NOT NULL)",
-  effect_agent_schedules_owner_deadline:
-    "CREATE INDEX effect_agent_schedules_owner_deadline ON effect_agent_schedules USING btree (tenant_id, owner_id, deadline_at_millis, schedule_id) WHERE (deadline_at_millis IS NOT NULL)",
-  effect_agent_schedules_pkey:
-    "CREATE UNIQUE INDEX effect_agent_schedules_pkey ON effect_agent_schedules USING btree (tenant_id, owner_id, schedule_id)",
-  effect_agent_storage_version_pkey:
-    "CREATE UNIQUE INDEX effect_agent_storage_version_pkey ON effect_agent_storage_version USING btree (id)",
-  effect_agent_submission_ownership_pkey:
-    "CREATE UNIQUE INDEX effect_agent_submission_ownership_pkey ON effect_agent_submission_ownership USING btree (submission_id)",
-  effect_agent_submissions_group:
-    "CREATE INDEX effect_agent_submissions_group ON effect_agent_submissions USING btree (thread_id, admission_group, state)",
-  effect_agent_submissions_joined_host:
-    "CREATE INDEX effect_agent_submissions_joined_host ON effect_agent_submissions USING btree (joined_host_submission_id)",
-  effect_agent_submissions_nonterminal:
-    "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions USING btree (thread_id, queue_sequence) WHERE (state <> 'settled'::text)",
-  effect_agent_submissions_parent:
-    "CREATE INDEX effect_agent_submissions_parent ON effect_agent_submissions USING btree (parent_submission_id)",
-  effect_agent_submissions_pkey:
-    "CREATE UNIQUE INDEX effect_agent_submissions_pkey ON effect_agent_submissions USING btree (submission_id)",
-  effect_agent_submissions_thread_id_principal_idempotency_ke_key:
-    "CREATE UNIQUE INDEX effect_agent_submissions_thread_id_principal_idempotency_ke_key ON effect_agent_submissions USING btree (thread_id, principal, idempotency_key)",
-  effect_agent_submissions_thread_id_queue_sequence_key:
-    "CREATE UNIQUE INDEX effect_agent_submissions_thread_id_queue_sequence_key ON effect_agent_submissions USING btree (thread_id, queue_sequence)",
-  effect_agent_subscription_del_tenant_id_source_address_deli_key:
-    "CREATE UNIQUE INDEX effect_agent_subscription_del_tenant_id_source_address_deli_key ON effect_agent_subscription_deliveries USING btree (tenant_id, source_address, delivery_key)",
-  effect_agent_subscription_deliveries_pending:
-    "CREATE INDEX effect_agent_subscription_deliveries_pending ON effect_agent_subscription_deliveries USING btree (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)",
-  effect_agent_subscription_deliveries_pkey:
-    "CREATE UNIQUE INDEX effect_agent_subscription_deliveries_pkey ON effect_agent_subscription_deliveries USING btree (tenant_id, source_address, owner_id, subscription_id, event_id)",
-  effect_agent_subscription_deliveries_registration:
-    "CREATE INDEX effect_agent_subscription_deliveries_registration ON effect_agent_subscription_deliveries USING btree (tenant_id, source_address, owner_id, subscription_id, delivery_key)",
-  effect_agent_subscription_events_pending:
-    "CREATE INDEX effect_agent_subscription_events_pending ON effect_agent_subscription_events USING btree (tenant_id, source_address, routing_complete, next_attempt_at_millis, event_id)",
-  effect_agent_subscription_events_pkey:
-    "CREATE UNIQUE INDEX effect_agent_subscription_events_pkey ON effect_agent_subscription_events USING btree (tenant_id, source_address, event_id)",
-  effect_agent_subscription_sequences_pkey:
-    "CREATE UNIQUE INDEX effect_agent_subscription_sequences_pkey ON effect_agent_subscription_sequences USING btree (tenant_id, source_address)",
-  effect_agent_subscriptions_candidates:
-    "CREATE INDEX effect_agent_subscriptions_candidates ON effect_agent_subscriptions USING btree (tenant_id, source_address, source_name, source_version, matching_key, ordinal)",
-  effect_agent_subscriptions_owner:
-    "CREATE INDEX effect_agent_subscriptions_owner ON effect_agent_subscriptions USING btree (tenant_id, source_address, owner_id, ordinal)",
-  effect_agent_subscriptions_pkey:
-    "CREATE UNIQUE INDEX effect_agent_subscriptions_pkey ON effect_agent_subscriptions USING btree (tenant_id, source_address, owner_id, subscription_id)",
-  effect_agent_subscriptions_recovery:
-    "CREATE INDEX effect_agent_subscriptions_recovery ON effect_agent_subscriptions USING btree (tenant_id, source_address, recovery_at_millis, ordinal) WHERE (recovery_at_millis IS NOT NULL)",
-  effect_agent_subscriptions_tenant_id_source_address_ordinal_key:
-    "CREATE UNIQUE INDEX effect_agent_subscriptions_tenant_id_source_address_ordinal_key ON effect_agent_subscriptions USING btree (tenant_id, source_address, ordinal)",
-  effect_agent_threads_pkey:
-    "CREATE UNIQUE INDEX effect_agent_threads_pkey ON effect_agent_threads USING btree (thread_id)",
-  effect_agent_unknown_resolutions_pkey:
-    "CREATE UNIQUE INDEX effect_agent_unknown_resolutions_pkey ON effect_agent_unknown_resolutions USING btree (submission_id, tool_call_id)",
-  effect_agent_worker_execution:
-    "CREATE INDEX effect_agent_worker_execution ON effect_agent_canonical_records USING btree (thread_id, ((read_metadata ->> 'tag'::text)), sequence) WHERE ((read_metadata ->> 'runId'::text) IS NOT NULL)",
-  effect_agent_worker_pending:
-    "CREATE INDEX effect_agent_worker_pending ON effect_agent_message_deliveries USING btree (owner_thread_id, ((read_metadata ->> 'threadId'::text)), message_id) WHERE ((state = ANY (ARRAY['pending'::text, 'parked'::text])) AND ((read_metadata ->> 'hasReceipt'::text) = 'false'::text))",
-  effect_agent_worker_starts:
-    "CREATE INDEX effect_agent_worker_starts ON effect_agent_message_deliveries USING btree (owner_thread_id, ((read_metadata ->> 'delegationId'::text)), ((read_metadata ->> 'targetAgentId'::text)), message_id) WHERE ((read_metadata ->> 'workerStart'::text) = 'true'::text)",
-  effect_agent_worker_stops_pkey:
-    "CREATE UNIQUE INDEX effect_agent_worker_stops_pkey ON effect_agent_worker_stops USING btree (thread_id)",
+const baselineIndexes: Readonly<Record<string, LayoutIndex>> = {
+  effect_agent_canonical_records_batch: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "batch_id", "sequence"],
+  },
+  effect_agent_message_deliveries_due: {
+    table: "effect_agent_message_deliveries",
+    columns: ["deadline_at_millis", "owner_thread_id", "message_id"],
+    predicate: ["notNull", ["column", "deadline_at_millis"]],
+  },
+  effect_agent_message_deliveries_pending: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", "message_id"],
+    predicate: ["notIn", ["column", "state"], ["processed", "refused"]],
+  },
+  effect_agent_records_call: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", null, null, null],
+    expressions: ["tag", "runId", "toolCallId"],
+  },
+  effect_agent_records_run_input: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", null],
+    expressions: ["runId"],
+    predicate: [
+      "and",
+      [
+        ["eq", ["json", "tag"], ["text", "UserInputRecorded"]],
+        ["eq", ["json", "kind"], ["text", "user"]],
+      ],
+    ],
+  },
+  effect_agent_records_subtree: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", null, "sequence"],
+    expressions: ["sourceSubmissionId"],
+    predicate: ["eq", ["json", "tag"], ["text", "SubtreeBudgetReserved"]],
+  },
+  effect_agent_records_worker_input: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", null],
+    expressions: ["messageId"],
+    predicate: ["eq", ["json", "tag"], ["text", "WorkerInputRequested"]],
+  },
+  effect_agent_schedules_deadline: {
+    table: "effect_agent_schedules",
+    columns: ["deadline_at_millis", "tenant_id", "owner_id", "schedule_id"],
+    predicate: ["notNull", ["column", "deadline_at_millis"]],
+  },
+  effect_agent_schedules_owner_deadline: {
+    table: "effect_agent_schedules",
+    columns: ["tenant_id", "owner_id", "deadline_at_millis", "schedule_id"],
+    predicate: ["notNull", ["column", "deadline_at_millis"]],
+  },
+  effect_agent_submissions_group: {
+    table: "effect_agent_submissions",
+    columns: ["thread_id", "admission_group", "state"],
+  },
+  effect_agent_submissions_joined_host: {
+    table: "effect_agent_submissions",
+    columns: ["joined_host_submission_id"],
+  },
+  effect_agent_submissions_nonterminal: {
+    table: "effect_agent_submissions",
+    columns: ["thread_id", "queue_sequence"],
+    predicate: ["ne", ["column", "state"], ["text", "settled"]],
+  },
+  effect_agent_submissions_parent: {
+    table: "effect_agent_submissions",
+    columns: ["parent_submission_id"],
+  },
+  effect_agent_subscription_deliveries_pending: {
+    table: "effect_agent_subscription_deliveries",
+    columns: ["tenant_id", "source_address", "state", "next_attempt_at_millis", "delivery_key"],
+  },
+  effect_agent_subscription_deliveries_registration: {
+    table: "effect_agent_subscription_deliveries",
+    columns: ["tenant_id", "source_address", "owner_id", "subscription_id", "delivery_key"],
+  },
+  effect_agent_subscription_events_pending: {
+    table: "effect_agent_subscription_events",
+    columns: [
+      "tenant_id",
+      "source_address",
+      "routing_complete",
+      "next_attempt_at_millis",
+      "event_id",
+    ],
+  },
+  effect_agent_subscriptions_candidates: {
+    table: "effect_agent_subscriptions",
+    columns: [
+      "tenant_id",
+      "source_address",
+      "source_name",
+      "source_version",
+      "matching_key",
+      "ordinal",
+    ],
+  },
+  effect_agent_subscriptions_owner: {
+    table: "effect_agent_subscriptions",
+    columns: ["tenant_id", "source_address", "owner_id", "ordinal"],
+  },
+  effect_agent_subscriptions_recovery: {
+    table: "effect_agent_subscriptions",
+    columns: ["tenant_id", "source_address", "recovery_at_millis", "ordinal"],
+    predicate: ["notNull", ["column", "recovery_at_millis"]],
+  },
+  effect_agent_worker_execution: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", null, "sequence"],
+    expressions: ["tag"],
+    predicate: ["notNull", ["json", "runId"]],
+  },
+  effect_agent_worker_pending: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", null, "message_id"],
+    expressions: ["threadId"],
+    predicate: [
+      "and",
+      [
+        ["in", ["column", "state"], ["pending", "parked"]],
+        ["eq", ["json", "hasReceipt"], ["text", "false"]],
+      ],
+    ],
+  },
+  effect_agent_worker_starts: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", null, null, "message_id"],
+    expressions: ["delegationId", "targetAgentId"],
+    predicate: ["eq", ["json", "workerStart"], ["text", "true"]],
+  },
 };
 
 const headerStatement =
@@ -484,9 +621,6 @@ const quote = (namespace: string) => `"${namespace.replaceAll('"', '""')}"`;
 const qualify = (statement: string, namespace: string) =>
   statement.replaceAll("__NAMESPACE__", quote(namespace));
 
-const unqualify = (statement: string, namespace: string) =>
-  statement.replaceAll(`${quote(namespace)}.`, "").replaceAll(`${namespace}.`, "");
-
 const NameRows = Schema.Array(Schema.Struct({ name: Schema.String, kind: Schema.String }));
 
 const ColumnRows = Schema.Array(
@@ -495,12 +629,54 @@ const ColumnRows = Schema.Array(
     column_name: Schema.String,
     type: Schema.String,
     not_null: Schema.Boolean,
+    collation: Schema.NullOr(Schema.String),
   }),
 );
 
-const DefinitionRows = Schema.Array(
-  Schema.Struct({ name: Schema.String, definition: Schema.String }),
+const ConstraintRows = Schema.Array(
+  Schema.Struct({
+    table_name: Schema.String,
+    name: Schema.String,
+    kind: Schema.String,
+    columns: Schema.Array(Schema.String),
+    target_table: Schema.NullOr(Schema.String),
+    target_schema: Schema.NullOr(Schema.String),
+    target_columns: Schema.Array(Schema.String),
+    expression: Schema.NullOr(Schema.String),
+    enforcement_ok: Schema.Boolean,
+  }),
 );
+
+const IndexRows = Schema.Array(
+  Schema.Struct({
+    name: Schema.String,
+    table_name: Schema.String,
+    columns: Schema.Array(Schema.NullOr(Schema.String)),
+    is_unique: Schema.Boolean,
+    is_primary: Schema.Boolean,
+    expressions: Schema.NullOr(Schema.String),
+    predicate: Schema.NullOr(Schema.String),
+    structure_ok: Schema.Boolean,
+  }),
+);
+
+const sameIndexColumns = Schema.toEquivalence(Schema.Array(Schema.NullOr(Schema.String)));
+
+const matchesIndex = (actual: (typeof IndexRows.Type)[number] | undefined, expected: LayoutIndex) =>
+  actual !== undefined &&
+  actual.structure_ok &&
+  actual.table_name === expected.table &&
+  actual.is_unique === (expected.unique ?? false) &&
+  actual.is_primary === (expected.primary ?? false) &&
+  sameIndexColumns(actual.columns, expected.columns) &&
+  matchesLayoutExpressions(
+    actual.expressions,
+    (expected.expressions ?? []).map((key) => ["json", key]),
+  ) &&
+  matchesLayoutExpressions(
+    actual.predicate,
+    expected.predicate === undefined ? [] : [expected.predicate],
+  );
 
 const sameStrings = Schema.toEquivalence(Schema.Array(Schema.String));
 
@@ -612,33 +788,86 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
   const columns = yield* decode(
     ColumnRows,
     yield* execute(sql<Record<string, unknown>>`
-    SELECT c.relname AS name, a.attname AS column_name, format_type(a.atttypid, a.atttypmod) AS type, a.attnotnull AS not_null
+    SELECT c.relname AS name, a.attname AS column_name,
+      CASE WHEN a.atttypmod <> -1 THEN ''
+        WHEN a.atttypid='pg_catalog.int8'::regtype THEN 'bigint'
+        WHEN a.atttypid='pg_catalog.bool'::regtype THEN 'boolean'
+        WHEN a.atttypid='pg_catalog.text'::regtype THEN 'text'
+        WHEN a.atttypid='pg_catalog.jsonb'::regtype THEN 'jsonb' ELSE '' END AS type,
+      a.attnotnull AS not_null,
+      cn.nspname || '.' || co.collname AS collation
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid
+    LEFT JOIN pg_collation co ON co.oid=a.attcollation LEFT JOIN pg_namespace cn ON cn.oid=co.collnamespace
     WHERE n.nspname=${namespace} AND starts_with(c.relname, 'effect_agent_') AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
     ORDER BY c.relname,a.attnum
   `),
     "pg_attribute",
   );
 
+  // Shipped expressions use only pinned built-ins. Any function/operator dependency
+  // denotes an extension or user-defined overload, even if its deparsed spelling matches.
   const constraints = yield* decode(
-    DefinitionRows,
+    ConstraintRows,
     yield* execute(sql<Record<string, unknown>>`
-    SELECT c.relname AS name, pg_get_constraintdef(k.oid) AS definition FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid
-    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=${namespace} AND k.contype IN ('p','u','f','c','x')
-    ORDER BY c.relname, pg_get_constraintdef(k.oid)
-  `),
+      SELECT c.relname AS table_name, k.conname AS name, k.contype::text AS kind,
+        to_jsonb(ARRAY(SELECT a.attname FROM unnest(k.conkey) WITH ORDINALITY v(attnum, position)
+          JOIN pg_attribute a ON a.attrelid=k.conrelid AND a.attnum=v.attnum ORDER BY v.position)) AS columns,
+        r.relname AS target_table, rn.nspname AS target_schema,
+        to_jsonb(ARRAY(SELECT a.attname FROM unnest(k.confkey) WITH ORDINALITY v(attnum, position)
+          JOIN pg_attribute a ON a.attrelid=k.confrelid AND a.attnum=v.attnum ORDER BY v.position)) AS target_columns,
+        pg_get_expr(k.conbin, k.conrelid, false) AS expression,
+        (k.convalidated AND NOT k.condeferrable AND NOT k.condeferred
+          AND k.conislocal AND k.coninhcount=0 AND k.conparentid=0
+          AND (k.contype<>'c' OR NOT k.connoinherit)
+          AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_constraint'::regclass
+            AND d.objid=k.oid AND d.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass))
+          AND (k.contype NOT IN ('p','u') OR ic.relname=k.conname)
+          AND (k.contype<>'f' OR (k.confupdtype='a' AND k.confdeltype='r' AND k.confmatchtype='s'
+            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conpfeqop)
+            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conppeqop)
+            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conffeqop)))) AS enforcement_ok
+      FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      LEFT JOIN pg_class r ON r.oid=k.confrelid LEFT JOIN pg_namespace rn ON rn.oid=r.relnamespace
+      LEFT JOIN pg_class ic ON ic.oid=k.conindid
+      WHERE n.nspname=${namespace} AND k.contype IN ('p','u','f','c','x')
+    `),
     "pg_constraint",
   );
 
+  // Frozen keys use btree ASC NULLS LAST (indoption=0), default built-in opclasses,
+  // and the column collation, or the database default for JSON text expressions.
   const indexes = yield* decode(
-    DefinitionRows,
+    IndexRows,
     yield* execute(sql<Record<string, unknown>>`
-    SELECT indexname AS name, indexdef AS definition FROM pg_indexes WHERE schemaname=${namespace} ORDER BY indexname
-  `),
-    "pg_indexes",
+      SELECT ic.relname AS name, c.relname AS table_name,
+        to_jsonb(ARRAY(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY v(attnum, position)
+          LEFT JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=v.attnum ORDER BY v.position)) AS columns,
+        i.indisunique AS is_unique, i.indisprimary AS is_primary,
+        pg_get_expr(i.indexprs, i.indrelid, false) AS expressions,
+        pg_get_expr(i.indpred, i.indrelid, false) AS predicate,
+        (ic.relkind='i' AND am.amname='btree' AND i.indisvalid AND i.indisready AND i.indislive
+          AND NOT i.indisexclusion AND i.indimmediate AND NOT i.indnullsnotdistinct
+          AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_class'::regclass
+            AND d.objid=i.indexrelid AND d.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass))
+          AND i.indnatts=i.indnkeyatts AND NOT EXISTS (
+            SELECT 1 FROM unnest(i.indkey, i.indcollation, i.indclass, i.indoption)
+              WITH ORDINALITY v(attnum, collation_oid, opclass, options, position)
+            JOIN pg_attribute ia ON ia.attrelid=i.indexrelid AND ia.attnum=v.position
+            LEFT JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=v.attnum
+            JOIN pg_opclass op ON op.oid=v.opclass
+            WHERE v.options<>0 OR NOT op.opcdefault OR op.opcnamespace<>'pg_catalog'::regnamespace
+              OR op.opcintype<>ia.atttypid OR op.opcmethod<>ic.relam
+              OR v.collation_oid<>CASE WHEN v.attnum=0 THEN 'pg_catalog.default'::regcollation ELSE a.attcollation END
+          )) AS structure_ok
+      FROM pg_index i JOIN pg_class ic ON ic.oid=i.indexrelid JOIN pg_class c ON c.oid=i.indrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_am am ON am.oid=ic.relam
+      WHERE n.nspname=${namespace}
+    `),
+    "pg_index",
   );
 
-  const expectedShape =
+  const expectedShape: typeof baselineShape =
     schemaTable === undefined
       ? baselineShape
       : {
@@ -649,36 +878,94 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
               "layout_version:bigint:true",
               "record_format:text:true",
             ],
-            constraints: [
-              "PRIMARY KEY (singleton)",
-              "CHECK ((singleton = 1))",
-              "CHECK ((layout_version > 0))",
-              "CHECK ((length(record_format) > 0))",
-            ],
+            constraints: {
+              effect_agent_schema_pkey: ["p", ["singleton"]],
+              effect_agent_schema_singleton_check: [
+                "c",
+                ["singleton"],
+                ["eq", ["column", "singleton"], ["integer", 1]],
+              ],
+              effect_agent_schema_layout_version_check: [
+                "c",
+                ["layout_version"],
+                ["gt", ["column", "layout_version"], ["integer", 0]],
+              ],
+              effect_agent_schema_record_format_check: [
+                "c",
+                ["record_format"],
+                ["gt", ["length", "record_format"], ["integer", 0]],
+              ],
+            },
           },
         };
 
   for (const [name, expected] of Object.entries(expectedShape)) {
-    const actualColumns = columns
-      .filter((row) => row.name === name)
-      .map((row) => `${row.column_name}:${row.type}:${row.not_null}`);
-
-    const actualConstraints = constraints
-      .filter((row) => row.name === name)
-      .map((row) => unqualify(row.definition, namespace))
-      .sort();
+    const tableColumns = columns.filter((row) => row.name === name);
+    const actualConstraints = constraints.filter((row) => row.table_name === name);
 
     if (
       names.find((row) => row.name === name)?.kind !== "r" ||
-      !sameStrings(actualColumns, expected.columns) ||
-      !sameStrings(actualConstraints, [...expected.constraints].sort())
+      !sameStrings(
+        tableColumns.map((row) => `${row.column_name}:${row.type}:${row.not_null}`),
+        expected.columns,
+      ) ||
+      tableColumns.some(
+        (row) =>
+          row.collation !==
+          (row.type === "text"
+            ? name === "effect_agent_schema"
+              ? "pg_catalog.default"
+              : "pg_catalog.C"
+            : null),
+      ) ||
+      actualConstraints.length !== Object.keys(expected.constraints).length
     )
       return yield* incompatible(legacy.version, `Missing or incompatible layout table ${name}.`);
-  }
-  for (const [name, definition] of Object.entries(baselineIndexes)) {
-    const actual = indexes.find((row) => row.name === name);
 
-    if (actual === undefined || unqualify(actual.definition, namespace) !== definition)
+    for (const [constraintName, constraint] of Object.entries(expected.constraints)) {
+      const actual = actualConstraints.find((row) => row.name === constraintName);
+      const [kind, keyColumns] = constraint;
+
+      if (
+        actual === undefined ||
+        !actual.enforcement_ok ||
+        actual.kind !== kind ||
+        !sameStrings(actual.columns, keyColumns) ||
+        actual.target_table !== (constraint[0] === "f" ? constraint[2] : null) ||
+        actual.target_schema !== (kind === "f" ? namespace : null) ||
+        !sameStrings(actual.target_columns, constraint[0] === "f" ? constraint[3] : []) ||
+        !matchesLayoutExpressions(actual.expression, constraint[0] === "c" ? [constraint[2]] : [])
+      )
+        return yield* incompatible(
+          legacy.version,
+          `Missing or incompatible layout constraint ${constraintName}.`,
+        );
+
+      if (
+        (kind === "p" || kind === "u") &&
+        !matchesIndex(
+          indexes.find((row) => row.name === constraintName),
+          {
+            table: name,
+            columns: keyColumns,
+            unique: true,
+            primary: kind === "p",
+          },
+        )
+      )
+        return yield* incompatible(
+          legacy.version,
+          `Missing or incompatible layout index ${constraintName}.`,
+        );
+    }
+  }
+  for (const [name, expected] of Object.entries(baselineIndexes)) {
+    if (
+      !matchesIndex(
+        indexes.find((row) => row.name === name),
+        expected,
+      )
+    )
       return yield* incompatible(legacy.version, `Missing or incompatible layout index ${name}.`);
   }
 

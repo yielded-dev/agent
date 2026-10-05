@@ -160,21 +160,10 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Change canonical record formats by exporting and re-encoding the log into an empty Thread,
-  never by rewriting stored payloads in place. Keep layout versions separate: adapter-owned,
-  immutable ordered `{ version, statements }` steps run in one transaction and reject newer
-  layouts. Optional/defaulted fields and safely ignorable record kinds need no record-format
-  bump; changes to existing-record meaning require a format increment and an explicit one-time
-  export/convert/import cutover. Runtime readers and importers accept only the current record
-  format; do not retain predecessor decoders, compatibility shims, or upgrade hooks. Keep the
-  schema baseline in development checks only. Export immutable admissions, including inputs not yet
-  recorded, and accepted-command facts. Bind every canonical reference to its admission; preserve
-  queue order, admission time, and opaque fences/groups. Apply destination admission constraints
-  without importing execution authority. Rebuild ledger execution state, checkpoints, and projections.
-  Recompute the digest chain and import atomically without restoring claims, leases, tokens, or
-  finalization flags. Reject nonempty targets and unsupported
-  or ambiguous data without mutation; never silently reset or drop queued work. Do not build
-  historical upgrade chains or a general migration framework.
+- Change record formats through a one-time export/convert/import cutover; runtime accepts only the current format.
+  Preserve immutable admission and accepted-command facts; rebuild derivatives and digests without importing execution authority.
+  Import atomically into empty Threads under destination constraints; reject unsupported or ambiguous data without mutation or lost work.
+  Keep adapter layout steps separate, immutable, ordered and atomic; reject newer layouts. No payload rewrites, history shims or migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.
