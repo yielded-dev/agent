@@ -21,7 +21,7 @@ Commit the Bun lockfile; CI installs with `--frozen-lockfile`.
 | Effect and its provider/platform/SQL/Atom/test packages | `4.0.0`              |
 | `effect-cf`                                             | `0.53.0`             |
 | TypeScript                                              | `7.0.2`              |
-| `@effect/tsgo`                                          | `0.45.0`             |
+| `@effect/tsgo`                                          | `0.48.1`             |
 | Node.js                                                 | `22.18+` or `24.11+` |
 
 Public packages require `effect@^4.0.0` as a peer. The exact catalog pin supplies the
@@ -354,6 +354,11 @@ This includes `admin:durable` and the Node crash workers.
 Apply the compiler patch separately with `vp run patch:tsgo`.
 The pinned upstream command selects a replacement for the installed TypeScript version and
 fails if that replacement is unavailable. Dependency versions live in the root catalog.
+
+Unknown diagnostic names fail compilation. The shared plugin also checks tag-specific
+error handling and ignored `flatMap` inputs. Stability diagnostics stay enabled;
+`allowedUnstableApis` records the Effect modules this repository intentionally uses.
+Review new unstable or experimental dependencies before extending those allowances.
 
 CI suppresses lifecycle scripts, then explicitly patches the compiler in jobs that check, test,
 or build TypeScript. Read installed Effect sources in `node_modules/effect`.
