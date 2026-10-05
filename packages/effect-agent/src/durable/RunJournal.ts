@@ -23,6 +23,7 @@ import {
   BatchId,
   CanonicalBatch,
   ModelResponseRecorded,
+  MAX_PERSISTED_JSON_BYTES,
   PersistedJson,
   RecordEnvelope,
   RecordId,
@@ -1408,6 +1409,8 @@ const validStagedUsage = (label: string, value: number): Effect.Effect<number, R
       );
 
 export interface TurnCommitInput {
+  readonly toolResultMaxBytes?: number | undefined;
+  readonly toolSelectionMaxBytes?: number | undefined;
   readonly toolOperations?: ModelResponseRecorded["toolOperations"] | undefined;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
@@ -1531,6 +1534,8 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
     payload: yield* ModelResponseRecorded.makeEffect({
+      toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
+      toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
       toolOperations: input.toolOperations ?? [],
       ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
         ? {}

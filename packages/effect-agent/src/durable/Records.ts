@@ -362,6 +362,14 @@ export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("Tool
  * `messagesDigest` pins the exact encoded content.
  */
 const ModelResponseRecordedFields = Schema.Struct({
+  /** Original bound for each application result; replacement Bindings cannot enlarge it. */
+  toolResultMaxBytes: Schema.Int.check(
+    Schema.isBetween({ minimum: 256, maximum: MAX_PERSISTED_JSON_BYTES }),
+  ),
+  /** Maximum encoded selection metadata from the native catalog at declaration time. */
+  toolSelectionMaxBytes: Schema.Natural.check(
+    Schema.isLessThanOrEqualTo(MAX_CANONICAL_RECORD_BYTES),
+  ),
   /** Exactly one entry per application call, including rejected calls; none for provider execution. */
   toolOperations: Schema.Array(ToolOperation),
   /** Explicit pre-execution failures, committed with the original arguments before any approval. */
@@ -940,6 +948,8 @@ export type WorkerOrigin = typeof WorkerOrigin.Type;
 /** Frozen per-input metadata; it grants no attached-child or parent-abort semantics. */
 export const WorkerAdmission = Schema.Struct({
   origin: WorkerOrigin,
+  /** Run executing this handoff, independently of immutable lineage and subtree funding. */
+  executionRunId: Schema.NullOr(RunId),
   messageId: IdempotencyKey,
   parameters: PersistedJson,
   createdAtMillis: Schema.Natural,
@@ -1066,6 +1076,8 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   "SubtreeBudgetReserved",
   {
     reservationId: BoundedName,
+    /** Run executing this reservation; null for host-owned follow-ups. Grants no authority. */
+    executionRunId: Schema.NullOr(RunId),
     sourceSubmissionId: Schema.optionalKey(SubmissionId),
     childThreadId: ThreadId,
     lifetime: Schema.Literals(["attached", "background"]),
@@ -1083,6 +1095,9 @@ export type EvidenceReference = typeof EvidenceReference.Type;
 export const MAX_RUN_CONTINUATION_BYTES = 8_192;
 /** Incremental record JSON per Turn, including progress and the first Turn's initial context. */
 export const MAX_TURN_CANONICAL_BYTES = MAX_CANONICAL_RECORD_BYTES;
+/** Room retained for a bounded terminal failure and its atomic progress publication. */
+export const RUN_TERMINAL_RESERVE_BYTES = 128 * 1024;
+export const RUN_TERMINAL_RESERVE_RECORDS = 4;
 export const MAX_RUN_EVIDENCE_RECORDS = 16_384;
 export const MAX_RUN_EVIDENCE_BYTES = 32 * 1024 * 1024;
 export const MAX_RUN_RECOVERY_SUFFIX_RECORDS = 64;
@@ -1162,6 +1177,8 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     /** Logical Turn whose incremental canonical bytes are currently being charged. */
     turn: Schema.Natural,
     turnBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES)),
+    /** Conservative room for terminal usage grouping; derived only from canonical model usage. */
+    terminalUsageBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
     originalInput: EvidenceReference,
     savedContext: Schema.optionalKey(EvidenceReference),
     latestResponse: Schema.optionalKey(EvidenceReference),

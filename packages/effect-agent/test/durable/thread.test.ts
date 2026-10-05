@@ -113,6 +113,8 @@ describe("thread canonical contracts", () => {
 describe("durable tool declarations", () => {
   const encodedModelResponse = {
     _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: 1024 * 1024,
+    toolSelectionMaxBytes: 0,
     runId: "run-1",
     turnId: "turn-1",
     turn: 2,

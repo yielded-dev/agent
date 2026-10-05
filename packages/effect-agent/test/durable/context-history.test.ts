@@ -46,6 +46,8 @@ const promptJson = (prompt: Prompt.Prompt) =>
 const response = (position: number, text: string, runId = "run-1") =>
   record(position, {
     _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: 1024 * 1024,
+    toolSelectionMaxBytes: 0,
     toolOperations: [],
     runId,
     turnId: `turn:${position}`,
@@ -156,6 +158,8 @@ describe("canonical context history", () => {
         ...Array.from({ length: 15 }, (_, i) => response(i + 1, "unrelated")),
         record(16, {
           _tag: "ModelResponseRecorded",
+          toolResultMaxBytes: 1024 * 1024,
+          toolSelectionMaxBytes: 0,
           toolOperations: [],
           runId: "run-1",
           turnId: "turn:16",
@@ -236,6 +240,8 @@ describe("canonical context history", () => {
         }),
         record(2, {
           _tag: "ModelResponseRecorded",
+          toolResultMaxBytes: 1024 * 1024,
+          toolSelectionMaxBytes: 0,
           toolOperations: [],
           runId: "run-1",
           turn: 1,

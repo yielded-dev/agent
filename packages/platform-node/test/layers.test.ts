@@ -26,6 +26,7 @@ import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-
 import {
   IdempotencyKey,
   Principal,
+  RecoverySnapshotRequest,
   SubmissionLedger,
   SubmissionLookupById,
 } from "@yielded/agent/submission-ledger";
@@ -570,6 +571,228 @@ describe("NodeDurableAgentRuntime", () => {
           ]);
         }),
       ),
+  );
+
+  // Regression: https://github.com/yielded-dev/agent/commit/6ceda1d2
+  it.effect("keeps accepted input owed across incompatible current Bindings", () =>
+    withTemporaryDatabase((filename) =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const instructions: Array<string> = [];
+        const requests: Array<Prompt.Prompt> = [];
+        const definitions = DefinitionDigestInput.make({ agent: "v1", model: "v1", tools: "v1" });
+
+        const digests = yield* digestDefinitions(definitions).pipe(
+          Effect.provide(NodeCrypto.layer),
+        );
+
+        const definitionOptions = {
+          input: plannerDefinition.input,
+          output: plannerDefinition.output,
+          toolkit: plannerDefinition.toolkit,
+          policy: plannerDefinition.policy,
+        };
+
+        const original = Agent.make("node-input-binding", {
+          ...definitionOptions,
+          instructions: ({ question }) => {
+            instructions.push(`original:${question}`);
+
+            return `Original instructions for ${question}.`;
+          },
+        });
+
+        const blockedModel = Model.make(
+          "scripted",
+          "blocked-input-binding",
+          Layer.effect(
+            LanguageModel.LanguageModel,
+            LanguageModel.make({
+              generateText: () => Effect.succeed([]),
+              streamText: ({ prompt }) => {
+                requests.push(prompt);
+
+                return Stream.unwrap(
+                  Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                );
+              },
+            }),
+          ),
+        );
+
+        const initialAgent = Agent.withModel(original, blockedModel);
+
+        const readRecords = (threadId: ThreadId) =>
+          Effect.gen(function* () {
+            const store = yield* ThreadStore;
+
+            return yield* Stream.runCollect(
+              store.read(ThreadRead.make({ threadId, limit: 1_024 })),
+            );
+          });
+
+        const accepted = yield* Effect.gen(function* () {
+          const runtime = yield* DurableAgentRuntime;
+
+          const saved = yield* runtime.submit(
+            initialAgent,
+            { question: "saved" },
+            {
+              ...submitOptions("binding-saved", "saved"),
+              definitions: digests,
+            },
+          );
+
+          const queued = yield* runtime.submit(
+            initialAgent,
+            { question: "queued" },
+            {
+              ...submitOptions("binding-queued", "queued"),
+              definitions: digests,
+            },
+          );
+
+          const fiber = yield* runtime.processThreadHead(saved.threadId).pipe(Effect.forkChild);
+
+          yield* Deferred.await(started);
+          yield* Fiber.interrupt(fiber);
+          const records = yield* readRecords(saved.threadId);
+          const queuedRecords = yield* readRecords(queued.threadId);
+
+          expect(
+            records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
+          ).toHaveLength(1);
+          expect(queuedRecords.some(({ record }) => record.payload._tag === "RunStarted")).toBe(
+            false,
+          );
+
+          return [
+            { receipt: saved, records },
+            { receipt: queued, records: queuedRecords },
+          ];
+        }).pipe(
+          Effect.provide(
+            NodeDurableHost.layerRegistered(
+              [{ agent: initialAgent, definitions }],
+              runtimeOptions(filename),
+            ),
+          ),
+        );
+
+        const model = yield* makeScriptedModel((_call, prompt) => {
+          requests.push(prompt);
+
+          return finalParts('{"answer":"done"}');
+        });
+
+        const incompatible = Agent.withModel(
+          Agent.make(original.id, {
+            ...definitionOptions,
+            input: Schema.Struct({ question: Schema.String, newRequiredField: Schema.String }),
+            instructions: ({ question }) => {
+              instructions.push(`incompatible:${question}`);
+
+              return `Incompatible instructions for ${question}.`;
+            },
+          }),
+          model,
+        );
+
+        const rejected = yield* Effect.gen(function* () {
+          const runtime = yield* DurableAgentRuntime;
+          const ledger = yield* SubmissionLedger;
+
+          return yield* Effect.forEach(accepted, ({ receipt }) =>
+            Effect.gen(function* () {
+              const result = yield* runtime.processThreadHead(receipt.threadId).pipe(Effect.result);
+              const status = yield* runtime.submissionStatus(receipt);
+
+              const snapshot = yield* ledger.loadRecoverySnapshot(
+                RecoverySnapshotRequest.make({
+                  submissionId: receipt.submissionId,
+                }),
+              );
+
+              const records = yield* readRecords(receipt.threadId);
+
+              return {
+                result,
+                status,
+                ownership: snapshot.ownership,
+                terminal: records.filter(
+                  ({ record }) =>
+                    record.payload._tag === "RunFailed" ||
+                    record.payload._tag === "SubmissionSettled",
+                ),
+              };
+            }),
+          );
+        }).pipe(
+          Effect.provide(
+            NodeDurableHost.layerRegistered(
+              [{ agent: incompatible, definitions }],
+              runtimeOptions(filename),
+            ),
+          ),
+        );
+
+        expect(rejected).toMatchObject(
+          accepted.map(() => ({
+            result: { _tag: "Failure", failure: { _tag: "BindingUnavailable" } },
+            status: { _tag: "pending" },
+            ownership: undefined,
+            terminal: [],
+          })),
+        );
+        expect(instructions).toEqual(["original:saved"]);
+        expect(requests).toHaveLength(1);
+
+        const compatible = Agent.withModel(
+          Agent.make(original.id, {
+            ...definitionOptions,
+            instructions: ({ question }) => {
+              instructions.push(`current:${question}`);
+
+              return `Current instructions for ${question}.`;
+            },
+          }),
+          model,
+        );
+
+        yield* Effect.gen(function* () {
+          const runtime = yield* DurableAgentRuntime;
+
+          for (const { receipt, records: prefix } of accepted) {
+            yield* runtime.processThreadHead(receipt.threadId);
+            expect(yield* runtime.submissionStatus(receipt)).toMatchObject({
+              _tag: "settled",
+              settlement: { submissionId: receipt.submissionId, outcome: "completed" },
+            });
+            const records = yield* readRecords(receipt.threadId);
+
+            expect(records.slice(0, prefix.length)).toEqual(prefix);
+            expect(
+              records.filter(({ record }) => record.payload._tag === "RunStarted"),
+            ).toHaveLength(1);
+            expect(
+              records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
+            ).toHaveLength(1);
+          }
+        }).pipe(
+          Effect.provide(
+            NodeDurableHost.layerRegistered(
+              [{ agent: compatible, definitions }],
+              runtimeOptions(filename),
+            ),
+          ),
+        );
+        expect(instructions).toEqual(["original:saved", "current:queued"]);
+        expect(requests).toHaveLength(3);
+        expect(JSON.stringify(requests[1])).toContain("Original instructions for saved.");
+        expect(JSON.stringify(requests[1])).not.toContain("Current instructions");
+        expect(JSON.stringify(requests[2])).toContain("Current instructions for queued.");
+      }),
+    ),
   );
 
   it.effect("keeps projected root and joined inputs private across Node host recovery", () =>

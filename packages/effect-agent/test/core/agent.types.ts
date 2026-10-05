@@ -1,5 +1,6 @@
 import { Agent } from "@yielded/agent";
 import {
+  type AgentInputDecodeError,
   type AgentInputError,
   type AgentOutputError,
   type AgentRunDispositionError,
@@ -164,7 +165,7 @@ const recoverableAgent = Agent.withModel(recoverableDefinition, model);
 export type RecoverableFailureProof = Assert<
   Equal<
     Agent.Failure<typeof recoverableAgent>,
-    AiError.AiError | AgentInputError | AgentOutputError
+    AiError.AiError | AgentInputDecodeError | AgentInputError | AgentOutputError
   >
 >;
 
@@ -188,6 +189,7 @@ type ExpectedFailure =
   | InstructionFailure
   | AvailabilityFailure
   | AiError.AiError
+  | AgentInputDecodeError
   | AgentInputError
   | AgentOutputError;
 

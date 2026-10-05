@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
     "properties": {
@@ -951,6 +950,16 @@
           "type": "string",
           "enum": ["ModelResponseRecorded"]
         },
+        "toolResultMaxBytes": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 1048576
+        },
+        "toolSelectionMaxBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4194304
+        },
         "toolOperations": {
           "type": "array",
           "items": {
@@ -1056,6 +1065,8 @@
       },
       "required": [
         "_tag",
+        "toolResultMaxBytes",
+        "toolSelectionMaxBytes",
         "toolOperations",
         "runId",
         "turnId",
@@ -2436,6 +2447,17 @@
               ],
               "additionalProperties": true
             },
+            "executionRunId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "messageId": {
               "type": "string",
               "minLength": 1,
@@ -2462,7 +2484,7 @@
               "enum": ["update"]
             }
           },
-          "required": ["origin", "messageId", "parameters", "createdAtMillis"],
+          "required": ["origin", "executionRunId", "messageId", "parameters", "createdAtMillis"],
           "additionalProperties": true
         },
         "inputDigest": {
@@ -3025,6 +3047,17 @@
           "minLength": 1,
           "maxLength": 256
         },
+        "executionRunId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sourceSubmissionId": {
           "type": "string",
           "minLength": 1
@@ -3068,6 +3101,7 @@
       "required": [
         "_tag",
         "reservationId",
+        "executionRunId",
         "childThreadId",
         "lifetime",
         "depth",
@@ -3199,6 +3233,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 4194304
+        },
+        "terminalUsageBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
         },
         "originalInput": {
           "type": "object",
@@ -3372,6 +3411,7 @@
         "recordBytes",
         "turn",
         "turnBytes",
+        "terminalUsageBytes",
         "originalInput",
         "lastFact",
         "position",

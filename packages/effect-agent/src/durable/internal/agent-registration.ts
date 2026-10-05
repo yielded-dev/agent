@@ -31,7 +31,7 @@ import type { DefinitionDigestInput, Digest, PersistedJson } from "../Records.ts
 import { DefinitionDigests, ReplayContract } from "../Records.ts";
 import type { Claim, Settlement, SubmissionSnapshot } from "../SubmissionLedger.ts";
 
-/** No unique current executable is registered for the stable Agent identity. */
+/** No unique current Binding can execute the stable Agent identity or decode its accepted input. */
 export class BindingUnavailable extends Schema.TaggedError<BindingUnavailable>()(
   "BindingUnavailable",
   { agentId: AgentId, message: Schema.String },
@@ -288,7 +288,7 @@ type ResolvedAttemptDriver = <
   claim: Claim,
 ) => Effect.Effect<
   Option.Option<Settlement>,
-  DurableWorkerFailure,
+  DurableWorkerFailure | DurableBindingFailure,
   DurableWorkerRequirements<
     RuntimeBinding<
       InputSchema,
@@ -312,7 +312,11 @@ type CapturedAttempt<A extends ExecutableAgentBinding> = (
   agent: A,
   threadId: ThreadId,
   claim: Claim,
-) => Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure, DurableWorkerRequirements<A>>;
+) => Effect.Effect<
+  Option.Option<Settlement>,
+  DurableWorkerFailure | DurableBindingFailure,
+  DurableWorkerRequirements<A>
+>;
 
 /**
  * An Agent with its worker services captured, ready to drive a fenced Attempt.
@@ -328,7 +332,7 @@ interface CapturedBinding {
     driver: ResolvedAttemptDriver,
     threadId: ThreadId,
     claim: Claim,
-  ) => Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure>;
+  ) => Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure | DurableBindingFailure>;
 }
 
 // Registrations outlive their construction span. Dependencies remain captured,
@@ -435,7 +439,7 @@ const capture = <A extends ExecutableAgentBinding, Provides = never, Requires = 
 
         return scoped.pipe(Effect.provide(context)) as Effect.Effect<
           Option.Option<Settlement>,
-          DurableWorkerFailure
+          DurableWorkerFailure | DurableBindingFailure
         >;
       },
     }),

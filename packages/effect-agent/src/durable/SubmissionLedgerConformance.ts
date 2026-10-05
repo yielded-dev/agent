@@ -630,6 +630,7 @@ const admissionIdempotency = conformanceCase(
 
 const workerMetadata = (base: AdmissionRequest) =>
   WorkerAdmission.make({
+    executionRunId: null,
     messageId: base.idempotencyKey,
     sourceSubmissionId: Schema.decodeSync(SubmissionId)("source-input"),
     deliveryPrincipal: base.principal,

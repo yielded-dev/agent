@@ -876,7 +876,13 @@ const nativeWorkerAccounting = conformanceCase(
         });
 
       const requested = WorkerInputRequested.make({
-        admission: { origin, messageId: origin.firstMessageId, parameters: {}, createdAtMillis: 0 },
+        admission: {
+          origin,
+          executionRunId: null,
+          messageId: origin.firstMessageId,
+          parameters: {},
+          createdAtMillis: 0,
+        },
         inputDigest: EMPTY_TAIL_DIGEST,
       });
 
@@ -955,6 +961,7 @@ const nativeWorkerAccounting = conformanceCase(
           id,
           SubtreeBudgetReserved.make({
             reservationId: id,
+            executionRunId: null,
             sourceSubmissionId,
             childThreadId: workerThreadId,
             lifetime: "background",

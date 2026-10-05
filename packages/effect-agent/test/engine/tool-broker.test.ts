@@ -245,13 +245,18 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
 
       yield* AgentRuntime.run(Agent.withModel(definition, model), "q", {
         durability: {
+          toolResultMaxBytes: 1024 * 1024,
           checkpoint: Effect.void,
           initialize: () => Effect.void,
           commitTurn: () => Effect.succeed("committed"),
           checkToolDispatch: Effect.void,
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,
-          step: { lookup: () => Effect.succeed(Option.none()), commit: () => Effect.void },
+          step: {
+            lookup: () => Effect.succeed(Option.none()),
+            reserve: () => Effect.succeed(Effect.void),
+            commit: () => Effect.void,
+          },
           reservePolicyUsage: (usage) =>
             Effect.gen(function* () {
               activeReservations += 1;
@@ -287,13 +292,18 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
         }),
         runOptions: {
           durability: {
+            toolResultMaxBytes: 1024 * 1024,
             checkpoint: Effect.void,
             initialize: () => Effect.void,
             commitTurn: () => Effect.succeed("committed"),
             checkToolDispatch: Effect.void,
             commitCompaction: () => Effect.void,
             noteTurnUsage: () => Effect.void,
-            step: { lookup: () => Effect.succeed(Option.none()), commit: () => Effect.void },
+            step: {
+              lookup: () => Effect.succeed(Option.none()),
+              reserve: () => Effect.succeed(Effect.void),
+              commit: () => Effect.void,
+            },
             reservePolicyUsage: (usage) =>
               Effect.sync(() => {
                 reserved = usage.programmaticToolCalls;

@@ -97,8 +97,10 @@ recorded results. An unresolved ordinary mutating call still requires reconcilia
 `RunContextRecorded` preserves the original model input independently of compaction. A compatible
 current Binding supplies execution services, while saved instructions, user intent, and the Run's
 own continuation remain unchanged by another Run's later traffic. New Runs evaluate current
-instructions. Input-dependent Bindings must still decode the original admitted value; missing
-Bindings or incompatible pending operation semantics leave work owed.
+instructions. Input-dependent Bindings must still decode the original admitted value. A current
+input Schema refusal returns `BindingUnavailable`, releases the Attempt, and leaves the original
+receipt pending until a usable Binding returns. Missing Bindings and incompatible pending
+operation semantics also leave work owed.
 
 Exact Run reads are bounded: at most 16,384 execution facts and 32 MiB, in pages of eight records.
 Preparations before the first continuation and a post-continuation suffix each have a limit of
@@ -106,8 +108,15 @@ Preparations before the first continuation and a post-continuation suffix each h
 capped at 4 MiB per Turn, including continuations and the first Turn's initial context and retained
 preparations. Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
 4 MiB limit to include its envelope. Duplicate SQL batch JSON and indexes are separate costs.
-Exceeding a bound fails typed before publication or recovery advances work. Saved context uses the
-existing persisted JSON limit, including its canonical compaction mapping.
+Dispatch reserves bounded Tool outcomes and a full valid Step result before a new Step body
+starts. Concurrent Steps share that capacity. Every nonterminal append retains room for a bounded
+failure settlement and usage metadata; insufficient capacity refuses execution or fails the Run.
+Reservations are conservative and can refuse work before the byte limit itself is reached. Saved
+context uses the existing persisted JSON limit, including its canonical compaction mapping.
+
+Worker lineage and subtree funding remain immutable provenance. Each worker input records its own
+execution owner: a Tool handoff charges its emitting Run, while host follow-ups and receiving
+framework reports have no source Run charge. Later inputs never enlarge a settled launching Run.
 
 Exact evidence reads and same-format archives retain additive fields and the original wire values.
 Reading a typed view never changes the content pinned by an evidence digest.

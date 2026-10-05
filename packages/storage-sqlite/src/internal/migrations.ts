@@ -60,8 +60,8 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_tag ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload._tag'), sequence)",
   "CREATE INDEX effect_agent_records_submission ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.submissionId'), sequence)",
   "CREATE INDEX effect_agent_records_source ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.sourceSubmissionId'), sequence)",
-  "CREATE INDEX effect_agent_records_worker_source ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.admission.sourceSubmissionId'), sequence)",
-  "CREATE INDEX effect_agent_records_worker_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.admission.origin.source.runId'), sequence) WHERE json_extract(record_json, '$.payload.admission.origin.source._tag') = 'tool'",
+  "CREATE INDEX effect_agent_records_subtree_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.executionRunId'), sequence) WHERE json_extract(record_json, '$.payload._tag') = 'SubtreeBudgetReserved'",
+  "CREATE INDEX effect_agent_records_worker_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.admission.executionRunId'), sequence) WHERE json_extract(record_json, '$.payload._tag') = 'WorkerInputRequested'",
   "CREATE INDEX effect_agent_records_update_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.update.runId'), sequence)",
   "CREATE INDEX effect_agent_records_peer_run ON effect_agent_canonical_records(thread_id, json_extract(record_json, '$.payload.source.runId'), sequence) WHERE json_extract(record_json, '$.payload.source._tag') = 'tool'",
 ] as const;

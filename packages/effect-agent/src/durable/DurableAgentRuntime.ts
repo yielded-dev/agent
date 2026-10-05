@@ -30,6 +30,8 @@ import { type RunDispositionDeclaration, type InputPromptSource } from "../core/
 import {
   AgentApprovalDenied,
   AgentApprovalPending,
+  AgentInputDecodeError,
+  AgentPersistenceCapacityError,
   AgentInputError,
   AgentToolAuthorizationDenied,
   type AgentToolAuthorizationCheckError,
@@ -50,6 +52,7 @@ import {
 } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
 import { copyJson } from "../core/internal/json.ts";
+import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { Receipt } from "../core/Receipt.ts";
 import type { ExhaustedLimit } from "../core/RunEvent.ts";
 import {
@@ -194,6 +197,8 @@ import {
   RunStartedRecord,
   RunContextRecorded,
   MAX_RUN_TOOL_CALL_IDENTITIES,
+  MAX_PERSISTED_JSON_BYTES,
+  MAX_RUN_CONTINUATION_BYTES,
   RunDurationExhausted,
   SettlementFailureDiagnostic,
   SubagentJoined,
@@ -233,6 +238,8 @@ import {
 } from "./Recovery.ts";
 import {
   canonicalRecordBytes,
+  CurrentRunWriter,
+  CurrentRunSettlement,
   canonicalRunIds,
   isPreContinuationFact,
   makeProgressWriter,
@@ -241,6 +248,7 @@ import {
   resolveEvidence,
   runEvidence,
   validateSuffix,
+  terminalUsageCharge,
 } from "./RunContinuation.ts";
 import {
   RunJournalError,
@@ -1215,6 +1223,7 @@ const declaredToolCalls = (
  * path). `undefined` when the Run's journal ends at a complete Turn boundary.
  */
 interface PendingToolBatch {
+  readonly toolResultMaxBytes: number;
   readonly toolOperations: ReadonlyArray<ToolOperation>;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
@@ -1639,6 +1648,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         prefix.length !== cursor.recordCount ||
         prefix.reduce((bytes, entry) => bytes + canonicalRecordBytes(entry.record), 0) !==
           cursor.recordBytes ||
+        prefix.reduce(
+          (bytes, { record: { payload } }) =>
+            bytes +
+            (payload._tag === "ModelResponseRecorded" || payload._tag === "ModelCallAborted"
+              ? terminalUsageCharge(payload.modelUsage ?? [])
+              : 0),
+          0,
+        ) !== cursor.terminalUsageBytes ||
         !validateSuffix(own, envelope.sequence)
       )
         return yield* invalid(
@@ -2245,6 +2262,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           readonly turn: number;
           readonly messages: PersistedJson;
           readonly toolOperations: ReadonlyArray<ToolOperation>;
+          readonly toolResultMaxBytes: number;
           readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
           readonly toolExposure?: Snapshot | undefined;
         }
@@ -2273,6 +2291,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             messages: payload.messages,
             toolParameterRejections: payload.toolParameterRejections,
             toolOperations: payload.toolOperations,
+            toolResultMaxBytes: payload.toolResultMaxBytes,
             ...(payload.toolExposure === undefined ? {} : { toolExposure: payload.toolExposure }),
           };
         }
@@ -2383,6 +2402,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       messages: lastResponse.messages,
       toolParameterRejections: lastResponse.toolParameterRejections,
       toolOperations: lastResponse.toolOperations,
+      toolResultMaxBytes: lastResponse.toolResultMaxBytes,
       ...(lastResponse.toolExposure === undefined
         ? {}
         : { toolExposure: lastResponse.toolExposure }),
@@ -2447,7 +2467,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const progress =
       active?.epoch === writer.producerEpoch
         ? active.writer
-        : yield* makeProgressWriter(writer.threadId).pipe(
+        : yield* makeProgressWriter(writer.threadId, config.deploymentId).pipe(
             Effect.provideService(ThreadReader, reader),
             Effect.provideService(Crypto.Crypto, crypto),
           );
@@ -2455,11 +2475,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const owned: RunWriter = {
       ...writer,
       append: (batch) =>
-        progress.commit(
-          batch,
-          Effect.map(writer.tail, (tail) => tail.sequence),
-          writer.append,
-        ),
+        progress.commit(batch).pipe(Effect.provideService(CurrentRunWriter, writer)),
     };
 
     progressWriters.set(owned, progress);
@@ -2489,11 +2505,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       ...session,
       append: owned.append,
       publishSettlement: (batch) =>
-        progress.commit(
-          batch,
-          Effect.map(session.tail, (tail) => tail.sequence),
-          session.publishSettlement,
-        ),
+        progress.publish(batch).pipe(Effect.provideService(CurrentRunSettlement, session)),
     };
 
     progressWriters.set(wrapped, progress);
@@ -2512,15 +2524,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const progress =
           active?.epoch === request.producerEpoch
             ? active.writer
-            : yield* makeProgressWriter(request.threadId).pipe(
+            : yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
                 Effect.provideService(ThreadReader, reader),
                 Effect.provideService(Crypto.Crypto, crypto),
               );
 
-        return yield* progress.commit(
-          request.batch,
-          Effect.succeed(request.expectedTailSequence),
-          (batch) => store.append(FencedAppendRequest.make({ ...request, batch })),
+        return yield* progress.commit(request.batch).pipe(
+          Effect.provideService(CurrentRunWriter, {
+            threadId: request.threadId,
+            tail: Effect.succeed({
+              sequence: request.expectedTailSequence,
+              digest: request.expectedTailDigest,
+            }),
+            append: (batch) => store.append(FencedAppendRequest.make({ ...request, batch })),
+          }),
         );
       }),
   });
@@ -2562,52 +2579,54 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             }),
           );
 
-        return progress.commit(
-          batch,
-          Effect.map(ctx.tail, (tail) => tail.sequence),
-          (prepared) =>
-            Effect.gen(function* () {
-              let tail = yield* ctx.tail;
+        return progress.publish(batch).pipe(
+          Effect.provideService(CurrentRunSettlement, {
+            threadId: ctx.threadId,
+            tail: ctx.tail,
+            publishSettlement: (prepared) =>
+              Effect.gen(function* () {
+                let tail = yield* ctx.tail;
 
-              for (let retries = 0; ; retries++) {
-                const result = yield* runStorage
-                  .publishSettlement(
-                    SettlementPublication.make({
-                      submissionId,
-                      authority,
-                      append: FencedAppendRequest.make({
-                        threadId: ctx.threadId,
-                        producerEpoch: ctx.producerEpoch,
-                        expectedTailSequence: tail.sequence,
-                        expectedTailDigest: tail.digest,
-                        batch: prepared,
+                for (let retries = 0; ; retries++) {
+                  const result = yield* runStorage
+                    .publishSettlement(
+                      SettlementPublication.make({
+                        submissionId,
+                        authority,
+                        append: FencedAppendRequest.make({
+                          threadId: ctx.threadId,
+                          producerEpoch: ctx.producerEpoch,
+                          expectedTailSequence: tail.sequence,
+                          expectedTailDigest: tail.digest,
+                          batch: prepared,
+                        }),
                       }),
-                    }),
-                  )
-                  .pipe(
-                    Effect.catchTag("AppendConflict", (conflict) => {
-                      if (
-                        conflict.reason !== "tail" ||
-                        conflict.actualTailSequence === undefined ||
-                        conflict.actualTailDigest === undefined ||
-                        retries >= 8
-                      )
-                        return Effect.fail(conflict);
-                      tail = {
-                        sequence: conflict.actualTailSequence,
-                        digest: conflict.actualTailDigest,
-                      };
+                    )
+                    .pipe(
+                      Effect.catchTag("AppendConflict", (conflict) => {
+                        if (
+                          conflict.reason !== "tail" ||
+                          conflict.actualTailSequence === undefined ||
+                          conflict.actualTailDigest === undefined ||
+                          retries >= 8
+                        )
+                          return Effect.fail(conflict);
+                        tail = {
+                          sequence: conflict.actualTailSequence,
+                          digest: conflict.actualTailDigest,
+                        };
 
-                      return Effect.succeed(undefined);
-                    }),
-                  );
+                        return Effect.succeed(undefined);
+                      }),
+                    );
 
-                if (result === undefined) continue;
-                yield* ctx.checkFence;
+                  if (result === undefined) continue;
+                  yield* ctx.checkFence;
 
-                return result;
-              }
-            }),
+                  return result;
+                }
+              }),
+          }),
         );
       });
 
@@ -4430,7 +4449,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       Effect.orDie,
       Effect.map((result) => ({
         _tag: "failed" as const,
-        result,
+        // Full private diagnostics are optional. A fixed bounded summary always fits the
+        // space retained before dispatch; the original live Cause was already logged.
+        result:
+          utf8ByteLength(JSON.stringify(result)) <= 64 * 1024
+            ? result
+            : SettlementFailureDiagnostic.make({
+                errorTag: result.errorTag,
+                message: result.message.slice(0, 1_024),
+                ...(result.context === undefined ? {} : { context: result.context }),
+              }),
         // A hard-rail policy failure keeps its typed limit durable (RUN-011):
         // the bounded message stays diagnostic, never the dimension authority.
         ...Option.match(decodePolicyFailureSafely(error), {
@@ -4830,6 +4858,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             (committedUnobservedCalls.get(payload.turn) ?? 0) + (payload.unobservedModelCalls ?? 0),
           );
         }
+        progressWriters.get(ctx)?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
       };
 
       const uncommittedModelUsage = () =>
@@ -5218,19 +5247,37 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const recordHalt = <A, R>(
         effect: Effect.Effect<A, DurableWorkerFailure, R>,
-      ): Effect.Effect<A, CoordinatorHalt, R> =>
+      ): Effect.Effect<A, CoordinatorHalt | AgentPersistenceCapacityError, R> =>
         effect.pipe(
-          Effect.tapError((failure) => Ref.set(haltRef, failure)),
-          halt,
+          Effect.tapError((failure) =>
+            failure instanceof ThreadStoreError &&
+            failure.cause instanceof AgentPersistenceCapacityError
+              ? Effect.void
+              : Ref.set(haltRef, failure),
+          ),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (failure) =>
+                failure instanceof ThreadStoreError &&
+                failure.cause instanceof AgentPersistenceCapacityError
+                  ? failure.cause
+                  : new CoordinatorHalt(failure),
+              ),
+            ),
+          ),
         );
 
       // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
       // authority before semantic work; progress delivery is not a coordinator checkpoint.
-      const checkpoint = halt(
+      const checkpoint = recordHalt(
         Effect.gen(function* () {
           const failure = yield* Ref.get(haltRef);
 
           if (failure !== undefined) return yield* failure;
+          const progress = progressWriters.get(ctx);
+
+          if (progress !== undefined)
+            yield* progress.check(runId).pipe(Effect.provideService(CurrentRunWriter, ctx));
         }),
       );
 
@@ -5282,7 +5329,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const flushDeferredResponse = promoteResponse.pipe(
         // Retain failure before releasing the permit; a waiting capability must not retry it.
-        Effect.tapError((failure) => Ref.set(haltRef, failure)),
+        Effect.tapError((failure) =>
+          failure instanceof ThreadStoreError &&
+          failure.cause instanceof AgentPersistenceCapacityError
+            ? Effect.void
+            : Ref.set(haltRef, failure),
+        ),
         responseGate.withPermits(1),
       );
 
@@ -5382,7 +5434,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
             };
 
-      const durability: RunDurabilityHook<CoordinatorHalt | CompactionError, never> = {
+      const durability: RunDurabilityHook<
+        CoordinatorHalt | AgentPersistenceCapacityError | CompactionError,
+        never
+      > = {
+        toolResultMaxBytes: MAX_PERSISTED_JSON_BYTES,
         checkpoint,
         initialize: ({ initialHistory, priorHistoryLength }) =>
           recordHalt(
@@ -5630,6 +5686,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 });
 
               const input: TurnCommitInput = {
+                toolResultMaxBytes: Math.min(
+                  agent.definition.policy.toolResultBounds.maxBytes,
+                  MAX_PERSISTED_JSON_BYTES,
+                ),
+                toolSelectionMaxBytes: utf8ByteLength(
+                  JSON.stringify({ toolSelection: { toolNames: Object.keys(currentContracts) } }),
+                ),
                 runId,
                 turn: commit.turn,
                 turnId: commit.turnId,
@@ -5680,7 +5743,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   return yield* RunJournalError.make({
                     message: "Only ordinary readonly Tool responses may be deferred",
                   });
-                deferredResponse = {
+
+                const candidate = {
                   turn: commit.turn,
                   turnId: commit.turnId,
                   // The journal owns encoded messages. Detach the remaining small metadata
@@ -5727,6 +5791,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     }),
                   ),
                 };
+
+                const progress = progressWriters.get(ctx);
+
+                if (progress === undefined)
+                  return yield* ThreadStoreError.make({
+                    operation: "reserve readonly dispatch",
+                    message: "Dispatch has no scoped progress writer",
+                  });
+                yield* progress
+                  .defer(candidate.batch)
+                  .pipe(Effect.provideService(CurrentRunWriter, ctx));
+                deferredResponse = candidate;
 
                 return "deferred" as const;
               }
@@ -5775,10 +5851,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               );
 
               return "committed" as const;
-            }).pipe(
-              Effect.tapError((failure) => Ref.set(haltRef, failure)),
-              responseGate.withPermits(1),
-            ),
+            }).pipe(responseGate.withPermits(1)),
           ),
         checkToolDispatch: recordHalt(
           Effect.gen(function* () {
@@ -5807,6 +5880,56 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   : Option.some({ encodedOutput: output });
               }),
             ),
+          reserve: (key) =>
+            recordHalt(
+              Effect.gen(function* () {
+                yield* flushDeferredResponse;
+                const recordId = toolStepSettledRecordId(runId, key.toolCallId, key.stepName);
+
+                const template = yield* makeEnvelope(
+                  recordId,
+                  yield* ToolStepSettled.makeEffect({
+                    runId,
+                    toolCallId: key.toolCallId,
+                    stepName: key.stepName,
+                    output: null,
+                    outputDigest: yield* withCrypto(digestJson(null)),
+                  }).pipe(
+                    Effect.mapError(() =>
+                      ThreadStoreError.make({
+                        operation: "reserve Step dispatch",
+                        message: "Durable Step identity exceeds canonical persistence bounds",
+                        cause: AgentPersistenceCapacityError.make({
+                          message: "Durable Step identity exceeds canonical persistence bounds",
+                        }),
+                      }),
+                    ),
+                  ),
+                );
+
+                const progress = progressWriters.get(ctx);
+
+                if (progress === undefined)
+                  return yield* ThreadStoreError.make({
+                    operation: "reserve Step dispatch",
+                    message: "Dispatch has no scoped progress writer",
+                  });
+
+                return yield* progress
+                  .reserve(
+                    runId,
+                    CanonicalBatch.make({
+                      batchId: decodeBatchIdSync(recordId),
+                      producerId: config.producerId,
+                      records: [template],
+                    }),
+                    canonicalRecordBytes(template) +
+                      MAX_PERSISTED_JSON_BYTES +
+                      MAX_RUN_CONTINUATION_BYTES,
+                  )
+                  .pipe(Effect.provideService(CurrentRunWriter, ctx));
+              }),
+            ),
           commit: (key, encodedOutput) =>
             recordHalt(
               Effect.gen(function* () {
@@ -5816,10 +5939,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 if (knownIds.has(recordId)) return;
 
                 const output = yield* decodePersisted(encodedOutput).pipe(
-                  Effect.mapError((cause) =>
-                    RunJournalError.make({
-                      message: `Durable Step ${key.stepName} output exceeds canonical persistence bounds`,
-                      cause,
+                  Effect.mapError(() =>
+                    ThreadStoreError.make({
+                      operation: "commit Step result",
+                      message: "Durable Step output exceeds canonical persistence bounds",
+                      cause: AgentPersistenceCapacityError.make({
+                        message: "Durable Step output exceeds canonical persistence bounds",
+                      }),
                     }),
                   ),
                 );
@@ -5864,6 +5990,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               costMicrousd: (prior?.costMicrousd ?? 0) + usage.usage.costMicrousd,
               modelUsage: [...(prior?.modelUsage ?? []), usage.usage],
             });
+            progressWriters
+              .get(ctx)
+              ?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
           }),
         commitCompaction: (commit) =>
           Effect.gen(function* () {
@@ -6190,7 +6319,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
        * without settling. A denied decision fails the Run through the engine's
        * `AgentApprovalDenied` path with the denial already canonical.
        */
-      const approval: RunApprovalHook<CoordinatorHalt, never> = {
+      const approval: RunApprovalHook<CoordinatorHalt | AgentPersistenceCapacityError, never> = {
         request: (request) =>
           recordHalt(
             Effect.gen(function* () {
@@ -6293,7 +6422,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             encodedInput,
           ).pipe(
             Effect.mapError((cause) =>
-              AgentInputError.make({
+              AgentInputDecodeError.make({
                 message: cause.message,
               }),
             ),
@@ -6395,7 +6524,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       );
 
       const input: RunInputHook<
-        CoordinatorHalt | Agent.Failure<typeof agent>,
+        CoordinatorHalt | AgentPersistenceCapacityError | Agent.Failure<typeof agent>,
         Agent.DefinitionRequirements<(typeof agent)["definition"]>
       > = {
         awaitJoin,
@@ -6526,7 +6655,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const establishSubagent = (
         request: RunSubagentEstablishRequest,
-      ): Effect.Effect<ChildEstablishStatus, CoordinatorHalt> =>
+      ): Effect.Effect<ChildEstablishStatus, CoordinatorHalt | AgentPersistenceCapacityError> =>
         recordHalt(
           Effect.gen(function* () {
             const toolCallId = request.toolCallId;
@@ -6755,6 +6884,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                         submission.threadId,
                         SubtreeBudgetReserved.make({
                           reservationId,
+                          executionRunId: runId,
                           sourceSubmissionId: submissionId,
                           childThreadId: childThreadIdFor(submissionId, toolCallId),
                           lifetime: "attached",
@@ -6952,7 +7082,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const joinSubagent = (
         request: RunSubagentJoinRequest,
-      ): Effect.Effect<void, CoordinatorHalt> =>
+      ): Effect.Effect<void, CoordinatorHalt | AgentPersistenceCapacityError> =>
         recordHalt(
           Effect.gen(function* () {
             const toolCallId = request.toolCallId;
@@ -7076,7 +7206,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           }),
         );
 
-      const subagent: RunSubagentHook<CoordinatorHalt, never> = {
+      const subagent: RunSubagentHook<CoordinatorHalt | AgentPersistenceCapacityError, never> = {
         establish: establishSubagent,
         join: joinSubagent,
       };
@@ -7102,6 +7232,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const options: RunOptions<
         | CoordinatorHalt
+        | AgentPersistenceCapacityError
         | AgentToolAuthorizationCheckError
         | CompactionError
         | RunContextPreparationError
@@ -7171,6 +7302,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               resume: {
                 ...(settledCompletion === undefined ? {} : { settledCompletion }),
                 turn: pending.turn,
+                toolResultMaxBytes: pending.toolResultMaxBytes,
                 turnId: pending.turnId,
                 calls: pending.calls,
                 toolParameterRejections: pending.toolParameterRejections,
@@ -7426,10 +7558,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 readonly _tag: "suspendedChildRun";
                 readonly children: AgentChildPending["children"];
               },
-            DurableWorkerFailure
+            DurableWorkerFailure | DurableBindingFailure
           > => {
             if (isCoordinatorHaltCause(cause)) {
               return Effect.failCause(Cause.map(cause, (halt) => halt.failure));
+            }
+            if (
+              cause.reasons.some(
+                (reason) => reason._tag === "Fail" && reason.error instanceof AgentInputDecodeError,
+              )
+            ) {
+              // Accepted input is still owed. A current codec refusal is a Binding problem,
+              // while coexisting defects/interruption remain in their original Cause channels.
+              return Effect.failCause(
+                Cause.map(cause, () =>
+                  BindingUnavailable.make({
+                    agentId: agent.definition.id,
+                    message: "The current Binding cannot decode accepted input",
+                  }),
+                ),
+              );
             }
             const approvalPending = agentApprovalPendingOption(cause);
 

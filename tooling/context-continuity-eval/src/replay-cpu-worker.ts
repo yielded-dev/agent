@@ -393,6 +393,8 @@ const application = Layer.unwrap(
                 );
 
                 payload = ModelResponseRecorded.make({
+                  toolResultMaxBytes: 1024 * 1024,
+                  toolSelectionMaxBytes: 0,
                   toolOperations: [],
                   runId,
                   turnId: TurnId.make(`seed-turn-${index}`),

@@ -203,12 +203,14 @@ const driveRun = (setup: RunSetup) =>
       commitCompaction === undefined
         ? undefined
         : {
+            toolResultMaxBytes: 1024 * 1024,
             checkpoint: Effect.void,
             initialize: () => Effect.void,
             commitTurn: () => Effect.succeed("committed"),
             checkToolDispatch: Effect.void,
             step: {
               lookup: () => Effect.succeed(Option.none()),
+              reserve: () => Effect.succeed(Effect.void),
               commit: () => Effect.void,
             },
             commitCompaction,

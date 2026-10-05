@@ -59,8 +59,8 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_tag ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'tag'), sequence)",
   "CREATE INDEX effect_agent_records_submission ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'submissionId'), sequence)",
   "CREATE INDEX effect_agent_records_source ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'sourceSubmissionId'), sequence)",
-  "CREATE INDEX effect_agent_records_worker_source ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'workerSourceSubmissionId'), sequence)",
-  "CREATE INDEX effect_agent_records_worker_run ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'workerSourceRunId'), sequence)",
+  "CREATE INDEX effect_agent_records_subtree_run ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'subtreeExecutionRunId'), sequence)",
+  "CREATE INDEX effect_agent_records_worker_run ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'workerExecutionRunId'), sequence)",
   "CREATE INDEX effect_agent_records_update_run ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'updateRunId'), sequence)",
   "CREATE INDEX effect_agent_records_peer_run ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (read_metadata ->> 'peerSourceRunId'), sequence)",
 ] as const;
@@ -479,15 +479,15 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     columns: ["thread_id", null, "sequence"],
     expressions: ["sourceSubmissionId"],
   },
-  effect_agent_records_worker_source: {
+  effect_agent_records_subtree_run: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", null, "sequence"],
-    expressions: ["workerSourceSubmissionId"],
+    expressions: ["subtreeExecutionRunId"],
   },
   effect_agent_records_worker_run: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", null, "sequence"],
-    expressions: ["workerSourceRunId"],
+    expressions: ["workerExecutionRunId"],
   },
   effect_agent_records_update_run: {
     table: "effect_agent_canonical_records",

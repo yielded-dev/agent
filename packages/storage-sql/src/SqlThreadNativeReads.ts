@@ -54,11 +54,10 @@ const canonicalPaths = {
   toolCallId: ["payload", "toolCallId"],
   kind: ["payload", "kind"],
   sourceSubmissionId: ["payload", "sourceSubmissionId"],
+  subtreeExecutionRunId: ["payload", "executionRunId"],
   messageId: ["payload", "admission", "messageId"],
   submissionId: ["payload", "submissionId"],
-  workerSourceSubmissionId: ["payload", "admission", "sourceSubmissionId"],
-  workerSourceRunId: ["payload", "admission", "origin", "source", "runId"],
-  workerSourceTag: ["payload", "admission", "origin", "source", "_tag"],
+  workerExecutionRunId: ["payload", "admission", "executionRunId"],
   peerSourceRunId: ["payload", "source", "runId"],
   peerSourceTag: ["payload", "source", "_tag"],
   updateRunId: ["payload", "update", "runId"],
@@ -88,11 +87,10 @@ const encodeMetadata = Schema.encodeSync(
       toolCallId: Schema.NullOr(Schema.String),
       kind: Schema.NullOr(Schema.String),
       sourceSubmissionId: Schema.NullOr(Schema.String),
+      subtreeExecutionRunId: Schema.NullOr(Schema.String),
       messageId: Schema.NullOr(Schema.String),
       submissionId: Schema.NullOr(Schema.String),
-      workerSourceSubmissionId: Schema.NullOr(Schema.String),
-      workerSourceRunId: Schema.NullOr(Schema.String),
-      workerSourceTag: Schema.NullOr(Schema.String),
+      workerExecutionRunId: Schema.NullOr(Schema.String),
       peerSourceRunId: Schema.NullOr(Schema.String),
       peerSourceTag: Schema.NullOr(Schema.String),
       updateRunId: Schema.NullOr(Schema.String),
@@ -117,22 +115,20 @@ export const canonicalRecordMetadata = (record: CanonicalRecord): string => {
       "sourceSubmissionId" in payload && payload.sourceSubmissionId !== undefined
         ? JSON.stringify(payload.sourceSubmissionId)
         : null,
+    subtreeExecutionRunId:
+      payload._tag === "SubtreeBudgetReserved" && payload.executionRunId !== null
+        ? JSON.stringify(payload.executionRunId)
+        : null,
     messageId:
       payload._tag === "WorkerInputRequested" ? JSON.stringify(payload.admission.messageId) : null,
     submissionId:
       "submissionId" in payload && payload.submissionId !== undefined
         ? JSON.stringify(payload.submissionId)
         : null,
-    workerSourceSubmissionId:
-      payload._tag === "WorkerInputRequested" && payload.admission.sourceSubmissionId !== undefined
-        ? JSON.stringify(payload.admission.sourceSubmissionId)
+    workerExecutionRunId:
+      payload._tag === "WorkerInputRequested" && payload.admission.executionRunId !== null
+        ? JSON.stringify(payload.admission.executionRunId)
         : null,
-    workerSourceRunId:
-      payload._tag === "WorkerInputRequested" && payload.admission.origin.source._tag === "tool"
-        ? JSON.stringify(payload.admission.origin.source.runId)
-        : null,
-    workerSourceTag:
-      payload._tag === "WorkerInputRequested" ? payload.admission.origin.source._tag : null,
     peerSourceRunId:
       payload._tag === "PeerMessagePrepared" && payload.source._tag === "tool"
         ? JSON.stringify(payload.source.runId)
@@ -406,16 +402,12 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   predicate: sql`${canonicalField(sql, "submissionId")} = ${queryIdentifier(sql, selection.submissionId)} AND ${canonicalField(sql, "tag")} IN ('AbortRequested', 'SubmissionSettled')`,
                 },
                 {
-                  index: "effect_agent_records_subtree",
-                  predicate: sql`${canonicalField(sql, "sourceSubmissionId")} = ${queryIdentifier(sql, selection.submissionId)} AND ${canonicalField(sql, "tag")} = 'SubtreeBudgetReserved'`,
-                },
-                {
-                  index: "effect_agent_records_worker_source",
-                  predicate: sql`${canonicalField(sql, "workerSourceSubmissionId")} = ${queryIdentifier(sql, selection.submissionId)} AND ${canonicalField(sql, "tag")} = 'WorkerInputRequested'`,
+                  index: "effect_agent_records_subtree_run",
+                  predicate: sql`${canonicalField(sql, "subtreeExecutionRunId")} = ${queryIdentifier(sql, selection.runId)} AND ${canonicalField(sql, "tag")} = 'SubtreeBudgetReserved'`,
                 },
                 {
                   index: "effect_agent_records_worker_run",
-                  predicate: sql`${canonicalField(sql, "workerSourceRunId")} = ${queryIdentifier(sql, selection.runId)} AND ${canonicalField(sql, "workerSourceTag")} = 'tool' AND ${canonicalField(sql, "tag")} = 'WorkerInputRequested'`,
+                  predicate: sql`${canonicalField(sql, "workerExecutionRunId")} = ${queryIdentifier(sql, selection.runId)} AND ${canonicalField(sql, "tag")} = 'WorkerInputRequested'`,
                 },
                 {
                   index: "effect_agent_records_peer_run",

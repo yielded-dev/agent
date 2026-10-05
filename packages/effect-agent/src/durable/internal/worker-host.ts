@@ -1341,6 +1341,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             reservationId: Schema.decodeSync(SubtreeBudgetReserved.fields.reservationId)(
               admission.messageId,
             ),
+            executionRunId: admission.executionRunId,
             ...(admission.sourceSubmissionId === undefined
               ? {}
               : { sourceSubmissionId: admission.sourceSubmissionId }),
@@ -1508,6 +1509,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       if (retained !== undefined) {
         workerAdmission = {
           origin: retained.origin,
+          executionRunId: null,
           reportKind: "update",
           messageId,
           parameters: retained.parameters,
@@ -1752,6 +1754,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         if (Option.isNone(parameters)) return refused("destination");
         workerAdmission = {
           origin: sourceOrigin,
+          executionRunId: null,
           messageId,
           parameters: parameters.value,
           createdAtMillis: now,
@@ -2191,6 +2194,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           authorization: { policyId: "worker-host", decisionId: messageId },
           workerAdmission: {
             origin,
+            // Freeze the first sender's execution owner; replay reuses this whole envelope.
+            executionRunId: context.source._tag === "tool" ? context.source.runId : null,
             messageId,
             parameters,
             createdAtMillis: now,
