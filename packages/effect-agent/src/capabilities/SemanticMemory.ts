@@ -121,7 +121,7 @@ const sameSource = (left: MemoryDocument, right: MemoryDocument): boolean =>
   left.source.locator === right.source.locator &&
   left._tag === right._tag;
 
-const readDocument = Effect.fn("semanticMemory.readDocument")(function* (key: MemoryKey) {
+const readDocument = Effect.fnUntraced(function* (key: MemoryKey) {
   const reader = yield* MemoryReader;
 
   const document = yield* reader.get(key).pipe(
@@ -148,7 +148,7 @@ const readDocument = Effect.fn("semanticMemory.readDocument")(function* (key: Me
   return document;
 });
 
-const embeddings = Effect.fn("semanticMemory.embeddings")(function* (
+const embeddings = Effect.fnUntraced(function* (
   inputs: ReadonlyArray<string>,
   profile: SemanticMemoryProfile,
 ) {
@@ -183,7 +183,7 @@ const embeddings = Effect.fn("semanticMemory.embeddings")(function* (
   return response;
 });
 
-const chunkText = Effect.fn("semanticMemory.chunkText")(function* (
+const chunkText = Effect.fnUntraced(function* (
   text: string,
   profile: SemanticMemoryProfile,
   limits: SemanticIndexLimits,
@@ -246,7 +246,7 @@ const chunkText = Effect.fn("semanticMemory.chunkText")(function* (
  * querySemanticMemory always revalidates and excludes such stale candidates.
  * No model or source text is attached to telemetry. Errors retain native provider/index types.
  */
-export const indexMemorySource = Effect.fn("indexMemorySource")(function* <
+export const indexMemorySource = Effect.fnUntraced(function* <
   Namespace extends MemoryNamespace.Any,
 >(key: MemoryKey<Namespace>, limits: SemanticIndexLimits) {
   yield* Schema.decodeUnknownEffect(MemoryKey.Wire)(key).pipe(
@@ -365,7 +365,7 @@ export const indexMemorySource = Effect.fn("indexMemorySource")(function* <
  * Checks begun before an acknowledged correction/withdrawal may finish with their already
  * captured source view.
  */
-export const querySemanticMemory = Effect.fn("querySemanticMemory")(function* (
+export const querySemanticMemory = Effect.fnUntraced(function* (
   query: string,
   access: MemoryAccess,
   limits: SemanticQueryLimits,

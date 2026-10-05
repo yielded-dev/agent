@@ -129,9 +129,10 @@ and one terminal classification. Provider SDK chunks do not enter this stable un
 For structured output, treat text deltas as provisional wire data. Show activity or received-character
 progress until the terminal output passes its Schema; do not display partial JSON as an answer.
 The demo follows this pattern. Plain-text output can render provisional text directly.
-Primitive text and reasoning deltas are copied into owned, Schema-validated values; their transport
-fragmentation does not create one ownership tracing span per delta. Complex metadata retains the
-general bounded ownership path.
+Provider parts are copied into bounded, engine-owned data and Schema-validated in order. The engine
+publishes each part's semantic events before processing the next part, even within a single provider
+chunk. A later invalid or interrupted part preserves earlier published progress and reported usage.
+Transport fragmentation does not create an ownership span per delta.
 
 Once stream consumption starts, a scoped producer advances until its bounded event buffer fills.
 Slow consumption backpressures publication, but individual pulls do not pace tool execution.
@@ -417,6 +418,7 @@ With an Effect tracer installed, filter `gen_ai.operation.name` to find agent wo
 All three carry `gen_ai.agent.name` (the definition ID), `gen_ai.agent.id` (the
 Thread-backed instance), and `gen_ai.conversation.id` (the Thread ID). Existing
 `agentId`, `threadId`, `runId`, and applicable `turnId` attributes remain available.
+The `invoke_agent`, `chat`, and `execute_tool` spans retain their identity and outcome attributes.
 Agent span names replace `AgentRuntime.run`; update filters using that old name.
 
 Successful tool executions log at Debug; failures log at Warning. The default logger omits
@@ -428,8 +430,14 @@ creating a second model-call span. The configured model and provider are recorde
 and token-usage annotations. Each retry and compaction summary has its own model span.
 These labels add identifiers, not prompts, instructions, or tool payloads.
 
-Use operation spans for timing and failure diagnostics. Internal helpers may share the enclosing
-operation's span without adding separate spans or Effect call frames.
+Library generators use `Effect.fnUntraced`; direct Effect-returning helpers need no wrapper.
+Spans are reserved for agent run/turn, model and tool calls, browser and transport operations,
+adapter storage operations, and recovery. The export check enforces their owning modules and
+names across `Effect.fn`, Effect and Stream span primitives, and the storage span wrapper.
+Helpers for stream parts, individual records, per-tool batch orchestration,
+and decoded rows are always untraced; actual tool calls retain their `execute_tool` spans.
+Use the enclosing operation spans for timing and failure diagnostics, and adjust filters that
+relied on private-helper span names.
 
 An agent span covers one active execution Scope. A durable Run resumed by another
 Attempt can produce another span with the same Run ID; the span is not the entire

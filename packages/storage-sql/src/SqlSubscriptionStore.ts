@@ -33,7 +33,7 @@ import type { SqlError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";
 
 import { sqliteJsonIsTrue, jsonIsValid } from "./internal/sql-json.ts";
-import { makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";
+import { makeRowDecoder, makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";
 
 const CountRow = Schema.Struct({ count: SqlInteger.check(Schema.isGreaterThanOrEqualTo(0)) });
 const SequenceRow = Schema.Struct({ sequence: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) });
@@ -65,13 +65,13 @@ const encode = <A, I>(schema: Schema.Codec<A, I>, value: A, code: string) =>
     Effect.mapError(() => corrupt(code)),
   );
 
-const decode = <A, I>(schema: Schema.Codec<A, I>, value: string, code: string) =>
-  Schema.decodeEffect(Schema.fromJsonString(schema))(value).pipe(
-    Effect.mapError(() => corrupt(code)),
-  );
+const decode = <A, I>(schema: Schema.Codec<A, I>) => {
+  const parse = Schema.decodeEffect(Schema.fromJsonString(schema));
 
-const decodeRows = <A, I>(schema: Schema.Codec<A, I>, rows: unknown, code: string) =>
-  Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(Effect.mapError(() => corrupt(code)));
+  return (value: string, code: string) => parse(value).pipe(Effect.mapError(() => corrupt(code)));
+};
+
+const { decodeRows } = makeRowDecoder(({ rowKey }) => corrupt(rowKey));
 
 const sameDeliveryIdentity = (left: SubscriptionDelivery, right: SubscriptionDelivery): boolean =>
   subscriptionDeliveryKeyString(left.key) === subscriptionDeliveryKeyString(right.key) &&
@@ -103,7 +103,7 @@ export interface SqlSubscriptionStoreOptions {
  * The returned methods capture the SQL client, transaction, and failpoint handler.
  * Cloudflare's transaction also updates its native alarm before committing.
  */
-export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(function* (
+export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   partition: SourcePartition,
   options: SqlSubscriptionStoreOptions,
 ): Effect.fn.Return<SubscriptionStore["Service"], SubscriptionError, SqlClientService.SqlClient> {
@@ -163,6 +163,64 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     record_json: StoredJson,
   });
 
+  const decodeRegistrationRows = decodeRows(Schema.Array(RegistrationRow));
+  const decodeEventRows = decodeRows(Schema.Array(EventRow));
+  const decodeDeliveryRows = decodeRows(Schema.Array(DeliveryRow));
+  const decodeCountRows = decodeRows(Schema.Array(CountRow));
+  const decodeSequenceRows = decodeRows(Schema.Array(SequenceRow));
+  const decodeRetentionHorizonRows = decodeRows(Schema.Array(RetentionHorizonRow));
+  const decodeScanRows = decodeRows(Schema.Array(ScanRow));
+  const decodeJsonRows = decodeRows(Schema.Array(JsonRow));
+
+  const decodeRegistrationKeyRows = decodeRows(
+    Schema.Array(
+      Schema.Struct({
+        owner_id: Schema.String,
+        subscription_id: Schema.String,
+        ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+      }),
+    ),
+  );
+
+  const decodeEventKeyRows = decodeRows(Schema.Array(Schema.Struct({ event_id: Schema.String })));
+
+  const decodeDeliveryKeyRows = decodeRows(
+    Schema.Array(
+      Schema.Struct({
+        owner_id: Schema.String,
+        subscription_id: Schema.String,
+        event_id: Schema.String,
+      }),
+    ),
+  );
+
+  const decodeDeadlineRows = decodeRows(
+    Schema.Array(Schema.Struct({ deadline: Schema.NullOr(SqlNumber) })),
+  );
+
+  const decodeRetentionProgressRows = decodeRows(
+    Schema.Array(
+      Schema.Struct({
+        replay_horizon_millis: SqlNumber,
+        tombstone_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+        event_cursor: Schema.String,
+        delivery_cursor: Schema.String,
+      }),
+    ),
+  );
+
+  const decodeRetainedDeliveryRows = decodeRows(
+    Schema.Array(Schema.Struct({ delivery_key: Schema.String, record_json: Schema.String })),
+  );
+
+  const decodeRetainedEventRows = decodeRows(
+    Schema.Array(Schema.Struct({ event_id: Schema.String, record_json: Schema.String })),
+  );
+
+  const decodeSubscription = decode(SubscriptionRecord);
+  const decodeEvent = decode(AcceptedEvent);
+  const decodeDelivery = decode(SubscriptionDelivery);
+
   const integer = sql.literal(sql.onDialectOrElse({ orElse: () => "INTEGER", pg: () => "BIGINT" }));
 
   yield* query(
@@ -207,10 +265,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       ? Effect.void
       : Effect.fail(error("validation", code));
 
-  const requireKey = Effect.fn("SqlSubscriptionStore.requireKey")(function* (
-    input: SubscriptionKey,
-    code: string,
-  ) {
+  const requireKey = Effect.fnUntraced(function* (input: SubscriptionKey, code: string) {
     const key = yield* validate(SubscriptionKey, input, code);
 
     yield* requirePartition(key.partition, code);
@@ -218,10 +273,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return key;
   });
 
-  const readRegistration = Effect.fn("SqlSubscriptionStore.readRegistration")(function* (
-    key: SubscriptionKey,
-    code: string,
-  ) {
+  const readRegistration = Effect.fnUntraced(function* (key: SubscriptionKey, code: string) {
     const rows = yield* query(
       sql<Record<string, unknown>>`
       SELECT owner_id, subscription_id, ordinal, source_name, source_version, matching_key, state,
@@ -232,13 +284,13 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       code,
     );
 
-    const decodedRows = yield* decodeRows(RegistrationRow, rows, code);
+    const decodedRows = yield* decodeRegistrationRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
 
     if (row === undefined) return null;
-    const record = yield* decode(SubscriptionRecord, row.record_json, code);
+    const record = yield* decodeSubscription(row.record_json, code);
 
     if (
       !sameSourcePartition(record.key.partition, partition) ||
@@ -258,10 +310,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return record;
   });
 
-  const readEvent = Effect.fn("SqlSubscriptionStore.readEvent")(function* (
-    eventId: string,
-    code: string,
-  ) {
+  const readEvent = Effect.fnUntraced(function* (eventId: string, code: string) {
     const rows = yield* query(
       sql<Record<string, unknown>>`
       SELECT event_id, source_name, source_version, matching_key, payload_digest, cutoff, cursor,
@@ -271,13 +320,13 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       code,
     );
 
-    const decodedRows = yield* decodeRows(EventRow, rows, code);
+    const decodedRows = yield* decodeEventRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
 
     if (row === undefined) return null;
-    const event = yield* decode(AcceptedEvent, row.record_json, code);
+    const event = yield* decodeEvent(row.record_json, code);
 
     if (
       !sameSourcePartition(event.partition, partition) ||
@@ -297,10 +346,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return event;
   });
 
-  const readDelivery = Effect.fn("SqlSubscriptionStore.readDelivery")(function* (
-    key: SubscriptionDeliveryKey,
-    code: string,
-  ) {
+  const readDelivery = Effect.fnUntraced(function* (key: SubscriptionDeliveryKey, code: string) {
     const rows = yield* query(
       sql<Record<string, unknown>>`
       SELECT owner_id, subscription_id, event_id, delivery_key, state, next_attempt_at_millis, record_json
@@ -312,13 +358,13 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       code,
     );
 
-    const decodedRows = yield* decodeRows(DeliveryRow, rows, code);
+    const decodedRows = yield* decodeDeliveryRows("subscription", code, rows);
 
     if (decodedRows.length > 1) return yield* corrupt(code);
     const row = decodedRows[0];
 
     if (row === undefined) return null;
-    const delivery = yield* decode(SubscriptionDelivery, row.record_json, code);
+    const delivery = yield* decodeDelivery(row.record_json, code);
 
     if (
       !sameSourcePartition(delivery.key.subscription.partition, partition) ||
@@ -334,19 +380,19 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return delivery;
   });
 
-  const count = Effect.fn("SqlSubscriptionStore.count")(function* (
+  const count = Effect.fnUntraced(function* (
     statement: Statement<Record<string, unknown>>,
     code: string,
   ) {
     const rows = yield* query(statement, code);
-    const decoded = yield* decodeRows(CountRow, rows, code);
+    const decoded = yield* decodeCountRows("subscription", code, rows);
 
     if (decoded.length !== 1) return yield* corrupt(code);
 
     return decoded[0].count;
   });
 
-  const nextSequence = Effect.fn("SqlSubscriptionStore.nextSequence")(function* () {
+  const nextSequence = Effect.fnUntraced(function* () {
     const rows = yield* query(
       sql<Record<string, unknown>>`
       UPDATE ${relation("effect_agent_subscription_sequences")} SET sequence=sequence+1
@@ -356,16 +402,18 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       "advance subscription sequence",
     );
 
-    const decoded = yield* decodeRows(SequenceRow, rows, "advance subscription sequence");
+    const decoded = yield* decodeSequenceRows(
+      "subscription",
+      "advance subscription sequence",
+      rows,
+    );
 
     if (decoded.length !== 1) return yield* corrupt("subscription sequence");
 
     return decoded[0].sequence;
   });
 
-  const writeRegistration = Effect.fn("SqlSubscriptionStore.writeRegistration")(function* (
-    record: SubscriptionRecord,
-  ) {
+  const writeRegistration = Effect.fnUntraced(function* (record: SubscriptionRecord) {
     const json = yield* encode(SubscriptionRecord, record, "encode subscription");
 
     yield* query(
@@ -380,7 +428,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     );
   });
 
-  const writeEvent = Effect.fn("SqlSubscriptionStore.writeEvent")(function* (event: AcceptedEvent) {
+  const writeEvent = Effect.fnUntraced(function* (event: AcceptedEvent) {
     const json = yield* encode(AcceptedEvent, event, "encode event");
 
     yield* query(
@@ -393,9 +441,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     );
   });
 
-  const writeDelivery = Effect.fn("SqlSubscriptionStore.writeDelivery")(function* (
-    delivery: SubscriptionDelivery,
-  ) {
+  const writeDelivery = Effect.fnUntraced(function* (delivery: SubscriptionDelivery) {
     const json = yield* encode(SubscriptionDelivery, delivery, "encode delivery");
 
     yield* query(
@@ -411,82 +457,80 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     );
   });
 
-  const register: SubscriptionStore["Service"]["register"] = Effect.fn(
-    "SqlSubscriptionStore.register",
-  )(function* (input, inputLimits) {
-    const record = yield* validate(SubscriptionRecord, input, "register-record");
-    const limits = yield* validate(SubscriptionLimits, inputLimits, "register-limits");
+  const register: SubscriptionStore["Service"]["register"] = Effect.fnUntraced(
+    function* (input, inputLimits) {
+      const record = yield* validate(SubscriptionRecord, input, "register-record");
+      const limits = yield* validate(SubscriptionLimits, inputLimits, "register-limits");
 
-    yield* requirePartition(record.key.partition, "register-partition");
+      yield* requirePartition(record.key.partition, "register-partition");
 
-    const result = yield* transaction(
-      Effect.gen(function* () {
-        const existing = yield* readRegistration(record.key, "register-existing");
+      const result = yield* transaction(
+        Effect.gen(function* () {
+          const existing = yield* readRegistration(record.key, "register-existing");
 
-        if (existing !== null) {
-          if (existing.creationFingerprint !== record.creationFingerprint)
-            return yield* error("conflict", "registration-identity");
+          if (existing !== null) {
+            if (existing.creationFingerprint !== record.creationFingerprint)
+              return yield* error("conflict", "registration-identity");
 
-          return { value: existing, changed: false } as const;
-        }
-        if (bytes(record.configuration.context) > limits.maxContextBytes)
-          return yield* error("capacity", "context-bytes");
-        if (bytes(record.configuration.parameters) > limits.maxPayloadBytes)
-          return yield* error("capacity", "parameters-bytes");
-        if (
-          record.configuration.expiresAtMillis !== null &&
-          record.configuration.expiresAtMillis - record.createdAtMillis > limits.maxLifetimeMillis
-        )
-          return yield* error("capacity", "lifetime");
-        if (
-          (yield* count(
-            sql<
-              Record<string, unknown>
-            >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-            "count registrations",
-          )) >= limits.maxRegistrations
-        )
-          return yield* error("capacity", "registrations");
-        if (
-          (yield* count(
-            sql<
-              Record<string, unknown>
-            >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
-            "count owner registrations",
-          )) >= limits.maxRegistrationsPerOwner
-        )
-          return yield* error("capacity", "owner-registrations");
-        const assigned = { ...record, ordinal: yield* nextSequence() };
-        const json = yield* encode(SubscriptionRecord, assigned, "encode registration");
+            return { value: existing, changed: false } as const;
+          }
+          if (bytes(record.configuration.context) > limits.maxContextBytes)
+            return yield* error("capacity", "context-bytes");
+          if (bytes(record.configuration.parameters) > limits.maxPayloadBytes)
+            return yield* error("capacity", "parameters-bytes");
+          if (
+            record.configuration.expiresAtMillis !== null &&
+            record.configuration.expiresAtMillis - record.createdAtMillis > limits.maxLifetimeMillis
+          )
+            return yield* error("capacity", "lifetime");
+          if (
+            (yield* count(
+              sql<
+                Record<string, unknown>
+              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
+              "count registrations",
+            )) >= limits.maxRegistrations
+          )
+            return yield* error("capacity", "registrations");
+          if (
+            (yield* count(
+              sql<
+                Record<string, unknown>
+              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
+              "count owner registrations",
+            )) >= limits.maxRegistrationsPerOwner
+          )
+            return yield* error("capacity", "owner-registrations");
+          const assigned = { ...record, ordinal: yield* nextSequence() };
+          const json = yield* encode(SubscriptionRecord, assigned, "encode registration");
 
-        yield* failpoint.hit("subscription:register:before");
-        yield* query(
-          sql<Record<string, unknown>>`
+          yield* failpoint.hit("subscription:register:before");
+          yield* query(
+            sql<Record<string, unknown>>`
         INSERT INTO ${relation("effect_agent_subscriptions")} (tenant_id, source_address, owner_id, subscription_id, ordinal,
           source_name, source_version, matching_key, state, expires_at_millis, recovery_at_millis, recovery_present, record_json)
         VALUES (${partition.tenantId}, ${partition.address}, ${assigned.key.ownerId}, ${assigned.key.subscriptionId}, ${assigned.ordinal},
           ${assigned.configuration.source.name}, ${assigned.configuration.source.version}, ${assigned.configuration.matchingKey}, ${assigned.state},
           ${assigned.configuration.expiresAtMillis}, ${assigned.recovery?.nextAttemptAtMillis ?? null}, ${assigned.recovery === null ? 0 : 1}, ${json})
       `,
-          "insert registration",
-        );
+            "insert registration",
+          );
 
-        return { value: assigned, changed: true } as const;
-      }),
-    );
+          return { value: assigned, changed: true } as const;
+        }),
+      );
 
-    if (result.changed) yield* failpoint.hit("subscription:register:after");
+      if (result.changed) yield* failpoint.hit("subscription:register:after");
 
-    return result.value;
-  });
-
-  const get: SubscriptionStore["Service"]["get"] = Effect.fn("SqlSubscriptionStore.get")(
-    function* (input) {
-      return yield* readRegistration(yield* requireKey(input, "get-key"), "get subscription");
+      return result.value;
     },
   );
 
-  const list: SubscriptionStore["Service"]["list"] = Effect.fn("SqlSubscriptionStore.list")(
+  const get: SubscriptionStore["Service"]["get"] = Effect.fnUntraced(function* (input) {
+    return yield* readRegistration(yield* requireKey(input, "get-key"), "get subscription");
+  });
+
+  const list: SubscriptionStore["Service"]["list"] = Effect.fnUntraced(
     function* (ownerId, after, limit) {
       const rows = yield* query(
         sql<Record<string, unknown>>`
@@ -496,19 +540,11 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
         "list subscriptions",
       );
 
-      const decoded = yield* decodeRows(
-        Schema.Struct({
-          owner_id: Schema.String,
-          subscription_id: Schema.String,
-          ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-        }),
-        rows,
-        "list subscriptions",
-      );
+      const decoded = yield* decodeRegistrationKeyRows("subscription", "list subscriptions", rows);
 
       return yield* Effect.forEach(
         decoded,
-        Effect.fn("SqlSubscriptionStore.listRecord")(function* (row) {
+        Effect.fnUntraced(function* (row) {
           const record = yield* readRegistration(
             { partition, ownerId: row.owner_id, subscriptionId: row.subscription_id },
             "list subscription",
@@ -523,7 +559,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     },
   );
 
-  const change: SubscriptionStore["Service"]["change"] = Effect.fn("SubscriptionStore.change")(
+  const change: SubscriptionStore["Service"]["change"] = Effect.fnUntraced(
     function* (input, expectedRevision, inputChange) {
       const key = yield* requireKey(input, "change-key");
       const change = yield* validate(SubscriptionChange, inputChange, "change");
@@ -555,7 +591,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     },
   );
 
-  const cancel: SubscriptionStore["Service"]["cancel"] = Effect.fn("SqlSubscriptionStore.cancel")(
+  const cancel: SubscriptionStore["Service"]["cancel"] = Effect.fnUntraced(
     function* (input, expectedRevision) {
       const key = yield* requireKey(input, "cancel-key");
 
@@ -600,7 +636,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     },
   );
 
-  const accept: SubscriptionStore["Service"]["accept"] = Effect.fn("SqlSubscriptionStore.accept")(
+  const accept: SubscriptionStore["Service"]["accept"] = Effect.fnUntraced(
     function* (input, inputLimits) {
       const event = yield* validate(AcceptedEvent, input, "accept-event");
       const limits = yield* validate(SubscriptionLimits, inputLimits, "accept-limits");
@@ -627,7 +663,9 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
             >`SELECT replay_horizon_millis FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
             "retained horizon",
           ).pipe(
-            Effect.flatMap((rows) => decodeRows(RetentionHorizonRow, rows, "retained horizon")),
+            Effect.flatMap((rows) =>
+              decodeRetentionHorizonRows("subscription", "retained horizon", rows),
+            ),
           );
 
           if (
@@ -651,7 +689,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
               "retained event horizon",
             ).pipe(
               Effect.flatMap((rows) =>
-                decodeRows(RetentionHorizonRow, rows, "retained event horizon"),
+                decodeRetentionHorizonRows("subscription", "retained event horizon", rows),
               ),
             );
 
@@ -702,77 +740,67 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     },
   );
 
-  const event: SubscriptionStore["Service"]["event"] = Effect.fn("SqlSubscriptionStore.event")(
-    (eventId) => readEvent(eventId, "get event"),
-  );
+  const event: SubscriptionStore["Service"]["event"] = (eventId) => readEvent(eventId, "get event");
 
-  const pendingEvents: SubscriptionStore["Service"]["pendingEvents"] = Effect.fn(
-    "SqlSubscriptionStore.pendingEvents",
-  )(function* (nowMillis, after, limit) {
-    const rows = yield* query(
-      sql<Record<string, unknown>>`
+  const pendingEvents: SubscriptionStore["Service"]["pendingEvents"] = Effect.fnUntraced(
+    function* (nowMillis, after, limit) {
+      const rows = yield* query(
+        sql<Record<string, unknown>>`
       SELECT event_id FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
         AND routing_complete=0 AND next_attempt_at_millis<=${nowMillis} AND event_id>${after} ORDER BY event_id LIMIT ${limit}
     `,
-      "pending events",
-    );
+        "pending events",
+      );
 
-    return yield* decodeRows(
-      Schema.Struct({ event_id: Schema.String }),
-      rows,
-      "pending event keys",
-    ).pipe(Effect.map((items) => items.map((item) => item.event_id)));
-  });
+      return yield* decodeEventKeyRows("subscription", "pending event keys", rows).pipe(
+        Effect.map((items) => items.map((item) => item.event_id)),
+      );
+    },
+  );
 
-  const candidates: SubscriptionStore["Service"]["candidates"] = Effect.fn(
-    "SqlSubscriptionStore.candidates",
-  )(function* (input, limit) {
-    const supplied = yield* validate(AcceptedEvent, input, "candidates-event");
+  const candidates: SubscriptionStore["Service"]["candidates"] = Effect.fnUntraced(
+    function* (input, limit) {
+      const supplied = yield* validate(AcceptedEvent, input, "candidates-event");
 
-    yield* requirePartition(supplied.partition, "candidates-partition");
-    const stored = yield* readEvent(supplied.eventId, "candidates event");
+      yield* requirePartition(supplied.partition, "candidates-partition");
+      const stored = yield* readEvent(supplied.eventId, "candidates event");
 
-    if (stored === null) return yield* error("not-found", "event");
-    if (!sameAcceptedEventIdentity(stored, supplied)) return yield* error("conflict", "event");
+      if (stored === null) return yield* error("not-found", "event");
+      if (!sameAcceptedEventIdentity(stored, supplied)) return yield* error("conflict", "event");
 
-    const rows = yield* query(
-      sql<Record<string, unknown>>`
+      const rows = yield* query(
+        sql<Record<string, unknown>>`
       SELECT owner_id, subscription_id, ordinal FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
         AND source_name=${stored.source.name} AND source_version=${stored.source.version} AND matching_key=${stored.matchingKey}
         AND ordinal>${stored.cursor} AND ordinal<=${stored.cutoff} ORDER BY ordinal LIMIT ${limit}
     `,
-      "subscription candidates",
-    );
+        "subscription candidates",
+      );
 
-    const decoded = yield* decodeRows(
-      Schema.Struct({
-        owner_id: Schema.String,
-        subscription_id: Schema.String,
-        ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-      }),
-      rows,
-      "subscription candidates",
-    );
+      const decoded = yield* decodeRegistrationKeyRows(
+        "subscription",
+        "subscription candidates",
+        rows,
+      );
 
-    return yield* Effect.forEach(
-      decoded,
-      Effect.fn("SqlSubscriptionStore.candidateRecord")(function* (row) {
-        const record = yield* readRegistration(
-          { partition, ownerId: row.owner_id, subscriptionId: row.subscription_id },
-          "subscription candidate",
-        );
+      return yield* Effect.forEach(
+        decoded,
+        Effect.fnUntraced(function* (row) {
+          const record = yield* readRegistration(
+            { partition, ownerId: row.owner_id, subscriptionId: row.subscription_id },
+            "subscription candidate",
+          );
 
-        if (record === null || record.ordinal !== row.ordinal)
-          return yield* corrupt("subscription candidate projection");
+          if (record === null || record.ordinal !== row.ordinal)
+            return yield* corrupt("subscription candidate projection");
 
-        return record;
-      }),
-    );
-  });
+          return record;
+        }),
+      );
+    },
+  );
 
-  const insertDelivery = Effect.fn("SqlSubscriptionStore.insertDelivery")(function* (
-    delivery: SubscriptionDelivery,
-  ) {
+  const insertDelivery = Effect.fnUntraced(function* (delivery: SubscriptionDelivery) {
     const json = yield* encode(SubscriptionDelivery, delivery, "encode selected delivery");
 
     yield* query(
@@ -788,7 +816,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     );
   });
 
-  const select: SubscriptionStore["Service"]["select"] = Effect.fn("SqlSubscriptionStore.select")(
+  const select: SubscriptionStore["Service"]["select"] = Effect.fnUntraced(
     function* (inputEvent, inputDeliveries, cursor, complete, nowMillis, inputLimits) {
       const supplied = yield* validate(AcceptedEvent, inputEvent, "select-event");
 
@@ -890,96 +918,98 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     },
   );
 
-  const catchUp: SubscriptionStore["Service"]["catchUp"] = Effect.fn(
-    "SqlSubscriptionStore.catchUp",
-  )(function* (inputEvent, inputDelivery, nowMillis, inputLimits) {
-    const supplied = yield* validate(AcceptedEvent, inputEvent, "catch-up-event");
-    const delivery = yield* validate(SubscriptionDelivery, inputDelivery, "catch-up-delivery");
-    const limits = yield* validate(SubscriptionLimits, inputLimits, "catch-up-limits");
+  const catchUp: SubscriptionStore["Service"]["catchUp"] = Effect.fnUntraced(
+    function* (inputEvent, inputDelivery, nowMillis, inputLimits) {
+      const supplied = yield* validate(AcceptedEvent, inputEvent, "catch-up-event");
+      const delivery = yield* validate(SubscriptionDelivery, inputDelivery, "catch-up-delivery");
+      const limits = yield* validate(SubscriptionLimits, inputLimits, "catch-up-limits");
 
-    yield* requirePartition(supplied.partition, "catch-up-partition");
-    yield* requirePartition(delivery.key.subscription.partition, "catch-up-delivery-partition");
+      yield* requirePartition(supplied.partition, "catch-up-partition");
+      yield* requirePartition(delivery.key.subscription.partition, "catch-up-delivery-partition");
 
-    const changed = yield* transaction(
-      Effect.gen(function* () {
-        const accepted = yield* readEvent(supplied.eventId, "catch-up event");
-        const record = yield* readRegistration(delivery.key.subscription, "catch-up subscription");
+      const changed = yield* transaction(
+        Effect.gen(function* () {
+          const accepted = yield* readEvent(supplied.eventId, "catch-up event");
 
-        if (accepted === null || record === null)
-          return yield* error("not-found", accepted === null ? "event" : "subscription");
-        if (
-          !sameAcceptedEventIdentity(accepted, supplied) ||
-          !subscriptionDeliveryCanSelect(delivery, record, accepted) ||
-          delivery.key.eventId !== accepted.eventId ||
-          delivery.source.name !== accepted.source.name ||
-          delivery.source.version !== accepted.source.version ||
-          record.configuration.mode !== "once"
-        )
-          return yield* error("conflict", "catch-up-identity");
-        const existing = yield* readDelivery(delivery.key, "catch-up existing delivery");
+          const record = yield* readRegistration(
+            delivery.key.subscription,
+            "catch-up subscription",
+          );
 
-        if (existing !== null) {
-          if (!sameDeliveryIdentity(existing, delivery))
-            return yield* error("conflict", "delivery-identity");
+          if (accepted === null || record === null)
+            return yield* error("not-found", accepted === null ? "event" : "subscription");
+          if (
+            !sameAcceptedEventIdentity(accepted, supplied) ||
+            !subscriptionDeliveryCanSelect(delivery, record, accepted) ||
+            delivery.key.eventId !== accepted.eventId ||
+            delivery.source.name !== accepted.source.name ||
+            delivery.source.version !== accepted.source.version ||
+            record.configuration.mode !== "once"
+          )
+            return yield* error("conflict", "catch-up-identity");
+          const existing = yield* readDelivery(delivery.key, "catch-up existing delivery");
 
-          return false;
-        }
-        yield* failpoint.hit("subscription:catch-up:before");
-        const effectiveNowMillis = Math.max(nowMillis, yield* Clock.currentTimeMillis);
+          if (existing !== null) {
+            if (!sameDeliveryIdentity(existing, delivery))
+              return yield* error("conflict", "delivery-identity");
 
-        if (!subscriptionCanSelect(record, accepted, effectiveNowMillis, true))
-          return yield* error("conflict", "catch-up-eligibility");
-        if (
-          (yield* count(
-            sql<
-              Record<string, unknown>
-            >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-            "count deliveries",
-          )) >= limits.maxDeliveries
-        )
-          return yield* error("capacity", "deliveries");
-        if (
-          (yield* count(
-            sql<
-              Record<string, unknown>
-            >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
-            "count owner deliveries",
-          )) >= limits.maxDeliveriesPerOwner
-        )
-          return yield* error("capacity", "owner-deliveries");
-        yield* insertDelivery(delivery);
-        yield* writeRegistration({ ...record, state: "consumed", recovery: null });
+            return false;
+          }
+          yield* failpoint.hit("subscription:catch-up:before");
+          const effectiveNowMillis = Math.max(nowMillis, yield* Clock.currentTimeMillis);
 
-        return true;
-      }),
-    );
+          if (!subscriptionCanSelect(record, accepted, effectiveNowMillis, true))
+            return yield* error("conflict", "catch-up-eligibility");
+          if (
+            (yield* count(
+              sql<
+                Record<string, unknown>
+              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
+              "count deliveries",
+            )) >= limits.maxDeliveries
+          )
+            return yield* error("capacity", "deliveries");
+          if (
+            (yield* count(
+              sql<
+                Record<string, unknown>
+              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
+              "count owner deliveries",
+            )) >= limits.maxDeliveriesPerOwner
+          )
+            return yield* error("capacity", "owner-deliveries");
+          yield* insertDelivery(delivery);
+          yield* writeRegistration({ ...record, state: "consumed", recovery: null });
 
-    if (changed) yield* failpoint.hit("subscription:catch-up:after");
-  });
+          return true;
+        }),
+      );
 
-  const deferEvent: SubscriptionStore["Service"]["deferEvent"] = Effect.fn(
-    "SqlSubscriptionStore.deferEvent",
-  )(function* (eventId, nextAttemptAtMillis, code) {
-    const routingFailure =
-      code === undefined
-        ? "routing-failed"
-        : yield* validate(SubscriptionName, code, "routing-failure");
+      if (changed) yield* failpoint.hit("subscription:catch-up:after");
+    },
+  );
 
-    yield* transaction(
-      Effect.gen(function* () {
-        const accepted = yield* readEvent(eventId, "defer event");
+  const deferEvent: SubscriptionStore["Service"]["deferEvent"] = Effect.fnUntraced(
+    function* (eventId, nextAttemptAtMillis, code) {
+      const routingFailure =
+        code === undefined
+          ? "routing-failed"
+          : yield* validate(SubscriptionName, code, "routing-failure");
 
-        if (accepted === null) return yield* error("not-found", "event");
-        yield* failpoint.hit("subscription:defer-event:before");
-        yield* writeEvent({ ...accepted, nextAttemptAtMillis, routingFailure });
-      }),
-    );
-    yield* failpoint.hit("subscription:defer-event:after");
-  });
+      yield* transaction(
+        Effect.gen(function* () {
+          const accepted = yield* readEvent(eventId, "defer event");
 
-  const delivery: SubscriptionStore["Service"]["delivery"] = Effect.fn(
-    "SqlSubscriptionStore.delivery",
-  )(function* (input) {
+          if (accepted === null) return yield* error("not-found", "event");
+          yield* failpoint.hit("subscription:defer-event:before");
+          yield* writeEvent({ ...accepted, nextAttemptAtMillis, routingFailure });
+        }),
+      );
+      yield* failpoint.hit("subscription:defer-event:after");
+    },
+  );
+
+  const delivery: SubscriptionStore["Service"]["delivery"] = Effect.fnUntraced(function* (input) {
     const key = yield* validate(SubscriptionDeliveryKey, input, "delivery-key");
 
     yield* requirePartition(key.subscription.partition, "delivery-partition");
@@ -987,151 +1017,147 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return yield* readDelivery(key, "get delivery");
   });
 
-  const pendingDeliveries: SubscriptionStore["Service"]["pendingDeliveries"] = Effect.fn(
-    "SqlSubscriptionStore.pendingDeliveries",
-  )(function* (nowMillis, after, limit) {
-    // Malformed bodies remain selectable for isolated decoding. Keep the same CASE guard
-    // in both deadline queries so corruption cannot prevent cursor commits or alarm repair.
-    const rows = yield* query(
-      sql<Record<string, unknown>>`
+  const pendingDeliveries: SubscriptionStore["Service"]["pendingDeliveries"] = Effect.fnUntraced(
+    function* (nowMillis, after, limit) {
+      // Malformed bodies remain selectable for isolated decoding. Keep the same CASE guard
+      // in both deadline queries so corruption cannot prevent cursor commits or alarm repair.
+      const rows = yield* query(
+        sql<Record<string, unknown>>`
       SELECT owner_id, subscription_id, event_id FROM ${relation("effect_agent_subscription_deliveries")}
       WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND CASE WHEN ${jsonIsValid(sql, "record_json")} THEN
           ((state NOT IN ('delivered','refused') AND NOT ${sql.onDialectOrElse({ orElse: () => sqliteJsonIsTrue(sql, "record_json", ["retry", "parked"]), pg: () => sql`retry_parked` })}) OR (state='delivered' AND ${sql.onDialectOrElse({ orElse: () => sqliteJsonIsTrue(sql, "record_json", ["observeSettlement"]), pg: () => sql`observe_settlement` })}))
           ELSE state<>'refused' END
         AND next_attempt_at_millis<=${nowMillis} AND delivery_key>${after} ORDER BY delivery_key LIMIT ${limit}
     `,
-      "pending deliveries",
-    );
+        "pending deliveries",
+      );
 
-    const rowSchema = Schema.Struct({
-      owner_id: Schema.String,
-      subscription_id: Schema.String,
-      event_id: Schema.String,
-    });
+      return yield* decodeDeliveryKeyRows("subscription", "pending delivery keys", rows).pipe(
+        Effect.map((items) =>
+          items.map((item) => ({
+            subscription: {
+              partition,
+              ownerId: item.owner_id,
+              subscriptionId: item.subscription_id,
+            },
+            eventId: item.event_id,
+          })),
+        ),
+      );
+    },
+  );
 
-    return yield* decodeRows(rowSchema, rows, "pending delivery keys").pipe(
-      Effect.map((items) =>
-        items.map((item) => ({
-          subscription: { partition, ownerId: item.owner_id, subscriptionId: item.subscription_id },
-          eventId: item.event_id,
-        })),
-      ),
-    );
-  });
+  const listDeliveries: SubscriptionStore["Service"]["listDeliveries"] = Effect.fnUntraced(
+    function* (input, after, limit) {
+      const key = yield* requireKey(input, "list-deliveries-key");
 
-  const listDeliveries: SubscriptionStore["Service"]["listDeliveries"] = Effect.fn(
-    "SqlSubscriptionStore.listDeliveries",
-  )(function* (input, after, limit) {
-    const key = yield* requireKey(input, "list-deliveries-key");
-
-    const rows = yield* query(
-      sql<Record<string, unknown>>`
+      const rows = yield* query(
+        sql<Record<string, unknown>>`
       SELECT record_json FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
         AND owner_id=${key.ownerId} AND subscription_id=${key.subscriptionId} AND delivery_key>${after} ORDER BY delivery_key LIMIT ${limit}
     `,
-      "list deliveries",
-    );
+        "list deliveries",
+      );
 
-    const decoded = yield* decodeRows(JsonRow, rows, "list deliveries");
+      const decoded = yield* decodeJsonRows("subscription", "list deliveries", rows);
 
-    return yield* Effect.forEach(decoded, (row) =>
-      decode(SubscriptionDelivery, row.record_json, "list delivery"),
-    );
-  });
+      return yield* Effect.forEach(decoded, (row) =>
+        decodeDelivery(row.record_json, "list delivery"),
+      );
+    },
+  );
 
-  const changeDelivery: SubscriptionStore["Service"]["changeDelivery"] = Effect.fn(
-    "SqlSubscriptionStore.changeDelivery",
-  )(function* (inputKey, inputDeliveryId, inputChange) {
-    const key = yield* validate(SubscriptionDeliveryKey, inputKey, "change-delivery-key");
-    const deliveryId = yield* validate(Digest, inputDeliveryId, "change-delivery-id");
-    const change = yield* validate(DeliveryChange, inputChange, "change-delivery-change");
+  const changeDelivery: SubscriptionStore["Service"]["changeDelivery"] = Effect.fnUntraced(
+    function* (inputKey, inputDeliveryId, inputChange) {
+      const key = yield* validate(SubscriptionDeliveryKey, inputKey, "change-delivery-key");
+      const deliveryId = yield* validate(Digest, inputDeliveryId, "change-delivery-id");
+      const change = yield* validate(DeliveryChange, inputChange, "change-delivery-change");
 
-    yield* requirePartition(key.subscription.partition, "change-delivery-partition");
+      yield* requirePartition(key.subscription.partition, "change-delivery-partition");
 
-    const result = yield* transaction(
-      Effect.gen(function* () {
-        const existing = yield* readDelivery(key, "change delivery");
-        const record = yield* readRegistration(key.subscription, "change delivery subscription");
+      const result = yield* transaction(
+        Effect.gen(function* () {
+          const existing = yield* readDelivery(key, "change delivery");
+          const record = yield* readRegistration(key.subscription, "change delivery subscription");
 
-        if (existing === null || record === null)
-          return yield* error("not-found", existing === null ? "delivery" : "subscription");
-        yield* failpoint.hit(`subscription:delivery-${change._tag.toLowerCase()}:before`);
+          if (existing === null || record === null)
+            return yield* error("not-found", existing === null ? "delivery" : "subscription");
+          yield* failpoint.hit(`subscription:delivery-${change._tag.toLowerCase()}:before`);
 
-        const effectiveChange =
-          change._tag === "Prepare"
-            ? { ...change, nowMillis: Math.max(change.nowMillis, yield* Clock.currentTimeMillis) }
-            : change;
+          const effectiveChange =
+            change._tag === "Prepare"
+              ? { ...change, nowMillis: Math.max(change.nowMillis, yield* Clock.currentTimeMillis) }
+              : change;
 
-        const transition = applySubscriptionDeliveryChange(
-          existing,
-          record,
-          deliveryId,
-          effectiveChange,
-        );
+          const transition = applySubscriptionDeliveryChange(
+            existing,
+            record,
+            deliveryId,
+            effectiveChange,
+          );
 
-        if (Result.isFailure(transition)) return yield* transition.failure;
-        if (transition.success === existing) return { value: existing, changed: false } as const;
-        yield* writeDelivery(transition.success);
+          if (Result.isFailure(transition)) return yield* transition.failure;
+          if (transition.success === existing) return { value: existing, changed: false } as const;
+          yield* writeDelivery(transition.success);
 
-        return { value: transition.success, changed: true } as const;
-      }),
-    );
+          return { value: transition.success, changed: true } as const;
+        }),
+      );
 
-    if (result.changed)
-      yield* failpoint.hit(`subscription:delivery-${change._tag.toLowerCase()}:after`);
+      if (result.changed)
+        yield* failpoint.hit(`subscription:delivery-${change._tag.toLowerCase()}:after`);
 
-    return result.value;
-  });
+      return result.value;
+    },
+  );
 
-  const recovering: SubscriptionStore["Service"]["recovering"] = Effect.fn(
-    "SqlSubscriptionStore.recovering",
-  )(function* (nowMillis, after, limit) {
-    const rows = yield* query(
-      sql<Record<string, unknown>>`
+  const recovering: SubscriptionStore["Service"]["recovering"] = Effect.fnUntraced(
+    function* (nowMillis, after, limit) {
+      const rows = yield* query(
+        sql<Record<string, unknown>>`
       SELECT owner_id, subscription_id, ordinal FROM ${relation("effect_agent_subscriptions")}
       WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND state='active'
         AND recovery_at_millis IS NOT NULL AND recovery_at_millis<=${nowMillis} AND ordinal>${after}
       ORDER BY ordinal LIMIT ${limit}
     `,
-      "recovering subscriptions",
-    );
+        "recovering subscriptions",
+      );
 
-    const rowSchema = Schema.Struct({
-      owner_id: Schema.String,
-      subscription_id: Schema.String,
-      ordinal: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-    });
+      return yield* decodeRegistrationKeyRows(
+        "subscription",
+        "recovering subscription keys",
+        rows,
+      ).pipe(
+        Effect.map((items) =>
+          items.map((item) => ({
+            key: { partition, ownerId: item.owner_id, subscriptionId: item.subscription_id },
+            ordinal: item.ordinal,
+          })),
+        ),
+      );
+    },
+  );
 
-    return yield* decodeRows(rowSchema, rows, "recovering subscription keys").pipe(
-      Effect.map((items) =>
-        items.map((item) => ({
-          key: { partition, ownerId: item.owner_id, subscriptionId: item.subscription_id },
-          ordinal: item.ordinal,
-        })),
-      ),
-    );
-  });
+  const deferRecovery: SubscriptionStore["Service"]["deferRecovery"] = Effect.fnUntraced(
+    function* (input, expectedRevision, recovery) {
+      const key = yield* requireKey(input, "defer-recovery-key");
 
-  const deferRecovery: SubscriptionStore["Service"]["deferRecovery"] = Effect.fn(
-    "SqlSubscriptionStore.deferRecovery",
-  )(function* (input, expectedRevision, recovery) {
-    const key = yield* requireKey(input, "defer-recovery-key");
+      yield* transaction(
+        Effect.gen(function* () {
+          const record = yield* readRegistration(key, "defer recovery");
 
-    yield* transaction(
-      Effect.gen(function* () {
-        const record = yield* readRegistration(key, "defer recovery");
-
-        if (record === null) return yield* error("not-found", "subscription");
-        if (record.configurationRevision !== expectedRevision) return;
-        yield* failpoint.hit("subscription:defer-recovery:before");
-        yield* writeRegistration({
-          ...record,
-          recovery: record.state === "active" || record.state === "paused" ? recovery : null,
-        });
-      }),
-    );
-    yield* failpoint.hit("subscription:defer-recovery:after");
-  });
+          if (record === null) return yield* error("not-found", "subscription");
+          if (record.configurationRevision !== expectedRevision) return;
+          yield* failpoint.hit("subscription:defer-recovery:before");
+          yield* writeRegistration({
+            ...record,
+            recovery: record.state === "active" || record.state === "paused" ? recovery : null,
+          });
+        }),
+      );
+      yield* failpoint.hit("subscription:defer-recovery:after");
+    },
+  );
 
   const readScanCursors: SubscriptionStore["Service"]["readScanCursors"] = Effect.gen(function* () {
     const rows = yield* query(
@@ -1143,7 +1169,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
       "read subscription scan cursors",
     );
 
-    const decoded = yield* decodeRows(ScanRow, rows, "read subscription scan cursors");
+    const decoded = yield* decodeScanRows("subscription", "read subscription scan cursors", rows);
 
     if (decoded.length !== 1) return yield* corrupt("subscription scan cursors");
 
@@ -1154,26 +1180,26 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     };
   });
 
-  const advanceScanCursors: SubscriptionStore["Service"]["advanceScanCursors"] = Effect.fn(
-    "SqlSubscriptionStore.advanceScanCursors",
-  )(function* (input) {
-    const cursors = yield* validate(SubscriptionScanCursors, input, "scan-cursors");
+  const advanceScanCursors: SubscriptionStore["Service"]["advanceScanCursors"] = Effect.fnUntraced(
+    function* (input) {
+      const cursors = yield* validate(SubscriptionScanCursors, input, "scan-cursors");
 
-    yield* transaction(
-      Effect.gen(function* () {
-        yield* failpoint.hit("subscription:advance-scan-cursors:before");
-        yield* query(
-          sql<Record<string, unknown>>`
+      yield* transaction(
+        Effect.gen(function* () {
+          yield* failpoint.hit("subscription:advance-scan-cursors:before");
+          yield* query(
+            sql<Record<string, unknown>>`
         UPDATE ${relation("effect_agent_subscription_sequences")}
         SET event_scan_cursor=${cursors.events}, delivery_scan_cursor=${cursors.deliveries}, recovery_scan_cursor=${cursors.recovery}
         WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
       `,
-          "advance subscription scan cursors",
-        );
-      }),
-    );
-    yield* failpoint.hit("subscription:advance-scan-cursors:after");
-  });
+            "advance subscription scan cursors",
+          );
+        }),
+      );
+      yield* failpoint.hit("subscription:advance-scan-cursors:after");
+    },
+  );
 
   const indexedDeadline = query(
     sql<Record<string, unknown>>`
@@ -1193,11 +1219,7 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     "next subscription deadline",
   ).pipe(
     Effect.flatMap((rows) =>
-      decodeRows(
-        Schema.Struct({ deadline: Schema.NullOr(SqlNumber) }),
-        rows,
-        "next subscription deadline",
-      ),
+      decodeDeadlineRows("subscription", "next subscription deadline", rows),
     ),
     Effect.flatMap((rows) =>
       rows.length === 1
@@ -1214,234 +1236,221 @@ export const makeSqlSubscriptionStore = Effect.fn("SqlSubscriptionStore.make")(f
     return yield* indexedDeadline;
   });
 
-  const compact: SubscriptionStore["Service"]["compact"] = Effect.fn(
-    "SqlSubscriptionStore.compact",
-  )(function* (nowMillis, inputPolicy, requestedLimit) {
-    nowMillis = Math.min(nowMillis, yield* Clock.currentTimeMillis);
-    const policy = yield* validate(SubscriptionRetentionPolicy, inputPolicy, "retention-policy");
+  const compact: SubscriptionStore["Service"]["compact"] = Effect.fnUntraced(
+    function* (nowMillis, inputPolicy, requestedLimit) {
+      nowMillis = Math.min(nowMillis, yield* Clock.currentTimeMillis);
+      const policy = yield* validate(SubscriptionRetentionPolicy, inputPolicy, "retention-policy");
 
-    const limit = yield* validate(
-      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
-      requestedLimit,
-      "maintenance-limit",
-    );
+      const limit = yield* validate(
+        Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+        requestedLimit,
+        "maintenance-limit",
+      );
 
-    const removed = yield* transaction(
-      Effect.gen(function* () {
-        yield* failpoint.hit("subscription:compact:before");
-        yield* query(
-          sql<
-            Record<string, unknown>
-          >`INSERT INTO ${relation("effect_agent_event_retention")} (tenant_id, source_address, replay_horizon_millis) VALUES (${partition.tenantId}, ${partition.address}, ${policy.replayHorizonMillis}) ON CONFLICT DO NOTHING`,
-          "initialize maintenance",
-        );
-
-        const progress = yield* query(
-          sql<
-            Record<string, unknown>
-          >`SELECT replay_horizon_millis, tombstone_count, event_cursor, delivery_cursor FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-          "maintenance progress",
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeRows(
-              Schema.Struct({
-                replay_horizon_millis: SqlNumber,
-                tombstone_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-                event_cursor: Schema.String,
-                delivery_cursor: Schema.String,
-              }),
-              rows,
-              "maintenance progress",
-            ),
-          ),
-        );
-
-        const cursor = progress[0];
-
-        if (progress.length !== 1 || cursor === undefined)
-          return yield* corrupt("maintenance progress");
-        if (cursor.replay_horizon_millis !== policy.replayHorizonMillis)
-          return yield* error("conflict", "retention-horizon");
-
-        const deliveryRows = yield* query(
-          sql<
-            Record<string, unknown>
-          >`SELECT delivery_key, record_json FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND delivery_key>${cursor.delivery_cursor} ORDER BY delivery_key LIMIT ${limit}`,
-          "maintenance deliveries",
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeRows(
-              Schema.Struct({ delivery_key: Schema.String, record_json: Schema.String }),
-              rows,
-              "maintenance deliveries",
-            ),
-          ),
-        );
-
-        const eventRows = yield* query(
-          sql<
-            Record<string, unknown>
-          >`SELECT event_id, record_json FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id>${cursor.event_cursor} ORDER BY event_id LIMIT ${limit}`,
-          "maintenance events",
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeRows(
-              Schema.Struct({ event_id: Schema.String, record_json: Schema.String }),
-              rows,
-              "maintenance events",
-            ),
-          ),
-        );
-
-        const protectedByRecovery = (event: AcceptedEvent) =>
-          query(
-            sql<
-              Record<string, unknown>
-            >`SELECT 1 FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND source_name=${event.source.name} AND source_version=${event.source.version} AND matching_key=${event.matchingKey} AND recovery_present=1 LIMIT 1`,
-            "maintenance recovery reference",
-          ).pipe(Effect.map((rows) => rows.length > 0));
-
-        const cutoff = nowMillis - policy.completedRetentionMillis;
-
-        for (const row of deliveryRows) {
-          const decoded = yield* decode(
-            SubscriptionDelivery,
-            row.record_json,
-            "maintenance delivery",
-          ).pipe(Effect.result);
-
-          if (Result.isFailure(decoded)) {
-            yield* Effect.logWarning("Subscription retention preserved corrupt delivery");
-            continue;
-          }
-          const delivery = decoded.success;
-
-          if (
-            subscriptionDeliveryKeyString(delivery.key) !== row.delivery_key ||
-            !sameSourcePartition(delivery.key.subscription.partition, partition)
-          ) {
-            yield* Effect.logWarning(
-              "Subscription retention preserved mismatched delivery identity",
-            );
-            continue;
-          }
-
-          if (
-            delivery.state !== "refused" &&
-            (delivery.state !== "delivered" || delivery.settledAtMillis === undefined)
-          )
-            continue;
-          if (
-            (delivery.settledAtMillis ?? delivery.completedAtMillis ?? delivery.selectedAtMillis) >
-            cutoff
-          )
-            continue;
-
-          const accepted = yield* readEvent(
-            delivery.key.eventId,
-            "maintenance delivery event",
-          ).pipe(Effect.result);
-
-          if (Result.isFailure(accepted)) {
-            if (accepted.failure.reason !== "corrupt") return yield* accepted.failure;
-            yield* Effect.logWarning("Subscription retention preserved corrupt event");
-            continue;
-          }
-          const event = accepted.success;
-
-          if (
-            event === null ||
-            !event.routingComplete ||
-            event.occurredAtMillis === undefined ||
-            event.acceptedAtMillis > cutoff ||
-            (yield* protectedByRecovery(event))
-          )
-            continue;
+      const removed = yield* transaction(
+        Effect.gen(function* () {
+          yield* failpoint.hit("subscription:compact:before");
           yield* query(
             sql<
               Record<string, unknown>
-            >`DELETE FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND delivery_key=${row.delivery_key}`,
-            "reclaim delivery",
-          );
-        }
-        let removed = 0;
-
-        let tombstones = cursor.tombstone_count;
-
-        for (const row of eventRows) {
-          const decoded = yield* decode(AcceptedEvent, row.record_json, "maintenance event").pipe(
-            Effect.result,
+            >`INSERT INTO ${relation("effect_agent_event_retention")} (tenant_id, source_address, replay_horizon_millis) VALUES (${partition.tenantId}, ${partition.address}, ${policy.replayHorizonMillis}) ON CONFLICT DO NOTHING`,
+            "initialize maintenance",
           );
 
-          if (Result.isFailure(decoded)) {
-            yield* Effect.logWarning("Subscription retention preserved corrupt event");
-            continue;
-          }
-          const event = decoded.success;
+          const progress = yield* query(
+            sql<
+              Record<string, unknown>
+            >`SELECT replay_horizon_millis, tombstone_count, event_cursor, delivery_cursor FROM ${relation("effect_agent_event_retention")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
+            "maintenance progress",
+          ).pipe(
+            Effect.flatMap((rows) =>
+              decodeRetentionProgressRows("subscription", "maintenance progress", rows),
+            ),
+          );
 
-          if (event.eventId !== row.event_id || !sameSourcePartition(event.partition, partition)) {
-            yield* Effect.logWarning("Subscription retention preserved mismatched event identity");
-            continue;
-          }
+          const cursor = progress[0];
 
-          if (
-            !event.routingComplete ||
-            event.occurredAtMillis === undefined ||
-            event.acceptedAtMillis > cutoff
-          )
-            continue;
-          const expired = event.occurredAtMillis <= nowMillis - policy.replayHorizonMillis;
+          if (progress.length !== 1 || cursor === undefined)
+            return yield* corrupt("maintenance progress");
+          if (cursor.replay_horizon_millis !== policy.replayHorizonMillis)
+            return yield* error("conflict", "retention-horizon");
 
-          if (event.tombstone === true && !expired) continue;
-          if (
-            (yield* query(
+          const deliveryRows = yield* query(
+            sql<
+              Record<string, unknown>
+            >`SELECT delivery_key, record_json FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND delivery_key>${cursor.delivery_cursor} ORDER BY delivery_key LIMIT ${limit}`,
+            "maintenance deliveries",
+          ).pipe(
+            Effect.flatMap((rows) =>
+              decodeRetainedDeliveryRows("subscription", "maintenance deliveries", rows),
+            ),
+          );
+
+          const eventRows = yield* query(
+            sql<
+              Record<string, unknown>
+            >`SELECT event_id, record_json FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id>${cursor.event_cursor} ORDER BY event_id LIMIT ${limit}`,
+            "maintenance events",
+          ).pipe(
+            Effect.flatMap((rows) =>
+              decodeRetainedEventRows("subscription", "maintenance events", rows),
+            ),
+          );
+
+          const protectedByRecovery = (event: AcceptedEvent) =>
+            query(
               sql<
                 Record<string, unknown>
-              >`SELECT 1 FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id=${event.eventId} LIMIT 1`,
-              "maintenance delivery reference",
-            )).length > 0 ||
-            (yield* protectedByRecovery(event))
-          )
-            continue;
-          if (expired) {
+              >`SELECT 1 FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND source_name=${event.source.name} AND source_version=${event.source.version} AND matching_key=${event.matchingKey} AND recovery_present=1 LIMIT 1`,
+              "maintenance recovery reference",
+            ).pipe(Effect.map((rows) => rows.length > 0));
+
+          const cutoff = nowMillis - policy.completedRetentionMillis;
+
+          for (const row of deliveryRows) {
+            const decoded = yield* decodeDelivery(row.record_json, "maintenance delivery").pipe(
+              Effect.result,
+            );
+
+            if (Result.isFailure(decoded)) {
+              yield* Effect.logWarning("Subscription retention preserved corrupt delivery");
+              continue;
+            }
+            const delivery = decoded.success;
+
+            if (
+              subscriptionDeliveryKeyString(delivery.key) !== row.delivery_key ||
+              !sameSourcePartition(delivery.key.subscription.partition, partition)
+            ) {
+              yield* Effect.logWarning(
+                "Subscription retention preserved mismatched delivery identity",
+              );
+              continue;
+            }
+
+            if (
+              delivery.state !== "refused" &&
+              (delivery.state !== "delivered" || delivery.settledAtMillis === undefined)
+            )
+              continue;
+            if (
+              (delivery.settledAtMillis ??
+                delivery.completedAtMillis ??
+                delivery.selectedAtMillis) > cutoff
+            )
+              continue;
+
+            const accepted = yield* readEvent(
+              delivery.key.eventId,
+              "maintenance delivery event",
+            ).pipe(Effect.result);
+
+            if (Result.isFailure(accepted)) {
+              if (accepted.failure.reason !== "corrupt") return yield* accepted.failure;
+              yield* Effect.logWarning("Subscription retention preserved corrupt event");
+              continue;
+            }
+            const event = accepted.success;
+
+            if (
+              event === null ||
+              !event.routingComplete ||
+              event.occurredAtMillis === undefined ||
+              event.acceptedAtMillis > cutoff ||
+              (yield* protectedByRecovery(event))
+            )
+              continue;
             yield* query(
               sql<
                 Record<string, unknown>
-              >`DELETE FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id=${event.eventId}`,
-              "expire event identity",
+              >`DELETE FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND delivery_key=${row.delivery_key}`,
+              "reclaim delivery",
             );
-            if (event.tombstone === true) tombstones--;
-          } else {
-            if (tombstones >= policy.maxTombstones) continue;
-            yield* writeEvent({ ...event, payload: null, tombstone: true });
-            tombstones++;
           }
-          removed++;
-        }
+          let removed = 0;
 
-        const remaining =
-          (yield* query(
+          let tombstones = cursor.tombstone_count;
+
+          for (const row of eventRows) {
+            const decoded = yield* decodeEvent(row.record_json, "maintenance event").pipe(
+              Effect.result,
+            );
+
+            if (Result.isFailure(decoded)) {
+              yield* Effect.logWarning("Subscription retention preserved corrupt event");
+              continue;
+            }
+            const event = decoded.success;
+
+            if (
+              event.eventId !== row.event_id ||
+              !sameSourcePartition(event.partition, partition)
+            ) {
+              yield* Effect.logWarning(
+                "Subscription retention preserved mismatched event identity",
+              );
+              continue;
+            }
+
+            if (
+              !event.routingComplete ||
+              event.occurredAtMillis === undefined ||
+              event.acceptedAtMillis > cutoff
+            )
+              continue;
+            const expired = event.occurredAtMillis <= nowMillis - policy.replayHorizonMillis;
+
+            if (event.tombstone === true && !expired) continue;
+            if (
+              (yield* query(
+                sql<
+                  Record<string, unknown>
+                >`SELECT 1 FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id=${event.eventId} LIMIT 1`,
+                "maintenance delivery reference",
+              )).length > 0 ||
+              (yield* protectedByRecovery(event))
+            )
+              continue;
+            if (expired) {
+              yield* query(
+                sql<
+                  Record<string, unknown>
+                >`DELETE FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND event_id=${event.eventId}`,
+                "expire event identity",
+              );
+              if (event.tombstone === true) tombstones--;
+            } else {
+              if (tombstones >= policy.maxTombstones) continue;
+              yield* writeEvent({ ...event, payload: null, tombstone: true });
+              tombstones++;
+            }
+            removed++;
+          }
+
+          const remaining =
+            (yield* query(
+              sql<
+                Record<string, unknown>
+              >`SELECT 1 FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} LIMIT 1`,
+              "remaining maintenance",
+            )).length > 0;
+
+          yield* query(
             sql<
               Record<string, unknown>
-            >`SELECT 1 FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} LIMIT 1`,
-            "remaining maintenance",
-          )).length > 0;
+            >`UPDATE ${relation("effect_agent_event_retention")} SET tombstone_count=${tombstones}, event_cursor=${eventRows.length < limit ? "" : (eventRows.at(-1)?.event_id ?? "")}, delivery_cursor=${deliveryRows.length < limit ? "" : (deliveryRows.at(-1)?.delivery_key ?? "")}, next_maintenance_at_millis=${remaining ? nowMillis + 60_000 : null} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
+            "advance maintenance",
+          );
 
-        yield* query(
-          sql<
-            Record<string, unknown>
-          >`UPDATE ${relation("effect_agent_event_retention")} SET tombstone_count=${tombstones}, event_cursor=${eventRows.length < limit ? "" : (eventRows.at(-1)?.event_id ?? "")}, delivery_cursor=${deliveryRows.length < limit ? "" : (deliveryRows.at(-1)?.delivery_key ?? "")}, next_maintenance_at_millis=${remaining ? nowMillis + 60_000 : null} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-          "advance maintenance",
-        );
+          return removed;
+        }),
+      );
 
-        return removed;
-      }),
-    );
+      yield* failpoint.hit("subscription:compact:after");
 
-    yield* failpoint.hit("subscription:compact:after");
-
-    return removed;
-  });
+      return removed;
+    },
+  );
 
   return SubscriptionStore.of({
     partition,

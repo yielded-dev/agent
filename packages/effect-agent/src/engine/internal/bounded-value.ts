@@ -132,12 +132,13 @@ const isCanonicalArrayIndex = (key: string): boolean => {
 };
 
 /**
- * Conservatively measure one retained, engine-owned JavaScript value without invoking getters,
+ * Conservatively measure one response value without invoking user getters,
  * coercion, or `toJSON`. `undefined` means the value exceeded the allowance or its shape could not
  * be measured without executing an accessor.
  *
- * This is a memory-retention guard, not an untrusted wire boundary. Callers must first canonicalize
- * provider values into owned data because JavaScript offers no portable, trap-free Proxy test.
+ * This memory-retention guard does not replace Schema validation or ownership capture. Callers
+ * also use it before copying provider values. Reflection can trigger Proxy traps because
+ * JavaScript offers no portable, trap-free Proxy test.
  * Object and property overheads deliberately make the estimate larger than the visible primitive
  * payload for ordinary response values.
  */
@@ -213,6 +214,8 @@ export const boundedValueFootprint = (
           skipIndexedProperties = true;
           supportedSpecialObject = true;
         }
+        // A changed prototype does not remove intrinsic storage. Probe the brand before
+        // allowing plain-object traversal, or hidden backing bytes could bypass the limit.
         if (!supportedSpecialObject) {
           const bufferByteLength = intrinsicArrayBufferByteLength(value);
 

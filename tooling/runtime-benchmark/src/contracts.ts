@@ -54,8 +54,8 @@ const workload = (
   ...options,
 });
 
-/** Profile sizes are fixed fixture inputs, never derived from the measured revision. */
-export const casesFor = (profile: Profile): ReadonlyArray<Case> => [
+/** Defaults stay fixed; explicit PR selection also permits the existing 16-record fresh case. */
+export const casesFor = (profile: Profile, includeSelectable = false): ReadonlyArray<Case> => [
   workload("small-run", "run"),
   workload("small-stream", "stream"),
   ...[1, 64, 1_024, 4_096].map((chunks) =>
@@ -76,6 +76,9 @@ export const casesFor = (profile: Profile): ReadonlyArray<Case> => [
     workload(`checkpoint-recovery-${records}`, "recovery", { records }),
     workload(`settled-ledger-${records}`, "ledger", { records }),
   ]),
+  ...(includeSelectable && profile === "pr"
+    ? [workload("durable-fresh-16", "durable", { records: 16 })]
+    : []),
 ];
 
 /** Resident SQLite is a separate workload from reopening a host in ordinary A/B samples. */
@@ -88,6 +91,8 @@ export const STEADY_STATE = {
   operations: 1_000,
   samplingIntervalMicros: 1_000,
 } as const;
+
+export const STEADY_STATE_MEASUREMENT = "resident-operation-v1" as const;
 
 export const SteadyStateResult = Schema.Struct({
   case: Schema.Literal("sqlite-tool-rounds-4"),
@@ -102,8 +107,12 @@ export const SteadyStateResult = Schema.Struct({
   warmupMs: Schema.Finite,
   operations: Schema.Natural,
   operationMs: Schema.Finite,
-  profileDurationMs: Schema.Finite,
-  samplingIntervalMicros: Schema.Literal(STEADY_STATE.samplingIntervalMicros),
+  profileDurationMs: Schema.NullOr(Schema.Finite),
+  samplingIntervalMicros: Schema.NullOr(Schema.Literal(STEADY_STATE.samplingIntervalMicros)),
+  measurement: Schema.optionalKey(Schema.Literal(STEADY_STATE_MEASUREMENT)),
+  operationSamplesMs: Schema.optionalKey(
+    Schema.Array(Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))),
+  ),
   modelCalls: Schema.Natural,
   modelFinalizers: Schema.Natural,
   toolCalls: Schema.Natural,
@@ -120,7 +129,9 @@ export type SteadyStateResult = typeof SteadyStateResult.Type;
 export const WorkerOptions = Schema.Struct({
   cold: Schema.Boolean,
   profile: Profile,
-  mode: Schema.optionalKey(Schema.Literals(["comparison", "cpu-profile", "steady-state-profile"])),
+  mode: Schema.optionalKey(
+    Schema.Literals(["comparison", "cpu-profile", "steady-state-profile", "steady-state"]),
+  ),
   cpuProfile: Schema.optionalKey(Schema.String),
   cases: Schema.optionalKey(Schema.Array(Schema.String).check(Schema.isMinLength(1))),
   warmups: Schema.Natural.check(Schema.isLessThanOrEqualTo(20)),
@@ -182,7 +193,7 @@ export const completeBatch = (
   report: WorkerReport,
   options: typeof WorkerOptions.Type,
 ): boolean => {
-  if (options.mode === "steady-state-profile") {
+  if (options.mode === "steady-state-profile" || options.mode === "steady-state") {
     const result = report.steadyState;
 
     return (
@@ -201,7 +212,19 @@ export const completeBatch = (
       result.warmupOperations === STEADY_STATE.warmupOperations &&
       result.warmupMs > 0 &&
       result.operationMs > 0 &&
-      result.profileDurationMs > 0 &&
+      (options.mode === "steady-state"
+        ? options.cpuProfile === undefined &&
+          result.profileDurationMs === null &&
+          result.samplingIntervalMicros === null &&
+          result.measurement === STEADY_STATE_MEASUREMENT &&
+          result.operationSamplesMs?.length === STEADY_STATE.operations &&
+          result.operationSamplesMs.every((ms) => Number.isFinite(ms) && ms >= 0)
+        : options.cpuProfile !== undefined &&
+          result.profileDurationMs !== null &&
+          result.profileDurationMs > 0 &&
+          result.samplingIntervalMicros === STEADY_STATE.samplingIntervalMicros &&
+          result.measurement === undefined &&
+          result.operationSamplesMs === undefined) &&
       result.modelCalls === result.operations * 5 &&
       result.modelFinalizers === result.modelCalls &&
       result.toolCalls === result.operations * 4 &&
@@ -212,7 +235,7 @@ export const completeBatch = (
 
   const available = options.cold
     ? casesFor(options.profile).slice(0, 1)
-    : casesFor(options.profile);
+    : casesFor(options.profile, (options.cases?.length ?? 0) > 0);
 
   const names = options.cases ?? available.map(({ name }) => name);
   const workloads = available.filter(({ name }) => names.includes(name));
@@ -220,7 +243,8 @@ export const completeBatch = (
   if (
     workloads.length === 0 ||
     names.length !== workloads.length ||
-    (options.mode !== undefined && report.mode !== options.mode) ||
+    (report.mode ?? "comparison") !== (options.mode ?? "comparison") ||
+    report.steadyState !== undefined ||
     (options.cases !== undefined &&
       (report.cases?.length !== names.length ||
         !workloads.every(({ name }, index) => report.cases?.[index] === name)))

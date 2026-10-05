@@ -100,7 +100,9 @@ flowchart LR
 
 ## Observation
 
-Wrap CPU-heavy synchronous work inside tracing spans, including hydration and decoding.
+Observe CPU-heavy hydration and decoding within the enclosing operation spans, following the
+[tracing policy](/guide/run-agents/#trace-agent-and-model-calls). Per-record and per-decoded-row
+helpers remain untraced.
 Object clocks may not advance during synchronous work, so elapsed clock samples alone cannot
 establish a CPU budget. Preserve original failure causes where the error contract carries them;
 some storage boundaries retain only diagnostic classifications. Keep scheduling reports content-free.

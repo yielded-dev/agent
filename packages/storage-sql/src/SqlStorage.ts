@@ -42,12 +42,13 @@ const PostgresText = Schema.String.check(
 export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient;
   const postgres = sql.onDialectOrElse({ pg: () => true, orElse: () => false });
+  const decodePostgresText = Schema.decodeEffect(PostgresText);
 
   const executePostgres = Effect.fnUntraced(function* <A extends object>(statement: Statement<A>) {
     if (postgres) {
       for (const parameter of statement.compile(true)[1]) {
         if (typeof parameter === "string") {
-          yield* Schema.decodeEffect(PostgresText)(parameter).pipe(
+          yield* decodePostgresText(parameter).pipe(
             Effect.mapError((cause) =>
               SqlError.make({
                 reason: UnknownError.make({
@@ -117,39 +118,41 @@ export type SqlStorageFailpoint<F extends Diagnostic> = (
 /** Native transaction shape used by stores whose errors already belong to their ports. */
 export type SqlWriteTransaction = SqlClient["withTransaction"];
 
-/** Decode database rows once, preserving the adapter's corruption error class. */
+/**
+ * Decode database rows once, preserving the adapter's corruption error class.
+ * Bind an array schema with decodeRows(schema) or decodeSingleRow(schema), then reuse the
+ * returned (table, rowKey, rows) decoder across reads.
+ */
 export const makeRowDecoder = <C extends Diagnostic>(
   corruption: (fields: CorruptionErrorFields) => C,
 ) => {
-  const decodeRows = <A, I>(
-    schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
-    table: string,
-    rowKey: string,
-    rows: unknown,
-  ): Effect.Effect<ReadonlyArray<A>, C> =>
-    Schema.decodeUnknownEffect(schema)(rows).pipe(
-      Effect.mapError((error) => corruption({ table, rowKey, message: String(error) })),
-    );
+  const decodeRows = <A, I>(schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>) => {
+    const decode = Schema.decodeUnknownEffect(schema);
 
-  const decodeSingleRow = <A, I>(
-    schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
-    table: string,
-    rowKey: string,
-    rows: unknown,
-  ): Effect.Effect<A, C> =>
-    decodeRows(schema, table, rowKey, rows).pipe(
-      Effect.flatMap((decoded) =>
-        decoded.length === 1
-          ? Effect.succeed(decoded[0])
-          : Effect.fail(
-              corruption({
-                table,
-                rowKey,
-                message: `Expected exactly one row but found ${decoded.length}.`,
-              }),
-            ),
-      ),
-    );
+    return (table: string, rowKey: string, rows: unknown): Effect.Effect<ReadonlyArray<A>, C> =>
+      decode(rows).pipe(
+        Effect.mapError((error) => corruption({ table, rowKey, message: String(error) })),
+      );
+  };
+
+  const decodeSingleRow = <A, I>(schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>) => {
+    const decode = decodeRows(schema);
+
+    return (table: string, rowKey: string, rows: unknown): Effect.Effect<A, C> =>
+      decode(table, rowKey, rows).pipe(
+        Effect.flatMap((decoded) =>
+          decoded.length === 1
+            ? Effect.succeed(decoded[0])
+            : Effect.fail(
+                corruption({
+                  table,
+                  rowKey,
+                  message: `Expected exactly one row but found ${decoded.length}.`,
+                }),
+              ),
+        ),
+      );
+  };
 
   return { decodeRows, decodeSingleRow };
 };

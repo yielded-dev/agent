@@ -226,7 +226,7 @@ export const ApprovalAuditMemoryLive = Layer.effect(
 );
 
 /** Construct an ApprovalRequest only after decoded input passes the configured Redactor. */
-export const makeApprovalRequest = Effect.fn("makeApprovalRequest")(function* (
+export const makeApprovalRequest = Effect.fnUntraced(function* (
   draft: ApprovalRequestDraft,
   decodedToolInput: unknown,
 ): Effect.fn.Return<ApprovalRequest, RedactionError, Redactor> {
@@ -263,7 +263,7 @@ const timeoutDenial = (request: ApprovalRequest, decidedAt: DateTime.Utc): Appro
  * resolution. A resolver infrastructure failure records a synthetic denial so
  * the audit reservation is released before the typed error propagates.
  */
-export const requestApproval = Effect.fn("requestApproval")(function* (request: ApprovalRequest) {
+export const requestApproval = Effect.fnUntraced(function* (request: ApprovalRequest) {
   const audit = yield* ApprovalAudit;
 
   yield* audit.recordRequest(request);

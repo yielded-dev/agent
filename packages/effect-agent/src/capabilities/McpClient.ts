@@ -223,7 +223,7 @@ const routeMessage = (
 };
 
 /** Reads a response body as text while refusing bodies above `maxBytes`. */
-const readBoundedText = Effect.fn("McpHttpTransport.readBoundedText")(function* (
+const readBoundedText = Effect.fnUntraced(function* (
   response: HttpClientResponse.HttpClientResponse,
   maxBytes: number,
 ) {
@@ -267,7 +267,7 @@ const readBoundedText = Effect.fn("McpHttpTransport.readBoundedText")(function* 
  * retry directive neither ends the stream nor fails the request. At most
  * `maxBytes` of an unterminated event stays buffered.
  */
-const consumeEventStream = Effect.fn("McpHttpTransport.consumeEventStream")(function* (
+const consumeEventStream = Effect.fnUntraced(function* (
   response: HttpClientResponse.HttpClientResponse,
   maxBytes: number,
   deliver: (data: string) => Effect.Effect<void>,
@@ -325,9 +325,7 @@ const consumeEventStream = Effect.fn("McpHttpTransport.consumeEventStream")(func
   yield* drain(true);
 });
 
-const makeHttpProtocol = Effect.fn("McpHttpTransport.protocol")(function* (
-  options: McpHttpTransportOptions,
-) {
+const makeHttpProtocol = Effect.fnUntraced(function* (options: McpHttpTransportOptions) {
   const client = yield* HttpClient.HttpClient;
   const serialization = RpcSerialization.jsonRpc();
   const parser = serialization.makeUnsafe();
@@ -428,7 +426,7 @@ const makeHttpProtocol = Effect.fn("McpHttpTransport.protocol")(function* (
        * (for example a `202`, an `id: null` error, or a stream that ends
        * early) fails that request instead of leaving its caller waiting.
        */
-      const dispatch = Effect.fn("McpHttpTransport.dispatch")(function* (
+      const dispatch = Effect.fnUntraced(function* (
         clientId: number,
         message: unknown,
         requestId?: string | number,
@@ -509,9 +507,7 @@ const makeHttpProtocol = Effect.fn("McpHttpTransport.protocol")(function* (
   );
 });
 
-const makeStdioProtocol = Effect.fn("McpStdioTransport.protocol")(function* (
-  options: McpStdioTransportOptions,
-) {
+const makeStdioProtocol = Effect.fnUntraced(function* (options: McpStdioTransportOptions) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const maxMessageBytes = options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
   const serialization = RpcSerialization.ndJsonRpc({ maxBufferSize: maxMessageBytes });
@@ -781,7 +777,7 @@ const failClosed =
       Effect.catchDefect((defect) => Effect.fail(connectionError(serverId, message)(defect))),
     );
 
-const connectServer = Effect.fn("McpClient.connect")(function* <R>(
+const connectServer = Effect.fnUntraced(function* <R>(
   transport: McpServerTransport<R>,
   request: McpConnectionRequest,
   clientInfo: McpSchema.Implementation,
@@ -840,7 +836,7 @@ const connectServer = Effect.fn("McpClient.connect")(function* <R>(
     }
   } while (cursor !== undefined);
 
-  const callTool = Effect.fn("McpClient.callTool")(function* (name: string, params: unknown) {
+  const callTool = Effect.fnUntraced(function* (name: string, params: unknown) {
     const args = yield* decodeToolArguments(params ?? {}).pipe(
       Effect.mapError((cause) =>
         McpToolCallFailed.make({

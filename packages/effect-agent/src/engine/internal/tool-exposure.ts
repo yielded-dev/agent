@@ -53,7 +53,7 @@ export const decodeSnapshot = (value: unknown) =>
     ),
   );
 
-export const eligibleCatalog = Effect.fn("ToolExposure.eligibleCatalog")(function* (
+export const eligibleCatalog = Effect.fnUntraced(function* (
   definition: AnyDefinition,
   request: Omit<VisibilityRequest, "toolNames">,
   grant: SubagentGrant | undefined,
@@ -123,7 +123,7 @@ export const eligibleCatalog = Effect.fn("ToolExposure.eligibleCatalog")(functio
   );
 });
 
-export const validateSelection = Effect.fn("ToolExposure.validateSelection")(function* (
+export const validateSelection = Effect.fnUntraced(function* (
   value: unknown,
   definition: AnyDefinition,
   entries: ReadonlyArray<CatalogEntry>,
@@ -147,7 +147,7 @@ export const validateSelection = Effect.fn("ToolExposure.validateSelection")(fun
   return Selection.make({ toolNames: Object.freeze([...selection.toolNames]) });
 });
 
-export const exposureSnapshot = Effect.fn("ToolExposure.exposureSnapshot")(function* (
+export const exposureSnapshot = Effect.fnUntraced(function* (
   definition: AnyDefinition,
   selection: Selection | undefined,
   entries: ReadonlyArray<CatalogEntry>,

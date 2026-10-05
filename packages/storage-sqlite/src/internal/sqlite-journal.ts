@@ -47,6 +47,9 @@ export const sqliteErrors = {
 };
 
 const { decodeRows, decodeSingleRow } = makeRowDecoder(SqliteStorageCorruptionError.make);
+const decodeNameRows = decodeRows(Schema.Array(SqliteNameRow));
+const decodeVersionRow = decodeSingleRow(Schema.Array(SqliteVersionRow));
+const decodeJournalModeRow = decodeSingleRow(Schema.Array(SqliteJournalModeRow));
 
 const SynchronousRow = Schema.Tuple([Schema.Struct({ synchronous: Schema.Int })]);
 const connectionModes = new WeakMap<Connection, "FULL" | "NORMAL">();
@@ -97,7 +100,7 @@ export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
   ).pipe(Effect.catchTag("SqlError", (cause) => storageError(operation)(cause)));
 });
 
-export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize")(function* () {
+export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { hit: failpoint } = yield* SqliteStorageFailpoint;
   const { busyTimeout } = yield* SqliteStorageConfig;
@@ -114,8 +117,7 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
     Effect.mapError(storageError("read journal mode")),
   );
 
-  const journalMode = yield* decodeSingleRow(
-    Schema.Array(SqliteJournalModeRow),
+  const journalMode = yield* decodeJournalModeRow(
     "pragma_journal_mode",
     "singleton",
     journalModeRows,
@@ -133,12 +135,7 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
     Effect.mapError(storageError("read storage version")),
   );
 
-  const version = yield* decodeSingleRow(
-    Schema.Array(SqliteVersionRow),
-    "pragma_user_version",
-    "singleton",
-    versionRows,
-  );
+  const version = yield* decodeVersionRow("pragma_user_version", "singleton", versionRows);
 
   const verifyCurrentStorage = Effect.fnUntraced(function* () {
     const requiredRows = yield* sql<Record<string, unknown>>`
@@ -164,12 +161,7 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
     ORDER BY name
   `.pipe(Effect.mapError(storageError("verify storage tables")));
 
-    const required = yield* decodeRows(
-      Schema.Array(SqliteNameRow),
-      "sqlite_master",
-      "required_tables",
-      requiredRows,
-    );
+    const required = yield* decodeNameRows("sqlite_master", "required_tables", requiredRows);
 
     if (required.length !== 23) {
       return yield* SqliteStorageCompatibilityError.make({
@@ -201,12 +193,7 @@ export const initializeSqliteJournalKernel = Effect.fn("SqliteJournal.initialize
       ORDER BY name
     `.pipe(Effect.mapError(storageError("inspect unversioned storage")));
 
-    const existing = yield* decodeRows(
-      Schema.Array(SqliteNameRow),
-      "sqlite_master",
-      "effect_agent_%",
-      existingRows,
-    );
+    const existing = yield* decodeNameRows("sqlite_master", "effect_agent_%", existingRows);
 
     if (existing.length > 0) {
       return yield* SqliteStorageCompatibilityError.make({

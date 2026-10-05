@@ -10,17 +10,23 @@ import { Clock, Effect, FileSystem, Layer, Option, References, Schema, Stream } 
 import { AiError, LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import type { PlatformError } from "effect/PlatformError";
 
-import { BenchmarkError, check, STEADY_STATE, type SteadyStateResult } from "./contracts.js";
+import {
+  BenchmarkError,
+  check,
+  STEADY_STATE,
+  STEADY_STATE_MEASUREMENT,
+  type SteadyStateResult,
+} from "./contracts.js";
 import { makeCpuProfiler } from "./cpu-profile.js";
 
 /** A native provider with bounded counters, without retaining every normalized prompt. */
-export const runSteadyStateProfile = Effect.fn("benchmark.steadyStateProfile")(function* (
-  filename: string,
+export const runSteadyState = Effect.fn("benchmark.steadyState")(function* (
+  filename: string | undefined,
   onWarmed: (operations: number, elapsedMs: number) => Effect.Effect<void, PlatformError>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const directory = yield* fs.makeTempDirectoryScoped({ prefix: "runtime-steady-state-" });
-  const profiler = yield* makeCpuProfiler;
+  const profiler = filename === undefined ? undefined : yield* makeCpuProfiler;
   const outputSchema = Schema.Struct({ text: Schema.String });
   const output = { text: "x".repeat(21) };
   const encodedOutput = JSON.stringify(output);
@@ -228,16 +234,32 @@ export const runSteadyStateProfile = Effect.fn("benchmark.steadyStateProfile")(f
     modelCalls = modelFinalizers = toolCalls = toolFinalizers = canonicalCompletions = 0;
     yield* onWarmed(warmupOperations, warmupMs);
 
-    const measured = yield* profiler.capture(
-      Effect.gen(function* () {
-        const started = yield* Clock.monotonicTimeNanos;
+    const operationSamplesMs: Array<number> | undefined = filename === undefined ? [] : undefined;
 
+    const measure = Effect.gen(function* () {
+      const started = yield* Clock.monotonicTimeNanos;
+
+      if (operationSamplesMs === undefined) {
+        // Keep per-operation clocks and timing arrays out of the CPU capture.
         for (let index = 0; index < STEADY_STATE.operations; index++) yield* execute;
+      } else {
+        for (let index = 0; index < STEADY_STATE.operations; index++) {
+          const operationStarted = yield* Clock.monotonicTimeNanos;
 
-        return Number((yield* Clock.monotonicTimeNanos) - started) / 1e6;
-      }),
-      filename,
-    );
+          yield* execute;
+          operationSamplesMs.push(
+            Number((yield* Clock.monotonicTimeNanos) - operationStarted) / 1e6,
+          );
+        }
+      }
+
+      return Number((yield* Clock.monotonicTimeNanos) - started) / 1e6;
+    });
+
+    const measured =
+      profiler !== undefined && filename !== undefined
+        ? yield* profiler.capture(measure, filename)
+        : { value: yield* measure, profileDurationMs: null };
 
     yield* check(
       modelCalls === STEADY_STATE.operations * 5 &&
@@ -259,7 +281,10 @@ export const runSteadyStateProfile = Effect.fn("benchmark.steadyStateProfile")(f
       operations: STEADY_STATE.operations,
       operationMs: measured.value,
       profileDurationMs: measured.profileDurationMs,
-      samplingIntervalMicros: STEADY_STATE.samplingIntervalMicros,
+      samplingIntervalMicros: profiler === undefined ? null : STEADY_STATE.samplingIntervalMicros,
+      ...(operationSamplesMs === undefined
+        ? {}
+        : { measurement: STEADY_STATE_MEASUREMENT, operationSamplesMs }),
       modelCalls,
       modelFinalizers,
       toolCalls,

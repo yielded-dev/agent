@@ -1,6 +1,4 @@
 import * as Response from "effect/ai/Response";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { boundedValueFootprint } from "./bounded-value.ts";
@@ -8,19 +6,6 @@ import { boundedValueFootprint } from "./bounded-value.ts";
 const brand = "~effect/ai/Response/Part";
 const keys = [brand, "type", "id", "delta", "metadata"];
 const boundaryKeys = [brand, "type", "id", "metadata"];
-
-const decode = Schema.decodeUnknownOption(
-  Schema.toType(
-    Schema.Union([
-      Response.TextDeltaPart,
-      Response.ReasoningDeltaPart,
-      Response.TextStartPart,
-      Response.TextEndPart,
-      Response.ReasoningStartPart,
-      Response.ReasoningEndPart,
-    ]),
-  ),
-);
 
 const overhead = (type: "text-delta" | "reasoning-delta") => ({
   source: boundedValueFootprint(
@@ -50,13 +35,13 @@ const overheads = {
 };
 
 /**
- * Copy primitive text and reasoning parts into owned data before native Schema validation.
+ * Capture primitive text and reasoning encodings for the native Schema decoder.
  * Descriptor checks select this optimization; they do not replace the native codec.
  * Extra fields, accessors, and nonempty metadata use the general ownership path.
  * No provider object survives, including an empty metadata object's hidden storage.
  * Unlike a generic footprint shortcut, this cannot retain an exotic backing buffer.
  */
-export const ownPrimitiveTextPart = (part: unknown, maxBytes: number) => {
+export const capturePrimitiveTextPart = (part: unknown, maxBytes: number) => {
   try {
     if (part === null || typeof part !== "object") return undefined;
     if (Array.isArray(part) || ArrayBuffer.isView(part)) return undefined;
@@ -81,6 +66,7 @@ export const ownPrimitiveTextPart = (part: unknown, maxBytes: number) => {
       if (descriptor === undefined || !("value" in descriptor)) return undefined;
       snapshot[key] = descriptor.value;
     }
+    if (snapshot[brand] !== brand) return undefined;
     const { type, id, delta, metadata } = snapshot;
 
     if (
@@ -109,11 +95,9 @@ export const ownPrimitiveTextPart = (part: unknown, maxBytes: number) => {
     if (bytes + fixed.source > maxBytes || bytes + fixed.encoded > maxBytes) return undefined;
     // Never pass the provider's metadata object (or any other object) to the decoder.
     snapshot.metadata = {};
-    const validated = decode(snapshot);
+    delete snapshot[brand];
 
-    if (Option.isNone(validated)) return undefined;
-
-    return { ownedPart: validated.value, retainedBytes: bytes + fixed.encoded };
+    return { encodedPart: snapshot, retainedBytes: bytes + fixed.encoded };
   } catch {
     // Reflection may throw for proxies. The general path owns the typed failure.
     return undefined;

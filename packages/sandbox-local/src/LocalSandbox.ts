@@ -47,9 +47,7 @@ const unsupported = (
     message: boundedDiagnostic(message),
   });
 
-const validateRequest = Effect.fn("LocalSandbox.validateRequest")(function* (
-  request: SandboxRequest,
-) {
+const validateRequest = Effect.fnUntraced(function* (request: SandboxRequest) {
   if (
     request.runtime.kind !== "unisolated-process" ||
     request.runtime.identity !== unisolatedImplementation.identity
@@ -113,9 +111,7 @@ const exitError = (message: string, cause?: unknown, exitCode = -1) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
-const environmentFromAllowlist = Effect.fn("LocalSandbox.environmentFromAllowlist")(function* (
-  request: SandboxRequest,
-) {
+const environmentFromAllowlist = Effect.fnUntraced(function* (request: SandboxRequest) {
   const environment: Record<string, string> = {};
 
   for (const name of request.environment.allow) {

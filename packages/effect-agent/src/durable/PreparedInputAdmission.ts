@@ -22,36 +22,37 @@ export class PreparedInputAdmission extends Context.Service<
  * Reduce one bounded admission attempt. The caller owns concurrency, durable retry state,
  * and completion fencing. Interruption and defects propagate without claiming a refusal.
  */
-export const admitPreparedInput = Effect.fn("Thread.admitPreparedInput")(
-  <R>(submit: Effect.Effect<Receipt, ScheduledInputFailure, R>, timeoutMillis: number) =>
-    submit.pipe(
-      Effect.timeout(timeoutMillis),
-      Effect.map((receipt) => ({ _tag: "Receipt" as const, receipt })),
-      Effect.catchTag("ScheduledInputRefused", (error) =>
-        Effect.succeed({ _tag: "Refused" as const, error }),
-      ),
-      Effect.catchTag("ScheduledInputRetryable", (error) =>
-        Effect.succeed({
-          _tag: "Retry" as const,
-          reason: error.reason,
-          diagnostic: FailureDiagnostic.capture(error),
-        }),
-      ),
-      Effect.catchTag("TimeoutError", (error) =>
-        Effect.succeed({
-          _tag: "Retry" as const,
-          reason: "timeout" as const,
-          diagnostic: FailureDiagnostic.capture(error),
-        }),
-      ),
-      Effect.catchTag("ScheduleStorageError", (error) =>
-        error.reason === "unavailable"
-          ? Effect.succeed({
-              _tag: "Retry" as const,
-              reason: "storage" as const,
-              diagnostic: FailureDiagnostic.capture(error),
-            })
-          : Effect.fail(ScheduleStorageError.make(error)),
-      ),
+export const admitPreparedInput = <R>(
+  submit: Effect.Effect<Receipt, ScheduledInputFailure, R>,
+  timeoutMillis: number,
+) =>
+  submit.pipe(
+    Effect.timeout(timeoutMillis),
+    Effect.map((receipt) => ({ _tag: "Receipt" as const, receipt })),
+    Effect.catchTag("ScheduledInputRefused", (error) =>
+      Effect.succeed({ _tag: "Refused" as const, error }),
     ),
-);
+    Effect.catchTag("ScheduledInputRetryable", (error) =>
+      Effect.succeed({
+        _tag: "Retry" as const,
+        reason: error.reason,
+        diagnostic: FailureDiagnostic.capture(error),
+      }),
+    ),
+    Effect.catchTag("TimeoutError", (error) =>
+      Effect.succeed({
+        _tag: "Retry" as const,
+        reason: "timeout" as const,
+        diagnostic: FailureDiagnostic.capture(error),
+      }),
+    ),
+    Effect.catchTag("ScheduleStorageError", (error) =>
+      error.reason === "unavailable"
+        ? Effect.succeed({
+            _tag: "Retry" as const,
+            reason: "storage" as const,
+            diagnostic: FailureDiagnostic.capture(error),
+          })
+        : Effect.fail(ScheduleStorageError.make(error)),
+    ),
+  );

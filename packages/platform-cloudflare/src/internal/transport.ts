@@ -33,7 +33,7 @@ export const threadPortTransportLayer: Layer.Layer<
     const { rpcTracing } = namespace;
 
     return ThreadPortTransport.of({
-      call: Effect.fn(
+      call: Effect.fnUntraced(
         function* (threadId: ThreadId, request: unknown) {
           const traceArgs =
             rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);

@@ -68,7 +68,7 @@ const sameKey = (left: MemoryKey, right: MemoryKey): boolean =>
 
 const encodeIntent = Schema.encodeSync(Protocol.Intent.Wire);
 
-const validateSource = Effect.fn("Remembering.validateSource")(function* (
+const validateSource = Effect.fnUntraced(function* (
   intent: Protocol.Intent,
   snapshot: SourceSnapshot,
   limits: Limits,
@@ -88,7 +88,7 @@ const validateSource = Effect.fn("Remembering.validateSource")(function* (
   return source;
 });
 
-const validateEvidence = Effect.fn("Remembering.validateEvidence")(function* (
+const validateEvidence = Effect.fnUntraced(function* (
   source: SourceSnapshot,
   proposal: Protocol.Proposal,
 ) {
@@ -110,7 +110,7 @@ const validateEvidence = Effect.fn("Remembering.validateEvidence")(function* (
   }
 });
 
-const validateCheckpoint = Effect.fn("Remembering.validateCheckpoint")(function* <
+const validateCheckpoint = Effect.fnUntraced(function* <
   S extends MemoryNamespace.Any,
   T extends MemoryNamespace.Any,
 >(
@@ -195,7 +195,7 @@ const completed = (
 /** Foreground admission performs only one durable port call. Bind authority and idempotency
  * from the trusted invocation before calling; a queued receipt is returned only after commit.
  */
-export const admit = Effect.fn("Remembering.admit")(function* <E, R>(
+export const admit = Effect.fnUntraced(function* <E, R>(
   store: Protocol.Store<E, R>,
   intent: Protocol.Intent,
 ) {
@@ -216,7 +216,7 @@ export const admit = Effect.fn("Remembering.admit")(function* <E, R>(
 /** Source owners await this durable suppression receipt before acknowledging edit/deletion/Forget.
  * Scheduling all affected retained references and conditional cleanup is the host's obligation.
  */
-export const invalidate = Effect.fn("Remembering.invalidate")(function* <E, R>(
+export const invalidate = Effect.fnUntraced(function* <E, R>(
   store: Protocol.Store<E, R>,
   event: Protocol.Invalidation,
 ) {
@@ -284,7 +284,7 @@ export const make = <
     input: CleanupInput<Value, S, T>,
   ) => Effect.Effect<Decision, CleanupE, CleanupR>;
 }) => {
-  const advance = Effect.fn("Remembering.advance")(function* <StoreE, StoreR>(input: {
+  const advance = Effect.fnUntraced(function* <StoreE, StoreR>(input: {
     readonly intent: Protocol.Intent<S, T>;
     readonly store: Protocol.Store<StoreE, StoreR>;
     readonly limits: Limits;
@@ -326,7 +326,7 @@ export const make = <
         return yield* Protocol.ProcessingError.make({ reason: "budget" });
       const failpoint = yield* Protocol.MutationFailpoint;
 
-      const save = Effect.fn("Remembering.save")(function* (
+      const save = Effect.fnUntraced(function* (
         next: Protocol.Progress,
         before: Protocol.MutationPoint,
         after: Protocol.MutationPoint,
@@ -344,7 +344,7 @@ export const make = <
         return yield* validateCheckpoint(intent, stored);
       });
 
-      const suppress = Effect.fn("Remembering.suppress")(function* (event: Protocol.Invalidation) {
+      const suppress = Effect.fnUntraced(function* (event: Protocol.Invalidation) {
         if (!sameKey(event.source, intent.source.key))
           return yield* Protocol.ProcessingError.make({ reason: "invalid-input" });
         yield* invalidate(input.store, event);

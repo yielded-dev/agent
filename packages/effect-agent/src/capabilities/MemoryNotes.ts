@@ -81,7 +81,7 @@ export const WriteNotes = Tool.make("write_notes", {
 
 export const toolkit = Toolkit.make(ReadNotes, WriteNotes);
 
-const snapshot = Effect.fn("MemoryNotes.snapshot")(function* (document: MemoryDocument | null) {
+const snapshot = Effect.fnUntraced(function* (document: MemoryDocument | null) {
   if (document?._tag === "WithdrawnMemoryDocument") {
     return yield* MemoryWithdrawn.make({
       key: document.key,
@@ -121,7 +121,7 @@ export const layer = (options: Options) => {
 
       return toolkit.of({
         read_notes: () => reader.get(config.key).pipe(Effect.flatMap(snapshot)),
-        write_notes: Effect.fn("MemoryNotes.write_notes")(
+        write_notes: Effect.fnUntraced(
           function* (request) {
             const step = yield* DurableStep;
 

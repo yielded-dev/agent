@@ -60,16 +60,15 @@ const keyString = (key: MemoryKey): string => JSON.stringify([key.namespace.addr
 const sourceIdentityBytes = (source: MemoryIndexSource): number =>
   Hex.encode(JSON.stringify(source)).length / 2;
 
-const decodeBoundary = Effect.fn("InMemorySemanticIndex.decodeBoundary")(function* <A, I>(
+const decodeBoundary = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: unknown,
   operation: string,
-): Effect.fn.Return<A, MemoryIndexError> {
-  return yield* Schema.decodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, MemoryIndexError> =>
+  Schema.decodeUnknownEffect(schema)(value).pipe(
     Effect.flatMap((decoded) => Schema.encodeEffect(schema)(decoded).pipe(Effect.as(decoded))),
     Effect.mapError(() => error(operation, "invalid-input")),
   );
-});
 
 const freezeSource = (source: MemoryIndexSource): MemoryIndexSource =>
   Object.freeze(
@@ -107,7 +106,7 @@ const squaredNorm = (vector: ReadonlyArray<number>): number | null => {
 const validVector = (vector: ReadonlyArray<number>, profile: SemanticMemoryProfile): boolean =>
   vector.length === profile.dimensions && squaredNorm(vector) !== null;
 
-const validateChunks = Effect.fn("InMemorySemanticIndex.validateChunks")(function* (
+const validateChunks = Effect.fnUntraced(function* (
   chunks: ReadonlyArray<SemanticMemoryChunk>,
   profile: SemanticMemoryProfile,
   operation: string,
@@ -151,7 +150,7 @@ const cosine = (left: ReadonlyArray<number>, right: ReadonlyArray<number>): numb
 const compareText = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
-const makeIndex = Effect.fn("InMemorySemanticIndex.make")(function* (
+const makeIndex = Effect.fnUntraced(function* (
   rawProfile: SemanticMemoryProfile,
   rawCapacity: InMemorySemanticIndexCapacity,
 ) {
@@ -181,110 +180,110 @@ const makeIndex = Effect.fn("InMemorySemanticIndex.make")(function* (
     Ref.set(data, { closed: true, entries: new Map(), sourceBytes: 0 }),
   );
 
-  const ensureOpen = Effect.fn("InMemorySemanticIndex.ensureOpen")(function* (operation: string) {
+  const ensureOpen = Effect.fnUntraced(function* (operation: string) {
     if ((yield* Ref.get(data)).closed) return yield* error(operation, "unavailable");
   });
 
-  const replace: SemanticMemoryIndex["Service"]["replace"] = Effect.fn(
-    "InMemorySemanticIndex.replace",
-  )(function* (rawRequest) {
-    const operation = "replace semantic memory source";
+  const replace: SemanticMemoryIndex["Service"]["replace"] = Effect.fnUntraced(
+    function* (rawRequest) {
+      const operation = "replace semantic memory source";
 
-    yield* ensureOpen(operation);
-    const request = yield* decodeBoundary(MemoryIndexReplacement.Wire, rawRequest, operation);
-    const source = freezeSource(request.source);
-    const sourceBytes = sourceIdentityBytes(source);
-    const chunks = Object.freeze(request.chunks.map(freezeChunk));
+      yield* ensureOpen(operation);
+      const request = yield* decodeBoundary(MemoryIndexReplacement.Wire, rawRequest, operation);
+      const source = freezeSource(request.source);
+      const sourceBytes = sourceIdentityBytes(source);
+      const chunks = Object.freeze(request.chunks.map(freezeChunk));
 
-    if (source.source.id !== source.key.id) return yield* error(operation, "invalid-input");
-    if (!sameProfile(request.profile, profile)) return yield* error(operation, "incompatible");
-    yield* validateChunks(chunks, profile, operation);
-    const indexedAt = yield* Clock.currentTimeMillis;
+      if (source.source.id !== source.key.id) return yield* error(operation, "invalid-input");
+      if (!sameProfile(request.profile, profile)) return yield* error(operation, "incompatible");
+      yield* validateChunks(chunks, profile, operation);
+      const indexedAt = yield* Clock.currentTimeMillis;
 
-    const failure = yield* Ref.modify(
-      data,
-      (current): readonly [MemoryIndexError | undefined, IndexData] => {
-        if (current.closed) return [error(operation, "unavailable"), current];
-        const id = keyString(source.key);
-        const existing = current.entries.get(id);
+      const failure = yield* Ref.modify(
+        data,
+        (current): readonly [MemoryIndexError | undefined, IndexData] => {
+          if (current.closed) return [error(operation, "unavailable"), current];
+          const id = keyString(source.key);
+          const existing = current.entries.get(id);
 
-        if (
-          existing !== undefined &&
-          (existing._tag === "Withdrawn" || sourceIsFenced(source, existing))
-        ) {
-          return [error(operation, "fenced"), current];
-        }
-        if (existing === undefined && current.entries.size >= capacity.maxSources) {
-          return [error(operation, "budget"), current];
-        }
-        const nextSourceBytes = current.sourceBytes - (existing?.sourceBytes ?? 0) + sourceBytes;
-
-        if (nextSourceBytes > maxSourceBytes) return [error(operation, "budget"), current];
-        let count = chunks.length;
-
-        for (const [entryId, entry] of current.entries) {
-          if (entryId !== id && entry._tag === "Indexed") count += entry.chunks.length;
-        }
-        if (count > capacity.maxChunks) return [error(operation, "budget"), current];
-        const entries = new Map(current.entries);
-
-        entries.set(id, { _tag: "Indexed", source, sourceBytes, chunks, indexedAt });
-
-        return [undefined, { ...current, entries, sourceBytes: nextSourceBytes }];
-      },
-    );
-
-    if (failure !== undefined) return yield* failure;
-  });
-
-  const withdraw: SemanticMemoryIndex["Service"]["withdraw"] = Effect.fn(
-    "InMemorySemanticIndex.withdraw",
-  )(function* (rawSource) {
-    const operation = "withdraw semantic memory source";
-
-    yield* ensureOpen(operation);
-
-    const source = freezeSource(
-      yield* decodeBoundary(MemoryIndexSource.Wire, rawSource, operation),
-    );
-
-    const sourceBytes = sourceIdentityBytes(source);
-
-    if (source.source.id !== source.key.id) return yield* error(operation, "invalid-input");
-
-    const failure = yield* Ref.modify(
-      data,
-      (current): readonly [MemoryIndexError | undefined, IndexData] => {
-        if (current.closed) return [error(operation, "unavailable"), current];
-        const id = keyString(source.key);
-        const existing = current.entries.get(id);
-
-        if (existing !== undefined) {
-          if (existing._tag === "Withdrawn") {
-            return [
-              sameSource(source, existing.source) ? undefined : error(operation, "fenced"),
-              current,
-            ];
+          if (
+            existing !== undefined &&
+            (existing._tag === "Withdrawn" || sourceIsFenced(source, existing))
+          ) {
+            return [error(operation, "fenced"), current];
           }
-          if (sourceIsFenced(source, existing)) return [error(operation, "fenced"), current];
-        } else if (current.entries.size >= capacity.maxSources) {
-          return [error(operation, "budget"), current];
-        }
-        const nextSourceBytes = current.sourceBytes - (existing?.sourceBytes ?? 0) + sourceBytes;
+          if (existing === undefined && current.entries.size >= capacity.maxSources) {
+            return [error(operation, "budget"), current];
+          }
+          const nextSourceBytes = current.sourceBytes - (existing?.sourceBytes ?? 0) + sourceBytes;
 
-        if (nextSourceBytes > maxSourceBytes) return [error(operation, "budget"), current];
-        const entries = new Map(current.entries);
+          if (nextSourceBytes > maxSourceBytes) return [error(operation, "budget"), current];
+          let count = chunks.length;
 
-        entries.set(id, { _tag: "Withdrawn", source, sourceBytes });
+          for (const [entryId, entry] of current.entries) {
+            if (entryId !== id && entry._tag === "Indexed") count += entry.chunks.length;
+          }
+          if (count > capacity.maxChunks) return [error(operation, "budget"), current];
+          const entries = new Map(current.entries);
 
-        return [undefined, { ...current, entries, sourceBytes: nextSourceBytes }];
-      },
-    );
+          entries.set(id, { _tag: "Indexed", source, sourceBytes, chunks, indexedAt });
 
-    if (failure !== undefined) return yield* failure;
-  });
+          return [undefined, { ...current, entries, sourceBytes: nextSourceBytes }];
+        },
+      );
 
-  const search = Effect.fn("InMemorySemanticIndex.search")(function* (rawQuery: MemoryIndexQuery) {
+      if (failure !== undefined) return yield* failure;
+    },
+  );
+
+  const withdraw: SemanticMemoryIndex["Service"]["withdraw"] = Effect.fnUntraced(
+    function* (rawSource) {
+      const operation = "withdraw semantic memory source";
+
+      yield* ensureOpen(operation);
+
+      const source = freezeSource(
+        yield* decodeBoundary(MemoryIndexSource.Wire, rawSource, operation),
+      );
+
+      const sourceBytes = sourceIdentityBytes(source);
+
+      if (source.source.id !== source.key.id) return yield* error(operation, "invalid-input");
+
+      const failure = yield* Ref.modify(
+        data,
+        (current): readonly [MemoryIndexError | undefined, IndexData] => {
+          if (current.closed) return [error(operation, "unavailable"), current];
+          const id = keyString(source.key);
+          const existing = current.entries.get(id);
+
+          if (existing !== undefined) {
+            if (existing._tag === "Withdrawn") {
+              return [
+                sameSource(source, existing.source) ? undefined : error(operation, "fenced"),
+                current,
+              ];
+            }
+            if (sourceIsFenced(source, existing)) return [error(operation, "fenced"), current];
+          } else if (current.entries.size >= capacity.maxSources) {
+            return [error(operation, "budget"), current];
+          }
+          const nextSourceBytes = current.sourceBytes - (existing?.sourceBytes ?? 0) + sourceBytes;
+
+          if (nextSourceBytes > maxSourceBytes) return [error(operation, "budget"), current];
+          const entries = new Map(current.entries);
+
+          entries.set(id, { _tag: "Withdrawn", source, sourceBytes });
+
+          return [undefined, { ...current, entries, sourceBytes: nextSourceBytes }];
+        },
+      );
+
+      if (failure !== undefined) return yield* failure;
+    },
+  );
+
+  const search = Effect.fnUntraced(function* (rawQuery: MemoryIndexQuery) {
     const operation = "search semantic memory index";
 
     yield* ensureOpen(operation);

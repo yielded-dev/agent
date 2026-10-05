@@ -29,6 +29,7 @@ import {
   selectCaseNames,
   steadyStateCases,
   STEADY_STATE,
+  STEADY_STATE_MEASUREMENT,
   summary,
   WorkerOptions,
   WorkerReport,
@@ -90,7 +91,7 @@ export const PerformanceReport = Schema.Struct({
       Schema.Struct({
         warmupOperations: Schema.Natural,
         operations: Schema.Natural,
-        samplingIntervalMicros: Schema.Natural,
+        samplingIntervalMicros: Schema.NullOr(Schema.Natural),
       }),
     ),
   }),
@@ -265,13 +266,12 @@ export const stageCheckout = Effect.fn("benchmark.stageCheckout")(function* (
 export const renderPerformanceReport = (report: PerformanceReport): string => {
   const baseline = report.revisions.find((revision) => revision.role === "base");
   const candidate = report.revisions.find((revision) => revision.role === "head");
-  const workloads = report.cases ?? casesFor(report.profile);
+  const resident = report.mode === "steady-state-profile" || report.mode === "steady-state";
+  const workloads = report.cases ?? (resident ? steadyStateCases : casesFor(report.profile));
 
   const expectedBatches =
     report.settings.batches *
-    (report.mode !== "steady-state-profile" && workloads.some(({ name }) => name === "small-run")
-      ? 4
-      : 2);
+    (!resident && workloads.some(({ name }) => name === "small-run") ? 4 : 2);
 
   if (
     report.mode === "cpu-profile" ||
@@ -293,7 +293,7 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
         batch.report?.steadyState === undefined
           ? []
           : [
-              `${batch.role}: ${batch.report.steadyState.warmupOperations} warmup operations in ${batch.report.steadyState.warmupMs.toFixed(2)} ms; ${batch.report.steadyState.operations} captured operations in ${batch.report.steadyState.operationMs.toFixed(2)} ms; ${batch.report.steadyState.modelCalls} provider calls, ${batch.report.steadyState.toolCalls} tool calls; profile interval ${batch.report.steadyState.profileDurationMs.toFixed(2)} ms.`,
+              `${batch.role}: ${batch.report.steadyState.warmupOperations} warmup operations in ${batch.report.steadyState.warmupMs.toFixed(2)} ms; ${batch.report.steadyState.operations} captured operations in ${batch.report.steadyState.operationMs.toFixed(2)} ms; ${batch.report.steadyState.modelCalls} provider calls, ${batch.report.steadyState.toolCalls} tool calls; profile interval ${batch.report.steadyState.profileDurationMs?.toFixed(2) ?? "n/a"} ms.`,
             ],
       ),
       ...(report.activeBatch === null
@@ -323,8 +323,16 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
           `Base release: \`${report.baselineTag}\` (\`${baseline?.revision}\`). Head checkout: \`${candidate?.revision}\`.`,
           "",
         ]),
-    "Timing is informational. Operation median [Q1–Q3] in milliseconds; every measured sample and outlier is retained. Model-entry timings remain in raw samples.",
-    "Samples share three worker processes per revision in the pr profile; their spread is not a confidence interval or a calibrated regression threshold.",
+    ...(report.mode === "steady-state"
+      ? [
+          "Unprofiled resident SQLite timing: per-operation median [Q1–Q3] in milliseconds with sample count. Admission through settlement, canonical completion read and inline correctness checks are included; every measured operation and outlier is retained in JSON.",
+          `Measurement ${STEADY_STATE_MEASUREMENT}: three cohorts (base/head, head/base, base/head), each with ${STEADY_STATE.warmupOperations} warmup and ${STEADY_STATE.operations} measured operations per revision. Only complete matched cohorts enter summaries.`,
+          "Operations share one resident host per worker and three workers per revision; the interquartile spread is not a confidence interval or a calibrated regression threshold.",
+        ]
+      : [
+          "Timing is informational. Operation median [Q1–Q3] in milliseconds; every measured sample and outlier is retained. Model-entry timings remain in raw samples.",
+          "Samples share three worker processes per revision in the pr profile; their spread is not a confidence interval or a calibrated regression threshold.",
+        ]),
     ...(identical
       ? [
           "Identical built JavaScript and lockfiles. Timing differences do not establish a code regression; percentage changes are suppressed.",
@@ -338,21 +346,40 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
   const format = (value: ReturnType<typeof summary>) =>
     value.count === 0
       ? "n/a"
-      : `${value.median.toFixed(2)} [${value.q1.toFixed(2)}–${value.q3.toFixed(2)}]`;
+      : `${value.median.toFixed(2)} [${value.q1.toFixed(2)}–${value.q3.toFixed(2)}]${report.mode === "steady-state" ? ` (n=${value.count})` : ""}`;
 
   for (const workload of workloads) {
-    const samples = (role: Revision["role"]) =>
+    const values = (role: Revision["role"]) =>
       report.batches
         .filter(
-          (batch) => batch.role === role && !batch.cold && batch.complete && batch.exitCode === 0,
+          (batch) =>
+            batch.role === role &&
+            !batch.cold &&
+            batch.complete &&
+            batch.exitCode === 0 &&
+            (report.mode !== "steady-state" ||
+              report.batches.some(
+                (other) =>
+                  other.cohort === batch.cohort &&
+                  other.role !== role &&
+                  !other.cold &&
+                  other.complete &&
+                  other.exitCode === 0,
+              )),
         )
-        .flatMap((batch) => batch.report?.samples ?? [])
-        .filter(
-          (sample) => sample.case === workload.name && !sample.warmup && sample.status === "passed",
+        .flatMap((batch) =>
+          report.mode === "steady-state"
+            ? (batch.report?.steadyState?.operationSamplesMs ?? [])
+            : (batch.report?.samples
+                .filter(
+                  (sample) =>
+                    sample.case === workload.name && !sample.warmup && sample.status === "passed",
+                )
+                .map((sample) => sample.totalMs) ?? []),
         );
 
-    const base = summary(samples("base").map((sample) => sample.totalMs));
-    const head = summary(samples("head").map((sample) => sample.totalMs));
+    const base = summary(values("base"));
+    const head = summary(values("head"));
 
     const delta = (baseline: ReturnType<typeof summary>) =>
       identical || baseline.count === 0 || head.count === 0 || baseline.median === 0
@@ -399,7 +426,13 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
       lines.push(
         `${role}: ${format(summary(report.batches.filter((batch) => batch.role === role && batch.cold && batch.complete && batch.exitCode === 0).map((batch) => batch.subprocessMs)))}`,
       );
-  } else lines.push("", "Cold subprocesses omitted: small-run was not selected.");
+  } else
+    lines.push(
+      "",
+      resident
+        ? "Cold subprocesses omitted in resident mode."
+        : "Cold subprocesses omitted: small-run was not selected.",
+    );
 
   const failures = report.batches.flatMap(
     (batch) => batch.report?.samples.filter((sample) => sample.status === "failed") ?? [],
@@ -424,12 +457,13 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
     ),
     `Fixture ${report.fixture} (${report.fixtureSha256}).`,
     `Node ${report.environment.node}; ${report.environment.platform}/${report.environment.architecture}; ${report.environment.cpu}.`,
-    `Samples per workload/revision: ${report.settings.samplesPerBatch * report.settings.batches}; warmups: ${report.settings.warmupsPerBatch * report.settings.batches}.`,
+    `Samples per workload/revision: ${(report.settings.steadyState?.operations ?? report.settings.samplesPerBatch) * report.settings.batches}; warmups: ${(report.settings.steadyState?.warmupOperations ?? report.settings.warmupsPerBatch) * report.settings.batches}.`,
   );
   for (const revision of report.revisions)
     lines.push(
       `${revision.role}: ${revision.revision}${revision.dirty ? " (dirty working tree)" : ""}; Effect ${revision.effect}; lock ${revision.lockfileSha256}`,
     );
+  if (resident) return lines.join("\n") + "\n";
   lines.push(
     "",
     "Worker wall time includes seed setup, assertions, cleanup, and report writes. Unallocated time includes startup, reporting, shutdown, controller overhead, and any unfinished attempt; these costs are not individually measured:",
@@ -465,6 +499,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
   cases?: ReadonlyArray<string>;
   cpuProfile?: boolean;
   steadyStateProfile?: boolean;
+  steadyState?: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -472,17 +507,25 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
   const output = path.resolve(options.output);
 
   yield* check(
-    !(options.cpuProfile && options.steadyStateProfile),
-    "Choose either --cpu-profile (whole process) or --steady-state-profile",
+    [options.cpuProfile, options.steadyStateProfile, options.steadyState].filter(Boolean).length <=
+      1,
+    "Choose only one of --cpu-profile, --steady-state-profile, or --steady-state",
   );
-  const available = options.steadyStateProfile ? steadyStateCases : casesFor(options.profile);
+  const resident = options.steadyStateProfile === true || options.steadyState === true;
+
+  const available = resident
+    ? steadyStateCases
+    : casesFor(options.profile, (options.cases?.length ?? 0) > 0);
+
   const profiling = options.cpuProfile || options.steadyStateProfile;
 
-  const mode = options.steadyStateProfile
-    ? "steady-state-profile"
-    : options.cpuProfile
-      ? "cpu-profile"
-      : "comparison";
+  const mode = options.steadyState
+    ? "steady-state"
+    : options.steadyStateProfile
+      ? "steady-state-profile"
+      : options.cpuProfile
+        ? "cpu-profile"
+        : "comparison";
 
   const cases = yield* selectCaseNames(
     available.map(({ name }) => name),
@@ -491,8 +534,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
 
   const workloads = available.filter(({ name }) => cases.includes(name));
 
-  const temperatures =
-    !options.steadyStateProfile && cases.includes("small-run") ? [true, false] : [false];
+  const temperatures = !resident && cases.includes("small-run") ? [true, false] : [false];
 
   yield* fs.makeDirectory(output, { recursive: true });
   yield* check(
@@ -553,8 +595,8 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
     `${FIXTURE_VERSION} requires Node 24; record runtime changes before comparing across runs`,
   );
 
-  const sizes = options.steadyStateProfile
-    ? { batches: 1, warmupsPerBatch: 0, samplesPerBatch: 0 }
+  const sizes = resident
+    ? { batches: options.steadyState ? 3 : 1, warmupsPerBatch: 0, samplesPerBatch: 0 }
     : options.profile === "smoke"
       ? { batches: 1, warmupsPerBatch: 0, samplesPerBatch: 1 }
       : options.profile === "pr"
@@ -591,7 +633,14 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
       production: true,
       execution: "unbundled published ESM",
       timingGate: profiling ? "profiling only" : "informational",
-      ...(options.steadyStateProfile ? { steadyState: STEADY_STATE } : {}),
+      ...(resident
+        ? {
+            steadyState: {
+              ...STEADY_STATE,
+              samplingIntervalMicros: profiling ? STEADY_STATE.samplingIntervalMicros : null,
+            },
+          }
+        : {}),
     },
     revisions: stages.map((stage) => stage.revision),
     batches,
@@ -647,7 +696,7 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
               : {}),
             cases: cold ? ["small-run"] : cases,
             warmups: cold ? 0 : sizes.warmupsPerBatch,
-            samples: options.steadyStateProfile ? 1 : cold ? 1 : sizes.samplesPerBatch,
+            samples: resident || cold ? 1 : sizes.samplesPerBatch,
             output: outputFile,
           };
 
@@ -807,13 +856,19 @@ export const command = Command.make(
     cases: Flag.String("case").pipe(
       Flag.atLeast(0),
       Flag.withDescription(
-        "Exact case ID; repeat to select multiple cases. Omit for the full profile.",
+        "Exact case ID; repeat to select multiple cases. Omit for the profile's default matrix.",
       ),
     ),
     listCases: Flag.Boolean("list-cases").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "List exact case IDs for --profile without building or requiring --base-dir.",
+        "List selectable case IDs for this mode/profile without building or requiring --base-dir.",
+      ),
+    ),
+    steadyState: Flag.Boolean("steady-state").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Measure resident SQLite operation medians without profiling in three alternating cohorts.",
       ),
     ),
     steadyStateProfile: Flag.Boolean("steady-state-profile").pipe(
@@ -839,9 +894,18 @@ export const command = Command.make(
     listCases,
     cpuProfile,
     steadyStateProfile,
+    steadyState,
   }) {
+    yield* check(
+      [cpuProfile, steadyStateProfile, steadyState].filter(Boolean).length <= 1,
+      "Choose only one of --cpu-profile, --steady-state-profile, or --steady-state",
+    );
+
     const selected = yield* selectCaseNames(
-      (steadyStateProfile ? steadyStateCases : casesFor(profile)).map(({ name }) => name),
+      (steadyStateProfile || steadyState
+        ? steadyStateCases
+        : casesFor(profile, listCases || cases.length > 0)
+      ).map(({ name }) => name),
       cases,
     );
 
@@ -867,6 +931,7 @@ export const command = Command.make(
       cases: selected,
       cpuProfile,
       steadyStateProfile,
+      steadyState,
     });
   }),
 ).pipe(

@@ -410,7 +410,7 @@ const makeExecute = (
   options: DynamicWorkerCodeExecutorOptions,
   clock: Clock.Clock,
 ): CodeExecutorExecute =>
-  Effect.fn("DynamicWorkerCodeExecutor.execute")(function* (request: CodeExecutionRequest) {
+  Effect.fnUntraced(function* (request: CodeExecutionRequest) {
     if (request.network._tag !== "NetworkDisabled") {
       return yield* CodeExecutorUnsupportedError.make({
         implementation: dynamicWorkerImplementation,

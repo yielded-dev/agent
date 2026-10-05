@@ -66,8 +66,10 @@ export const annotateToolSpanTerminalOutcome = (
 
 export const stripToolSpanFailures = <E>(
   cause: Cause.Cause<E | ToolSpanFailure>,
-  marker: ToolSpanFailure,
+  marker: ToolSpanFailure | undefined,
 ): { readonly found: boolean; readonly residual: Cause.Cause<E | ToolSpanFailure> } => {
+  if (marker === undefined) return { found: false, residual: cause };
+
   const found = cause.reasons.some(
     (reason) => Cause.isFailReason(reason) && reason.error === marker,
   );
@@ -93,7 +95,7 @@ export const stripToolSpanFailures = <E>(
 /** @internal Remove only the private marker and restore the saved Cause plus every residual. */
 export const restoreToolSpanFailureCause = <E, Original>(
   cause: Cause.Cause<E | ToolSpanFailure>,
-  marker: ToolSpanFailure,
+  marker: ToolSpanFailure | undefined,
   original: Cause.Cause<Original> | undefined,
 ): {
   readonly found: boolean;

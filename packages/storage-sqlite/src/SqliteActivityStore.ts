@@ -10,7 +10,7 @@ import * as SqlClientService from "effect/sql/SqlClient";
 
 export type SqliteActivityInitializationError = ActivityStoreError | ActivityMutationFailure;
 
-const makeActivityStore = Effect.fn("SqliteActivityStore.make")(function* () {
+const makeActivityStore = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
 
   return yield* makeSqlActivityStore(sql.withTransaction);

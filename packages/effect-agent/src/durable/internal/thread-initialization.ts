@@ -50,7 +50,7 @@ export const threadCreatedRecordId = (threadId: ThreadId): RecordId =>
  * child can be claimed before it is runnable; that advances the shared storage fence without
  * appending anything. Re-read and retry that initialization race with the current fence.
  */
-export const ensureThreadCreated = Effect.fn("DurableAgentRuntime.ensureThreadCreated")(
+export const ensureThreadCreated = Effect.fnUntraced(
   function* (
     config: InitializationConfig,
     threadId: ThreadId,
@@ -117,7 +117,7 @@ export const ensureThreadCreated = Effect.fn("DurableAgentRuntime.ensureThreadCr
 
 const sameOrigin = Schema.toEquivalence(WorkerOrigin);
 
-export const ensureWorkerOrigin = Effect.fn("WorkerHost.ensureOrigin")(
+export const ensureWorkerOrigin = Effect.fnUntraced(
   function* (config: InitializationConfig, origin: WorkerOrigin) {
     const store = yield* ThreadStore;
     const failpoint = yield* DurableRuntimeFailpoint;

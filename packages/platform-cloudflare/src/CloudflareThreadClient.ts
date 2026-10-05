@@ -474,7 +474,7 @@ export class CloudflareThreadClient extends Context.Service<
       const { rpcTracing } = namespace;
       const crypto = yield* Crypto.Crypto;
 
-      const call = Effect.fn(
+      const call = Effect.fnUntraced(
         function* (
           threadId: ThreadId,
           operation: keyof typeof hostRpcMethods,

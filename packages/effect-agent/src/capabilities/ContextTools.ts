@@ -95,7 +95,7 @@ export const toolkit = Toolkit.make(
 const handlers = toolkit.of({
   new_context: (request) => Effect.succeed(request),
   get_context_remaining: () => Effect.flatMap(ContextWindow, (window) => window.status),
-  search_context_windows: Effect.fn("ContextTools.search_context_windows")(function* (request) {
+  search_context_windows: Effect.fnUntraced(function* (request) {
     const window = yield* ContextWindow;
     const status = yield* window.status;
     const history = yield* ContextHistory;
@@ -109,7 +109,7 @@ const handlers = toolkit.of({
       }),
     );
   }),
-  read_context_window: Effect.fn("ContextTools.read_context_window")(function* (request) {
+  read_context_window: Effect.fnUntraced(function* (request) {
     const window = yield* ContextWindow;
     const status = yield* window.status;
     const history = yield* ContextHistory;

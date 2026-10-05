@@ -147,9 +147,7 @@ const inputByteLength = (input: PersistedJson): number => utf8ByteLength(JSON.st
 
 const currentMillis = DateTime.now.pipe(Effect.map(DateTime.toEpochMillis));
 
-const validateRequestedFields = Effect.fn("Scheduling.validateRequestedFields")(function* (
-  options: ScheduleCreateOptions,
-) {
+const validateRequestedFields = Effect.fnUntraced(function* (options: ScheduleCreateOptions) {
   yield* Schema.encodeEffect(ScheduleTimingRequestSchema)(options.timing).pipe(
     Effect.mapError(() => ScheduleValidationError.make({ message: "Invalid timing request" })),
   );
@@ -161,9 +159,7 @@ const validateRequestedFields = Effect.fn("Scheduling.validateRequestedFields")(
   );
 });
 
-const resolveInput = Effect.fn("Scheduling.resolveInput")(function* <
-  InputSchema extends Schema.Top,
->(
+const resolveInput = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
   agent: DurableSubmitAgent<InputSchema>,
   input: InputSchema["Type"],
   maximumBytes: number,
@@ -220,7 +216,7 @@ const makeManagement = (limits: SchedulingLimits) =>
     const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
       Effect.provideService(effect, Crypto.Crypto, crypto);
 
-    const fingerprint = Effect.fn("Scheduling.fingerprint")(function* (
+    const fingerprint = Effect.fnUntraced(function* (
       agentId: AgentId,
       inputDigest: Digest,
       options: ScheduleCreateOptions,
@@ -285,7 +281,7 @@ const makeManagement = (limits: SchedulingLimits) =>
       inputDigest,
     });
 
-    const create = Effect.fn("Scheduling.create")(function* <InputSchema extends Schema.Top>(
+    const create = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
       agent: DurableSubmitAgent<InputSchema>,
       input: InputSchema["Type"],
       options: ScheduleCreateOptions,
@@ -380,7 +376,7 @@ const makeManagement = (limits: SchedulingLimits) =>
       return asSnapshot(inserted, nowMillis);
     });
 
-    const update = Effect.fn("Scheduling.update")(function* <InputSchema extends Schema.Top>(
+    const update = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
       agent: DurableSubmitAgent<InputSchema>,
       input: InputSchema["Type"],
       options: ScheduleUpdateOptions,
@@ -462,10 +458,7 @@ const makeManagement = (limits: SchedulingLimits) =>
       return asSnapshot(changed, nowMillis);
     });
 
-    const get = Effect.fn("Scheduling.get")(function* (
-      scope: ScheduleScope,
-      scheduleId: ScheduleId,
-    ) {
+    const get = Effect.fnUntraced(function* (scope: ScheduleScope, scheduleId: ScheduleId) {
       yield* authorizer.manage({ operation: "get", scope, scheduleId });
       const key = keyOf(scope, scheduleId);
       const record = yield* store.get(key);
@@ -475,7 +468,7 @@ const makeManagement = (limits: SchedulingLimits) =>
       return asSnapshot(record, yield* currentMillis);
     });
 
-    const list = Effect.fn("Scheduling.list")(function* (
+    const list = Effect.fnUntraced(function* (
       scope: ScheduleScope,
       options: ScheduleListOptions = {},
     ) {
@@ -499,7 +492,7 @@ const makeManagement = (limits: SchedulingLimits) =>
       return { items: page.items.map((record) => asSnapshot(record, nowMillis)), next: page.next };
     });
 
-    const control = Effect.fn("Scheduling.control")(function* (
+    const control = Effect.fnUntraced(function* (
       operation: "pause" | "resume" | "cancel",
       scope: ScheduleScope,
       scheduleId: ScheduleId,
@@ -625,7 +618,7 @@ const makeDriver = (limits: SchedulingLimits) =>
     const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
       Effect.provideService(effect, Crypto.Crypto, crypto);
 
-    const retry = Effect.fn("Scheduling.retry")(function* (
+    const retry = Effect.fnUntraced(function* (
       key: ScheduleKey,
       record: ScheduleRecord,
       reason: ScheduleRetryReason,
@@ -655,10 +648,7 @@ const makeDriver = (limits: SchedulingLimits) =>
       });
     });
 
-    const verifyPending = Effect.fn("Scheduling.verifyPending")(function* (
-      key: ScheduleKey,
-      record: ScheduleRecord,
-    ) {
+    const verifyPending = Effect.fnUntraced(function* (key: ScheduleKey, record: ScheduleRecord) {
       const pending = record.pending;
 
       if (pending === null) return;
@@ -712,7 +702,7 @@ const makeDriver = (limits: SchedulingLimits) =>
       }
     });
 
-    const deliverPending = Effect.fn("Scheduling.deliverPending")(function* (
+    const deliverPending = Effect.fnUntraced(function* (
       key: ScheduleKey,
       record: ScheduleRecord,
       nowMillis: number,
@@ -785,7 +775,7 @@ const makeDriver = (limits: SchedulingLimits) =>
       return yield* retry(key, record, outcome.reason, completedAtMillis);
     });
 
-    const processRecord = Effect.fn("Scheduling.processRecord")(function* (
+    const processRecord = Effect.fnUntraced(function* (
       key: ScheduleKey,
       initial: ScheduleRecord,
       nowMillis: number,
@@ -897,7 +887,7 @@ const makeDriver = (limits: SchedulingLimits) =>
       return yield* deliverPending(key, prepared, nowMillis);
     });
 
-    const process = Effect.fn("Scheduling.process")(function* (key: ScheduleKey) {
+    const process = Effect.fnUntraced(function* (key: ScheduleKey) {
       const nowMillis = yield* currentMillis;
       const record = yield* store.get(key);
 
@@ -920,7 +910,7 @@ const makeDriver = (limits: SchedulingLimits) =>
       return processed;
     });
 
-    const runDue = Effect.fn("ScheduleDriver.runDue")(function* (owner?: ScheduleOwner) {
+    const runDue = Effect.fnUntraced(function* (owner?: ScheduleOwner) {
       const nowMillis = yield* currentMillis;
       let after: ScheduleDueCursor | undefined;
       let processed = 0;

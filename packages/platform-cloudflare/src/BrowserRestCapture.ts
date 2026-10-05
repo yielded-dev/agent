@@ -199,7 +199,7 @@ const isJsonResponse = (headers: Readonly<Record<string, string | undefined>>): 
   return mediaType === "application/json" || mediaType?.endsWith("+json") === true;
 };
 
-const readBoundedResponse = Effect.fn("BrowserRestCapture.readResponse")(function* (
+const readBoundedResponse = Effect.fnUntraced(function* (
   response: { readonly stream: Stream.Stream<Uint8Array, HttpClientError.HttpClientError> },
   request: PageCaptureRequest,
 ): Effect.fn.Return<string, PageCaptureError> {
@@ -308,7 +308,7 @@ const makeCapture = (
   options: BrowserRestCaptureOptions,
   workersAi?: BrowserQuickActionWorkersAiPolicy,
 ): PageCaptureCapture =>
-  Effect.fn("BrowserRestCapture.capture")(function* (
+  Effect.fnUntraced(function* (
     request: PageCaptureRequest,
   ): Effect.fn.Return<PageCaptureResult, PageCaptureError> {
     const usesWorkersAi = request.action._tag === "CapturePageStructured";

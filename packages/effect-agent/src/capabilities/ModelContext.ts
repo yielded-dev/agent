@@ -245,7 +245,7 @@ const utf8Bytes = (value: string): Uint8Array => {
 };
 
 /** Compute a cryptographic digest over the canonical encoded exact source range. */
-export const digestCompactionSource = Effect.fn("digestCompactionSource")(function* (
+export const digestCompactionSource = Effect.fnUntraced(function* (
   snapshot: ThreadSnapshot,
   coversFrom: number,
   coversThrough: number,
@@ -282,7 +282,7 @@ export const digestCompactionSource = Effect.fn("digestCompactionSource")(functi
  * visible, and the summary is inserted before the first message derived
  * entirely from later source.
  */
-export const applyCompaction = Effect.fn("applyCompaction")(function* (
+export const applyCompaction = Effect.fnUntraced(function* (
   context: PreparedModelContext,
   artifact: CompactionArtifact,
 ) {

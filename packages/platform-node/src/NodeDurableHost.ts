@@ -70,7 +70,7 @@ export class AdmissionClosed extends Schema.TaggedError<AdmissionClosed>()("Admi
   message: Schema.String,
 }) {}
 
-const makeHost = Effect.fn("NodeDurableHost.make")(function* (
+const makeHost = Effect.fnUntraced(function* (
   startWorkers: boolean,
   managedWorkers?: Effect.Effect<void, DurableWorkerFailure | DurableBindingFailure>,
 ) {

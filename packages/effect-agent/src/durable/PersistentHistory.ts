@@ -75,7 +75,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const store = yield* ThreadStore;
 
-    const load = Effect.fn("PersistentHistory.load")(function* (threadId: ThreadId) {
+    const load = Effect.fnUntraced(function* (threadId: ThreadId) {
       const exported = yield* store
         .export(ThreadExportRequest.make({ threadId }))
         .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
@@ -85,7 +85,7 @@ export const layer = Layer.effect(
       );
     });
 
-    const open = Effect.fn("PersistentHistory.open")(function* ({
+    const open = Effect.fnUntraced(function* ({
       threadId,
       runId,
     }: {
@@ -158,7 +158,7 @@ export const layer = Layer.effect(
 
       return {
         prompt,
-        stageInput: Effect.fn("PersistentHistory.stageInput")(function* (encodedInput: unknown) {
+        stageInput: Effect.fnUntraced(function* (encodedInput: unknown) {
           input = record(
             `history-input:${runId}`,
             UserInputRecorded.make({
@@ -168,7 +168,7 @@ export const layer = Layer.effect(
             }),
           );
         }),
-        stageHistory: Effect.fn("PersistentHistory.stageHistory")(function* (next: Prompt.Prompt) {
+        stageHistory: Effect.fnUntraced(function* (next: Prompt.Prompt) {
           const source = next.content.slice(initialPromptLength);
           let retained = 0;
 
@@ -199,7 +199,7 @@ export const layer = Layer.effect(
           encodedMessages = nextEncoded;
           stagedSource = source;
         }),
-        commit: Effect.fn("PersistentHistory.commit")(function* (completion: RunCompletedEvent) {
+        commit: Effect.fnUntraced(function* (completion: RunCompletedEvent) {
           if (input === undefined || messages === undefined) {
             return yield* error("encoding", "Run completed without its encoded input and history");
           }

@@ -26,7 +26,7 @@ export class ReviewSource extends Schema.Class<ReviewSource>(
   content: Schema.String.check(Schema.isMaxLength(20_000)),
 }) {
   /** Apply the same line and character bounds in live and frozen-source adapters. */
-  static readonly fromText = Effect.fn("ReviewSource.fromText")(function* (
+  static readonly fromText = Effect.fnUntraced(function* (
     input: typeof ReadFileInput.Type,
     text: string,
   ) {

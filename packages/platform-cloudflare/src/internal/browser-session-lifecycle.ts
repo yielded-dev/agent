@@ -53,10 +53,7 @@ export class BrowserRunSessionLifecycle extends Context.Service<
         }
         const client = yield* HttpClient.HttpClient;
 
-        const request = Effect.fn("BrowserRunSessionLifecycle.request")(function* (
-          method: "GET" | "DELETE",
-          sessionId: string,
-        ) {
+        const request = Effect.fnUntraced(function* (method: "GET" | "DELETE", sessionId: string) {
           const path = method === "DELETE" ? "browser" : "session";
 
           const response = yield* client
@@ -166,7 +163,7 @@ export class BrowserRunSessionLifecycle extends Context.Service<
           return result.endTime !== undefined && result.endTime > 0;
         });
 
-        const close = Effect.fn("BrowserRunSessionLifecycle.close")(
+        const close = Effect.fnUntraced(
           function* (sessionId: Redacted.Redacted<string>) {
             const id = yield* Schema.decodeEffect(Identity)(Redacted.value(sessionId)).pipe(
               Effect.mapError(() => new BrowserRunCleanupError({ reason: "configuration" })),

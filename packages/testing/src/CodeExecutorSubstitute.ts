@@ -383,167 +383,165 @@ const classifyProgramFailure = (
   });
 };
 
-const executeInProcess: CodeExecutorExecute = Effect.fn("InProcessCodeExecutor.execute")(
-  function* (request) {
-    yield* validateRequest(request);
-    const host = yield* CodeExecutionHost;
-    const capture: LogCapture = { lines: [], bytes: 0 };
-    const counter = { calls: 0 };
-    const queue = yield* Queue.unbounded<PendingHostCall>();
+const executeInProcess: CodeExecutorExecute = Effect.fnUntraced(function* (request) {
+  yield* validateRequest(request);
+  const host = yield* CodeExecutionHost;
+  const capture: LogCapture = { lines: [], bytes: 0 };
+  const counter = { calls: 0 };
+  const queue = yield* Queue.unbounded<PendingHostCall>();
 
-    const factory = yield* Effect.try({
-      try: () =>
-        // This substitute intentionally evaluates authored test programs in-process and reports
-        // an `unisolated` posture. Real adapters own the security boundary and never use this path.
-        // oxlint-disable-next-line typescript/no-implied-eval
-        new Function(
-          ...shadowedGlobals,
-          "console",
-          ...request.namespaces.map((namespace) => namespace.name),
-          `"use strict";\nreturn (\n${request.source}\n);`,
-        ),
-      catch: (cause) =>
-        CodeSourceError.make({
-          implementation: inProcessCodeExecutorImplementation,
-          reason: "invalid",
-          message: boundedText(cause),
-        }),
-    });
-
-    const harnessConsole = makeConsole(capture, request.limits);
-    // Admission is enforced at call creation, not only at the single-consumer
-    // dequeue: a burst of unawaited calls can enqueue at most one entry past
-    // the cap (the entry the server fails the pass on); everything beyond is
-    // rejected synchronously, so the queue stays bounded against hostile
-    // programs.
-    let issuedHostCalls = 0;
-
-    const namespaceObjects = request.namespaces.map((namespace) =>
-      buildNamespaceObject(namespace, (pending) => {
-        issuedHostCalls += 1;
-        if (issuedHostCalls > request.limits.maxHostCalls + 1) {
-          pending.reject(new Error(`host-call limit of ${request.limits.maxHostCalls} exceeded`));
-
-          return;
-        }
-        Queue.offerUnsafe(queue, pending);
-      }),
-    );
-
-    const concurrency = request.limits.maxHostCallConcurrency ?? 4;
-
-    const server = yield* Effect.all(
-      Array.from({ length: concurrency }, () =>
-        serveHostCalls(host, queue, request.limits, capture, counter),
+  const factory = yield* Effect.try({
+    try: () =>
+      // This substitute intentionally evaluates authored test programs in-process and reports
+      // an `unisolated` posture. Real adapters own the security boundary and never use this path.
+      // oxlint-disable-next-line typescript/no-implied-eval
+      new Function(
+        ...shadowedGlobals,
+        "console",
+        ...request.namespaces.map((namespace) => namespace.name),
+        `"use strict";\nreturn (\n${request.source}\n);`,
       ),
-      { concurrency, discard: true },
-    ).pipe(Effect.andThen(Effect.never), Effect.forkScoped);
-
-    const program = Effect.tryPromise({
-      try: async () => {
-        let candidate: unknown;
-
-        try {
-          candidate = factory(
-            ...shadowedGlobals.map(() => undefined),
-            harnessConsole,
-            ...namespaceObjects,
-          );
-        } catch (cause) {
-          throw new EvaluationThrew(cause);
-        }
-        if (typeof candidate !== "function") {
-          throw new EvaluationThrew(new NotAFunction(typeof candidate));
-        }
-        let outcome: unknown;
-
-        try {
-          outcome = candidate();
-        } catch (cause) {
-          throw new EvaluationThrew(cause);
-        }
-
-        return await Promise.resolve(outcome);
-      },
-      catch: (thrown) => classifyProgramFailure(thrown, request.limits, capture),
-    });
-
-    const startedAt = yield* Clock.currentTimeMillis;
-
-    // The wall-clock deadline interrupts only at asynchronous suspension
-    // points: a synchronous runaway shares the host thread and cannot be
-    // stopped in-process — exactly why the platform CPU enforcement cases
-    // belong to isolated adapters only (testing spec §8.1). The server fiber
-    // is interrupted when the pass settles so no host call outlives the
-    // program that issued it.
-    const returned = yield* Effect.raceFirst(program, Fiber.join(server)).pipe(
-      Effect.timeoutOrElse({
-        duration: request.limits.maxWallTime,
-        orElse: () =>
-          CodeExecutionTimeoutError.make({
-            implementation: inProcessCodeExecutorImplementation,
-            kind: "wall-clock",
-            maxWallTime: request.limits.maxWallTime,
-            logs: [...capture.lines],
-          }),
+    catch: (cause) =>
+      CodeSourceError.make({
+        implementation: inProcessCodeExecutorImplementation,
+        reason: "invalid",
+        message: boundedText(cause),
       }),
-      Effect.ensuring(Fiber.interrupt(server)),
-    );
+  });
 
-    const finishedAt = yield* Clock.currentTimeMillis;
+  const harnessConsole = makeConsole(capture, request.limits);
+  // Admission is enforced at call creation, not only at the single-consumer
+  // dequeue: a burst of unawaited calls can enqueue at most one entry past
+  // the cap (the entry the server fails the pass on); everything beyond is
+  // rejected synchronously, so the queue stays bounded against hostile
+  // programs.
+  let issuedHostCalls = 0;
 
-    // An unawaited burst can outrun the server: the program may return before
-    // the over-limit entry is dequeued, so the admission counter is the
-    // authority — a pass that ISSUED more calls than the cap fails even when
-    // its promise settled first.
-    if (issuedHostCalls > request.limits.maxHostCalls) {
-      return yield* CodeHostCallLimitError.make({
-        implementation: inProcessCodeExecutorImplementation,
-        limit: request.limits.maxHostCalls,
-        logs: [...capture.lines],
-      });
-    }
+  const namespaceObjects = request.namespaces.map((namespace) =>
+    buildNamespaceObject(namespace, (pending) => {
+      issuedHostCalls += 1;
+      if (issuedHostCalls > request.limits.maxHostCalls + 1) {
+        pending.reject(new Error(`host-call limit of ${request.limits.maxHostCalls} exceeded`));
 
-    const nonJsonResult = () =>
-      CodeProgramFailedError.make({
-        implementation: inProcessCodeExecutorImplementation,
-        reason: "non-json-result",
-        thrown: null,
-        message: "The program must return a JSON value",
-        logs: [...capture.lines],
-      });
+        return;
+      }
+      Queue.offerUnsafe(queue, pending);
+    }),
+  );
 
-    const encoded = serializeJson(returned);
+  const concurrency = request.limits.maxHostCallConcurrency ?? 4;
 
-    if (Option.isNone(encoded)) return yield* nonJsonResult();
-    const resultBytes = utf8ByteLength(encoded.value);
+  const server = yield* Effect.all(
+    Array.from({ length: concurrency }, () =>
+      serveHostCalls(host, queue, request.limits, capture, counter),
+    ),
+    { concurrency, discard: true },
+  ).pipe(Effect.andThen(Effect.never), Effect.forkScoped);
 
-    if (resultBytes > request.limits.maxResultBytes) {
-      return yield* CodeOutputLimitError.make({
-        implementation: inProcessCodeExecutorImplementation,
-        surface: "result",
-        limit: request.limits.maxResultBytes,
-        observed: resultBytes,
-        logs: [...capture.lines],
-      });
-    }
-    const decoded = decodeJsonText(encoded.value);
+  const program = Effect.tryPromise({
+    try: async () => {
+      let candidate: unknown;
 
-    if (Option.isNone(decoded)) return yield* nonJsonResult();
+      try {
+        candidate = factory(
+          ...shadowedGlobals.map(() => undefined),
+          harnessConsole,
+          ...namespaceObjects,
+        );
+      } catch (cause) {
+        throw new EvaluationThrew(cause);
+      }
+      if (typeof candidate !== "function") {
+        throw new EvaluationThrew(new NotAFunction(typeof candidate));
+      }
+      let outcome: unknown;
 
-    return CodeExecutionResult.make({
+      try {
+        outcome = candidate();
+      } catch (cause) {
+        throw new EvaluationThrew(cause);
+      }
+
+      return await Promise.resolve(outcome);
+    },
+    catch: (thrown) => classifyProgramFailure(thrown, request.limits, capture),
+  });
+
+  const startedAt = yield* Clock.currentTimeMillis;
+
+  // The wall-clock deadline interrupts only at asynchronous suspension
+  // points: a synchronous runaway shares the host thread and cannot be
+  // stopped in-process — exactly why the platform CPU enforcement cases
+  // belong to isolated adapters only (testing spec §8.1). The server fiber
+  // is interrupted when the pass settles so no host call outlives the
+  // program that issued it.
+  const returned = yield* Effect.raceFirst(program, Fiber.join(server)).pipe(
+    Effect.timeoutOrElse({
+      duration: request.limits.maxWallTime,
+      orElse: () =>
+        CodeExecutionTimeoutError.make({
+          implementation: inProcessCodeExecutorImplementation,
+          kind: "wall-clock",
+          maxWallTime: request.limits.maxWallTime,
+          logs: [...capture.lines],
+        }),
+    }),
+    Effect.ensuring(Fiber.interrupt(server)),
+  );
+
+  const finishedAt = yield* Clock.currentTimeMillis;
+
+  // An unawaited burst can outrun the server: the program may return before
+  // the over-limit entry is dequeued, so the admission counter is the
+  // authority — a pass that ISSUED more calls than the cap fails even when
+  // its promise settled first.
+  if (issuedHostCalls > request.limits.maxHostCalls) {
+    return yield* CodeHostCallLimitError.make({
       implementation: inProcessCodeExecutorImplementation,
-      value: decoded.value,
+      limit: request.limits.maxHostCalls,
       logs: [...capture.lines],
-      resourceUse: CodeExecutionResourceUse.make({
-        wallTime: Duration.millis(Math.max(0, finishedAt - startedAt)),
-        hostCalls: counter.calls,
-        logBytes: capture.bytes,
-        resultBytes,
-      }),
     });
-  },
-);
+  }
+
+  const nonJsonResult = () =>
+    CodeProgramFailedError.make({
+      implementation: inProcessCodeExecutorImplementation,
+      reason: "non-json-result",
+      thrown: null,
+      message: "The program must return a JSON value",
+      logs: [...capture.lines],
+    });
+
+  const encoded = serializeJson(returned);
+
+  if (Option.isNone(encoded)) return yield* nonJsonResult();
+  const resultBytes = utf8ByteLength(encoded.value);
+
+  if (resultBytes > request.limits.maxResultBytes) {
+    return yield* CodeOutputLimitError.make({
+      implementation: inProcessCodeExecutorImplementation,
+      surface: "result",
+      limit: request.limits.maxResultBytes,
+      observed: resultBytes,
+      logs: [...capture.lines],
+    });
+  }
+  const decoded = decodeJsonText(encoded.value);
+
+  if (Option.isNone(decoded)) return yield* nonJsonResult();
+
+  return CodeExecutionResult.make({
+    implementation: inProcessCodeExecutorImplementation,
+    value: decoded.value,
+    logs: [...capture.lines],
+    resourceUse: CodeExecutionResourceUse.make({
+      wallTime: Duration.millis(Math.max(0, finishedAt - startedAt)),
+      hostCalls: counter.calls,
+      logBytes: capture.bytes,
+      resultBytes,
+    }),
+  });
+});
 
 /**
  * Layer providing the unisolated in-process `CodeExecutor` substitute. The

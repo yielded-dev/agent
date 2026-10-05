@@ -189,7 +189,7 @@ export class CloudflareSchedulingClient {
     Effect.gen(function* () {
       const { namespace } = yield* ScheduleOwnerNamespace;
 
-      const call = Effect.fn("CloudflareSchedulingClient.call")(function* (
+      const call = Effect.fnUntraced(function* (
         owner: ScheduleOwner,
         request: ScheduleOwnerRequest,
       ): Effect.fn.Return<ScheduleOwnerResponse, ScheduleManagementFailure> {
@@ -234,9 +234,7 @@ export class CloudflareSchedulingClient {
           : response.failure;
       });
 
-      const encodeInput = Effect.fn("CloudflareSchedulingClient.encodeInput")(function* <
-        InputSchema extends Schema.Top,
-      >(
+      const encodeInput = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
         agent: DurableSubmitAgent<InputSchema>,
         input: InputSchema["Type"],
       ): Effect.fn.Return<PersistedJson, ScheduleValidationError, InputSchema["EncodingServices"]> {
@@ -392,7 +390,7 @@ export class ScheduleOwnerIdentity extends Context.Service<
   { readonly owner: ScheduleOwner }
 >()("@effect-agent/platform-cloudflare/ScheduleOwnerIdentity") {}
 
-const decodeOwnerName = Effect.fn("decodeScheduleOwnerName")(function* (
+const decodeOwnerName = Effect.fnUntraced(function* (
   name: string | null | undefined,
 ): Effect.fn.Return<ScheduleOwner, ScheduleOwnerProtocolError> {
   if (name === null || name === undefined) {
@@ -508,7 +506,7 @@ const ensureOwner = (
       );
 };
 
-const handleScheduleRequest = Effect.fn("ScheduleOwner.handleRequest")(function* (
+const handleScheduleRequest = Effect.fnUntraced(function* (
   encoded: unknown,
 ): Effect.fn.Return<unknown, never, Scheduling | ScheduleOwnerIdentity> {
   const decoded = yield* decodeScheduleOwnerRequest(encoded).pipe(Effect.result);

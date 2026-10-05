@@ -52,42 +52,56 @@ reverses between samples. With the full selection, each cohort also runs one col
 All warmups, measured samples, slow values, and failures remain in JSON artifacts. Every manual
 run retains its Actions summary and artifact; manual runs do not publish release-PR comments.
 
-## Select cases and profile CPU
+## Select cases and measurement mode
 
 Both commands list their exact case IDs without a base checkout, installation of a comparison
-revision, or a build. Runtime IDs depend on the fixed profile:
+revision, or a build. Runtime IDs depend on the profile or resident mode:
 
 ```sh
 vp run perf:compare --profile archive --list-cases
 vp run perf:diagnose --list-cases
+vp run perf:compare --base-dir /tmp/effect-agent-base --profile pr --case tool-rounds-4 --case durable-fresh-16 --out-dir /tmp/pr-selected-001
 vp run perf:compare --base-dir /tmp/effect-agent-base --profile archive --case durable-fresh-100000 --case checkpoint-recovery-100000 --out-dir /tmp/archive-selected-001
 vp run perf:diagnose --base-dir /tmp/effect-agent-base --case history-single --out-dir /tmp/history-selected-001
 ```
 
 Repeat `--case` for multiple IDs. Unknown or repeated IDs fail before staging or creating an
-output directory. Omit it to retain the full matrix. Selection preserves fixture order and the
+output directory. Omit it to retain the profile's default matrix. Selection preserves fixture order and the
 profile's existing warmup/sample counts; it does not define a new workload. Reports retain the
 selected identities and reject missing, duplicated, or unselected samples. Cold subprocesses
 run only when `small-run` is selected. Run the same selection on both revisions and retain every
 cohort, including slow samples. Selecting cases changes shared-process warmup and cache history;
 compare only matched selections, not selected runs against historical full-matrix timings.
+The existing `durable-fresh-16` workload is also selectable in `pr`: three alternating cohorts,
+each with two warmups and three measured samples per revision. It is listed by `--list-cases`
+but does not expand the implicit `pr` matrix or add other 16-record cases to that profile.
 
-Use `--steady-state-profile` for operation CPU, with a new output directory:
+Use `--steady-state` for resident operation latency or `--steady-state-profile` for operation CPU,
+with a new output directory:
 
 ```sh
-vp run perf:compare --steady-state-profile --list-cases
+vp run perf:compare --steady-state --list-cases
+vp run perf:compare --base-dir /tmp/effect-agent-base --steady-state --case sqlite-tool-rounds-4 --out-dir /tmp/sqlite-timing-001
 vp run perf:compare --base-dir /tmp/effect-agent-base --steady-state-profile --case sqlite-tool-rounds-4 --out-dir /tmp/sqlite-profile-001
 ```
 
-This mode has one explicit workload: a resident file-backed SQLite Node host, fresh Thread and
+Both modes share one explicit workload: a resident file-backed SQLite Node host, fresh Thread and
 Submission identities for each operation, four sequential immediate tool calls and five native
 provider requests. Input, final JSON output, and each tool result are 32 bytes. The scripted native
 Effect LanguageModel uses `Stream.make` delivery, performs no inference or network calls, and retains bounded counters instead
-of every prompt. This delivery differs from an async-iterable provider, so the profile diagnoses costs
-and does not establish latency for that other workload. There is no synthetic tool delay. The database accumulates completed Threads and
+of every prompt. This delivery differs from an async-iterable provider, so these measurements diagnose costs
+and do not establish latency for that other workload. There is no synthetic tool delay. The database accumulates completed Threads and
 Submissions across warmup and measurement; this intentionally exercises the resident host and ledger.
 
-Each revision runs in one child, baseline then candidate. After host acquisition, the worker warms
+Unprofiled `--steady-state` runs three sequential cohorts: base/head, head/base, base/head.
+Each worker acquires its own host and database, completes exactly 500 warmup operations, then
+times exactly 1,000 operations individually around the same checked operation used by profiling.
+JSON retains every duration in `steadyState.operationSamplesMs`; Markdown reports the per-operation
+median, Q1–Q3 interquartile spread, and count across complete matched cohorts (3,000 operations per
+revision). Incomplete pairs are excluded from both sides of the timing summary. These operations
+share three worker processes per revision; their spread is not a confidence interval.
+
+With `--steady-state-profile`, each revision runs in one child, baseline then candidate. After host acquisition, the worker warms
 for exactly 500 operations, leaving both revisions with the same completed ledger size. It then starts one in-process Inspector CPU
 profile, executes exactly 1,000 operations, and stops the profile. The captured operation runs from
 admission through settlement and the exact canonical completion read, including runtime validation,
@@ -95,13 +109,14 @@ inline fixture checks, and resident host background work. Imports, host acquisit
 profile serialization, report writes, and host disposal occur outside the captured interval.
 Run-owned model/tool finalizers remain part of each operation. The inspector connection and
 application resources belong to Scope; failure stops capture before disposing the host.
+Profiling adds no per-operation clocks or timing arrays and still produces exactly one capture per revision.
 
-JSON and Markdown retain actual warmup count/duration, measured operation count/duration, profile
+Profiling JSON and Markdown retain actual warmup count/duration, measured operation count/duration, profile
 duration, 1 ms sampling interval, call/finalizer/completion counts, and the exact revision and fixture
 identities. This resident workload differs from the ordinary matrix, which reopens a host for every
-durable sample. `--profile` does not change the steady-state workload or its fixed loop sizes.
+durable sample. `--profile` does not change either resident mode's workload, loop sizes, or cohort count.
 Select `steady_state_profile` in the manual workflow; `cases` can be blank or `sqlite-tool-rounds-4`.
-The mode does not run cold samples or ordinary A/B timing cohorts.
+Neither resident mode runs cold samples or the ordinary reopen-per-sample matrix.
 
 For startup, setup, or diagnostic-case investigations, `--cpu-profile` retains whole-process capture:
 
@@ -111,16 +126,17 @@ vp run perf:diagnose --base-dir /tmp/effect-agent-base --case history-single --c
 ```
 
 Whole-process profiles include startup, imports, setup, warmups, operations, verification, reporting,
-and shutdown. They are explicitly labeled separately from steady-state operation profiles; the two
-flags cannot be combined. Diagnostics support whole-process capture only. Open `.cpuprofile` files
+and shutdown. They are explicitly labeled separately from steady-state operation profiles.
+`--cpu-profile`, `--steady-state-profile`, and `--steady-state` are mutually exclusive.
+Diagnostics support whole-process capture only. Open `.cpuprofile` files
 in Chrome DevTools or another CPU-profile viewer. Neither mode includes CPU in other processes or
 measures Cloudflare billing CPU. Missing requested profiles fail completeness; force-killed children
 may leave partial evidence without a profile.
 
 Both profiling modes suppress timing-comparison tables. Instrumented elapsed values are diagnostic
 evidence only. Use profiles to locate work, then run a separate unprofiled matched workload to assess
-a change. Without either profiling flag, cohort order, sample counts, and timing boundaries stay
-unchanged.
+a change; use `--steady-state` for the resident fixture. Without a resident or profiling flag,
+ordinary cohort order, sample counts, and timing boundaries stay unchanged.
 
 `--profile smoke` exercises every workload family with one sample and 16 retained records;
 it checks the command, not statistical confidence. `extended` takes 30 samples per revision and
@@ -208,8 +224,12 @@ own installation. Reports identify exact commits, dirty state, lockfile hashes, 
 hashes, fixture hash/version, runtime, operating system, CPU, memory, sample counts, median,
 interquartile range, and process failures. The artifact includes the exact transpiled fixture.
 
-The `runtime-v4` artifact identifies Base and Head, the selected cases, and comparison or
-profiling mode. `baselineTag` names a release when one was selected; otherwise it is null.
+The `runtime-v4` artifact identifies Base and Head, the selected cases, and ordinary comparison,
+resident timing, or profiling mode. Resident timing uses mode `steady-state` and measurement
+`resident-operation-v1`, identifying the new per-operation timing boundary while retaining the
+existing workload inputs and correctness checks. Profile results retain their existing capture
+boundary and contain no per-operation timings. `baselineTag` names a release when one was selected;
+otherwise it is null.
 Ordinary comparison tables show medians and Q1–Q3 spread.
 The nine samples share three worker processes per revision; that spread is not a confidence
 interval, and runner/process variability has not been calibrated. Timing differences alone

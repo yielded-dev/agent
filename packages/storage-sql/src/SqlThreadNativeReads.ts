@@ -151,6 +151,17 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
   const sql = yield* SqlClient.SqlClient;
   const owner = yield* SelectedReadOwner;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
+  const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+
+  const decodeTailRows = Schema.decodeUnknownEffect(
+    Schema.Array(
+      Schema.Struct({
+        tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+        tail_digest: Digest,
+        producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
+      }),
+    ),
+  );
 
   const sqlSnapshot = sql.onDialectOrElse({
     orElse: () => sql.withTransaction,
@@ -176,15 +187,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
     if (rows.length === 0) return yield* ThreadNotMaterialized.make({ threadId });
 
-    const decoded = yield* Schema.decodeUnknownEffect(
-      Schema.Array(
-        Schema.Struct({
-          tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-          tail_digest: Digest,
-          producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
-        }),
-      ),
-    )(rows);
+    const decoded = yield* decodeTailRows(rows);
 
     if (decoded.length !== 1 || decoded[0] === undefined)
       return yield* failure("native thread tail");
@@ -248,7 +251,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               break;
             }
           }
-          const decoded = yield* Schema.decodeUnknownEffect(Schema.Array(Row))(rows);
+          const decoded = yield* decodeRows(rows);
 
           if (selection._tag === "RunInput" && decoded.length > 1)
             return yield* failure("ambiguous original Run input");
@@ -301,7 +304,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${lineage} AND sequence <> 1
           ) ORDER BY identity_order`.pipe(execute);
 
-          const records = yield* Schema.decodeUnknownEffect(Schema.Array(Row))(rows).pipe(
+          const records = yield* decodeRows(rows).pipe(
             Effect.flatMap(
               Effect.forEach((row) =>
                 envelope(row).pipe(

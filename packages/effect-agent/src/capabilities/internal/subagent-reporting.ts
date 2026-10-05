@@ -21,7 +21,7 @@ const projectReport = <
 >(
   declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
 ) =>
-  Effect.fn("Subagent.projectReport")(function* (report: WorkerRunReport) {
+  Effect.fnUntraced(function* (report: WorkerRunReport) {
     const { worker, observation } = report;
     const invalid = () => WorkerReportPreparationFailure.make({ stage: "projection" });
 
@@ -111,7 +111,7 @@ export const automaticReporting = <
 ) => ({
   delegationId: declaration.delegationId,
   target: declaration.target,
-  prepare: Effect.fn("Subagent.automaticReport")(function* (report: WorkerRunReport) {
+  prepare: Effect.fnUntraced(function* (report: WorkerRunReport) {
     const { projected, encodedResult } = yield* projectReport(declaration)(report);
 
     const encoded =

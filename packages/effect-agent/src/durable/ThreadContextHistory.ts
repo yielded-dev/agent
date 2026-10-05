@@ -70,7 +70,7 @@ export const layer = (
       const timeoutMillis = decoded.timeoutMillis ?? 10_000;
       const store = yield* ThreadStore;
 
-      const scan = Effect.fn("ThreadContextHistory.scan")(function* (
+      const scan = Effect.fnUntraced(function* (
         threadId: ThreadId,
         visit: (record: CanonicalRecordEnvelope) => Effect.Effect<void, ContextHistoryError>,
       ) {
@@ -124,7 +124,7 @@ export const layer = (
         return boundaries;
       });
 
-      const search = Effect.fn("ThreadContextHistory.search")(
+      const search = Effect.fnUntraced(
         function* (input: ContextHistorySearch) {
           const request = yield* Schema.decodeEffect(Schema.toType(ContextHistorySearch))(
             input,
@@ -136,7 +136,7 @@ export const layer = (
 
           const boundaries = yield* scan(
             request.threadId,
-            Effect.fn(function* (record) {
+            Effect.fnUntraced(function* (record) {
               const item = (yield* project(record)).evidence;
 
               if (item === undefined) return;
@@ -178,7 +178,7 @@ export const layer = (
         }),
       );
 
-      const read = Effect.fn("ThreadContextHistory.read")(
+      const read = Effect.fnUntraced(
         function* (input: ContextHistoryRead) {
           const request = yield* Schema.decodeEffect(Schema.toType(ContextHistoryRead))(input).pipe(
             Effect.mapError(() => invalid("Invalid context history read")),
@@ -188,7 +188,7 @@ export const layer = (
 
           const boundaries = yield* scan(
             request.threadId,
-            Effect.fn(function* (record) {
+            Effect.fnUntraced(function* (record) {
               if (record.record.recordId === request.recordId)
                 selected = (yield* project(record)).evidence;
             }),

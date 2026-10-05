@@ -64,9 +64,7 @@ const rows = <A, I>(schema: Schema.Codec<A, I>, input: unknown, table: string) =
     Effect.mapError(() => invalid(table, "rows", "Invalid SQL row shape.")),
   );
 
-const checkColumns = Effect.fn("SqlStorageV2Upgrade.checkColumns")(function* (
-  tables: ReadonlyArray<keyof typeof v2Columns>,
-) {
+const checkColumns = Effect.fnUntraced(function* (tables: ReadonlyArray<keyof typeof v2Columns>) {
   const sql = yield* SqlClient.SqlClient;
 
   for (const table of tables) {
@@ -86,9 +84,7 @@ const checkColumns = Effect.fn("SqlStorageV2Upgrade.checkColumns")(function* (
 });
 
 /** SQLite-only upgrade; callers own one transaction, recheck the version inside it, and advance it last. */
-export const upgradeV2Schedules = Effect.fn("SqlStorageV2Upgrade.schedules")(function* (
-  maxBytes: number,
-) {
+export const upgradeV2Schedules = Effect.fnUntraced(function* (maxBytes: number) {
   const sql = yield* SqlClient.SqlClient;
   const { hit } = yield* ScheduleFailpoint;
 
@@ -171,9 +167,7 @@ export const upgradeV2Schedules = Effect.fn("SqlStorageV2Upgrade.schedules")(fun
 });
 
 /** v2 registrations were immutable: revision 1 and the delivery snapshot have one possible value. */
-export const upgradeV2Subscriptions = Effect.fn("SqlStorageV2Upgrade.subscriptions")(function* (
-  maxBytes: number,
-) {
+export const upgradeV2Subscriptions = Effect.fnUntraced(function* (maxBytes: number) {
   const sql = yield* SqlClient.SqlClient;
   const { hit } = yield* SubscriptionFailpoint;
 

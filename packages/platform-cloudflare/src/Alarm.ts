@@ -799,7 +799,7 @@ export class ThreadMutationGate extends Context.Service<
         dueQueue.register(DueQueue.Native);
       });
 
-      const schedule = Effect.fn("ThreadMutationGate.schedule")(function* (
+      const schedule = Effect.fnUntraced(function* (
         id: string,
         dueAt: number,
         progressCursor?: bigint,
@@ -842,7 +842,7 @@ export class ThreadMutationGate extends Context.Service<
         yield* notify;
       });
 
-      const beginMutation = Effect.fn("ThreadMaintenance.beginMutation")(function* (
+      const beginMutation = Effect.fnUntraced(function* (
         invalidatesRecovery: boolean,
         lanes: ReadonlyArray<string>,
       ) {
@@ -959,9 +959,7 @@ export class ThreadMutationGate extends Context.Service<
               ),
         );
 
-      const recordProgress = Effect.fn("ThreadMutationGate.recordProgress")(function* (
-        lanes: ReadonlyArray<string>,
-      ) {
+      const recordProgress = Effect.fnUntraced(function* (lanes: ReadonlyArray<string>) {
         yield* validateSourceBoundary;
         if (Option.isNone(yield* Effect.serviceOption(sql.transactionService)))
           return yield* DurableAlarmError.make({
@@ -1352,7 +1350,7 @@ export class ThreadMaintenance extends Context.Service<
         }),
       };
 
-      const recordRecoveryFaults = Effect.fn("ThreadMaintenance.recordRecoveryFaults")(function* (
+      const recordRecoveryFaults = Effect.fnUntraced(function* (
         result: RecoverySweepResult,
         recovery: NativeRecovery,
         current?: ReadonlyArray<SubmissionWorkItem>,
@@ -1461,7 +1459,7 @@ export class ThreadMaintenance extends Context.Service<
         return retained.faults;
       });
 
-      const recoverThread = Effect.fn("ThreadMaintenance.recoverThread")(function* (
+      const recoverThread = Effect.fnUntraced(function* (
         threadId: ThreadId,
         recovery: NativeRecovery,
       ) {
@@ -1499,7 +1497,7 @@ export class ThreadMaintenance extends Context.Service<
         return { state, initialized: true };
       };
 
-      const ensureAlarm = Effect.fn("ThreadMaintenance.ensureAlarm")(function* () {
+      const ensureAlarm = Effect.fnUntraced(function* () {
         yield* failpoint.hit("maintenance:ensure:before");
         const now = yield* Clock.currentTimeMillis;
 
@@ -1533,9 +1531,7 @@ export class ThreadMaintenance extends Context.Service<
         yield* failpoint.hit("maintenance:ensure:after");
       });
 
-      const beginPass = Effect.fn("ThreadMaintenance.beginPass")(function* (
-        observed: MaintenanceObservation,
-      ) {
+      const beginPass = Effect.fnUntraced(function* (observed: MaintenanceObservation) {
         yield* failpoint.hit("maintenance:begin:before");
         const now = yield* Clock.currentTimeMillis;
 
@@ -1609,16 +1605,11 @@ export class ThreadMaintenance extends Context.Service<
         return Math.ceil(backoff / 2 + (backoff / 2) * jitter);
       };
 
-      const rearmDelay = Effect.fn("ThreadMaintenance.rearmDelay")(function* (
-        progressed: boolean,
-        priorStalls: number,
-      ) {
+      const rearmDelay = Effect.fnUntraced(function* (progressed: boolean, priorStalls: number) {
         return progressed ? config.alarmBackoffBase : backoffDelay(priorStalls, yield* Random.next);
       });
 
-      const rearmFailure = Effect.fn("ThreadMaintenance.rearmFailure")(function* (
-        observed: MaintenanceObservation,
-      ) {
+      const rearmFailure = Effect.fnUntraced(function* (observed: MaintenanceObservation) {
         const { generation, nativeOnly } = observed;
 
         if (generation === undefined) return;
@@ -1691,10 +1682,8 @@ export class ThreadMaintenance extends Context.Service<
         yield* failpoint.hit("maintenance:retry:after");
       });
 
-      const beginNative = Effect.fn("ThreadMaintenance.beginNative")(function* (
-        observed: MaintenanceObservation,
-      ) {
-        return yield* mutations.withSnapshot((activeAtStart) =>
+      const beginNative = (observed: MaintenanceObservation) =>
+        mutations.withSnapshot((activeAtStart) =>
           Effect.gen(function* () {
             const generation = yield* beginPass(observed);
 
@@ -1707,9 +1696,8 @@ export class ThreadMaintenance extends Context.Service<
             return { ...generation, activeAtStart };
           }),
         );
-      });
 
-      const attemptSelected = Effect.fn("ThreadMaintenance.attemptSelected")(function* (
+      const attemptSelected = Effect.fnUntraced(function* (
         selected: SubmissionWorkItem,
         previousWaits: ReadonlyArray<BindingWait>,
         yieldAfter: DateTime.Utc,
@@ -1797,7 +1785,7 @@ export class ThreadMaintenance extends Context.Service<
         return Option.isSome(settlement) ? 1 : 0;
       });
 
-      const advance = Effect.fn("ThreadMaintenance.advance")(function* (
+      const advance = Effect.fnUntraced(function* (
         started: Effect.Success<ReturnType<typeof beginNative>>,
         yieldAfter: DateTime.Utc,
         observed: MaintenanceObservation,
@@ -2263,7 +2251,7 @@ export class ThreadMaintenance extends Context.Service<
         };
       });
 
-      const validateLanes = Effect.fn("ThreadMaintenance.validateLanes")(function* (
+      const validateLanes = Effect.fnUntraced(function* (
         lanes: ReadonlyArray<ThreadHostMaintenanceLane>,
         queued: ReadonlyArray<DueQueue.DueLane>,
       ) {
@@ -2294,7 +2282,7 @@ export class ThreadMaintenance extends Context.Service<
         }
       });
 
-      const dispatch = Effect.fn("ThreadMaintenance.dispatch")(function* (
+      const dispatch = Effect.fnUntraced(function* (
         yieldAfter: DateTime.Utc,
         dispatchUntil: DateTime.Utc,
         observed: MaintenanceObservation,
@@ -2691,7 +2679,7 @@ export class ThreadMaintenance extends Context.Service<
         return { result, phase, recovered: recovery.recovered, settled: dispatch.settled };
       });
 
-      const pass = Effect.fn("ThreadMaintenance.pass")(function* (
+      const pass = Effect.fnUntraced(function* (
         yieldAfter: DateTime.Utc,
         dispatchUntil: DateTime.Utc,
         observed: MaintenanceObservation,

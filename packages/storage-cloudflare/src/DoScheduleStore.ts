@@ -116,15 +116,12 @@ const unavailable = (operation: string): ScheduleStorageError =>
 const corrupt = (operation: string): ScheduleStorageError =>
   ScheduleStorageError.make({ operation, reason: "corrupt" });
 
-const decodeRows = Effect.fn("DoScheduleStore.decodeRows")(function* <A, I, R>(
+const decodeRows = <A, I, R>(
   schema: Schema.Codec<A, I, R>,
   rows: ReadonlyArray<unknown>,
   operation: string,
-): Effect.fn.Return<A, ScheduleStorageError, R> {
-  return yield* Schema.decodeUnknownEffect(schema)(rows).pipe(
-    Effect.mapError(() => corrupt(operation)),
-  );
-});
+): Effect.Effect<A, ScheduleStorageError, R> =>
+  Schema.decodeUnknownEffect(schema)(rows).pipe(Effect.mapError(() => corrupt(operation)));
 
 const decodeBoundary = <A, I, R>(
   schema: Schema.Codec<A, I, R>,
@@ -133,7 +130,7 @@ const decodeBoundary = <A, I, R>(
 ): Effect.Effect<A, ScheduleStorageError, R> =>
   Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(() => corrupt(operation)));
 
-const decodeRecord = Effect.fn("DoScheduleStore.decodeRecord")(function* (
+const decodeRecord = Effect.fnUntraced(function* (
   row: ScheduleRow,
 ): Effect.fn.Return<ScheduleRecord, ScheduleStorageError> {
   const record = yield* Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord))(
@@ -152,7 +149,7 @@ const decodeRecord = Effect.fn("DoScheduleStore.decodeRecord")(function* (
   return record;
 });
 
-const encodeRecord = Effect.fn("DoScheduleStore.encodeRecord")(function* (
+const encodeRecord = Effect.fnUntraced(function* (
   record: ScheduleRecord,
 ): Effect.fn.Return<string, ScheduleStorageError> {
   const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(ScheduleRecord))(record).pipe(
@@ -164,7 +161,7 @@ const encodeRecord = Effect.fn("DoScheduleStore.encodeRecord")(function* (
   );
 });
 
-const initializeScheduleStore = Effect.fn("DoScheduleStore.initialize")(function* () {
+const initializeScheduleStore = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const operation = "initialize schedule store";
 
@@ -289,7 +286,7 @@ const makeServices = Effect.gen(function* () {
 
   yield* initializeScheduleStore();
 
-  const readRows = Effect.fn("DoScheduleStore.readRows")(function* (
+  const readRows = Effect.fnUntraced(function* (
     key: ScheduleKey,
     operation: string,
   ): Effect.fn.Return<ReadonlyArray<ScheduleRow>, ScheduleStorageError> {
@@ -304,7 +301,7 @@ const makeServices = Effect.gen(function* () {
     return yield* decodeRows(Schema.Array(ScheduleRow), rows, operation);
   });
 
-  const readOne = Effect.fn("DoScheduleStore.readOne")(function* (
+  const readOne = Effect.fnUntraced(function* (
     key: ScheduleKey,
     operation: string,
   ): Effect.fn.Return<ScheduleRecord | null, ScheduleStorageError> {
@@ -316,7 +313,7 @@ const makeServices = Effect.gen(function* () {
     return yield* decodeRecord(rows[0]);
   });
 
-  const readNextDeadline = Effect.fn("DoScheduleStore.readNextDeadline")(function* (
+  const readNextDeadline = Effect.fnUntraced(function* (
     owner: ScheduleOwner | undefined,
     operation: string,
   ): Effect.fn.Return<number | null, ScheduleStorageError> {
@@ -342,7 +339,7 @@ const makeServices = Effect.gen(function* () {
     return decoded[0].deadline_at_millis;
   });
 
-  const replaceAlarm = Effect.fn("DoScheduleStore.replaceAlarm")(function* (
+  const replaceAlarm = Effect.fnUntraced(function* (
     replace: DoScheduleReplaceAlarm,
     deadlineAtMillis: number | null,
     operation: string,
@@ -364,7 +361,7 @@ const makeServices = Effect.gen(function* () {
     yield* scheduleFailpoint.hit("schedule:alarm:after");
   });
 
-  const insert: ScheduleStore["Service"]["insert"] = Effect.fn("DoScheduleStore.insert")(
+  const insert: ScheduleStore["Service"]["insert"] = Effect.fnUntraced(
     function* (record, ownerLimit) {
       const operation = "insert schedule";
       const canonical = yield* decodeBoundary(ScheduleRecord, record, operation);
@@ -423,13 +420,13 @@ const makeServices = Effect.gen(function* () {
     },
   );
 
-  const get: ScheduleStore["Service"]["get"] = Effect.fn("DoScheduleStore.get")(function* (key) {
+  const get: ScheduleStore["Service"]["get"] = Effect.fnUntraced(function* (key) {
     const canonical = yield* decodeBoundary(ScheduleKey, key, "get schedule");
 
     return yield* readOne(canonical, "get schedule");
   });
 
-  const list: ScheduleStore["Service"]["list"] = Effect.fn("DoScheduleStore.list")(function* (
+  const list: ScheduleStore["Service"]["list"] = Effect.fnUntraced(function* (
     requestValue: SchedulePageRequest,
   ): Effect.fn.Return<SchedulePage, ScheduleStorageError> {
     const operation = "list schedules";
@@ -463,7 +460,7 @@ const makeServices = Effect.gen(function* () {
     return { items, next: hasNext ? (items.at(-1)?.scheduleId ?? null) : null };
   });
 
-  const change: ScheduleStore["Service"]["change"] = Effect.fn("DoScheduleStore.change")(function* (
+  const change: ScheduleStore["Service"]["change"] = Effect.fnUntraced(function* (
     key,
     change,
     ownerLimit = defaultSchedulingLimits.maxSchedulesPerOwner,
@@ -522,7 +519,7 @@ const makeServices = Effect.gen(function* () {
     return result.record;
   });
 
-  const due: ScheduleStore["Service"]["due"] = Effect.fn("DoScheduleStore.due")(function* (
+  const due: ScheduleStore["Service"]["due"] = Effect.fnUntraced(function* (
     nowMillis,
     limit,
     owner?: ScheduleOwner,
@@ -572,15 +569,15 @@ const makeServices = Effect.gen(function* () {
     }));
   });
 
-  const nextDeadline: ScheduleStore["Service"]["nextDeadline"] = Effect.fn(
-    "DoScheduleStore.nextDeadline",
-  )(function* (owner?: ScheduleOwner) {
+  const nextDeadline: ScheduleStore["Service"]["nextDeadline"] = Effect.fnUntraced(function* (
+    owner?: ScheduleOwner,
+  ) {
     const operation = "query next schedule deadline";
 
     return yield* readNextDeadline(owner, operation);
   });
 
-  const prearm = Effect.fn("DoScheduleStore.prearm")(function* (
+  const prearm = Effect.fnUntraced(function* (
     deadlineAtMillis: number,
   ): Effect.fn.Return<void, ScheduleStorageError | ScheduleFailpointError> {
     yield* decodeBoundary(ScheduleInstant, deadlineAtMillis, "pre-arm schedule recovery");

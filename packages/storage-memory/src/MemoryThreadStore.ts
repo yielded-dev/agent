@@ -122,35 +122,33 @@ const storeError = (operation: string, message: string, cause?: unknown): Thread
     ? ThreadStoreError.make({ operation, message })
     : ThreadStoreError.make({ operation, message, cause });
 
-const validate = Effect.fn("MemoryThreadStore.validate")(
-  <A, I>(
-    schema: Schema.Codec<A, I>,
-    operation: string,
-    value: unknown,
-  ): Effect.Effect<A, ThreadStoreError> =>
-    Schema.encodeUnknownEffect(schema)(value).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(schema)),
-      Effect.mapError((error) => storeError(operation, `Invalid ${operation} request`, error)),
-    ),
-);
+const validate = <A, I>(
+  schema: Schema.Codec<A, I>,
+  operation: string,
+  value: unknown,
+): Effect.Effect<A, ThreadStoreError> =>
+  Schema.encodeUnknownEffect(schema)(value).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(schema)),
+    Effect.mapError((error) => storeError(operation, `Invalid ${operation} request`, error)),
+  );
 
 const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const ZERO_CANONICAL_SEQUENCE = decodeCanonicalSequence(0);
 
-const offsetSequence = Effect.fn("MemoryThreadStore.offsetSequence")((
+const offsetSequence = Effect.fnUntraced(function* (
   threadId: ThreadId,
   offset: ObservationOffset | undefined,
-): Effect.Effect<CanonicalSequence, ThreadStoreError> => {
-  if (offset === undefined) return Effect.succeed(ZERO_CANONICAL_SEQUENCE);
+): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
+  if (offset === undefined) return yield* Effect.succeed(ZERO_CANONICAL_SEQUENCE);
   const prefix = `memory:v1:${Base64.encode(threadId)}:`;
   const encodedSequence = offset.startsWith(prefix) ? offset.slice(prefix.length) : "";
 
   if (!/^\d+$/.test(encodedSequence)) {
-    return Effect.fail(storeError("observe", "Malformed observation offset"));
+    return yield* Effect.fail(storeError("observe", "Malformed observation offset"));
   }
   const sequence = Number(encodedSequence);
 
-  return Number.isSafeInteger(sequence)
+  return yield* Number.isSafeInteger(sequence)
     ? Schema.decodeEffect(CanonicalSequence)(sequence).pipe(
         Effect.mapError(() => storeError("observe", "Malformed observation offset")),
       )
@@ -160,13 +158,13 @@ const offsetSequence = Effect.fn("MemoryThreadStore.offsetSequence")((
 const observationOffset = (threadId: ThreadId, sequence: CanonicalSequence): ObservationOffset =>
   Schema.decodeSync(ObservationOffset)(`memory:v1:${Base64.encode(threadId)}:${sequence}`);
 
-const findThread = Effect.fn("MemoryThreadStore.findThread")((
+const findThread = Effect.fnUntraced(function* (
   state: MemoryState,
   threadId: ThreadId,
-): Effect.Effect<StoredThread, ThreadNotMaterialized> => {
+): Effect.fn.Return<StoredThread, ThreadNotMaterialized> {
   const thread = state.threads.get(threadId);
 
-  return thread === undefined
+  return yield* thread === undefined
     ? Effect.fail(ThreadNotMaterialized.make({ threadId }))
     : Effect.succeed(thread);
 });
@@ -178,20 +176,20 @@ const CheckpointVersionEnvelope = Schema.Struct({
   }),
 });
 
-const validateCheckpointVersion = Effect.fn("MemoryThreadStore.validateCheckpointVersion")(
-  function* (value: unknown): Effect.fn.Return<void, ThreadStoreError | CheckpointRejected> {
-    const envelope = yield* Schema.decodeUnknownEffect(CheckpointVersionEnvelope)(value).pipe(
-      Effect.mapError(() => storeError("saveCheckpoint", "Invalid saveCheckpoint request")),
-    );
+const validateCheckpointVersion = Effect.fnUntraced(function* (
+  value: unknown,
+): Effect.fn.Return<void, ThreadStoreError | CheckpointRejected> {
+  const envelope = yield* Schema.decodeUnknownEffect(CheckpointVersionEnvelope)(value).pipe(
+    Effect.mapError(() => storeError("saveCheckpoint", "Invalid saveCheckpoint request")),
+  );
 
-    if (envelope.checkpoint.schemaVersion !== 1) {
-      return yield* CheckpointRejected.make({
-        threadId: envelope.checkpoint.threadId,
-        reason: "unsupported-version",
-      });
-    }
-  },
-);
+  if (envelope.checkpoint.schemaVersion !== 1) {
+    return yield* CheckpointRejected.make({
+      threadId: envelope.checkpoint.threadId,
+      reason: "unsupported-version",
+    });
+  }
+});
 
 const makeThreadStore = Effect.gen(function* () {
   const maxThreads = yield* ThreadCapacity;
@@ -203,10 +201,8 @@ const makeThreadStore = Effect.gen(function* () {
 
   yield* Effect.addFinalizer(() => PubSub.shutdown(updates));
 
-  const materialize: ThreadStore["Service"]["materialize"] = Effect.fn(
-    "MemoryThreadStore.materialize",
-  )((unvalidated) =>
-    Effect.gen(function* () {
+  const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(
+    function* (unvalidated) {
       const request = yield* validate(ThreadMaterialization, "materialize", unvalidated);
 
       const decision = yield* Ref.modify(
@@ -271,7 +267,7 @@ const makeThreadStore = Effect.gen(function* () {
       );
 
       if (decision._tag === "failure") return yield* decision.error;
-    }),
+    },
   );
 
   const prepareAppend = Effect.fnUntraced(function* (unvalidated: FencedAppendRequest) {
@@ -518,18 +514,20 @@ const makeThreadStore = Effect.gen(function* () {
       return Math.min(thread.peerCount, request.limit);
     });
 
-  const readSnapshot = Effect.fn("MemoryThreadStore.readSnapshot")(
-    (threadId: ThreadId, afterSequence: CanonicalSequence | undefined, limit: number) =>
-      Ref.get(state).pipe(
-        Effect.flatMap((current) => findThread(current, threadId)),
-        Effect.map((thread) => {
-          // Append assigns gap-free sequences starting at 1, so the exclusive cursor is an index.
-          const start = afterSequence ?? ZERO_CANONICAL_SEQUENCE;
+  const readSnapshot = (
+    threadId: ThreadId,
+    afterSequence: CanonicalSequence | undefined,
+    limit: number,
+  ) =>
+    Ref.get(state).pipe(
+      Effect.flatMap((current) => findThread(current, threadId)),
+      Effect.map((thread) => {
+        // Append assigns gap-free sequences starting at 1, so the exclusive cursor is an index.
+        const start = afterSequence ?? ZERO_CANONICAL_SEQUENCE;
 
-          return thread.records.slice(start, start + limit);
-        }),
-      ),
-  );
+        return thread.records.slice(start, start + limit);
+      }),
+    );
 
   const read: ThreadStore["Service"]["read"] = (unvalidated) =>
     Stream.unwrap(
@@ -632,29 +630,24 @@ const makeThreadStore = Effect.gen(function* () {
       }),
     );
 
-  const exportThread: ThreadStore["Service"]["export"] = Effect.fn("MemoryThreadStore.export")(
-    (unvalidated) =>
-      Effect.gen(function* () {
-        const request = yield* validate(ThreadExportRequest, "export", unvalidated);
+  const exportThread: ThreadStore["Service"]["export"] = Effect.fnUntraced(function* (unvalidated) {
+    const request = yield* validate(ThreadExportRequest, "export", unvalidated);
 
-        const thread = yield* Ref.get(state).pipe(
-          Effect.flatMap((current) => findThread(current, request.threadId)),
-        );
+    const thread = yield* Ref.get(state).pipe(
+      Effect.flatMap((current) => findThread(current, request.threadId)),
+    );
 
-        return ThreadExport.make({
-          format: "effect-agent/thread@1",
-          threadId: request.threadId,
-          tailSequence: thread.tailSequence,
-          tailDigest: thread.tailDigest,
-          records: thread.records,
-        });
-      }),
-  );
+    return ThreadExport.make({
+      format: "effect-agent/thread@1",
+      threadId: request.threadId,
+      tailSequence: thread.tailSequence,
+      tailDigest: thread.tailDigest,
+      records: thread.records,
+    });
+  });
 
-  const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fn(
-    "MemoryThreadStore.inspectTail",
-  )((unvalidated) =>
-    Effect.gen(function* () {
+  const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(
+    function* (unvalidated) {
       const request = yield* validate(ThreadTailRequest, "inspectTail", unvalidated);
 
       const thread = yield* Ref.get(state).pipe(
@@ -667,190 +660,61 @@ const makeThreadStore = Effect.gen(function* () {
         tailDigest: thread.tailDigest,
         producerEpoch: thread.producerEpoch,
       });
-    }),
+    },
   );
 
-  const readIdentity: ThreadStore["Service"]["readIdentity"] = Effect.fn(
-    "MemoryThreadStore.readIdentity",
-  )(function* (unvalidated) {
-    const request = yield* validate(ThreadIdentityRequest, "readIdentity", unvalidated);
+  const readIdentity: ThreadStore["Service"]["readIdentity"] = Effect.fnUntraced(
+    function* (unvalidated) {
+      const request = yield* validate(ThreadIdentityRequest, "readIdentity", unvalidated);
 
-    const thread = yield* Ref.get(state).pipe(
-      Effect.flatMap((current) => findThread(current, request.threadId)),
-    );
+      const thread = yield* Ref.get(state).pipe(
+        Effect.flatMap((current) => findThread(current, request.threadId)),
+      );
 
-    const selected = [
-      thread.records[0],
-      thread.byId.get(workerOriginRecordId(request.threadId)),
-      thread.byId.get(subagentLineageRecordId(request.threadId)),
-    ].filter((entry) => entry !== undefined);
+      const selected = [
+        thread.records[0],
+        thread.byId.get(workerOriginRecordId(request.threadId)),
+        thread.byId.get(subagentLineageRecordId(request.threadId)),
+      ].filter((entry) => entry !== undefined);
 
-    return yield* ThreadIdentity.makeEffect({
-      threadId: request.threadId,
-      tailSequence: thread.tailSequence,
-      tailDigest: thread.tailDigest,
-      producerEpoch: thread.producerEpoch,
-      records: selected.filter(
-        (entry, index) =>
-          selected.findIndex((other) => other.record.recordId === entry.record.recordId) === index,
-      ),
-    }).pipe(
-      Effect.mapError((cause) => storeError("readIdentity", "Invalid canonical identity", cause)),
-    );
-  });
-
-  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fn("MemoryThreadStore.saveCheckpoint")(
-    (unvalidated) =>
-      Effect.gen(function* () {
-        yield* validateCheckpointVersion(unvalidated);
-        const request = yield* validate(SaveCheckpointRequest, "saveCheckpoint", unvalidated);
-
-        const decision = yield* Ref.modify(
-          state,
-          (current): readonly [CheckpointDecision, MemoryState] => {
-            const checkpoint = request.checkpoint;
-            const thread = current.threads.get(checkpoint.threadId);
-
-            if (thread === undefined) {
-              return [
-                {
-                  _tag: "failure",
-                  error: ThreadNotMaterialized.make({
-                    threadId: checkpoint.threadId,
-                  }),
-                },
-                current,
-              ];
-            }
-            if (checkpoint.throughSequence > thread.tailSequence) {
-              return [
-                {
-                  _tag: "failure",
-                  error: CheckpointRejected.make({
-                    threadId: checkpoint.threadId,
-                    reason: "ahead-of-tail",
-                  }),
-                },
-                current,
-              ];
-            }
-            if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest) {
-              return [
-                {
-                  _tag: "failure",
-                  error: CheckpointRejected.make({
-                    threadId: checkpoint.threadId,
-                    reason: "digest-mismatch",
-                  }),
-                },
-                current,
-              ];
-            }
-            if (
-              !thread.checkpoints.has(checkpoint.throughSequence) &&
-              thread.checkpoints.size >= MAX_CHECKPOINTS_PER_THREAD
-            ) {
-              return [
-                {
-                  _tag: "failure",
-                  error: storeError(
-                    "saveCheckpoint",
-                    `In-memory checkpoint limit ${MAX_CHECKPOINTS_PER_THREAD} exceeded`,
-                  ),
-                },
-                current,
-              ];
-            }
-            const checkpoints = new Map(thread.checkpoints);
-
-            checkpoints.set(checkpoint.throughSequence, checkpoint);
-            const threads = new Map(current.threads);
-
-            threads.set(checkpoint.threadId, { ...thread, checkpoints });
-
-            return [{ _tag: "success" }, { threads }];
-          },
-        );
-
-        if (decision._tag === "failure") return yield* decision.error;
-      }),
+      return yield* ThreadIdentity.makeEffect({
+        threadId: request.threadId,
+        tailSequence: thread.tailSequence,
+        tailDigest: thread.tailDigest,
+        producerEpoch: thread.producerEpoch,
+        records: selected.filter(
+          (entry, index) =>
+            selected.findIndex((other) => other.record.recordId === entry.record.recordId) ===
+            index,
+        ),
+      }).pipe(
+        Effect.mapError((cause) => storeError("readIdentity", "Invalid canonical identity", cause)),
+      );
+    },
   );
 
-  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fn("MemoryThreadStore.loadCheckpoint")(
-    (unvalidated) =>
-      Effect.gen(function* () {
-        const request = yield* validate(LoadCheckpointRequest, "loadCheckpoint", unvalidated);
-
-        const thread = yield* Ref.get(state).pipe(
-          Effect.flatMap((current) => findThread(current, request.threadId)),
-        );
-
-        const maximum = request.atOrBeforeSequence ?? thread.tailSequence;
-        let selected: ThreadCheckpoint | undefined;
-
-        for (const [sequence, checkpoint] of thread.checkpoints) {
-          if (
-            sequence <= maximum &&
-            (selected === undefined || sequence > selected.throughSequence)
-          ) {
-            selected = checkpoint;
-          }
-        }
-        if (
-          selected !== undefined &&
-          thread.tailDigests.get(selected.throughSequence) !== selected.tailDigest
-        ) {
-          return yield* CheckpointRejected.make({
-            threadId: request.threadId,
-            reason: "digest-mismatch",
-          });
-        }
-
-        return Option.fromNullishOr(selected);
-      }),
-  );
-
-  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fn(
-    "MemoryThreadStore.saveRecoveryCheckpoint",
-  )(function* (unvalidated) {
-    const request = yield* validate(
-      SaveRecoveryCheckpointRequest,
-      "saveRecoveryCheckpoint",
-      unvalidated,
-    );
+  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fnUntraced(function* (unvalidated) {
+    yield* validateCheckpointVersion(unvalidated);
+    const request = yield* validate(SaveCheckpointRequest, "saveCheckpoint", unvalidated);
 
     const decision = yield* Ref.modify(
       state,
-      (
-        current,
-      ): readonly [
-        CheckpointDecision | { readonly _tag: "failure"; readonly error: FenceRejected },
-        MemoryState,
-      ] => {
+      (current): readonly [CheckpointDecision, MemoryState] => {
         const checkpoint = request.checkpoint;
         const thread = current.threads.get(checkpoint.threadId);
 
-        if (thread === undefined)
+        if (thread === undefined) {
           return [
             {
               _tag: "failure",
-              error: ThreadNotMaterialized.make({ threadId: checkpoint.threadId }),
-            },
-            current,
-          ];
-        if (thread.producerEpoch !== request.producerEpoch)
-          return [
-            {
-              _tag: "failure",
-              error: FenceRejected.make({
+              error: ThreadNotMaterialized.make({
                 threadId: checkpoint.threadId,
-                actualEpoch: thread.producerEpoch,
-                attemptedEpoch: request.producerEpoch,
               }),
             },
             current,
           ];
-        if (checkpoint.throughSequence > thread.tailSequence)
+        }
+        if (checkpoint.throughSequence > thread.tailSequence) {
           return [
             {
               _tag: "failure",
@@ -861,7 +725,8 @@ const makeThreadStore = Effect.gen(function* () {
             },
             current,
           ];
-        if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
+        }
+        if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest) {
           return [
             {
               _tag: "failure",
@@ -872,11 +737,28 @@ const makeThreadStore = Effect.gen(function* () {
             },
             current,
           ];
-        if ((thread.recoveryCheckpoint?.throughSequence ?? -1) > checkpoint.throughSequence)
-          return [{ _tag: "success" }, current];
+        }
+        if (
+          !thread.checkpoints.has(checkpoint.throughSequence) &&
+          thread.checkpoints.size >= MAX_CHECKPOINTS_PER_THREAD
+        ) {
+          return [
+            {
+              _tag: "failure",
+              error: storeError(
+                "saveCheckpoint",
+                `In-memory checkpoint limit ${MAX_CHECKPOINTS_PER_THREAD} exceeded`,
+              ),
+            },
+            current,
+          ];
+        }
+        const checkpoints = new Map(thread.checkpoints);
+
+        checkpoints.set(checkpoint.throughSequence, checkpoint);
         const threads = new Map(current.threads);
 
-        threads.set(checkpoint.threadId, { ...thread, recoveryCheckpoint: checkpoint });
+        threads.set(checkpoint.threadId, { ...thread, checkpoints });
 
         return [{ _tag: "success" }, { threads }];
       },
@@ -885,30 +767,133 @@ const makeThreadStore = Effect.gen(function* () {
     if (decision._tag === "failure") return yield* decision.error;
   });
 
-  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fn(
-    "MemoryThreadStore.loadRecoveryCheckpoint",
-  )(function* (unvalidated) {
-    const request = yield* validate(LoadCheckpointRequest, "loadRecoveryCheckpoint", unvalidated);
+  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fnUntraced(function* (unvalidated) {
+    const request = yield* validate(LoadCheckpointRequest, "loadCheckpoint", unvalidated);
 
     const thread = yield* Ref.get(state).pipe(
       Effect.flatMap((current) => findThread(current, request.threadId)),
     );
 
-    const checkpoint = thread.recoveryCheckpoint;
+    const maximum = request.atOrBeforeSequence ?? thread.tailSequence;
+    let selected: ThreadCheckpoint | undefined;
 
+    for (const [sequence, checkpoint] of thread.checkpoints) {
+      if (sequence <= maximum && (selected === undefined || sequence > selected.throughSequence)) {
+        selected = checkpoint;
+      }
+    }
     if (
-      checkpoint === undefined ||
-      checkpoint.throughSequence > (request.atOrBeforeSequence ?? thread.tailSequence)
-    )
-      return Option.none();
-    if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
+      selected !== undefined &&
+      thread.tailDigests.get(selected.throughSequence) !== selected.tailDigest
+    ) {
       return yield* CheckpointRejected.make({
         threadId: request.threadId,
         reason: "digest-mismatch",
       });
+    }
 
-    return Option.some(checkpoint);
+    return Option.fromNullishOr(selected);
   });
+
+  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fnUntraced(
+    function* (unvalidated) {
+      const request = yield* validate(
+        SaveRecoveryCheckpointRequest,
+        "saveRecoveryCheckpoint",
+        unvalidated,
+      );
+
+      const decision = yield* Ref.modify(
+        state,
+        (
+          current,
+        ): readonly [
+          CheckpointDecision | { readonly _tag: "failure"; readonly error: FenceRejected },
+          MemoryState,
+        ] => {
+          const checkpoint = request.checkpoint;
+          const thread = current.threads.get(checkpoint.threadId);
+
+          if (thread === undefined)
+            return [
+              {
+                _tag: "failure",
+                error: ThreadNotMaterialized.make({ threadId: checkpoint.threadId }),
+              },
+              current,
+            ];
+          if (thread.producerEpoch !== request.producerEpoch)
+            return [
+              {
+                _tag: "failure",
+                error: FenceRejected.make({
+                  threadId: checkpoint.threadId,
+                  actualEpoch: thread.producerEpoch,
+                  attemptedEpoch: request.producerEpoch,
+                }),
+              },
+              current,
+            ];
+          if (checkpoint.throughSequence > thread.tailSequence)
+            return [
+              {
+                _tag: "failure",
+                error: CheckpointRejected.make({
+                  threadId: checkpoint.threadId,
+                  reason: "ahead-of-tail",
+                }),
+              },
+              current,
+            ];
+          if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
+            return [
+              {
+                _tag: "failure",
+                error: CheckpointRejected.make({
+                  threadId: checkpoint.threadId,
+                  reason: "digest-mismatch",
+                }),
+              },
+              current,
+            ];
+          if ((thread.recoveryCheckpoint?.throughSequence ?? -1) > checkpoint.throughSequence)
+            return [{ _tag: "success" }, current];
+          const threads = new Map(current.threads);
+
+          threads.set(checkpoint.threadId, { ...thread, recoveryCheckpoint: checkpoint });
+
+          return [{ _tag: "success" }, { threads }];
+        },
+      );
+
+      if (decision._tag === "failure") return yield* decision.error;
+    },
+  );
+
+  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fnUntraced(
+    function* (unvalidated) {
+      const request = yield* validate(LoadCheckpointRequest, "loadRecoveryCheckpoint", unvalidated);
+
+      const thread = yield* Ref.get(state).pipe(
+        Effect.flatMap((current) => findThread(current, request.threadId)),
+      );
+
+      const checkpoint = thread.recoveryCheckpoint;
+
+      if (
+        checkpoint === undefined ||
+        checkpoint.throughSequence > (request.atOrBeforeSequence ?? thread.tailSequence)
+      )
+        return Option.none();
+      if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
+        return yield* CheckpointRejected.make({
+          threadId: request.threadId,
+          reason: "digest-mismatch",
+        });
+
+      return Option.some(checkpoint);
+    },
+  );
 
   const threadStore = ThreadStore.of({
     readIdentity,

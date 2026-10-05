@@ -57,7 +57,7 @@ const storage = () =>
 const rejected = (reason: UpdateError["reason"]) => UpdateError.make({ reason });
 
 /** Acceptance is fenced by the actual emitting Attempt; recovery only recreates frozen outbox rows. */
-export const makeAgentUpdateRuntime = Effect.fn("AgentUpdates.makeDurable")(function* (options: {
+export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   readonly deploymentId: DeploymentId;
   readonly producerId: ProducerId;
 }) {
@@ -71,10 +71,7 @@ export const makeAgentUpdateRuntime = Effect.fn("AgentUpdates.makeDurable")(func
   const read = (threadId: ThreadId) =>
     store.export(ThreadExportRequest.make({ threadId })).pipe(Effect.mapError(storage));
 
-  const prepareDelivery = Effect.fn("AgentUpdates.prepareDelivery")(function* (
-    update: Update,
-    delivery: Delivery,
-  ) {
+  const prepareDelivery = Effect.fnUntraced(function* (update: Update, delivery: Delivery) {
     const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(delivery.envelope).pipe(
       Effect.mapError(storage),
     );
@@ -88,7 +85,7 @@ export const makeAgentUpdateRuntime = Effect.fn("AgentUpdates.makeDurable")(func
     }).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(storage));
   });
 
-  const insert = Effect.fn("AgentUpdates.restoreDelivery")(function* (record: AgentUpdateEmitted) {
+  const insert = Effect.fnUntraced(function* (record: AgentUpdateEmitted) {
     const delivery = record.delivery;
 
     if (delivery === undefined) return;
@@ -100,7 +97,7 @@ export const makeAgentUpdateRuntime = Effect.fn("AgentUpdates.makeDurable")(func
     yield* failpoint.hit("update:after-delivery-insert");
   });
 
-  const repair = Effect.fn("AgentUpdates.repair")(function* (threadId: ThreadId) {
+  const repair = Effect.fnUntraced(function* (threadId: ThreadId) {
     const history = yield* read(threadId);
 
     for (const { record } of history.records) {
@@ -109,7 +106,7 @@ export const makeAgentUpdateRuntime = Effect.fn("AgentUpdates.makeDurable")(func
     }
   });
 
-  const emit = Effect.fn("AgentUpdates.accept")(function* (request: {
+  const emit = Effect.fnUntraced(function* (request: {
     readonly submission: SubmissionSnapshot;
     readonly runId: RunId;
     readonly producerEpoch: ProducerEpoch;

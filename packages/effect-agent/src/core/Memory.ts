@@ -111,7 +111,7 @@ const render = (passages: ReadonlyArray<SelectedPassage>): string => {
  * for tighter selection. The engine independently enforces its full per-call context budget.
  * The deadline owns a Scope, so temporary reader resources finalize on every exit path.
  */
-const recall = Effect.fn("Memory.recall")(function* <E = never, R = never>(
+const recall = Effect.fnUntraced(function* <E = never, R = never>(
   sources: ReadonlyArray<MemoryRecallSource<E, R>>,
   limits: MemoryRecallLimits,
   estimateTokens: (text: string) => number = bytes,

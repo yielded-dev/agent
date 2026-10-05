@@ -637,7 +637,7 @@ const make = <
     methods.map((method) => [`${method.namespace}.${method.method}`, method]),
   );
 
-  const describe = Effect.fn("CodeMode.describe")(function* (
+  const describe = Effect.fnUntraced(function* (
     selected: ReadonlyArray<string>,
     options?: { readonly maxBytes?: number | undefined },
   ) {
@@ -907,7 +907,7 @@ const make = <
         });
       });
 
-    const invoke = Effect.fn(`CodeMode.${name}`)(function* (parameters: { readonly code: string }) {
+    const invoke = Effect.fnUntraced(function* (parameters: { readonly code: string }) {
       const broker = yield* ToolBroker;
       // Resolve invocation authority before restoring captured construction services. A Layer
       // built under an older Run must not restore that Run's catalogue or hidden method names.

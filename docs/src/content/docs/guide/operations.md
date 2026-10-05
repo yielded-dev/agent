@@ -197,6 +197,11 @@ Persist observation cursors and make downstream projection or delivery idempoten
 an external side effect can redeliver the record. Streams, notifications, callbacks, and process
 finalizers provide no exactly-once delivery guarantee.
 
+Use [operation spans](/guide/run-agents/#trace-agent-and-model-calls) to diagnose storage and recovery.
+Adapter storage spans cover append, claim, renew, release, publish, and finalize boundaries;
+recovery spans cover recovery operations. Hydration and decoding stay within the enclosing
+operation span, without separate spans for individual records or decoded rows.
+
 <a id="backup-and-restore-on-dn"></a>
 
 ## Back up and restore on Node.js

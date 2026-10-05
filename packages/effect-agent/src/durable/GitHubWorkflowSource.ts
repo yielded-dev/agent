@@ -143,9 +143,7 @@ export const githubWorkflowRunsHttpLayer = (
 
       const apiUrl = (options.apiUrl ?? "https://api.github.com").replace(/\/$/, "");
 
-      const getAttempt = Effect.fn("GitHubWorkflowRuns.getAttempt")(function* (
-        request: GitHubWorkflowRunAttemptRequest,
-      ) {
+      const getAttempt = Effect.fnUntraced(function* (request: GitHubWorkflowRunAttemptRequest) {
         const repository = yield* Schema.decodeEffect(GitHubRepository, {
           onExcessProperty: "error",
         })(request.repository).pipe(Effect.mapError(() => httpFailure("invalid-response", false)));
@@ -218,7 +216,7 @@ const completionIdentity = (completion: GitHubWorkflowRunCompletion): string =>
 const watchIdentity = (repositoryId: number, watch: GitHubWorkflowRunWatch): string =>
   `github-workflow-run:${String(repositoryId)}:${String(watch.runId)}:${String(watch.attempt)}:completed`;
 
-const completionFromWire = Effect.fn("GitHubWorkflowRun.completionFromWire")(function* (
+const completionFromWire = Effect.fnUntraced(function* (
   repository: GitHubRepository,
   watch: GitHubWorkflowRunWatch,
   wire: GitHubWorkflowRunAttempt,
@@ -253,7 +251,7 @@ export interface GitHubWorkflowRunSourceOptions {
  * Build the exact-attempt completion source, shared by all destination Agents in this partition.
  * Reconciliation depends on GitHub retaining a readable exact attempt.
  */
-export const makeGitHubWorkflowRunSource = Effect.fn("makeGitHubWorkflowRunSource")(function* (
+export const makeGitHubWorkflowRunSource = Effect.fnUntraced(function* (
   options: GitHubWorkflowRunSourceOptions,
 ): Effect.fn.Return<EventSource, SubscriptionSourceError, GitHubWorkflowRuns> {
   const repository = yield* Schema.decodeEffect(GitHubRepository, { onExcessProperty: "error" })(
@@ -337,10 +335,7 @@ export const webCryptoGitHubWebhookSignatureVerifierLayer = <Key>(
   Layer.effect(
     GitHubWebhookSignatureVerifier,
     Effect.sync(() => {
-      const verify = Effect.fn("GitHubWebhookSignatureVerifier.verify")(function* (
-        body: Uint8Array,
-        signature: string,
-      ) {
+      const verify = Effect.fnUntraced(function* (body: Uint8Array, signature: string) {
         if (!/^sha256=[0-9a-f]{64}$/.test(signature)) {
           return yield* GitHubWebhookVerificationError.make({ reason: "invalid-signature" });
         }
@@ -398,9 +393,7 @@ export interface VerifiedGitHubWorkflowRunWebhookRequest {
  * Verify raw ingress, decode only a completed `workflow_run`, and hand its canonical completion to
  * durable intake. The acknowledgement means routing work is retained; it is not a Submission Receipt.
  */
-export const acceptVerifiedGitHubWorkflowRunWebhook = Effect.fn(
-  "acceptVerifiedGitHubWorkflowRunWebhook",
-)(function* (
+export const acceptVerifiedGitHubWorkflowRunWebhook = Effect.fnUntraced(function* (
   request: VerifiedGitHubWorkflowRunWebhookRequest,
 ): Effect.fn.Return<
   EventAcknowledgement,

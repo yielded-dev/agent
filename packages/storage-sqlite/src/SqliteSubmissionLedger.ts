@@ -18,7 +18,7 @@ import {
   type SqliteStorageOptions,
 } from "./SqliteThreadStore.ts";
 
-const makeServices = Effect.fn("SqliteSubmissionLedger.makeServices")(function* () {
+const makeServices = Effect.fnUntraced(function* () {
   const config = yield* SqliteStorageConfig;
   const failpoint = yield* SqliteStorageFailpoint;
   const journal = yield* initializeSqliteJournal();

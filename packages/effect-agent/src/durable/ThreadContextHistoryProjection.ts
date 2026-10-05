@@ -40,7 +40,7 @@ const unavailable = () =>
     message: "Canonical context history is unavailable",
   });
 
-const jsonText = Effect.fn("ThreadContextHistoryProjection.jsonText")(function* (value: unknown) {
+const jsonText = Effect.fnUntraced(function* (value: unknown) {
   const json = yield* Schema.decodeUnknownEffect(PersistedJson)(value).pipe(
     Effect.mapError(unavailable),
   );
@@ -48,9 +48,7 @@ const jsonText = Effect.fn("ThreadContextHistoryProjection.jsonText")(function* 
   return JSON.stringify(json);
 });
 
-const promptText = Effect.fn("ThreadContextHistoryProjection.promptText")(function* (
-  value: PersistedJson,
-) {
+const promptText = Effect.fnUntraced(function* (value: PersistedJson) {
   const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(value).pipe(
     Effect.mapError(unavailable),
   );
@@ -90,7 +88,7 @@ const promptText = Effect.fn("ThreadContextHistoryProjection.promptText")(functi
   return messages.join("\n\n");
 });
 
-const retainedEvidence = Effect.fn("ThreadContextHistoryProjection.evidence")(function* (
+const retainedEvidence = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
 ): Effect.fn.Return<ContextHistoryEvidence | undefined, ContextHistoryError> {
   const payload = envelope.record.payload;
@@ -137,7 +135,7 @@ const retainedEvidence = Effect.fn("ThreadContextHistoryProjection.evidence")(fu
  * Do not restrict rollover boundaries to the anchor: later commits may assign older evidence
  * to a window. An ID or an index row alone does not establish existence, eligibility, or access.
  */
-export const project = Effect.fn("ThreadContextHistoryProjection.project")(function* (
+export const project = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
 ): Effect.fn.Return<ContextHistoryProjection, ContextHistoryError> {
   const payload = envelope.record.payload;
@@ -162,7 +160,7 @@ export const project = Effect.fn("ThreadContextHistoryProjection.project")(funct
 export const normalizeText = (text: string): string => text.toLowerCase();
 
 /** Validate, trim, and case-fold a search query using the native history contract. */
-export const normalizeQuery = Effect.fn("ThreadContextHistoryProjection.normalizeQuery")(function* (
+export const normalizeQuery = Effect.fnUntraced(function* (
   query: string,
 ): Effect.fn.Return<string, ContextHistoryError> {
   const decoded = yield* Schema.decodeEffect(ContextHistorySearch.fields.query)(query).pipe(

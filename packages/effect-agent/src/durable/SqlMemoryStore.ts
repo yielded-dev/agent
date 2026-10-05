@@ -177,7 +177,7 @@ class MemoryViews {
 
 const ownedViews = new WeakMap<object, MemoryViews>();
 
-const memoryViews = Effect.fn("SqliteMemoryStore.memoryViews")(function* () {
+const memoryViews = Effect.fnUntraced(function* () {
   const owner = yield* SqlStorageOwner;
 
   if (owner === undefined) return undefined;
@@ -294,37 +294,34 @@ const query = <A extends object>(
   operation: string,
 ) => effect.pipe(Effect.mapError(() => storageError(operation)));
 
-const decodeRows = Effect.fn("SqliteMemoryStore.decodeRows")(function* <A, I>(
+const decodeRows = <A, I>(
   schema: Schema.Codec<A, I, never>,
   rows: ReadonlyArray<unknown>,
   operation: string,
-): Effect.fn.Return<ReadonlyArray<A>, MemoryStorageError> {
-  return yield* Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
+): Effect.Effect<ReadonlyArray<A>, MemoryStorageError> =>
+  Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
     Effect.mapError(() => storageError(operation, "corrupt")),
   );
-});
 
-const decodeInput = Effect.fn("SqliteMemoryStore.decodeInput")(function* <A, I>(
+const decodeInput = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: unknown,
   operation: string,
-): Effect.fn.Return<A, MemoryStorageError> {
-  return yield* Schema.decodeUnknownEffect(schema)(value).pipe(
+): Effect.Effect<A, MemoryStorageError> =>
+  Schema.decodeUnknownEffect(schema)(value).pipe(
     Effect.mapError(() => storageError(operation, "invalid-input")),
   );
-});
 
-const encodeJson = Effect.fn("SqliteMemoryStore.encodeJson")(function* <A, I>(
+const encodeJson = <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: A,
   operation: string,
-): Effect.fn.Return<string, MemoryStorageError> {
-  return yield* Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(
+): Effect.Effect<string, MemoryStorageError> =>
+  Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(
     Effect.mapError(() => storageError(operation, "corrupt")),
   );
-});
 
-const validateEncodedChange = Effect.fn("SqliteMemoryStore.validateEncodedChange")(function* (
+const validateEncodedChange = Effect.fnUntraced(function* (
   encoded: typeof EncodedMemoryChange.Type,
   operation: string,
 ): Effect.fn.Return<void, MemoryStorageError> {
@@ -333,7 +330,7 @@ const validateEncodedChange = Effect.fn("SqliteMemoryStore.validateEncodedChange
   );
 });
 
-const decodeVersionedJson = Effect.fn("SqliteMemoryStore.decodeVersionedJson")(function* <A, I>(
+const decodeVersionedJson = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
   value: string,
   operation: string,
@@ -357,7 +354,7 @@ const decodeVersionedJson = Effect.fn("SqliteMemoryStore.decodeVersionedJson")(f
   return decoded;
 });
 
-const validateDocument = Effect.fn("SqliteMemoryStore.validateDocument")(function* (
+const validateDocument = Effect.fnUntraced(function* (
   document: MemoryDocument,
   key: MemoryKey,
   operation: string,
@@ -378,7 +375,7 @@ const validateDocument = Effect.fn("SqliteMemoryStore.validateDocument")(functio
   return document;
 });
 
-const validateReceiptResult = Effect.fn("SqliteMemoryStore.validateReceiptResult")(function* (
+const validateReceiptResult = Effect.fnUntraced(function* (
   command: MemoryWrite,
   result: MemoryDocument,
   operation: string,
@@ -409,7 +406,7 @@ const validateReceiptResult = Effect.fn("SqliteMemoryStore.validateReceiptResult
   }
 });
 
-const readUsage = Effect.fn("SqliteMemoryStore.readUsage")(function* () {
+const readUsage = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const views = yield* memoryViews();
   const operation = "read memory usage";
@@ -430,7 +427,7 @@ const readUsage = Effect.fn("SqliteMemoryStore.readUsage")(function* () {
 
 // Called inside schema initialization's transaction. The separate marker distinguishes
 // a legacy store from damaged established accounting; reopening never rebuilds counters.
-const initializeMemoryUsage = Effect.fn("SqliteMemoryStore.initializeUsage")(function* () {
+const initializeMemoryUsage = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const failpoint = yield* MemoryMutationFailpoint;
   const operation = "initialize memory usage";
@@ -482,7 +479,7 @@ const initializeMemoryUsage = Effect.fn("SqliteMemoryStore.initializeUsage")(fun
   yield* readUsage();
 });
 
-const initializeMemorySchema = Effect.fn("SqliteMemoryStore.initialize")(function* () {
+const initializeMemorySchema = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const owner = yield* SqlStorageOwner;
   const transaction = owner === undefined ? sql.withTransaction : owner.transaction;
@@ -576,12 +573,12 @@ const initializeMemorySchema = Effect.fn("SqliteMemoryStore.initialize")(functio
   yield* failpoint.hit("memory:initialize:after");
 });
 
-const makeMemoryReader = Effect.fn("SqliteMemoryStore.makeReader")(function* () {
+const makeMemoryReader = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const owner = yield* SqlStorageOwner;
   const views = yield* memoryViews();
 
-  const readDocuments = Effect.fn("SqliteMemoryStore.readDocuments")(
+  const readDocuments = Effect.fnUntraced(
     function* (
       keys: ReadonlyArray<MemoryKey>,
       operation: string,
@@ -656,7 +653,7 @@ const makeMemoryReader = Effect.fn("SqliteMemoryStore.makeReader")(function* () 
     (effect) => (owner === undefined ? effect : owner.read(effect)),
   );
 
-  const get = Effect.fn("SqliteMemoryStore.get")(function* (key: MemoryKey) {
+  const get = Effect.fnUntraced(function* (key: MemoryKey) {
     const decodedKey = yield* decodeInput(MemoryKey.Wire, key, "get memory document");
 
     const documents = yield* readDocuments([decodedKey], "get memory document");
@@ -667,7 +664,7 @@ const makeMemoryReader = Effect.fn("SqliteMemoryStore.makeReader")(function* () 
   return { get, readDocuments };
 });
 
-const makeMemoryServices = Effect.fn("SqliteMemoryStore.make")(function* () {
+const makeMemoryServices = Effect.fnUntraced(function* () {
   const sql = yield* SqlClientService.SqlClient;
   const owner = yield* SqlStorageOwner;
   const views = yield* memoryViews();
@@ -688,7 +685,7 @@ const makeMemoryServices = Effect.fn("SqliteMemoryStore.make")(function* () {
   yield* initializeMemorySchema();
   const { get, readDocuments } = yield* makeMemoryReader();
 
-  const readReceipts = Effect.fn("SqliteMemoryStore.readReceipts")(function* (
+  const readReceipts = Effect.fnUntraced(function* (
     writes: ReadonlyArray<MemoryWrite>,
     operation: string,
   ): Effect.fn.Return<ReadonlyMap<string, ReceiptView>, MemoryStorageError> {
@@ -769,9 +766,7 @@ const makeMemoryServices = Effect.fn("SqliteMemoryStore.make")(function* () {
     return found;
   });
 
-  const changeMany = Effect.fn("SqliteMemoryStore.changeMany")(function* (
-    writes: ReadonlyArray<MemoryWrite>,
-  ) {
+  const changeMany = Effect.fnUntraced(function* (writes: ReadonlyArray<MemoryWrite>) {
     const operation = "change memory document";
     const decodedWrites = yield* decodeInput(SqlMemoryWriteBatch, writes, operation);
 
@@ -971,14 +966,14 @@ const makeMemoryServices = Effect.fn("SqliteMemoryStore.make")(function* () {
     return transactionResult.documents;
   });
 
-  const change = Effect.fn("SqliteMemoryStore.change")(function* (write: MemoryWrite) {
+  const change = Effect.fnUntraced(function* (write: MemoryWrite) {
     return (yield* changeMany([write]))[0];
   });
 
   const batchWriter = SqlMemoryBatchWriter.of({
-    changeMany: Effect.fn("SqlMemoryBatchWriter.changeMany")(function* <
-      Namespace extends MemoryNamespace,
-    >(writes: ReadonlyArray<MemoryWrite<Namespace>>) {
+    changeMany: Effect.fnUntraced(function* <Namespace extends MemoryNamespace>(
+      writes: ReadonlyArray<MemoryWrite<Namespace>>,
+    ) {
       const documents = yield* changeMany(writes);
 
       return yield* Effect.forEach(documents, (document, index) =>

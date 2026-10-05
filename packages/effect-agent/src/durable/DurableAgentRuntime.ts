@@ -1258,9 +1258,7 @@ interface OpenCallReview {
   readonly recovered: number;
 }
 
-const make = Effect.fn("DurableAgentRuntime.make")(function* (
-  bindings: ReadonlyArray<ResolvedBinding>,
-) {
+const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
   const registeredBindings = [...bindings];
   const bindingSelection = yield* CurrentBindingSelection;
   const workerAdmissionPort = yield* WorkerAdmissionPort;
@@ -1808,39 +1806,37 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     );
   });
 
-  const persistRecoveryCheckpoint = Effect.fn("DurableAgentRuntime.persistRecoveryCheckpoint")(
-    function* (
-      ctx: AttemptAppendContext,
-      submission: SubmissionSnapshot,
-      contents: PersistedJson,
-      tail: { readonly sequence: CanonicalSequence; readonly digest: Digest },
-      createdAt: DateTime.Utc,
-    ): Effect.fn.Return<void, DurableWorkerFailure> {
-      if (store.recoveryCheckpoints === undefined) return;
+  const persistRecoveryCheckpoint = Effect.fnUntraced(function* (
+    ctx: AttemptAppendContext,
+    submission: SubmissionSnapshot,
+    contents: PersistedJson,
+    tail: { readonly sequence: CanonicalSequence; readonly digest: Digest },
+    createdAt: DateTime.Utc,
+  ): Effect.fn.Return<void, DurableWorkerFailure> {
+    if (store.recoveryCheckpoints === undefined) return;
 
-      const checkpoint = ThreadCheckpoint.make({
-        schemaVersion: 1,
-        threadId: ctx.threadId,
-        throughSequence: tail.sequence,
-        tailDigest: tail.digest,
-        engineVersion: RECOVERY_ENGINE_VERSION,
-        agentDefinitionDigest: submission.agentDigests.agent,
-        modelDigest: submission.agentDigests.model,
-        toolDigest: submission.agentDigests.tools,
-        state: contents,
-        createdAt,
-      });
+    const checkpoint = ThreadCheckpoint.make({
+      schemaVersion: 1,
+      threadId: ctx.threadId,
+      throughSequence: tail.sequence,
+      tailDigest: tail.digest,
+      engineVersion: RECOVERY_ENGINE_VERSION,
+      agentDefinitionDigest: submission.agentDigests.agent,
+      modelDigest: submission.agentDigests.model,
+      toolDigest: submission.agentDigests.tools,
+      state: contents,
+      createdAt,
+    });
 
-      yield* hit("checkpoint:before-save");
-      yield* store.recoveryCheckpoints
-        .save(SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch: ctx.producerEpoch }))
-        .pipe(Effect.catchTag("CheckpointRejected", () => Effect.void));
-      yield* hit("checkpoint:after-save");
-    },
-  );
+    yield* hit("checkpoint:before-save");
+    yield* store.recoveryCheckpoints
+      .save(SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch: ctx.producerEpoch }))
+      .pipe(Effect.catchTag("CheckpointRejected", () => Effect.void));
+    yield* hit("checkpoint:after-save");
+  });
 
   /** Refresh before settlement finalization, so completed processing includes the cache's cost. */
-  const saveThreadContext = Effect.fn("DurableAgentRuntime.saveThreadContext")(function* (
+  const saveThreadContext = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     priorContext?: ThreadContextCheckpoint,
@@ -1988,16 +1984,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * left for a later snapshot, while a short page or sequence gap fails typed before recovery
    * mutates anything. At most `ceil((through - after) / READ_PAGE)` store pages are requested.
    */
-  const readCanonicalRange = Effect.fnUntraced(function* (
+  const readCanonicalRange = (
     threadId: ThreadId,
     afterSequence: CanonicalSequence,
     throughSequence: CanonicalSequence,
     retain: (record: CanonicalRecordEnvelope) => boolean,
-  ): Effect.fn.Return<Array<CanonicalRecordEnvelope>, ThreadStoreError | ThreadNotMaterialized> {
-    return yield* Stream.runCollect(
+  ): Effect.Effect<Array<CanonicalRecordEnvelope>, ThreadStoreError | ThreadNotMaterialized> =>
+    Stream.runCollect(
       canonicalRange(threadId, throughSequence, afterSequence).pipe(Stream.filter(retain)),
     );
-  });
 
   /**
    * Capture one strongly-consistent pass-start tail and read exactly that prefix. This snapshot
@@ -2759,7 +2754,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     });
 
   /** Append the canonical `AbortRequested` record; an identity conflict means it already exists. */
-  const appendAbortRecord = Effect.fn("DurableAgentRuntime.appendAbortRecord")(function* (
+  const appendAbortRecord = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     intent: AbortIntent,
   ) {
@@ -2791,7 +2786,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * ledger marking is a separate step so abort settlement can record the uncertainty WITHOUT
    * blocking the lane (durability §13: abort never asserts external rollback).
    */
-  const appendUnknownRecords = Effect.fn("DurableAgentRuntime.appendUnknownRecords")(function* (
+  const appendUnknownRecords = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submissionId: SubmissionId,
     knownIds: Set<string>,
@@ -2859,7 +2854,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * identity dedupes double-settles across the batch path and this path; an `AppendConflict`
    * means an identical closure (modulo timestamp) already committed.
    */
-  const appendClosedCall = Effect.fn("DurableAgentRuntime.appendClosedCall")(function* (
+  const appendClosedCall = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submissionId: SubmissionId,
     knownIds: Set<string>,
@@ -2947,7 +2942,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * `Uncertain` collects for Unknown marking, and a reconciler FAILURE is no proof at all (the
    * call stays open and blocked without being marked). Nothing here ever executes a handler.
    */
-  const reconcileOpenCalls = Effect.fn("DurableAgentRuntime.reconcileOpenCalls")(function* (
+  const reconcileOpenCalls = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     snapshot: RecoverySnapshot,
@@ -3131,7 +3126,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * (history is the recovery truth, DUR-015), then the ownership-free ledger marking that blocks
    * the lane until the authorized DUR-017 resolution path covers every marked call.
    */
-  const markCallsUnknown = Effect.fn("DurableAgentRuntime.markCallsUnknown")(function* (
+  const markCallsUnknown = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submissionId: SubmissionId,
     knownIds: Set<string>,
@@ -3157,7 +3152,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * the record — an earlier Attempt crashed after its append — only the ledger marker is repaired
    * (DUR-015/DUR-016).
    */
-  const applyCanonicalInput = Effect.fn("DurableAgentRuntime.applyCanonicalInput")(function* (
+  const applyCanonicalInput = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     ownership: RunOwnership,
@@ -3228,7 +3223,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return existing?.record;
   });
 
-  const ensureRunStarted = Effect.fn("DurableAgentRuntime.ensureRunStarted")(function* (
+  const ensureRunStarted = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     maxDurationMillis: number,
@@ -3293,9 +3288,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * notification for single-store parent re-suspension races; `ResumeWaitingParent` remains the
    * repair for older data and any already-recorded canonical settlement.
    */
-  const notifyParentOfChildSettlement = Effect.fn(
-    "DurableAgentRuntime.notifyParentOfChildSettlement",
-  )(function* (
+  const notifyParentOfChildSettlement = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     record: RecordEnvelope,
   ): Effect.fn.Return<void, LedgerError> {
@@ -3399,7 +3392,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     }
   });
 
-  const settleOneJoined = Effect.fn("DurableAgentRuntime.settleOneJoined")(function* (
+  const settleOneJoined = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     hostSettlement: SubmissionSettledRecord,
     joined: RecoverySnapshot,
@@ -3453,29 +3446,27 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /** Every joined receipt publishes the host outcome; canonical history repairs any lost finalization. */
-  const settleJoinedSubmissions = Effect.fn("DurableAgentRuntime.settleJoinedSubmissions")(
-    function* (
-      ctx: AttemptAppendContext,
-      hostSettlement: SubmissionSettledRecord,
-    ): Effect.fn.Return<void, DurableWorkerFailure> {
-      const hostSubmissionId = hostSettlement.submissionId;
+  const settleJoinedSubmissions = Effect.fnUntraced(function* (
+    ctx: AttemptAppendContext,
+    hostSettlement: SubmissionSettledRecord,
+  ): Effect.fn.Return<void, DurableWorkerFailure> {
+    const hostSubmissionId = hostSettlement.submissionId;
 
-      const snapshot = yield* ledger.loadRecoverySnapshot(
-        RecoverySnapshotRequest.make({ submissionId: hostSubmissionId }),
+    const snapshot = yield* ledger.loadRecoverySnapshot(
+      RecoverySnapshotRequest.make({ submissionId: hostSubmissionId }),
+    );
+
+    for (const join of snapshot.joins) {
+      if (join.state !== "joined") continue;
+
+      const joinedSnapshot = yield* ledger.loadRecoverySnapshot(
+        RecoverySnapshotRequest.make({ submissionId: join.submissionId }),
       );
 
-      for (const join of snapshot.joins) {
-        if (join.state !== "joined") continue;
-
-        const joinedSnapshot = yield* ledger.loadRecoverySnapshot(
-          RecoverySnapshotRequest.make({ submissionId: join.submissionId }),
-        );
-
-        if (joinedSnapshot.submission.state === "settled") continue;
-        yield* settleOneJoined(ctx, hostSettlement, joinedSnapshot);
-      }
-    },
-  );
+      if (joinedSnapshot.submission.state === "settled") continue;
+      yield* settleOneJoined(ctx, hostSettlement, joinedSnapshot);
+    }
+  });
 
   /**
    * Terminalization: publish the single canonical settlement, complete notifications, then
@@ -3483,7 +3474,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * Submissions joined to this host Run settle with the host outcome immediately after
    * (plan §2.5); recovery completes any prefix of that loop.
    */
-  const terminalize = Effect.fn("DurableAgentRuntime.terminalize")(function* (
+  const terminalize = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     publishSettlement: PublishSettlement,
@@ -3558,7 +3549,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /** Canonical settlement exists: rebuild the ledger from history, never the reverse (DUR-015). */
-  const finalizeFromHistory = Effect.fn("DurableAgentRuntime.finalizeFromHistory")(function* (
+  const finalizeFromHistory = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     record: RecordEnvelope,
   ): Effect.fn.Return<Settlement, LedgerError | SettlementConflict> {
@@ -3584,7 +3575,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * records for every open ordinary Tool Call (abort settles the obligation but never asserts
    * external rollback, durability §13), then settle aborted.
    */
-  const settleAborted = Effect.fn("DurableAgentRuntime.settleAborted")(function* (
+  const settleAborted = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     submission: SubmissionSnapshot,
     publishSettlement: PublishSettlement,
@@ -3631,7 +3622,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * identity; a racing append is re-proved from the log. A claim of the admitted child may
    * advance only its fence, so bounded retries acquire the current tail before appending.
    */
-  const ensureChildLineage = Effect.fn("DurableAgentRuntime.ensureChildLineage")(
+  const ensureChildLineage = Effect.fnUntraced(
     function* (
       parent: SubmissionSnapshot,
       request: SubagentRequested,
@@ -3726,108 +3717,102 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * readiness. Every step is get-or-create; a replay converges on the one existing child
    * (SUB-016) and an `indeterminate` answer NEVER admits a second child.
    */
-  const establishChildFromRequest = Effect.fn("DurableAgentRuntime.establishChildFromRequest")(
-    function* (
-      parent: SubmissionSnapshot,
-      request: SubagentRequested,
-      allowAdmission = true,
-    ): Effect.fn.Return<ChildAdmissionOutcome, DurableWorkerFailure> {
-      const principal = decodePrincipalSync(request.childPrincipal);
-      const idempotencyKey = decodeIdempotencyKeySync(request.childIdempotencyKey);
+  const establishChildFromRequest = Effect.fnUntraced(function* (
+    parent: SubmissionSnapshot,
+    request: SubagentRequested,
+    allowAdmission = true,
+  ): Effect.fn.Return<ChildAdmissionOutcome, DurableWorkerFailure> {
+    const principal = decodePrincipalSync(request.childPrincipal);
+    const idempotencyKey = decodeIdempotencyKeySync(request.childIdempotencyKey);
 
-      const resolution = yield* ledger.resolveAdmission(
-        SubmissionLookupByKey.make({
-          threadId: request.childThreadId,
-          principal,
-          idempotencyKey,
-        }),
-      );
+    const resolution = yield* ledger.resolveAdmission(
+      SubmissionLookupByKey.make({
+        threadId: request.childThreadId,
+        principal,
+        idempotencyKey,
+      }),
+    );
 
-      let childSubmissionId: SubmissionId;
-      let receiptId: ReceiptId;
+    let childSubmissionId: SubmissionId;
+    let receiptId: ReceiptId;
 
-      switch (resolution._tag) {
-        case "Indeterminate": {
-          return { _tag: "indeterminate", reason: resolution.reason };
-        }
-        case "NotAdmitted": {
-          if (!allowAdmission) {
-            return {
-              _tag: "indeterminate",
-              reason: "The expired parent cannot admit a new child",
-            };
-          }
-
-          const admitted: AdmissionResult = yield* ledger
-            .admit(
-              AdmissionRequest.make({
-                threadId: request.childThreadId,
-                principal,
-                idempotencyKey,
-                agentId: request.targetAgentId,
-                agentDigests: request.targetDigests,
-                deploymentId: config.deploymentId,
-                inputPayload: request.childInput,
-                inputDigest: request.childInputDigest,
-                parentLinkage: ParentLinkage.make({
-                  parentSubmissionId: parent.submissionId,
-                  parentToolCallId: request.toolCallId,
-                }),
-              }),
-            )
-            .pipe(
-              Effect.catchTag(
-                "AdmissionConflict",
-                conflictToLedgerError("establishChildFromRequest"),
-              ),
-            );
-
-          childSubmissionId = admitted.submissionId;
-          receiptId = admitted.receiptId;
-          break;
-        }
-        case "Admitted": {
-          // The one existing child: verify the immutable admission facts against the canonical
-          // request before reattaching — a divergent row can never be "the same child"
-          // (fail-closed; identifiers are never capabilities, D10).
-          const child = resolution.submission;
-          const linkage = child.parentLinkage;
-
-          if (
-            child.agentId !== request.targetAgentId ||
-            !definitionDigestsEqual(child.agentDigests, request.targetDigests) ||
-            child.inputDigest !== request.childInputDigest ||
-            linkage === undefined ||
-            linkage.parentSubmissionId !== parent.submissionId ||
-            linkage.parentToolCallId !== request.toolCallId
-          ) {
-            return yield* LedgerError.make({
-              operation: "establishChildFromRequest",
-              message: `The admitted child ${child.submissionId} diverges from the canonical SubagentRequested record for Tool Call ${request.toolCallId}; establishment fails closed (SUB-016)`,
-            });
-          }
-          childSubmissionId = child.submissionId;
-          receiptId = child.receiptId;
-          break;
-        }
+    switch (resolution._tag) {
+      case "Indeterminate": {
+        return { _tag: "indeterminate", reason: resolution.reason };
       }
-      yield* hit("subagent:after-admit");
-      yield* materializeAtLeast(request.childThreadId, ZERO_EPOCH);
-      yield* ensureThreadCreated(
-        request.childThreadId,
-        request.targetAgentId,
-        request.targetDigests,
-      );
-      const childRead = yield* readAllTolerant(request.childThreadId, []);
+      case "NotAdmitted": {
+        if (!allowAdmission) {
+          return {
+            _tag: "indeterminate",
+            reason: "The expired parent cannot admit a new child",
+          };
+        }
 
-      yield* ensureChildLineage(parent, request, childRead.records);
-      yield* ledger.markReady(MarkReadyRequest.make({ submissionId: childSubmissionId }));
-      yield* hit("subagent:after-child-ready");
-      yield* wake.notify(request.childThreadId);
+        const admitted: AdmissionResult = yield* ledger
+          .admit(
+            AdmissionRequest.make({
+              threadId: request.childThreadId,
+              principal,
+              idempotencyKey,
+              agentId: request.targetAgentId,
+              agentDigests: request.targetDigests,
+              deploymentId: config.deploymentId,
+              inputPayload: request.childInput,
+              inputDigest: request.childInputDigest,
+              parentLinkage: ParentLinkage.make({
+                parentSubmissionId: parent.submissionId,
+                parentToolCallId: request.toolCallId,
+              }),
+            }),
+          )
+          .pipe(
+            Effect.catchTag(
+              "AdmissionConflict",
+              conflictToLedgerError("establishChildFromRequest"),
+            ),
+          );
 
-      return { _tag: "established", childSubmissionId, receiptId };
-    },
-  );
+        childSubmissionId = admitted.submissionId;
+        receiptId = admitted.receiptId;
+        break;
+      }
+      case "Admitted": {
+        // The one existing child: verify the immutable admission facts against the canonical
+        // request before reattaching — a divergent row can never be "the same child"
+        // (fail-closed; identifiers are never capabilities, D10).
+        const child = resolution.submission;
+        const linkage = child.parentLinkage;
+
+        if (
+          child.agentId !== request.targetAgentId ||
+          !definitionDigestsEqual(child.agentDigests, request.targetDigests) ||
+          child.inputDigest !== request.childInputDigest ||
+          linkage === undefined ||
+          linkage.parentSubmissionId !== parent.submissionId ||
+          linkage.parentToolCallId !== request.toolCallId
+        ) {
+          return yield* LedgerError.make({
+            operation: "establishChildFromRequest",
+            message: `The admitted child ${child.submissionId} diverges from the canonical SubagentRequested record for Tool Call ${request.toolCallId}; establishment fails closed (SUB-016)`,
+          });
+        }
+        childSubmissionId = child.submissionId;
+        receiptId = child.receiptId;
+        break;
+      }
+    }
+    yield* hit("subagent:after-admit");
+    yield* materializeAtLeast(request.childThreadId, ZERO_EPOCH);
+    yield* ensureThreadCreated(request.childThreadId, request.targetAgentId, request.targetDigests);
+    const childRead = yield* readAllTolerant(request.childThreadId, []);
+
+    yield* ensureChildLineage(parent, request, childRead.records);
+    yield* ledger.markReady(MarkReadyRequest.make({ submissionId: childSubmissionId }));
+    yield* hit("subagent:after-child-ready");
+    yield* wake.notify(request.childThreadId);
+
+    return { _tag: "established", childSubmissionId, receiptId };
+  });
 
   /**
    * Bounded usage summary rebuilt from canonical child evidence (D11 structural dimensions).
@@ -3906,7 +3891,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * definition digests, input/grant digests, settlement identity, and the settlement record
    * digest pinned by the child's reservation. Any mismatch is a typed verification failure.
    */
-  const verifySettledChild = Effect.fn("DurableAgentRuntime.verifySettledChild")(function* (
+  const verifySettledChild = Effect.fnUntraced(function* (
     parent: SubmissionSnapshot,
     request: SubagentRequested,
     childSubmissionId: SubmissionId,
@@ -4028,64 +4013,60 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * `releaseChildBudget` applies it exactly once — budget stays unavailable until repair, never
    * available twice.
    */
-  const applyReservationRelease = Effect.fn("DurableAgentRuntime.applyReservationRelease")(
-    function* (
-      reservationId: ChildReservationId,
-      accounting: PersistedJson,
-    ): Effect.fn.Return<void, DurableWorkerFailure> {
-      yield* ledger
-        .beginChildBudgetRelease(BeginChildBudgetReleaseRequest.make({ reservationId, accounting }))
-        .pipe(
-          Effect.catchTag(
-            "ChildReservationConflict",
-            conflictToLedgerError("beginChildBudgetRelease"),
-          ),
-        );
-      yield* hit("subagent:after-release-pending");
-      yield* ledger
-        .releaseChildBudget(ReleaseChildBudgetRequest.make({ reservationId }))
-        .pipe(
-          Effect.catchTag("ChildReservationConflict", conflictToLedgerError("releaseChildBudget")),
-        );
-      yield* hit("subagent:after-release");
-    },
-  );
+  const applyReservationRelease = Effect.fnUntraced(function* (
+    reservationId: ChildReservationId,
+    accounting: PersistedJson,
+  ): Effect.fn.Return<void, DurableWorkerFailure> {
+    yield* ledger
+      .beginChildBudgetRelease(BeginChildBudgetReleaseRequest.make({ reservationId, accounting }))
+      .pipe(
+        Effect.catchTag(
+          "ChildReservationConflict",
+          conflictToLedgerError("beginChildBudgetRelease"),
+        ),
+      );
+    yield* hit("subagent:after-release-pending");
+    yield* ledger
+      .releaseChildBudget(ReleaseChildBudgetRequest.make({ reservationId }))
+      .pipe(
+        Effect.catchTag("ChildReservationConflict", conflictToLedgerError("releaseChildBudget")),
+      );
+    yield* hit("subagent:after-release");
+  });
 
   /**
    * Release a provably-childless reservation exactly once (spec §13 "reservation exists,
    * request absent"): freeze the deterministic zero-consumed decision — a conflict means a
    * different decision already froze first, and the release below applies THAT frozen decision.
    */
-  const releaseOrphanReservation = Effect.fn("DurableAgentRuntime.releaseOrphanReservation")(
-    function* (reservationId: ChildReservationId): Effect.fn.Return<void, DurableWorkerFailure> {
-      yield* ledger
-        .beginChildBudgetRelease(
-          BeginChildBudgetReleaseRequest.make({
-            reservationId,
-            accounting: ORPHAN_ZERO_CONSUMED_ACCOUNTING,
-          }),
-        )
-        .pipe(
-          Effect.catchTag("ChildReservationConflict", () => Effect.void),
-          Effect.asVoid,
-        );
-      yield* hit("subagent:after-release-pending");
-      yield* ledger
-        .releaseChildBudget(ReleaseChildBudgetRequest.make({ reservationId }))
-        .pipe(
-          Effect.catchTag("ChildReservationConflict", conflictToLedgerError("releaseChildBudget")),
-        );
-      yield* hit("subagent:after-release");
-    },
-  );
+  const releaseOrphanReservation = Effect.fnUntraced(function* (
+    reservationId: ChildReservationId,
+  ): Effect.fn.Return<void, DurableWorkerFailure> {
+    yield* ledger
+      .beginChildBudgetRelease(
+        BeginChildBudgetReleaseRequest.make({
+          reservationId,
+          accounting: ORPHAN_ZERO_CONSUMED_ACCOUNTING,
+        }),
+      )
+      .pipe(
+        Effect.catchTag("ChildReservationConflict", () => Effect.void),
+        Effect.asVoid,
+      );
+    yield* hit("subagent:after-release-pending");
+    yield* ledger
+      .releaseChildBudget(ReleaseChildBudgetRequest.make({ reservationId }))
+      .pipe(
+        Effect.catchTag("ChildReservationConflict", conflictToLedgerError("releaseChildBudget")),
+      );
+    yield* hit("subagent:after-release");
+  });
 
   /**
    * Join a settled child after parent abort or expiry without running application handlers.
    * The canonical child outcome stays intact; the parent result records why it cannot continue.
    */
-  const joinSettledChildWithoutHandler = Effect.fn(
-    "DurableAgentRuntime.joinSettledChildWithoutHandler",
-  )(function* (
+  const joinSettledChildWithoutHandler = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     parent: SubmissionSnapshot,
     knownIds: Set<string>,
@@ -4205,7 +4186,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * join), which must block the settlement (spec §13: a parent never settles across an open
    * child obligation).
    */
-  const completeJoinedReleases = Effect.fn("DurableAgentRuntime.completeJoinedReleases")(function* (
+  const completeJoinedReleases = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
   ): Effect.fn.Return<boolean, DurableWorkerFailure> {
     const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -4236,209 +4217,207 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /** Release unused reservations or repair and join existing children, never admit new work. */
-  const reconcileRetainedChildren = Effect.fn("DurableAgentRuntime.reconcileRetainedChildren")(
-    function* (
-      ctx: AttemptAppendContext,
-      parent: SubmissionSnapshot,
-      ownership: RunOwnership,
-      unavailableCalls?: ReadonlySet<ToolCallId>,
-    ) {
-      const snapshot = yield* ledger.loadRecoverySnapshot(
-        RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
-      );
+  const reconcileRetainedChildren = Effect.fnUntraced(function* (
+    ctx: AttemptAppendContext,
+    parent: SubmissionSnapshot,
+    ownership: RunOwnership,
+    unavailableCalls?: ReadonlySet<ToolCallId>,
+  ) {
+    const snapshot = yield* ledger.loadRecoverySnapshot(
+      RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
+    );
 
-      const records = yield* readControl(parent.threadId, [parent.submissionId]);
-      const runId = runIdForSubmission(parent.submissionId);
-      const pending = yield* pendingToolBatchFor(records, runId);
-      const knownIds = knownRecordIdsOf(records);
-      const subagent = subagentRecordsOf(records, runId);
+    const records = yield* readControl(parent.threadId, [parent.submissionId]);
+    const runId = runIdForSubmission(parent.submissionId);
+    const pending = yield* pendingToolBatchFor(records, runId);
+    const knownIds = knownRecordIdsOf(records);
+    const subagent = subagentRecordsOf(records, runId);
 
-      const notExecuted = new Set<ToolCallId>();
-      const waiting: Array<WaitingChild> = [];
-      const indeterminate = new Set<ToolCallId>();
+    const notExecuted = new Set<ToolCallId>();
+    const waiting: Array<WaitingChild> = [];
+    const indeterminate = new Set<ToolCallId>();
 
-      for (const toolCallId of unavailableCalls ?? []) {
-        if (
-          snapshot.childReservations.some(
-            (reservation) => reservation.parentToolCallId === toolCallId,
-          )
+    for (const toolCallId of unavailableCalls ?? []) {
+      if (
+        snapshot.childReservations.some(
+          (reservation) => reservation.parentToolCallId === toolCallId,
         )
-          continue;
-        if (subagent.requested.has(toolCallId) || subagent.started.has(toolCallId))
+      )
+        continue;
+      if (subagent.requested.has(toolCallId) || subagent.started.has(toolCallId))
+        return yield* LedgerError.make({
+          operation: "reconcileRetainedChildren",
+          message: "Child request has no original reservation",
+        });
+      notExecuted.add(toolCallId);
+    }
+    for (const reservation of snapshot.childReservations) {
+      const toolCallId = reservation.parentToolCallId;
+
+      if (unavailableCalls !== undefined && !unavailableCalls.has(toolCallId)) continue;
+      const joined = subagent.joined.get(toolCallId);
+
+      if (joined !== undefined) {
+        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting);
+        continue;
+      }
+      if (reservation.status !== "reserved") {
+        if (reservation.accounting !== undefined)
+          yield* applyReservationRelease(reservation.reservationId, reservation.accounting);
+        // An orphan release proves non-admission; it never hides an attached child.
+        if (reservation.childSubmissionId !== undefined || subagent.started.has(toolCallId))
           return yield* LedgerError.make({
             operation: "reconcileRetainedChildren",
-            message: "Child request has no original reservation",
+            message: "Unjoined child reservation was already released",
           });
         notExecuted.add(toolCallId);
+        continue;
       }
-      for (const reservation of snapshot.childReservations) {
-        const toolCallId = reservation.parentToolCallId;
+      let started = subagent.started.get(toolCallId);
+      const request = subagent.requested.get(toolCallId);
 
-        if (unavailableCalls !== undefined && !unavailableCalls.has(toolCallId)) continue;
-        const joined = subagent.joined.get(toolCallId);
+      if (
+        started === undefined &&
+        request === undefined &&
+        reservation.childSubmissionId === undefined
+      ) {
+        yield* releaseOrphanReservation(reservation.reservationId);
+        notExecuted.add(toolCallId);
+        continue;
+      }
+      const call = pending?.calls.find((candidate) => candidate.id === toolCallId);
 
-        if (joined !== undefined) {
-          yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting);
+      if (
+        pending === undefined ||
+        call === undefined ||
+        request === undefined ||
+        subagent.declaredNames.get(toolCallId) !== call.name ||
+        request.delegationId !== call.name ||
+        reservation.parentSubmissionId !== parent.submissionId ||
+        request.reservationId !== reservation.reservationId ||
+        request.reservationDigest !== reservation.allocationDigest ||
+        request.turn !== pending.turn ||
+        request.turnId !== pending.turnId
+      ) {
+        return yield* LedgerError.make({
+          operation: "reconcileRetainedChildren",
+          message: `Tool Call ${toolCallId} has inconsistent canonical child request evidence`,
+        });
+      }
+      if (started === undefined) {
+        const resolution = yield* ledger.resolveAdmission(
+          SubmissionLookupByKey.make({
+            threadId: request.childThreadId,
+            principal: decodePrincipalSync(request.childPrincipal),
+            idempotencyKey: decodeIdempotencyKeySync(request.childIdempotencyKey),
+          }),
+        );
+
+        if (resolution._tag === "Indeterminate") {
+          indeterminate.add(toolCallId);
           continue;
         }
-        if (reservation.status !== "reserved") {
-          if (reservation.accounting !== undefined)
-            yield* applyReservationRelease(reservation.reservationId, reservation.accounting);
-          // An orphan release proves non-admission; it never hides an attached child.
-          if (reservation.childSubmissionId !== undefined || subagent.started.has(toolCallId))
+        if (resolution._tag === "NotAdmitted") {
+          if (reservation.childSubmissionId !== undefined) {
             return yield* LedgerError.make({
               operation: "reconcileRetainedChildren",
-              message: "Unjoined child reservation was already released",
+              message: `Tool Call ${toolCallId} has an attachment but no admitted child`,
             });
-          notExecuted.add(toolCallId);
-          continue;
-        }
-        let started = subagent.started.get(toolCallId);
-        const request = subagent.requested.get(toolCallId);
-
-        if (
-          started === undefined &&
-          request === undefined &&
-          reservation.childSubmissionId === undefined
-        ) {
-          yield* releaseOrphanReservation(reservation.reservationId);
-          notExecuted.add(toolCallId);
-          continue;
-        }
-        const call = pending?.calls.find((candidate) => candidate.id === toolCallId);
-
-        if (
-          pending === undefined ||
-          call === undefined ||
-          request === undefined ||
-          subagent.declaredNames.get(toolCallId) !== call.name ||
-          request.delegationId !== call.name ||
-          reservation.parentSubmissionId !== parent.submissionId ||
-          request.reservationId !== reservation.reservationId ||
-          request.reservationDigest !== reservation.allocationDigest ||
-          request.turn !== pending.turn ||
-          request.turnId !== pending.turnId
-        ) {
-          return yield* LedgerError.make({
-            operation: "reconcileRetainedChildren",
-            message: `Tool Call ${toolCallId} has inconsistent canonical child request evidence`,
-          });
-        }
-        if (started === undefined) {
-          const resolution = yield* ledger.resolveAdmission(
-            SubmissionLookupByKey.make({
-              threadId: request.childThreadId,
-              principal: decodePrincipalSync(request.childPrincipal),
-              idempotencyKey: decodeIdempotencyKeySync(request.childIdempotencyKey),
-            }),
-          );
-
-          if (resolution._tag === "Indeterminate") {
-            indeterminate.add(toolCallId);
+          }
+          if (unavailableCalls === undefined) {
+            yield* releaseOrphanReservation(reservation.reservationId);
+            notExecuted.add(toolCallId);
             continue;
           }
-          if (resolution._tag === "NotAdmitted") {
-            if (reservation.childSubmissionId !== undefined) {
-              return yield* LedgerError.make({
-                operation: "reconcileRetainedChildren",
-                message: `Tool Call ${toolCallId} has an attachment but no admitted child`,
-              });
-            }
-            if (unavailableCalls === undefined) {
-              yield* releaseOrphanReservation(reservation.reservationId);
-              notExecuted.add(toolCallId);
-              continue;
-            }
-          }
-
-          // A canonical request already authorized this exact idempotent admission. Finish it
-          // when its handler is unavailable: a stale admission can still arrive after the lookup,
-          // so NotAdmitted cannot justify releasing its reservation. Expiry keeps admission closed.
-          const admission = yield* establishChildFromRequest(
-            parent,
-            request,
-            unavailableCalls !== undefined,
-          );
-
-          if (admission._tag === "indeterminate") {
-            indeterminate.add(toolCallId);
-            continue;
-          }
-          started = SubagentStarted.make({
-            runId,
-            toolCallId,
-            childThreadId: request.childThreadId,
-            childSubmissionId: admission.childSubmissionId,
-            childReceiptId: admission.receiptId,
-            childRunId: runIdForSubmission(admission.childSubmissionId),
-          });
-          const startRecordId = subagentStartedRecordId(runId, toolCallId);
-          const envelope = yield* makeEnvelope(startRecordId, started);
-
-          yield* appendBatch(
-            ctx,
-            CanonicalBatch.make({
-              batchId: subagentStartedBatchId(runId, toolCallId),
-              producerId: config.producerId,
-              records: [envelope],
-            }),
-          );
-          knownIds.add(startRecordId);
-          subagent.started.set(toolCallId, started);
-          yield* hit("subagent:after-start-append");
         }
 
-        const child = yield* ledger.lookup(
-          SubmissionLookupById.make({ submissionId: started.childSubmissionId }),
-        );
-
-        if (
-          Option.isNone(child) ||
-          (reservation.childSubmissionId !== undefined &&
-            reservation.childSubmissionId !== started.childSubmissionId) ||
-          request.childThreadId !== started.childThreadId ||
-          started.childThreadId !== child.value.threadId ||
-          started.childReceiptId !== child.value.receiptId ||
-          started.childRunId !== runIdForSubmission(started.childSubmissionId)
-        ) {
-          return yield* LedgerError.make({
-            operation: "reconcileRetainedChildren",
-            message: `Tool Call ${call.id} has inconsistent canonical child attachment evidence`,
-          });
-        }
-        yield* ownership
-          .attachChildToReservation({
-            reservationId: reservation.reservationId,
-            childSubmissionId: started.childSubmissionId,
-          })
-          .pipe(
-            Effect.catchTag(
-              "ChildReservationConflict",
-              conflictToLedgerError("attachChildToReservation"),
-            ),
-          );
-        if (child.value.state !== "settled") {
-          waiting.push(
-            WaitingChild.make({ toolCallId, childSubmissionId: started.childSubmissionId }),
-          );
-          yield* wake.notify(child.value.threadId);
-          continue;
-        }
-        yield* joinSettledChildWithoutHandler(
-          ctx,
+        // A canonical request already authorized this exact idempotent admission. Finish it
+        // when its handler is unavailable: a stale admission can still arrive after the lookup,
+        // so NotAdmitted cannot justify releasing its reservation. Expiry keeps admission closed.
+        const admission = yield* establishChildFromRequest(
           parent,
-          knownIds,
-          subagent,
-          reservation,
-          started.toolCallId,
-          started.childSubmissionId,
-          unavailableCalls === undefined ? "duration" : "unavailable",
+          request,
+          unavailableCalls !== undefined,
         );
+
+        if (admission._tag === "indeterminate") {
+          indeterminate.add(toolCallId);
+          continue;
+        }
+        started = SubagentStarted.make({
+          runId,
+          toolCallId,
+          childThreadId: request.childThreadId,
+          childSubmissionId: admission.childSubmissionId,
+          childReceiptId: admission.receiptId,
+          childRunId: runIdForSubmission(admission.childSubmissionId),
+        });
+        const startRecordId = subagentStartedRecordId(runId, toolCallId);
+        const envelope = yield* makeEnvelope(startRecordId, started);
+
+        yield* appendBatch(
+          ctx,
+          CanonicalBatch.make({
+            batchId: subagentStartedBatchId(runId, toolCallId),
+            producerId: config.producerId,
+            records: [envelope],
+          }),
+        );
+        knownIds.add(startRecordId);
+        subagent.started.set(toolCallId, started);
+        yield* hit("subagent:after-start-append");
       }
 
-      return { notExecuted, waiting, indeterminate };
-    },
-  );
+      const child = yield* ledger.lookup(
+        SubmissionLookupById.make({ submissionId: started.childSubmissionId }),
+      );
+
+      if (
+        Option.isNone(child) ||
+        (reservation.childSubmissionId !== undefined &&
+          reservation.childSubmissionId !== started.childSubmissionId) ||
+        request.childThreadId !== started.childThreadId ||
+        started.childThreadId !== child.value.threadId ||
+        started.childReceiptId !== child.value.receiptId ||
+        started.childRunId !== runIdForSubmission(started.childSubmissionId)
+      ) {
+        return yield* LedgerError.make({
+          operation: "reconcileRetainedChildren",
+          message: `Tool Call ${call.id} has inconsistent canonical child attachment evidence`,
+        });
+      }
+      yield* ownership
+        .attachChildToReservation({
+          reservationId: reservation.reservationId,
+          childSubmissionId: started.childSubmissionId,
+        })
+        .pipe(
+          Effect.catchTag(
+            "ChildReservationConflict",
+            conflictToLedgerError("attachChildToReservation"),
+          ),
+        );
+      if (child.value.state !== "settled") {
+        waiting.push(
+          WaitingChild.make({ toolCallId, childSubmissionId: started.childSubmissionId }),
+        );
+        yield* wake.notify(child.value.threadId);
+        continue;
+      }
+      yield* joinSettledChildWithoutHandler(
+        ctx,
+        parent,
+        knownIds,
+        subagent,
+        reservation,
+        started.toolCallId,
+        started.childSubmissionId,
+        unavailableCalls === undefined ? "duration" : "unavailable",
+      );
+    }
+
+    return { notExecuted, waiting, indeterminate };
+  });
 
   /** Where the request-abort-and-join pass over attached children ended (spec §13.1). */
   type ChildAbortDisposition = "clear" | "waiting" | "blocked";
@@ -4452,7 +4431,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * reattached first; a provably-childless reservation releases exactly once; an indeterminate
    * admission blocks honestly — never a second admission, never a fabricated settlement.
    */
-  const abortAttachedChildren = Effect.fn("DurableAgentRuntime.abortAttachedChildren")(function* (
+  const abortAttachedChildren = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     parent: SubmissionSnapshot,
     ownership: RunOwnership,
@@ -4613,7 +4592,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * fence without inference. History cannot distinguish these from a lost provider response.
    * This records incomplete accounting, not an exact number or identity of missing model calls.
    */
-  const appendInterruptedAudit = Effect.fn("DurableAgentRuntime.appendInterruptedAudit")(function* (
+  const appendInterruptedAudit = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     runId: ReturnType<typeof runIdForSubmission>,
     lineage: AttemptLineage,
@@ -4746,265 +4725,264 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         boundaries,
       };
 
-      const saveRecoveryCheckpoint = Effect.fn("DurableAgentRuntime.saveRecoveryCheckpoint")(
-        function* (compactionId: RecordId): Effect.fn.Return<void, DurableWorkerFailure> {
-          if (store.recoveryCheckpoints === undefined) return;
-          const tail = yield* ctx.tail;
+      const saveRecoveryCheckpoint = Effect.fnUntraced(function* (
+        compactionId: RecordId,
+      ): Effect.fn.Return<void, DurableWorkerFailure> {
+        if (store.recoveryCheckpoints === undefined) return;
+        const tail = yield* ctx.tail;
 
-          const source =
-            priorContext === undefined
-              ? Stream.concat(
-                  canonical,
-                  canonicalRange(ctx.threadId, tail.sequence, canonicalThrough),
-                )
-              : canonicalRange(ctx.threadId, tail.sequence);
+        const source =
+          priorContext === undefined
+            ? Stream.concat(
+                canonical,
+                canonicalRange(ctx.threadId, tail.sequence, canonicalThrough),
+              )
+            : canonicalRange(ctx.threadId, tail.sequence);
 
-          let compaction: CanonicalRecordEnvelope | undefined;
-          let latestResponse: CanonicalSequence | undefined;
-          let firstSequence = journalSeed?.firstSequence;
-          const protectedCalls = new Set<string>();
-          const protectedTurns = new Set<number>();
-          const operationRecords: Array<CanonicalRecordEnvelope> = [];
+        let compaction: CanonicalRecordEnvelope | undefined;
+        let latestResponse: CanonicalSequence | undefined;
+        let firstSequence = journalSeed?.firstSequence;
+        const protectedCalls = new Set<string>();
+        const protectedTurns = new Set<number>();
+        const operationRecords: Array<CanonicalRecordEnvelope> = [];
 
-          yield* Stream.runForEach(source, (entry) =>
-            Effect.sync(() => {
+        yield* Stream.runForEach(source, (entry) =>
+          Effect.sync(() => {
+            const payload = entry.record.payload;
+
+            if (entry.record.recordId === compactionId) compaction = entry;
+            if (!("runId" in payload) || payload.runId !== runId) return;
+            firstSequence ??= entry.sequence;
+            operationRecords.push(entry);
+            if (payload._tag === "ModelResponseRecorded") {
+              latestResponse = entry.sequence;
+              for (const operation of payload.toolOperations)
+                if (
+                  operation.executionKind === "delegation" ||
+                  operation.executionKind === "orchestration"
+                ) {
+                  protectedCalls.add(operation.toolCallId);
+                  protectedTurns.add(payload.turn);
+                }
+            }
+          }),
+        );
+        for (const state of unresolvedToolOperations(operationRecords, runId)) {
+          protectedCalls.add(state.operation.toolCallId);
+          protectedTurns.add(state.turn);
+        }
+        if (
+          compaction === undefined ||
+          compaction.record.payload._tag !== "CompactionCreated" ||
+          compaction.record.payload.kind === "clear-tool-results"
+        )
+          return;
+        const replacement = compaction;
+        const covered = compaction.record.payload.coversThrough;
+
+        const retiredThrough = decodeCanonicalSequence(
+          Math.min(covered, (latestResponse ?? covered + 1) - 1),
+        );
+
+        if (retiredThrough <= (journalSeed?.throughSequence ?? 0)) return;
+
+        const retired = yield* projectRunJournalStream(
+          source.pipe(Stream.filter((entry) => entry.sequence <= retiredThrough)),
+          runId,
+          undefined,
+          journalSeed,
+        );
+
+        const detailed = yield* summarizeModelUsage(
+          retired.usage.modelUsage,
+          retired.usage.summarizedModelUsage,
+        ).pipe(
+          Effect.mapError((cause) =>
+            RunJournalError.make({ message: "Retired usage exceeds accounting bounds", cause }),
+          ),
+        );
+
+        const protectedContext = retired.protectedContext ?? journal.protectedContext;
+        // The first native rollover may precede this Attempt's first journal snapshot response.
+        const current = yield* projectRunJournalStream(source, runId, undefined, journalSeed);
+        const protectedMessages = protectedContext ?? current.protectedContext;
+
+        const encodedContext =
+          protectedMessages === undefined
+            ? undefined
+            : yield* Schema.encodeEffect(Prompt.Prompt)(protectedMessages).pipe(
+                Effect.flatMap(decodePersisted),
+                Effect.mapError((cause) =>
+                  RunJournalError.make({ message: "Cannot checkpoint protected context", cause }),
+                ),
+              );
+
+        let frontier = journalSeed?.frontier;
+        const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
+        let retiredIdentitiesExceeded = false;
+
+        const retained = yield* Stream.runCollect(
+          source.pipe(
+            Stream.filter((entry) => {
+              if (entry.sequence > retiredThrough) return true;
               const payload = entry.record.payload;
 
-              if (entry.record.recordId === compactionId) compaction = entry;
-              if (!("runId" in payload) || payload.runId !== runId) return;
-              firstSequence ??= entry.sequence;
-              operationRecords.push(entry);
-              if (payload._tag === "ModelResponseRecorded") {
-                latestResponse = entry.sequence;
-                for (const operation of payload.toolOperations)
-                  if (
-                    operation.executionKind === "delegation" ||
-                    operation.executionKind === "orchestration"
-                  ) {
-                    protectedCalls.add(operation.toolCallId);
-                    protectedTurns.add(payload.turn);
+              if (payload._tag === "ModelResponseRecorded" || payload._tag === "ToolCallSettled")
+                frontier = { sequence: entry.sequence, tag: payload._tag };
+              if (
+                payload._tag === "ThreadCreated" ||
+                payload._tag === "SubagentLineageRecorded" ||
+                payload._tag === "WorkerOriginRecorded"
+              )
+                return true;
+              if (!("runId" in payload) || payload.runId !== runId) return false;
+              if ("toolCallId" in payload && protectedCalls.has(payload.toolCallId)) return true;
+              switch (payload._tag) {
+                case "ModelResponseRecorded":
+                  if (protectedTurns.has(payload.turn)) return true;
+                  for (const operation of payload.toolOperations) {
+                    if (retiredToolCallIds.has(operation.toolCallId)) continue;
+                    if (retiredToolCallIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                      retiredIdentitiesExceeded = true;
+                    else retiredToolCallIds.add(operation.toolCallId);
                   }
+
+                  return false;
+                case "ToolCallSettled":
+                case "ToolCallUnknown":
+                case "ToolCallResolved":
+                case "ToolApprovalRequested":
+                case "ToolApprovalDecided":
+                case "CompactionCreated":
+                case "RunPolicyUsageReserved":
+                  return false;
+                default:
+                  return true;
               }
             }),
-          );
-          for (const state of unresolvedToolOperations(operationRecords, runId)) {
-            protectedCalls.add(state.operation.toolCallId);
-            protectedTurns.add(state.turn);
-          }
-          if (
-            compaction === undefined ||
-            compaction.record.payload._tag !== "CompactionCreated" ||
-            compaction.record.payload.kind === "clear-tool-results"
-          )
-            return;
-          const replacement = compaction;
-          const covered = compaction.record.payload.coversThrough;
+          ),
+        );
 
-          const retiredThrough = decodeCanonicalSequence(
-            Math.min(covered, (latestResponse ?? covered + 1) - 1),
-          );
+        if (retiredIdentitiesExceeded)
+          return yield* RunJournalError.make({
+            message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
+          });
 
-          if (retiredThrough <= (journalSeed?.throughSequence ?? 0)) return;
+        const ids = new Set<SubmissionId>([submissionId]);
 
-          const retired = yield* projectRunJournalStream(
-            source.pipe(Stream.filter((entry) => entry.sequence <= retiredThrough)),
-            runId,
-            undefined,
-            journalSeed,
-          );
+        for (const {
+          record: { payload },
+        } of retained)
+          if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined)
+            ids.add(payload.submissionId);
 
-          const detailed = yield* summarizeModelUsage(
-            retired.usage.modelUsage,
-            retired.usage.summarizedModelUsage,
-          ).pipe(
-            Effect.mapError((cause) =>
-              RunJournalError.make({ message: "Retired usage exceeds accounting bounds", cause }),
-            ),
-          );
-
-          const protectedContext = retired.protectedContext ?? journal.protectedContext;
-          // The first native rollover may precede this Attempt's first journal snapshot response.
-          const current = yield* projectRunJournalStream(source, runId, undefined, journalSeed);
-          const protectedMessages = protectedContext ?? current.protectedContext;
-
-          const encodedContext =
-            protectedMessages === undefined
-              ? undefined
-              : yield* Schema.encodeEffect(Prompt.Prompt)(protectedMessages).pipe(
-                  Effect.flatMap(decodePersisted),
-                  Effect.mapError((cause) =>
-                    RunJournalError.make({ message: "Cannot checkpoint protected context", cause }),
-                  ),
-                );
-
-          let frontier = journalSeed?.frontier;
-          const retiredToolCallIds = new Set(journalSeed?.retiredToolCallIds);
-          let retiredIdentitiesExceeded = false;
-
-          const retained = yield* Stream.runCollect(
-            source.pipe(
-              Stream.filter((entry) => {
-                if (entry.sequence > retiredThrough) return true;
-                const payload = entry.record.payload;
-
-                if (payload._tag === "ModelResponseRecorded" || payload._tag === "ToolCallSettled")
-                  frontier = { sequence: entry.sequence, tag: payload._tag };
-                if (
-                  payload._tag === "ThreadCreated" ||
-                  payload._tag === "SubagentLineageRecorded" ||
-                  payload._tag === "WorkerOriginRecorded"
-                )
-                  return true;
-                if (!("runId" in payload) || payload.runId !== runId) return false;
-                if ("toolCallId" in payload && protectedCalls.has(payload.toolCallId)) return true;
-                switch (payload._tag) {
-                  case "ModelResponseRecorded":
-                    if (protectedTurns.has(payload.turn)) return true;
-                    for (const operation of payload.toolOperations) {
-                      if (retiredToolCallIds.has(operation.toolCallId)) continue;
-                      if (retiredToolCallIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
-                        retiredIdentitiesExceeded = true;
-                      else retiredToolCallIds.add(operation.toolCallId);
-                    }
-
-                    return false;
-                  case "ToolCallSettled":
-                  case "ToolCallUnknown":
-                  case "ToolCallResolved":
-                  case "ToolApprovalRequested":
-                  case "ToolApprovalDecided":
-                  case "CompactionCreated":
-                  case "RunPolicyUsageReserved":
-                    return false;
-                  default:
-                    return true;
-                }
+        const validated = yield* Effect.try({
+          try: () =>
+            RecoveryCheckpointState.make({
+              schemaVersion: 2,
+              policyAccountingVersion: 1,
+              submissionId,
+              submissionIds: [...ids],
+              seed: JournalCheckpointSeed.make({
+                runId,
+                retiredToolCallIds: [...retiredToolCallIds],
+                throughSequence: retiredThrough,
+                ...(firstSequence === undefined ? {} : { firstSequence }),
+                committedTurns: retired.committedTurns,
+                ...(retired.toolSelection === undefined
+                  ? {}
+                  : { toolSelection: retired.toolSelection }),
+                policyUsage: retired.policyUsage,
+                modelCalls: retired.usage.modelCalls,
+                unobservedModelCalls: retired.usage.unobservedModelCalls ?? 0,
+                inputTokens: retired.usage.inputTokens,
+                outputTokens: retired.usage.outputTokens,
+                lastInputTokens: retired.usage.lastInputTokens,
+                lastOutputTokens: retired.usage.lastOutputTokens,
+                costMicrousd: retired.usage.costMicrousd,
+                summarizedModelUsage: detailed,
+                ...(current.contextWindowId === undefined
+                  ? {}
+                  : { contextWindowId: current.contextWindowId }),
+                ...(frontier === undefined ? {} : { frontier }),
+                ...(encodedContext === undefined ? {} : { protectedContext: encodedContext }),
+                compaction: replacement,
               }),
-            ),
-          );
+              records: retained,
+            }),
+          catch: (cause) =>
+            RunJournalError.make({ message: "Recovery checkpoint exceeds cache bounds", cause }),
+        }).pipe(Effect.option);
 
-          if (retiredIdentitiesExceeded)
-            return yield* RunJournalError.make({
-              message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
-            });
+        // Capacity is a cache eligibility limit, never a reason to truncate canonical evidence.
+        if (Option.isNone(validated)) return;
 
-          const ids = new Set<SubmissionId>([submissionId]);
+        // Removing proof must not make a previously invalid historical compaction valid.
+        // Check the disposable projection against the canonical source before publishing it.
+        const replayed = yield* projectRunJournalStream(
+          Stream.fromIterable(retained),
+          runId,
+          undefined,
+          validated.value.seed,
+        ).pipe(Effect.option);
 
-          for (const {
-            record: { payload },
-          } of retained)
-            if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined)
-              ids.add(payload.submissionId);
+        if (Option.isNone(replayed)) return;
+        const candidate = replayed.value;
+        const equalPrompt = Schema.toEquivalence(Prompt.Prompt);
 
-          const validated = yield* Effect.try({
-            try: () =>
-              RecoveryCheckpointState.make({
-                schemaVersion: 2,
-                policyAccountingVersion: 1,
-                submissionId,
-                submissionIds: [...ids],
-                seed: JournalCheckpointSeed.make({
-                  runId,
-                  retiredToolCallIds: [...retiredToolCallIds],
-                  throughSequence: retiredThrough,
-                  ...(firstSequence === undefined ? {} : { firstSequence }),
-                  committedTurns: retired.committedTurns,
-                  ...(retired.toolSelection === undefined
-                    ? {}
-                    : { toolSelection: retired.toolSelection }),
-                  policyUsage: retired.policyUsage,
-                  modelCalls: retired.usage.modelCalls,
-                  unobservedModelCalls: retired.usage.unobservedModelCalls ?? 0,
-                  inputTokens: retired.usage.inputTokens,
-                  outputTokens: retired.usage.outputTokens,
-                  lastInputTokens: retired.usage.lastInputTokens,
-                  lastOutputTokens: retired.usage.lastOutputTokens,
-                  costMicrousd: retired.usage.costMicrousd,
-                  summarizedModelUsage: detailed,
-                  ...(current.contextWindowId === undefined
-                    ? {}
-                    : { contextWindowId: current.contextWindowId }),
-                  ...(frontier === undefined ? {} : { frontier }),
-                  ...(encodedContext === undefined ? {} : { protectedContext: encodedContext }),
-                  compaction: replacement,
-                }),
-                records: retained,
-              }),
-            catch: (cause) =>
-              RunJournalError.make({ message: "Recovery checkpoint exceeds cache bounds", cause }),
-          }).pipe(Effect.option);
+        if (
+          !equalPrompt(current.prompt, candidate.prompt) ||
+          !equalPrompt(current.historyBefore, candidate.historyBefore) ||
+          !Schema.toEquivalence(Schema.optional(Prompt.Prompt))(
+            current.protectedContext,
+            candidate.protectedContext,
+          ) ||
+          current.contextWindowId !== candidate.contextWindowId ||
+          current.pendingContextToolCallId !== candidate.pendingContextToolCallId ||
+          !Schema.toEquivalence(Schema.optional(Selection))(
+            current.toolSelection,
+            candidate.toolSelection,
+          ) ||
+          current.committedTurns !== candidate.committedTurns ||
+          !Schema.toEquivalence(RunPolicyUsage)(current.policyUsage, candidate.policyUsage) ||
+          (
+            [
+              "modelCalls",
+              "inputTokens",
+              "outputTokens",
+              "lastInputTokens",
+              "lastOutputTokens",
+              "costMicrousd",
+            ] as const
+          ).some((field) => current.usage[field] !== candidate.usage[field]) ||
+          (current.usage.unobservedModelCalls ?? 0) !== (candidate.usage.unobservedModelCalls ?? 0)
+        )
+          return;
 
-          // Capacity is a cache eligibility limit, never a reason to truncate canonical evidence.
-          if (Option.isNone(validated)) return;
+        const summaries = yield* Effect.forEach([current, candidate], (projection) =>
+          summarizeModelUsage(projection.usage.modelUsage, projection.usage.summarizedModelUsage),
+        ).pipe(Effect.option);
 
-          // Removing proof must not make a previously invalid historical compaction valid.
-          // Check the disposable projection against the canonical source before publishing it.
-          const replayed = yield* projectRunJournalStream(
-            Stream.fromIterable(retained),
-            runId,
-            undefined,
-            validated.value.seed,
-          ).pipe(Effect.option);
+        if (
+          Option.isNone(summaries) ||
+          summaries.value[0] === undefined ||
+          summaries.value[1] === undefined ||
+          !Schema.toEquivalence(RunUsageSummary)(summaries.value[0], summaries.value[1])
+        )
+          return;
 
-          if (Option.isNone(replayed)) return;
-          const candidate = replayed.value;
-          const equalPrompt = Schema.toEquivalence(Prompt.Prompt);
+        const contents = yield* encodeRecoveryCheckpoint(validated.value);
 
-          if (
-            !equalPrompt(current.prompt, candidate.prompt) ||
-            !equalPrompt(current.historyBefore, candidate.historyBefore) ||
-            !Schema.toEquivalence(Schema.optional(Prompt.Prompt))(
-              current.protectedContext,
-              candidate.protectedContext,
-            ) ||
-            current.contextWindowId !== candidate.contextWindowId ||
-            current.pendingContextToolCallId !== candidate.pendingContextToolCallId ||
-            !Schema.toEquivalence(Schema.optional(Selection))(
-              current.toolSelection,
-              candidate.toolSelection,
-            ) ||
-            current.committedTurns !== candidate.committedTurns ||
-            !Schema.toEquivalence(RunPolicyUsage)(current.policyUsage, candidate.policyUsage) ||
-            (
-              [
-                "modelCalls",
-                "inputTokens",
-                "outputTokens",
-                "lastInputTokens",
-                "lastOutputTokens",
-                "costMicrousd",
-              ] as const
-            ).some((field) => current.usage[field] !== candidate.usage[field]) ||
-            (current.usage.unobservedModelCalls ?? 0) !==
-              (candidate.usage.unobservedModelCalls ?? 0)
-          )
-            return;
+        if (Option.isNone(contents)) return;
 
-          const summaries = yield* Effect.forEach([current, candidate], (projection) =>
-            summarizeModelUsage(projection.usage.modelUsage, projection.usage.summarizedModelUsage),
-          ).pipe(Effect.option);
-
-          if (
-            Option.isNone(summaries) ||
-            summaries.value[0] === undefined ||
-            summaries.value[1] === undefined ||
-            !Schema.toEquivalence(RunUsageSummary)(summaries.value[0], summaries.value[1])
-          )
-            return;
-
-          const contents = yield* encodeRecoveryCheckpoint(validated.value);
-
-          if (Option.isNone(contents)) return;
-
-          yield* persistRecoveryCheckpoint(
-            ctx,
-            submission,
-            contents.value,
-            tail,
-            replacement.record.createdAt,
-          );
-        },
-      );
+        yield* persistRecoveryCheckpoint(
+          ctx,
+          submission,
+          contents.value,
+          tail,
+          replacement.record.createdAt,
+        );
+      });
 
       const childLineage = records.find(
         ({ record }) => record.recordId === subagentLineageRecordId(submission.threadId),
@@ -8548,47 +8526,47 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
   // Administrative repairs acquire separately from active Run sessions and never renew.
   // Register cleanup before any interruptible work can observe the granted claim.
-  const acquireAdministrativeClaim = Effect.fn("DurableAgentRuntime.acquireAdministrativeClaim")(
-    function* (threadId: ThreadId, handoff?: ClaimHandoff) {
-      const claimed = yield* ledger.claim(
-        ClaimRequest.make({
-          threadId,
-          producerId: config.producerId,
-          ...(handoff === undefined ? {} : { handoff }),
-        }),
-      );
+  const acquireAdministrativeClaim = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    handoff?: ClaimHandoff,
+  ) {
+    const claimed = yield* ledger.claim(
+      ClaimRequest.make({
+        threadId,
+        producerId: config.producerId,
+        ...(handoff === undefined ? {} : { handoff }),
+      }),
+    );
 
-      if (Option.isNone(claimed)) return Option.none();
-      const claim = claimed.value;
+    if (Option.isNone(claimed)) return Option.none();
+    const claim = claimed.value;
 
-      yield* Effect.addFinalizer(() =>
-        ledger
-          .releaseOwnership(
-            ReleaseOwnershipRequest.make({
-              submissionId: claim.submissionId,
-              ownershipToken: claim.ownershipToken,
-            }),
-          )
-          .pipe(
-            Effect.catchTag("OwnershipLost", () => Effect.void),
-            Effect.catchTag("LedgerError", () =>
-              Effect.logWarning(
-                "Attempt ownership release failed; lease recovery remains required",
-              ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
-            ),
+    yield* Effect.addFinalizer(() =>
+      ledger
+        .releaseOwnership(
+          ReleaseOwnershipRequest.make({
+            submissionId: claim.submissionId,
+            ownershipToken: claim.ownershipToken,
+          }),
+        )
+        .pipe(
+          Effect.catchTag("OwnershipLost", () => Effect.void),
+          Effect.catchTag("LedgerError", () =>
+            Effect.logWarning(
+              "Attempt ownership release failed; lease recovery remains required",
+            ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
           ),
-      );
+        ),
+    );
 
-      if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
-        return yield* LedgerError.make({
-          operation: "claim handoff",
-          message: "The submission adapter did not honor the requested handoff",
-        });
+    if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
+      return yield* LedgerError.make({
+        operation: "claim handoff",
+        message: "The submission adapter did not honor the requested handoff",
+      });
 
-      return Option.some({ claim });
-    },
-    Effect.uninterruptible,
-  );
+    return Option.some({ claim });
+  }, Effect.uninterruptible);
 
   const processThreadHead = (
     resolve: (
@@ -8846,7 +8824,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       Effect.map(({ settlement }) => settlement),
     );
 
-  const claimFor = Effect.fn("DurableAgentRuntime.claimFor")(function* (
+  const claimFor = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     decision: RecoveryDecision,
   ): Effect.fn.Return<Option.Option<Claim>, LedgerError | OwnershipLost, Scope.Scope> {
@@ -8920,138 +8898,134 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       );
     }).pipe(Effect.ignore);
 
-  const settleAbortedForRecovery = Effect.fn("DurableAgentRuntime.settleAbortedForRecovery")(
-    function* (
-      snapshot: RecoverySnapshot,
-      evidence: RecoveryEvidence,
-      records: ReadonlyArray<CanonicalRecordEnvelope>,
-      decision: SettleAbortedDecision,
-    ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
-      const intent = snapshot.abortIntent;
+  const settleAbortedForRecovery = Effect.fnUntraced(function* (
+    snapshot: RecoverySnapshot,
+    evidence: RecoveryEvidence,
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    decision: SettleAbortedDecision,
+  ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
+    const intent = snapshot.abortIntent;
 
-      if (intent === undefined) return "deferred";
-      const submission = snapshot.submission;
+    if (intent === undefined) return "deferred";
+    const submission = snapshot.submission;
 
-      if (submission.state === "suspended" && snapshot.suspension !== undefined) {
-        if (snapshot.suspension.reason._tag === "WaitingForChild") {
-          // The classifier reaches SettleAborted only when every attached-child obligation is
-          // closed (open ones route to PropagateChildAbort/ResumeWaitingParent, spec §13.1), so
-          // every listed child is provably settled: replay the idempotent wake to make the
-          // suspended lane claimable, then settle aborted below. A wake the adapter cannot yet
-          // verify defers honestly instead of guessing.
-          const woken = yield* Effect.gen(function* () {
-            for (const child of snapshot.suspension?.reason._tag === "WaitingForChild"
-              ? snapshot.suspension.reason.children
-              : []) {
-              yield* ledger.recordChildSettled(
-                ChildSettledNotification.make({
-                  parentSubmissionId: submission.submissionId,
-                  childSubmissionId: child.childSubmissionId,
-                }),
-              );
-            }
-
-            return true;
-          }).pipe(Effect.catchTag("LedgerError", () => Effect.succeed(false)));
-
-          if (!woken) return "deferred";
-        } else {
-          // A suspended head is never worker-claimable (WP2 claim rule), so the aborted
-          // settlement first closes the suspension: every undecided call of the stored reason
-          // gets a durable DENIED decision, which wakes the lane (`suspended → input-applied`)
-          // without ever resuming the batch — the abort intent settles the Submission before
-          // any Run resumes. A raced real decision also covers the reason, so its conflict is
-          // absorbed.
-          const decided = new Set(
-            snapshot.approvalDecisions.map((decision) => decision.toolCallId),
-          );
-
-          for (const toolCallId of snapshot.suspension.reason.toolCallIds) {
-            if (decided.has(toolCallId)) continue;
-            yield* ledger
-              .recordApprovalDecision(
-                ApprovalDecisionCommand.make({
-                  submissionId: submission.submissionId,
-                  toolCallId,
-                  decision: "denied",
-                  resolver: RECOVERY_RESOLVER,
-                  reason:
-                    "The Submission was aborted while durably suspended; the pending approval closes denied so the aborted settlement can commit",
-                }),
-              )
-              .pipe(
-                Effect.catchTag("ApprovalConflict", () => Effect.void),
-                Effect.asVoid,
-              );
+    if (submission.state === "suspended" && snapshot.suspension !== undefined) {
+      if (snapshot.suspension.reason._tag === "WaitingForChild") {
+        // The classifier reaches SettleAborted only when every attached-child obligation is
+        // closed (open ones route to PropagateChildAbort/ResumeWaitingParent, spec §13.1), so
+        // every listed child is provably settled: replay the idempotent wake to make the
+        // suspended lane claimable, then settle aborted below. A wake the adapter cannot yet
+        // verify defers honestly instead of guessing.
+        const woken = yield* Effect.gen(function* () {
+          for (const child of snapshot.suspension?.reason._tag === "WaitingForChild"
+            ? snapshot.suspension.reason.children
+            : []) {
+            yield* ledger.recordChildSettled(
+              ChildSettledNotification.make({
+                parentSubmissionId: submission.submissionId,
+                childSubmissionId: child.childSubmissionId,
+              }),
+            );
           }
+
+          return true;
+        }).pipe(Effect.catchTag("LedgerError", () => Effect.succeed(false)));
+
+        if (!woken) return "deferred";
+      } else {
+        // A suspended head is never worker-claimable (WP2 claim rule), so the aborted
+        // settlement first closes the suspension: every undecided call of the stored reason
+        // gets a durable DENIED decision, which wakes the lane (`suspended → input-applied`)
+        // without ever resuming the batch — the abort intent settles the Submission before
+        // any Run resumes. A raced real decision also covers the reason, so its conflict is
+        // absorbed.
+        const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
+
+        for (const toolCallId of snapshot.suspension.reason.toolCallIds) {
+          if (decided.has(toolCallId)) continue;
+          yield* ledger
+            .recordApprovalDecision(
+              ApprovalDecisionCommand.make({
+                submissionId: submission.submissionId,
+                toolCallId,
+                decision: "denied",
+                resolver: RECOVERY_RESOLVER,
+                reason:
+                  "The Submission was aborted while durably suspended; the pending approval closes denied so the aborted settlement can commit",
+              }),
+            )
+            .pipe(
+              Effect.catchTag("ApprovalConflict", () => Effect.void),
+              Effect.asVoid,
+            );
         }
       }
-      const claimed = yield* claimFor(submission, decision);
+    }
+    const claimed = yield* claimFor(submission, decision);
 
-      if (Option.isNone(claimed)) {
-        // P7 §7(c): an aborted, never-claimed, still-queued `ready` Submission settles NOW
-        // instead of waiting to head the lane — settlement order of never-run work is not
-        // execution order (DUR-004 bounds execution; DUR-012 allows settling inactive
-        // accepted work without an Attempt). The appends run at the current tail with the
-        // durable abort intent as publication authority; any racing owner's fence
-        // advance (or a concurrent joining claim) defers honestly to the next pass.
-        if (submission.state === "ready" && snapshot.ownership === undefined) {
-          return yield* Effect.gen(function* () {
-            yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
-            yield* ensureThreadCreated(
-              submission.threadId,
-              submission.agentId,
-              submission.agentDigests,
-            );
-            const ctx = yield* attemptContextAtTail(submission.threadId);
-
-            yield* settleAborted(
-              ctx,
-              submission,
-              publicationFor(ctx, submission.submissionId, { _tag: "QueuedAbort" }),
-              intent,
-              evidence,
-              knownRecordIdsOf(records),
-            );
-
-            return "repaired" as const;
-          }).pipe(
-            Effect.catchTags({
-              FenceRejected: () => Effect.succeed("deferred" as const),
-              AppendConflict: () => Effect.succeed("deferred" as const),
-              OwnershipLost: () => Effect.succeed("deferred" as const),
-            }),
+    if (Option.isNone(claimed)) {
+      // P7 §7(c): an aborted, never-claimed, still-queued `ready` Submission settles NOW
+      // instead of waiting to head the lane — settlement order of never-run work is not
+      // execution order (DUR-004 bounds execution; DUR-012 allows settling inactive
+      // accepted work without an Attempt). The appends run at the current tail with the
+      // durable abort intent as publication authority; any racing owner's fence
+      // advance (or a concurrent joining claim) defers honestly to the next pass.
+      if (submission.state === "ready" && snapshot.ownership === undefined) {
+        return yield* Effect.gen(function* () {
+          yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
+          yield* ensureThreadCreated(
+            submission.threadId,
+            submission.agentId,
+            submission.agentDigests,
           );
-        }
+          const ctx = yield* attemptContextAtTail(submission.threadId);
 
-        return "deferred";
+          yield* settleAborted(
+            ctx,
+            submission,
+            publicationFor(ctx, submission.submissionId, { _tag: "QueuedAbort" }),
+            intent,
+            evidence,
+            knownRecordIdsOf(records),
+          );
+
+          return "repaired" as const;
+        }).pipe(
+          Effect.catchTags({
+            FenceRejected: () => Effect.succeed("deferred" as const),
+            AppendConflict: () => Effect.succeed("deferred" as const),
+            OwnershipLost: () => Effect.succeed("deferred" as const),
+          }),
+        );
       }
-      const claim = claimed.value;
 
-      yield* store.materialize(
-        ThreadMaterialization.make({
-          threadId: submission.threadId,
-          producerEpoch: claim.producerEpoch,
-        }),
-      );
-      yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
-      const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+      return "deferred";
+    }
+    const claim = claimed.value;
 
-      yield* settleAborted(
-        ctx,
-        submission,
-        publicationFor(ctx, submission.submissionId, {
-          _tag: "Owned",
-          ownershipToken: claim.ownershipToken,
-        }),
-        intent,
-        evidence,
-        knownRecordIdsOf(records),
-      );
+    yield* store.materialize(
+      ThreadMaterialization.make({
+        threadId: submission.threadId,
+        producerEpoch: claim.producerEpoch,
+      }),
+    );
+    yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
+    const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
 
-      return "repaired";
-    },
-  );
+    yield* settleAborted(
+      ctx,
+      submission,
+      publicationFor(ctx, submission.submissionId, {
+        _tag: "Owned",
+        ownershipToken: claim.ownershipToken,
+      }),
+      intent,
+      evidence,
+      knownRecordIdsOf(records),
+    );
+
+    return "repaired";
+  });
 
   /**
    * Execute the reconcile-then-mark flow for a `MarkUnknown` decision (plan §2.2). Current
@@ -9060,7 +9034,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * without a durable intent, original idempotent declaration, or reconciler proof stay uncertain.
    * Closed calls report `repaired`; deferred checks report `deferred`; uncertain calls become Unknown.
    */
-  const markUnknownForRecovery = Effect.fn("DurableAgentRuntime.markUnknownForRecovery")(function* (
+  const markUnknownForRecovery = Effect.fnUntraced(function* (
     snapshot: RecoverySnapshot,
     evidence: RecoveryEvidence,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -9159,9 +9133,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * Replay covering resolution intents as state-only wakes. Canonical outcomes wait for an
    * actual claim, so resolving an older request cannot append using a later writer's epoch.
    */
-  const applyUnknownResolutionsForRecovery = Effect.fn(
-    "DurableAgentRuntime.applyUnknownResolutionsForRecovery",
-  )(function* (
+  const applyUnknownResolutionsForRecovery = Effect.fnUntraced(function* (
     snapshot: RecoverySnapshot,
     _evidence: RecoveryEvidence,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -9206,61 +9178,59 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * permit, and stays `deferred`. Decisions that raced ahead of the repair leave the lane to a
    * worker's batch resume (`deferred`).
    */
-  const awaitApprovalForRecovery = Effect.fn("DurableAgentRuntime.awaitApprovalForRecovery")(
-    function* (
-      snapshot: RecoverySnapshot,
-      evidence: RecoveryEvidence,
-      decision: RecoveryDecision,
-    ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
-      const submission = snapshot.submission;
+  const awaitApprovalForRecovery = Effect.fnUntraced(function* (
+    snapshot: RecoverySnapshot,
+    evidence: RecoveryEvidence,
+    decision: RecoveryDecision,
+  ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
+    const submission = snapshot.submission;
 
-      if (submission.state === "suspended") return "deferred";
-      const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
+    if (submission.state === "suspended") return "deferred";
+    const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
 
-      const undecided = evidence.approvalsPending.filter(
-        (pending) => !decided.has(pending.toolCallId),
-      );
+    const undecided = evidence.approvalsPending.filter(
+      (pending) => !decided.has(pending.toolCallId),
+    );
 
-      const first = undecided[0];
+    const first = undecided[0];
 
-      if (first === undefined) return "deferred";
-      const claimed = yield* claimFor(submission, decision);
+    if (first === undefined) return "deferred";
+    const claimed = yield* claimFor(submission, decision);
 
-      if (Option.isNone(claimed)) return "deferred";
-      const claim = claimed.value;
+    if (Option.isNone(claimed)) return "deferred";
+    const claim = claimed.value;
 
-      const outcome = yield* ledger.suspend(
-        SuspendRequest.make({
-          submissionId: submission.submissionId,
-          ownershipToken: claim.ownershipToken,
-          reason: ApprovalPendingSuspension.make({
-            toolCallIds: [
-              first.toolCallId,
-              ...undecided.slice(1).map((pending) => pending.toolCallId),
-            ],
-          }),
+    const outcome = yield* ledger.suspend(
+      SuspendRequest.make({
+        submissionId: submission.submissionId,
+        ownershipToken: claim.ownershipToken,
+        reason: ApprovalPendingSuspension.make({
+          toolCallIds: [
+            first.toolCallId,
+            ...undecided.slice(1).map((pending) => pending.toolCallId),
+          ],
         }),
-      );
+      }),
+    );
 
-      yield* hit("approval:after-suspend");
-      if (outcome === "resume-immediately") {
-        // Decisions raced in between the snapshot read and the suspend transaction: nothing to
-        // repair — release the claim so a worker resumes the declared batch.
-        yield* ledger
-          .releaseOwnership(
-            ReleaseOwnershipRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken: claim.ownershipToken,
-            }),
-          )
-          .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+    yield* hit("approval:after-suspend");
+    if (outcome === "resume-immediately") {
+      // Decisions raced in between the snapshot read and the suspend transaction: nothing to
+      // repair — release the claim so a worker resumes the declared batch.
+      yield* ledger
+        .releaseOwnership(
+          ReleaseOwnershipRequest.make({
+            submissionId: submission.submissionId,
+            ownershipToken: claim.ownershipToken,
+          }),
+        )
+        .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
-        return "deferred";
-      }
+      return "deferred";
+    }
 
-      return "repaired";
-    },
-  );
+    return "repaired";
+  });
 
   /**
    * Defensive branch for a `suspended` lane whose canonical approval requests are all decided
@@ -9270,49 +9240,339 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * executor therefore only re-hints the lane and reports `deferred`, keeping the obligation
    * visible instead of guessing at a wake the ledger port does not offer.
    */
-  const resumeSuspendedForRecovery = Effect.fn("DurableAgentRuntime.resumeSuspendedForRecovery")(
-    function* (snapshot: RecoverySnapshot): Effect.fn.Return<"deferred", DurableWorkerFailure> {
-      yield* wake.notify(snapshot.submission.threadId);
+  const resumeSuspendedForRecovery = Effect.fnUntraced(function* (
+    snapshot: RecoverySnapshot,
+  ): Effect.fn.Return<"deferred", DurableWorkerFailure> {
+    yield* wake.notify(snapshot.submission.threadId);
 
-      return "deferred";
-    },
-  );
+    return "deferred";
+  });
 
-  const executeRecoveryDecision = Effect.fn("DurableAgentRuntime.executeRecoveryDecision")(
-    function* (
-      snapshot: RecoverySnapshot,
-      evidence: RecoveryEvidence,
-      decision: RecoveryDecision,
-      records: ReadonlyArray<CanonicalRecordEnvelope>,
-      history: RecoveryHistorySnapshot,
-    ): Effect.fn.Return<
-      "repaired" | "deferred" | "none" | "unknown",
-      DurableWorkerFailure,
-      Scope.Scope
-    > {
-      const submission = snapshot.submission;
-      const runId = runIdForSubmission(submission.submissionId);
-      const start = yield* canonicalRunStartFromRecords(records, runId);
+  const executeRecoveryDecision = Effect.fnUntraced(function* (
+    snapshot: RecoverySnapshot,
+    evidence: RecoveryEvidence,
+    decision: RecoveryDecision,
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    history: RecoveryHistorySnapshot,
+  ): Effect.fn.Return<
+    "repaired" | "deferred" | "none" | "unknown",
+    DurableWorkerFailure,
+    Scope.Scope
+  > {
+    const submission = snapshot.submission;
+    const runId = runIdForSubmission(submission.submissionId);
+    const start = yield* canonicalRunStartFromRecords(records, runId);
 
-      if (
-        start?.payload._tag === "RunStarted" &&
-        start.payload.runId === runId &&
-        (records.some(
-          ({ record }) =>
-            record.payload._tag === "RunDurationExhausted" && record.payload.runId === runId,
-        ) ||
-          (submission.workerAdmission !== undefined &&
-            (yield* Clock.currentTimeMillis) >=
-              submission.workerAdmission.origin.expiresAtMillis)) &&
-        (decision._tag === "CompleteChildAdmission" ||
-          decision._tag === "RepairSubagentStartLink" ||
-          decision._tag === "AwaitChildAdmissionResolution" ||
-          (decision._tag === "MarkUnknown" &&
-            snapshot.childReservations.some((reservation) => reservation.status !== "released")))
-      ) {
-        // A closed admission window must release provably-unused reservations or restore the
-        // existing child's link. Do this before ordinary Unknown Outcomes make the lane
-        // unclaimable, and never let binding-free recovery admit new work after expiry.
+    if (
+      start?.payload._tag === "RunStarted" &&
+      start.payload.runId === runId &&
+      (records.some(
+        ({ record }) =>
+          record.payload._tag === "RunDurationExhausted" && record.payload.runId === runId,
+      ) ||
+        (submission.workerAdmission !== undefined &&
+          (yield* Clock.currentTimeMillis) >= submission.workerAdmission.origin.expiresAtMillis)) &&
+      (decision._tag === "CompleteChildAdmission" ||
+        decision._tag === "RepairSubagentStartLink" ||
+        decision._tag === "AwaitChildAdmissionResolution" ||
+        (decision._tag === "MarkUnknown" &&
+          snapshot.childReservations.some((reservation) => reservation.status !== "released")))
+    ) {
+      // A closed admission window must release provably-unused reservations or restore the
+      // existing child's link. Do this before ordinary Unknown Outcomes make the lane
+      // unclaimable, and never let binding-free recovery admit new work after expiry.
+      const claimed = yield* claimFor(submission, decision);
+
+      if (Option.isNone(claimed)) return "deferred";
+      const claim = claimed.value;
+
+      yield* store.materialize(
+        ThreadMaterialization.make({
+          threadId: submission.threadId,
+          producerEpoch: claim.producerEpoch,
+        }),
+      );
+      const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+
+      yield* reconcileRetainedChildren(
+        ctx,
+        submission,
+        yield* recoveryOwnership(
+          submission.threadId,
+          submission.submissionId,
+          claim.ownershipToken,
+        ),
+      );
+      const open = yield* completeJoinedReleases(submission);
+
+      yield* ledger
+        .releaseOwnership(
+          ReleaseOwnershipRequest.make({
+            submissionId: submission.submissionId,
+            ownershipToken: claim.ownershipToken,
+          }),
+        )
+        .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+
+      return open ? "deferred" : "repaired";
+    }
+    switch (decision._tag) {
+      case "NoAction": {
+        return "none";
+      }
+      case "ResumeFromTurnBoundary":
+      case "ResumePendingToolBatch": {
+        // Resumption needs the Agent Binding: a claiming worker resumes from the committed
+        // boundary (the declared batch resumes without model re-invocation, durability §15).
+        return "deferred";
+      }
+      case "MarkUnknown": {
+        return yield* markUnknownForRecovery(snapshot, evidence, records, decision);
+      }
+      case "ApplyUnknownResolutions": {
+        return yield* applyUnknownResolutionsForRecovery(snapshot, evidence, records);
+      }
+      case "AwaitUnknownResolution": {
+        // This Submission stays parked awaiting the authorized DUR-017 resolution path;
+        // the settlement obligation stays visible, nothing replays.
+        return "unknown";
+      }
+      case "AwaitApprovalDecision": {
+        return yield* awaitApprovalForRecovery(snapshot, evidence, decision);
+      }
+      case "ResumeSuspended": {
+        return yield* resumeSuspendedForRecovery(snapshot);
+      }
+      case "RevertJoining":
+      case "RepairJoinMarker": {
+        const hostSubmissionId = snapshot.hostSubmissionId;
+
+        if (hostSubmissionId === undefined) return "deferred";
+
+        const host = yield* ledger.lookup(
+          SubmissionLookupById.make({ submissionId: hostSubmissionId }),
+        );
+
+        if (Option.isNone(host)) return "deferred";
+
+        // Joining belongs to the host's ownership period, including the interval before
+        // its input append. Recovery must not revert claims a live host is still consuming.
+        const claimed =
+          host.value.state === "settled"
+            ? Option.none<Claim>()
+            : yield* claimFor(host.value, decision);
+
+        if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";
+        if (Option.isSome(claimed))
+          yield* store.materialize(
+            ThreadMaterialization.make({
+              threadId: submission.threadId,
+              producerEpoch: claimed.value.producerEpoch,
+            }),
+          );
+
+        // The previous owner may have appended after the pass snapshot, before this claim.
+        // Re-read that suffix and the join link before deciding whether the input is absent.
+        const currentRecords = yield* refreshRecoveryHistory(
+          submission.threadId,
+          records,
+          history.throughSequence,
+          history.submissionIds,
+        );
+
+        const current = yield* ledger.loadRecoverySnapshot(
+          RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
+        );
+
+        if (current.submission.state !== "joining" || current.hostSubmissionId !== hostSubmissionId)
+          return "deferred";
+
+        const currentEvidence = yield* evidenceFor(
+          currentRecords,
+          submission.submissionId,
+          history.materialized,
+          hostSubmissionId,
+        );
+
+        const inputEnvelope = currentRecords.find(
+          (envelope) =>
+            envelope.record.recordId === submissionInputRecordId(submission.submissionId),
+        );
+
+        if (currentEvidence.hostSettlementOutcome !== undefined) {
+          // A covered terminal input stays visible: markJoined must precede delivery, so
+          // recovery cannot guess at that unreachable prefix. Uncovered input returns ready.
+          if (currentEvidence.joinedInputCovered) return "deferred";
+        } else if (Option.isNone(claimed)) {
+          // A ledger-settled host without canonical settlement evidence is not repair authority.
+          return "deferred";
+        } else if (inputEnvelope !== undefined) {
+          yield* ledger.markJoined(
+            MarkJoinedRequest.make({
+              submissionId: submission.submissionId,
+              ownershipToken: claimed.value.ownershipToken,
+              recordId: inputEnvelope.record.recordId,
+              sequence: inputEnvelope.sequence,
+            }),
+          );
+        }
+        if (currentEvidence.hostSettlementOutcome !== undefined || inputEnvelope === undefined)
+          yield* ledger.revertJoining(
+            RevertJoiningRequest.make({
+              submissionId: submission.submissionId,
+              guard: {
+                hostSubmissionId,
+                ...(Option.isNone(claimed) ? {} : { ownershipToken: claimed.value.ownershipToken }),
+              },
+            }),
+          );
+        if (Option.isSome(claimed))
+          yield* ledger
+            .releaseOwnership(
+              ReleaseOwnershipRequest.make({
+                submissionId: hostSubmissionId,
+                ownershipToken: claimed.value.ownershipToken,
+              }),
+            )
+            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+        yield* wake.notify(submission.threadId);
+
+        return "repaired";
+      }
+      case "SettleJoinedWithHost": {
+        const hostSubmissionId = snapshot.hostSubmissionId;
+
+        if (hostSubmissionId === undefined) return "deferred";
+        const hostRecord = yield* canonicalSettlementRecord(records, hostSubmissionId);
+        const hostSettlement = yield* settlementPayloadFromRecord(hostRecord, hostSubmissionId);
+        // The host settled canonically, so no live owner can exist for this lane (a joined
+        // head is never claimable): the joined settlement completes unfenced at the current
+        // tail, deferring to any racing fence advance.
+        const ctx = yield* attemptContextAtTail(submission.threadId);
+
+        const applied = yield* settleOneJoined(ctx, hostSettlement, snapshot).pipe(
+          Effect.as(true),
+          Effect.catchTag("FenceRejected", () => Effect.succeed(false)),
+        );
+
+        return applied ? "repaired" : "deferred";
+      }
+      case "AwaitHostSettlement": {
+        // The joined input reattaches through the host Run's resume (prompt-coverage rule);
+        // hint the shared lane and keep the obligation visible.
+        yield* wake.notify(submission.threadId);
+
+        return "deferred";
+      }
+      case "CompleteMaterialization":
+      case "RepairReadiness": {
+        yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
+        yield* ensureThreadCreated(
+          submission.threadId,
+          submission.agentId,
+          submission.agentDigests,
+        );
+        if (submission.workerAdmission !== undefined) {
+          yield* workerRuntime
+            .ensureOrigin(submission.workerAdmission.origin)
+            .pipe(
+              Effect.mapError((cause) =>
+                LedgerError.make({ operation: "worker-origin", message: cause.reason, cause }),
+              ),
+            );
+        }
+        yield* ledger.markReady(MarkReadyRequest.make({ submissionId: submission.submissionId }));
+
+        return "repaired";
+      }
+      case "ApplyInput":
+      case "RepairInputMarker": {
+        const claimed = yield* claimFor(submission, decision);
+
+        if (Option.isNone(claimed)) return "deferred";
+        const claim = claimed.value;
+
+        yield* store.materialize(
+          ThreadMaterialization.make({
+            threadId: submission.threadId,
+            producerEpoch: claim.producerEpoch,
+          }),
+        );
+        yield* ensureThreadCreated(
+          submission.threadId,
+          submission.agentId,
+          submission.agentDigests,
+        );
+        const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+
+        const ownership = yield* recoveryOwnership(
+          submission.threadId,
+          submission.submissionId,
+          claim.ownershipToken,
+        );
+
+        const currentRecords = yield* refreshRecoveryHistory(
+          submission.threadId,
+          records,
+          history.throughSequence,
+          history.submissionIds,
+        );
+
+        yield* applyCanonicalInput(
+          ctx,
+          submission,
+          ownership,
+          currentRecords,
+          snapshot.inputApplied,
+        );
+        const ownershipToken = claim.ownershipToken;
+
+        yield* ledger
+          .releaseOwnership(
+            ReleaseOwnershipRequest.make({
+              submissionId: submission.submissionId,
+              ownershipToken,
+            }),
+          )
+          .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+
+        return "repaired";
+      }
+      case "FinalizeLedgerFromHistory": {
+        const record = yield* canonicalSettlementRecord(records, submission.submissionId);
+
+        yield* finalizeFromHistory(submission, record);
+
+        return "repaired";
+      }
+      case "SettleAborted": {
+        return yield* settleAbortedForRecovery(snapshot, evidence, records, decision);
+      }
+      case "CompleteChildAdmission": {
+        // Binding-free (D3): the canonical `SubagentRequested` payload carries the encoded
+        // child input, intended identity, and every digest, so admission completes without a
+        // live delegation handler — one child, same Receipt on every replay (SUB-016).
+        const subagent = subagentRecordsOf(records, runIdForSubmission(submission.submissionId));
+        const requestedPayload = subagent.requested.get(decision.toolCallId);
+
+        if (requestedPayload === undefined) return "deferred";
+        const admission = yield* establishChildFromRequest(submission, requestedPayload);
+
+        return admission._tag === "indeterminate" ? "deferred" : "repaired";
+      }
+      case "RepairSubagentStartLink": {
+        // Resolve the SAME child by its deterministic idempotency key, complete any missing
+        // materialization/lineage/readiness, then append the exact deterministic
+        // `SubagentStarted` link and reattach the reservation under the parent fence
+        // (spec §13, SUB-016/SUB-017).
+        const runId = runIdForSubmission(submission.submissionId);
+        const subagent = subagentRecordsOf(records, runId);
+        const requestedPayload = subagent.requested.get(decision.toolCallId);
+
+        if (requestedPayload === undefined) return "deferred";
+        const admission = yield* establishChildFromRequest(submission, requestedPayload);
+
+        if (admission._tag === "indeterminate") return "deferred";
         const claimed = yield* claimFor(submission, decision);
 
         if (Option.isNone(claimed)) return "deferred";
@@ -9325,18 +9585,49 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
           }),
         );
         const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+        const knownIds = knownRecordIdsOf(records);
+        const startRecordId = subagentStartedRecordId(runId, decision.toolCallId);
 
-        yield* reconcileRetainedChildren(
-          ctx,
-          submission,
-          yield* recoveryOwnership(
-            submission.threadId,
-            submission.submissionId,
-            claim.ownershipToken,
-          ),
-        );
-        const open = yield* completeJoinedReleases(submission);
+        if (!knownIds.has(startRecordId)) {
+          const envelope = yield* makeEnvelope(
+            startRecordId,
+            SubagentStarted.make({
+              runId,
+              toolCallId: decision.toolCallId,
+              childThreadId: requestedPayload.childThreadId,
+              childSubmissionId: admission.childSubmissionId,
+              childReceiptId: admission.receiptId,
+              childRunId: runIdForSubmission(admission.childSubmissionId),
+            }),
+          );
 
+          yield* appendBatch(
+            ctx,
+            CanonicalBatch.make({
+              batchId: subagentStartedBatchId(runId, decision.toolCallId),
+              producerId: config.producerId,
+              records: [envelope],
+            }),
+          ).pipe(
+            Effect.catchTag("AppendConflict", () => Effect.void),
+            Effect.asVoid,
+          );
+          yield* hit("subagent:after-start-append");
+        }
+        yield* ledger
+          .attachChildToReservation(
+            AttachChildToReservationRequest.make({
+              reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
+              ownershipToken: claim.ownershipToken,
+              childSubmissionId: admission.childSubmissionId,
+            }),
+          )
+          .pipe(
+            Effect.catchTag(
+              "ChildReservationConflict",
+              conflictToLedgerError("attachChildToReservation"),
+            ),
+          );
         yield* ledger
           .releaseOwnership(
             ReleaseOwnershipRequest.make({
@@ -9345,344 +9636,123 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
             }),
           )
           .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+        yield* wake.notify(requestedPayload.childThreadId);
+        yield* wake.notify(submission.threadId);
 
-        return open ? "deferred" : "repaired";
+        return "repaired";
       }
-      switch (decision._tag) {
-        case "NoAction": {
-          return "none";
-        }
-        case "ResumeFromTurnBoundary":
-        case "ResumePendingToolBatch": {
-          // Resumption needs the Agent Binding: a claiming worker resumes from the committed
-          // boundary (the declared batch resumes without model re-invocation, durability §15).
-          return "deferred";
-        }
-        case "MarkUnknown": {
-          return yield* markUnknownForRecovery(snapshot, evidence, records, decision);
-        }
-        case "ApplyUnknownResolutions": {
-          return yield* applyUnknownResolutionsForRecovery(snapshot, evidence, records);
-        }
-        case "AwaitUnknownResolution": {
-          // This Submission stays parked awaiting the authorized DUR-017 resolution path;
-          // the settlement obligation stays visible, nothing replays.
-          return "unknown";
-        }
-        case "AwaitApprovalDecision": {
-          return yield* awaitApprovalForRecovery(snapshot, evidence, decision);
-        }
-        case "ResumeSuspended": {
-          return yield* resumeSuspendedForRecovery(snapshot);
-        }
-        case "RevertJoining":
-        case "RepairJoinMarker": {
-          const hostSubmissionId = snapshot.hostSubmissionId;
+      case "EnsureWaitingForChild": {
+        // Restore the lost `waitingForChild` checkpoint (spec §14 "after parent start, before
+        // waitingForChild checkpoint"): claim the lane and suspend it — the ledger op ends the
+        // ownership period itself, so the lane holds no worker permit while each child runs
+        // on its own lane. Never spawns a replacement invocation (SUB-018/SUB-030).
+        const claimed = yield* claimFor(submission, decision);
 
-          if (hostSubmissionId === undefined) return "deferred";
+        if (Option.isNone(claimed)) return "deferred";
+        const claim = claimed.value;
 
-          const host = yield* ledger.lookup(
-            SubmissionLookupById.make({ submissionId: hostSubmissionId }),
-          );
+        const suspension = yield* ledger.suspend(
+          SuspendRequest.make({
+            submissionId: submission.submissionId,
+            ownershipToken: claim.ownershipToken,
+            reason: WaitingForChildSuspension.make({ children: decision.children }),
+          }),
+        );
 
-          if (Option.isNone(host)) return "deferred";
-
-          // Joining belongs to the host's ownership period, including the interval before
-          // its input append. Recovery must not revert claims a live host is still consuming.
-          const claimed =
-            host.value.state === "settled"
-              ? Option.none<Claim>()
-              : yield* claimFor(host.value, decision);
-
-          if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";
-          if (Option.isSome(claimed))
-            yield* store.materialize(
-              ThreadMaterialization.make({
-                threadId: submission.threadId,
-                producerEpoch: claimed.value.producerEpoch,
-              }),
-            );
-
-          // The previous owner may have appended after the pass snapshot, before this claim.
-          // Re-read that suffix and the join link before deciding whether the input is absent.
-          const currentRecords = yield* refreshRecoveryHistory(
-            submission.threadId,
-            records,
-            history.throughSequence,
-            history.submissionIds,
-          );
-
-          const current = yield* ledger.loadRecoverySnapshot(
-            RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
-          );
-
-          if (
-            current.submission.state !== "joining" ||
-            current.hostSubmissionId !== hostSubmissionId
-          )
-            return "deferred";
-
-          const currentEvidence = yield* evidenceFor(
-            currentRecords,
-            submission.submissionId,
-            history.materialized,
-            hostSubmissionId,
-          );
-
-          const inputEnvelope = currentRecords.find(
-            (envelope) =>
-              envelope.record.recordId === submissionInputRecordId(submission.submissionId),
-          );
-
-          if (currentEvidence.hostSettlementOutcome !== undefined) {
-            // A covered terminal input stays visible: markJoined must precede delivery, so
-            // recovery cannot guess at that unreachable prefix. Uncovered input returns ready.
-            if (currentEvidence.joinedInputCovered) return "deferred";
-          } else if (Option.isNone(claimed)) {
-            // A ledger-settled host without canonical settlement evidence is not repair authority.
-            return "deferred";
-          } else if (inputEnvelope !== undefined) {
-            yield* ledger.markJoined(
-              MarkJoinedRequest.make({
-                submissionId: submission.submissionId,
-                ownershipToken: claimed.value.ownershipToken,
-                recordId: inputEnvelope.record.recordId,
-                sequence: inputEnvelope.sequence,
-              }),
-            );
-          }
-          if (currentEvidence.hostSettlementOutcome !== undefined || inputEnvelope === undefined)
-            yield* ledger.revertJoining(
-              RevertJoiningRequest.make({
-                submissionId: submission.submissionId,
-                guard: {
-                  hostSubmissionId,
-                  ...(Option.isNone(claimed)
-                    ? {}
-                    : { ownershipToken: claimed.value.ownershipToken }),
-                },
-              }),
-            );
-          if (Option.isSome(claimed))
-            yield* ledger
-              .releaseOwnership(
-                ReleaseOwnershipRequest.make({
-                  submissionId: hostSubmissionId,
-                  ownershipToken: claimed.value.ownershipToken,
-                }),
-              )
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-          yield* wake.notify(submission.threadId);
-
-          return "repaired";
-        }
-        case "SettleJoinedWithHost": {
-          const hostSubmissionId = snapshot.hostSubmissionId;
-
-          if (hostSubmissionId === undefined) return "deferred";
-          const hostRecord = yield* canonicalSettlementRecord(records, hostSubmissionId);
-          const hostSettlement = yield* settlementPayloadFromRecord(hostRecord, hostSubmissionId);
-          // The host settled canonically, so no live owner can exist for this lane (a joined
-          // head is never claimable): the joined settlement completes unfenced at the current
-          // tail, deferring to any racing fence advance.
-          const ctx = yield* attemptContextAtTail(submission.threadId);
-
-          const applied = yield* settleOneJoined(ctx, hostSettlement, snapshot).pipe(
-            Effect.as(true),
-            Effect.catchTag("FenceRejected", () => Effect.succeed(false)),
-          );
-
-          return applied ? "repaired" : "deferred";
-        }
-        case "AwaitHostSettlement": {
-          // The joined input reattaches through the host Run's resume (prompt-coverage rule);
-          // hint the shared lane and keep the obligation visible.
-          yield* wake.notify(submission.threadId);
-
-          return "deferred";
-        }
-        case "CompleteMaterialization":
-        case "RepairReadiness": {
-          yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
-          yield* ensureThreadCreated(
-            submission.threadId,
-            submission.agentId,
-            submission.agentDigests,
-          );
-          if (submission.workerAdmission !== undefined) {
-            yield* workerRuntime
-              .ensureOrigin(submission.workerAdmission.origin)
-              .pipe(
-                Effect.mapError((cause) =>
-                  LedgerError.make({ operation: "worker-origin", message: cause.reason, cause }),
-                ),
-              );
-          }
-          yield* ledger.markReady(MarkReadyRequest.make({ submissionId: submission.submissionId }));
-
-          return "repaired";
-        }
-        case "ApplyInput":
-        case "RepairInputMarker": {
-          const claimed = yield* claimFor(submission, decision);
-
-          if (Option.isNone(claimed)) return "deferred";
-          const claim = claimed.value;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({
-              threadId: submission.threadId,
-              producerEpoch: claim.producerEpoch,
-            }),
-          );
-          yield* ensureThreadCreated(
-            submission.threadId,
-            submission.agentId,
-            submission.agentDigests,
-          );
-          const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-
-          const ownership = yield* recoveryOwnership(
-            submission.threadId,
-            submission.submissionId,
-            claim.ownershipToken,
-          );
-
-          const currentRecords = yield* refreshRecoveryHistory(
-            submission.threadId,
-            records,
-            history.throughSequence,
-            history.submissionIds,
-          );
-
-          yield* applyCanonicalInput(
-            ctx,
-            submission,
-            ownership,
-            currentRecords,
-            snapshot.inputApplied,
-          );
-          const ownershipToken = claim.ownershipToken;
-
+        yield* hit("subagent:after-suspend");
+        if (suspension === "resume-immediately") {
+          // Every listed child already settled: leave the joins to a claiming worker's batch
+          // resume (they need the parent Binding and its result projection).
           yield* ledger
             .releaseOwnership(
               ReleaseOwnershipRequest.make({
                 submissionId: submission.submissionId,
-                ownershipToken,
+                ownershipToken: claim.ownershipToken,
               }),
             )
             .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
 
-          return "repaired";
+          return "deferred";
         }
-        case "FinalizeLedgerFromHistory": {
-          const record = yield* canonicalSettlementRecord(records, submission.submissionId);
 
-          yield* finalizeFromHistory(submission, record);
-
-          return "repaired";
-        }
-        case "SettleAborted": {
-          return yield* settleAbortedForRecovery(snapshot, evidence, records, decision);
-        }
-        case "CompleteChildAdmission": {
-          // Binding-free (D3): the canonical `SubagentRequested` payload carries the encoded
-          // child input, intended identity, and every digest, so admission completes without a
-          // live delegation handler — one child, same Receipt on every replay (SUB-016).
-          const subagent = subagentRecordsOf(records, runIdForSubmission(submission.submissionId));
-          const requestedPayload = subagent.requested.get(decision.toolCallId);
-
-          if (requestedPayload === undefined) return "deferred";
-          const admission = yield* establishChildFromRequest(submission, requestedPayload);
-
-          return admission._tag === "indeterminate" ? "deferred" : "repaired";
-        }
-        case "RepairSubagentStartLink": {
-          // Resolve the SAME child by its deterministic idempotency key, complete any missing
-          // materialization/lineage/readiness, then append the exact deterministic
-          // `SubagentStarted` link and reattach the reservation under the parent fence
-          // (spec §13, SUB-016/SUB-017).
-          const runId = runIdForSubmission(submission.submissionId);
-          const subagent = subagentRecordsOf(records, runId);
-          const requestedPayload = subagent.requested.get(decision.toolCallId);
-
-          if (requestedPayload === undefined) return "deferred";
-          const admission = yield* establishChildFromRequest(submission, requestedPayload);
-
-          if (admission._tag === "indeterminate") return "deferred";
-          const claimed = yield* claimFor(submission, decision);
-
-          if (Option.isNone(claimed)) return "deferred";
-          const claim = claimed.value;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({
-              threadId: submission.threadId,
-              producerEpoch: claim.producerEpoch,
+        return "repaired";
+      }
+      case "ResumeWaitingParent": {
+        // Every relevant child is provably settled: replay the idempotent ownership-free wake
+        // (a dropped wake is never a lost obligation) so a claiming worker resumes the
+        // declared batch and joins each child's canonical Settlement (spec §13).
+        for (const child of decision.children) {
+          yield* ledger.recordChildSettled(
+            ChildSettledNotification.make({
+              parentSubmissionId: submission.submissionId,
+              childSubmissionId: child.childSubmissionId,
             }),
           );
-          const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
-          const knownIds = knownRecordIdsOf(records);
-          const startRecordId = subagentStartedRecordId(runId, decision.toolCallId);
+        }
+        yield* wake.notify(submission.threadId);
 
-          if (!knownIds.has(startRecordId)) {
-            const envelope = yield* makeEnvelope(
-              startRecordId,
-              SubagentStarted.make({
-                runId,
-                toolCallId: decision.toolCallId,
-                childThreadId: requestedPayload.childThreadId,
-                childSubmissionId: admission.childSubmissionId,
-                childReceiptId: admission.receiptId,
-                childRunId: runIdForSubmission(admission.childSubmissionId),
-              }),
-            );
+        return "repaired";
+      }
+      case "ApplyJoinAccounting": {
+        // Budget release incomplete after a canonical join: replay the accounting decision
+        // FROM the canonical `SubagentJoined` record — budget stays unavailable until repair,
+        // never available twice (spec §12 join step 6, DUR-015).
+        const reservation = snapshot.childReservations.find(
+          (row) => row.reservationId === decision.reservationId,
+        );
 
-            yield* appendBatch(
-              ctx,
-              CanonicalBatch.make({
-                batchId: subagentStartedBatchId(runId, decision.toolCallId),
-                producerId: config.producerId,
-                records: [envelope],
-              }),
-            ).pipe(
-              Effect.catchTag("AppendConflict", () => Effect.void),
-              Effect.asVoid,
-            );
-            yield* hit("subagent:after-start-append");
-          }
+        if (reservation === undefined) return "deferred";
+        if (reservation.status === "released") return "repaired";
+        const subagent = subagentRecordsOf(records, runIdForSubmission(submission.submissionId));
+        const joinedPayload = subagent.joined.get(decision.toolCallId);
+
+        if (joinedPayload !== undefined) {
+          yield* applyReservationRelease(decision.reservationId, joinedPayload.finalAccounting);
+
+          return "repaired";
+        }
+        if (reservation.status === "releasePending" && reservation.accounting !== undefined) {
+          // The decision is already frozen: finish the idempotent release — never re-freeze.
+          yield* applyReservationRelease(decision.reservationId, reservation.accounting);
+
+          return "repaired";
+        }
+
+        return "deferred";
+      }
+      case "PropagateChildAbort": {
+        // Request-abort-and-join (spec §13.1): the ONE idempotent durable abort command per
+        // nonterminal child — the recorded child `AbortIntent` row IS the propagation marker,
+        // so the replayed command returns it unchanged (DUR-012) — while the parent stays (or
+        // becomes) suspended `waitingForChild` for the joins.
+        for (const child of decision.children) {
           yield* ledger
-            .attachChildToReservation(
-              AttachChildToReservationRequest.make({
-                reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
-                ownershipToken: claim.ownershipToken,
-                childSubmissionId: admission.childSubmissionId,
+            .requestAbort(
+              AbortCommand.make({
+                submissionId: child.childSubmissionId,
+                author: SUBAGENT_ABORT_AUTHOR,
+                reason: SUBAGENT_ABORT_REASON,
               }),
             )
             .pipe(
-              Effect.catchTag(
-                "ChildReservationConflict",
-                conflictToLedgerError("attachChildToReservation"),
-              ),
-            );
-          yield* ledger
-            .releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: submission.submissionId,
-                ownershipToken: claim.ownershipToken,
+              // The child settled concurrently: its one winning Settlement joins next pass.
+              Effect.catchTags({
+                SettlementConflict: () => Effect.void,
+                JoinedToHost: conflictToLedgerError("PropagateChildAbort"),
               }),
-            )
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-          yield* wake.notify(requestedPayload.childThreadId);
-          yield* wake.notify(submission.threadId);
+              Effect.asVoid,
+            );
+          yield* hit("subagent:after-child-abort-intent");
 
-          return "repaired";
+          const childRow = yield* ledger.lookup(
+            SubmissionLookupById.make({ submissionId: child.childSubmissionId }),
+          );
+
+          if (Option.isSome(childRow)) {
+            yield* wake.notify(childRow.value.threadId);
+          }
         }
-        case "EnsureWaitingForChild": {
-          // Restore the lost `waitingForChild` checkpoint (spec §14 "after parent start, before
-          // waitingForChild checkpoint"): claim the lane and suspend it — the ledger op ends the
-          // ownership period itself, so the lane holds no worker permit while each child runs
-          // on its own lane. Never spawns a replacement invocation (SUB-018/SUB-030).
+        if (submission.state !== "suspended") {
           const claimed = yield* claimFor(submission, decision);
 
           if (Option.isNone(claimed)) return "deferred";
@@ -9698,8 +9768,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
 
           yield* hit("subagent:after-suspend");
           if (suspension === "resume-immediately") {
-            // Every listed child already settled: leave the joins to a claiming worker's batch
-            // resume (they need the parent Binding and its result projection).
+            // Every child settled while suspending: the next pass joins the winners.
             yield* ledger
               .releaseOwnership(
                 ReleaseOwnershipRequest.make({
@@ -9708,160 +9777,53 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
                 }),
               )
               .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-
-            return "deferred";
           }
-
-          return "repaired";
         }
-        case "ResumeWaitingParent": {
-          // Every relevant child is provably settled: replay the idempotent ownership-free wake
-          // (a dropped wake is never a lost obligation) so a claiming worker resumes the
-          // declared batch and joins each child's canonical Settlement (spec §13).
-          for (const child of decision.children) {
-            yield* ledger.recordChildSettled(
-              ChildSettledNotification.make({
-                parentSubmissionId: submission.submissionId,
-                childSubmissionId: child.childSubmissionId,
-              }),
-            );
-          }
-          yield* wake.notify(submission.threadId);
 
-          return "repaired";
-        }
-        case "ApplyJoinAccounting": {
-          // Budget release incomplete after a canonical join: replay the accounting decision
-          // FROM the canonical `SubagentJoined` record — budget stays unavailable until repair,
-          // never available twice (spec §12 join step 6, DUR-015).
-          const reservation = snapshot.childReservations.find(
-            (row) => row.reservationId === decision.reservationId,
-          );
-
-          if (reservation === undefined) return "deferred";
-          if (reservation.status === "released") return "repaired";
-          const subagent = subagentRecordsOf(records, runIdForSubmission(submission.submissionId));
-          const joinedPayload = subagent.joined.get(decision.toolCallId);
-
-          if (joinedPayload !== undefined) {
-            yield* applyReservationRelease(decision.reservationId, joinedPayload.finalAccounting);
-
-            return "repaired";
-          }
-          if (reservation.status === "releasePending" && reservation.accounting !== undefined) {
-            // The decision is already frozen: finish the idempotent release — never re-freeze.
-            yield* applyReservationRelease(decision.reservationId, reservation.accounting);
-
-            return "repaired";
-          }
-
-          return "deferred";
-        }
-        case "PropagateChildAbort": {
-          // Request-abort-and-join (spec §13.1): the ONE idempotent durable abort command per
-          // nonterminal child — the recorded child `AbortIntent` row IS the propagation marker,
-          // so the replayed command returns it unchanged (DUR-012) — while the parent stays (or
-          // becomes) suspended `waitingForChild` for the joins.
-          for (const child of decision.children) {
-            yield* ledger
-              .requestAbort(
-                AbortCommand.make({
-                  submissionId: child.childSubmissionId,
-                  author: SUBAGENT_ABORT_AUTHOR,
-                  reason: SUBAGENT_ABORT_REASON,
-                }),
-              )
-              .pipe(
-                // The child settled concurrently: its one winning Settlement joins next pass.
-                Effect.catchTags({
-                  SettlementConflict: () => Effect.void,
-                  JoinedToHost: conflictToLedgerError("PropagateChildAbort"),
-                }),
-                Effect.asVoid,
-              );
-            yield* hit("subagent:after-child-abort-intent");
-
-            const childRow = yield* ledger.lookup(
-              SubmissionLookupById.make({ submissionId: child.childSubmissionId }),
-            );
-
-            if (Option.isSome(childRow)) {
-              yield* wake.notify(childRow.value.threadId);
-            }
-          }
-          if (submission.state !== "suspended") {
-            const claimed = yield* claimFor(submission, decision);
-
-            if (Option.isNone(claimed)) return "deferred";
-            const claim = claimed.value;
-
-            const suspension = yield* ledger.suspend(
-              SuspendRequest.make({
-                submissionId: submission.submissionId,
-                ownershipToken: claim.ownershipToken,
-                reason: WaitingForChildSuspension.make({ children: decision.children }),
-              }),
-            );
-
-            yield* hit("subagent:after-suspend");
-            if (suspension === "resume-immediately") {
-              // Every child settled while suspending: the next pass joins the winners.
-              yield* ledger
-                .releaseOwnership(
-                  ReleaseOwnershipRequest.make({
-                    submissionId: submission.submissionId,
-                    ownershipToken: claim.ownershipToken,
-                  }),
-                )
-                .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
-            }
-          }
-
-          return "repaired";
-        }
-        case "ReleaseOrphanChildReservation": {
-          // Provably childless reservations release exactly once (spec §13/§14): freeze the
-          // deterministic zero-consumed decision, then apply it idempotently.
-          for (const reservationId of decision.reservationIds) {
-            yield* releaseOrphanReservation(reservationId);
-          }
-
-          return "repaired";
-        }
-        case "AwaitChildAdmissionResolution": {
-          // Wait-and-retry (SUB-031): the evidence assembler re-queries the authoritative owner
-          // with the deterministic idempotency key on every recovery pass; an indeterminate
-          // answer never permits a second admission and holds no worker permit.
-          return "deferred";
-        }
-        case "AwaitChildSettlement": {
-          // The parent lane stays dormant `waitingForChild` (SUB-030): the child's Settlement
-          // wakes it durably through `recordChildSettled`; an unresolved ordinary Tool inside
-          // the child keeps the parent here honestly with the obligation visible (SUB-021).
-          return "deferred";
-        }
-        case "AwaitParentEstablishment": {
-          // The child lane defers its own materialization/readiness repair until the
-          // parent's idempotent establishment appends the immutable lineage record — a child
-          // never runs a Turn before its lineage is canonical. A droppable wake hint nudges the
-          // parent lane, whose own recovery re-drives establishment (CompleteChildAdmission /
-          // RepairSubagentStartLink); the deterministic child identity makes every replay
-          // converge on this one child (SUB-016).
-          const parent = yield* ledger.lookup(
-            SubmissionLookupById.make({ submissionId: decision.parentSubmissionId }),
-          );
-
-          if (Option.isSome(parent)) {
-            yield* wake.notify(parent.value.threadId);
-          }
-
-          return "deferred";
-        }
+        return "repaired";
       }
-    },
-  );
+      case "ReleaseOrphanChildReservation": {
+        // Provably childless reservations release exactly once (spec §13/§14): freeze the
+        // deterministic zero-consumed decision, then apply it idempotently.
+        for (const reservationId of decision.reservationIds) {
+          yield* releaseOrphanReservation(reservationId);
+        }
 
-  const recoverSnapshot = Effect.fn("DurableAgentRuntime.recoverSnapshot")(function* (
+        return "repaired";
+      }
+      case "AwaitChildAdmissionResolution": {
+        // Wait-and-retry (SUB-031): the evidence assembler re-queries the authoritative owner
+        // with the deterministic idempotency key on every recovery pass; an indeterminate
+        // answer never permits a second admission and holds no worker permit.
+        return "deferred";
+      }
+      case "AwaitChildSettlement": {
+        // The parent lane stays dormant `waitingForChild` (SUB-030): the child's Settlement
+        // wakes it durably through `recordChildSettled`; an unresolved ordinary Tool inside
+        // the child keeps the parent here honestly with the obligation visible (SUB-021).
+        return "deferred";
+      }
+      case "AwaitParentEstablishment": {
+        // The child lane defers its own materialization/readiness repair until the
+        // parent's idempotent establishment appends the immutable lineage record — a child
+        // never runs a Turn before its lineage is canonical. A droppable wake hint nudges the
+        // parent lane, whose own recovery re-drives establishment (CompleteChildAdmission /
+        // RepairSubagentStartLink); the deterministic child identity makes every replay
+        // converge on this one child (SUB-016).
+        const parent = yield* ledger.lookup(
+          SubmissionLookupById.make({ submissionId: decision.parentSubmissionId }),
+        );
+
+        if (Option.isSome(parent)) {
+          yield* wake.notify(parent.value.threadId);
+        }
+
+        return "deferred";
+      }
+    }
+  });
+
+  const recoverSnapshot = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     history: RecoveryHistorySnapshot,
   ): Effect.fn.Return<RecoveryReport, DurableWorkerFailure> {
@@ -10012,7 +9974,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return RecoverySweepResult.make({ reports, blocked });
   });
 
-  const submit = Effect.fn("DurableAgentRuntime.submit")(function* <InputSchema extends Schema.Top>(
+  const submit = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
     agent: DurableSubmitAgent<InputSchema>,
     input: InputSchema["Type"],
     options: DurableSubmitOptions,
@@ -10216,9 +10178,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       }),
     );
 
-  const submitRegistered = Effect.fn("DurableAgentRuntime.submitRegistered")(function* <
-    InputSchema extends Schema.Top,
-  >(
+  const submitRegistered = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
     agent: DurableSubmitAgent<InputSchema>,
     input: InputSchema["Type"],
     options: Omit<DurableSubmitOptions, "definitions">,
@@ -10228,9 +10188,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* submit(agent, input, { ...options, definitions: binding.digests });
   });
 
-  const readFinalizedSubmission = Effect.fn("DurableAgentRuntime.readSubmissionStatus")(function* (
-    receipt: Receipt,
-  ): Effect.fn.Return<
+  const readFinalizedSubmission = Effect.fnUntraced(function* (receipt: Receipt): Effect.fn.Return<
     Option.Option<{
       readonly settlement: Settlement;
       readonly record: SubmissionSettledRecord;
@@ -10319,7 +10277,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
       : SettledSubmission.make({ settlement: finalized.value.settlement });
   });
 
-  const submissionStatus = Effect.fn("DurableAgentRuntime.submissionStatus")(function* (
+  const submissionStatus = Effect.fnUntraced(function* (
     receipt: Receipt,
   ): Effect.fn.Return<SubmissionStatus, DurableAwaitFailure> {
     yield* authorizeSettlement(receipt);
@@ -10327,9 +10285,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* readSubmissionStatus(receipt);
   });
 
-  const settlementRecord = Effect.fn("DurableAgentRuntime.settlementRecord")(function* (
-    receipt: Receipt,
-  ) {
+  const settlementRecord = Effect.fnUntraced(function* (receipt: Receipt) {
     yield* authorizeSettlement(receipt);
     const finalized = yield* readFinalizedSubmission(receipt);
 
@@ -10365,19 +10321,15 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     }
   });
 
-  const awaitSettlement = Effect.fn("DurableAgentRuntime.awaitSettlement")(function* (
-    receipt: Receipt,
-  ) {
+  const awaitSettlement = Effect.fnUntraced(function* (receipt: Receipt) {
     return (yield* awaitFinalizedSubmission(receipt)).settlement;
   });
 
-  const awaitSettlementRecord = Effect.fn("DurableAgentRuntime.awaitSettlementRecord")(function* (
-    receipt: Receipt,
-  ) {
+  const awaitSettlementRecord = Effect.fnUntraced(function* (receipt: Receipt) {
     return (yield* awaitFinalizedSubmission(receipt)).record;
   });
 
-  const awaitProgress = Effect.fn("DurableAgentRuntime.awaitProgress")(function* (
+  const awaitProgress = Effect.fnUntraced(function* (
     threadId: ThreadId,
     afterSequence: CanonicalSequence,
   ): Effect.fn.Return<void, DurableProgressFailure> {
@@ -10433,7 +10385,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
         ),
     );
 
-  const abort = Effect.fn("DurableAgentRuntime.abort")(function* (
+  const abort = Effect.fnUntraced(function* (
     command: AbortCommand,
   ): Effect.fn.Return<AbortIntent, DurableAbortFailure> {
     yield* operationAuthorizer.authorize(
@@ -10672,7 +10624,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     });
   });
 
-  const explain = Effect.fn("DurableAgentRuntime.explain")(function* (
+  const explain = Effect.fnUntraced(function* (
     submissionId: SubmissionId,
   ): Effect.fn.Return<RecoveryExplanation, DurableExplainFailure> {
     yield* operationAuthorizer.authorize(
@@ -10683,7 +10635,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return yield* explainSubmission(submission);
   });
 
-  const explainThread = Effect.fn("DurableAgentRuntime.explainThread")(function* (
+  const explainThread = Effect.fnUntraced(function* (
     threadId: ThreadId,
   ): Effect.fn.Return<ReadonlyArray<RecoveryExplanation>, DurableExplainFailure> {
     yield* operationAuthorizer.authorize(
@@ -10704,7 +10656,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
     return explanations;
   });
 
-  const verifyImpl = Effect.fn("DurableAgentRuntime.verify")(function* (
+  const verifyImpl = Effect.fnUntraced(function* (
     threadId: ThreadId,
   ): Effect.fn.Return<IntegrityReport, DurableVerifyFailure> {
     yield* operationAuthorizer.authorize(
@@ -10881,7 +10833,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
   });
 
   /** The documented operator liveness nudge: a droppable wake hint for one lane. */
-  const wakeImpl = Effect.fn("DurableAgentRuntime.wake")(function* (
+  const wakeImpl = Effect.fnUntraced(function* (
     threadId: ThreadId,
   ): Effect.fn.Return<void, OperationDenied> {
     yield* operationAuthorizer.authorize(
@@ -10896,7 +10848,7 @@ const make = Effect.fn("DurableAgentRuntime.make")(function* (
    * `createdAt` for queued and running work, `suspendedAt` for durable suspensions, and the
    * oldest unresolved canonical `ToolCallUnknown` record for DUR-017 blocks (OPS-002).
    */
-  const scanObligationsImpl = Effect.fn("DurableAgentRuntime.scanObligations")(function* (
+  const scanObligationsImpl = Effect.fnUntraced(function* (
     thresholds: ObligationThresholds,
   ): Effect.fn.Return<ObligationReport, DurableObligationFailure> {
     yield* operationAuthorizer.authorize(

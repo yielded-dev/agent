@@ -163,7 +163,7 @@ export const toRunApprovalHook = (
  *    approving, denying, or crashing the Attempt on a transient policy fault. Explicit
  *    policy denials (including the P2 timeout-denial for `denial: "terminal"`) still deny.
  */
-export const toDurableRunApprovalHook = Effect.fn("toDurableRunApprovalHook")(function* (
+export const toDurableRunApprovalHook = Effect.fnUntraced(function* (
   policy: RunApprovalAdapterPolicy,
 ): Effect.fn.Return<
   RunApprovalHook<never, never>,
@@ -232,7 +232,7 @@ export type ThreadAdapterError =
  * For retaining only successful Runs, provide ThreadHistory through PersistentHistory.layer
  * with a memory or SQLite store instead. This adapter does not provide durable recovery.
  */
-export const toRunThreadOptions = Effect.fn("toRunThreadOptions")(function* (
+export const toRunThreadOptions = Effect.fnUntraced(function* (
   threadId: import("../core/Identifiers.ts").ThreadId,
   runId: import("../core/Identifiers.ts").RunId,
 ): Effect.fn.Return<

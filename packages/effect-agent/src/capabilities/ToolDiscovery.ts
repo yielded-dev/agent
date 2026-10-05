@@ -212,7 +212,7 @@ export const make = <Failure extends Schema.Top = typeof Schema.Never, Requireme
       const searchServices = yield* Effect.context<Exclude<Requirements, Scope.Scope>>();
 
       return toolkit.of({
-        discover_tools: Effect.fn("ToolDiscovery.discover_tools")(function* (request) {
+        discover_tools: Effect.fnUntraced(function* (request) {
           const snapshot = yield* CurrentToolCatalog;
 
           const entries = snapshot.entries

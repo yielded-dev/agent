@@ -108,9 +108,7 @@ export const memoryMessageDeliveryStoreLayer = (
       const lock = yield* Semaphore.make(1);
       const failpoint = yield* MessageDeliveryFailpoint;
 
-      const encode = Effect.fn("MemoryMessageDeliveryStore.encode")(function* (
-        record: MessageDeliveryRecord,
-      ) {
+      const encode = Effect.fnUntraced(function* (record: MessageDeliveryRecord) {
         const text = yield* Schema.encodeEffect(codec)(record).pipe(
           Effect.mapError(() =>
             MessageDeliveryError.make({ reason: "corrupt", operation: "encode" }),
@@ -127,134 +125,132 @@ export const memoryMessageDeliveryStoreLayer = (
         return text;
       });
 
-      const all = Effect.fn("MemoryMessageDeliveryStore.all")(function* () {
+      const all = Effect.fnUntraced(function* () {
         return yield* Effect.forEach((yield* Ref.get(state)).records.values(), decode);
       });
 
-      const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fn(
-        "MemoryMessageDeliveryStore.insert",
-      )(function* (record) {
-        const encoded = yield* encode(record);
-        const input = yield* decode(encoded);
+      const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(
+        function* (record) {
+          const encoded = yield* encode(record);
+          const input = yield* decode(encoded);
 
-        if (
-          input.version !== 1 ||
-          input.status !== "pending" ||
-          input.leaseUntilMillis !== null ||
-          input.retry.attempts !== 0 ||
-          input.retry.generation !== 0 ||
-          input.retry.automaticAttempts !== 0 ||
-          input.retry.nextAttemptAtMillis !== input.createdAtMillis ||
-          input.retry.lastAttemptAtMillis !== null ||
-          input.retry.lastFailure !== null ||
-          input.deadlineAtMillis !== input.initialDeadlineAtMillis
-        ) {
-          return yield* MessageDeliveryError.make({
-            reason: "validation",
-            operation: "insert-state",
-          });
-        }
-        if (
-          new TextEncoder().encode(JSON.stringify(input.envelope)).byteLength >
-          config.maxEnvelopeBytes
-        ) {
-          return yield* MessageDeliveryError.make({
-            reason: "capacity",
-            operation: "envelope-bytes",
-          });
-        }
-        yield* failpoint.hit("message-delivery:insert:before");
+          if (
+            input.version !== 1 ||
+            input.status !== "pending" ||
+            input.leaseUntilMillis !== null ||
+            input.retry.attempts !== 0 ||
+            input.retry.generation !== 0 ||
+            input.retry.automaticAttempts !== 0 ||
+            input.retry.nextAttemptAtMillis !== input.createdAtMillis ||
+            input.retry.lastAttemptAtMillis !== null ||
+            input.retry.lastFailure !== null ||
+            input.deadlineAtMillis !== input.initialDeadlineAtMillis
+          ) {
+            return yield* MessageDeliveryError.make({
+              reason: "validation",
+              operation: "insert-state",
+            });
+          }
+          if (
+            new TextEncoder().encode(JSON.stringify(input.envelope)).byteLength >
+            config.maxEnvelopeBytes
+          ) {
+            return yield* MessageDeliveryError.make({
+              reason: "capacity",
+              operation: "envelope-bytes",
+            });
+          }
+          yield* failpoint.hit("message-delivery:insert:before");
 
-        const inserted = yield* lock.withPermit(
-          Effect.uninterruptible(
-            Effect.gen(function* () {
-              const { records } = yield* Ref.get(state);
-              const key = messageDeliveryKeyString(input.key);
-              const existingText = records.get(key);
+          const inserted = yield* lock.withPermit(
+            Effect.uninterruptible(
+              Effect.gen(function* () {
+                const { records } = yield* Ref.get(state);
+                const key = messageDeliveryKeyString(input.key);
+                const existingText = records.get(key);
 
-              if (existingText !== undefined) {
-                const existing = yield* decode(existingText);
+                if (existingText !== undefined) {
+                  const existing = yield* decode(existingText);
 
-                if (!sameMessageDeliveryIdentity(existing, input))
+                  if (!sameMessageDeliveryIdentity(existing, input))
+                    return yield* MessageDeliveryError.make({
+                      reason: "conflict",
+                      operation: "insert",
+                    });
+
+                  return existing;
+                }
+
+                const owned = (yield* all()).filter(
+                  (record) =>
+                    record.key.ownerThreadId === input.key.ownerThreadId &&
+                    isWorkerUpdateDelivery(record) === isWorkerUpdateDelivery(input),
+                );
+
+                const capacity = messageDeliveryCapacity(config, isWorkerUpdateDelivery(input));
+
+                if (
+                  owned.length >= capacity.retained ||
+                  owned.filter(messageDeliveryUsesCapacity).length >= capacity.pending
+                ) {
                   return yield* MessageDeliveryError.make({
-                    reason: "conflict",
+                    reason: "capacity",
                     operation: "insert",
                   });
+                }
+                yield* commit(input, encoded);
 
-                return existing;
-              }
+                return input;
+              }),
+            ),
+          );
 
-              const owned = (yield* all()).filter(
-                (record) =>
-                  record.key.ownerThreadId === input.key.ownerThreadId &&
-                  isWorkerUpdateDelivery(record) === isWorkerUpdateDelivery(input),
-              );
+          yield* failpoint.hit("message-delivery:insert:after");
 
-              const capacity = messageDeliveryCapacity(config, isWorkerUpdateDelivery(input));
+          return yield* decode(yield* encode(inserted));
+        },
+      );
 
-              if (
-                owned.length >= capacity.retained ||
-                owned.filter(messageDeliveryUsesCapacity).length >= capacity.pending
-              ) {
-                return yield* MessageDeliveryError.make({
-                  reason: "capacity",
-                  operation: "insert",
-                });
-              }
-              yield* commit(input, encoded);
-
-              return input;
-            }),
-          ),
-        );
-
-        yield* failpoint.hit("message-delivery:insert:after");
-
-        return yield* decode(yield* encode(inserted));
-      });
-
-      const get: MessageDeliveryStore["Service"]["get"] = Effect.fn(
-        "MemoryMessageDeliveryStore.get",
-      )(function* (key) {
+      const get: MessageDeliveryStore["Service"]["get"] = Effect.fnUntraced(function* (key) {
         const input = yield* validateMessageDelivery(MessageDeliveryKey, key, "get");
         const text = (yield* Ref.get(state)).records.get(messageDeliveryKeyString(input));
 
         return text === undefined ? null : yield* decode(text);
       });
 
-      const change: MessageDeliveryStore["Service"]["change"] = Effect.fn(
-        "MemoryMessageDeliveryStore.change",
-      )(function* (key, change) {
-        const input = yield* validateMessageDelivery(MessageDeliveryChange, change, "change");
-        const decodedKey = yield* validateMessageDelivery(MessageDeliveryKey, key, "change");
-        const point = `message-delivery:${input._tag.toLowerCase()}`;
+      const change: MessageDeliveryStore["Service"]["change"] = Effect.fnUntraced(
+        function* (key, change) {
+          const input = yield* validateMessageDelivery(MessageDeliveryChange, change, "change");
+          const decodedKey = yield* validateMessageDelivery(MessageDeliveryKey, key, "change");
+          const point = `message-delivery:${input._tag.toLowerCase()}`;
 
-        yield* failpoint.hit(`${point}:before`);
+          yield* failpoint.hit(`${point}:before`);
 
-        const changed = yield* lock.withPermit(
-          Effect.uninterruptible(
-            Effect.gen(function* () {
-              const existing = yield* get(decodedKey);
+          const changed = yield* lock.withPermit(
+            Effect.uninterruptible(
+              Effect.gen(function* () {
+                const existing = yield* get(decodedKey);
 
-              if (existing === null)
-                return yield* MessageDeliveryError.make({
-                  reason: "not-found",
-                  operation: "change",
-                });
-              const next = yield* Effect.fromResult(applyMessageDeliveryChange(existing, input));
-              const encoded = yield* encode(next);
+                if (existing === null)
+                  return yield* MessageDeliveryError.make({
+                    reason: "not-found",
+                    operation: "change",
+                  });
+                const next = yield* Effect.fromResult(applyMessageDeliveryChange(existing, input));
+                const encoded = yield* encode(next);
 
-              yield* commit(next, encoded);
+                yield* commit(next, encoded);
 
-              return next;
-            }),
-          ),
-        );
+                return next;
+              }),
+            ),
+          );
 
-        yield* failpoint.hit(`${point}:after`);
+          yield* failpoint.hit(`${point}:after`);
 
-        return yield* decode(yield* encode(changed));
-      });
+          return yield* decode(yield* encode(changed));
+        },
+      );
 
       return MessageDeliveryStore.of({
         limits: config,
@@ -262,7 +258,7 @@ export const memoryMessageDeliveryStoreLayer = (
         insert,
         get,
         change,
-        list: Effect.fn("MemoryMessageDeliveryStore.list")(function* (request) {
+        list: Effect.fnUntraced(function* (request) {
           const input = yield* validateMessageDelivery(MessageDeliveryPageRequest, request, "list");
 
           const current = yield* Ref.get(state);
@@ -319,53 +315,46 @@ export const memoryMessageDeliveryStoreLayer = (
             next: records.length > input.limit ? (items.at(-1)?.key.messageId ?? null) : null,
           };
         }),
-        due: Effect.fn("MemoryMessageDeliveryStore.due")(
-          function* (nowMillis, limit, ownerThreadId) {
-            const input = yield* validateMessageDelivery(
-              Scan,
-              { nowMillis, limit, ...(ownerThreadId === undefined ? {} : { ownerThreadId }) },
-              "due",
-            );
+        due: Effect.fnUntraced(function* (nowMillis, limit, ownerThreadId) {
+          const input = yield* validateMessageDelivery(
+            Scan,
+            { nowMillis, limit, ...(ownerThreadId === undefined ? {} : { ownerThreadId }) },
+            "due",
+          );
 
-            return (yield* all())
-              .flatMap((record) => {
-                const deadline = messageDeliveryDeadline(record);
-
-                return deadline !== null &&
-                  deadline <= input.nowMillis &&
-                  (input.ownerThreadId === undefined ||
-                    input.ownerThreadId === record.key.ownerThreadId)
-                  ? [{ key: record.key, deadline }]
-                  : [];
-              })
-              .sort(
-                (left, right) =>
-                  left.deadline - right.deadline ||
-                  (messageDeliveryKeyString(left.key) < messageDeliveryKeyString(right.key)
-                    ? -1
-                    : 1),
-              )
-              .slice(0, input.limit)
-              .map((record) => record.key);
-          },
-        ),
-        nextDeadline: Effect.fn("MemoryMessageDeliveryStore.nextDeadline")(
-          function* (ownerThreadId) {
-            if (ownerThreadId !== undefined)
-              yield* validateMessageDelivery(ThreadId, ownerThreadId, "nextDeadline");
-            let next: number | null = null;
-
-            for (const record of yield* all()) {
-              if (ownerThreadId !== undefined && ownerThreadId !== record.key.ownerThreadId)
-                continue;
+          return (yield* all())
+            .flatMap((record) => {
               const deadline = messageDeliveryDeadline(record);
 
-              if (deadline !== null && (next === null || deadline < next)) next = deadline;
-            }
+              return deadline !== null &&
+                deadline <= input.nowMillis &&
+                (input.ownerThreadId === undefined ||
+                  input.ownerThreadId === record.key.ownerThreadId)
+                ? [{ key: record.key, deadline }]
+                : [];
+            })
+            .sort(
+              (left, right) =>
+                left.deadline - right.deadline ||
+                (messageDeliveryKeyString(left.key) < messageDeliveryKeyString(right.key) ? -1 : 1),
+            )
+            .slice(0, input.limit)
+            .map((record) => record.key);
+        }),
+        nextDeadline: Effect.fnUntraced(function* (ownerThreadId) {
+          if (ownerThreadId !== undefined)
+            yield* validateMessageDelivery(ThreadId, ownerThreadId, "nextDeadline");
+          let next: number | null = null;
 
-            return next;
-          },
-        ),
+          for (const record of yield* all()) {
+            if (ownerThreadId !== undefined && ownerThreadId !== record.key.ownerThreadId) continue;
+            const deadline = messageDeliveryDeadline(record);
+
+            if (deadline !== null && (next === null || deadline < next)) next = deadline;
+          }
+
+          return next;
+        }),
       });
     }),
   );

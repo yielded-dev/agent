@@ -92,9 +92,7 @@ const selectedRecords = Effect.fnUntraced(function* (
 });
 
 /** Host-owned read: authenticate the Thread and exact locator before calling. */
-export const getRecord = Effect.fn("ThreadStore.getRecord")(function* (
-  request: ThreadRecordRequest,
-) {
+export const getRecord = Effect.fnUntraced(function* (request: ThreadRecordRequest) {
   yield* Schema.decodeEffect(ThreadRecordRequest)(request).pipe(
     Effect.mapError(() => incomplete("getRecord request")),
   );
@@ -111,9 +109,7 @@ export const getRecord = Effect.fn("ThreadStore.getRecord")(function* (
   return Option.fromUndefinedOr(records[0]);
 });
 
-export const getRunInput = Effect.fn("ThreadStore.getRunInput")(function* (
-  request: ThreadRunInputRequest,
-) {
+export const getRunInput = Effect.fnUntraced(function* (request: ThreadRunInputRequest) {
   yield* Schema.decodeEffect(ThreadRunInputRequest)(request).pipe(
     Effect.mapError(() => incomplete("getRunInput request")),
   );
@@ -138,9 +134,7 @@ export const getRunInput = Effect.fn("ThreadStore.getRunInput")(function* (
 });
 
 /** A bounded snapshot of native lifetime and source-submission worker accounting. */
-export const readWorkerState = Effect.fn("ThreadStore.readWorkerState")(function* (
-  request: ThreadWorkerStateRequest,
-) {
+export const readWorkerState = Effect.fnUntraced(function* (request: ThreadWorkerStateRequest) {
   yield* Schema.decodeEffect(ThreadWorkerStateRequest)(request).pipe(
     Effect.mapError(() => incomplete("readWorkerState request")),
   );

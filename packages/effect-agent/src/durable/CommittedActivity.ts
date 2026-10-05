@@ -80,18 +80,14 @@ const contiguous = () =>
   });
 
 /** Stable work identity independent of worker claims, retry count, extraction, and clocks. */
-export const activityWorkId = Effect.fn("activityWorkId")(function* (
-  key: ActivityProcessorKey,
-  sequence: CanonicalSequence,
-) {
-  return yield* digestJson([
+export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSequence) =>
+  digestJson([
     "effect-agent/activity@1",
     key.processorId,
     key.processorVersion,
     key.threadId,
     sequence,
   ]);
-});
 
 /**
  * Process one bounded committed prefix of one application-selected Thread. Nothing runs until
@@ -105,7 +101,7 @@ export const activityWorkId = Effect.fn("activityWorkId")(function* (
  * a timeout and a longer lease. Claim release has a separate 500ms deadline; failure leaves
  * the bounded lease to expire.
  */
-export const processCommittedActivity = Effect.fn("processCommittedActivity")(function* <
+export const processCommittedActivity = Effect.fnUntraced(function* <
   E = never,
   R = never,
   EApply = never,

@@ -223,7 +223,7 @@ export const subscriptionToolsLayer = (
     const permitted = (source: EventSourceVersion) =>
       options.permittedSources.some((candidate) => sameSource(candidate.source, source));
 
-    const subscribe = Effect.fn("SubscriptionTools.subscribe")(function* (parameters: {
+    const subscribe = Effect.fnUntraced(function* (parameters: {
       readonly source: EventSourceVersion;
       readonly parameters: PersistedJson;
       readonly mode: "once" | "continuous";
@@ -278,7 +278,7 @@ export const subscriptionToolsLayer = (
         );
     });
 
-    const list = Effect.fn("SubscriptionTools.list")(function* (parameters: {
+    const list = Effect.fnUntraced(function* (parameters: {
       readonly after?: number | undefined;
       readonly limit?: number | undefined;
     }) {
@@ -291,9 +291,7 @@ export const subscriptionToolsLayer = (
       return { items: page.items.map(registration), next: page.next };
     });
 
-    const cancel = Effect.fn("SubscriptionTools.cancel")(function* (parameters: {
-      readonly subscriptionId: string;
-    }) {
+    const cancel = Effect.fnUntraced(function* (parameters: { readonly subscriptionId: string }) {
       const step = yield* DurableStep;
 
       return yield* step

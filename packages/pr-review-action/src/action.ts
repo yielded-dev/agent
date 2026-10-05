@@ -265,7 +265,7 @@ export const reviewPublicationFailure = (input: {
   return undefined;
 };
 
-const writeOutputs = Effect.fn("writeReviewOutputs")(function* (
+const writeOutputs = Effect.fnUntraced(function* (
   entries: ReadonlyArray<readonly [string, string | number]>,
 ) {
   const outputPath = yield* Config.String("GITHUB_OUTPUT").pipe(Config.withDefault(""));
@@ -281,7 +281,7 @@ const writeOutputs = Effect.fn("writeReviewOutputs")(function* (
 });
 
 /** Count stale attempts only against the inspected commit, without publishing their findings. */
-export const publishHeadBoundReview = Effect.fn("publishHeadBoundReview")(function* (
+export const publishHeadBoundReview = (
   publish: Effect.Effect<string, GitHubApiFailure | StaleReviewHead>,
   staleAttempt: {
     readonly publish: (input: {
@@ -291,11 +291,11 @@ export const publishHeadBoundReview = Effect.fn("publishHeadBoundReview")(functi
     readonly automatic: boolean;
     readonly failureSummary?: string | undefined;
   },
-) {
-  return yield* publish.pipe(
+) =>
+  publish.pipe(
     Effect.tapErrorTag(
       "StaleReviewHead",
-      Effect.fn(function* (failure) {
+      Effect.fnUntraced(function* (failure) {
         yield* Console.log(
           `PR review publication stopped: inspected ${failure.inspectedHead}, current head ${failure.currentHead}. Recording an incomplete attempt on the inspected commit only.`,
         );
@@ -322,9 +322,8 @@ export const publishHeadBoundReview = Effect.fn("publishHeadBoundReview")(functi
       }),
     ),
   );
-});
 
-const skip = Effect.fn("skipReview")(function* (
+const skip = Effect.fnUntraced(function* (
   reason: string,
   reviewUrl?: string,
   unresolvedChangeRequests = 0,
@@ -396,7 +395,7 @@ export class GeneratedFileClassification extends Context.Service<
 >()("@effect-agent/pr-review-action/GeneratedFileClassification") {}
 
 /** Hydrate exact patches in implementation-first order for one navigable review. */
-export const hydrateExactChanges = Effect.fn("hydrateExactChanges")(function* (input: {
+export const hydrateExactChanges = Effect.fnUntraced(function* (input: {
   readonly files: ReadonlyArray<ChangedFile>;
   readonly changedPaths: ReadonlyArray<string>;
   readonly base: RepositorySnapshot;
@@ -712,7 +711,7 @@ export const makeReviewRepository = (input: {
   const isReadableEntry = (entry: ReturnType<RepositorySnapshot["entry"]>) =>
     entry?.type === "blob" && entry.mode !== "120000";
 
-  const readFile = Effect.fn("ReviewRepository.readFile")(function* (request: ReviewReadFileInput) {
+  const readFile = Effect.fnUntraced(function* (request: ReviewReadFileInput) {
     if (outsideScope(request.path)) {
       return yield* reviewContextFailure(
         "The requested path is outside this review's source scope.",
@@ -757,9 +756,7 @@ export const makeReviewRepository = (input: {
     );
   };
 
-  const searchCode = Effect.fn("ReviewRepository.searchCode")(function* (
-    request: ReviewSearchCodeInput,
-  ) {
+  const searchCode = Effect.fnUntraced(function* (request: ReviewSearchCodeInput) {
     const selected = snapshot(request.revision);
 
     const paths = selected.paths
@@ -1037,7 +1034,7 @@ const prepareReview = Effect.gen(function* () {
   };
 });
 
-const reviewPullRequest = Effect.fn("reviewPullRequest")(function* (
+const reviewPullRequest = Effect.fnUntraced(function* (
   prepared: Omit<Exclude<Effect.Success<typeof prepareReview>, void>, "github">,
   publication: { url?: string },
 ) {

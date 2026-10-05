@@ -7,6 +7,7 @@ import * as Response from "effect/ai/Response";
 import * as ResponseIdTracker from "effect/ai/ResponseIdTracker";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
+import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
 import * as Channel from "effect/Channel";
 import * as Clock from "effect/Clock";
@@ -141,7 +142,7 @@ import { ThreadHistory, ThreadHistoryError } from "../ThreadHistory.ts";
 import { CurrentToolCatalog, RunToolVisibility, type CatalogEntry } from "../ToolExposure.ts";
 import { boundedValueFootprint } from "./bounded-value.ts";
 import { isTextOutput, outputSchemaContract, prepareModelPrompt } from "./output-contract.ts";
-import { ownPrimitiveTextPart } from "./primitive-delta.ts";
+import { capturePrimitiveTextPart } from "./primitive-delta.ts";
 import {
   boundedCanonicalJsonSnapshot,
   boundedJsonSnapshot,
@@ -354,6 +355,7 @@ import {
   contextWindowId,
   collectCoveredMessages,
   estimatePromptTokens,
+  estimateMessageTokens,
   evaluateMessageTokenEstimates,
   initialCompactionState,
   isContextOverflowMessage,
@@ -403,7 +405,7 @@ const runTotalsOf = (context: RunContext): RunTotals =>
     unobservedModelCalls: context.unobservedModelCalls,
   });
 
-const usageReportOf = Effect.fn("AgentRuntime.usageReport")(function* (context: RunContext) {
+const usageReportOf = Effect.fnUntraced(function* (context: RunContext) {
   const contributions: RunTotals[] = [];
 
   for (const read of context.childUsage.values()) {
@@ -420,10 +422,7 @@ const usageReportOf = Effect.fn("AgentRuntime.usageReport")(function* (context: 
   return RunUsageReport.make({ usage: runTotalsOf(context), delegatedUsage });
 });
 
-const noteIncompleteUsage = Effect.fn("AgentRuntime.noteIncompleteUsage")(function* (
-  context: RunContext,
-  turn: number,
-) {
+const noteIncompleteUsage = Effect.fnUntraced(function* (context: RunContext, turn: number) {
   const accounting = yield* ModelUsageAccounting;
 
   context.unobservedModelCalls += 1;
@@ -532,7 +531,7 @@ type InterpreterRequirements<
   | HookRequirements
   | InstructionRequirements;
 
-type EventPublisher = (event: RunEvent) => Effect.Effect<void>;
+type EventPublisher = (events: ReadonlyArray<RunEvent>) => Effect.Effect<void>;
 
 interface RunContext {
   readonly publish: EventPublisher | undefined;
@@ -633,15 +632,13 @@ const publishEvent = <E, R>(
 ): Effect.Effect<void, E, R> =>
   context.publish === undefined
     ? Effect.void
-    : Effect.flatMap(Effect.suspend(make), context.publish);
+    : Effect.flatMap(Effect.suspend(make), (event) => publishEvents(context, [event]));
 
 const publishEvents = (
   context: RunContext,
   events: ReadonlyArray<RunEvent>,
 ): Effect.Effect<void> =>
-  context.publish === undefined
-    ? Effect.void
-    : Effect.forEach(events, context.publish, { discard: true });
+  context.publish === undefined || events.length === 0 ? Effect.void : context.publish(events);
 
 /** A completed admission failure cannot be swallowed by a Handler or outrun by its result. */
 const checkpointExecution = <E, R>(
@@ -1088,25 +1085,42 @@ const encodedToolParameterToolkit = (toolkit: Toolkit.Any): Toolkit.Any =>
     ),
   );
 
-const makeModelResponseCodec = (toolkit: Toolkit.Any) =>
-  Schema.toCodecJson(Response.StreamPart(encodedToolParameterToolkit(toolkit)));
+const makeModelResponseParsers = (toolkit: Toolkit.Any) => {
+  const codec = Schema.toCodecJson(Response.StreamPart(encodedToolParameterToolkit(toolkit)));
 
-// Native Toolkits are immutable. Weak keys let discarded definitions and handler Toolkits go
-// away while each live Toolkit shares its canonical codec across response parts and Turns.
-const modelResponseCodecs = new WeakMap<Toolkit.Any, ReturnType<typeof makeModelResponseCodec>>();
+  // The native encoder validates application payloads before detachment. Interpreter state uses
+  // their canonical JSON, so ownership must not run application decoding transformations again.
+  const ownedToolkit = Toolkit.make(
+    ...Object.values(toolkit.tools).map((tool) =>
+      tool.setParameters(Schema.Json).setSuccess(Schema.Json).setFailure(Schema.Json),
+    ),
+  );
 
-const modelResponseCodecFor = (toolkit: Toolkit.Any) => {
-  const cached = modelResponseCodecs.get(toolkit);
-
-  if (cached !== undefined) return cached;
-  const codec = makeModelResponseCodec(toolkit);
-
-  modelResponseCodecs.set(toolkit, codec);
-
-  return codec;
+  return {
+    encode: Schema.encodeUnknownEffect(codec),
+    decode: Schema.decodeUnknownEffect(Schema.toCodecJson(Response.StreamPart(ownedToolkit))),
+  };
 };
 
-const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
+// Native Toolkits are immutable. Weak keys let discarded definitions and handler Toolkits go
+// away while each live Toolkit shares compiled parsers across response parts and Turns.
+const modelResponseParsers = new WeakMap<
+  Toolkit.Any,
+  ReturnType<typeof makeModelResponseParsers>
+>();
+
+const modelResponseParsersFor = (toolkit: Toolkit.Any) => {
+  const cached = modelResponseParsers.get(toolkit);
+
+  if (cached !== undefined) return cached;
+  const parsers = makeModelResponseParsers(toolkit);
+
+  modelResponseParsers.set(toolkit, parsers);
+
+  return parsers;
+};
+
+const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
   Tools extends Record<string, Tool.Any>,
 >(
   part: unknown,
@@ -1135,13 +1149,15 @@ const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
 
     yield* inspectModelResponsePartCapacity(usage, preflight ?? part, limits);
   }
-  const codec = modelResponseCodecFor(toolkit);
+  const parsers = modelResponseParsersFor(toolkit);
 
-  const encoded = yield* Schema.encodeUnknownEffect(codec)(part).pipe(
-    Effect.mapError(() =>
-      ModelProtocolError.make({ message: "Model response part failed canonical encoding" }),
-    ),
-  );
+  const encoded = yield* parsers
+    .encode(part)
+    .pipe(
+      Effect.mapError(() =>
+        ModelProtocolError.make({ message: "Model response part failed canonical encoding" }),
+      ),
+    );
 
   const retainedBytes = yield* inspectModelResponsePartCapacity(usage, encoded, limits);
 
@@ -1160,59 +1176,56 @@ const ownModelResponsePartGeneral = Effect.fnUntraced(function* <
       }),
   });
 
-  const ownedPart = yield* Schema.decodeUnknownEffect(codec)(ownedEncoded).pipe(
-    Effect.mapError(() =>
-      ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
-    ),
-  );
-
-  return { ownedPart, retainedBytes };
+  return { encodedPart: ownedEncoded, retainedBytes };
 });
 
-const ownModelResponsePart = <Tools extends Record<string, Tool.Any>>(
+const captureModelResponsePart = <Tools extends Record<string, Tool.Any>>(
   part: unknown,
   toolkit: Toolkit.Toolkit<Tools>,
   usage: ModelResponseBufferUsage,
   limits: EffectiveRunBufferLimits,
-): ReturnType<typeof ownModelResponsePartGeneral> =>
-  Effect.suspend((): ReturnType<typeof ownModelResponsePartGeneral> => {
+): ReturnType<typeof captureModelResponsePartGeneral> =>
+  Effect.suspend((): ReturnType<typeof captureModelResponsePartGeneral> => {
     const primitive =
       usage.responsePartCount < limits.maxModelResponseParts
-        ? ownPrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
+        ? capturePrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
         : undefined;
 
     return primitive === undefined
-      ? ownModelResponsePartGeneral(part, toolkit, usage, limits)
+      ? captureModelResponsePartGeneral(part, toolkit, usage, limits)
       : Effect.succeed(primitive);
   });
 
-const consumeModelResponsePart = (
-  usage: ModelResponseBufferUsage,
-  retainedBytes: number,
-  limits: EffectiveRunBufferLimits,
-): Effect.Effect<void, ModelProtocolError> =>
-  Effect.suspend(() => {
-    if (
-      usage.responsePartCount >= limits.maxModelResponseParts ||
-      !Number.isSafeInteger(retainedBytes) ||
-      retainedBytes < 0 ||
-      retainedBytes > limits.maxModelResponseBytes - usage.responsePartBytes
-    ) {
-      return Effect.fail(
-        ModelProtocolError.make({
-          message:
-            usage.responsePartCount >= limits.maxModelResponseParts
-              ? `Model response exceeded the ${limits.maxModelResponseParts}-part response limit`
-              : `Model response exceeded the ${limits.maxModelResponseBytes}-byte retained response limit`,
-        }),
-      );
-    }
+interface OwnedModelResponsePart {
+  readonly ownedPart: Response.AnyPart;
+  readonly retainedBytes: number;
+}
 
-    return Effect.sync(() => {
-      usage.responsePartCount += 1;
-      usage.responsePartBytes += retainedBytes;
+/** Reject trailing content before its capture can run an application codec or suspend. */
+const ownModelResponsePart = Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
+  part: unknown,
+  toolkit: Toolkit.Toolkit<Tools>,
+  usage: ModelResponseBufferUsage,
+  limits: EffectiveRunBufferLimits,
+  finished: boolean,
+): Effect.fn.Return<OwnedModelResponsePart, ModelProtocolError> {
+  if (finished) {
+    return yield* ModelProtocolError.make({
+      message: "Model response emitted content after its finish part",
     });
-  });
+  }
+  const captured = yield* captureModelResponsePart(part, toolkit, usage, limits);
+
+  const ownedPart = yield* modelResponseParsersFor(toolkit)
+    .decode(captured.encodedPart)
+    .pipe(
+      Effect.mapError(() =>
+        ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
+      ),
+    );
+
+  return { ownedPart, retainedBytes: captured.retainedBytes };
+});
 
 type PartLifecycle = "open" | "closed";
 
@@ -1431,186 +1444,179 @@ const effectiveRunBounds = (
   maxToolCalls: boundedAllowance(policy.maxToolCalls, options.toolCallAllowance),
 });
 
-const decodeResumedSettledCall = Effect.fn("AgentRuntime.decodeResumedSettledCall")(
-  (input: unknown) =>
-    Effect.gen(function* () {
-      const raw = yield* Effect.try({
-        try: () => {
-          if (input === null || typeof input !== "object") {
-            throw new TypeError("settled Tool Call must be an object");
-          }
-
-          const readOwnDataProperty = (key: "id" | "result" | "isFailure"): unknown => {
-            const descriptor = Object.getOwnPropertyDescriptor(input, key);
-
-            if (descriptor === undefined || !("value" in descriptor)) {
-              throw new TypeError(`settled Tool Call ${key} must be an own data property`);
-            }
-
-            return descriptor.value;
-          };
-
-          const selection = Object.getOwnPropertyDescriptor(input, "toolSelection");
-
-          if (selection !== undefined && !("value" in selection))
-            throw new TypeError("settled Tool selection must be an own data property");
-          const rejected = Object.getOwnPropertyDescriptor(input, "budgetRejected");
-
-          if (rejected !== undefined && !("value" in rejected)) {
-            throw new TypeError("settled Tool Call budgetRejected must be an own data property");
-          }
-
-          return {
-            id: readOwnDataProperty("id"),
-            result: readOwnDataProperty("result"),
-            isFailure: readOwnDataProperty("isFailure"),
-            ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
-            ...(selection === undefined ? {} : { toolSelection: selection.value }),
-          };
-        },
-        catch: () =>
-          ModelProtocolError.make({
-            message: "Turn resume contains an invalid settled Tool Call",
-          }),
-      });
-
-      const result = boundedCanonicalJsonSnapshot(raw.result, MAX_RESUMED_RESULT_BYTES);
-
-      if (result === undefined) {
-        return yield* ModelProtocolError.make({
-          message: "Turn resume settled Tool result is not bounded canonical JSON",
-        });
+const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
+  const raw = yield* Effect.try({
+    try: () => {
+      if (input === null || typeof input !== "object") {
+        throw new TypeError("settled Tool Call must be an object");
       }
 
-      return yield* Schema.decodeUnknownEffect(RunTurnResumeSettledCallSchema)({
-        ...raw,
-        result: result.value,
-      }).pipe(
-        Effect.mapError(() =>
-          ModelProtocolError.make({
-            message: "Turn resume contains an invalid settled Tool Call",
-          }),
-        ),
-      );
-    }),
-);
+      const readOwnDataProperty = (key: "id" | "result" | "isFailure"): unknown => {
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
 
-const snapshotResumedSettledCalls = Effect.fn("AgentRuntime.snapshotResumedSettledCalls")(
-  (resume: unknown, maximum: number) =>
-    Effect.try({
-      try: () => {
-        if (resume === null || typeof resume !== "object") {
-          throw new TypeError("Turn resume must be an object");
-        }
-        const settledDescriptor = Object.getOwnPropertyDescriptor(resume, "settled");
-
-        if (settledDescriptor === undefined || !("value" in settledDescriptor)) {
-          throw new TypeError("Turn resume settled must be an own data property");
-        }
-        const settled = settledDescriptor.value;
-
-        if (!Array.isArray(settled)) {
-          throw new TypeError("Turn resume settled must be an array");
-        }
-        const lengthDescriptor = Object.getOwnPropertyDescriptor(settled, "length");
-
-        if (
-          lengthDescriptor === undefined ||
-          !("value" in lengthDescriptor) ||
-          !Number.isSafeInteger(lengthDescriptor.value) ||
-          lengthDescriptor.value < 0 ||
-          lengthDescriptor.value > maximum
-        ) {
-          throw new TypeError("Turn resume settled has an invalid length");
-        }
-        const snapshot: Array<unknown> = [];
-
-        for (let index = 0; index < lengthDescriptor.value; index += 1) {
-          const entryDescriptor = Object.getOwnPropertyDescriptor(settled, String(index));
-
-          if (entryDescriptor === undefined || !("value" in entryDescriptor)) {
-            throw new TypeError("Turn resume settled entries must be own data properties");
-          }
-          snapshot.push(entryDescriptor.value);
+        if (descriptor === undefined || !("value" in descriptor)) {
+          throw new TypeError(`settled Tool Call ${key} must be an own data property`);
         }
 
-        return snapshot;
-      },
-      catch: () =>
-        ModelProtocolError.make({
-          message: "Turn resume contains an invalid settled Tool Call collection",
-        }),
-    }),
-);
+        return descriptor.value;
+      };
 
-const decodeResumeUsage = Effect.fn("AgentRuntime.decodeResumeUsage")((input: unknown) =>
-  Effect.gen(function* () {
-    const snapshot = yield* Effect.try({
-      try: () => {
-        if (input === null || typeof input !== "object") {
-          throw new TypeError("Run resume usage must be an object");
-        }
+      const selection = Object.getOwnPropertyDescriptor(input, "toolSelection");
 
-        const read = (key: keyof RunResumeUsage, optional = false): unknown => {
-          const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (selection !== undefined && !("value" in selection))
+        throw new TypeError("settled Tool selection must be an own data property");
+      const rejected = Object.getOwnPropertyDescriptor(input, "budgetRejected");
 
-          if (descriptor === undefined && optional) return undefined;
-          if (descriptor === undefined || !("value" in descriptor)) {
-            throw new TypeError(`Run resume usage ${key} must be an own data property`);
-          }
+      if (rejected !== undefined && !("value" in rejected)) {
+        throw new TypeError("settled Tool Call budgetRejected must be an own data property");
+      }
 
-          return descriptor.value;
-        };
+      return {
+        id: readOwnDataProperty("id"),
+        result: readOwnDataProperty("result"),
+        isFailure: readOwnDataProperty("isFailure"),
+        ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
+        ...(selection === undefined ? {} : { toolSelection: selection.value }),
+      };
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call",
+      }),
+  });
 
-        const optional = Object.fromEntries(
-          (
-            [
-              "usageStatus",
-              "pricingStatus",
-              "unobservedModelCalls",
-              "children",
-              "modelRestarts",
-              "webSearchCalls",
-            ] as const
-          )
-            .map((key) => [key, read(key, true)])
-            .filter(([, value]) => value !== undefined),
-        );
+  const result = boundedCanonicalJsonSnapshot(raw.result, MAX_RESUMED_RESULT_BYTES);
 
-        return {
-          ...optional,
-          modelCalls: read("modelCalls"),
-          inputTokens: read("inputTokens"),
-          outputTokens: read("outputTokens"),
-          lastInputTokens: read("lastInputTokens"),
-          lastOutputTokens: read("lastOutputTokens"),
-          costMicrousd: read("costMicrousd"),
-          committedTurns: read("committedTurns"),
-          toolCalls: read("toolCalls"),
-          programmaticToolCalls: read("programmaticToolCalls"),
-          consecutiveToolFailures: read("consecutiveToolFailures"),
-          finalizationUsed: read("finalizationUsed"),
-        };
-      },
-      catch: () =>
-        ModelProtocolError.make({
-          message:
-            "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
-        }),
+  if (result === undefined) {
+    return yield* ModelProtocolError.make({
+      message: "Turn resume settled Tool result is not bounded canonical JSON",
     });
+  }
 
-    return yield* Schema.decodeUnknownEffect(RunResumeUsageSchema)(snapshot).pipe(
-      Effect.mapError(() =>
-        ModelProtocolError.make({
-          message:
-            "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
-        }),
-      ),
-    );
-  }),
-);
+  return yield* Schema.decodeUnknownEffect(RunTurnResumeSettledCallSchema)({
+    ...raw,
+    result: result.value,
+  }).pipe(
+    Effect.mapError(() =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call",
+      }),
+    ),
+  );
+});
 
-const makeToolFailedEvent = Effect.fn("AgentRuntime.makeToolFailedEvent")(function* (
+const snapshotResumedSettledCalls = (resume: unknown, maximum: number) =>
+  Effect.try({
+    try: () => {
+      if (resume === null || typeof resume !== "object") {
+        throw new TypeError("Turn resume must be an object");
+      }
+      const settledDescriptor = Object.getOwnPropertyDescriptor(resume, "settled");
+
+      if (settledDescriptor === undefined || !("value" in settledDescriptor)) {
+        throw new TypeError("Turn resume settled must be an own data property");
+      }
+      const settled = settledDescriptor.value;
+
+      if (!Array.isArray(settled)) {
+        throw new TypeError("Turn resume settled must be an array");
+      }
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(settled, "length");
+
+      if (
+        lengthDescriptor === undefined ||
+        !("value" in lengthDescriptor) ||
+        !Number.isSafeInteger(lengthDescriptor.value) ||
+        lengthDescriptor.value < 0 ||
+        lengthDescriptor.value > maximum
+      ) {
+        throw new TypeError("Turn resume settled has an invalid length");
+      }
+      const snapshot: Array<unknown> = [];
+
+      for (let index = 0; index < lengthDescriptor.value; index += 1) {
+        const entryDescriptor = Object.getOwnPropertyDescriptor(settled, String(index));
+
+        if (entryDescriptor === undefined || !("value" in entryDescriptor)) {
+          throw new TypeError("Turn resume settled entries must be own data properties");
+        }
+        snapshot.push(entryDescriptor.value);
+      }
+
+      return snapshot;
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message: "Turn resume contains an invalid settled Tool Call collection",
+      }),
+  });
+
+const decodeResumeUsage = Effect.fnUntraced(function* (input: unknown) {
+  const snapshot = yield* Effect.try({
+    try: () => {
+      if (input === null || typeof input !== "object") {
+        throw new TypeError("Run resume usage must be an object");
+      }
+
+      const read = (key: keyof RunResumeUsage, optional = false): unknown => {
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
+
+        if (descriptor === undefined && optional) return undefined;
+        if (descriptor === undefined || !("value" in descriptor)) {
+          throw new TypeError(`Run resume usage ${key} must be an own data property`);
+        }
+
+        return descriptor.value;
+      };
+
+      const optional = Object.fromEntries(
+        (
+          [
+            "usageStatus",
+            "pricingStatus",
+            "unobservedModelCalls",
+            "children",
+            "modelRestarts",
+            "webSearchCalls",
+          ] as const
+        )
+          .map((key) => [key, read(key, true)])
+          .filter(([, value]) => value !== undefined),
+      );
+
+      return {
+        ...optional,
+        modelCalls: read("modelCalls"),
+        inputTokens: read("inputTokens"),
+        outputTokens: read("outputTokens"),
+        lastInputTokens: read("lastInputTokens"),
+        lastOutputTokens: read("lastOutputTokens"),
+        costMicrousd: read("costMicrousd"),
+        committedTurns: read("committedTurns"),
+        toolCalls: read("toolCalls"),
+        programmaticToolCalls: read("programmaticToolCalls"),
+        consecutiveToolFailures: read("consecutiveToolFailures"),
+        finalizationUsed: read("finalizationUsed"),
+      };
+    },
+    catch: () =>
+      ModelProtocolError.make({
+        message:
+          "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
+      }),
+  });
+
+  return yield* Schema.decodeUnknownEffect(RunResumeUsageSchema)(snapshot).pipe(
+    Effect.mapError(() =>
+      ModelProtocolError.make({
+        message:
+          "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
+      }),
+    ),
+  );
+});
+
+const makeToolFailedEvent = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   call: Response.ToolCallPart<string, Schema.Json>,
@@ -1647,7 +1653,7 @@ const makeToolFailedEvent = Effect.fn("AgentRuntime.makeToolFailedEvent")(functi
  * a response commit for this Turn — settle canonically via the single-batch
  * Turn commit.
  */
-const settleRejectedBatch = Effect.fn("AgentRuntime.settleRejectedBatch")(function* (
+const settleRejectedBatch = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   trace: TurnTrace,
@@ -1695,7 +1701,7 @@ type ToolEventPayload =
   | SubagentEventPayload
   | { readonly _tag: "AgentUpdateEmitted"; readonly update: Update };
 
-const stampSubagentEvent = Effect.fn("AgentRuntime.stampSubagentEvent")(function* (
+const stampSubagentEvent = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   payload: ToolEventPayload,
@@ -2251,7 +2257,9 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
     failureMode: prepared.tool.failureMode,
   };
 
-  const toolSpanFailure = ToolSpanFailure.marker();
+  let toolSpanFailure: ToolSpanFailure | undefined;
+  // Successful attempts need no private failure value or Schema class construction.
+  const failureMarker = () => (toolSpanFailure ??= ToolSpanFailure.marker());
   let terminal = false;
   let terminalResultCommitted = false;
 
@@ -2266,7 +2274,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       terminalToolTelemetry(
         telemetryDescriptor,
         outcome,
-        outcome === "failure" ? toolSpanFailure : undefined,
+        outcome === "failure" ? failureMarker() : undefined,
         handling,
       ),
     );
@@ -2455,7 +2463,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         });
       }),
     );
-    if (result.isFailure) return yield* toolSpanFailure;
+    if (result.isFailure) return yield* failureMarker();
   });
 
   const failTerminalResult = (cause: Cause.Cause<ToolExecutionError>) =>
@@ -2472,7 +2480,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         makeToolFailedEvent(context, turnId, call, Cause.squash(cause), "propagated"),
       );
 
-      return yield* toolSpanFailure;
+      return yield* failureMarker();
     });
 
   const measured = started.pipe(
@@ -2718,7 +2726,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
           );
         }
       }
-      if (context.publish !== undefined) yield* context.publish(event);
+      if (context.publish !== undefined) yield* context.publish([event]);
     });
 
   const batchSink: RunEventSinkService = {
@@ -3886,7 +3894,7 @@ const estimateContextTokens = Effect.fnUntraced(function* (
   );
 });
 
-const nextContextEstimate = Effect.fn("AgentRuntime.nextContextEstimate")(function* (
+const nextContextEstimate = Effect.fnUntraced(function* (
   context: RunContext,
   view: ReadonlyArray<Prompt.Message>,
   systemMessagesInHistory: boolean,
@@ -3916,10 +3924,8 @@ const nextContextEstimate = Effect.fn("AgentRuntime.nextContextEstimate")(functi
   );
 });
 
-const snapshotCompactionMessages = Effect.fnUntraced(function* (
-  messages: ReadonlyArray<Prompt.Message>,
-) {
-  return yield* Effect.try({
+const snapshotCompactionMessages = (messages: ReadonlyArray<Prompt.Message>) =>
+  Effect.try({
     try: () =>
       messages.map((message) =>
         Schema.decodeUnknownSync(Schema.Json)(
@@ -3929,7 +3935,6 @@ const snapshotCompactionMessages = Effect.fnUntraced(function* (
     catch: (cause) =>
       CompactionError.make({ message: "Could not snapshot prepared compaction history", cause }),
   });
-});
 
 const HttpStatus = AiError.HttpResponseDetails.fields.status.check(
   Schema.isBetween({ minimum: 100, maximum: 599 }),
@@ -4141,6 +4146,77 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
         const textParts = new Map<string, PartLifecycle>();
         const reasoningParts = new Map<string, PartLifecycle>();
 
+        const consumeSummaryPart = (owned: OwnedModelResponsePart) =>
+          Effect.gen(function* () {
+            responseUsage.responsePartCount++;
+            responseUsage.responsePartBytes += owned.retainedBytes;
+            const ownedPart = owned.ownedPart;
+
+            if (ownedPart.type === "text-delta") {
+              pieces.push(ownedPart.delta);
+            } else if (ownedPart.type === "finish") {
+              if (summaryUsage === undefined) {
+                summaryUsage = ownedPart.usage;
+                summaryFinishMetadata = ownedPart.metadata;
+              }
+            } else if (ownedPart.type === "response-metadata") {
+              summaryResponse = yield* responseIdentity(ownedPart, summaryResponse);
+            }
+            // Drain malformed responses within the buffer bounds so reported usage is charged.
+            yield* Effect.gen(function* () {
+              switch (ownedPart.type) {
+                case "text-start":
+                  return yield* startPart(textParts, ownedPart.id, "compaction text");
+                case "text-delta":
+                  return yield* continuePart(textParts, ownedPart.id, "compaction text delta");
+                case "text-end":
+                  return yield* endPart(textParts, ownedPart.id, "compaction text");
+                case "reasoning-start":
+                  return yield* startPart(reasoningParts, ownedPart.id, "compaction reasoning");
+                case "reasoning-delta":
+                  return yield* continuePart(
+                    reasoningParts,
+                    ownedPart.id,
+                    "compaction reasoning delta",
+                  );
+                case "reasoning-end":
+                  return yield* endPart(reasoningParts, ownedPart.id, "compaction reasoning");
+                case "finish": {
+                  summaryFinished = true;
+                  if (
+                    ownedPart.reason !== "stop" ||
+                    [...textParts.values(), ...reasoningParts.values()].includes("open")
+                  ) {
+                    return yield* ModelProtocolError.make({
+                      message:
+                        "Compaction response did not finish with complete text and a stop reason",
+                    });
+                  }
+
+                  return;
+                }
+                case "tool-params-start":
+                case "tool-params-delta":
+                case "tool-params-end":
+                case "tool-approval-request":
+                case "error":
+                  return yield* ModelProtocolError.make({
+                    message: `Compaction response contained an unusable ${ownedPart.type} part`,
+                  });
+                case "file":
+                case "response-metadata":
+                case "source":
+                  return;
+              }
+            }).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  summaryFailure ??= error;
+                }),
+              ),
+            );
+          });
+
         const summaryExit = yield* enforceDurationDeadline(
           guardBudgetStream(LanguageModel.streamText({ prompt: summarizerPrompt }), options.budget),
           context.durationDeadlineMillis,
@@ -4148,90 +4224,13 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
         ).pipe(
           Stream.provideServiceEffect(Tracer.Tracer, modelTelemetryTracer(context)),
           Stream.runForEach((part) =>
-            Effect.gen(function* () {
-              const owned = yield* ownModelResponsePart(
-                part,
-                Toolkit.empty,
-                responseUsage,
-                context.bufferLimits,
-              );
-
-              yield* consumeModelResponsePart(
-                responseUsage,
-                owned.retainedBytes,
-                context.bufferLimits,
-              );
-              const ownedPart = owned.ownedPart;
-
-              if (ownedPart.type === "text-delta") {
-                pieces.push(ownedPart.delta);
-              } else if (ownedPart.type === "finish") {
-                if (summaryUsage === undefined) {
-                  summaryUsage = ownedPart.usage;
-                  summaryFinishMetadata = ownedPart.metadata;
-                }
-              } else if (ownedPart.type === "response-metadata") {
-                summaryResponse = yield* responseIdentity(ownedPart, summaryResponse);
-              }
-              // Drain malformed responses within the buffer bounds so reported usage is charged.
-              yield* Effect.gen(function* () {
-                if (summaryFinished) {
-                  return yield* ModelProtocolError.make({
-                    message: "Compaction response emitted content after its finish part",
-                  });
-                }
-                switch (ownedPart.type) {
-                  case "text-start":
-                    return yield* startPart(textParts, ownedPart.id, "compaction text");
-                  case "text-delta":
-                    return yield* continuePart(textParts, ownedPart.id, "compaction text delta");
-                  case "text-end":
-                    return yield* endPart(textParts, ownedPart.id, "compaction text");
-                  case "reasoning-start":
-                    return yield* startPart(reasoningParts, ownedPart.id, "compaction reasoning");
-                  case "reasoning-delta":
-                    return yield* continuePart(
-                      reasoningParts,
-                      ownedPart.id,
-                      "compaction reasoning delta",
-                    );
-                  case "reasoning-end":
-                    return yield* endPart(reasoningParts, ownedPart.id, "compaction reasoning");
-                  case "finish": {
-                    summaryFinished = true;
-                    if (
-                      ownedPart.reason !== "stop" ||
-                      [...textParts.values(), ...reasoningParts.values()].includes("open")
-                    ) {
-                      return yield* ModelProtocolError.make({
-                        message:
-                          "Compaction response did not finish with complete text and a stop reason",
-                      });
-                    }
-
-                    return;
-                  }
-                  case "tool-params-start":
-                  case "tool-params-delta":
-                  case "tool-params-end":
-                  case "tool-approval-request":
-                  case "error":
-                    return yield* ModelProtocolError.make({
-                      message: `Compaction response contained an unusable ${ownedPart.type} part`,
-                    });
-                  case "file":
-                  case "response-metadata":
-                  case "source":
-                    return;
-                }
-              }).pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    summaryFailure ??= error;
-                  }),
-                ),
-              );
-            }),
+            ownModelResponsePart(
+              part,
+              Toolkit.empty,
+              responseUsage,
+              context.bufferLimits,
+              summaryFinished,
+            ).pipe(Effect.flatMap(consumeSummaryPart)),
           ),
           Effect.exit,
         );
@@ -4461,82 +4460,74 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
     return { events: events ?? noEvents, changed };
   });
 
-const decodeInput = Effect.fn("AgentRuntime.decodeInput")(
-  <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    input: unknown,
-  ): Effect.Effect<
-    Agent.Input<AgentValue>,
-    AgentInputError,
-    AgentValue["definition"]["input"]["DecodingServices"]
-  > =>
-    Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
-      Effect.mapError((cause) =>
-        AgentInputError.make({
-          message: cause.message,
-        }),
-      ),
+const decodeInput = <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  input: unknown,
+): Effect.Effect<
+  Agent.Input<AgentValue>,
+  AgentInputError,
+  AgentValue["definition"]["input"]["DecodingServices"]
+> =>
+  Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
+    Effect.mapError((cause) =>
+      AgentInputError.make({
+        message: cause.message,
+      }),
     ),
-);
+  );
 
-const evaluateInstructions = Effect.fn("AgentRuntime.evaluateInstructions")(
-  <Input, Error, Services>(
-    instructions: InstructionSource<Input, Error, Services>,
-    input: Input,
-  ): Effect.Effect<Prompt.RawInput, Error, Services> =>
-    Effect.suspend(() => {
-      const result = typeof instructions === "function" ? instructions(input) : instructions;
+const evaluateInstructions = <Input, Error, Services>(
+  instructions: InstructionSource<Input, Error, Services>,
+  input: Input,
+): Effect.Effect<Prompt.RawInput, Error, Services> =>
+  Effect.suspend(() => {
+    const result = typeof instructions === "function" ? instructions(input) : instructions;
 
-      return Effect.isEffect(result) ? result : Effect.succeed(result);
-    }),
-);
+    return Effect.isEffect(result) ? result : Effect.succeed(result);
+  });
 
-const encodeInput = Effect.fn("AgentRuntime.encodeInput")(
-  <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    input: Agent.Input<AgentValue>,
-  ): Effect.Effect<
-    AgentValue["definition"]["input"]["Encoded"],
-    AgentInputError,
-    AgentValue["definition"]["input"]["EncodingServices"]
-  > =>
-    Schema.encodeEffect(agent.definition.input)(input).pipe(
-      Effect.mapError((cause) =>
-        AgentInputError.make({
-          message: `Unable to encode Agent input: ${cause.message}`,
-        }),
-      ),
+const encodeInput = <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  input: Agent.Input<AgentValue>,
+): Effect.Effect<
+  AgentValue["definition"]["input"]["Encoded"],
+  AgentInputError,
+  AgentValue["definition"]["input"]["EncodingServices"]
+> =>
+  Schema.encodeEffect(agent.definition.input)(input).pipe(
+    Effect.mapError((cause) =>
+      AgentInputError.make({
+        message: `Unable to encode Agent input: ${cause.message}`,
+      }),
     ),
-);
+  );
 
-const renderInputPromptEffect = Effect.fn("AgentRuntime.renderInputPrompt")(
-  <Input, Error, Services>(
-    inputPrompt: InputPromptSource<Input, Error, Services> | undefined,
-    decodedInput: Input,
-    encodedInput: unknown,
-  ): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Services> =>
-    inputPrompt === undefined
-      ? Effect.try({
-          try: () => {
-            const encoded = JSON.stringify(encodedInput);
+const renderInputPromptEffect = <Input, Error, Services>(
+  inputPrompt: InputPromptSource<Input, Error, Services> | undefined,
+  decodedInput: Input,
+  encodedInput: unknown,
+): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Services> =>
+  inputPrompt === undefined
+    ? Effect.try({
+        try: () => {
+          const encoded = JSON.stringify(encodedInput);
 
-            if (encoded === undefined) {
-              throw new Error("Agent input cannot be represented as JSON");
-            }
+          if (encoded === undefined) {
+            throw new Error("Agent input cannot be represented as JSON");
+          }
 
-            return encoded;
-          },
-          catch: (cause) =>
-            AgentInputError.make({
-              message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
-            }),
-        })
-      : Effect.suspend(() => {
-          const result = inputPrompt(decodedInput);
+          return encoded;
+        },
+        catch: (cause) =>
+          AgentInputError.make({
+            message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
+          }),
+      })
+    : Effect.suspend(() => {
+        const result = inputPrompt(decodedInput);
 
-          return Effect.isEffect(result) ? result : Effect.succeed(result);
-        }),
-);
+        return Effect.isEffect(result) ? result : Effect.succeed(result);
+      });
 
 /** Render decoded Agent input for model visibility, preserving the legacy JSON default. */
 export function renderInputPrompt<
@@ -4769,22 +4760,20 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
   trace: TurnTrace,
   part: Response.AnyPart,
   retainedBytes: number,
+  events: Array<RunEvent> | undefined,
 ): Effect.fn.Return<
   void,
   ModelProtocolError,
   | Tool.HandlerServices<ToolUnion<Tools>>
   | Tool.ParametersSchema<ToolUnion<Tools>>["EncodingServices"]
 > {
-  yield* consumeModelResponsePart(trace, retainedBytes, context.bufferLimits);
+  // Ownership checked this part against the cumulative count and byte limits.
+  trace.responsePartCount++;
+  trace.responsePartBytes += retainedBytes;
   // Capture reported accounting before lifecycle validation can reject the response.
   if (part.type === "finish" && trace.usage === undefined) {
     trace.usage = part.usage;
     trace.finishMetadata = part.metadata;
-  }
-  if (trace.finished) {
-    return yield* ModelProtocolError.make({
-      message: "Model response emitted content after its finish part",
-    });
   }
   // Provider/model identifiers are untrusted correlation keys. Reject them before they enter
   // the Turn trace, lifecycle maps, canonical event stream, diagnostics, or Tool scheduler.
@@ -4802,17 +4791,17 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
       yield* continuePart(trace.textParts, part.id, "text delta");
       trace.text.push(part.delta);
 
-      if (context.publish === undefined) return;
+      if (events === undefined) return;
 
-      return yield* publishEvent(context, () =>
-        Effect.gen(function* () {
-          return TextDelta.make({
-            ...(yield* eventBase(context)),
-            turnId,
-            text: part.delta,
-          });
+      events.push(
+        TextDelta.make({
+          ...(yield* eventBase(context)),
+          turnId,
+          text: part.delta,
         }),
       );
+
+      return;
     }
     case "text-end": {
       yield* endPart(trace.textParts, part.id, "text");
@@ -4827,17 +4816,17 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
     case "reasoning-delta": {
       yield* continuePart(trace.reasoningParts, part.id, "reasoning delta");
 
-      if (context.publish === undefined) return;
+      if (events === undefined) return;
 
-      return yield* publishEvent(context, () =>
-        Effect.gen(function* () {
-          return ReasoningDelta.make({
-            ...(yield* eventBase(context)),
-            turnId,
-            text: part.delta,
-          });
+      events.push(
+        ReasoningDelta.make({
+          ...(yield* eventBase(context)),
+          turnId,
+          text: part.delta,
         }),
       );
+
+      return;
     }
     case "reasoning-end": {
       yield* endPart(trace.reasoningParts, part.id, "reasoning");
@@ -4990,7 +4979,7 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
         });
       }
 
-      if (context.publish === undefined) return;
+      if (events === undefined) return;
 
       const declared = ToolCallDeclared.make({
         ...(yield* eventBase(context)),
@@ -5001,7 +4990,9 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
         providerExecuted: part.providerExecuted,
       });
 
-      return yield* context.publish(declared);
+      events.push(declared);
+
+      return;
     }
     case "tool-result": {
       const declaredCall = trace.toolCalls.get(part.id);
@@ -5116,18 +5107,18 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
         return;
       }
 
-      if (context.publish === undefined) return;
+      if (events === undefined) return;
 
-      return yield* publishEvent(context, () =>
-        Effect.gen(function* () {
-          return TurnCompleted.make({
-            ...(yield* eventBase(context)),
-            turnId,
-            turn,
-            finishReason: part.reason,
-          });
+      events.push(
+        TurnCompleted.make({
+          ...(yield* eventBase(context)),
+          turnId,
+          turn,
+          finishReason: part.reason,
         }),
       );
+
+      return;
     }
     case "error": {
       return yield* ModelProtocolError.make({
@@ -5145,9 +5136,7 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
   }
 });
 
-const decodeFinalOutput = Effect.fn("AgentRuntime.decodeFinalOutput")(function* <
-  AgentValue extends Agent.Any,
->(
+const decodeFinalOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
   text: string,
 ): Effect.fn.Return<
@@ -5178,9 +5167,10 @@ const decodeFinalOutput = Effect.fn("AgentRuntime.decodeFinalOutput")(function* 
   return { encoded: eventJson, decoded };
 });
 
-const encodeOutputCandidate = Effect.fn("AgentRuntime.encodeOutputCandidate")(function* <
-  AgentValue extends Agent.Any,
->(agent: AgentValue, candidate: unknown) {
+const encodeOutputCandidate = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  candidate: unknown,
+) {
   const encoded = yield* Schema.encodeUnknownEffect(agent.definition.output)(candidate).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
@@ -5208,9 +5198,7 @@ const encodeOutputCandidate = Effect.fn("AgentRuntime.encodeOutputCandidate")(fu
   return { encoded: json, decoded };
 });
 
-const projectToolResult = Effect.fn("AgentRuntime.projectToolResult")(function* <
-  AgentValue extends Agent.Any,
->(
+const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
   declaration: CompletionToolDeclaration | CompletionFromToolDeclaration,
   parameters: unknown,
@@ -5257,9 +5245,12 @@ const projectToolResult = Effect.fn("AgentRuntime.projectToolResult")(function* 
   return projected;
 });
 
-const projectCompletionOutput = Effect.fn("AgentRuntime.projectCompletionOutput")(function* <
-  AgentValue extends Agent.Any,
->(agent: AgentValue, declaration: CompletionToolDeclaration, parameters: unknown, result: unknown) {
+const projectCompletionOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  declaration: CompletionToolDeclaration,
+  parameters: unknown,
+  result: unknown,
+) {
   return yield* encodeOutputCandidate(
     agent,
     yield* projectToolResult(agent, declaration, parameters, result),
@@ -5267,27 +5258,25 @@ const projectCompletionOutput = Effect.fn("AgentRuntime.projectCompletionOutput"
 });
 
 /** Reconstruct optional action completion identically for live execution and canonical recovery. */
-const projectCompletionFromToolOutput = Effect.fn("AgentRuntime.projectCompletionFromToolOutput")(
-  function* <AgentValue extends Agent.Any>(
-    agent: AgentValue,
-    declaration: CompletionFromToolDeclaration,
-    parameters: unknown,
-    result: unknown,
-  ) {
-    const projected = yield* projectToolResult(agent, declaration, parameters, result);
+const projectCompletionFromToolOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+  agent: AgentValue,
+  declaration: CompletionFromToolDeclaration,
+  parameters: unknown,
+  result: unknown,
+) {
+  const projected = yield* projectToolResult(agent, declaration, parameters, result);
 
-    if (!Option.isOption(projected)) {
-      return yield* AgentOutputError.make({
-        message: "Action completion projector did not return an Option",
-      });
-    }
-    if (Option.isNone(projected)) return Option.none();
+  if (!Option.isOption(projected)) {
+    return yield* AgentOutputError.make({
+      message: "Action completion projector did not return an Option",
+    });
+  }
+  if (Option.isNone(projected)) return Option.none();
 
-    return Option.some(yield* encodeOutputCandidate(agent, projected.value));
-  },
-);
+  return Option.some(yield* encodeOutputCandidate(agent, projected.value));
+});
 
-const encodeRunDispositionCandidate = Effect.fn("AgentRuntime.encodeRunDisposition")(function* <
+const encodeRunDispositionCandidate = Effect.fnUntraced(function* <
   Output,
   DispositionSchema extends Schema.Top,
 >(
@@ -5366,18 +5355,15 @@ function encodeRunDisposition<Output, DispositionSchema extends Schema.Top>(
     : encodeRunDispositionCandidate(declaration, output);
 }
 
-const decodeRunDispositionCandidate = Effect.fn("AgentRuntime.decodeRunDisposition")(function* <
-  Output,
-  DispositionSchema extends Schema.Top,
->(
+const decodeRunDispositionCandidate = <Output, DispositionSchema extends Schema.Top>(
   declaration: RunDispositionDeclaration<Output, DispositionSchema>,
   encoded: Schema.Json,
-): Effect.fn.Return<
+): Effect.Effect<
   DispositionSchema["Type"],
   AgentRunDispositionError,
   DispositionSchema["DecodingServices"]
-> {
-  return yield* Schema.decodeEffect(declaration.schema)(encoded).pipe(
+> =>
+  Schema.decodeEffect(declaration.schema)(encoded).pipe(
     Effect.mapError((cause) =>
       AgentRunDispositionError.make({
         cause,
@@ -5385,7 +5371,6 @@ const decodeRunDispositionCandidate = Effect.fn("AgentRuntime.decodeRunDispositi
       }),
     ),
   );
-});
 
 function decodeRunDisposition<AgentValue extends Agent.Any>(
   agent: AgentValue,
@@ -5573,7 +5558,27 @@ const makeTurn = <
 
       context.windowContextTokenLimit = contextTokenLimit;
       const toolSchemaTransformer = modelContext.modelCall?.toolSchemaTransformer;
-      const messageTokenEstimator = modelContext.modelCall?.estimateMessageTokens;
+      // Estimates belong to this prepared prompt. Rebuild the cache after every context
+      // preparation so caller-owned message identities never carry counts into another turn.
+      const messageTokenEstimates = new WeakMap<Prompt.Message, number>();
+
+      const estimatePreparedMessage = (message: Prompt.Message) => {
+        const cached = messageTokenEstimates.get(message);
+
+        if (cached !== undefined) return cached;
+        const tokens = estimateMessageTokens(message);
+
+        messageTokenEstimates.set(message, tokens);
+
+        return tokens;
+      };
+
+      const compactor = yield* ContextCompactor;
+
+      const messageTokenEstimator =
+        modelContext.modelCall?.estimateMessageTokens ??
+        (compactor.estimate === estimatePromptTokens ? estimatePreparedMessage : undefined);
+
       const visibility = yield* RunToolVisibility;
 
       const catalog = yield* prepareWithinDeadline(
@@ -5716,20 +5721,20 @@ const makeTurn = <
 
         if (context.publish === undefined) return;
 
-        yield* context.publish(
+        yield* context.publish([
           TurnStarted.make({
             ...(yield* eventBase(context)),
             turnId,
             turn,
           }),
-        );
-        yield* context.publish(
+        ]);
+        yield* context.publish([
           ModelStarted.make({
             ...(yield* eventBase(context)),
             turnId,
             turn,
           }),
-        );
+        ]);
 
         return;
       }).pipe(Effect.withLogSpan("AgentRuntime.model"));
@@ -6331,7 +6336,7 @@ const makeTurn = <
 
       // Failure accounting observes the already-selected failure; a secondary
       // budget/estimator failure must not replace that native outcome.
-      const retainFailedUsage = Effect.fn("AgentRuntime.retainFailedUsage")(function* () {
+      const retainFailedUsage = Effect.fnUntraced(function* () {
         if (trace.usageConsumed) return;
         trace.usageConsumed = true;
         if (trace.usage === undefined) {
@@ -6468,24 +6473,30 @@ const makeTurn = <
                         }),
                       ),
                       Stream.runForEach((part) =>
-                        ownModelResponsePart(
-                          part,
-                          agent.definition.toolkit,
-                          trace,
-                          context.bufferLimits,
-                        ).pipe(
-                          Effect.flatMap((owned) =>
-                            processModelPart(
-                              context,
-                              turnId,
-                              turn,
-                              agent.definition.toolkit.tools,
-                              trace,
-                              owned.ownedPart,
-                              owned.retainedBytes,
-                            ),
-                          ),
-                        ),
+                        Effect.gen(function* () {
+                          const owned = yield* ownModelResponsePart(
+                            part,
+                            agent.definition.toolkit,
+                            trace,
+                            context.bufferLimits,
+                            trace.finished,
+                          );
+
+                          const events = context.publish === undefined ? undefined : [];
+
+                          yield* processModelPart(
+                            context,
+                            turnId,
+                            turn,
+                            agent.definition.toolkit.tools,
+                            trace,
+                            owned.ownedPart,
+                            owned.retainedBytes,
+                            events,
+                          );
+                          // Publish before accepting the next part. Backpressure stays interruptible.
+                          if (events !== undefined) yield* publishEvents(context, events);
+                        }),
                       ),
                       (effect) => prepareWithinDeadline(context, effect),
                       Effect.onExit((exit) =>
@@ -8114,21 +8125,21 @@ const makeResumeTurn = <
 
         if (context.publish === undefined) return;
 
-        yield* context.publish(
+        yield* context.publish([
           TurnStarted.make({
             ...(yield* eventBase(context)),
             turnId,
             turn,
           }),
-        );
-        yield* context.publish(
+        ]);
+        yield* context.publish([
           TurnCompleted.make({
             ...(yield* eventBase(context)),
             turnId,
             turn,
             finishReason: "tool-calls",
           }),
-        );
+        ]);
 
         return;
       }).pipe(Effect.withLogSpan("AgentRuntime.resume"));
@@ -9131,7 +9142,7 @@ function executeWithCompletion<
           Effect.gen(function* () {
             if (onCompleted !== undefined) yield* onCompleted(terminal);
             if (retained !== undefined) yield* retained.commit(terminal);
-            if (publish !== undefined) yield* publish(terminal);
+            if (publish !== undefined) yield* publish([terminal]);
 
             return terminal;
           }).pipe(
@@ -9141,7 +9152,7 @@ function executeWithCompletion<
               const failed =
                 publish === undefined
                   ? Effect.void
-                  : publish(
+                  : publish([
                       RunFailed.make({
                         eventVersion: terminal.eventVersion,
                         threadId: terminal.threadId,
@@ -9154,7 +9165,7 @@ function executeWithCompletion<
                         errorTag: errorTag(error),
                         message: errorMessage(error),
                       }),
-                    );
+                    ]);
 
               return failed.pipe(Effect.andThen(Effect.failCause(cause)));
             }),
@@ -9188,7 +9199,7 @@ const streamWithCompletion = <A extends ExecutableAgent, H = never, R = never>(
           options,
           undefined,
           undefined,
-          (event) => Queue.offer(queue, event).pipe(Effect.asVoid),
+          (events) => Queue.offerAll(queue, events).pipe(Effect.asVoid),
         );
 
         yield* Effect.forkScoped(
@@ -9381,11 +9392,14 @@ const startProgram = Effect.fn("AgentRuntime.start")(function* <A extends Agent.
       (read) => {
         readUsage = read;
       },
-      (event) =>
+      (events) =>
         Effect.suspend(() => {
-          captured.push(event);
+          if (!Arr.isReadonlyArrayNonEmpty(events)) return Effect.void;
+          const chunk = Arr.copy(events);
 
-          return PubSub.publish(pubsub, [event]).pipe(Effect.asVoid);
+          captured.push(...chunk);
+
+          return PubSub.publish(pubsub, chunk).pipe(Effect.asVoid);
         }),
     ),
   ).pipe(
@@ -9650,14 +9664,14 @@ class ProgrammaticToolAuthorization extends Context.Service<
  */
 const stripProgrammaticToolSpanFailure = (
   cause: Cause.Cause<ToolSpanFailure>,
-  marker: ToolSpanFailure,
+  marker: ToolSpanFailure | undefined,
 ): { readonly found: boolean; readonly residual: Cause.Cause<never> } => {
   let found = false;
   const residual: Array<Cause.Reason<never>> = [];
 
   for (const reason of cause.reasons) {
     if (Cause.isFailReason(reason)) {
-      if (reason.error === marker) {
+      if (marker !== undefined && reason.error === marker) {
         found = true;
       } else {
         // This Effect's only typed failure is its fresh marker. Preserve a future invariant break
@@ -9678,7 +9692,8 @@ const measureProgrammaticToolCall = <R>(
   effect: Effect.Effect<ProgrammaticCallOutcome, never, R>,
 ): Effect.Effect<ProgrammaticCallOutcome, never, R> =>
   Effect.suspend(() => {
-    const marker = ToolSpanFailure.marker();
+    let marker: ToolSpanFailure | undefined;
+    const failureMarker = () => (marker ??= ToolSpanFailure.marker());
     let terminalResult: ProgrammaticCallOutcome | undefined;
     let propagatedFailure: Cause.Cause<never> | undefined;
 
@@ -9693,8 +9708,8 @@ const measureProgrammaticToolCall = <R>(
           propagatedFailure = exit.cause;
 
           return isolateToolDerivative(
-            terminalToolTelemetry(descriptor, "failure", marker, "propagated"),
-          ).pipe(Effect.andThen(Effect.fail(marker)));
+            terminalToolTelemetry(descriptor, "failure", failureMarker(), "propagated"),
+          ).pipe(Effect.andThen(Effect.fail(failureMarker())));
         }
 
         terminalResult = exit.value;
@@ -9706,11 +9721,13 @@ const measureProgrammaticToolCall = <R>(
           terminalToolTelemetry(
             descriptor,
             outcome,
-            outcome === "failure" ? marker : undefined,
+            outcome === "failure" ? failureMarker() : undefined,
             outcome === "failure" ? "returned-to-caller" : undefined,
           ),
         ).pipe(
-          Effect.andThen(outcome === "failure" ? Effect.fail(marker) : Effect.succeed(exit.value)),
+          Effect.andThen(
+            outcome === "failure" ? Effect.fail(failureMarker()) : Effect.succeed(exit.value),
+          ),
         );
       }),
       Effect.withSpan(`execute_tool ${descriptor.toolName}`, {
@@ -10788,7 +10805,7 @@ const spawnWithParent = (
   preparation: RunContextPreparation["Service"],
   onChild: (runId: RunId, read: Effect.Effect<RunUsageReport>) => void,
 ) =>
-  Effect.fn("AgentSpawner.spawn")(function* <
+  Effect.fnUntraced(function* <
     InputSchema extends Schema.Top,
     OutputSchema extends Schema.Top,
     Instructions,

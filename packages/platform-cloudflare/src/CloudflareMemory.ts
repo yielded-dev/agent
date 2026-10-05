@@ -64,9 +64,7 @@ export const memoryObjectName = (namespace: MemoryNamespace.Any): string => name
  * Interrupted callers stop waiting; the owner has its own deadline. A timed-out write
  * may have committed: reconcile by sending the identical operation ID and command.
  */
-const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
-  Namespace extends MemoryNamespace.Any,
->(
+const makeMemoryClient = Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
   access: MemoryAccess<Namespace>,
   principal: Principal,
   rpcLimits: MemoryRpcLimits = defaultMemoryRpcLimits,
@@ -84,7 +82,7 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
   );
   const { namespace } = yield* MemoryObjectNamespace;
 
-  const call = Effect.fn("CloudflareMemoryClient.call")(function* (request: MemoryOwnerRequest) {
+  const call = Effect.fnUntraced(function* (request: MemoryOwnerRequest) {
     const decoded = yield* Schema.decodeEffect(MemoryOwnerRequest)(request).pipe(
       Effect.mapError(() => MemoryRpcError.make({ reason: "protocol" })),
     );
@@ -130,7 +128,7 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
       }),
     );
 
-  const revalidate = Effect.fn("CloudflareMemoryClient.revalidate")(function* (
+  const revalidate = Effect.fnUntraced(function* (
     lookup: MemoryLookup,
     limits: MemoryRecallLimits,
   ) {
@@ -156,9 +154,7 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
     }).pipe((effect) => withinDeadline(effect, timeoutMillis));
   });
 
-  const change = Effect.fn("CloudflareMemoryClient.change")(function* (
-    write: MemoryWrite<Namespace>,
-  ) {
+  const change = Effect.fnUntraced(function* (write: MemoryWrite<Namespace>) {
     if (!MemoryNamespace.equals(write.key.namespace, bound.namespace))
       return yield* MemoryRpcError.make({ reason: "denied" });
 
@@ -186,7 +182,7 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
    * exact-key authority and active document scopes; source-dependent provenance policy remains
    * application-owned. No extraction, job draining, embedding, discovery or rendering occurs.
    */
-  const get = Effect.fn("CloudflareMemoryClient.get")(function* (key: MemoryKey<Namespace>) {
+  const get = Effect.fnUntraced(function* (key: MemoryKey<Namespace>) {
     const decodedKey = yield* Schema.decodeUnknownEffect(MemoryKey.Wire)(key).pipe(
       Effect.mapError(() => MemoryRpcError.make({ reason: "protocol" })),
     );
@@ -225,12 +221,12 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
     }).pipe((effect) => withinDeadline(effect, validated.timeoutMillis));
   });
 
-  const revalidateSemantic = Effect.fn("CloudflareMemoryClient.revalidateSemantic")(function* (
-    found: MemoryIndexSearch<Namespace>,
-    profile: SemanticMemoryProfile,
-    limits: SemanticCandidateLimits,
-  ) {
-    return yield* Effect.gen(function* () {
+  const revalidateSemantic = Effect.fnUntraced(
+    function* (
+      found: MemoryIndexSearch<Namespace>,
+      profile: SemanticMemoryProfile,
+      limits: SemanticCandidateLimits,
+    ) {
       const response = yield* call({
         _tag: "RevalidateSemantic",
         version: 1,
@@ -245,8 +241,9 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
       if (response._tag !== "Semantic") return yield* MemoryRpcError.make({ reason: "protocol" });
 
       return response.result;
-    }).pipe((effect) => withinDeadline(effect, validated.timeoutMillis));
-  });
+    },
+    (effect) => withinDeadline(effect, validated.timeoutMillis),
+  );
 
   /**
    * Revalidate in one owner RPC, then render whole passages within the caller's budget.
@@ -255,17 +252,16 @@ const makeMemoryClient = Effect.fn("CloudflareMemoryClient.make")(function* <
    * The single outcome has sourceId "memory". No embedding or candidate search is performed.
    * Use revalidate with Memory.recall for multiple readers sharing one output budget.
    */
-  const recall = Effect.fn("CloudflareMemoryClient.recall")(function* (
+  const recall = (
     lookup: MemoryLookup,
     limits: MemoryRecallLimits,
     estimateTokens?: (text: string) => number,
-  ) {
-    return yield* Memory.recall(
+  ) =>
+    Memory.recall(
       [{ id: "memory", essential: true, read: revalidate(lookup, limits) }],
       limits,
       estimateTokens,
     );
-  });
 
   return { get, recall, revalidate, revalidateSemantic, change };
 });
@@ -274,20 +270,17 @@ export const CloudflareMemoryClient = {
   /** Bind access and principal using the MemoryObjectNamespace supplied by the application. */
   make: makeMemoryClient,
   /** Use a resolved Worker or Durable Object binding without manual service provisioning. */
-  fromBinding: Effect.fn("CloudflareMemoryClient.fromBinding")(function* <
-    Namespace extends MemoryNamespace.Any,
-  >(
+  fromBinding: <Namespace extends MemoryNamespace.Any>(
     binding: DurableObjectNamespace<MemoryObjectRpc>,
     options: {
       readonly access: MemoryAccess<Namespace>;
       readonly principal: Principal;
       readonly rpcLimits?: MemoryRpcLimits;
     },
-  ) {
-    return yield* makeMemoryClient(options.access, options.principal, options.rpcLimits).pipe(
+  ) =>
+    makeMemoryClient(options.access, options.principal, options.rpcLimits).pipe(
       Effect.provideService(MemoryObjectNamespace, { namespace: binding }),
-    );
-  }),
+    ),
 };
 
 /**

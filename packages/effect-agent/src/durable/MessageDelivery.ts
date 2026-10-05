@@ -277,7 +277,7 @@ export class MessageDeliveryStore extends Context.Service<
  * therefore leave accepted worker discovery to canonical outstanding inputs; a no-receipt action
  * delivery remains uncertain, including when parked or due in the future.
  */
-export const readPending = Effect.fn("MessageDelivery.readPending")(function* (
+export const readPending = Effect.fnUntraced(function* (
   request: Pick<MessageDeliveryPageRequest, "ownerThreadId" | "limit">,
 ) {
   const store = yield* MessageDeliveryStore;
@@ -371,7 +371,7 @@ const MessageDeliveryPreparation = Schema.Struct({
 });
 
 /** Freeze and digest the complete admission envelope before publishing the obligation. */
-export const prepareMessageDelivery = Effect.fn("MessageDelivery.prepare")(function* (options: {
+export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
   readonly key: MessageDeliveryKey;
   readonly envelope: PreparedInput;
   readonly createdAtMillis: number;
@@ -675,7 +675,7 @@ export class MessageDeliveryDriver extends Context.Service<
         const failpoint = yield* MessageDeliveryFailpoint;
         const semaphore = yield* Semaphore.make(config.concurrency);
 
-        const process = Effect.fn("MessageDelivery.process")((key: MessageDeliveryKey) =>
+        const process = (key: MessageDeliveryKey) =>
           semaphore
             .withPermit(
               Effect.gen(function* () {
@@ -847,12 +847,11 @@ export class MessageDeliveryDriver extends Context.Service<
                     )
                   : Effect.fail(failure),
               ),
-            ),
-        );
+            );
 
         return MessageDeliveryDriver.of({
           process,
-          runDue: Effect.fn("MessageDelivery.runDue")(function* (ownerThreadId) {
+          runDue: Effect.fnUntraced(function* (ownerThreadId) {
             const keys = yield* store.due(
               yield* Clock.currentTimeMillis,
               config.batchSize,
@@ -861,16 +860,14 @@ export class MessageDeliveryDriver extends Context.Service<
 
             return yield* Effect.forEach(keys, process, { concurrency: config.concurrency });
           }),
-          retry: Effect.fn("MessageDelivery.retry")(
-            function* (key, expectedVersion, deadlineAtMillis) {
-              return yield* store.change(key, {
-                _tag: "Recover",
-                expectedVersion,
-                deadlineAtMillis,
-                nowMillis: yield* Clock.currentTimeMillis,
-              });
-            },
-          ),
+          retry: Effect.fnUntraced(function* (key, expectedVersion, deadlineAtMillis) {
+            return yield* store.change(key, {
+              _tag: "Recover",
+              expectedVersion,
+              deadlineAtMillis,
+              nowMillis: yield* Clock.currentTimeMillis,
+            });
+          }),
         });
       }),
     );

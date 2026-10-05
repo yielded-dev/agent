@@ -279,7 +279,7 @@ const checkedAdd = (
 };
 
 /** Combine disjoint totals, retaining uncertainty and rejecting numeric overflow. */
-export const sumRunTotals = Effect.fn("sumRunTotals")(function* (
+export const sumRunTotals = Effect.fnUntraced(function* (
   contributions: ReadonlyArray<RunTotals>,
 ): Effect.fn.Return<RunTotals, UsageAggregationError> {
   let modelCalls = 0;
@@ -368,7 +368,7 @@ export const runTotalsFromSummary = (summary: RunUsageSummary): RunTotals =>
  * A validated seed retains earlier call totals and pricing groups without retaining those calls.
  * Empty contributions do not change completeness; the seed is never mutated.
  */
-export const summarizeModelUsage = Effect.fn("summarizeModelUsage")(function* (
+export const summarizeModelUsage = Effect.fnUntraced(function* (
   calls: ReadonlyArray<ModelCallUsage>,
   seed?: RunUsageSummary,
 ): Effect.fn.Return<RunUsageSummary, UsageAggregationError> {
