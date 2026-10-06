@@ -56,7 +56,7 @@ export class ThreadExporterReader extends Context.Service<
       Pick<ThreadExport, "records" | "batches">,
       ThreadStoreError | ThreadNotMaterialized
     >;
-    /** A keyset read of at most 256 facts, subject to the transfer byte bound. */
+    /** A keyset read of at most 256 facts. Keys stay bounded independently of fact identities. */
     readonly facts: (
       threadId: ThreadId,
       section: TransferSection,

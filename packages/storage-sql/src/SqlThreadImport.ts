@@ -169,6 +169,7 @@ const AdmissionRow = Schema.Struct({
 });
 
 const AbortRow = Schema.Struct({
+  command_sequence: SqlInteger.check(Schema.isGreaterThan(0)),
   submission_id: Schema.String,
   author: Schema.String,
   reason: Schema.String,
@@ -176,6 +177,7 @@ const AbortRow = Schema.Struct({
 });
 
 const ApprovalRow = Schema.Struct({
+  command_sequence: SqlInteger.check(Schema.isGreaterThan(0)),
   submission_id: Schema.String,
   tool_call_id: Schema.String,
   decision: Schema.String,
@@ -185,6 +187,7 @@ const ApprovalRow = Schema.Struct({
 });
 
 const ResolutionRow = Schema.Struct({
+  command_sequence: SqlInteger.check(Schema.isGreaterThan(0)),
   submission_id: Schema.String,
   tool_call_id: Schema.String,
   resolution_kind: UnknownResolutionKind,
@@ -287,62 +290,79 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     section: "aborts" | "approvals" | "resolutions",
     predicate: Fragment,
     limit: number,
+    order: "identity" | "sequence" = "identity",
   ) {
     const kind = section;
 
-    const selected = sql`SELECT a.submission_id, a.tool_call_id, a.resolution_kind
+    const orderBy =
+      order === "sequence"
+        ? sql`a.command_sequence`
+        : sql`a.submission_id, a.tool_call_id, a.resolution_kind`;
+
+    const selected = sql`SELECT a.command_sequence, a.submission_id, a.tool_call_id, a.resolution_kind
       FROM ${table("effect_agent_transfer_commands")} a
       WHERE a.thread_id=${threadId} AND a.command_kind=${kind} AND ${predicate}
-      ORDER BY a.submission_id, a.tool_call_id, a.resolution_kind LIMIT ${limit}`;
+      ORDER BY ${orderBy} LIMIT ${limit}`;
 
-    if (section === "aborts")
-      return {
-        aborts: yield* query(sql`SELECT fact.* FROM (${selected}) selected
+    if (section === "aborts") {
+      const rows =
+        yield* query(sql`SELECT selected.command_sequence, fact.* FROM (${selected}) selected
           LEFT JOIN ${table("effect_agent_abort_intents")} fact ON fact.submission_id=selected.submission_id`).pipe(
           Effect.flatMap((r) => decode(Schema.Array(AbortRow), r)),
-          Effect.flatMap((r) =>
-            Effect.forEach(r, (r) =>
-              decodeAbortFact(r).pipe(Effect.mapError((e) => failure("decode transfer abort", e))),
-            ),
-          ),
-        ),
-        approvals: [],
-        resolutions: [],
-      };
-    if (section === "approvals")
+        );
+
       return {
-        aborts: [],
-        approvals: yield* query(sql`SELECT fact.* FROM (${selected}) selected
+        commands: {
+          aborts: yield* Effect.forEach(rows, (r) =>
+            decodeAbortFact(r).pipe(Effect.mapError((e) => failure("decode transfer abort", e))),
+          ),
+          approvals: [],
+          resolutions: [],
+        },
+        after: rows.at(-1)?.command_sequence,
+      };
+    }
+    if (section === "approvals") {
+      const rows =
+        yield* query(sql`SELECT selected.command_sequence, fact.* FROM (${selected}) selected
           LEFT JOIN ${table("effect_agent_approval_decisions")} fact
             ON fact.submission_id=selected.submission_id AND fact.tool_call_id=selected.tool_call_id`).pipe(
           Effect.flatMap((r) => decode(Schema.Array(ApprovalRow), r)),
-          Effect.flatMap((r) =>
-            Effect.forEach(r, (r) =>
-              decodeApprovalFact(r).pipe(
-                Effect.mapError((e) => failure("decode transfer approval", e)),
-              ),
+        );
+
+      return {
+        commands: {
+          aborts: [],
+          approvals: yield* Effect.forEach(rows, (r) =>
+            decodeApprovalFact(r).pipe(
+              Effect.mapError((e) => failure("decode transfer approval", e)),
             ),
           ),
-        ),
-        resolutions: [],
+          resolutions: [],
+        },
+        after: rows.at(-1)?.command_sequence,
       };
+    }
 
-    return {
-      aborts: [],
-      approvals: [],
-      resolutions: yield* query(sql`SELECT fact.* FROM (${selected}) selected
+    const rows =
+      yield* query(sql`SELECT selected.command_sequence, fact.* FROM (${selected}) selected
         LEFT JOIN ${table("effect_agent_unknown_resolutions")} fact
           ON fact.submission_id=selected.submission_id AND fact.tool_call_id=selected.tool_call_id
           AND fact.resolution_kind=selected.resolution_kind`).pipe(
         Effect.flatMap((r) => decode(Schema.Array(ResolutionRow), r)),
-        Effect.flatMap((r) =>
-          Effect.forEach(r, (r) =>
-            decodeResolutionFact(r).pipe(
-              Effect.mapError((e) => failure("decode transfer resolution", e)),
-            ),
+      );
+
+    return {
+      commands: {
+        aborts: [],
+        approvals: [],
+        resolutions: yield* Effect.forEach(rows, (r) =>
+          decodeResolutionFact(r).pipe(
+            Effect.mapError((e) => failure("decode transfer resolution", e)),
           ),
         ),
-      ),
+      },
+      after: rows.at(-1)?.command_sequence,
     };
   });
 
@@ -655,31 +675,22 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         };
       }
 
-      const key =
+      const sequence =
         after === undefined
-          ? undefined
-          : yield* json(Schema.Tuple([Schema.String, Schema.String, Schema.String]), after);
+          ? 0
+          : yield* decode(Schema.FiniteFromString.pipe(Schema.decodeTo(Schema.Natural)), after);
 
-      const predicate =
-        key === undefined
-          ? sql`1=1`
-          : section === "aborts"
-            ? sql`a.submission_id>${key[0]}`
-            : sql`(a.submission_id, a.tool_call_id, a.resolution_kind)>(${key[0]}, ${key[1]}, ${key[2]})`;
-
-      const commands = yield* commandFacts(threadId, section, predicate, 1);
-      const item = commands[section][0];
+      const page = yield* commandFacts(
+        threadId,
+        section,
+        sql`a.command_sequence>${sequence}`,
+        1,
+        "sequence",
+      );
 
       return {
-        facts: { ...facts, commands },
-        after:
-          item === undefined
-            ? (after ?? "")
-            : JSON.stringify([
-                item.submissionId,
-                "toolCallId" in item ? item.toolCallId : "",
-                "resolution" in item ? unknownResolutionKind(item.resolution) : "",
-              ]),
+        facts: { ...facts, commands: page.commands },
+        after: String(page.after ?? sequence),
       };
     }),
   });
@@ -792,13 +803,13 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         const result: typeof ThreadCommands.Type = { aborts: [], approvals: [], resolutions: [] };
         const aborts = yield* commandFacts(id, "aborts", sql`a.submission_id=${sid}`, 2);
 
-        if (aborts.aborts.length > 1)
+        if (aborts.commands.aborts.length > 1)
           return yield* failure("read staged commands", "Duplicate accepted abort");
         let bytes = 0;
         const approvals: Array<ApprovalDecisionIntent> = [];
         const resolutions: Array<UnknownResolutionIntent> = [];
 
-        for (const command of aborts.aborts)
+        for (const command of aborts.commands.aborts)
           bytes += utf8ByteLength(canonicalJson(yield* encode(AbortIntent, command)));
         for (const section of ["approvals", "resolutions"] as const) {
           let after: readonly [string, string] | undefined;
@@ -812,7 +823,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             );
 
             if (section === "approvals") {
-              const command = page.approvals[0];
+              const command = page.commands.approvals[0];
 
               if (command === undefined) break;
               bytes += utf8ByteLength(
@@ -826,7 +837,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               approvals.push(command);
               after = [command.toolCallId, ""];
             } else {
-              const command = page.resolutions[0];
+              const command = page.commands.resolutions[0];
 
               if (command === undefined) break;
               bytes += utf8ByteLength(
@@ -843,7 +854,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           }
         }
 
-        return { ...result, aborts: aborts.aborts, approvals, resolutions };
+        return { ...result, aborts: aborts.commands.aborts, approvals, resolutions };
       }),
       hasAgent: (agentId) =>
         query(sql`SELECT record_id FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${id} AND r.record_tag='ThreadCreated'

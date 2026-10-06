@@ -15,7 +15,7 @@ export const CurrentPostgresStorageVersion = 21;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
-DECLARE owner_id TEXT; fact JSONB;
+DECLARE owner_id TEXT; fact JSONB; command_sequence BIGINT;
 BEGIN
   IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
   IF TG_OP = 'DELETE' THEN fact := to_jsonb(OLD); ELSE fact := to_jsonb(NEW); END IF;
@@ -23,11 +23,6 @@ BEGIN
     SELECT thread_id INTO STRICT owner_id FROM __NAMESPACE__.effect_agent_submissions
       WHERE submission_id = (fact ->> CASE WHEN TG_ARGV[0] = 'submission' THEN 'submission_id' ELSE 'parent_submission_id' END);
   ELSE owner_id := fact ->> TG_ARGV[0]; END IF;
-  IF TG_ARGV[1] IN ('aborts_count','approvals_count','resolutions_count') THEN
-    INSERT INTO __NAMESPACE__.effect_agent_transfer_commands (thread_id, command_kind, submission_id, tool_call_id, resolution_kind)
-      VALUES (owner_id, CASE TG_ARGV[1] WHEN 'aborts_count' THEN 'aborts' WHEN 'approvals_count' THEN 'approvals' ELSE 'resolutions' END,
-        fact ->> 'submission_id', COALESCE(fact ->> 'tool_call_id', ''), COALESCE(fact ->> 'resolution_kind', ''));
-  END IF;
   IF TG_TABLE_NAME = 'effect_agent_child_reservations' THEN
     IF TG_OP = 'UPDATE' THEN
       DELETE FROM __NAMESPACE__.effect_agent_live_child_reservations WHERE reservation_id=OLD.reservation_id;
@@ -50,7 +45,14 @@ BEGIN
       aborts_count=effect_agent_transfer_state.aborts_count+EXCLUDED.aborts_count,
       approvals_count=effect_agent_transfer_state.approvals_count+EXCLUDED.approvals_count,
       resolutions_count=effect_agent_transfer_state.resolutions_count+EXCLUDED.resolutions_count,
-      deliveries_count=effect_agent_transfer_state.deliveries_count+EXCLUDED.deliveries_count;
+      deliveries_count=effect_agent_transfer_state.deliveries_count+EXCLUDED.deliveries_count
+    RETURNING CASE TG_ARGV[1] WHEN 'aborts_count' THEN aborts_count WHEN 'approvals_count' THEN approvals_count
+      WHEN 'resolutions_count' THEN resolutions_count END INTO command_sequence;
+  IF command_sequence IS NOT NULL THEN
+    INSERT INTO __NAMESPACE__.effect_agent_transfer_commands (thread_id, command_kind, command_sequence, submission_id, tool_call_id, resolution_kind)
+      VALUES (owner_id, CASE TG_ARGV[1] WHEN 'aborts_count' THEN 'aborts' WHEN 'approvals_count' THEN 'approvals' ELSE 'resolutions' END,
+        command_sequence, fact ->> 'submission_id', COALESCE(fact ->> 'tool_call_id', ''), COALESCE(fact ->> 'resolution_kind', ''));
+  END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
@@ -221,7 +223,8 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_submissions_active_parent ON __NAMESPACE__.effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND parent_submission_id IS NOT NULL",
   'CREATE TABLE __NAMESPACE__.effect_agent_live_child_reservations (reservation_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL)',
   "CREATE INDEX effect_agent_live_child_reservations_thread ON __NAMESPACE__.effect_agent_live_child_reservations(thread_id, reservation_id)",
-  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_commands (thread_id TEXT COLLATE "C" NOT NULL, command_kind TEXT COLLATE "C" NOT NULL, submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, resolution_kind TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, command_kind, submission_id, tool_call_id, resolution_kind), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__.effect_agent_submissions(submission_id) ON DELETE RESTRICT)',
+  // Compact native positions keep accepted identities out of bounded export cursors.
+  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_commands (thread_id TEXT COLLATE "C" NOT NULL, command_kind TEXT COLLATE "C" NOT NULL, command_sequence BIGINT NOT NULL, submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, resolution_kind TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, command_kind, submission_id, tool_call_id, resolution_kind), CONSTRAINT effect_agent_transfer_commands_sequence_key UNIQUE (thread_id, command_kind, command_sequence), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__.effect_agent_submissions(submission_id) ON DELETE RESTRICT)',
   // Persistent scalar FIFO derivatives; rebuild from canonical input/settlement boundaries.
   'CREATE TABLE __NAMESPACE__.effect_agent_input_intervals (thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, settlement_sequence BIGINT, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_input_intervals_open ON __NAMESPACE__.effect_agent_input_intervals(thread_id, sequence) WHERE settlement_sequence IS NULL",
@@ -762,6 +765,7 @@ const layoutShape: Readonly<
     columns: [
       "thread_id:text:true",
       "command_kind:text:true",
+      "command_sequence:bigint:true",
       "submission_id:text:true",
       "tool_call_id:text:true",
       "resolution_kind:text:true",
@@ -770,6 +774,10 @@ const layoutShape: Readonly<
       effect_agent_transfer_commands_pkey: [
         "p",
         ["thread_id", "command_kind", "submission_id", "tool_call_id", "resolution_kind"],
+      ],
+      effect_agent_transfer_commands_sequence_key: [
+        "u",
+        ["thread_id", "command_kind", "command_sequence"],
       ],
       effect_agent_transfer_commands_submission_id_fkey: [
         "f",
