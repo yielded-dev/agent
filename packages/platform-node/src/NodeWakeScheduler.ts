@@ -1,20 +1,21 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
-import { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import type { ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
 import type { Duration } from "effect";
-import { Context, Effect, Layer, PubSub, Stream } from "effect";
+import { Clock, Context, Effect, Layer, Option, PubSub, Stream } from "effect";
 
 /**
- * Bounded in-process wake buffer. Wake hints are droppable by contract (the ledger-scan fallback
+ * Bounded in-process wake buffer. Wake hints are droppable by contract (native work inventory
  * keeps liveness), so a full buffer slides out the oldest hint instead of growing without bound.
  */
 const WAKE_BUFFER_CAPACITY = 1_024;
 
-/** Cadence authority for the Node wake scheduler's ledger-scan fallback loop. */
+/** Cadence authority for the Node wake scheduler's native inventory fallback. */
 export class NodeWakeSchedulerConfig extends Context.Service<
   NodeWakeSchedulerConfig,
   {
-    /** Interval between ledger scans that re-emit every nonterminal Thread lane. */
+    /** Interval between scans of Threads with outstanding work, including terminal obligations. */
     readonly scanInterval: Duration.Duration;
   }
 >()("@effect-agent/platform-node/NodeWakeSchedulerConfig") {
@@ -26,47 +27,38 @@ export class NodeWakeSchedulerConfig extends Context.Service<
 }
 
 const makeWakeScheduler = Effect.gen(function* () {
-  const ledger = yield* SubmissionLedger;
+  const work = yield* ThreadWorkDiscovery.pipe(Effect.provide(ThreadWorkDiscovery.layer));
   const config = yield* NodeWakeSchedulerConfig;
+  const clock = yield* Clock.Clock;
   const hints = yield* PubSub.sliding<ThreadId>(WAKE_BUFFER_CAPACITY);
   const progress = yield* makeWakeSubscriptionHub;
   const settlements = yield* makeWakeSubscriptionHub;
 
   yield* Effect.addFinalizer(() => PubSub.shutdown(hints));
 
-  /**
-   * One fallback scan: every Thread lane with nonterminal work, deduplicated. A scan
-   * failure degrades to "no hints this round" — the wake channel has no error contract and the
-   * next round retries — but is logged so a persistently failing ledger stays visible.
-   */
-  const scanOnce: Effect.Effect<ReadonlyArray<ThreadId>> = Stream.runCollect(
-    ledger.scanNonterminal,
-  ).pipe(
-    Effect.map((snapshots) => {
-      const lanes = new Set<ThreadId>();
-
-      for (const snapshot of snapshots) {
-        lanes.add(snapshot.threadId);
-      }
-
-      return [...lanes];
-    }),
-    Effect.catch((error) =>
-      Effect.logWarning("NodeWakeScheduler fallback scan failed", error).pipe(
-        Effect.as([] as ReadonlyArray<ThreadId>),
+  const scanOnce = Stream.paginate(undefined, (afterThreadId: ThreadId | undefined) =>
+    work
+      .threads({ limit: 32, ...(afterThreadId === undefined ? {} : { afterThreadId }) })
+      .pipe(
+        Effect.map(
+          (page): readonly [ReadonlyArray<ThreadId>, Option.Option<ThreadId | undefined>] => [
+            page.threadIds,
+            page.afterThreadId === undefined ? Option.none() : Option.some(page.afterThreadId),
+          ],
+        ),
       ),
+  ).pipe(
+    Stream.catch((error) =>
+      Stream.fromEffect(
+        Effect.logWarning("NodeWakeScheduler native work inventory failed", error),
+      ).pipe(Stream.drain),
     ),
   );
 
-  /**
-   * Deployment §3: correctness must not depend on in-memory notifications, so every `wakes` run
-   * merges its PubSub subscription with shared Clock-driven ledger scans. Share whole snapshots:
-   * sliding individual lanes would strand the beginning of scans larger than the hint buffer.
-   * The scan starts with the first subscriber and stops when the last subscriber leaves.
-   */
-  const fallbackScans = yield* Stream.share(
-    Stream.fromEffectRepeat(Effect.sleep(config.scanInterval).pipe(Effect.andThen(scanOnce))),
-    { capacity: 1, strategy: "sliding" },
+  // Each subscriber owns its cursor. A slow subscriber retains one page and resumes it;
+  // faster subscribers keep scanning without an unbounded shared snapshot or dropped pages.
+  const fallbackScans = Stream.fromEffectRepeat(clock.sleep(config.scanInterval)).pipe(
+    Stream.flatMap(() => scanOnce),
   );
 
   return WakeScheduler.of({
@@ -77,23 +69,20 @@ const makeWakeScheduler = Effect.gen(function* () {
       ).pipe(Effect.andThen(PubSub.publish(hints, threadId)), Effect.asVoid),
     subscribe: (threadId, kind) =>
       (kind === "settlement" ? settlements : progress).subscribe(threadId),
-    wakes: Stream.merge(
-      Stream.fromPubSub(hints),
-      fallbackScans.pipe(Stream.flatMap(Stream.fromIterable)),
-    ),
+    wakes: Stream.merge(Stream.fromPubSub(hints), fallbackScans),
   });
 });
 
 /**
  * In-process Node `WakeScheduler`: `notify` publishes to a bounded sliding PubSub for prompt
  * same-process worker wakeups. Thread waiters use separate progress and settlement registrations;
- * broad hints wake both. Active `wakes` subscriptions share one periodic
- * `SubmissionLedger.scanNonterminal` fallback so a dropped, coalesced, or never-sent notification
- * can never strand accepted work (persistence §14). Delivery may duplicate; consumers already
+ * broad hints wake both. Each active `wakes` subscription pages the native work inventory
+ * periodically so a dropped, coalesced, or never-sent notification cannot strand accepted work
+ * or a terminal side obligation. Delivery may duplicate; consumers already
  * treat wakes as pure liveness hints.
  */
 export const nodeWakeSchedulerLayer: Layer.Layer<
   WakeScheduler,
   never,
-  SubmissionLedger | NodeWakeSchedulerConfig
+  ThreadStore | NodeWakeSchedulerConfig
 > = Layer.effect(WakeScheduler)(makeWakeScheduler);

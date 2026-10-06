@@ -314,7 +314,7 @@ import {
   type RunToolFailureObserver,
   type ChildEstablishStatus,
   type CommandDrainPolicy,
-  type RunApprovalDecision,
+  type RunApprovalRequest,
   type RunBufferLimits,
   type RunResumeUsage,
   type RunDurabilityHook,
@@ -1783,156 +1783,69 @@ const stampSubagentEvent = Effect.fnUntraced(function* (
   }
 });
 
-const approvalDecision = <Tools extends Record<string, Tool.Any>, Error, Requirements>(
+const prepareApprovalRequest = <Tools extends Record<string, Tool.Any>>(
   context: RunContext,
   turnId: TurnId,
   prepared: PreparedToolCall<Tools>,
-  options: RunOptions<Error, Requirements>,
 ): Effect.Effect<
-  | {
-      readonly required: false;
-    }
-  | {
-      readonly required: true;
-      readonly request: Response.ToolApprovalRequestPart;
-      readonly decision: RunApprovalDecision;
-    },
-  Error | ModelProtocolError,
-  Requirements | Tool.HandlerServices<ToolUnion<Tools>>
+  RunApprovalRequest | undefined,
+  ModelProtocolError | AgentPolicyError,
+  Tool.HandlerServices<ToolUnion<Tools>>
 > =>
-  Effect.gen(function* () {
-    if (Result.isFailure(prepared.validation)) return { required: false } as const;
-    const decodedParams = prepared.validation.success;
+  prepareWithinDeadline(
+    context,
+    Effect.gen(function* () {
+      if (Result.isFailure(prepared.validation)) return undefined;
+      const decodedParams = prepared.validation.success;
+      const approval = prepared.tool.needsApproval;
 
-    const approval = prepared.tool.needsApproval;
+      if (approval === undefined || approval === false) return undefined;
 
-    if (approval === undefined || approval === false) {
-      return { required: false as const };
-    }
+      const required =
+        typeof approval === "function"
+          ? yield* Effect.suspend(() => {
+              // Match native Effect AI: history is readonly and may contain opaque Tool values.
+              const result = approval(decodedParams, {
+                toolCallId: prepared.call.id,
+                messages: context.history.content,
+              });
 
-    const required =
-      typeof approval === "function"
-        ? yield* Effect.gen(function* () {
-            // Approval callbacks own their view; mutating it must not rewrite official history.
-            const history = yield* Schema.encodeEffect(Prompt.Prompt)(context.history).pipe(
-              Effect.flatMap((encoded) =>
-                Effect.try({
-                  try: () => {
-                    if (typeof structuredCloneFunction !== "function") {
-                      throw new TypeError("structuredClone is unavailable");
-                    }
+              return Effect.isEffect(result) ? result : Effect.succeed(result);
+            })
+          : approval;
 
-                    const clone = (value: unknown): unknown =>
-                      Reflect.apply(structuredCloneFunction, globalThis, [value]);
+      if (!required) return undefined;
 
-                    const validateJson = Schema.decodeUnknownSync(Schema.Json);
+      const toolCallId = yield* decodeToolCallId(prepared.call.id);
 
-                    return {
-                      content: encoded.content.map((message) => ({
-                        ...message,
-                        options: clone(message.options),
-                        content:
-                          typeof message.content === "string"
-                            ? message.content
-                            : message.content.map((part) => {
-                                // Native Prompt permits Unknown here; approval history requires JSON.
-                                if (part.type === "tool-call") validateJson(part.params);
-                                else if (part.type === "tool-result") validateJson(part.result);
+      const parameters =
+        typeof approval === "function"
+          ? yield* decodeToolCallParameters<Tools>(
+              prepared.tool,
+              prepared.call.name,
+              copyJson(prepared.call.params),
+            )
+          : decodedParams;
 
-                                return part.type !== "file"
-                                  ? clone(part)
-                                  : {
-                                      ...part,
-                                      options: clone(part.options),
-                                      data:
-                                        typeof part.data === "string"
-                                          ? part.data
-                                          : part.data instanceof Uint8Array
-                                            ? new Uint8Array(part.data)
-                                            : Schema.decodeSync(Schema.URLFromString)(
-                                                part.data.href,
-                                              ),
-                                    };
-                              }),
-                      })),
-                    };
-                  },
-                  catch: (cause) =>
-                    ModelProtocolError.make({
-                      message: `Could not copy Tool approval history: ${errorMessage(cause)}`,
-                    }),
-                }),
-              ),
-              Effect.flatMap(Schema.decodeUnknownEffect(Prompt.Prompt)),
-              Effect.mapError((cause) =>
-                cause._tag === "ModelProtocolError"
-                  ? cause
-                  : ModelProtocolError.make({
-                      message: `Could not snapshot Tool approval history: ${cause.message}`,
-                    }),
-              ),
-            );
-
-            const result = approval(decodedParams, {
-              toolCallId: prepared.call.id,
-              messages: history.content,
-            });
-
-            return yield* Effect.isEffect(result) ? result : Effect.succeed(result);
-          })
-        : approval;
-
-    if (!required) {
-      return { required: false as const };
-    }
-
-    const request = Response.makePart("tool-approval-request", {
-      approvalId: `${context.runId}:${prepared.call.id}`,
-      toolCallId: prepared.call.id,
-    });
-
-    if (options.approval === undefined) {
       return {
-        required: true as const,
-        request,
-        decision: {
-          _tag: "unresolved" as const,
-          reason: "No approval decision hook is available",
-        },
+        request: Response.makePart("tool-approval-request", {
+          approvalId: `${context.runId}:${prepared.call.id}`,
+          toolCallId: prepared.call.id,
+        }),
+        threadId: context.threadId,
+        runId: context.runId,
+        turnId,
+        toolCallId,
+        toolName: prepared.call.name,
+        parameters,
       };
-    }
-    const toolCallId = yield* decodeToolCallId(prepared.call.id);
-
-    const parameters =
-      typeof approval === "function"
-        ? yield* decodeToolCallParameters<Tools>(
-            prepared.tool,
-            prepared.call.name,
-            copyJson(prepared.call.params),
-          )
-        : decodedParams;
-
-    const decision = yield* options.approval.request({
-      request,
-      threadId: context.threadId,
-      runId: context.runId,
-      turnId,
-      toolCallId,
-      toolName: prepared.call.name,
-      parameters,
-    });
-
-    return {
-      required: true as const,
-      request,
-      decision,
-    };
-  });
+    }),
+  );
 
 /**
  * Resolve every native Effect AI approval before the handler scheduler starts.
- * Concatenating this preflight stream ahead of handler streams makes denied or
- * unresolved batches a strict no-start boundary.
+ * Retaining all required requests before decisions keeps denied or unresolved
+ * batches a strict no-start boundary across replacement Attempts.
  */
 const preflightApproval = Effect.fnUntraced(function* <
   Tools extends Record<string, Tool.Any>,
@@ -1942,17 +1855,24 @@ const preflightApproval = Effect.fnUntraced(function* <
   context: RunContext,
   turnId: TurnId,
   prepared: PreparedToolCall<Tools>,
+  request: RunApprovalRequest | undefined,
   options: RunOptions<HookError, HookRequirements>,
 ): Effect.fn.Return<
   void,
-  HookError | ModelProtocolError | AgentApprovalDenied | AgentApprovalPending,
+  HookError | ModelProtocolError | AgentPolicyError | AgentApprovalDenied | AgentApprovalPending,
   HookRequirements | Tool.HandlerServices<ToolUnion<Tools>>
 > {
-  // This callback may publish canonical approval facts. Do not put it inside a deadline timer.
-  const approval = yield* approvalDecision(context, turnId, prepared, options);
+  if (request === undefined) return;
+  const hook = options.approval;
 
-  if (!approval.required) return;
-  const toolCallId = yield* decodeToolCallId(prepared.call.id);
+  const decision =
+    hook === undefined
+      ? { _tag: "unresolved" as const, reason: "No approval decision hook is available" }
+      : yield* prepareWithinDeadline(context, hook.request(request));
+
+  // Canonical acceptance is fenced by its storage owner and must finish before the decision is used.
+  if (hook?.commit !== undefined) yield* hook.commit(request, decision);
+  const toolCallId = request.toolCallId;
 
   yield* publishEvent(context, () =>
     Effect.map(eventBase(context), (base) =>
@@ -1965,14 +1885,14 @@ const preflightApproval = Effect.fnUntraced(function* <
     ),
   );
 
-  switch (approval.decision._tag) {
+  switch (decision._tag) {
     case "approved":
       return;
     case "denied": {
       const denied = AgentApprovalDenied.make({
         toolCallId: prepared.call.id,
         toolName: prepared.call.name,
-        message: approval.decision.reason ?? "Tool approval was denied",
+        message: decision.reason ?? "Tool approval was denied",
       });
 
       yield* publishEvent(context, () =>
@@ -1995,10 +1915,10 @@ const preflightApproval = Effect.fnUntraced(function* <
     }
     case "unresolved":
       return yield* AgentApprovalPending.make({
-        approvalId: approval.request.approvalId,
+        approvalId: request.request.approvalId,
         toolCallId: prepared.call.id,
         toolName: prepared.call.name,
-        message: approval.decision.reason ?? "Tool approval remains unresolved",
+        message: decision.reason ?? "Tool approval remains unresolved",
       });
   }
 });
@@ -2632,8 +2552,18 @@ const executeToolBatch = Effect.fnUntraced(function* <
   const hookServices = yield* Effect.context<HookRequirements>();
 
   yield* checkpointExecution(context, durability);
-  for (const call of prepared) {
-    yield* preflightApproval(context, turnId, call, options);
+
+  const approvals = yield* Effect.forEach(prepared, (call) =>
+    Effect.map(prepareApprovalRequest(context, turnId, call), (request) => ({ call, request })),
+  );
+
+  if (options.approval?.prepareBatch !== undefined)
+    yield* options.approval.prepareBatch(
+      approvals.flatMap(({ request }) => (request === undefined ? [] : [request])),
+    );
+  yield* checkpointExecution(context, durability);
+  for (const { call, request } of approvals) {
+    yield* preflightApproval(context, turnId, call, request, options);
     yield* checkpointExecution(context, durability);
   }
   for (const call of executableDescriptors) {

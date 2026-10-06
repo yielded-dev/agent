@@ -806,6 +806,7 @@ it.effect(
           recoveredLog.records.some(
             ({ record }) =>
               record.payload._tag === "WorkerInputCompleted" &&
+              record.payload.messageId === start.delivery.message.messageId &&
               record.payload.effectsResolved === true,
           ),
         ).toBe(false);

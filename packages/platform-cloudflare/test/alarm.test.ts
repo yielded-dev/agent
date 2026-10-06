@@ -530,7 +530,9 @@ describe("DC alarm semantics", () => {
 
       const recovery = await runInDurableObject(stubFor(thread), (instance) =>
         instance[DurableObject.RunSymbol](
-          DurableAgentRuntime.use((runtime) => runtime.runRecovery()),
+          DurableAgentRuntime.use((runtime) =>
+            runtime.runRecovery({ threadId: decodeThreadId(thread) }),
+          ),
         ),
       );
 

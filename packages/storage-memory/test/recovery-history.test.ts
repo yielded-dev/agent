@@ -5,7 +5,7 @@ import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thre
 import { EMPTY_TAIL_DIGEST, digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
-import { AgentId, ThreadId } from "@yielded/agent/identifiers";
+import { AgentId, ThreadId, type SubmissionId } from "@yielded/agent/identifiers";
 import type { WorkerOrigin } from "@yielded/agent/records";
 import {
   CanonicalBatch,
@@ -47,31 +47,32 @@ import { Context, DateTime, Effect, Layer, Option, Ref, Schema, Stream } from "e
 class RecoveryReadProbe extends Context.Service<
   RecoveryReadProbe,
   {
-    readonly failReadAfter: (sequence: CanonicalSequence) => Effect.Effect<void>;
+    readonly failReadFor: (submissionId: SubmissionId) => Effect.Effect<void>;
   }
 >()("@effect-agent/storage-memory/test/RecoveryReadProbe") {}
 
 const countingThreadStoreLayer = Layer.effectContext(
   Effect.gen(function* () {
     const store = yield* ThreadStore;
-    const failingAfter = yield* Ref.make<Option.Option<CanonicalSequence>>(Option.none());
+    const failingSubmission = yield* Ref.make<Option.Option<SubmissionId>>(Option.none());
 
     const counted = ThreadStore.of({
+      ...store,
       readIdentity: store.readIdentity,
       materialize: store.materialize,
       append: store.append,
       read: (request) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            const failure = yield* Ref.get(failingAfter);
+            const failure = yield* Ref.get(failingSubmission);
 
             if (
               Option.isSome(failure) &&
               "selection" in request &&
               request.selection._tag === "RunEvidence" &&
-              request.page.afterSequence === failure.value
+              request.selection.submissionId === failure.value
             ) {
-              yield* Ref.set(failingAfter, Option.none());
+              yield* Ref.set(failingSubmission, Option.none());
 
               return Stream.fail(ThreadNotMaterialized.make({ threadId: request.threadId }));
             }
@@ -89,7 +90,7 @@ const countingThreadStoreLayer = Layer.effectContext(
       Context.add(
         RecoveryReadProbe,
         RecoveryReadProbe.of({
-          failReadAfter: (sequence) => Ref.set(failingAfter, Option.some(sequence)),
+          failReadFor: (submissionId) => Ref.set(failingSubmission, Option.some(submissionId)),
         }),
       ),
     );
@@ -117,7 +118,6 @@ const ZERO_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const DIGEST = decodeDigest("a".repeat(64));
 const DEFINITIONS = DefinitionDigests.make({ agent: DIGEST, model: DIGEST, tools: DIGEST });
 const HISTORY_RECORDS = 2_050;
-const HISTORY_TAIL = Schema.decodeSync(CanonicalSequence)(HISTORY_RECORDS);
 
 const runtimeLayer = DurableAgentRuntime.layer.pipe(
   Layer.provide(runStorageLayer()),
@@ -199,7 +199,7 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
 
 describe("DurableAgentRuntime recovery history", () => {
   it.effect(
-    "STORE-015 issue #96: normalizes disappearance during selected Run suffix refresh",
+    "STORE-015 issue #96: isolates disappearance while hydrating selected Run evidence",
     () =>
       Effect.gen(function* () {
         yield* seedHistory();
@@ -207,7 +207,6 @@ describe("DurableAgentRuntime recovery history", () => {
         const runtime = yield* DurableAgentRuntime;
         const probe = yield* RecoveryReadProbe;
         const store = yield* ThreadStore;
-        let prefixTail = HISTORY_TAIL;
 
         for (let index = 0; index < 2; index++) {
           const input = { work: `suffix-race-${index}` };
@@ -239,7 +238,7 @@ describe("DurableAgentRuntime recovery history", () => {
             // A lost input marker requires suffix repair; untouched ready input does not.
             const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: THREAD_ID }));
 
-            const appended = yield* store.append(
+            yield* store.append(
               FencedAppendRequest.make({
                 threadId: THREAD_ID,
                 expectedTailSequence: tail.tailSequence,
@@ -267,14 +266,14 @@ describe("DurableAgentRuntime recovery history", () => {
               }),
             );
 
-            prefixTail = appended.lastSequence;
+            yield* probe.failReadFor(admitted.submissionId);
           }
         }
 
-        yield* probe.failReadAfter(prefixTail);
         const result = yield* runtime.runRecovery();
 
-        expect(result.reports).toEqual([]);
+        expect(result.reports).toMatchObject([{ disposition: "repaired" }]);
+        expect(result.reports).toHaveLength(1);
         expect(result.blocked).toMatchObject([
           {
             threadId: THREAD_ID,

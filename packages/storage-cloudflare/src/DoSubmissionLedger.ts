@@ -51,6 +51,7 @@ import {
   ApprovalConflict,
   ApprovalDecisionCommand,
   ApprovalDecisionIntent,
+  approvalDecisionsCover,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildAttachmentSnapshot,
@@ -101,6 +102,9 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
+  UnknownResolutionKind,
+  unknownResolutionKind,
+  unknownResolutionMatchesResult,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   submissionSettlementBatchId,
@@ -248,6 +252,7 @@ class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDec
 class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")({
   submission_id: BoundedIdentifier,
   tool_call_id: BoundedIdentifier,
+  resolution_kind: UnknownResolutionKind,
   author: BoundedIdentifier,
   reason: BoundedStoredText,
   resolution_json: BoundedStoredText,
@@ -423,7 +428,7 @@ const approvalsRows = ownedRows(ApprovalDecisionRow, "effect_agent_approval_deci
 );
 
 const resolutionsRows = ownedRows(UnknownResolutionRow, "effect_agent_unknown_resolutions", (row) =>
-  JSON.stringify([row.submission_id, row.tool_call_id]),
+  JSON.stringify([row.submission_id, row.tool_call_id, row.resolution_kind]),
 );
 
 const childSettlementsRows = ownedRows(
@@ -1398,6 +1403,17 @@ const makeServices = Effect.fnUntraced(function* () {
               ${messageAdmissionJson}
             )
            RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+
+        if (queueSequence === 1) {
+          const threads = yield* journal
+            .getThread(validated.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)));
+
+          if (threads.length === 0)
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
+        }
 
         // The INSERT (never replay or hydration) proves these new submission-owned sets
         // empty. Gated writes update them; rollback/invalidation discards that proof.
@@ -2726,9 +2742,13 @@ const makeServices = Effect.fnUntraced(function* () {
         // `recordChildSettled` → marker) before this suspend commits is observed here.
         if (validated.reason._tag === "ApprovalPending") {
           const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
-          const decided = new Set(decisions.map((row) => row.tool_call_id));
+          const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-          if (validated.reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) {
+          if (
+            approvalDecisionsCover(validated.reason.toolCallIds, (toolCallId) =>
+              decided.get(toolCallId),
+            )
+          ) {
             return RESUME_IMMEDIATELY;
           }
         } else {
@@ -2785,7 +2805,7 @@ const makeServices = Effect.fnUntraced(function* () {
   });
 
   /**
-   * Once every pending call of a recorded ApprovalPending suspension has a decision intent,
+   * Once one pending call is denied or every pending call has a decision intent,
    * the lane wakes: suspended → input-applied, suspension cleared (plan §2.6). A
    * WaitingForChild suspension wakes only through recordChildSettled. Runs inside the caller's
    * write transaction.
@@ -2811,9 +2831,10 @@ const makeServices = Effect.fnUntraced(function* () {
 
     if (reason._tag !== "ApprovalPending") return;
     const decisions = yield* readApprovalDecisions(operation, submission.submission_id);
-    const decided = new Set(decisions.map((row) => row.tool_call_id));
+    const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-    if (!reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) return;
+    if (!approvalDecisionsCover(reason.toolCallIds, (toolCallId) => decided.get(toolCallId)))
+      return;
     yield* sql`
       UPDATE effect_agent_submissions
       SET
@@ -3014,13 +3035,22 @@ const makeServices = Effect.fnUntraced(function* () {
               );
             }
 
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: submission.settled_outcome,
-            });
+            // Factual closure may outlive settlement; it never restores execution authority.
+            if (
+              validated.resolution._tag !== "CompletedWithResult" &&
+              validated.resolution._tag !== "NeverHappened"
+            )
+              return yield* SettlementConflict.make({
+                submissionId: validated.submissionId,
+                existingOutcome: submission.settled_outcome,
+              });
           }
           const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
-          const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);
+          const kind = unknownResolutionKind(validated.resolution);
+
+          const existing = resolutions.find(
+            (row) => row.tool_call_id === validated.toolCallId && row.resolution_kind === kind,
+          );
 
           const existingIntent =
             existing === undefined
@@ -3028,13 +3058,69 @@ const makeServices = Effect.fnUntraced(function* () {
               : yield* unknownResolutionIntentFromRow(operation, existing);
 
           if (
-            existingIntent !== undefined &&
-            !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)
+            (existingIntent !== undefined &&
+              !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)) ||
+            (existing === undefined &&
+              kind === "execution" &&
+              resolutions.some(
+                (row) =>
+                  row.tool_call_id === validated.toolCallId && row.resolution_kind === "factual",
+              ))
           ) {
             return yield* UnknownResolutionConflict.make({
               submissionId: validated.submissionId,
               toolCallId: validated.toolCallId,
             });
+          }
+
+          if (existingIntent === undefined && kind === "factual") {
+            const runId = runIdForSubmission(validated.submissionId);
+
+            const found = yield* sql`
+              SELECT record_json FROM effect_agent_canonical_records
+              WHERE thread_id = ${submission.thread_id}
+                AND record_tag = 'ToolCallSettled'
+                AND run_id = ${JSON.stringify(runId)}
+                AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
+              LIMIT 2
+            `.pipe(Effect.mapError(sqlFailure(operation)));
+
+            const outcomes = yield* decodeRows(
+              Schema.Array(Schema.Struct({ record_json: BoundedStoredText })),
+              "effect_agent_canonical_records",
+              validated.toolCallId,
+              found,
+            ).pipe(Effect.mapError(internalFailure(operation)));
+
+            const result =
+              outcomes[0] === undefined
+                ? undefined
+                : (yield* decodeRecordEnvelopeText(outcomes[0].record_json).pipe(
+                    Effect.mapError(internalFailure(operation)),
+                  )).payload;
+
+            if (
+              outcomes.length > 1 ||
+              (result !== undefined &&
+                (result._tag !== "ToolCallSettled" ||
+                  result.runId !== runId ||
+                  result.toolCallId !== validated.toolCallId))
+            )
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_canonical_records",
+                validated.toolCallId,
+                "Canonical Tool result identity is inconsistent.",
+              );
+
+            if (
+              result?._tag === "ToolCallSettled" &&
+              !unknownResolutionMatchesResult(validated.resolution, result)
+            )
+              return yield* UnknownResolutionConflict.make({
+                submissionId: validated.submissionId,
+                toolCallId: validated.toolCallId,
+              });
           }
           let resolved: UnknownResolutionIntent;
 
@@ -3049,6 +3135,7 @@ const makeServices = Effect.fnUntraced(function* () {
             INSERT INTO effect_agent_unknown_resolutions (
               submission_id,
               tool_call_id,
+              resolution_kind,
               author,
               reason,
               resolution_json,
@@ -3056,6 +3143,7 @@ const makeServices = Effect.fnUntraced(function* () {
             ) VALUES (
               ${validated.submissionId},
               ${validated.toolCallId},
+              ${kind},
               ${validated.author},
               ${validated.reason},
               ${resolutionJson},

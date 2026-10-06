@@ -44,6 +44,7 @@ import {
   ApprovalConflict,
   ApprovalDecisionCommand,
   ApprovalDecisionIntent,
+  approvalDecisionsCover,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildAttachmentSnapshot,
@@ -95,6 +96,8 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
+  unknownResolutionKind,
+  unknownResolutionMatchesResult,
   type ChildReservationId,
   type ChildReservationStatus,
   type ChildSettledOutcome,
@@ -105,7 +108,8 @@ import {
   type SuspensionReason,
 } from "@yielded/agent/submission-ledger";
 import { RebuiltSubmission, ThreadImportRejected } from "@yielded/agent/thread-import";
-import { ThreadAdmission } from "@yielded/agent/thread-store";
+import { ThreadAdmission, ThreadStoreError } from "@yielded/agent/thread-store";
+import { admissionWork } from "@yielded/agent/thread-work";
 import {
   Clock,
   Context,
@@ -124,6 +128,7 @@ import {
 } from "effect";
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
+import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
 const MAX_SUBMISSIONS = 65_536;
 
@@ -207,7 +212,7 @@ interface StoredSubmission {
   readonly suspension: StoredSuspension | undefined;
   readonly unknownMark: StoredUnknownMark | undefined;
   readonly approvalDecisions: ReadonlyMap<ToolCallId, ApprovalDecisionIntent>;
-  readonly unknownResolutions: ReadonlyMap<ToolCallId, StoredUnknownResolution>;
+  readonly unknownResolutions: ReadonlyMap<string, StoredUnknownResolution>;
 }
 
 /**
@@ -461,6 +466,71 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       activeByThread: new Map(),
     });
 
+    yield* journal.registerWorkOwner("admissions", {
+      threads: (request) =>
+        Ref.get(state).pipe(
+          Effect.map((current) => {
+            const candidates = boundedWorkSelection<ThreadId>(
+              request.limit,
+              (id) => id,
+              request.afterThreadId,
+            );
+
+            for (const [threadId, ids] of current.activeByThread)
+              if (ids.size > 0) candidates.add(threadId);
+            const threadIds = candidates.values;
+
+            const afterThreadId = threadIds.length === request.limit ? threadIds.at(-1) : undefined;
+
+            return {
+              threadIds,
+              ...(afterThreadId === undefined ? {} : { afterThreadId }),
+            };
+          }),
+        ),
+      page: (threadId, after, limit) =>
+        Effect.gen(function* () {
+          const current = yield* Ref.get(state);
+
+          const candidates = boundedWorkSelection<SubmissionId>(limit + 1, (id) => id, after);
+
+          for (const id of current.activeByThread.get(threadId) ?? []) candidates.add(id);
+          const ids = candidates.values;
+
+          const entries = [];
+
+          for (const id of ids.slice(0, limit)) {
+            const stored = current.submissions.get(id);
+
+            if (
+              stored === undefined ||
+              stored.row.threadId !== threadId ||
+              stored.row.state === "settled"
+            )
+              return yield* ThreadStoreError.make({
+                operation: "admission work",
+                message: "Active admission index is incomplete or corrupt",
+              });
+            const entry = admissionWork(stored.row);
+
+            entries.push(
+              stored.suspension === undefined
+                ? entry
+                : {
+                    ...entry,
+                    wait:
+                      stored.suspension.reason._tag === "WaitingForChild"
+                        ? ("child" as const)
+                        : ("approval" as const),
+                  },
+            );
+          }
+          const next = ids.length > limit ? ids[limit - 1] : undefined;
+
+          return { entries, ...(next === undefined ? {} : { after: next }) };
+        }),
+    });
+
     const admissionFence = yield* SubmissionAdmissionFence;
     const leaseMillis = Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION);
 
@@ -676,9 +746,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             suspension: undefined,
             unknownMark: undefined,
             approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
-            unknownResolutions: new Map<ToolCallId, StoredUnknownResolution>(),
+            unknownResolutions: new Map<string, StoredUnknownResolution>(),
           });
 
+          journal.initializeWork(request.threadId);
           const admissionIndex = new Map(current.admissionIndex).set(key, row.submissionId);
 
           const lanes = new Map(current.lanes).set(request.threadId, {
@@ -1862,8 +1933,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             // resumes the caller immediately WITHOUT releasing the lane (plan §2.6, spec §12).
             const alreadyCovered =
               request.reason._tag === "ApprovalPending"
-                ? request.reason.toolCallIds.every((toolCallId) =>
-                    stored.approvalDecisions.has(toolCallId),
+                ? approvalDecisionsCover(
+                    request.reason.toolCallIds,
+                    (toolCallId) => stored.approvalDecisions.get(toolCallId)?.decision,
                   )
                 : request.reason.children.every((child) =>
                     announcedChildren.has(child.childSubmissionId),
@@ -1978,15 +2050,16 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               intent,
             );
 
-            // Once every pending call of an ApprovalPending suspension is decided, the lane
-            // wakes: suspended → input-applied (plan §2.6). A WaitingForChild suspension wakes
+            // A denial or decisions for every pending call wake an ApprovalPending lane:
+            // suspended → input-applied. A WaitingForChild suspension wakes
             // only through recordChildSettled.
             const wakes =
               stored.row.state === "suspended" &&
               stored.suspension !== undefined &&
               stored.suspension.reason._tag === "ApprovalPending" &&
-              stored.suspension.reason.toolCallIds.every((toolCallId) =>
-                approvalDecisions.has(toolCallId),
+              approvalDecisionsCover(
+                stored.suspension.reason.toolCallIds,
+                (toolCallId) => approvalDecisions.get(toolCallId)?.decision,
               );
 
             return [
@@ -2095,6 +2168,46 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
         const nowMillis = yield* Clock.currentTimeMillis;
 
+        const before = (yield* Ref.get(state)).submissions.get(command.submissionId);
+        const kind = unknownResolutionKind(command.resolution);
+
+        if (
+          before !== undefined &&
+          kind === "factual" &&
+          !before.unknownResolutions.has(JSON.stringify([command.toolCallId, kind]))
+        ) {
+          const runId = runIdForSubmission(before.row.submissionId);
+
+          const outcomes = yield* journal.toolCallResults(
+            before.row.threadId,
+            runId,
+            command.toolCallId,
+          );
+
+          const result = outcomes[0]?.payload;
+
+          if (
+            outcomes.length > 1 ||
+            (result !== undefined &&
+              (result._tag !== "ToolCallSettled" ||
+                result.runId !== runId ||
+                result.toolCallId !== command.toolCallId))
+          )
+            return yield* ledgerError(
+              "recordUnknownResolution",
+              "Canonical Tool result identity is inconsistent",
+            );
+
+          if (
+            result?._tag === "ToolCallSettled" &&
+            !unknownResolutionMatchesResult(command.resolution, result)
+          )
+            return yield* UnknownResolutionConflict.make({
+              submissionId: command.submissionId,
+              toolCallId: command.toolCallId,
+            });
+        }
+
         const decision = yield* Ref.modify(
           state,
           (
@@ -2132,21 +2245,30 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 ];
               }
 
-              return [
-                failure(
-                  SettlementConflict.make({
-                    submissionId: command.submissionId,
-                    existingOutcome: stored.row.settledOutcome,
-                  }),
-                ),
-                current,
-              ];
+              // Factual closure may outlive settlement; it never restores execution authority.
+              if (
+                command.resolution._tag !== "CompletedWithResult" &&
+                command.resolution._tag !== "NeverHappened"
+              )
+                return [
+                  failure(
+                    SettlementConflict.make({
+                      submissionId: command.submissionId,
+                      existingOutcome: stored.row.settledOutcome,
+                    }),
+                  ),
+                  current,
+                ];
             }
-            const existing = stored.unknownResolutions.get(command.toolCallId);
+            const key = JSON.stringify([command.toolCallId, kind]);
+            const existing = stored.unknownResolutions.get(key);
 
             if (
-              existing !== undefined &&
-              !equivalentUnknownResolution(existing.intent.resolution, command.resolution)
+              (existing !== undefined &&
+                !equivalentUnknownResolution(existing.intent.resolution, command.resolution)) ||
+              (existing === undefined &&
+                kind === "execution" &&
+                stored.unknownResolutions.has(JSON.stringify([command.toolCallId, "factual"])))
             ) {
               return [
                 failure(
@@ -2173,7 +2295,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const unknownResolutions =
               existing !== undefined
                 ? stored.unknownResolutions
-                : new Map(stored.unknownResolutions).set(command.toolCallId, {
+                : new Map(stored.unknownResolutions).set(key, {
                     intent,
                   });
 
@@ -2183,8 +2305,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const wakes =
               stored.row.state === "unknown" &&
               stored.unknownMark !== undefined &&
-              stored.unknownMark.toolCallIds.every((toolCallId) =>
-                unknownResolutions.has(toolCallId),
+              stored.unknownMark.toolCallIds.every(
+                (toolCallId) =>
+                  unknownResolutions.has(JSON.stringify([toolCallId, "execution"])) ||
+                  unknownResolutions.has(JSON.stringify([toolCallId, "factual"])),
               );
 
             return [
@@ -3106,7 +3230,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               rebuilt.approvals.map((intent) => [intent.toolCallId, intent]),
             ),
             unknownResolutions: new Map(
-              rebuilt.resolutions.map((intent) => [intent.toolCallId, { intent }]),
+              rebuilt.resolutions.map((intent) => [
+                JSON.stringify([intent.toolCallId, unknownResolutionKind(intent.resolution)]),
+                { intent },
+              ]),
             ),
           };
 

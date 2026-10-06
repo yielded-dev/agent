@@ -40,6 +40,7 @@ import {
   ApprovalConflict,
   ApprovalDecisionCommand,
   ApprovalDecisionIntent,
+  approvalDecisionsCover,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildAttachmentSnapshot,
@@ -90,6 +91,9 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
+  UnknownResolutionKind,
+  unknownResolutionKind,
+  unknownResolutionMatchesResult,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   type ChildSettledOutcome,
@@ -194,6 +198,7 @@ class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDec
 class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")({
   submission_id: BoundedIdentifier,
   tool_call_id: BoundedIdentifier,
+  resolution_kind: UnknownResolutionKind,
   author: BoundedIdentifier,
   reason: BoundedStoredText,
   resolution_json: BoundedStoredText,
@@ -907,13 +912,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         SELECT
           submission_id,
           tool_call_id,
+          resolution_kind,
           author,
           reason,
           resolution_json,
           resolved_at
         FROM ${relation("effect_agent_unknown_resolutions")}
         WHERE submission_id = ${submissionId}
-        ORDER BY tool_call_id ASC
+        ORDER BY tool_call_id ASC, resolution_kind ASC
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
     return yield* decodeUnknownResolutionRows(
@@ -1285,6 +1291,17 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
+        if (queueSequence === 1) {
+          const threads = yield* journal
+            .getThread(validated.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)));
+
+          if (threads.length === 0)
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
+        }
+
         return yield* decodeAdmissionResult({
           submissionId: mintedSubmissionId,
           receiptId: mintedReceiptId,
@@ -1581,6 +1598,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
                 ${producerEpoch}
               )
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
           } else {
             producerEpoch = threads[0].producer_epoch + 1;
             yield* sql`
@@ -2666,9 +2686,13 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         // file) resumes the caller immediately WITHOUT releasing the lane (plan §2.6, §12).
         if (validated.reason._tag === "ApprovalPending") {
           const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
-          const decided = new Set(decisions.map((row) => row.tool_call_id));
+          const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-          if (validated.reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) {
+          if (
+            approvalDecisionsCover(validated.reason.toolCallIds, (toolCallId) =>
+              decided.get(toolCallId),
+            )
+          ) {
             return RESUME_IMMEDIATELY;
           }
         } else {
@@ -2722,7 +2746,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   });
 
   /**
-   * Once every pending call of a recorded ApprovalPending suspension has a decision intent,
+   * Once one pending call is denied or every pending call has a decision intent,
    * the lane wakes: suspended → input-applied, suspension cleared (plan §2.6). A
    * WaitingForChild suspension wakes only through recordChildSettled. Runs inside the caller's
    * write transaction.
@@ -2748,9 +2772,10 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
 
     if (reason._tag !== "ApprovalPending") return;
     const decisions = yield* readApprovalDecisions(operation, submission.submission_id);
-    const decided = new Set(decisions.map((row) => row.tool_call_id));
+    const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-    if (!reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) return;
+    if (!approvalDecisionsCover(reason.toolCallIds, (toolCallId) => decided.get(toolCallId)))
+      return;
     yield* sql`
         UPDATE ${relation("effect_agent_submissions")}
         SET
@@ -2950,13 +2975,23 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               );
             }
 
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: submission.settled_outcome,
-            });
+            // Factual resolutions can outlive the run. Retain the command without reopening
+            // the settled lane, clearing its unknown identities, or touching execution ownership.
+            if (
+              validated.resolution._tag !== "CompletedWithResult" &&
+              validated.resolution._tag !== "NeverHappened"
+            )
+              return yield* SettlementConflict.make({
+                submissionId: validated.submissionId,
+                existingOutcome: submission.settled_outcome,
+              });
           }
           const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
-          const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);
+          const kind = unknownResolutionKind(validated.resolution);
+
+          const existing = resolutions.find(
+            (row) => row.tool_call_id === validated.toolCallId && row.resolution_kind === kind,
+          );
 
           const existingIntent =
             existing === undefined
@@ -2964,13 +2999,62 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               : yield* unknownResolutionIntentFromRow(operation, existing);
 
           if (
-            existingIntent !== undefined &&
-            !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)
+            (existingIntent !== undefined &&
+              !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)) ||
+            (existing === undefined &&
+              kind === "execution" &&
+              resolutions.some(
+                (row) =>
+                  row.tool_call_id === validated.toolCallId && row.resolution_kind === "factual",
+              ))
           ) {
             return yield* UnknownResolutionConflict.make({
               submissionId: validated.submissionId,
               toolCallId: validated.toolCallId,
             });
+          }
+
+          if (existingIntent === undefined && kind === "factual") {
+            const runId = runIdForSubmission(validated.submissionId);
+
+            const outcomes = yield* sql<{ readonly record_json: string }>`
+              SELECT record_json FROM ${relation("effect_agent_canonical_records")}
+              WHERE thread_id = ${submission.thread_id}
+                AND record_tag = 'ToolCallSettled'
+                AND run_id = ${JSON.stringify(runId)}
+                AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
+              LIMIT 2
+            `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+            const result =
+              outcomes[0] === undefined
+                ? undefined
+                : (yield* decodeRecordEnvelopeText(outcomes[0].record_json).pipe(
+                    Effect.mapError(internalFailure(operation)),
+                  )).payload;
+
+            if (
+              outcomes.length > 1 ||
+              (result !== undefined &&
+                (result._tag !== "ToolCallSettled" ||
+                  result.runId !== runId ||
+                  result.toolCallId !== validated.toolCallId))
+            )
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_canonical_records",
+                validated.toolCallId,
+                "Canonical Tool result identity is inconsistent.",
+              );
+
+            if (
+              result?._tag === "ToolCallSettled" &&
+              !unknownResolutionMatchesResult(validated.resolution, result)
+            )
+              return yield* UnknownResolutionConflict.make({
+                submissionId: validated.submissionId,
+                toolCallId: validated.toolCallId,
+              });
           }
           let resolved: UnknownResolutionIntent;
 
@@ -2985,6 +3069,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             INSERT INTO ${relation("effect_agent_unknown_resolutions")} (
               submission_id,
               tool_call_id,
+              resolution_kind,
               author,
               reason,
               resolution_json,
@@ -2992,6 +3077,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             ) VALUES (
               ${validated.submissionId},
               ${validated.toolCallId},
+              ${kind},
               ${validated.author},
               ${validated.reason},
               ${resolutionJson},

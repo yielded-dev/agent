@@ -169,7 +169,7 @@ import {
 } from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
 import { WorkerRuntime } from "./internal/worker-runtime.ts";
-import { MessageDeliveryStore } from "./MessageDelivery.ts";
+import { MessageDeliveryStore, prepareMessageDelivery } from "./MessageDelivery.ts";
 import {
   OperationAuthorizationRequest,
   OperationAuthorizer,
@@ -223,6 +223,7 @@ import {
   ToolStepSettled,
   UserInputRecorded,
   WorkerAdmission,
+  WorkHandoffCompleted,
   type ApprovalDecision,
   type SettlementOutcome,
   type ToolCallResolution,
@@ -233,6 +234,7 @@ import {
   OpenDelegationCallEvidence,
   OpenToolCallEvidence,
   PendingApprovalEvidence,
+  pendingApprovalForRecovery,
   RecoveryDecision,
   RecoveryEvidence,
   type DelegationAdmissionEvidence,
@@ -248,6 +250,7 @@ import {
   isPreContinuationFact,
   makeProgressWriter,
   readContinuation,
+  readRunEvidenceSnapshot,
   reference,
   resolveEvidence,
   runEvidence,
@@ -358,6 +361,7 @@ import {
   SubmissionLookupByKey,
   SuspendRequest,
   UnknownResolutionCommand,
+  unknownResolutionKind,
   WaitingChild,
   WaitingForChildSuspension,
   submissionAbortBatchId,
@@ -376,6 +380,7 @@ import {
   type UnknownResolutionIntent,
 } from "./SubmissionLedger.ts";
 import { PendingSubmission, SettledSubmission, type SubmissionStatus } from "./SubmissionStatus.ts";
+import { PreparedInput } from "./Subscription.ts";
 import { verifyThreadInvariants } from "./ThreadInvariants.ts";
 import {
   type ThreadCheckpoint,
@@ -394,8 +399,26 @@ import {
   FencedAppendRequest,
   LoadCheckpointRequest,
   getRecord,
+  getRunInput,
   ThreadReader,
 } from "./ThreadStore.ts";
+import {
+  type WorkIndexRebuildRequest,
+  type WorkIndexProgress,
+  ThreadWorkDiscovery,
+  ThreadWorkEntry,
+  ThreadWorkRequest,
+  WorkDiscoveryUnavailable,
+  type WorkThreadsRequest,
+  type WorkThreadsPage,
+  resolveWorkEvidence,
+  operationEvidence,
+  validateWorkPage,
+  workId,
+  MAX_RECOVERY_WORK_ITEMS,
+  MAX_RECOVERY_PAGES,
+  type ThreadWorkPage,
+} from "./ThreadWork.ts";
 import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
 import { WakeScheduler } from "./WakeScheduler.ts";
 import { WorkerAdmissionPort, WorkerAdmissionRequest } from "./WorkerAdmission.ts";
@@ -591,6 +614,7 @@ const RecoveryCauseTag = Schema.Literals([
   "AppendConflict",
   "FenceRejected",
   "RunJournalError",
+  "WorkDiscoveryUnavailable",
   "DurableRuntimeFailpointError",
   "SchemaError",
   "Error",
@@ -772,16 +796,49 @@ export class RecoveryReport extends Schema.Class<RecoveryReport>(
   disposition: Schema.Literals(["repaired", "deferred", "none", "unknown"]),
 }) {}
 
+/** A selected owner was checked against its original evidence; this grants no execution lease. */
+export class WorkRecoveryReport extends Schema.Class<WorkRecoveryReport>("WorkRecoveryReport")({
+  threadId: ThreadId,
+  workId: Schema.NonEmptyString.check(Schema.isMaxLength(4096)),
+  disposition: Schema.Literals(["repaired", "deferred", "none", "unknown"]),
+  submission: Schema.optionalKey(RecoveryReport),
+  /**
+   * An owning transport transition still needs a timed check; external Unknown waits omit it.
+   * Derived fractional durations round up to the next millisecond.
+   */
+  retryAtMillis: Schema.optionalKey(Schema.Natural),
+}) {}
+
+export const WorkRecoveryRequest = Schema.Struct({ threadId: ThreadId, work: ThreadWorkEntry });
+export type WorkRecoveryRequest = typeof WorkRecoveryRequest.Type;
+
+const RecoverySweepCursor = Schema.Struct({
+  version: Schema.Literal(1),
+  selection: Schema.optionalKey(ThreadId),
+  threadId: Schema.optionalKey(ThreadId),
+  workCursor: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(4096))),
+  afterThreadId: Schema.optionalKey(ThreadId),
+});
+
+const encodeRecoveryCursor = Schema.encodeSync(Schema.fromJsonString(RecoverySweepCursor));
+
 /** Submission decisions and operational faults have different ownership and settlement semantics. */
 export class RecoverySweepResult extends Schema.Class<RecoverySweepResult>("RecoverySweepResult")({
   reports: Schema.Array(RecoveryReport),
   /** Exactly one fault per failed Thread, regardless of its queued Submission count. */
   blocked: Schema.Array(RecoveryBlocked),
+  workReports: Schema.optionalKey(
+    Schema.Array(WorkRecoveryReport).check(Schema.isMaxLength(MAX_RECOVERY_WORK_ITEMS)),
+  ),
+  /** Resume this bounded live scan; new work behind the cursor appears on the next scan. */
+  cursor: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(8192))),
 }) {}
 
-/** Select one Thread before reading history, or omit to recover every pending Thread. */
+/** Recover one bounded page of native work, optionally confined to one Thread. */
 export interface RecoverySweepOptions {
   readonly threadId?: ThreadId;
+  /** Continue the previous pass until its result has no cursor. */
+  readonly cursor?: string;
 }
 
 /** Per-submission options accepted by `DurableAgentRuntime.submit` (D2). */
@@ -842,6 +899,8 @@ export type DurableWorkerFailure =
   | AppendConflict
   | FenceRejected
   | RunJournalError
+  | WorkDiscoveryUnavailable
+  | RecoveryBlocked
   | DurableRuntimeFailpointError;
 
 export type DurableAwaitFailure = LedgerError | SettlementConflict | OperationDenied;
@@ -1301,6 +1360,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
+
+  const workDiscovery = yield* ThreadWorkDiscovery.pipe(
+    Effect.provide(ThreadWorkDiscovery.layer),
+    Effect.provideService(ThreadStore, store),
+  );
+
   const runStorage = yield* RunStorage;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
@@ -1359,6 +1424,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
     Effect.provideService(effect, Crypto.Crypto, crypto);
+
+  const resolutionIntentsFor = (snapshot: RecoverySnapshot) => {
+    const intents = new Map<ToolCallId, UnknownResolutionIntent>();
+
+    for (const intent of snapshot.unknownResolutions) {
+      if (!intents.has(intent.toolCallId) || unknownResolutionKind(intent.resolution) === "factual")
+        intents.set(intent.toolCallId, intent);
+    }
+
+    return intents;
+  };
 
   const contractsFor = (definition: Agent.AnyDefinition) => {
     const registered = registeredBindings.filter(
@@ -1808,10 +1884,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   }
 
   /**
-   * Capture one strongly-consistent pass-start tail and read exactly that prefix. This snapshot
-   * is disposable: `runRecovery` retains it only while processing the scan's contiguous group
-   * for this Thread, retaining only the addressed runs' control evidence
-   * and never survives the pass or an interruption/restart.
+   * Capture one tail and the addressed Runs' bounded control evidence. Recovery retains this
+   * disposable snapshot only while repairing the selected owner; unrelated history is not read.
    */
   const readRecoveryHistory = Effect.fnUntraced(function* (
     threadId: ThreadId,
@@ -1938,7 +2012,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const declarationIds = new Set<string>();
     const responseTurns = new Set<number>();
     const requested: Array<PendingApprovalEvidence> = [];
-    const decidedIds = new Set<string>();
+    const canonicalApprovals = new Map<ToolCallId, ApprovalDecision>();
 
     let lastResponse:
       | {
@@ -1986,7 +2060,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           break;
         }
         case "ToolApprovalDecided": {
-          if (payload.runId === runId) decidedIds.add(payload.toolCallId);
+          if (payload.runId === runId) canonicalApprovals.set(payload.toolCallId, payload.decision);
           break;
         }
         case "SubagentLineageRecorded": {
@@ -2165,19 +2239,39 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     let declaredPendingBatch: DeclaredPendingBatchEvidence | undefined;
+    const requestedIds = new Set(requested.map((approval) => approval.toolCallId));
 
     if (lastResponse !== undefined) {
-      const pending = operationStates.filter(
-        (state) => state.turn === lastResponse.turn && !state.settled,
-      );
+      const turn = lastResponse.turn;
+
+      const pending = operationStates.filter((state) => state.turn === turn && !state.settled);
 
       if (pending.length > 0)
         declaredPendingBatch = DeclaredPendingBatchEvidence.make({
-          turn: lastResponse.turn,
+          turn,
           callCount: pending.length,
+          approvals: operationStates
+            .filter(
+              (state) =>
+                state.turn === turn &&
+                !state.settled &&
+                !state.resolved &&
+                requestedIds.has(state.operation.toolCallId),
+            )
+            .map((state) => {
+              const decision = canonicalApprovals.get(state.operation.toolCallId);
+
+              return {
+                toolCallId: state.operation.toolCallId,
+                ...(decision === undefined ? {} : { decision }),
+              };
+            }),
         });
     }
-    const approvalsPending = requested.filter((pending) => !decidedIds.has(pending.toolCallId));
+
+    const approvalsPending = requested.filter(
+      (pending) => !canonicalApprovals.has(pending.toolCallId),
+    );
 
     return RecoveryEvidence.make({
       threadMaterialized: materialized,
@@ -2792,11 +2886,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   });
 
   /**
-   * Close one open Tool Call canonically: the recovered result (when one exists) settles under
-   * the per-call late-settle batch (`turn-results:{runId}:{turn}:{toolCallId}`), then the
-   * `ToolCallResolved` audit records who authorized the closure and how (DUR-017). Record
-   * identity dedupes double-settles across the batch path and this path; an `AppendConflict`
-   * means an identical closure (modulo timestamp) already committed.
+   * Close the result and its resolution audit in one canonical commit. Removing operation
+   * membership cannot strand the accepted resolution between two independent appends.
    */
   const appendClosedCall = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
@@ -2812,66 +2903,79 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   ): Effect.fn.Return<void, DurableWorkerFailure> {
     const runId = runIdForSubmission(submissionId);
 
-    const swallowIdentityConflict = (effect: ReturnType<typeof appendBatch>) =>
-      effect.pipe(
-        Effect.catchTag("AppendConflict", () => Effect.void),
-        Effect.asVoid,
-      );
+    const envelopes: Array<RecordEnvelope> = [];
+    const settledId = toolCallSettledRecordId(runId, call.turn, call.toolCallId);
 
     if (closure.result !== undefined) {
-      const settledId = toolCallSettledRecordId(runId, call.turn, call.toolCallId);
-
       if (!knownIds.has(settledId)) {
-        const envelope = yield* makeEnvelope(
-          settledId,
-          ToolCallSettled.make({
-            runId,
-            toolCallId: call.toolCallId,
-            toolName: call.toolName,
-            result: closure.result.value,
-            isFailure: closure.result.isFailure,
-          }),
-        );
-
-        yield* swallowIdentityConflict(
-          appendBatch(
-            ctx,
-            CanonicalBatch.make({
-              batchId: toolCallResultBatchId(runId, call.turn, call.toolCallId),
-              producerId: config.producerId,
-              records: [envelope],
+        envelopes.push(
+          yield* makeEnvelope(
+            settledId,
+            ToolCallSettled.make({
+              runId,
+              toolCallId: call.toolCallId,
+              toolName: call.toolName,
+              result: closure.result.value,
+              isFailure: closure.result.isFailure,
             }),
           ),
         );
-        knownIds.add(settledId);
       }
     }
     const resolvedId = toolCallResolvedRecordId(runId, call.turn, call.toolCallId);
 
     if (!knownIds.has(resolvedId)) {
-      const envelope = yield* makeEnvelope(
-        resolvedId,
-        ToolCallResolved.make({
-          runId,
-          toolCallId: call.toolCallId,
-          resolution: closure.resolution,
-          author: closure.author,
-          reason: closure.reason,
-        }),
-      );
-
-      yield* swallowIdentityConflict(
-        appendBatch(
-          ctx,
-          CanonicalBatch.make({
-            batchId: toolCallResolutionBatchId(submissionId, call.toolCallId),
-            producerId: config.producerId,
-            records: [envelope],
+      envelopes.push(
+        yield* makeEnvelope(
+          resolvedId,
+          ToolCallResolved.make({
+            runId,
+            toolCallId: call.toolCallId,
+            resolution: closure.resolution,
+            author: closure.author,
+            reason: closure.reason,
           }),
         ),
       );
-      knownIds.add(resolvedId);
     }
+    const [first, ...rest] = envelopes;
+
+    if (first === undefined) return;
+    yield* appendBatch(
+      ctx,
+      CanonicalBatch.make({
+        batchId: envelopes.some(({ recordId }) => recordId === settledId)
+          ? toolCallResultBatchId(runId, call.turn, call.toolCallId)
+          : toolCallResolutionBatchId(submissionId, call.toolCallId),
+        producerId: config.producerId,
+        records: [first, ...rest],
+      }),
+    ).pipe(
+      Effect.catchTag("AppendConflict", () =>
+        Effect.forEach(
+          envelopes,
+          (expected) =>
+            getRecord({ threadId: ctx.threadId, recordId: expected.recordId }).pipe(
+              Effect.provideService(ThreadReader, reader),
+              Effect.flatMap((actual) =>
+                Option.isSome(actual) &&
+                Schema.toEquivalence(RecordEnvelope.fields.payload)(
+                  actual.value.record.payload,
+                  expected.payload,
+                )
+                  ? Effect.void
+                  : ThreadStoreError.make({
+                      operation: "resolve operation",
+                      message: "The factual closure did not commit under its original identity",
+                    }),
+              ),
+            ),
+          { discard: true },
+        ),
+      ),
+      Effect.asVoid,
+    );
+    for (const envelope of envelopes) knownIds.add(envelope.recordId);
   });
 
   /**
@@ -2918,9 +3022,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
     }
 
-    const intents = new Map(
-      snapshot.unknownResolutions.map((intent) => [intent.toolCallId, intent]),
-    );
+    const intents = resolutionIntentsFor(snapshot);
 
     const review: OpenCallReview = { uncertain: [], unproven: [], retryable: [], recovered: 0 };
     let recovered = 0;
@@ -3328,7 +3430,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         );
     }
     if (submission.workerAdmission?.origin.reporting?.mode === "standard")
-      yield* updateRuntime.repair(submission.threadId).pipe(
+      yield* updateRuntime.repairRun(submission.threadId, submission.submissionId).pipe(
         Effect.mapError(() =>
           LedgerError.make({
             operation: "update-delivery",
@@ -3983,9 +4085,69 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
    * `releaseChildBudget` applies it exactly once — budget stays unavailable until repair, never
    * available twice.
    */
+  const completeWorkHandoff = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    preparationId: RecordId,
+    ownerId = workId("handoff", preparationId),
+  ): Effect.fn.Return<void, DurableWorkerFailure> {
+    const id = decodeRecordId(`work-handoff-completed:${preparationId}`);
+
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const existing = yield* getRecord({ threadId, recordId: id }).pipe(
+        Effect.provideService(ThreadReader, reader),
+      );
+
+      if (Option.isSome(existing)) {
+        const payload = existing.value.record.payload;
+
+        if (
+          payload._tag !== "WorkHandoffCompleted" ||
+          payload.preparationId !== preparationId ||
+          payload.ownerId !== ownerId
+        )
+          return yield* ThreadStoreError.make({
+            operation: "complete work handoff",
+            message: "The closure identity conflicts with its owner",
+          });
+
+        return;
+      }
+      const ctx = yield* attemptContextAtTail(threadId);
+
+      const envelope = yield* makeEnvelope(
+        id,
+        WorkHandoffCompleted.make({ preparationId, ownerId }),
+      );
+
+      const committed = yield* appendBatch(
+        ctx,
+        CanonicalBatch.make({
+          batchId: decodeBatchId(`work-handoff-completed:${preparationId}`),
+          producerId: config.producerId,
+          records: [envelope],
+        }),
+      ).pipe(
+        Effect.as(true),
+        Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
+      );
+
+      if (committed) return;
+    }
+
+    return yield* ThreadStoreError.make({
+      operation: "complete work handoff",
+      message: "The canonical tail remained contended",
+    });
+  });
+
   const applyReservationRelease = Effect.fnUntraced(function* (
     reservationId: ChildReservationId,
     accounting: PersistedJson,
+    joinedOwner?: {
+      readonly threadId: ThreadId;
+      readonly runId: RunId;
+      readonly toolCallId: ToolCallId;
+    },
   ): Effect.fn.Return<void, DurableWorkerFailure> {
     yield* ledger
       .beginChildBudgetRelease(BeginChildBudgetReleaseRequest.make({ reservationId, accounting }))
@@ -4002,6 +4164,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         Effect.catchTag("ChildReservationConflict", conflictToLedgerError("releaseChildBudget")),
       );
     yield* hit("subagent:after-release");
+    if (joinedOwner !== undefined) {
+      const preparationId = subagentJoinedRecordId(joinedOwner.runId, joinedOwner.toolCallId);
+
+      const joined = yield* getRecord({
+        threadId: joinedOwner.threadId,
+        recordId: preparationId,
+      }).pipe(Effect.provideService(ThreadReader, reader));
+
+      if (Option.isSome(joined)) {
+        if (joined.value.record.payload._tag !== "SubagentJoined")
+          return yield* RunJournalError.make({ message: "Child accounting has no canonical join" });
+        yield* completeWorkHandoff(joinedOwner.threadId, preparationId);
+      }
+    }
   });
 
   /**
@@ -4145,7 +4321,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         yield* hit("subagent:after-join-append");
       }
     }
-    yield* applyReservationRelease(reservation.reservationId, finalAccounting);
+    yield* applyReservationRelease(reservation.reservationId, finalAccounting, {
+      threadId: parent.threadId,
+      runId,
+      toolCallId,
+    });
   });
 
   /**
@@ -4173,11 +4353,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const joined = subagent.joined.get(reservation.parentToolCallId);
 
       if (joined !== undefined) {
-        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting);
+        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting, {
+          threadId: submission.threadId,
+          runId: runIdForSubmission(submission.submissionId),
+          toolCallId: reservation.parentToolCallId,
+        });
         continue;
       }
       if (reservation.status === "releasePending" && reservation.accounting !== undefined) {
-        yield* applyReservationRelease(reservation.reservationId, reservation.accounting);
+        yield* applyReservationRelease(reservation.reservationId, reservation.accounting, {
+          threadId: submission.threadId,
+          runId: runIdForSubmission(submission.submissionId),
+          toolCallId: reservation.parentToolCallId,
+        });
         continue;
       }
       open = true;
@@ -4228,12 +4416,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const joined = subagent.joined.get(toolCallId);
 
       if (joined !== undefined) {
-        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting);
+        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting, {
+          threadId: parent.threadId,
+          runId,
+          toolCallId,
+        });
         continue;
       }
       if (reservation.status !== "reserved") {
         if (reservation.accounting !== undefined)
-          yield* applyReservationRelease(reservation.reservationId, reservation.accounting);
+          yield* applyReservationRelease(reservation.reservationId, reservation.accounting, {
+            threadId: parent.threadId,
+            runId,
+            toolCallId,
+          });
         // An orphan release proves non-admission; it never hides an attached child.
         if (reservation.childSubmissionId !== undefined || subagent.started.has(toolCallId))
           return yield* LedgerError.make({
@@ -4429,7 +4625,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const joined = subagent.joined.get(toolCallId);
 
         if (joined !== undefined) {
-          yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting);
+          yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting, {
+            threadId: parent.threadId,
+            runId,
+            toolCallId,
+          });
           continue;
         }
         if (reservation.status === "releasePending") {
@@ -4438,6 +4638,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           yield* applyReservationRelease(
             reservation.reservationId,
             reservation.accounting ?? ORPHAN_ZERO_CONSUMED_ACCOUNTING,
+            { threadId: parent.threadId, runId, toolCallId },
           );
           continue;
         }
@@ -6264,7 +6465,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               if (candidate === undefined) continue;
               const following = coverable[index + 1];
 
-              if (following !== undefined && following.tag !== "ModelResponseRecorded") continue;
+              if (following?.tag === "ToolCallSettled") continue;
 
               const length = comparisonView.prefixLength(candidate.promptLength);
 
@@ -6455,72 +6656,110 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
 
       /**
-       * Durable approval hook (plan §2.6). Resolution order per declared call: (1) a canonical
-       * `ToolApprovalDecided` record — the deterministic decision authority across Attempts;
-       * (2) a durable `resolveApproval` intent, appended canonically before it is honored;
-       * (3) the optional policy-auto delegate, whose immediate decision becomes canonical
-       * (request + decision, one atomic batch) before it is honored; (4) otherwise the canonical
-       * `ToolApprovalRequested` record is appended and the call reports unresolved — with the
-       * request canonical, "waiting for explicit approval" is a safe durable boundary
-       * (durability §8), the engine raises `AgentApprovalPending`, and the Attempt suspends
-       * without settling. A denied decision fails the Run through the engine's
-       * `AgentApprovalDenied` path with the denial already canonical.
+       * Retain every required request before any decision can remove initial-dispatch proof.
+       * Policy preparation shares the engine deadline; canonical acceptance is a separate,
+       * fenced commit. Canonical decisions and accepted resolver intents keep their audit.
        */
       const approval: RunApprovalHook<CoordinatorHalt | AgentPersistenceCapacityError, never> = {
+        prepareBatch: (requests) =>
+          recordHalt(
+            Effect.gen(function* () {
+              if (requests.length === 0) return;
+              yield* flushDeferredResponse;
+              const turnInfo = currentToolTurn;
+
+              if (turnInfo === undefined)
+                return yield* RunJournalError.make({
+                  message: "Approval preparation preceded its canonical response",
+                });
+              for (const request of requests) {
+                if (
+                  request.threadId !== submission.threadId ||
+                  request.runId !== runId ||
+                  request.turnId !== turnInfo.turnId ||
+                  declaredNamesByCallId.get(request.toolCallId) !== request.toolName
+                )
+                  return yield* RunJournalError.make({
+                    message: "Approval preparation does not match its original declaration",
+                  });
+                yield* appendApprovalRecords(
+                  turnInfo,
+                  request.toolCallId,
+                  request.toolName,
+                  undefined,
+                );
+              }
+            }),
+          ),
         request: (request) =>
+          recordHalt(
+            Effect.gen(function* () {
+              const canonical = canonicalApprovalDecisions.get(request.toolCallId);
+
+              if (canonical !== undefined)
+                return canonical === "approved"
+                  ? { _tag: "approved" as const }
+                  : { _tag: "denied" as const };
+              const intent = approvalIntents.get(request.toolCallId);
+
+              if (intent !== undefined)
+                return intent.decision === "approved"
+                  ? { _tag: "approved" as const, reason: intent.reason }
+                  : { _tag: "denied" as const, reason: intent.reason };
+
+              return approvalResolver === undefined
+                ? { _tag: "unresolved" as const }
+                : yield* approvalResolver.request(request);
+            }),
+          ),
+        commit: (request, decision) =>
           recordHalt(
             Effect.gen(function* () {
               const turnInfo = currentToolTurn;
 
-              if (turnInfo === undefined) {
+              if (
+                turnInfo === undefined ||
+                request.threadId !== submission.threadId ||
+                request.runId !== runId ||
+                request.turnId !== turnInfo.turnId ||
+                declaredNamesByCallId.get(request.toolCallId) !== request.toolName
+              )
                 return yield* RunJournalError.make({
-                  message: `Tool Call ${request.toolCallId} requested approval before any canonical response commit`,
+                  message: "Approval acceptance does not match its original declaration",
                 });
-              }
-              const toolCallId = request.toolCallId;
-              const canonical = canonicalApprovalDecisions.get(toolCallId);
+              const canonical = canonicalApprovalDecisions.get(request.toolCallId);
 
               if (canonical !== undefined) {
-                return canonical === "approved"
-                  ? { _tag: "approved" as const }
-                  : { _tag: "denied" as const };
-              }
-              const intent = approvalIntents.get(toolCallId);
-
-              if (intent !== undefined) {
-                yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, {
-                  decision: intent.decision,
-                  resolver: intent.resolver,
-                  reason: intent.reason,
-                });
-
-                return intent.decision === "approved"
-                  ? { _tag: "approved" as const, reason: intent.reason }
-                  : { _tag: "denied" as const, reason: intent.reason };
-              }
-              if (approvalResolver !== undefined) {
-                const delegated = yield* approvalResolver.request(request);
-
-                if (delegated._tag !== "unresolved") {
-                  yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, {
-                    decision: delegated._tag,
-                    resolver: APPROVAL_POLICY_RESOLVER,
-                    reason: boundedApprovalReason(
-                      delegated.reason,
-                      "The configured approval policy decided immediately",
-                    ),
+                if (decision._tag !== canonical)
+                  return yield* RunJournalError.make({
+                    message: "Approval preparation disagrees with its canonical decision",
                   });
 
-                  return delegated;
-                }
+                return;
               }
-              yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, undefined);
+              const intent = approvalIntents.get(request.toolCallId);
 
-              return {
-                _tag: "unresolved" as const,
-                reason:
-                  "The approval request is canonical and awaits a durable resolveApproval decision",
-              };
+              if (intent !== undefined && decision._tag !== intent.decision)
+                return yield* RunJournalError.make({
+                  message: "Approval preparation disagrees with its accepted intent",
+                });
+              yield* appendApprovalRecords(
+                turnInfo,
+                request.toolCallId,
+                request.toolName,
+                intent !== undefined
+                  ? { decision: intent.decision, resolver: intent.resolver, reason: intent.reason }
+                  : decision._tag === "unresolved"
+                    ? undefined
+                    : {
+                        decision: decision._tag,
+                        resolver: APPROVAL_POLICY_RESOLVER,
+                        reason: boundedApprovalReason(
+                          decision.reason,
+                          "The configured approval policy decided immediately",
+                        ),
+                      },
+              );
             }),
           ),
       };
@@ -7349,7 +7588,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               finalAccounting = accounting;
               yield* hit("subagent:after-join-append");
             }
-            yield* applyReservationRelease(reservationId, finalAccounting);
+            yield* applyReservationRelease(reservationId, finalAccounting, {
+              threadId: submission.threadId,
+              runId,
+              toolCallId,
+            });
           }),
         );
 
@@ -7930,7 +8173,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
       if (submission.workerAdmission?.origin.reporting?.mode === "standard")
-        yield* updateRuntime.repair(threadId);
+        yield* updateRuntime.repairRun(threadId, submissionId);
       if (submission.workerAdmission !== undefined) {
         yield* workerRuntime
           .ensureOrigin(submission.workerAdmission.origin)
@@ -9092,15 +9335,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     snapshot: RecoverySnapshot,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
-    if (!snapshot.unknownResolutions.some((intent) => intent.resolution._tag === "SafeToRetry"))
-      return false;
+    const intents = [...resolutionIntentsFor(snapshot).values()];
+
+    if (!intents.some((intent) => intent.resolution._tag === "SafeToRetry")) return false;
     const submission = snapshot.submission;
     const current = yield* currentOperationsFor(submission);
     const operations = operationsFor(records, runIdForSubmission(submission.submissionId));
 
     const declared = yield* declaredCallsFor(records, runIdForSubmission(submission.submissionId));
 
-    for (const intent of snapshot.unknownResolutions) {
+    for (const intent of intents) {
       if (intent.resolution._tag !== "SafeToRetry") continue;
       const original = declared.get(intent.toolCallId);
 
@@ -9131,7 +9375,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     if (yield* hasUnsupportedRetry(snapshot, records)) return "unknown";
     const submission = snapshot.submission;
 
-    for (const intent of snapshot.unknownResolutions) {
+    for (const intent of resolutionIntentsFor(snapshot).values()) {
       yield* ledger
         .recordUnknownResolution(
           UnknownResolutionCommand.make({
@@ -9176,13 +9420,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const submission = snapshot.submission;
 
     if (submission.state === "suspended") return "deferred";
-    const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
-
-    const undecided = evidence.approvalsPending.filter(
-      (pending) => !decided.has(pending.toolCallId),
-    );
-
-    const first = undecided[0];
+    const first = pendingApprovalForRecovery(snapshot, evidence);
 
     if (first === undefined) return "deferred";
     const claimed = yield* claimFor(submission, decision);
@@ -9195,10 +9433,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         submissionId: submission.submissionId,
         ownershipToken: claim.ownershipToken,
         reason: ApprovalPendingSuspension.make({
-          toolCallIds: [
-            first.toolCallId,
-            ...undecided.slice(1).map((pending) => pending.toolCallId),
-          ],
+          toolCallIds: [first.toolCallId],
         }),
       }),
     );
@@ -9697,13 +9932,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const joinedPayload = subagent.joined.get(decision.toolCallId);
 
         if (joinedPayload !== undefined) {
-          yield* applyReservationRelease(decision.reservationId, joinedPayload.finalAccounting);
+          yield* applyReservationRelease(decision.reservationId, joinedPayload.finalAccounting, {
+            threadId: submission.threadId,
+            runId: runIdForSubmission(submission.submissionId),
+            toolCallId: decision.toolCallId,
+          });
 
           return "repaired";
         }
         if (reservation.status === "releasePending" && reservation.accounting !== undefined) {
           // The decision is already frozen: finish the idempotent release — never re-freeze.
-          yield* applyReservationRelease(decision.reservationId, reservation.accounting);
+          yield* applyReservationRelease(decision.reservationId, reservation.accounting, {
+            threadId: submission.threadId,
+            runId: runIdForSubmission(submission.submissionId),
+            toolCallId: decision.toolCallId,
+          });
 
           return "repaired";
         }
@@ -9895,73 +10138,854 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const history = yield* readRecoveryHistory(found.value.threadId, [submissionId]);
 
     if (history.materialized && found.value.workerAdmission?.origin.reporting?.mode === "standard")
-      yield* updateRuntime.repair(found.value.threadId);
+      yield* updateRuntime.repairRun(found.value.threadId, submissionId);
 
     return yield* recoverSnapshot(found.value, history);
   });
 
+  const discoverWork = Effect.fn("DurableAgentRuntime.discoverWork")(function* (
+    request: ThreadWorkRequest,
+  ): Effect.fn.Return<ThreadWorkPage, ThreadStoreError | WorkDiscoveryUnavailable> {
+    const decoded = yield* Schema.decodeEffect(ThreadWorkRequest)(request).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "discover work",
+          message: "Invalid work page request",
+          cause,
+        }),
+      ),
+    );
+
+    return yield* validateWorkPage(yield* workDiscovery.page(decoded), decoded.limit);
+  });
+
+  const rebuildWorkIndex = workDiscovery.rebuild;
+  const discoverWorkThreads = workDiscovery.threads;
+
+  const originalSubmission = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
+    const input = yield* getRunInput({ threadId, runId }).pipe(
+      Effect.provideService(ThreadReader, reader),
+    );
+
+    const payload = Option.isSome(input) ? input.value.record.payload : undefined;
+
+    if (
+      payload?._tag !== "UserInputRecorded" ||
+      payload.submissionId === undefined ||
+      runIdForSubmission(payload.submissionId) !== runId ||
+      (Option.isSome(input) &&
+        input.value.record.recordId !== submissionInputRecordId(payload.submissionId))
+    )
+      return yield* ThreadStoreError.make({
+        operation: "recover work",
+        message: "The original Run input is missing or incompatible",
+      });
+    const submission = yield* lookupKnownSubmission("recover work", payload.submissionId);
+
+    if (submission.threadId !== threadId)
+      return yield* ThreadStoreError.make({
+        operation: "recover work",
+        message: "The original admission belongs to another Thread",
+      });
+
+    return submission;
+  });
+
+  const readOperation = Effect.fnUntraced(function* (threadId: ThreadId, entry: ThreadWorkEntry) {
+    if (
+      entry.owner._tag !== "Operation" ||
+      entry.originRecordId === undefined ||
+      entry.originDigest === undefined
+    )
+      return yield* ThreadStoreError.make({
+        operation: "recover operation",
+        message: "The original declaration reference is missing",
+      });
+    const owner = entry.owner;
+
+    const current = yield* withCrypto(
+      resolveWorkEvidence(threadId, entry).pipe(Effect.provideService(ThreadReader, reader)),
+    );
+
+    const origin = yield* withCrypto(
+      resolveEvidence(threadId, {
+        recordId: entry.originRecordId,
+        digest: entry.originDigest,
+      }).pipe(Effect.provideService(ThreadReader, reader)),
+    );
+
+    const declaration = origin.record.payload;
+
+    if (
+      declaration._tag !== "ModelResponseRecorded" ||
+      declaration.runId !== owner.runId ||
+      !declaration.toolOperations.some((call) => call.toolCallId === owner.toolCallId) ||
+      current.sequence < origin.sequence
+    )
+      return yield* ThreadStoreError.make({
+        operation: "recover operation",
+        message: "The selected operation does not match its declaration",
+      });
+    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+    const records = yield* Stream.runCollect(
+      operationEvidence(threadId, owner, entry.originRecordId, tail.tailSequence, declaration),
+    ).pipe(Effect.provideService(ThreadReader, reader));
+
+    if (
+      !records.some(({ record }) => record.recordId === origin.record.recordId) ||
+      !records.some(({ record }) => record.recordId === current.record.recordId)
+    )
+      return yield* ThreadStoreError.make({
+        operation: "recover operation",
+        message: "Selected operation evidence is incomplete",
+      });
+    const declared = (yield* declaredCallsFor(records, owner.runId)).get(owner.toolCallId);
+
+    if (declared === undefined)
+      return yield* RunJournalError.make({
+        message: "The selected call has no original parameters and replay contract",
+      });
+
+    const state = toolOperationStates(records, owner.runId).find(
+      (state) => state.operation.toolCallId === owner.toolCallId,
+    );
+
+    if (state === undefined)
+      return yield* RunJournalError.make({ message: "Selected operation state is missing" });
+
+    return { records, declared, state, declaration };
+  });
+
+  const recoverTerminalOperation = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    entry: ThreadWorkEntry,
+    submission: SubmissionSnapshot,
+  ): Effect.fn.Return<WorkRecoveryReport["disposition"], DurableWorkerFailure> {
+    const selected = yield* readOperation(threadId, entry);
+
+    if (selected.state.settled || selected.state.resolved) return "none";
+
+    const snapshot = yield* ledger.loadRecoverySnapshot(
+      RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
+    );
+
+    const intent = snapshot.unknownResolutions.find(
+      (intent) =>
+        intent.toolCallId === selected.declared.toolCallId &&
+        unknownResolutionKind(intent.resolution) === "factual",
+    );
+
+    const factual = intent?.resolution;
+
+    const reconciliation =
+      factual === undefined && selected.declared.executionKind === "ordinary"
+        ? yield* reconciler
+            .reconcile(
+              DeclaredToolCallEvidence.make({
+                threadId,
+                submissionId: submission.submissionId,
+                ...selected.declared,
+              }),
+            )
+            .pipe(
+              Effect.map(Option.some),
+              Effect.catchTag("ToolReconcilerError", () => Effect.succeed(Option.none())),
+            )
+        : Option.none();
+
+    const completed =
+      factual?._tag === "CompletedWithResult"
+        ? factual
+        : Option.isSome(reconciliation) && reconciliation.value._tag === "CompletedWithResult"
+          ? reconciliation.value
+          : undefined;
+
+    const neverStarted =
+      factual?._tag === "NeverHappened" ||
+      selected.state.dispatchBlocked ||
+      (Option.isSome(reconciliation) && reconciliation.value._tag === "NeverStarted");
+
+    if (completed === undefined && !neverStarted) return "unknown";
+
+    const result =
+      completed === undefined
+        ? yield* Schema.encodeEffect(ToolUnavailable)(
+            ToolUnavailable.make({
+              toolName: selected.declared.toolName,
+              execution: "not-executed",
+              message: "The Run is terminal and this original operation did not execute.",
+            }),
+          ).pipe(Effect.flatMap(decodePersisted), Effect.orDie)
+        : completed.result;
+
+    if (utf8ByteLength(JSON.stringify(result)) > selected.declaration.toolResultMaxBytes)
+      return yield* RunJournalError.make({
+        message: "The recovered result exceeds the original operation's result bound",
+      });
+    const ctx = yield* attemptContextAtTail(threadId);
+
+    yield* appendClosedCall(
+      ctx,
+      submission.submissionId,
+      new Set(selected.records.map(({ record }) => record.recordId)),
+      OpenToolCallEvidence.make({
+        toolCallId: selected.declared.toolCallId,
+        toolName: selected.declared.toolName,
+        turn: selected.declared.turn,
+      }),
+      {
+        result: { value: result, isFailure: completed?.isFailure ?? true },
+        resolution:
+          completed === undefined
+            ? "never-started"
+            : completed.isFailure
+              ? "failed-with-error"
+              : "completed-with-result",
+        author: intent?.author ?? RECONCILER_AUTHOR,
+        reason:
+          intent?.reason ??
+          "Original operation evidence established the factual outcome after Run closure",
+      },
+    );
+    yield* workerRuntime.completeInput(submission).pipe(
+      Effect.mapError((cause) =>
+        LedgerError.make({
+          operation: "recover operation",
+          message: "Worker effect acknowledgement remains unavailable",
+          cause,
+        }),
+      ),
+    );
+
+    return "repaired";
+  });
+
+  const repairFrozenDelivery = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    frozen: {
+      readonly messageId: IdempotencyKey;
+      readonly envelope: PersistedJson;
+      readonly createdAtMillis: number;
+      readonly deadlineAtMillis: number;
+      readonly predecessor?: IdempotencyKey;
+    },
+  ) {
+    if (Option.isNone(deliveries))
+      return yield* ThreadStoreError.make({
+        operation: "recover delivery",
+        message: "The owning delivery port is unavailable",
+      });
+
+    const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(frozen.envelope).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "recover delivery",
+          message: "Frozen delivery evidence is incompatible",
+          cause,
+        }),
+      ),
+    );
+
+    const record = yield* withCrypto(
+      prepareMessageDelivery({
+        key: { ownerThreadId: threadId, messageId: frozen.messageId },
+        envelope,
+        createdAtMillis: frozen.createdAtMillis,
+        deadlineAtMillis: frozen.deadlineAtMillis,
+        ...(frozen.predecessor === undefined ? {} : { predecessor: frozen.predecessor }),
+      }),
+    ).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "recover delivery",
+          message: "Frozen delivery cannot be prepared",
+          cause,
+        }),
+      ),
+    );
+
+    yield* deliveries.value.insert(record).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "recover delivery",
+          message: "The durable handoff remains owed",
+          cause,
+        }),
+      ),
+    );
+  });
+
+  const recoverOwnedWork = Effect.fnUntraced(function* (
+    request: WorkRecoveryRequest,
+    recoveredAdmissions = new Map<SubmissionId, RecoveryReport>(),
+  ): Effect.fn.Return<WorkRecoveryReport, DurableWorkerFailure> {
+    const { threadId, work: entry } = yield* Schema.decodeEffect(WorkRecoveryRequest)(request).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "recover work",
+          message: "Invalid selected work",
+          cause,
+        }),
+      ),
+    );
+
+    const owner = entry.owner;
+
+    const recoverAdmission = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+      const recovered = recoveredAdmissions.get(submissionId);
+
+      if (recovered !== undefined) return recovered;
+      const report = yield* recoverSubmission(submissionId);
+
+      recoveredAdmissions.set(submissionId, report);
+
+      return report;
+    });
+
+    const report = (
+      disposition: WorkRecoveryReport["disposition"],
+      submission?: RecoveryReport,
+      retryAtMillis?: number,
+    ) =>
+      WorkRecoveryReport.make({
+        threadId,
+        workId: entry.id,
+        disposition,
+        ...(submission === undefined ? {} : { submission }),
+        ...(retryAtMillis === undefined ? {} : { retryAtMillis: Math.ceil(retryAtMillis) }),
+      });
+
+    const invalid = () =>
+      ThreadStoreError.make({
+        operation: "recover work",
+        message: "The selected owner does not match its state reference",
+      });
+
+    if (owner._tag === "Admission") {
+      if (
+        entry.id !== workId("admission", owner.submissionId) ||
+        entry.stateReference._tag !== "Submission" ||
+        entry.stateReference.submissionId !== owner.submissionId
+      )
+        return yield* invalid();
+      const original = yield* lookupKnownSubmission("recover work", owner.submissionId);
+
+      if (original.threadId !== threadId) return yield* invalid();
+      const submission = yield* recoverAdmission(owner.submissionId);
+
+      return report(submission.disposition, submission);
+    }
+    if (owner._tag === "Delivery") {
+      if (
+        entry.id !== workId("delivery", owner.messageId) ||
+        entry.stateReference._tag !== "Delivery" ||
+        entry.stateReference.messageId !== owner.messageId
+      )
+        return yield* invalid();
+      if (Option.isNone(deliveries))
+        return yield* WorkDiscoveryUnavailable.make({ threadId, reason: "unsupported" });
+
+      const delivery = yield* deliveries.value
+        .get({ ownerThreadId: threadId, messageId: owner.messageId })
+        .pipe(
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({
+              operation: "recover work",
+              message: "The owning delivery is unavailable",
+              cause,
+            }),
+          ),
+        );
+
+      if (
+        delivery === null ||
+        delivery.key.ownerThreadId !== threadId ||
+        delivery.key.messageId !== owner.messageId ||
+        delivery.version < entry.stateReference.version
+      )
+        return yield* invalid();
+
+      // The delivery driver owns due-time, claim, retry, destination authorization and parking.
+      return report(
+        delivery.status === "processed" || delivery.status === "refused" ? "none" : "deferred",
+      );
+    }
+
+    const evidence = yield* withCrypto(
+      resolveWorkEvidence(threadId, entry).pipe(Effect.provideService(ThreadReader, reader)),
+    );
+
+    const payload = evidence.record.payload;
+
+    if (owner._tag === "Operation") {
+      if (entry.id !== workId("operation", owner.runId, owner.toolCallId)) return yield* invalid();
+      const submission = yield* originalSubmission(threadId, owner.runId);
+
+      if (submission.state === "settled")
+        return report(yield* recoverTerminalOperation(threadId, entry, submission));
+      const recovered = yield* recoverAdmission(submission.submissionId);
+
+      return report(recovered.disposition, recovered);
+    }
+    if (owner._tag === "WorkerInput") {
+      if (
+        entry.id !== workId("worker-input", owner.messageId) ||
+        payload._tag !== "WorkerInputRequested" ||
+        payload.admission.messageId !== owner.messageId ||
+        payload.admission.origin.worker.threadId !== owner.workerThreadId ||
+        payload.admission.origin.source.threadId !== threadId
+      )
+        return yield* invalid();
+
+      const repair = yield* workerRuntime
+        .repairInput(threadId, evidence.record.recordId, payload)
+        .pipe(
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({
+              operation: "recover worker input",
+              message: "Worker effect evidence remains owed",
+              cause,
+            }),
+          ),
+        );
+
+      // A processed delivery no longer owns retry. Keep source acknowledgement recovery due
+      // until the child publishes its factual evidence; remote wake hints may be lost.
+      return report(
+        repair === "repaired" ? "repaired" : "deferred",
+        undefined,
+        repair === "awaiting-effects"
+          ? (yield* Clock.currentTimeMillis) + Duration.toMillis(config.settlementPollInterval)
+          : undefined,
+      );
+    }
+    if (owner._tag === "WorkerEffects") {
+      if (
+        entry.id !== workId("worker-effects", owner.submissionId) ||
+        payload._tag !== "SubmissionSettled" ||
+        payload.submissionId !== owner.submissionId
+      )
+        return yield* invalid();
+      const submission = yield* lookupKnownSubmission("recover worker effects", owner.submissionId);
+      const admission = submission.workerAdmission;
+
+      if (
+        submission.threadId !== threadId ||
+        admission === undefined ||
+        admission.origin.worker.threadId !== threadId ||
+        payload.receiptId !== submission.receiptId
+      )
+        return yield* invalid();
+      yield* workerRuntime.completeInput(submission).pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "recover worker effects",
+            message: "The owning worker acknowledgement remains owed",
+            cause,
+          }),
+        ),
+      );
+
+      const acknowledgement = Option.getOrUndefined(
+        yield* getRecord({
+          threadId,
+          recordId: RecordId.make(`worker-effects-resolved:${admission.messageId}`),
+        }).pipe(Effect.provideService(ThreadReader, reader)),
+      )?.record.payload;
+
+      if (acknowledgement === undefined) return report("unknown");
+      if (
+        acknowledgement._tag !== "WorkerInputCompleted" ||
+        acknowledgement.effectsResolved !== true ||
+        acknowledgement.submissionId !== submission.submissionId ||
+        acknowledgement.receiptId !== submission.receiptId ||
+        acknowledgement.settlementId !== payload.settlementId ||
+        acknowledgement.workerThreadId !== threadId ||
+        acknowledgement.messageId !== admission.messageId
+      )
+        return yield* invalid();
+
+      return report("repaired");
+    }
+    if (owner._tag === "Report") {
+      if (
+        entry.id !== workId("report", owner.runId) ||
+        payload._tag !== "SubmissionSettled" ||
+        payload.runId !== owner.runId
+      )
+        return yield* invalid();
+      const submission = yield* originalSubmission(threadId, owner.runId);
+
+      if (submission.state !== "settled") return report("deferred");
+      if (submission.workerAdmission?.origin.reporting?.mode !== "standard")
+        return yield* invalid();
+      yield* workerRuntime.completeInput(submission).pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "recover report",
+            message: "The report obligation remains owed",
+            cause,
+          }),
+        ),
+      );
+
+      return report("repaired");
+    }
+    if (owner._tag === "Child") {
+      if (
+        entry.id !== workId("child", owner.runId, owner.toolCallId) ||
+        payload._tag !== "SubagentRequested" ||
+        payload.runId !== owner.runId ||
+        payload.toolCallId !== owner.toolCallId ||
+        payload.childThreadId !== owner.childThreadId
+      )
+        return yield* invalid();
+      const parent = yield* originalSubmission(threadId, owner.runId);
+
+      if (parent.state !== "settled") {
+        const recovered = yield* recoverAdmission(parent.submissionId);
+
+        return report(recovered.disposition, recovered);
+      }
+      const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+      const records = yield* withCrypto(
+        readRunEvidenceSnapshot(threadId, parent.submissionId, tail.tailSequence).pipe(
+          Effect.provideService(ThreadReader, reader),
+        ),
+      );
+
+      const snapshot = yield* ledger.loadRecoverySnapshot(
+        RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
+      );
+
+      const reservation = snapshot.childReservations.find(
+        (row) =>
+          row.reservationId === payload.reservationId && row.parentToolCallId === owner.toolCallId,
+      );
+
+      if (reservation === undefined) return yield* invalid();
+      const subagent = subagentRecordsOf(records, owner.runId);
+      const joined = subagent.joined.get(owner.toolCallId);
+
+      if (joined !== undefined) {
+        yield* applyReservationRelease(reservation.reservationId, joined.finalAccounting, {
+          threadId,
+          runId: owner.runId,
+          toolCallId: owner.toolCallId,
+        });
+
+        return report("repaired");
+      }
+
+      const childId =
+        subagent.started.get(owner.toolCallId)?.childSubmissionId ?? reservation.childSubmissionId;
+
+      if (childId === undefined) return report("deferred");
+      const child = yield* lookupKnownSubmission("recover child", childId);
+
+      if (
+        child.threadId !== owner.childThreadId ||
+        child.parentLinkage?.parentSubmissionId !== parent.submissionId ||
+        child.parentLinkage.parentToolCallId !== owner.toolCallId
+      )
+        return yield* invalid();
+      if (child.state === "settled") {
+        yield* joinSettledChildWithoutHandler(
+          yield* attemptContextAtTail(threadId),
+          parent,
+          new Set(records.map(({ record }) => record.recordId)),
+          subagent,
+          reservation,
+          owner.toolCallId,
+          childId,
+          "unavailable",
+        );
+
+        return report("repaired");
+      }
+      yield* ledger
+        .requestAbort(
+          AbortCommand.make({
+            submissionId: childId,
+            author: SUBAGENT_ABORT_AUTHOR,
+            reason: SUBAGENT_ABORT_REASON,
+          }),
+        )
+        .pipe(
+          Effect.catchTags({
+            SettlementConflict: () => Effect.void,
+            JoinedToHost: conflictToLedgerError("recover child"),
+          }),
+        );
+      yield* wake.notify(child.threadId);
+
+      return report("deferred");
+    }
+    if (
+      owner._tag !== "Handoff" ||
+      owner.recordId !== evidence.record.recordId ||
+      entry.id !==
+        (owner.kind === "reservation"
+          ? workId("reservation", owner.childThreadId ?? "")
+          : workId("handoff", owner.recordId))
+    )
+      return yield* invalid();
+    switch (owner.kind) {
+      case "peer":
+        if (
+          payload._tag !== "PeerMessagePrepared" ||
+          owner.messageId !== payload.messageId ||
+          payload.source.threadId !== threadId
+        )
+          return yield* invalid();
+        yield* repairFrozenDelivery(threadId, {
+          messageId: payload.messageId,
+          envelope: payload.encodedEnvelope,
+          createdAtMillis: DateTime.toEpochMillis(evidence.record.createdAt),
+          deadlineAtMillis: payload.deadlineAtMillis,
+        });
+
+        return report("repaired");
+      case "report":
+        if (payload._tag !== "WorkerReportPrepared" || owner.messageId !== payload.messageId)
+          return yield* invalid();
+        yield* repairFrozenDelivery(threadId, payload);
+
+        return report("repaired");
+      case "update":
+        if (
+          payload._tag !== "AgentUpdateEmitted" ||
+          payload.delivery === undefined ||
+          owner.messageId !== payload.delivery.messageId ||
+          payload.update.threadId !== threadId
+        )
+          return yield* invalid();
+        yield* repairFrozenDelivery(threadId, payload.delivery);
+
+        return report("repaired");
+      case "worker-stop":
+        if (
+          payload._tag !== "WorkerStopRequested" ||
+          owner.childThreadId !== payload.command.worker.threadId
+        )
+          return yield* invalid();
+
+        const stopped = yield* workerRuntime.repairStop(threadId, owner.recordId, payload).pipe(
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({
+              operation: "recover worker stop",
+              message: "Destination sealing remains owed",
+              cause,
+            }),
+          ),
+        );
+
+        return report(
+          stopped ? "repaired" : "deferred",
+          undefined,
+          stopped
+            ? undefined
+            : (yield* Clock.currentTimeMillis) + Duration.toMillis(config.settlementPollInterval),
+        );
+      case "child-accounting": {
+        if (payload._tag !== "SubagentJoined") return yield* invalid();
+        const parent = yield* originalSubmission(threadId, payload.runId);
+
+        const snapshot = yield* ledger.loadRecoverySnapshot(
+          RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
+        );
+
+        const reservation = snapshot.childReservations.find(
+          (row) =>
+            row.reservationId === payload.reservationId &&
+            row.parentToolCallId === payload.toolCallId,
+        );
+
+        if (
+          reservation === undefined ||
+          reservation.childSubmissionId !== payload.childSubmissionId
+        )
+          return yield* invalid();
+        yield* applyReservationRelease(reservation.reservationId, payload.finalAccounting, {
+          threadId,
+          runId: payload.runId,
+          toolCallId: payload.toolCallId,
+        });
+
+        return report("repaired");
+      }
+      case "reservation": {
+        if (
+          payload._tag !== "SubtreeBudgetReserved" ||
+          owner.childThreadId !== payload.childThreadId
+        )
+          return yield* invalid();
+        if (payload.executionRunId === null) return report("deferred");
+        const parent = yield* originalSubmission(threadId, payload.executionRunId);
+
+        if (parent.state !== "settled") {
+          const recovered = yield* recoverAdmission(parent.submissionId);
+
+          return report(recovered.disposition, recovered);
+        }
+        const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+        const records = yield* withCrypto(
+          readRunEvidenceSnapshot(threadId, parent.submissionId, tail.tailSequence).pipe(
+            Effect.provideService(ThreadReader, reader),
+          ),
+        );
+
+        if (
+          records.some(
+            ({ record: { payload: fact } }) =>
+              fact._tag === "SubagentRequested" && fact.childThreadId === payload.childThreadId,
+          )
+        )
+          return report("deferred");
+        // No dispatch remains owed by a terminal Run. The monotonic subtree charge is retained.
+        yield* completeWorkHandoff(threadId, owner.recordId, entry.id);
+
+        return report("repaired");
+      }
+    }
+  });
+
+  const recoverWork = Effect.fn("DurableAgentRuntime.recoverWork")((request: WorkRecoveryRequest) =>
+    recoverOwnedWork(request),
+  );
+
   const runRecovery = Effect.fn("DurableAgentRuntime.runRecovery")(function* (
     options?: RecoverySweepOptions,
   ): Effect.fn.Return<RecoverySweepResult, DurableWorkerFailure> {
-    const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
-    const reports: Array<RecoveryReport> = [];
-    const blocked: Array<RecoveryBlocked> = [];
-    // SubmissionLedger guarantees `(threadId, queueSequence)` order. Capture and retain
-    // one verified canonical prefix only for the current contiguous Thread group: read
-    // work is one tail inspection plus `ceil(passStartTail / READ_PAGE)` pages per Thread
-    // rather than multiplied by its nonterminal Submission count, and the prefix becomes
-    // unreachable before the next Thread is read.
-    let index = 0;
-
-    while (index < nonterminal.length) {
-      const first = nonterminal[index];
-
-      if (first === undefined) break;
-      const submissionIds: Array<SubmissionId> = [];
-
-      for (let offset = index; offset < nonterminal.length; offset += 1) {
-        const entry = nonterminal[offset];
-
-        if (entry === undefined || entry.threadId !== first.threadId) break;
-        submissionIds.push(entry.submissionId);
-      }
-
-      index += submissionIds.length;
-      if (options?.threadId !== undefined && options.threadId !== first.threadId) continue;
-      let phase: RecoveryFailure["phase"] = "recovery";
-
-      // A retained record or child read can fail before any new Attempt exists. Isolate the
-      // entire Thread: a partial repair never grants a later head permission to run through
-      // incomplete evidence. Scope/timeout release resources before the next Thread starts.
-      const outcome = yield* isolateRecovery(
-        Effect.gen(function* () {
-          // The worklist contains only control state. Retained input/worker metadata belongs
-          // to this Thread's failure boundary, never to global discovery or fresh admission.
-          const group = yield* Effect.forEach(submissionIds, (submissionId) =>
-            lookupKnownSubmission("recover submission", submissionId),
+    const cursor =
+      options?.cursor === undefined
+        ? undefined
+        : yield* Schema.decodeEffect(Schema.fromJsonString(RecoverySweepCursor))(
+            options.cursor,
+          ).pipe(
+            Effect.mapError((cause) =>
+              ThreadStoreError.make({
+                operation: "recover work cursor",
+                message: "Invalid recovery cursor",
+                cause,
+              }),
+            ),
           );
 
-          phase = "history";
-          const history = yield* readRecoveryHistory(first.threadId, submissionIds);
+    if (
+      cursor !== undefined &&
+      (cursor.selection !== options?.threadId ||
+        (options?.threadId !== undefined && cursor.threadId !== options.threadId))
+    )
+      return yield* ThreadStoreError.make({
+        operation: "recover work cursor",
+        message: "The recovery cursor belongs to another selection",
+      });
+    const reports: Array<RecoveryReport> = [];
+    const workReports: Array<WorkRecoveryReport> = [];
+    const blocked: Array<RecoveryBlocked> = [];
+    // Several native owners can point at one active Submission. Advance it only once per
+    // bounded pass; terminal obligations still repair independently from their own evidence.
+    const recoveredAdmissions = new Map<SubmissionId, RecoveryReport>();
+    const reportedAdmissions = new Set<SubmissionId>();
 
-          phase = "recovery";
-          if (
-            history.materialized &&
-            group.some((row) => row.workerAdmission?.origin.reporting?.mode === "standard")
-          )
-            yield* updateRuntime.repair(first.threadId);
+    const selected = options?.threadId;
 
-          return yield* Effect.forEach(group, (submission) => recoverSnapshot(submission, history));
+    const page =
+      selected === undefined
+        ? yield* workDiscovery.threads({
+            limit: cursor?.threadId === undefined ? 32 : 31,
+            ...((cursor?.threadId ?? cursor?.afterThreadId) === undefined
+              ? {}
+              : { afterThreadId: cursor?.threadId ?? cursor?.afterThreadId }),
+          })
+        : { threadIds: [selected], afterThreadId: undefined };
+
+    const threadIds =
+      cursor?.threadId !== undefined && selected === undefined
+        ? [cursor.threadId, ...page.threadIds]
+        : page.threadIds;
+
+    let continuation: string | undefined;
+
+    for (let index = 0; index < threadIds.length; index++) {
+      const threadId = threadIds[index];
+
+      if (threadId === undefined) break;
+      let workCursor = cursor?.threadId === threadId ? cursor.workCursor : undefined;
+      let complete = false;
+      let phase: RecoveryFailure["phase"] = "history";
+
+      const outcome = yield* isolateRecovery(
+        Effect.gen(function* () {
+          for (
+            let pages = 0;
+            pages < MAX_RECOVERY_PAGES && workReports.length < MAX_RECOVERY_WORK_ITEMS;
+            pages++
+          ) {
+            phase = "history";
+
+            const workPage: ThreadWorkPage = yield* discoverWork({
+              threadId,
+              limit: MAX_RECOVERY_WORK_ITEMS - workReports.length,
+              ...(workCursor === undefined ? {} : { cursor: workCursor }),
+            });
+
+            phase = "recovery";
+            for (const work of workPage.entries) {
+              const repaired = yield* recoverOwnedWork({ threadId, work }, recoveredAdmissions);
+
+              workReports.push(repaired);
+              if (
+                repaired.submission !== undefined &&
+                !reportedAdmissions.has(repaired.submission.submissionId)
+              ) {
+                reportedAdmissions.add(repaired.submission.submissionId);
+                reports.push(repaired.submission);
+              }
+            }
+            workCursor = workPage.cursor;
+            if (workCursor === undefined) {
+              complete = true;
+              break;
+            }
+          }
         }),
-        { timeout: config.recoveryTimeout, phase: () => phase },
+        { timeout: config.recoveryTimeout, phase: () => phase, operation: "recover Thread work" },
       );
 
-      if (Result.isSuccess(outcome)) reports.push(...outcome.success);
-      else
-        blocked.push(RecoveryBlocked.make({ threadId: first.threadId, failure: outcome.failure }));
+      if (Result.isFailure(outcome)) {
+        blocked.push(RecoveryBlocked.make({ threadId, failure: outcome.failure }));
+        complete = true;
+      }
+      if (!complete) {
+        continuation = encodeRecoveryCursor({
+          version: 1,
+          threadId,
+          ...(selected === undefined ? {} : { selection: selected }),
+          ...(workCursor === undefined ? {} : { workCursor }),
+        });
+        break;
+      }
+      if (workReports.length >= MAX_RECOVERY_WORK_ITEMS || index === threadIds.length - 1) {
+        if (
+          selected === undefined &&
+          (index < threadIds.length - 1 || page.afterThreadId !== undefined)
+        )
+          continuation = encodeRecoveryCursor({ version: 1, afterThreadId: threadId });
+        break;
+      }
     }
 
-    return RecoverySweepResult.make({ reports, blocked });
+    return RecoverySweepResult.make({
+      reports,
+      blocked,
+      workReports,
+      ...(continuation === undefined ? {} : { cursor: continuation }),
+    });
   });
 
   const submit = Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
@@ -10417,6 +11441,93 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         submissionId: command.submissionId,
       }),
     );
+
+    const original = yield* ledger.lookup(
+      SubmissionLookupById.make({ submissionId: command.submissionId }),
+    );
+
+    if (
+      Option.isSome(original) &&
+      original.value.state === "settled" &&
+      (command.resolution._tag === "CompletedWithResult" ||
+        command.resolution._tag === "NeverHappened")
+    ) {
+      yield* Effect.gen(function* () {
+        const submission = original.value;
+
+        const snapshot = yield* ledger.loadRecoverySnapshot(
+          RecoverySnapshotRequest.make({ submissionId: command.submissionId }),
+        );
+
+        // Identical intent retries remain valid after the factual closure commits.
+        if (
+          snapshot.unknownResolutions.some(
+            (intent) =>
+              intent.toolCallId === command.toolCallId &&
+              unknownResolutionKind(intent.resolution) === "factual",
+          )
+        )
+          return;
+
+        const tail = yield* store.inspectTail(
+          ThreadTailRequest.make({ threadId: submission.threadId }),
+        );
+
+        const records = yield* withCrypto(
+          readRunEvidenceSnapshot(
+            submission.threadId,
+            submission.submissionId,
+            tail.tailSequence,
+          ).pipe(Effect.provideService(ThreadReader, reader)),
+        );
+
+        const runId = runIdForSubmission(submission.submissionId);
+
+        const state = toolOperationStates(records, runId).find(
+          (state) => state.operation.toolCallId === command.toolCallId,
+        );
+
+        const declared = yield* declaredCallsFor(records, runId);
+
+        if (
+          state === undefined ||
+          state.settled ||
+          state.resolved ||
+          !declared.has(command.toolCallId)
+        )
+          return yield* LedgerError.make({
+            operation: "resolveUnknown",
+            message: "No unresolved original operation exists on this terminal Run",
+          });
+
+        const response = records.find(
+          ({ record: { payload } }) =>
+            payload._tag === "ModelResponseRecorded" &&
+            payload.runId === runId &&
+            payload.turn === state.turn,
+        )?.record.payload;
+
+        if (
+          response?._tag !== "ModelResponseRecorded" ||
+          (command.resolution._tag === "CompletedWithResult" &&
+            utf8ByteLength(JSON.stringify(command.resolution.result)) > response.toolResultMaxBytes)
+        )
+          return yield* LedgerError.make({
+            operation: "resolveUnknown",
+            message: "The factual result exceeds the original result contract",
+          });
+      }).pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "LedgerError"
+            ? cause
+            : LedgerError.make({
+                operation: "resolveUnknown",
+                message: "Original operation evidence is unavailable",
+                cause,
+              }),
+        ),
+      );
+    }
     const intent = yield* ledger.recordUnknownResolution(command);
 
     yield* hit("resolve:after-intent");
@@ -10932,15 +12043,39 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     // Each claimed head selects a current Binding by stable Agent ID and optional host routing.
     // Original per-operation replay contracts still govern unfinished handlers, while one worker
     // pool serves both parent and child lanes.
-    const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
-    const seen = new Set<ThreadId>();
+    const initial = Stream.paginate(undefined, (afterThreadId: ThreadId | undefined) =>
+      workDiscovery
+        .threads({ limit: 32, ...(afterThreadId === undefined ? {} : { afterThreadId }) })
+        .pipe(
+          Effect.map(
+            (page): readonly [ReadonlyArray<ThreadId>, Option.Option<ThreadId | undefined>] => [
+              page.threadIds,
+              page.afterThreadId === undefined ? Option.none() : Option.some(page.afterThreadId),
+            ],
+          ),
+        ),
+    );
 
-    for (const submission of nonterminal) {
-      if (seen.has(submission.threadId)) continue;
-      seen.add(submission.threadId);
-      yield* processThreadResolvedImpl(submission.threadId);
-    }
-    yield* Stream.runForEach(wake.wakes, (threadId) => processThreadResolvedImpl(threadId));
+    yield* Stream.merge(initial, wake.wakes, { haltStrategy: "right" }).pipe(
+      Stream.runForEach(
+        Effect.fnUntraced(function* (threadId) {
+          let cursor: string | undefined;
+
+          do {
+            const recovered = yield* runRecovery({
+              threadId,
+              ...(cursor === undefined ? {} : { cursor }),
+            });
+
+            const blocked = recovered.blocked[0];
+
+            if (blocked !== undefined) return yield* blocked;
+            cursor = recovered.cursor;
+            yield* processThreadResolvedImpl(threadId);
+          } while (cursor !== undefined);
+        }),
+      ),
+    );
   });
 
   const messagingRuntime = yield* makeMessagingRuntime({
@@ -11033,6 +12168,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     runResolvedWorker: runResolvedWorkerImpl,
     runRecovery,
     recoverSubmission,
+    discoverWork,
+    discoverWorkThreads,
+    rebuildWorkIndex,
+    recoverWork,
   });
 });
 
@@ -11075,14 +12214,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
  *   lanes using registrations owned by the runtime Layer: each stable `agentId` selects
  *   one current Binding. Unfinished operation contracts gate handler execution independently
  *   of immutable admission evidence; missing bindings release the claim with a typed refusal.
- * - `runRecovery()` — classify every nonterminal Submission with the pure `classifyRecovery` and
- *   execute repair decisions, annotating owned repair attempts with their granted epochs
- *   (DUR-013). Untouched ready input and model-resuming work are reported `deferred` for a
- *   worker claim; Submissions parked on
- *   Unknown Outcomes are reported `unknown`. The S2 binding-free Subagent executors (admission
- *   completion, start-link repair, waiting restoration, wake replay, canonical join accounting,
- *   abort propagation, orphan reservation release) run here; the settlement join itself is
- *   deferred to a claiming worker because it needs the parent Binding's result projection.
+ * - `discoverWork()` / `discoverWorkThreads()` — enumerate native metadata without granting
+ *   execution authority. Missing or incomplete indexes fail explicitly; `rebuildWorkIndex()`
+ *   reconstructs them in bounded, resumable pages independently of ordinary recovery.
+ * - `runRecovery()` — repair at most 32 native owners per pass, returning a cursor for remaining
+ *   work. Follow that cursor to finish the sweep. Selected admissions use `classifyRecovery`;
+ *   ready input and model work remain `deferred` for a fenced worker claim. Terminal Runs can
+ *   retain factual tool closures, frozen deliveries, child accounting and worker acknowledgements.
+ *   These repairs use original evidence and never invoke a Tool handler or reopen a settled Run.
  * - `explain`/`explainThread`, `verify`, `retry`, `wake`, `scanObligations` — the P7
  *   administrative operations (plan §3) over the same two ports, identical on DN and DC.
  *   `explain` and `verify` are strictly read-only; `retry` re-drives exactly one classified
@@ -11293,6 +12432,20 @@ export class DurableAgentRuntime extends Context.Service<
     readonly recoverSubmission: (
       submissionId: SubmissionId,
     ) => Effect.Effect<RecoveryReport, DurableWorkerFailure>;
+    /** Trusted host inventory; discovery grants no execution or disclosure authority. */
+    readonly discoverWork: (
+      request: ThreadWorkRequest,
+    ) => Effect.Effect<ThreadWorkPage, ThreadStoreError | WorkDiscoveryUnavailable>;
+    readonly discoverWorkThreads: (
+      request: WorkThreadsRequest,
+    ) => Effect.Effect<WorkThreadsPage, ThreadStoreError>;
+    /** Explicit, resumable maintenance. Missing indexes never trigger implicit history reads. */
+    readonly rebuildWorkIndex: (
+      request: WorkIndexRebuildRequest,
+    ) => Effect.Effect<WorkIndexProgress, ThreadStoreError | WorkDiscoveryUnavailable>;
+    readonly recoverWork: (
+      request: WorkRecoveryRequest,
+    ) => Effect.Effect<WorkRecoveryReport, DurableWorkerFailure>;
   }
 >()("@effect-agent/thread/DurableAgentRuntime") {
   /**

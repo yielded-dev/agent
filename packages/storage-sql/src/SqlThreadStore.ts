@@ -756,6 +756,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
 
   const store = ThreadStore.of({
+    work: journal.work.storage,
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),

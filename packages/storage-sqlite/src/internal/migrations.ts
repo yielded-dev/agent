@@ -1,4 +1,5 @@
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
+import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -11,7 +12,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 18;
+export const CurrentSqliteStorageVersion = 20;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -28,7 +29,7 @@ const layoutStatements = [
   'CREATE TABLE "effect_agent_abort_intents" ( submission_id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, requested_at TEXT NOT NULL, canonical_record_id TEXT, FOREIGN KEY (submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_submissions_joined_host ON "effect_agent_submissions" (joined_host_submission_id)',
   'CREATE TABLE "effect_agent_approval_decisions" ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, decision TEXT NOT NULL, resolver TEXT NOT NULL, reason TEXT NOT NULL, decided_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
-  'CREATE TABLE "effect_agent_unknown_resolutions" ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, resolution_json TEXT NOT NULL, resolved_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_unknown_resolutions" ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, resolution_kind TEXT NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, resolution_json TEXT NOT NULL, resolved_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id, resolution_kind), FOREIGN KEY (submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_submissions_parent ON "effect_agent_submissions" (parent_submission_id)',
   'CREATE TABLE "effect_agent_child_reservations" ( reservation_id TEXT PRIMARY KEY NOT NULL, parent_submission_id TEXT NOT NULL, parent_tool_call_id TEXT NOT NULL, child_submission_id TEXT, status TEXT NOT NULL, allocation_json TEXT NOT NULL, allocation_digest TEXT NOT NULL, accounting_json TEXT, reserved_at TEXT NOT NULL, release_began_at TEXT, released_at TEXT, UNIQUE (parent_submission_id, parent_tool_call_id), FOREIGN KEY (parent_submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_schedules" ( tenant_id TEXT NOT NULL, owner_id TEXT NOT NULL, schedule_id TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, owner_id, schedule_id) )',
@@ -90,7 +91,7 @@ const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: 18,
+  version: 20,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -154,9 +155,14 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
 
       if (header !== undefined) return header;
       for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
+      yield* createSqlThreadWorkTables().pipe(
+        Effect.mapError((cause) =>
+          SqliteStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+        ),
+      );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 18").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 20, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 20").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

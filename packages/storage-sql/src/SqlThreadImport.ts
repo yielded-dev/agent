@@ -12,6 +12,8 @@ import {
   SuspensionSnapshot,
   SubmissionAdmissionFence,
   UnknownResolutionIntent,
+  UnknownResolutionKind,
+  unknownResolutionKind,
 } from "@yielded/agent/submission-ledger";
 import {
   ThreadImport,
@@ -42,6 +44,7 @@ import {
 import { BatchRow, RecordRow, ThreadRow } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordMetadata, type CanonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
+import { createSqlThreadWorkTables, makeSqlThreadWork } from "./SqlThreadWork.ts";
 
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
@@ -125,6 +128,7 @@ const ApprovalRow = Schema.Struct({
 const ResolutionRow = Schema.Struct({
   submission_id: Schema.String,
   tool_call_id: Schema.String,
+  resolution_kind: UnknownResolutionKind,
   author: Schema.String,
   reason: Schema.String,
   resolution_json: Schema.String,
@@ -154,6 +158,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const crypto = yield* Crypto.Crypto;
   const admissionFence = yield* SubmissionAdmissionFence;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
+
+  const work = yield* makeSqlThreadWork(
+    options.namespace === undefined ? {} : { namespace: options.namespace },
+  );
 
   const query = <A extends object>(statement: ReturnType<typeof sql<A>>) =>
     execute(statement).pipe(
@@ -363,7 +371,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           const resolutionRows = yield* decode(
             Schema.Array(ResolutionRow),
             yield* query(
-              sql`SELECT a.submission_id, a.tool_call_id, a.author, a.reason, a.resolution_json, a.resolved_at FROM ${table("effect_agent_unknown_resolutions")} a JOIN ${table("effect_agent_submissions")} s ON s.submission_id=a.submission_id WHERE s.thread_id=${request.threadId} LIMIT ${MAX_THREAD_EXPORT_RECORDS + 1}`,
+              sql`SELECT a.submission_id, a.tool_call_id, a.resolution_kind, a.author, a.reason, a.resolution_json, a.resolved_at FROM ${table("effect_agent_unknown_resolutions")} a JOIN ${table("effect_agent_submissions")} s ON s.submission_id=a.submission_id WHERE s.thread_id=${request.threadId} LIMIT ${MAX_THREAD_EXPORT_RECORDS + 1}`,
             ),
           );
 
@@ -621,6 +629,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             yield* query(
               sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${prepared.result.tailSequence}, tail_digest=${prepared.result.tailDigest}, producer_epoch=${epoch} WHERE thread_id=${threadId}`,
             );
+          yield* createSqlThreadWorkTables(options.namespace).pipe(
+            Effect.provideService(SqlClient, sql),
+          );
+          yield* work.initialize(threadId);
           for (const batch of prepared.batches) {
             yield* query(
               sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_json) VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batch.batchJson})`,
@@ -645,6 +657,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   VALUES (${threadId}, ${runId}, ${batch.firstSequence + index})`);
             }
           }
+          for (const batch of prepared.batches)
+            yield* work.apply(threadId, batch.firstSequence, batch.batch.records);
           for (const rebuilt of prepared.submissions) {
             // Preserve the accepted fact; destination policy interprets its opaque coordinates.
             // Terminal history no longer competes for an active admission slot.
@@ -721,7 +735,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               const command = yield* encode(UnknownResolutionIntent, intent);
 
               yield* query(
-                sql`INSERT INTO ${table("effect_agent_unknown_resolutions")} (submission_id, tool_call_id, author, reason, resolution_json, resolved_at) VALUES (${admission.submissionId}, ${command.toolCallId}, ${command.author}, ${command.reason}, ${canonicalJson(command.resolution)}, ${command.resolvedAt})`,
+                sql`INSERT INTO ${table("effect_agent_unknown_resolutions")} (submission_id, tool_call_id, resolution_kind, author, reason, resolution_json, resolved_at) VALUES (${admission.submissionId}, ${command.toolCallId}, ${unknownResolutionKind(intent.resolution)}, ${command.author}, ${command.reason}, ${canonicalJson(command.resolution)}, ${command.resolvedAt})`,
               );
             }
           }

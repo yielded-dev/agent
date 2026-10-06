@@ -2,6 +2,7 @@ import {
   AbortIntent,
   ApprovalDecisionIntent,
   UnknownResolutionIntent,
+  unknownResolutionKind,
 } from "@yielded/agent/submission-ledger";
 import { ThreadAdmission } from "@yielded/agent/thread-store";
 import { Effect, Schema } from "effect";
@@ -107,12 +108,13 @@ export const decodeApprovalFact = (row: {
 export const decodeResolutionFact = Effect.fnUntraced(function* (row: {
   readonly submission_id: string;
   readonly tool_call_id: string;
+  readonly resolution_kind: string;
   readonly author: string;
   readonly reason: string;
   readonly resolution_json: string;
   readonly resolved_at: string;
 }): Effect.fn.Return<UnknownResolutionIntent, Schema.SchemaError> {
-  return yield* decodeResolution({
+  const intent = yield* decodeResolution({
     submissionId: row.submission_id,
     toolCallId: row.tool_call_id,
     author: row.author,
@@ -120,4 +122,10 @@ export const decodeResolutionFact = Effect.fnUntraced(function* (row: {
     resolution: yield* parseJson(row.resolution_json),
     resolvedAt: row.resolved_at,
   });
+
+  yield* Schema.decodeUnknownEffect(Schema.Literal(unknownResolutionKind(intent.resolution)))(
+    row.resolution_kind,
+  );
+
+  return intent;
 });

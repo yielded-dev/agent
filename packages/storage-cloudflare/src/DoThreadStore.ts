@@ -881,6 +881,7 @@ const makeServices = Effect.fnUntraced(function* () {
   );
 
   const threadStore = ThreadStore.of({
+    work: journal.work.storage,
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),

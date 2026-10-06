@@ -355,6 +355,35 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           let rows: unknown;
 
           switch (selection._tag) {
+            case "LastAgentUpdate":
+              rows = yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_tag")}
+                WHERE thread_id=${request.threadId} AND record_tag='AgentUpdateEmitted'
+                  AND sequence<=${selection.throughSequence}
+                ORDER BY sequence DESC LIMIT 1`.pipe(execute);
+              break;
+            case "DeliveryPredecessor": {
+              const candidates = sql.join(
+                " UNION ALL ",
+                false,
+              )(
+                ["WorkerReportPrepared", "AgentUpdateEmitted"].map(
+                  (tag) => sql`SELECT * FROM (
+                  SELECT thread_id, sequence, record_id, batch_id, record_json
+                  FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_delivery_predecessor")}
+                  WHERE thread_id=${request.threadId} AND record_tag=${tag} AND handoff=1
+                    AND sequence<=${selection.throughSequence}
+                  ORDER BY sequence DESC LIMIT 1
+                ) AS predecessor_branch`,
+                ),
+              );
+
+              rows =
+                yield* sql`SELECT * FROM (${candidates}) AS predecessors ORDER BY sequence DESC LIMIT 1`.pipe(
+                  execute,
+                );
+              break;
+            }
             case "RunContinuation":
               rows = yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_continuation")}
@@ -404,6 +433,62 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   AND handoff = 1
                 ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
               break;
+            case "OperationEvidence": {
+              // Scalar locators store JSON-escaped identifiers; escape each key before the array.
+              const encodedApprovalIds = JSON.stringify(
+                selection.approvalToolCallIds.map(canonicalIdentifier),
+              );
+
+              const approvalCalls = sql.onDialectOrElse({
+                pg: () => sql`SELECT value AS tool_call_id
+                  FROM jsonb_array_elements_text(${encodedApprovalIds}::jsonb) AS approval_ids(value)`,
+                orElse: () =>
+                  sql`SELECT value AS tool_call_id FROM json_each(${encodedApprovalIds})`,
+              });
+
+              const tags = [
+                "ToolCallSettled",
+                "ToolCallUnknown",
+                "ToolCallResolved",
+                "ToolStepSettled",
+                "ToolApprovalRequested",
+                "ToolApprovalDecided",
+                "SubagentRequested",
+                "SubagentStarted",
+                "SubagentJoined",
+              ];
+
+              const candidates = boundedCandidates(
+                sql,
+                [
+                  sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+                  FROM ${relation("effect_agent_canonical_records")}
+                  WHERE thread_id=${request.threadId} AND record_id=${selection.originRecordId}
+                    AND sequence>${after} AND sequence<=${selection.throughSequence}`,
+                  ...tags.map(
+                    (tag) => sql`SELECT * FROM (
+                  SELECT thread_id, sequence, record_id, batch_id, record_json
+                  FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
+                  WHERE thread_id=${request.threadId} AND record_tag=${tag}
+                    AND run_id=${canonicalIdentifier(selection.runId)}
+                    AND ${
+                      tag === "ToolApprovalRequested" || tag === "ToolApprovalDecided"
+                        ? sql`tool_call_id IN (SELECT tool_call_id FROM approval_calls)`
+                        : sql`tool_call_id=${canonicalIdentifier(selection.toolCallId)}`
+                    }
+                    AND sequence>${after} AND sequence<=${selection.throughSequence}
+                  ORDER BY sequence LIMIT ${request.page.limit}
+                ) AS operation_branch`,
+                  ),
+                ],
+                request.page.limit,
+                true,
+              );
+
+              rows = yield* sql`WITH approval_calls AS (${approvalCalls})
+                ${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
+              break;
+            }
             case "RecordId":
               rows =
                 yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${selection.recordId} AND sequence > ${after}`.pipe(
@@ -508,6 +593,39 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   return yield* failure("invalid Run evidence membership");
                 if (selection._tag === "WorkHandoffs" && !isWorkHandoff(value.record))
                   return yield* failure("invalid canonical handoff membership");
+                if (
+                  selection._tag === "LastAgentUpdate" &&
+                  value.record.payload._tag !== "AgentUpdateEmitted"
+                )
+                  return yield* failure("invalid newest update membership");
+                if (
+                  selection._tag === "DeliveryPredecessor" &&
+                  value.record.payload._tag !== "WorkerReportPrepared" &&
+                  !(
+                    value.record.payload._tag === "AgentUpdateEmitted" &&
+                    value.record.payload.delivery !== undefined
+                  )
+                )
+                  return yield* failure("invalid delivery predecessor membership");
+                if (selection._tag === "OperationEvidence") {
+                  const payload = value.record.payload;
+                  const origin = value.record.recordId === selection.originRecordId;
+
+                  if (
+                    !("runId" in payload) ||
+                    payload.runId !== selection.runId ||
+                    (origin && payload._tag === "ModelResponseRecorded"
+                      ? !payload.toolOperations.some(
+                          (call) => call.toolCallId === selection.toolCallId,
+                        )
+                      : !("toolCallId" in payload) ||
+                        (payload._tag === "ToolApprovalRequested" ||
+                        payload._tag === "ToolApprovalDecided"
+                          ? !selection.approvalToolCallIds.includes(payload.toolCallId)
+                          : payload.toolCallId !== selection.toolCallId))
+                  )
+                    return yield* failure("invalid operation evidence membership");
+                }
 
                 return value;
               }),

@@ -29,6 +29,7 @@ import { sqliteJsonText, queryIdentifier } from "./internal/sql-json.ts";
 import { makeSqlLifecyclePublication } from "./SqlLifecyclePublication.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { SqlStorageProgress } from "./SqlStorageProgress.ts";
+import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
 const workerPaths = {
   delegationId: ["envelope", "workerAdmission", "origin", "worker", "delegationId"],
@@ -187,6 +188,11 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
   const sql = yield* SqlClient.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
+
+  const work = yield* makeSqlThreadWork(
+    options.namespace === undefined ? {} : { namespace: options.namespace },
+  );
+
   const decodeRowArray = Schema.decodeUnknownEffect(Schema.Array(Row));
   const decodeCountRows = Schema.decodeUnknownEffect(Schema.Array(Count));
   const decodePendingSizeRows = Schema.decodeUnknownEffect(Schema.Array(PendingSize));
@@ -358,6 +364,10 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           if (!sameMessageDeliveryIdentity(existing, input))
             return yield* MessageDeliveryError.make({ reason: "conflict", operation: "insert" });
 
+          yield* work
+            .transferDelivery(input.key.ownerThreadId, input.key.messageId)
+            .pipe(Effect.mapError((cause) => storage("transfer work handoff", cause)));
+
           return existing;
         }
 
@@ -380,6 +390,9 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           "insert",
           sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${deliveryMetadata(input)}::jsonb` })})`,
         );
+        yield* work
+          .transferDelivery(input.key.ownerThreadId, input.key.messageId)
+          .pipe(Effect.mapError((cause) => storage("transfer work handoff", cause)));
         updatePending(input, bytes(text));
         yield* recordProgress;
 

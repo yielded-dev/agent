@@ -7,4 +7,4 @@
 "@yielded/agent-storage-cloudflare": patch
 ---
 
-Resume durable Runs from canonical continuations and referenced context, expose `@yielded/agent/run-continuation`, and remove `ThreadStore.recoveryCheckpoints`. **BEHAVIOR CHANGE:** use fresh layout-18 storage and `effect-agent/thread@2` archives; predecessor stores and formats are rejected.
+Resume durable Runs from canonical continuations and referenced context, expose `@yielded/agent/run-continuation`, and remove `ThreadStore.recoveryCheckpoints`. **BEHAVIOR CHANGE:** use fresh layout-20 storage and `effect-agent/thread@2` archives; predecessor stores and formats are rejected.

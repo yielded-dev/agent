@@ -3376,22 +3376,42 @@ const unknownResolutionLifecycle = conformanceCase(
 
       yield* settleClaimed(admitted, reclaim.ownershipToken);
 
-      const late = yield* expectFailure(
-        "resolving an unknown call for a settled Submission",
+      yield* ledger.recordUnknownResolution(
+        UnknownResolutionCommand.make({
+          submissionId: admitted.submissionId,
+          toolCallId: decodeToolCallId("call-unknown-late"),
+          author: "conformance-operator",
+          reason: "factual closure after settlement",
+          resolution: ResolutionNeverHappened.make(),
+        }),
+      );
+
+      const afterLate = yield* expectSome(
+        "lookup after factual closure",
+        yield* lookupById(admitted.submissionId),
+      );
+
+      yield* ensure(
+        afterLate.state === "settled" && afterLate.settledOutcome === "completed",
+        "Factual closure must preserve the original settlement",
+      );
+
+      const lateRetry = yield* expectFailure(
+        "authorizing execution after settlement",
         ledger.recordUnknownResolution(
           UnknownResolutionCommand.make({
             submissionId: admitted.submissionId,
-            toolCallId: decodeToolCallId("call-unknown-late"),
+            toolCallId: decodeToolCallId("call-unknown-late-retry"),
             author: "conformance-operator",
-            reason: "too late",
-            resolution: ResolutionNeverHappened.make(),
+            reason: "retry is execution authority",
+            resolution: ResolutionSafeToRetry.make(),
           }),
         ),
       );
 
       yield* ensure(
-        isSettlementConflict(late),
-        "A resolution must never land on a settled Submission",
+        isSettlementConflict(lateRetry),
+        "A settled Submission must never regain execution authority",
       );
     }),
 );

@@ -88,9 +88,11 @@ worker admission reserves its source input before returning a receipt. Applicati
 accepted worker discovery to canonical worker inputs and recognize native completion/update
 reports without reconstructing transport validation. These reads grant no execution authority.
 
-Aborting a submission retains its unknown outcomes. A terminal settlement does not authorize
-retrying or resolving those operations. Record-format changes require export and import into an
-empty Thread; see [adopting these contracts](#adopting-these-contracts).
+Aborting a submission retains its unknown outcomes. Execution decisions such as `AbortSubmission`
+and `SafeToRetry` do not establish whether an effect happened. Later supplier reconciliation,
+`CompletedWithResult`, or `NeverHappened` can close that original effect while preserving the
+terminal settlement. Record-format changes require export and import into an empty Thread; see
+[adopting these contracts](#adopting-these-contracts).
 
 <a id="obligation-monitoring"></a>
 
@@ -476,7 +478,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased execution protocol
-uses fresh layout-18 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
+uses fresh layout-20 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
 Cloudflare. Opening predecessor or ambiguous stores fails before DDL or payload mutation. Keep
 them with their matching release; this protocol has no historical decoder, layout upgrade,
 archive converter, or mixed-format runtime.
@@ -485,7 +487,8 @@ For a same-format backup restore, quiesce the source, retain a backup, export ea
 import into an empty destination Thread. `ThreadStore.export` supplies the archive and the local
 `ThreadImport` service installs it. `reencodeThread(source)` composes these operations through its
 Effect environment. Check the imported tail before resuming accepted work under current compatible
-Bindings. This format stays unreleased until work discovery and long-history storage are complete.
+Bindings. This format stays unreleased until the parent issue's remaining long-history storage
+and transfer work is complete.
 
 For SQLite, the repository admin CLI uses the same operations:
 

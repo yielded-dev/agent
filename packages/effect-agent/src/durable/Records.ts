@@ -966,7 +966,17 @@ export type WorkerAdmission = typeof WorkerAdmission.Type;
 /** Owner command retained before the destination inbox is sealed. */
 export class WorkerStopRequested extends Schema.TaggedClass<WorkerStopRequested>()(
   "WorkerStopRequested",
-  { command: WorkerStop },
+  {
+    command: WorkerStop,
+    principal: Principal,
+    sourceSubmissionId: Schema.optionalKey(SubmissionId),
+  },
+) {}
+
+/** The named canonical obligation closed only after its owning state durably completes. */
+export class WorkHandoffCompleted extends Schema.TaggedClass<WorkHandoffCompleted>()(
+  "WorkHandoffCompleted",
+  { preparationId: RecordId, ownerId: Schema.NonEmptyString.check(Schema.isMaxLength(4096)) },
 ) {}
 
 /** Source-log capacity reservation, retained independently of the source Run's settlement. */
@@ -1109,7 +1119,7 @@ export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
 /** Saved model context has its own canonical owner; execution progress only references it. */
 export const ContextBoundary = Schema.Struct({
   sequence: CanonicalSequence,
-  tag: Schema.Literals(["ModelResponseRecorded", "ToolCallSettled"]),
+  tag: Schema.Literals(["ModelCompleted", "ModelResponseRecorded", "ToolCallSettled"]),
   promptLength: Schema.Natural,
   incomplete: Schema.optionalKey(Schema.Literal(true)),
   terminalPriorRun: Schema.optionalKey(Schema.Literal(true)),
@@ -1247,6 +1257,7 @@ export const KnownRecordPayload = Schema.Union([
   SubagentLineageRecorded,
   WorkerInputRequested,
   WorkerStopRequested,
+  WorkHandoffCompleted,
   WorkerOriginRecorded,
   WorkerInputCompleted,
   WorkerReportPrepared,

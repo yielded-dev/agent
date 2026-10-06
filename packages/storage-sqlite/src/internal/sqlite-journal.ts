@@ -96,9 +96,8 @@ export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
   ).pipe(Effect.catchTag("SqlError", (cause) => storageError(operation)(cause)));
 });
 
-export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
+export const initializeSqliteStorage = Effect.fnUntraced(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
-  const { hit: failpoint } = yield* SqliteStorageFailpoint;
   const { busyTimeout } = yield* SqliteStorageConfig;
 
   yield* configureSqliteSynchronous();
@@ -159,6 +158,13 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
   }
 
   yield* ensureSqliteStorageLayout();
+});
+
+export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+  const { hit: failpoint } = yield* SqliteStorageFailpoint;
+
+  yield* initializeSqliteStorage();
 
   const classifyWriteFailure =
     (operation: string) =>

@@ -3,7 +3,7 @@ import { SourcePartition, SubscriptionError, SubscriptionStore } from "@yielded/
 import { Effect, Layer, Schema } from "effect";
 import type * as SqlClientService from "effect/sql/SqlClient";
 
-import { initializeSqliteJournal } from "./internal/sqlite-journal.ts";
+import { initializeSqliteStorage } from "./internal/sqlite-journal.ts";
 import type { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
 import type { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import type { SqliteStorageInitializationError } from "./SqliteThreadStore.ts";
@@ -13,7 +13,7 @@ const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartitio
     Effect.mapError(() => SubscriptionError.make({ reason: "validation", code: "partition" })),
   );
 
-  yield* initializeSqliteJournal();
+  yield* initializeSqliteStorage();
 
   return yield* makeSqlSubscriptionStore(partition, {
     maxStoredJsonLength: 16 * 1024 * 1024,

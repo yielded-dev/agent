@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
-import { ReceiptId, RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { QueueSequence } from "../core/Receipt.ts";
 import { digestCanonicalBatchJson } from "./Digest.ts";
 import { captureRecord, type ProgressAppendRecord } from "./internal/record-encoding.ts";
@@ -13,6 +13,7 @@ import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
+  MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
   PersistedJson,
   ProducerEpoch,
@@ -26,6 +27,7 @@ import {
   ApprovalDecisionIntent,
   UnknownResolutionIntent,
 } from "./SubmissionLedger.ts";
+import type { ThreadWorkStorage } from "./ThreadWork.ts";
 
 export const MAX_THREAD_EXPORT_RECORDS = 131_072;
 
@@ -339,6 +341,29 @@ export const ThreadSelection = Schema.Union([
     submissionId: SubmissionId,
     throughSequence: CanonicalSequence,
   }),
+  /** Exact declaration, this call's facts, and shared approval proof from its original batch. */
+  Schema.Struct({
+    _tag: Schema.Literal("OperationEvidence"),
+    runId: RunId,
+    toolCallId: ToolCallId,
+    originRecordId: RecordId,
+    approvalToolCallIds: Schema.Array(ToolCallId).check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(MAX_RUN_TOOL_CALL_IDENTITIES),
+      Schema.makeFilter((ids) => new Set(ids).size === ids.length),
+    ),
+    throughSequence: CanonicalSequence,
+  }).check(
+    Schema.makeFilter((selection) => selection.approvalToolCallIds.includes(selection.toolCallId)),
+  ),
+  Schema.Struct({
+    _tag: Schema.Literal("LastAgentUpdate"),
+    throughSequence: CanonicalSequence,
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("DeliveryPredecessor"),
+    throughSequence: CanonicalSequence,
+  }),
   /** Canonical creation/handoff intents retained independently of Run settlement. */
   Schema.Struct({
     _tag: Schema.Literal("WorkHandoffs"),
@@ -622,6 +647,8 @@ export class ThreadStore extends Context.Service<
   ThreadStore,
   {
     readonly lifecyclePublications?: LifecyclePublicationStorage;
+    /** Native owner inventory and explicit canonical-index reconstruction. Absence fails closed. */
+    readonly work?: ThreadWorkStorage;
     readonly materialize: (
       request: ThreadMaterialization,
     ) => Effect.Effect<void, ThreadStoreError | FenceRejected>;

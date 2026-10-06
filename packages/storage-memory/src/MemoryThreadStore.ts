@@ -1,5 +1,6 @@
 import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
+import type { IdempotencyKey } from "@yielded/agent/receipt";
 import { ExportBatch } from "@yielded/agent/record-format";
 import {
   ProducerEpoch,
@@ -14,6 +15,7 @@ import {
 } from "@yielded/agent/records";
 import {
   canonicalRunIds,
+  canonicalRecordBytes,
   isWorkHandoff,
   prepareProgressAppend,
   ProgressAppendReader,
@@ -62,6 +64,23 @@ import {
   MAX_THREAD_EXPORT_RECORDS,
 } from "@yielded/agent/thread-store";
 import {
+  WORK_INDEX_VERSION,
+  MAX_WORK_REBUILD_RECORDS,
+  MAX_WORK_REBUILD_BYTES,
+  WorkDiscoveryUnavailable,
+  ThreadWorkRequest,
+  WorkThreadsRequest,
+  WorkIndexRebuildRequest,
+  decodeWorkCursor,
+  encodeWorkCursor,
+  validateWorkPage,
+  workIndexChanges,
+  advanceWorkEntry,
+  type CanonicalWorkEntry,
+  type WorkerReportingMode,
+  type ThreadWorkStorage,
+} from "@yielded/agent/thread-work";
+import {
   Context,
   Crypto,
   Effect,
@@ -79,8 +98,10 @@ import { Base64 } from "effect/encoding";
 import {
   MemoryThreadStoreKernel,
   type MemoryLedgerTransfer,
+  type MemoryWorkOwner,
   type PreparedMemoryAppend,
 } from "./internal/MemoryThreadStoreKernel.ts";
+import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
 const MAX_THREADS = 256;
 const MAX_RECORDS_PER_THREAD = MAX_THREAD_EXPORT_RECORDS;
@@ -102,15 +123,20 @@ interface StoredThread {
   /** Append-only owner indexes; readers must constrain them to their captured canonical tail. */
   readonly runRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly continuations: Map<string, Array<CanonicalRecordEnvelope>>;
-  readonly handoffs: ReadonlyArray<CanonicalRecordEnvelope>;
+  readonly operationRecords: Map<string, Array<CanonicalRecordEnvelope>>;
+  readonly handoffs: Array<CanonicalRecordEnvelope>;
+  readonly agentUpdates: Array<CanonicalRecordEnvelope>;
+  readonly deliveryPredecessors: Array<CanonicalRecordEnvelope>;
   readonly peerCount: number;
   readonly workerRecords: Map<string, Array<CanonicalRecordEnvelope>>;
-  readonly byId: ReadonlyMap<string, CanonicalRecordEnvelope>;
-  readonly runInputs: ReadonlyMap<string, CanonicalRecordEnvelope | null>;
+  readonly byId: Map<string, CanonicalRecordEnvelope>;
+  readonly runInputs: Map<string, CanonicalRecordEnvelope | null>;
   readonly producerEpoch: ProducerEpoch;
   readonly tailSequence: CanonicalSequence;
   readonly tailDigest: Digest;
   readonly records: ReadonlyArray<CanonicalRecordEnvelope>;
+  /** Captured with canonical facts so rebuild checks bytes before reading a payload. */
+  readonly recordBytes: ReadonlyArray<number>;
   readonly recordIds: ReadonlySet<RecordId>;
   readonly batches: ReadonlyMap<BatchId, StoredBatch>;
   readonly tailDigests: ReadonlyMap<CanonicalSequence, Digest>;
@@ -120,6 +146,117 @@ interface StoredThread {
 interface MemoryState {
   readonly threads: ReadonlyMap<ThreadId, StoredThread>;
 }
+
+type NativeIndexes = Pick<
+  StoredThread,
+  | "peerCount"
+  | "workerRecords"
+  | "byId"
+  | "runInputs"
+  | "runRecords"
+  | "continuations"
+  | "handoffs"
+  | "operationRecords"
+  | "agentUpdates"
+  | "deliveryPredecessors"
+>;
+
+const emptyIndexes = (): NativeIndexes => ({
+  peerCount: 0,
+  workerRecords: new Map(),
+  byId: new Map(),
+  runInputs: new Map(),
+  runRecords: new Map(),
+  continuations: new Map(),
+  handoffs: [],
+  agentUpdates: [],
+  deliveryPredecessors: [],
+  operationRecords: new Map(),
+});
+
+interface WorkIndex {
+  readonly version: number;
+  readonly state: "ready" | "rebuilding";
+  readonly through: CanonicalSequence;
+  readonly reporting: WorkerReportingMode;
+  readonly entryCount: number;
+  readonly entries: Map<string, CanonicalWorkEntry>;
+  readonly messages: Map<IdempotencyKey, Set<string>>;
+  readonly rebuildingIndexes?: NativeIndexes;
+}
+
+const emptyWorkIndex = (): WorkIndex => ({
+  version: WORK_INDEX_VERSION,
+  state: "ready",
+  through: ZERO_CANONICAL_SEQUENCE,
+  reporting: "none",
+  entryCount: 0,
+  entries: new Map(),
+  messages: new Map(),
+});
+
+/** Prepare only this batch's changes; commit under the writer gate with canonical publication. */
+const prepareWork = Effect.fnUntraced(function* (
+  previous: WorkIndex,
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+  retained: (threadId: ThreadId, messageId: IdempotencyKey) => boolean,
+) {
+  const changes = new Map<string, CanonicalWorkEntry | undefined>();
+  let reporting = previous.reporting;
+  let through = previous.through;
+
+  for (const record of records) {
+    for (const change of yield* workIndexChanges(record, reporting)) {
+      if (change._tag === "WorkerMode") reporting = change.mode;
+      else if (change._tag === "Remove") changes.set(change.id, undefined);
+      else {
+        const entry = advanceWorkEntry(
+          changes.has(change.entry.id)
+            ? changes.get(change.entry.id)
+            : previous.entries.get(change.entry.id),
+          change.entry,
+        );
+
+        changes.set(
+          entry.id,
+          entry.owner._tag === "Handoff" &&
+            entry.owner.messageId !== undefined &&
+            retained(record.threadId, entry.owner.messageId)
+            ? undefined
+            : entry,
+        );
+      }
+    }
+    through = record.sequence;
+  }
+
+  return (): WorkIndex => {
+    const { entries, messages } = previous;
+
+    for (const [id, entry] of changes) {
+      const old = entries.get(id);
+
+      if (old?.owner._tag === "Handoff" && old.owner.messageId !== undefined) {
+        const ids = messages.get(old.owner.messageId);
+
+        ids?.delete(id);
+        if (ids?.size === 0) messages.delete(old.owner.messageId);
+      }
+      if (entry === undefined) entries.delete(id);
+      else {
+        entries.set(id, entry);
+        if (entry.owner._tag === "Handoff" && entry.owner.messageId !== undefined) {
+          const ids = messages.get(entry.owner.messageId);
+
+          if (ids === undefined) messages.set(entry.owner.messageId, new Set([id]));
+          else ids.add(id);
+        }
+      }
+    }
+
+    return { ...previous, through, reporting, entryCount: entries.size };
+  };
+});
 
 /** First sequence strictly after the cursor, without traversing a Run's earlier facts. */
 const upperSequence = (records: ReadonlyArray<CanonicalRecordEnvelope>, sequence: number) => {
@@ -161,27 +298,27 @@ const commitIndex = (
 };
 
 const prepareIndexes = (
-  previous: Pick<
-    StoredThread,
-    | "peerCount"
-    | "workerRecords"
-    | "byId"
-    | "runInputs"
-    | "runRecords"
-    | "continuations"
-    | "handoffs"
-  >,
+  previous: NativeIndexes,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
+  reuse = false,
 ) => {
   let peerCount = previous.peerCount;
   // Latest execution entries are replaced in this private map; owner histories only append.
-  const workerRecords = new Map(previous.workerRecords);
+  // Rebuild staging is private: reuse it only in the synchronous cursor publication step.
+  const workerRecords = reuse ? previous.workerRecords : new Map(previous.workerRecords);
   const workerAppends = new Map<string, Array<CanonicalRecordEnvelope>>();
-  const byId = new Map(previous.byId);
-  const runInputs = new Map(previous.runInputs);
+  const byId = reuse ? previous.byId : new Map(previous.byId);
+  const runInputs = reuse ? previous.runInputs : new Map(previous.runInputs);
   const runRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
   const continuations = new Map<string, Array<CanonicalRecordEnvelope>>();
-  const handoffs = [...previous.handoffs];
+  const handoffs = reuse ? previous.handoffs : [...previous.handoffs];
+  const agentUpdates = reuse ? previous.agentUpdates : [...previous.agentUpdates];
+
+  const deliveryPredecessors = reuse
+    ? previous.deliveryPredecessors
+    : [...previous.deliveryPredecessors];
+
+  const operationAppends = new Map<string, Array<CanonicalRecordEnvelope>>();
 
   for (const entry of records) {
     byId.set(entry.record.recordId, entry);
@@ -191,6 +328,27 @@ const prepareIndexes = (
       if (payload._tag === "RunContinuation") appendToIndex(continuations, runId, entry);
       else appendToIndex(runRecords, runId, entry);
     if (isWorkHandoff(entry.record)) handoffs.push(entry);
+    if (payload._tag === "AgentUpdateEmitted") agentUpdates.push(entry);
+    if (
+      payload._tag === "WorkerReportPrepared" ||
+      (payload._tag === "AgentUpdateEmitted" && payload.delivery !== undefined)
+    )
+      deliveryPredecessors.push(entry);
+    if ("runId" in payload && payload.runId !== undefined && "toolCallId" in payload) {
+      appendToIndex(operationAppends, JSON.stringify([payload.runId, payload.toolCallId]), entry);
+      if (payload._tag === "ToolApprovalRequested" || payload._tag === "ToolApprovalDecided")
+        appendToIndex(
+          operationAppends,
+          JSON.stringify([payload.runId, payload.toolCallId, "approval"]),
+          entry,
+        );
+      if (payload._tag === "ToolCallSettled")
+        appendToIndex(
+          operationAppends,
+          JSON.stringify([payload.runId, payload.toolCallId, "settled"]),
+          entry,
+        );
+    }
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
@@ -232,11 +390,15 @@ const prepareIndexes = (
       runInputs,
       runRecords: previous.runRecords,
       continuations: previous.continuations,
+      operationRecords: previous.operationRecords,
       handoffs,
+      agentUpdates,
+      deliveryPredecessors,
     },
     commit: () => {
       commitIndex(previous.runRecords, runRecords);
       commitIndex(previous.continuations, continuations);
+      commitIndex(previous.operationRecords, operationAppends);
       commitIndex(workerRecords, workerAppends);
     },
   };
@@ -370,6 +532,261 @@ const makeThreadStore = Effect.gen(function* () {
   let ledgerTransfer: MemoryLedgerTransfer | undefined;
   let hasMessageDeliveries: ((threadId: ThreadId) => Effect.Effect<boolean>) | undefined;
 
+  const workState = yield* Ref.make(new Map<ThreadId, WorkIndex>());
+  const workOwners = new Map<"admissions" | "deliveries", MemoryWorkOwner>();
+  let deliveryLookup: ((threadId: ThreadId, messageId: IdempotencyKey) => boolean) | undefined;
+
+  const retainedDelivery = (threadId: ThreadId, messageId: IdempotencyKey) =>
+    deliveryLookup?.(threadId, messageId) ?? false;
+
+  const publishWork = (threadId: ThreadId, index: WorkIndex) =>
+    MutableRef.get(workState.ref).set(threadId, index);
+
+  const retainDelivery = (threadId: ThreadId, messageId: IdempotencyKey) => {
+    const index = MutableRef.get(workState.ref).get(threadId);
+    const ids = index?.messages.get(messageId);
+
+    if (
+      index === undefined ||
+      index.version !== WORK_INDEX_VERSION ||
+      index.entryCount !== index.entries.size ||
+      ids === undefined
+    )
+      return;
+    const { entries, messages } = index;
+
+    for (const id of ids) entries.delete(id);
+    messages.delete(messageId);
+    publishWork(threadId, { ...index, entryCount: entries.size });
+  };
+
+  const readyIndex = (threadId: ThreadId, tail: number) => {
+    const index = MutableRef.get(workState.ref).get(threadId);
+
+    if (
+      index === undefined ||
+      index.version !== WORK_INDEX_VERSION ||
+      index.entries.size !== index.entryCount
+    )
+      return WorkDiscoveryUnavailable.make({ threadId, reason: "missing-index" });
+    if (index.state !== "ready" || index.through !== tail)
+      return WorkDiscoveryUnavailable.make({ threadId, reason: "incomplete-rebuild" });
+
+    return Effect.succeed(index);
+  };
+
+  const work: ThreadWorkStorage = {
+    threads: (unvalidated) =>
+      withMutation(
+        Effect.gen(function* () {
+          const request = yield* validate(WorkThreadsRequest, "work threads", unvalidated);
+          const current = yield* Ref.get(state);
+          const catalogue = yield* Ref.get(workState);
+
+          const candidates = boundedWorkSelection<ThreadId>(
+            request.limit,
+            (id) => id,
+            request.afterThreadId,
+          );
+
+          for (const [threadId, thread] of current.threads) {
+            const index = catalogue.get(threadId);
+
+            if (
+              index === undefined ||
+              index.version !== WORK_INDEX_VERSION ||
+              index.state !== "ready" ||
+              index.through !== thread.tailSequence ||
+              index.entryCount !== index.entries.size ||
+              index.entryCount > 0
+            )
+              candidates.add(threadId);
+          }
+          for (const owner of workOwners.values()) {
+            const page = yield* owner.threads(request);
+
+            for (const threadId of page.threadIds) candidates.add(threadId);
+          }
+          const threadIds = candidates.values;
+          const afterThreadId = threadIds.length === request.limit ? threadIds.at(-1) : undefined;
+
+          // A full page may have more owner rows; the next bounded call proves exhaustion.
+          return {
+            threadIds,
+            ...(afterThreadId === undefined ? {} : { afterThreadId }),
+          };
+        }),
+      ),
+    page: (unvalidated) =>
+      withMutation(
+        Effect.gen(function* () {
+          const request = yield* validate(ThreadWorkRequest, "work page", unvalidated);
+          const cursor = yield* decodeWorkCursor(request);
+          const thread = (yield* Ref.get(state)).threads.get(request.threadId);
+          // Accepted input can precede canonical Thread materialization entirely.
+          const index = yield* readyIndex(request.threadId, thread?.tailSequence ?? 0);
+
+          if (cursor.source === "canonical") {
+            const candidates = boundedWorkSelection<CanonicalWorkEntry>(
+              request.limit + 1,
+              (entry) => entry.id,
+              cursor.after,
+            );
+
+            for (const entry of index.entries.values()) candidates.add(entry);
+            const selected = candidates.values;
+
+            const entries = selected.slice(0, request.limit);
+            const after = selected.length > request.limit ? entries.at(-1)?.id : undefined;
+
+            return yield* validateWorkPage(
+              {
+                entries,
+                cursor: encodeWorkCursor({
+                  version: WORK_INDEX_VERSION,
+                  threadId: request.threadId,
+                  source: after === undefined ? "deliveries" : "canonical",
+                  ...(after === undefined ? {} : { after }),
+                }),
+              },
+              request.limit,
+            );
+          }
+
+          const page = yield* (
+            workOwners.get(cursor.source)?.page(request.threadId, cursor.after, request.limit) ??
+              Effect.succeed<Effect.Success<ReturnType<MemoryWorkOwner["page"]>>>({ entries: [] })
+          );
+
+          const next =
+            page.after === undefined
+              ? cursor.source === "admissions"
+                ? "canonical"
+                : undefined
+              : cursor.source;
+
+          return yield* validateWorkPage(
+            {
+              entries: [...page.entries],
+              ...(next === undefined
+                ? {}
+                : {
+                    cursor: encodeWorkCursor({
+                      version: WORK_INDEX_VERSION,
+                      threadId: request.threadId,
+                      source: next,
+                      ...(page.after === undefined ? {} : { after: page.after }),
+                    }),
+                  }),
+            },
+            request.limit,
+          );
+        }),
+      ),
+    rebuild: (unvalidated) =>
+      withMutation(
+        Effect.gen(function* () {
+          const request = yield* validate(WorkIndexRebuildRequest, "rebuild work", unvalidated);
+          const current = yield* Ref.get(state);
+          const thread = current.threads.get(request.threadId);
+          const tail = thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE;
+          const prior = (yield* Ref.get(workState)).get(request.threadId);
+
+          const index: WorkIndex =
+            request.restart ||
+            prior === undefined ||
+            prior.version !== WORK_INDEX_VERSION ||
+            prior.entries.size !== prior.entryCount ||
+            (prior.state === "ready" && prior.through !== tail)
+              ? { ...emptyWorkIndex(), state: "rebuilding", rebuildingIndexes: emptyIndexes() }
+              : prior;
+
+          if (index.state === "ready")
+            return {
+              version: WORK_INDEX_VERSION,
+              threadId: request.threadId,
+              state: "ready",
+              throughSequence: index.through,
+              tailSequence: tail,
+              processedRecords: 0,
+              processedBytes: 0,
+            };
+          if (index.rebuildingIndexes === undefined)
+            return yield* WorkDiscoveryUnavailable.make({
+              threadId: request.threadId,
+              reason: "incomplete-rebuild",
+            });
+          const rebuildingIndexes = index.rebuildingIndexes;
+          const records: Array<CanonicalRecordEnvelope> = [];
+          let bytes = 0;
+          const end = Math.min(tail, index.through + (request.limit ?? MAX_WORK_REBUILD_RECORDS));
+
+          for (let position = index.through; position < end; position++) {
+            const size = thread?.recordBytes[position];
+
+            if (size === undefined)
+              return yield* storeError("rebuild work", "Canonical record byte length is missing");
+            if (bytes + size > MAX_WORK_REBUILD_BYTES) break;
+            const record = thread?.records[position];
+
+            if (record === undefined || record.sequence !== position + 1)
+              return yield* storeError("rebuild work", "Canonical rebuild sequence is incomplete");
+            bytes += size;
+            records.push(record);
+          }
+          if (index.through < tail && records.length === 0)
+            return yield* storeError(
+              "rebuild work",
+              "Canonical rebuild cannot advance within its byte bound",
+            );
+
+          const commitWork = yield* prepareWork(index, records, retainedDelivery).pipe(
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
+          // Shared writer gate fences the current tail; publish native locators and catalogue together.
+          const next = yield* Effect.sync(() => {
+            const native = prepareIndexes(rebuildingIndexes, records, true);
+            const rebuilt = commitWork();
+            const complete = rebuilt.through === tail;
+
+            const next: WorkIndex = {
+              version: rebuilt.version,
+              through: rebuilt.through,
+              reporting: rebuilt.reporting,
+              entryCount: rebuilt.entryCount,
+              entries: rebuilt.entries,
+              messages: rebuilt.messages,
+              state: complete ? "ready" : "rebuilding",
+              ...(complete ? {} : { rebuildingIndexes: native.indexes }),
+            };
+
+            native.commit();
+            if (thread !== undefined && complete)
+              MutableRef.set(state.ref, {
+                threads: new Map(current.threads).set(request.threadId, {
+                  ...thread,
+                  ...native.indexes,
+                }),
+              });
+            publishWork(request.threadId, next);
+
+            return next;
+          });
+
+          return {
+            version: WORK_INDEX_VERSION,
+            threadId: request.threadId,
+            state: next.state,
+            throughSequence: next.through,
+            tailSequence: tail,
+            processedRecords: records.length,
+            processedBytes: bytes,
+          };
+        }),
+      ),
+  };
+
   yield* Effect.addFinalizer(() => PubSub.shutdown(updates));
 
   const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(
@@ -428,13 +845,19 @@ const makeThreadStore = Effect.gen(function* () {
             runInputs: new Map(),
             runRecords: new Map(),
             continuations: new Map(),
+            operationRecords: new Map(),
             handoffs: [],
+            agentUpdates: [],
+            deliveryPredecessors: [],
             records: [],
+            recordBytes: [],
             recordIds: new Set(),
             batches: new Map(),
             tailDigests: new Map([[ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST]]),
             checkpoints: new Map(),
           });
+
+          publishWork(request.threadId, emptyWorkIndex());
 
           return [{ _tag: "success" }, { threads }];
         },
@@ -498,6 +921,29 @@ const makeThreadStore = Effect.gen(function* () {
             Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
         }),
       );
+
+    const currentWork = (yield* Ref.get(workState)).get(request.threadId);
+
+    const preparedWork =
+      thread !== undefined &&
+      thread.producerEpoch === request.producerEpoch &&
+      thread.tailSequence === request.expectedTailSequence &&
+      thread.tailDigest === request.expectedTailDigest &&
+      !thread.batches.has(request.batch.batchId) &&
+      currentWork?.version === WORK_INDEX_VERSION &&
+      currentWork.state === "ready" &&
+      currentWork.through === thread.tailSequence &&
+      currentWork.entryCount === currentWork.entries.size
+        ? yield* prepareWork(
+            currentWork,
+            batchEnvelopes(
+              request.threadId,
+              request.batch,
+              decodeCanonicalSequence(thread.tailSequence + 1),
+            ),
+            retainedDelivery,
+          ).pipe(Effect.provideService(Crypto.Crypto, crypto))
+        : undefined;
 
     const decision = yield* Effect.uninterruptible(
       Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
@@ -645,6 +1091,10 @@ const makeThreadStore = Effect.gen(function* () {
           tailSequence: lastSequence,
           tailDigest: digest,
           records: [...thread.records, ...records],
+          recordBytes: [
+            ...thread.recordBytes,
+            ...records.map((entry) => canonicalRecordBytes(entry.record)),
+          ],
           recordIds,
           batches,
           tailDigests,
@@ -656,6 +1106,7 @@ const makeThreadStore = Effect.gen(function* () {
         ];
 
         // All rejection paths and preparation precede mutation. Ref.modify publishes without a yield.
+        if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         indexes.commit();
 
         return publication;
@@ -726,6 +1177,18 @@ const makeThreadStore = Effect.gen(function* () {
           let records: ReadonlyArray<CanonicalRecordEnvelope>;
 
           switch (selection._tag) {
+            case "LastAgentUpdate":
+            case "DeliveryPredecessor": {
+              const candidates =
+                selection._tag === "LastAgentUpdate"
+                  ? thread.agentUpdates
+                  : thread.deliveryPredecessors;
+
+              const latest = candidates[upperSequence(candidates, selection.throughSequence) - 1];
+
+              records = latest === undefined ? [] : [latest];
+              break;
+            }
             case "RunContinuation": {
               const candidates = thread.continuations.get(selection.runId) ?? [];
               const index = upperSequence(candidates, selection.throughSequence) - 1;
@@ -773,6 +1236,57 @@ const makeThreadStore = Effect.gen(function* () {
               ];
               if (records.some((entry) => entry.record.payload._tag === "RunContinuation"))
                 return yield* storeError("selected read", "Invalid Run control identity");
+              break;
+            }
+            case "OperationEvidence": {
+              const candidates =
+                thread.operationRecords.get(
+                  JSON.stringify([selection.runId, selection.toolCallId]),
+                ) ?? [];
+
+              const origin = thread.byId.get(selection.originRecordId);
+              const after = request.page.afterSequence ?? 0;
+
+              const selectPage = (entries: ReadonlyArray<CanonicalRecordEnvelope>) => {
+                const start = upperSequence(entries, after);
+
+                return entries.slice(
+                  start,
+                  Math.min(
+                    upperSequence(entries, selection.throughSequence),
+                    start + request.page.limit,
+                  ),
+                );
+              };
+
+              let facts = selectPage(candidates);
+
+              // Approval-only keys exclude siblings' Steps/results before applying page limits.
+              for (const toolCallId of selection.approvalToolCallIds) {
+                if (toolCallId === selection.toolCallId) continue;
+
+                const approvals =
+                  thread.operationRecords.get(
+                    JSON.stringify([selection.runId, toolCallId, "approval"]),
+                  ) ?? [];
+
+                facts = [...facts, ...selectPage(approvals)]
+                  .sort((left, right) => left.sequence - right.sequence)
+                  .slice(0, request.page.limit);
+              }
+
+              records = [
+                ...new Map(
+                  [
+                    ...facts,
+                    ...(origin !== undefined &&
+                    origin.sequence > after &&
+                    origin.sequence <= selection.throughSequence
+                      ? [origin]
+                      : []),
+                  ].map((entry) => [entry.sequence, entry]),
+                ).values(),
+              ];
               break;
             }
             case "WorkHandoffs":
@@ -1020,7 +1534,10 @@ const makeThreadStore = Effect.gen(function* () {
               runInputs: new Map(),
               runRecords: new Map(),
               continuations: new Map(),
+              operationRecords: new Map(),
               handoffs: [],
+              agentUpdates: [],
+              deliveryPredecessors: [],
             },
             records,
           );
@@ -1029,6 +1546,7 @@ const makeThreadStore = Effect.gen(function* () {
             ...indexes.indexes,
             producerEpoch,
             records,
+            recordBytes: records.map((entry) => canonicalRecordBytes(entry.record)),
             batches,
             tailDigests,
             tailSequence: prepared.result.tailSequence,
@@ -1042,11 +1560,22 @@ const makeThreadStore = Effect.gen(function* () {
               ? undefined
               : yield* ledgerTransfer.prepareImport(prepared, producerEpoch);
 
+          const importedWork = yield* prepareWork(emptyWorkIndex(), records, retainedDelivery).pipe(
+            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.mapError(() =>
+              ThreadImportRejected.make({
+                reason: "invalid-archive",
+                message: "Cannot reconstruct imported work",
+              }),
+            ),
+          );
+
           // Readers do not take the gate. No Effect yield may separate these two publications.
           yield* Effect.uninterruptible(
             Effect.sync(() => {
               commitLedger?.();
               indexes.commit();
+              publishWork(threadId, importedWork());
               MutableRef.set(state.ref, { threads });
             }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
           );
@@ -1207,6 +1736,7 @@ const makeThreadStore = Effect.gen(function* () {
   });
 
   const threadStore = ThreadStore.of({
+    work,
     readIdentity,
     countPeerMessages,
     materialize: (request) => withMutation(materialize(request)),
@@ -1222,6 +1752,30 @@ const makeThreadStore = Effect.gen(function* () {
     Context.add(ThreadImport, { import: importThread }),
     Context.add(MemoryThreadStoreKernel, {
       withMutation,
+      retainDelivery,
+      initializeWork: (threadId) => {
+        if (
+          !MutableRef.get(state.ref).threads.has(threadId) &&
+          !MutableRef.get(workState.ref).has(threadId)
+        )
+          publishWork(threadId, emptyWorkIndex());
+      },
+      registerWorkOwner: (kind, owner) =>
+        withMutation(
+          Effect.sync(() => {
+            if (workOwners.has(kind))
+              throw new Error(`MemoryThreadStore already has a ${kind} work owner`);
+            workOwners.set(kind, owner);
+          }),
+        ),
+      registerDeliveryLookup: (lookup) =>
+        withMutation(
+          Effect.sync(() => {
+            if (deliveryLookup !== undefined)
+              throw new Error("MemoryThreadStore already has a delivery lookup");
+            deliveryLookup = lookup;
+          }),
+        ),
       registerLedgerTransfer: (transfer) =>
         withMutation(
           Effect.sync(() => {
@@ -1243,6 +1797,18 @@ const makeThreadStore = Effect.gen(function* () {
       record: (threadId, recordId) =>
         Ref.get(state).pipe(
           Effect.map((current) => current.threads.get(threadId)?.byId.get(recordId)?.record),
+        ),
+      toolCallResults: (threadId, runId, toolCallId) =>
+        Ref.get(state).pipe(
+          Effect.map((current) =>
+            (
+              current.threads
+                .get(threadId)
+                ?.operationRecords.get(JSON.stringify([runId, toolCallId, "settled"])) ?? []
+            )
+              .slice(0, 2)
+              .map((entry) => entry.record),
+          ),
         ),
       tail: (threadId) => inspectTail(ThreadTailRequest.make({ threadId })),
     }),

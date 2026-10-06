@@ -120,6 +120,8 @@ The Layers supply tool handlers, provider credentials, and worker access.
 
 The host recovers accepted work and pending reports after restarts. Keep report preparation
 free of external side effects: recovery may repeat it before its decision is recorded.
+Conclusive refusal before destination admission closes the retained source input and releases
+its capacity without a destination receipt or acknowledgement. Ambiguous delivery remains owed.
 
 ### Authorize the conversation
 

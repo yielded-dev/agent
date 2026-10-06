@@ -26,7 +26,18 @@ import {
 } from "@yielded/agent/subagent-host";
 import { ToolResultBounds } from "@yielded/agent/tool-result";
 import { WorkerCompletion, WorkerError, WorkerUpdate } from "@yielded/agent/worker";
-import { Clock, DateTime, Deferred, Duration, Effect, Fiber, Option, Schema, Stream } from "effect";
+import {
+  Clock,
+  Crypto,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
 import { Toolkit } from "effect/ai";
 import { TestClock } from "effect/testing";
 
@@ -47,6 +58,7 @@ import {
 } from "../../src/durable/MessageDelivery.ts";
 import {
   BatchId,
+  CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   DefinitionDigests,
@@ -64,6 +76,11 @@ import {
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "../../src/durable/Records.ts";
+import {
+  CurrentRunWriter,
+  canonicalRunIds,
+  makeProgressWriter,
+} from "../../src/durable/RunContinuation.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "../../src/durable/RunJournal.ts";
 import {
   AbortIntent,
@@ -85,9 +102,11 @@ import {
   ThreadNotMaterialized,
   ThreadTail,
   ThreadStore,
+  ThreadReader,
   ThreadStoreError,
   type ThreadReadRequest,
 } from "../../src/durable/ThreadStore.ts";
+import { ThreadWorkEntry, workId } from "../../src/durable/ThreadWork.ts";
 import { WakeScheduler } from "../../src/durable/WakeScheduler.ts";
 import {
   WorkerBudgetAuthorizer,
@@ -191,6 +210,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
   } = {},
 ) {
   const now = yield* Clock.currentTimeMillis;
+  const crypto = yield* Crypto.Crypto;
   const logs = new Map<ThreadId, Array<CanonicalRecordEnvelope>>();
   const epochs = new Map<ThreadId, ProducerEpoch>();
   const appendAttempts: Array<{ readonly threadId: ThreadId; readonly epoch: ProducerEpoch }> = [];
@@ -203,13 +223,13 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
   let sequence = 0;
 
-  const push = (threadId: ThreadId, payload: CanonicalRecordPayload, id: string) => {
+  const push = (threadId: ThreadId, payload: CanonicalRecordPayload, id: string, batchId = id) => {
     const records = logs.get(threadId) ?? [];
 
     records.push(
       CanonicalRecordEnvelope.make({
         threadId,
-        batchId: Schema.decodeSync(BatchId)(id),
+        batchId: Schema.decodeSync(BatchId)(batchId),
         sequence: Schema.decodeSync(CanonicalSequence)(records.length + 1),
         offset: Schema.decodeSync(ObservationOffset)(`${records.length + 1}`),
         record: RecordEnvelope.make({
@@ -240,6 +260,252 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
   let runtime: Effect.Success<ReturnType<typeof makeWorkerRuntime>>;
 
+  const fixtureStore = ThreadStore.of({
+    work: {
+      threads: () => Effect.die("Worker fixture does not enumerate global owners"),
+      rebuild: () => Effect.die("Worker fixture has no disposable persisted index"),
+      page: ({ threadId, limit }) =>
+        Effect.sync(() => ({
+          entries: [...deliveries.values()]
+            .filter(
+              (row) =>
+                row.key.ownerThreadId === threadId &&
+                row.status !== "processed" &&
+                row.status !== "refused",
+            )
+            .slice(0, limit)
+            .map((row) =>
+              Schema.decodeSync(ThreadWorkEntry)({
+                id: workId("delivery", row.key.messageId),
+                owner: { _tag: "Delivery", messageId: row.key.messageId },
+                stateReference: {
+                  _tag: "Delivery",
+                  messageId: row.key.messageId,
+                  version: row.version,
+                },
+                state: "ready",
+                partition:
+                  row.envelope.workerAdmission?.reportKind === "update" ? "update" : "ordinary",
+              }),
+            ),
+        })),
+    },
+    readIdentity: ({ threadId }) =>
+      Effect.gen(function* () {
+        const records = logs.get(threadId);
+
+        if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
+
+        const selected: Array<CanonicalRecordEnvelope> = [];
+
+        for (const entry of [
+          records[0],
+          records.find(({ record }) => record.recordId === workerOriginRecordId(threadId)),
+          records.find(({ record }) => record.recordId === subagentLineageRecordId(threadId)),
+        ])
+          if (entry !== undefined && !selected.includes(entry)) selected.push(entry);
+
+        const snapshot = ThreadIdentity.make({
+          threadId,
+          tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+          tailDigest: digest,
+          producerEpoch: epochs.get(threadId)!,
+          records: selected,
+        });
+
+        yield* options.afterIdentity?.(snapshot) ?? Effect.void;
+
+        return snapshot;
+      }),
+    read: (request) =>
+      Stream.suspend(() => {
+        const all = logs.get(request.threadId) ?? [];
+        const selection = "selection" in request ? request.selection : undefined;
+        let records = all;
+
+        if (selection?._tag === "RecordId") {
+          records = all.filter((entry) => entry.record.recordId === selection.recordId);
+        } else if (selection?._tag === "WorkerExecution") {
+          records = ["UserInputRecorded", "RunStarted"]
+            .flatMap((tag) =>
+              all
+                .filter(
+                  ({ record: { payload } }) =>
+                    payload._tag === tag && "runId" in payload && payload.runId !== undefined,
+                )
+                .slice(-1),
+            )
+            .sort((a, b) => a.sequence - b.sequence);
+        } else if (selection?._tag === "RunInput") {
+          records = all.filter(
+            ({ record: { payload } }) =>
+              payload._tag === "UserInputRecorded" &&
+              payload.kind === "user" &&
+              payload.runId === selection.runId,
+          );
+        } else if (selection?._tag === "WorkerState") {
+          records = all.filter(({ record: { payload } }) =>
+            payload._tag === "SubtreeBudgetReserved"
+              ? payload.sourceSubmissionId === selection.sourceSubmissionId
+              : payload._tag === "SubagentJoined"
+                ? payload.runId === `run:${selection.sourceSubmissionId}`
+                : [
+                    "ThreadCreated",
+                    "WorkerOriginRecorded",
+                    "SubagentLineageRecorded",
+                    "WorkerInputRequested",
+                    "WorkerInputCompleted",
+                  ].includes(payload._tag),
+          );
+        } else if (selection?._tag === "RunContinuation") {
+          records = all
+            .filter(
+              ({ sequence, record: { payload } }) =>
+                sequence <= selection.throughSequence &&
+                payload._tag === "RunContinuation" &&
+                payload.runId === selection.runId,
+            )
+            .slice(-1);
+        } else if (selection?._tag === "RunEvidence") {
+          records = all.filter(
+            ({ sequence, record }) =>
+              sequence <= selection.throughSequence &&
+              record.payload._tag !== "RunContinuation" &&
+              canonicalRunIds(record).includes(selection.runId),
+          );
+        } else if (
+          selection?._tag === "DeliveryPredecessor" ||
+          selection?._tag === "LastAgentUpdate"
+        ) {
+          records = all
+            .filter(
+              ({ sequence, record: { payload } }) =>
+                sequence <= selection.throughSequence &&
+                (selection._tag === "LastAgentUpdate"
+                  ? payload._tag === "AgentUpdateEmitted"
+                  : payload._tag === "WorkerReportPrepared" ||
+                    (payload._tag === "AgentUpdateEmitted" && payload.delivery !== undefined)),
+            )
+            .slice(-1);
+        } else if (selection !== undefined)
+          return Stream.die("Worker fixture only reads exact identities and accounting");
+        const page = "selection" in request ? request.page : request;
+
+        return Stream.fromIterable(
+          records
+            .filter((entry) => entry.sequence > (page.afterSequence ?? 0))
+            .slice(0, page.limit)
+            .map((entry) => {
+              return entry;
+            }),
+        );
+      }).pipe(Stream.onStart(Effect.suspend(() => options.beforeRead?.(request) ?? Effect.void))),
+    export: ({ threadId }) =>
+      Effect.gen(function* () {
+        const records = logs.get(threadId);
+
+        if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
+
+        const exported = yield* Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope))(
+          records,
+        ).pipe(
+          Effect.flatMap(Schema.decodeEffect(Schema.Array(ThreadExportRecord))),
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({ operation: "export", message: "Invalid fixture log", cause }),
+          ),
+        );
+
+        return ThreadExport.make({
+          format: "effect-agent/thread@1",
+          threadId,
+          records: exported,
+          tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+          tailDigest: digest,
+        });
+      }),
+    inspectTail: ({ threadId }) =>
+      Effect.suspend(() => {
+        const records = logs.get(threadId);
+
+        return records === undefined
+          ? ThreadNotMaterialized.make({ threadId })
+          : Effect.succeed(
+              ThreadTail.make({
+                threadId,
+                tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+                tailDigest: digest,
+                producerEpoch: epochs.get(threadId)!,
+              }),
+            );
+      }),
+    append: (request) =>
+      Effect.gen(function* () {
+        yield* Effect.yieldNow;
+        const records = logs.get(request.threadId) ?? [];
+
+        appendAttempts.push({ threadId: request.threadId, epoch: request.producerEpoch });
+        const currentEpoch = epochs.get(request.threadId)!;
+
+        if (currentEpoch !== request.producerEpoch) {
+          rejectedAppends.epoch++;
+
+          return yield* FenceRejected.make({
+            threadId: request.threadId,
+            attemptedEpoch: request.producerEpoch,
+            actualEpoch: currentEpoch,
+          });
+        }
+        if (
+          records.length !== request.expectedTailSequence ||
+          digest !== request.expectedTailDigest
+        ) {
+          rejectedAppends.tail++;
+
+          return yield* AppendConflict.make({
+            threadId: request.threadId,
+            batchId: request.batch.batchId,
+            reason: "tail",
+          });
+        }
+        const first = records.length + 1;
+
+        for (const record of request.batch.records)
+          push(request.threadId, record.payload, record.recordId, request.batch.batchId);
+
+        return AppendResult.make({
+          firstSequence: Schema.decodeSync(CanonicalSequence)(first),
+          lastSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+          tailDigest: digest,
+          replayed: false,
+        });
+      }),
+
+    materialize: () => Effect.die("Worker fixture materializes through input control"),
+    observe: () => Stream.die("Worker fixture uses finite canonical reads"),
+  });
+
+  const updateStore = ThreadStore.of({
+    ...fixtureStore,
+    append: (request) =>
+      Effect.gen(function* () {
+        const writer = yield* makeProgressWriter(request.threadId, DeploymentId.make("test")).pipe(
+          Effect.provideService(ThreadReader, ThreadReader.fromStore(fixtureStore)),
+          Effect.provideService(Crypto.Crypto, crypto),
+        );
+
+        return yield* writer.commit(request.batch).pipe(
+          Effect.provideService(CurrentRunWriter, {
+            threadId: request.threadId,
+            tail: Effect.succeed({
+              sequence: request.expectedTailSequence,
+              digest: request.expectedTailDigest,
+            }),
+            append: (batch) => fixtureStore.append({ ...request, batch }),
+          }),
+        );
+      }),
+  });
+
   const runtimes = yield* makeWorkerRuntime({
     deploymentId: Schema.decodeSync(DeploymentId)("test"),
     producerId: Schema.decodeSync(ProducerId)("test"),
@@ -258,6 +524,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         deploymentId: Schema.decodeSync(DeploymentId)("test"),
         producerId: Schema.decodeSync(ProducerId)("test"),
       }).pipe(
+        Effect.provideService(ThreadStore, updateStore),
         Effect.provideService(WorkerRuntime, runtime),
         Effect.provide(WakeScheduler.layerNoop),
         Effect.map((updates) => ({ runtime, updates })),
@@ -296,170 +563,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
             : Effect.void,
         ),
     }),
-    Effect.provideService(ThreadStore, {
-      readIdentity: ({ threadId }) =>
-        Effect.gen(function* () {
-          const records = logs.get(threadId);
-
-          if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
-
-          const selected: Array<CanonicalRecordEnvelope> = [];
-
-          for (const entry of [
-            records[0],
-            records.find(({ record }) => record.recordId === workerOriginRecordId(threadId)),
-            records.find(({ record }) => record.recordId === subagentLineageRecordId(threadId)),
-          ])
-            if (entry !== undefined && !selected.includes(entry)) selected.push(entry);
-
-          const snapshot = ThreadIdentity.make({
-            threadId,
-            tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-            tailDigest: digest,
-            producerEpoch: epochs.get(threadId)!,
-            records: selected,
-          });
-
-          yield* options.afterIdentity?.(snapshot) ?? Effect.void;
-
-          return snapshot;
-        }),
-      read: (request) =>
-        Stream.suspend(() => {
-          const all = logs.get(request.threadId) ?? [];
-          const selection = "selection" in request ? request.selection : undefined;
-          let records = all;
-
-          if (selection?._tag === "RecordId") {
-            records = all.filter((entry) => entry.record.recordId === selection.recordId);
-          } else if (selection?._tag === "WorkerExecution") {
-            records = ["UserInputRecorded", "RunStarted"]
-              .flatMap((tag) =>
-                all
-                  .filter(
-                    ({ record: { payload } }) =>
-                      payload._tag === tag && "runId" in payload && payload.runId !== undefined,
-                  )
-                  .slice(-1),
-              )
-              .sort((a, b) => a.sequence - b.sequence);
-          } else if (selection?._tag === "RunInput") {
-            records = all.filter(
-              ({ record: { payload } }) =>
-                payload._tag === "UserInputRecorded" &&
-                payload.kind === "user" &&
-                payload.runId === selection.runId,
-            );
-          } else if (selection?._tag === "WorkerState") {
-            records = all.filter(({ record: { payload } }) =>
-              payload._tag === "SubtreeBudgetReserved"
-                ? payload.sourceSubmissionId === selection.sourceSubmissionId
-                : payload._tag === "SubagentJoined"
-                  ? payload.runId === `run:${selection.sourceSubmissionId}`
-                  : [
-                      "ThreadCreated",
-                      "WorkerOriginRecorded",
-                      "SubagentLineageRecorded",
-                      "WorkerInputRequested",
-                      "WorkerInputCompleted",
-                    ].includes(payload._tag),
-            );
-          } else if (selection !== undefined)
-            return Stream.die("Worker fixture only reads exact identities and accounting");
-          const page = "selection" in request ? request.page : request;
-
-          return Stream.fromIterable(
-            records
-              .filter((entry) => entry.sequence > (page.afterSequence ?? 0))
-              .slice(0, page.limit)
-              .map((entry) => {
-                return entry;
-              }),
-          );
-        }).pipe(Stream.onStart(Effect.suspend(() => options.beforeRead?.(request) ?? Effect.void))),
-      export: ({ threadId }) =>
-        Effect.gen(function* () {
-          const records = logs.get(threadId);
-
-          if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
-
-          const exported = yield* Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope))(
-            records,
-          ).pipe(
-            Effect.flatMap(Schema.decodeEffect(Schema.Array(ThreadExportRecord))),
-            Effect.mapError((cause) =>
-              ThreadStoreError.make({ operation: "export", message: "Invalid fixture log", cause }),
-            ),
-          );
-
-          return ThreadExport.make({
-            format: "effect-agent/thread@1",
-            threadId,
-            records: exported,
-            tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-            tailDigest: digest,
-          });
-        }),
-      inspectTail: ({ threadId }) =>
-        Effect.suspend(() => {
-          const records = logs.get(threadId);
-
-          return records === undefined
-            ? ThreadNotMaterialized.make({ threadId })
-            : Effect.succeed(
-                ThreadTail.make({
-                  threadId,
-                  tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-                  tailDigest: digest,
-                  producerEpoch: epochs.get(threadId)!,
-                }),
-              );
-        }),
-      append: (request) =>
-        Effect.gen(function* () {
-          yield* Effect.yieldNow;
-          const records = logs.get(request.threadId) ?? [];
-
-          appendAttempts.push({ threadId: request.threadId, epoch: request.producerEpoch });
-          const currentEpoch = epochs.get(request.threadId)!;
-
-          if (currentEpoch !== request.producerEpoch) {
-            rejectedAppends.epoch++;
-
-            return yield* FenceRejected.make({
-              threadId: request.threadId,
-              attemptedEpoch: request.producerEpoch,
-              actualEpoch: currentEpoch,
-            });
-          }
-          if (
-            records.length !== request.expectedTailSequence ||
-            digest !== request.expectedTailDigest
-          ) {
-            rejectedAppends.tail++;
-
-            return yield* AppendConflict.make({
-              threadId: request.threadId,
-              batchId: request.batch.batchId,
-              reason: "tail",
-            });
-          }
-          const first = records.length + 1;
-
-          for (const record of request.batch.records)
-            push(request.threadId, record.payload, record.recordId);
-
-          return AppendResult.make({
-            firstSequence: Schema.decodeSync(CanonicalSequence)(first),
-            lastSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-            tailDigest: digest,
-            replayed: false,
-          });
-        }),
-
-      materialize: () => Effect.die("Worker fixture materializes through input control"),
-      observe: () => Stream.die("Worker fixture uses finite canonical reads"),
-    }),
+    Effect.provideService(ThreadStore, fixtureStore),
     Effect.provideService(MessageDeliveryStore, {
       limits: defaultMessageDeliveryStoreLimits,
       maxStoredValueBytes: 16 * 1_024 * 1_024,
@@ -685,6 +789,56 @@ const harness = Effect.fn("workerHostHarness")(function* (
     ...(options.sourceReports?.length ? { sourceSubmissionId: ownerId } : {}),
   });
 
+  const commit = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    payload: CanonicalRecordPayload,
+    id: string,
+  ) {
+    const store = fixtureStore;
+
+    const writer = yield* makeProgressWriter(
+      threadId,
+      Schema.decodeSync(DeploymentId)("test"),
+    ).pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(store)));
+
+    yield* writer
+      .commit(
+        CanonicalBatch.make({
+          batchId: BatchId.make(id),
+          producerId: ProducerId.make("test"),
+          records: [
+            RecordEnvelope.make({
+              recordId: Schema.decodeSync(RecordEnvelope.fields.recordId)(id),
+              family: "thread",
+              schemaVersion: 1,
+              createdAt: DateTime.makeUnsafe(now),
+              deploymentId: DeploymentId.make("test"),
+              payload,
+            }),
+          ],
+        }),
+      )
+      .pipe(
+        Effect.provideService(CurrentRunWriter, {
+          threadId: threadId,
+          tail: Effect.sync(() => ({
+            sequence: CanonicalSequence.make(logs.get(threadId)?.length ?? 0),
+            digest,
+          })),
+          append: (batch) =>
+            Effect.flatMap(store.inspectTail({ threadId: threadId }), (tail) =>
+              store.append({
+                threadId: threadId,
+                producerEpoch: tail.producerEpoch,
+                expectedTailSequence: tail.tailSequence,
+                expectedTailDigest: tail.tailDigest,
+                batch,
+              }),
+            ),
+        }),
+      );
+  });
+
   const settle = Effect.fn("workerHostHarness.settle")(function* (
     receipt: Receipt,
     result = "done",
@@ -698,7 +852,10 @@ const harness = Effect.fn("workerHostHarness")(function* (
       `run:${options.host?.submissionId ?? row.submissionId}`,
     );
 
-    if (runId !== undefined)
+    if (
+      runId !== undefined &&
+      !logs.get(row.threadId)?.some(({ record }) => record.recordId === `input:${row.submissionId}`)
+    )
       push(
         row.threadId,
         UserInputRecorded.make({
@@ -710,20 +867,18 @@ const harness = Effect.fn("workerHostHarness")(function* (
         `input:${row.submissionId}`,
       );
 
-    push(
-      row.threadId,
-      Schema.decodeUnknownSync(Schema.toType(SubmissionSettledRecord))(
-        SubmissionSettled.make({
-          submissionId: row.submissionId,
-          receiptId: row.receiptId,
-          settlementId,
-          outcome,
-          ...(options.host === undefined && outcome === "completed" ? { result } : {}),
-          ...(runId === undefined ? {} : { runId }),
-        }),
-      ),
-      `settled:${row.submissionId}`,
+    const payload = Schema.decodeUnknownSync(Schema.toType(SubmissionSettledRecord))(
+      SubmissionSettled.make({
+        submissionId: row.submissionId,
+        receiptId: row.receiptId,
+        settlementId,
+        outcome,
+        ...(options.host === undefined && outcome === "completed" ? { result } : {}),
+        ...(runId === undefined ? {} : { runId }),
+      }),
     );
+
+    yield* commit(row.threadId, payload, `settled:${row.submissionId}`);
     yield* runtime.completeInput(row);
 
     const settlement = Settlement.make({
@@ -738,7 +893,29 @@ const harness = Effect.fn("workerHostHarness")(function* (
     submissions.set(row.submissionId, SubmissionSnapshot.make({ ...row, state: "settled" }));
   });
 
+  const startRun = Effect.fnUntraced(function* (receipt: Receipt) {
+    const row = submissions.get(receipt.submissionId)!;
+    const runId = RunId.make(`run:${row.submissionId}`);
+
+    push(
+      row.threadId,
+      UserInputRecorded.make({
+        submissionId: row.submissionId,
+        kind: "user",
+        runId,
+        input: row.inputPayload,
+      }),
+      `input:${row.submissionId}`,
+    );
+    yield* commit(
+      row.threadId,
+      RunStartedRecord.make({ runId, policyAccountingVersion: 1, maxDurationMillis: 10_000 }),
+      `started:${row.submissionId}`,
+    );
+  });
+
   return {
+    startRun,
     runtime,
     updates: runtimes.updates,
     host,
@@ -1475,11 +1652,13 @@ layer(NodeCrypto.layer)((it) => {
   it.effect("bounds report preparation and finalizes its resources on timeout", () =>
     Effect.gen(function* () {
       let finalized = 0;
+      const entered = yield* Deferred.make<void>();
 
       const h = yield* harness({
         sourceReports: [
           reportWith(() =>
-            Effect.never.pipe(
+            Deferred.succeed(entered, undefined).pipe(
+              Effect.andThen(Effect.never),
               Effect.ensuring(
                 Effect.sync(() => {
                   finalized++;
@@ -1493,6 +1672,7 @@ layer(NodeCrypto.layer)((it) => {
       const first = yield* h.host.start(request("timeout"));
       const fiber = yield* h.settle(first.delivery.receipt!).pipe(Effect.forkChild);
 
+      yield* Deferred.await(entered);
       yield* TestClock.adjust("5 seconds");
       yield* Fiber.join(fiber);
       expect(finalized).toBe(1);
@@ -1508,11 +1688,15 @@ layer(NodeCrypto.layer)((it) => {
     Effect.gen(function* () {
       let block = true;
       let finalized = 0;
+      const entered = yield* Deferred.make<void>();
 
       const h = yield* harness({
         sourceReports: [
           reportWith((report) =>
-            (block ? Effect.never : standardReport.prepare(report)).pipe(
+            (block
+              ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never))
+              : standardReport.prepare(report)
+            ).pipe(
               Effect.ensuring(
                 Effect.sync(() => {
                   finalized++;
@@ -1526,7 +1710,7 @@ layer(NodeCrypto.layer)((it) => {
       const first = yield* h.host.start(request("interrupted"));
       const fiber = yield* h.settle(first.delivery.receipt!).pipe(Effect.forkChild);
 
-      yield* Effect.yieldNow;
+      yield* Deferred.await(entered);
       yield* Fiber.interrupt(fiber);
       block = false;
       yield* h.runtime.completeInput(h.submissions.get(first.delivery.receipt!.submissionId)!);
@@ -1653,11 +1837,7 @@ layer(NodeCrypto.layer)((it) => {
         const submission = h.submissions.get(scout.delivery.receipt!.submissionId)!;
         const runId = Schema.decodeSync(RunId)(`run:${submission.submissionId}`);
 
-        h.push(
-          scout.worker.threadId,
-          RunStartedRecord.make({ runId, policyAccountingVersion: 1, maxDurationMillis: 10_000 }),
-          "scout-run",
-        );
+        yield* h.startRun(scout.delivery.receipt!);
         yield* h.updates.emit({
           submission,
           runId,

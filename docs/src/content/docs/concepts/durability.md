@@ -32,7 +32,7 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
-The execution protocol uses `effect-agent/thread@2` records in fresh layout-18 stores.
+The execution protocol uses `effect-agent/thread@2` records in fresh layout-20 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
@@ -129,9 +129,10 @@ framework reports have no source Run charge. Later inputs never enlarge a settle
 Exact evidence reads and same-format archives retain additive fields and the original wire values.
 Reading a typed view never changes the content pinned by an evidence digest.
 
-Initial context assembly for a new Run can read history preceding its original input. Full Thread
-work inventory, resumable index reconstruction, archive partitioning, and streamed transfer are
-separate concerns. This protocol boundary does not remove existing Thread storage/export caps.
+Initial context assembly for a new Run can read history preceding its original input. Work
+discovery uses native owner indexes; explicit index reconstruction reads canonical history in
+bounded passes. Archive partitioning and streamed transfer remain separate concerns. Existing
+Thread storage/export caps still apply.
 Generic `ThreadStore.checkpoints` remain optional application projections and never govern execution.
 
 <a id="operational-obligation"></a>
@@ -153,14 +154,32 @@ their start and their own Turns. Later results can close prior historical calls,
 continuation cannot replace the current input. Compaction covers its creator's context while
 complete Thread history retains interleaved exchanges from other Runs.
 
-`SubmissionLedger.scanNonterminal` discovers work through `SubmissionWorkItem`: identities,
-receipt, deployment, queue order and state, without execution payloads. Read `lookup` or
-`loadRecoverySnapshot` only for selected work. Recovery hydrates each Thread inside its fault
-boundary, so an unreadable retained input or worker origin cannot poison global discovery.
+The Thread work inventory combines accepted admissions with unresolved operations, approvals,
+children, worker inputs and acknowledgements, reports, and deliveries. These owners outlive a Run when their own work
+remains unfinished. A settled or stopped worker retains its source capacity until its original
+effects are factually resolved. Authorized `CompletedWithResult` and `NeverHappened` resolutions
+can record that truth after settlement; they preserve the original receipt and outcome.
+The destination owns acknowledgement publication until factual effects are recorded; the source
+retains a retry deadline and copies that acknowledgement to release its input capacity.
 
-`runRecovery()` isolates history, retained payload and child-recovery faults by Thread. It returns ordinary
-Submission `reports` and one `blocked` fault per failed Thread. Blocked Threads cannot be
-claimed until recovery succeeds. Pass `{ threadId }` to recover a selected Thread independently.
+`runtime.discoverWork({ threadId, limit, cursor })` returns identities, owning state references,
+and scheduling metadata. It reads no execution payloads and grants no ownership or authority.
+An empty page with a cursor still has more work to enumerate. Cursors are live, Thread-bound
+scans: new work behind the cursor appears in the next scan. `recoverWork({ threadId, work })`
+resolves the selected canonical evidence and original admission before repairing it. A frozen
+message preparation remains discoverable even when its delivery row was never inserted.
+
+Missing, incompatible, or incomplete indexes return `WorkDiscoveryUnavailable`, never an empty
+inventory. Call `rebuildWorkIndex({ threadId, restart: true })` explicitly to discard a damaged
+derivative, then call without `restart` until `state` is `ready`. Each pass processes at most
+eight canonical records and 32 MiB. Concurrent appends remain canonical; completion checks the
+current tail under the same storage writer. Ordinary recovery never starts this scan implicitly.
+
+`runRecovery()` selects at most 32 owners across at most 32 Threads, with at most eight inventory
+pages per Thread. It returns Submission `reports`, content-free `workReports`, one `blocked`
+fault per failed Thread, and a resumable `cursor`. Follow that cursor to finish the scan. Selected
+evidence is released between owners. Blocked Threads cannot be claimed until recovery succeeds.
+Pass `{ threadId }` to recover one Thread independently, preserving that selection when resuming.
 The host owns durable fault visibility and retry scheduling outside the execution log. The
 default cooperative recovery bound is 30 seconds per Thread (`recoveryTimeout`). Interruption
 and global SQL/control-identity scan failures still fail the sweep. A recovery fault never settles accepted work,
@@ -273,7 +292,8 @@ an approval after possible execution cannot restore it. Parameter rejection prov
 of its individual call. Approved calls without results remain uncertain.
 
 Recovery uses the original recorded arguments and operation contract. `CompletedWithResult`
-injects a confirmed result; `NeverStarted` proves nonexecution. `SafeToRetry` permits another
+injects a confirmed result and must agree with any already committed tool result; `NeverStarted`
+proves nonexecution. `SafeToRetry` permits another
 attempt under compatible original semantics, but cannot authorize changed code or erase uncertainty.
 Readonly and idempotent calls retain their declared replay behavior. Unsupported effects stay unknown.
 

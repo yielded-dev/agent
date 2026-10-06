@@ -1,15 +1,17 @@
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
+import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   PostgresStorageCompatibilityError,
+  PostgresStorageError,
   PostgresStorageCorruptionError,
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 18;
+export const CurrentPostgresStorageVersion = 20;
 
 /** Fresh layout only; inspection rejects every predecessor before DDL. */
 const layoutStatements = [
@@ -27,7 +29,7 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_abort_intents" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, author TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, requested_at TEXT COLLATE "C" NOT NULL, canonical_record_id TEXT COLLATE "C", FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_submissions_joined_host ON __NAMESPACE__."effect_agent_submissions" (joined_host_submission_id)',
   'CREATE TABLE __NAMESPACE__."effect_agent_approval_decisions" ( submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, decision TEXT COLLATE "C" NOT NULL, resolver TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, decided_at TEXT COLLATE "C" NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_unknown_resolutions" ( submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, author TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, resolution_json TEXT COLLATE "C" NOT NULL, resolved_at TEXT COLLATE "C" NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_unknown_resolutions" ( submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, resolution_kind TEXT COLLATE "C" NOT NULL, author TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, resolution_json TEXT COLLATE "C" NOT NULL, resolved_at TEXT COLLATE "C" NOT NULL, PRIMARY KEY (submission_id, tool_call_id, resolution_kind), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_submissions_parent ON __NAMESPACE__."effect_agent_submissions" (parent_submission_id)',
   'CREATE TABLE __NAMESPACE__."effect_agent_child_reservations" ( reservation_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, parent_submission_id TEXT COLLATE "C" NOT NULL, parent_tool_call_id TEXT COLLATE "C" NOT NULL, child_submission_id TEXT COLLATE "C", status TEXT COLLATE "C" NOT NULL, allocation_json TEXT COLLATE "C" NOT NULL, allocation_digest TEXT COLLATE "C" NOT NULL, accounting_json TEXT COLLATE "C", reserved_at TEXT COLLATE "C" NOT NULL, release_began_at TEXT COLLATE "C", released_at TEXT COLLATE "C", UNIQUE (parent_submission_id, parent_tool_call_id), FOREIGN KEY (parent_submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_schedules" ( tenant_id TEXT COLLATE "C" NOT NULL, owner_id TEXT COLLATE "C" NOT NULL, schedule_id TEXT COLLATE "C" NOT NULL, deadline_at_millis BIGINT, record_json TEXT COLLATE "C" NOT NULL, uses_capacity BOOLEAN NOT NULL, PRIMARY KEY (tenant_id, owner_id, schedule_id) )',
@@ -440,13 +442,17 @@ const layoutShape: Readonly<
     columns: [
       "submission_id:text:true",
       "tool_call_id:text:true",
+      "resolution_kind:text:true",
       "author:text:true",
       "reason:text:true",
       "resolution_json:text:true",
       "resolved_at:text:true",
     ],
     constraints: {
-      effect_agent_unknown_resolutions_pkey: ["p", ["submission_id", "tool_call_id"]],
+      effect_agent_unknown_resolutions_pkey: [
+        "p",
+        ["submission_id", "tool_call_id", "resolution_kind"],
+      ],
       effect_agent_unknown_resolutions_submission_id_fkey: [
         "f",
         ["submission_id"],
@@ -969,14 +975,19 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   if (header !== undefined) return header;
   for (const statement of layoutStatements)
     yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
+  yield* createSqlThreadWorkTables(namespace).pipe(
+    Effect.mapError((cause) =>
+      PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+    ),
+  );
   yield* sql.unsafe(qualify(headerStatement, namespace)).withoutTransform;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 18)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 20)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 20, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);

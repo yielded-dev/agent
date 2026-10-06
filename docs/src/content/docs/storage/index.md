@@ -54,7 +54,7 @@ checks its admission constraints. Import rebuilds ledger state from canonical re
 and checkpoints are disposable.
 No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
 
-The unreleased protocol accepts only fresh layout-18 stores and `effect-agent/thread@2` archives.
+The unreleased protocol accepts only fresh layout-20 stores and `effect-agent/thread@2` archives.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 

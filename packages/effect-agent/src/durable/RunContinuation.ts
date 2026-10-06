@@ -2,9 +2,9 @@ import { Context, Crypto, Effect, Option, Schema, Semaphore, Stream } from "effe
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
-import { RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
+import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
+import { ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
-import { IdempotencyKey } from "../core/Receipt.ts";
 import { summarizeModelUsage } from "../core/Usage.ts";
 import { reference, resolveEvidence } from "./internal/evidence.ts";
 export { reference, resolveEvidence } from "./internal/evidence.ts";
@@ -94,52 +94,6 @@ export {
   isWorkHandoff,
   isPreContinuationFact,
 } from "./internal/record-ownership.ts";
-
-export const WorkOwner = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Admission"), submissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("Run"), runId: RunId }),
-  Schema.Struct({ _tag: Schema.Literal("Operation"), runId: RunId, toolCallId: ToolCallId }),
-  Schema.Struct({ _tag: Schema.Literal("Delivery"), messageId: IdempotencyKey }),
-  Schema.Struct({ _tag: Schema.Literal("Handoff"), evidence: EvidenceReference }),
-]);
-
-export const ThreadWorkRequest = Schema.Struct({
-  threadId: ThreadId,
-  cursor: Schema.optionalKey(Schema.NonEmptyString),
-  limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 128 })),
-});
-
-export const ThreadWorkPage = Schema.Struct({
-  entries: Schema.Array(
-    Schema.Struct({
-      owner: WorkOwner,
-      state: Schema.Literals(["ready", "waiting", "unknown", "handoff"]),
-      notBeforeMillis: Schema.optionalKey(Schema.Natural),
-    }),
-  ).check(Schema.isMaxLength(128)),
-  cursor: Schema.optionalKey(Schema.NonEmptyString),
-});
-
-export class WorkDiscoveryUnavailable extends Schema.TaggedError<WorkDiscoveryUnavailable>()(
-  "WorkDiscoveryUnavailable",
-  {
-    threadId: ThreadId,
-    reason: Schema.Literals(["missing-index", "incomplete-rebuild", "unsupported"]),
-  },
-) {}
-
-/**
- * Thread-wide inventory port. Enumeration grants no authority; missing/incomplete indexes
- * are distinguishable from an empty inventory. Stage 2 supplies bounded reconstruction.
- */
-export class ThreadWorkDiscovery extends Context.Service<
-  ThreadWorkDiscovery,
-  {
-    readonly page: (
-      request: typeof ThreadWorkRequest.Type,
-    ) => Effect.Effect<typeof ThreadWorkPage.Type, WorkDiscoveryUnavailable | ThreadStoreError>;
-  }
->()("@effect-agent/thread/ThreadWorkDiscovery") {}
 
 const failure = (message: string, cause?: unknown) =>
   ThreadStoreError.make({
@@ -316,6 +270,108 @@ export const validateSuffix = (
       MAX_RUN_RECOVERY_SUFFIX_BYTES
   );
 };
+
+/**
+ * Selected semantic evidence without expanding model context. Worker acknowledgements and
+ * delivery repair must validate locator completeness before treating missing effects as closed.
+ */
+export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  submissionId: SubmissionId,
+  throughSequence: CanonicalSequence,
+) {
+  const records = yield* Stream.runCollect(runEvidence(threadId, submissionId, throughSequence));
+  const runId = runIdForSubmission(submissionId);
+  const own = records.filter((entry) => executionRunIds(entry.record).includes(runId));
+  const progress = yield* readContinuation(threadId, runId, throughSequence);
+
+  if (Option.isNone(progress)) {
+    if (
+      own.some(
+        ({ record }) =>
+          !isPreContinuationFact(record) ||
+          (record.payload._tag === "SubmissionSettled" && record.payload.runId === runId),
+      )
+    )
+      return yield* failure(
+        "Selected execution has no canonical continuation; rebuild its locator explicitly",
+      );
+
+    return records;
+  }
+  const envelope = progress.value;
+  const cursor = envelope.continuation;
+
+  if (cursor.submissionId !== submissionId)
+    return yield* failure("Selected continuation has another admitted owner");
+  const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
+
+  const resolve = Effect.fnUntraced(function* (ref: EvidenceReference) {
+    const found = byId.get(ref.recordId);
+
+    if (found === undefined) {
+      yield* resolveEvidence(threadId, ref);
+
+      return yield* failure(
+        "Selected canonical locator omits required evidence; rebuild it explicitly",
+      );
+    }
+    if ((yield* reference(found.record)).digest !== ref.digest)
+      return yield* failure("Selected canonical evidence has invalid integrity");
+
+    return found;
+  });
+
+  const input = yield* resolve(cursor.originalInput);
+
+  if (
+    input.record.payload._tag !== "UserInputRecorded" ||
+    input.record.payload.submissionId !== submissionId ||
+    input.record.payload.kind !== "user" ||
+    input.record.payload.runId !== runId
+  )
+    return yield* failure("Selected continuation has no original accepted input");
+  const frontier = yield* resolve(cursor.lastFact);
+
+  if (
+    frontier.batchId !== envelope.batchId ||
+    frontier.sequence >= envelope.sequence ||
+    own.filter((entry) => entry.sequence <= frontier.sequence).length !== cursor.recordCount ||
+    !validateSuffix(own, envelope.sequence)
+  )
+    return yield* failure("Selected canonical evidence is incomplete or exceeds its suffix bound");
+  if (cursor.savedContext !== undefined) {
+    const context = yield* resolve(cursor.savedContext);
+
+    if (
+      context.record.payload._tag !== "RunContextRecorded" ||
+      context.record.payload.runId !== runId
+    )
+      return yield* failure("Selected continuation has invalid saved context evidence");
+  }
+  if (cursor.latestResponse !== undefined) {
+    const response = yield* resolve(cursor.latestResponse);
+
+    if (
+      response.record.payload._tag !== "ModelResponseRecorded" ||
+      response.record.payload.runId !== runId ||
+      response.record.payload.turn !== cursor.accounting.committedTurns
+    )
+      return yield* failure("Selected continuation has invalid operation evidence");
+  }
+  if (cursor.terminal !== undefined) {
+    const terminal = yield* resolve(cursor.terminal);
+
+    if (
+      terminal.record.payload._tag !== "RunCompleted" &&
+      terminal.record.payload._tag !== "RunFailed" &&
+      terminal.record.payload._tag !== "SubmissionSettled"
+    )
+      return yield* failure("Selected continuation has invalid terminal evidence");
+  }
+
+  return records;
+});
 
 /** Called inside the adapter's existing mutation, before publishing any fact or index. */
 export const validateProgressAppend = Effect.fnUntraced(function* (

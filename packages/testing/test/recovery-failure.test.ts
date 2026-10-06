@@ -74,14 +74,17 @@ describe("bounded recovery failure isolation", () => {
         let scanFails = false;
         let mixedCause = false;
 
+        const scanFailure = ThreadStoreError.make({
+          operation: "work threads",
+          message: "private scan failure",
+          cause: failure,
+        });
+
         const observedLedger = Layer.effect(
           SubmissionLedger,
           Effect.map(SubmissionLedger, (ledger) =>
             SubmissionLedger.of({
               ...ledger,
-              scanNonterminal: Stream.suspend(() =>
-                scanFails ? Stream.fail(failure) : ledger.scanNonterminal,
-              ),
               loadRecoverySnapshot: (request) =>
                 Effect.gen(function* () {
                   const snapshot = yield* ledger.loadRecoverySnapshot(request);
@@ -109,12 +112,31 @@ describe("bounded recovery failure isolation", () => {
           ),
         );
 
+        const observedDiscovery = Layer.effect(
+          ThreadStore,
+          Effect.map(ThreadStore, (store) => {
+            const work = store.work;
+
+            if (work === undefined)
+              throw new Error("Native work discovery is required by the fixture");
+
+            return ThreadStore.of({
+              ...store,
+              work: {
+                ...work,
+                threads: (request) =>
+                  scanFails ? Effect.fail(scanFailure) : work.threads(request),
+              },
+            });
+          }),
+        ).pipe(Layer.provideMerge(observedLedger));
+
         const services = DurableAgentRuntime.layer
           .pipe(Layer.provide(runStorageLayer()))
           .pipe(
             Layer.provideMerge(
               Layer.mergeAll(
-                observedLedger,
+                observedDiscovery,
                 config,
                 DurableRuntimeFailpoint.layer,
                 WakeScheduler.layerNoop,
@@ -191,7 +213,7 @@ describe("bounded recovery failure isolation", () => {
           const accepted = yield* Stream.runCollect(ledger.scanNonterminal);
 
           scanFails = true;
-          expect(yield* runtime.runRecovery().pipe(Effect.flip)).toBe(failure);
+          expect(yield* runtime.runRecovery().pipe(Effect.flip)).toBe(scanFailure);
           scanFails = false;
           expect(yield* Stream.runCollect(ledger.scanNonterminal)).toEqual(accepted);
         }).pipe(Effect.provide(services));
@@ -298,7 +320,7 @@ describe("bounded recovery failure isolation", () => {
               {
                 threadId: failingThread,
                 failure: {
-                  phase: "history",
+                  phase: "recovery",
                   reason: mode,
                   errorTag: "RecoveryTimeout",
                 },
