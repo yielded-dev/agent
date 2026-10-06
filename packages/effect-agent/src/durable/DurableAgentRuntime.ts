@@ -5877,8 +5877,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     message: "Tool Call identity is reused within a Run",
                   });
                 // Preserve every prior identity across compaction and recovery. Refuse the
-                // whole response before dispatch instead of overflowing the checkpoint seed.
-                if (declaredToolIds.size + responseToolIds.size >= MAX_RUN_TOOL_CALL_IDENTITIES)
+                // whole response before dispatch if adding this call exceeds the inclusive bound.
+                if (declaredToolIds.size + responseToolIds.size + 1 > MAX_RUN_TOOL_CALL_IDENTITIES)
                   return yield* RunJournalError.make({
                     message: `Run exceeds the ${MAX_RUN_TOOL_CALL_IDENTITIES} Tool Call identity limit`,
                   });

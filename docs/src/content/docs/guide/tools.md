@@ -425,7 +425,8 @@ Approval occurs after parameter decoding and before any handler in the batch sta
 cannot approve a tool call. Durable batches retain every required request before honoring
 decisions; a denial blocks the whole batch. Function-based predicates receive native readonly
 Effect AI history, including opaque tool values; leave that history unchanged. Approval decisions
-receive independent decoded arguments.
+receive independent decoded arguments. Approval predicates accept non-JSON caller history,
+including `undefined` and `Date` values.
 
 ## Authorize tool calls
 
