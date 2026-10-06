@@ -77,6 +77,19 @@ export class CurrentRunSettlement extends Context.Service<
   Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement">
 >()("@effect-agent/thread/CurrentRunSettlement") {}
 
+/** Canonical reads pinned to the append owner's current transaction or mutation gate. */
+export class ProgressAppendReader extends Context.Service<
+  ProgressAppendReader,
+  {
+    readonly previous: (
+      runId: RunId,
+    ) => Effect.Effect<RunContinuation | undefined, ThreadStoreError>;
+    readonly initial: (
+      next: RunContinuation,
+    ) => Effect.Effect<ReadonlyArray<RecordEnvelope>, ThreadStoreError>;
+  }
+>()("@effect-agent/thread/ProgressAppendReader") {}
+
 export {
   canonicalRunIds,
   executionRunIds,
@@ -363,11 +376,10 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
 });
 
 /** Called inside the adapter's existing mutation, before publishing any fact or index. */
-export const validateProgressAppend = Effect.fnUntraced(function* <E, R>(
+export const validateProgressAppend = Effect.fnUntraced(function* (
   records: ReadonlyArray<ProgressAppendRecord>,
-  previous: (runId: RunId) => Effect.Effect<RunContinuation | undefined, E, R>,
-  initial: (next: RunContinuation) => Effect.Effect<ReadonlyArray<RecordEnvelope>, E, R>,
-): Effect.fn.Return<void, E | ThreadStoreError, R> {
+): Effect.fn.Return<void, ThreadStoreError, ProgressAppendReader> {
+  const reader = yield* ProgressAppendReader;
   const seen = new Set<RunId>();
   let progressStarted = false;
 
@@ -391,11 +403,11 @@ export const validateProgressAppend = Effect.fnUntraced(function* <E, R>(
     );
 
     const frontier = facts.at(-1);
-    const prior = yield* previous(next.runId);
+    const prior = yield* reader.previous(next.runId);
 
     const retained =
       prior === undefined
-        ? (yield* initial(next)).filter((fact) => executionRunIds(fact).includes(next.runId))
+        ? (yield* reader.initial(next)).filter((fact) => executionRunIds(fact).includes(next.runId))
         : [];
 
     const retainedBytes = retained.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0);
