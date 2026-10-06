@@ -15,6 +15,7 @@ import {
 } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
+import { MAX_ARCHIVE_RANGE_PAGE } from "@yielded/agent/thread-archive-range";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import {
   type ThreadExportRequest,
@@ -99,7 +100,8 @@ export interface DoStorageOptions {
    */
   readonly maxStoredValueBytes?: number | undefined;
   /**
-   * Re-verify every stored payload and digest chain while opening the store. Defaults to
+   * Re-verify Thread journal payloads, ownership, and digest chains in bounded pages while
+   * opening the store, including orphan rows and rows outside declared ranges. Defaults to
    * off: per-operation Schema decoding and the digest chain already fail clearly on corrupt
    * rows without scanning the whole database on every open.
    */
@@ -308,8 +310,9 @@ const tailDigestAt = Effect.fnUntraced(function* (
   );
 });
 
-/** Explicit startup audit: page owners and verify bounded ranges, never collect Thread payloads. */
+/** Audit excluded rows before paging owners and bounded ranges; never collect Thread payloads. */
 const decodeStartupPayloads = Effect.fnUntraced(function* (journal: DoJournal) {
+  yield* journal.archiveRanges.verifyCoverage;
   let afterThreadId: string | undefined;
 
   while (true) {
@@ -319,7 +322,7 @@ const decodeStartupPayloads = Effect.fnUntraced(function* (journal: DoJournal) {
       yield* journal.archiveRanges.verifyThread(owner.thread_id);
       afterThreadId = owner.thread_id;
     }
-    if (owners.length < 32) break;
+    if (owners.length < MAX_ARCHIVE_RANGE_PAGE) break;
   }
 });
 
@@ -331,7 +334,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const journal = yield* initializeDoJournal(sql, failpoint.hit, config.maxStoredValueBytes);
 
   if (config.verifyOnOpen) {
-    yield* decodeStartupPayloads(journal).pipe(
+    yield* journal.state.read(decodeStartupPayloads(journal)).pipe(
       Effect.mapError((cause) =>
         DoStorageCorruptionError.make({
           table: "effect_agent_journal_ranges",

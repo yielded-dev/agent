@@ -20,6 +20,7 @@ import {
 import { ScheduleInstant } from "@yielded/agent/schedule";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { IdempotencyKey } from "@yielded/agent/submission-ledger";
+import { makeTransferFactCheck } from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
@@ -129,6 +130,15 @@ const Scan = Schema.Struct({
 });
 
 const codec = Schema.fromJsonString(MessageDeliveryRecord);
+const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
+
+const checkTransfer = (record: MessageDeliveryRecord) =>
+  deliveryFitsTransfer(record.key.ownerThreadId, { ...record, leaseUntilMillis: null })
+    ? Effect.void
+    : Effect.fail(
+        MessageDeliveryError.make({ reason: "capacity", operation: "transfer-page-bytes" }),
+      );
+
 const bytes = (text: string): number => new TextEncoder().encode(text).byteLength;
 
 interface PendingRecord {
@@ -377,6 +387,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           return existing;
         }
 
+        yield* checkTransfer(input);
         const update = isWorkerUpdateDelivery(input);
         const capacity = messageDeliveryCapacity(config, update);
 
@@ -462,6 +473,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           const next = yield* Effect.fromResult(applyMessageDeliveryChange(current, input));
 
           if (next === current) return current;
+          yield* checkTransfer(next);
           const text = yield* encode(next);
 
           const updated = yield* query(

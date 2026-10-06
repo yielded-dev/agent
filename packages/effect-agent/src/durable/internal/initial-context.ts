@@ -26,7 +26,13 @@ import { projectRunContext } from "./run-context.ts";
 const invalid = (message: string) => RunJournalError.make({ message });
 const promptTag = new Set<string>(PROMPT_EVIDENCE_TAGS);
 
-/** One flat saved prefix plus a fixed admission suffix and exact canonical dependencies. */
+/**
+ * One flat saved prefix plus a fixed admission suffix and exact canonical dependencies.
+ * The read budget bounds this working set, including history retired by later compaction.
+ * Saved-context limits apply in runModel's projection evidence callback, after valid coverage
+ * removes that history. The previous Run's immutable original context does not advance when
+ * that Run compacts, so its raw suffix can legitimately exceed the saved-context limits.
+ */
 export const initialContext = Effect.fnUntraced(function* (original: CanonicalRecordEnvelope) {
   const reader = yield* ThreadReader;
   const threadId = original.threadId;
@@ -36,7 +42,6 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
   const readIds = new Set<string>();
   const creatorInputs = new Set<string>();
   const terminalInputs = new Set<string>();
-  let residentBytes = 0;
   let readBytes = 0;
 
   const account = (entry: CanonicalRecordEnvelope) => {
@@ -66,13 +71,6 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
       return prior.record.recordId === entry.record.recordId
         ? Effect.void
         : Effect.fail(invalid("Initial context has conflicting canonical identities"));
-    const bytes = recordEncoding(entry.record).bytes;
-
-    if (facts.size >= MAX_RUN_CONTEXT_RECORDS || residentBytes + bytes > MAX_RUN_CONTEXT_BYTES)
-      return Effect.fail(
-        invalid("Initial model context exceeds its evidence budget; configure context compaction"),
-      );
-    residentBytes += bytes;
     facts.set(entry.sequence, entry);
     queue.push(entry);
 

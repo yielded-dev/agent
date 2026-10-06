@@ -100,6 +100,7 @@ import {
   streamExport,
   ThreadExportSource,
   canonicalBatchFitsTransfer,
+  transferPageFits,
 } from "@yielded/agent/thread-store";
 import { exportThreadPage, ThreadExporterReader } from "@yielded/agent/thread-transfer";
 import {
@@ -1213,6 +1214,17 @@ const makeThreadStore = Effect.gen(function* () {
               current,
             ];
           }
+          if (!transferPageFits(request.threadId))
+            return [
+              {
+                _tag: "failure",
+                error: storeError(
+                  "materialize",
+                  "Thread identity exceeds its bounded transfer representation",
+                ),
+              },
+              current,
+            ];
           const threads = new Map(current.threads);
 
           threads.set(request.threadId, {

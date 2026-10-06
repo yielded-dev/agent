@@ -40,6 +40,11 @@ import {
   MAX_THREAD_EXPORT_PAGE_RECORDS,
   ThreadAdmission,
   ThreadExport,
+  ThreadAbortFact,
+  ThreadApprovalFact,
+  ThreadResolutionFact,
+  makeTransferFactCheck,
+  transferPageFits,
   type ThreadStoreError,
 } from "./ThreadStore.ts";
 import { transferDependencies, transferSnapshotId, transferSections } from "./ThreadTransfer.ts";
@@ -63,6 +68,12 @@ export const ThreadArchive = Schema.Struct({
 });
 
 export type ThreadArchive = typeof ThreadArchive.Type;
+
+const admissionFitsTransfer = makeTransferFactCheck(ThreadAdmission);
+const abortFitsTransfer = makeTransferFactCheck(ThreadAbortFact);
+const approvalFitsTransfer = makeTransferFactCheck(ThreadApprovalFact);
+const resolutionFitsTransfer = makeTransferFactCheck(ThreadResolutionFact);
+const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
 
 export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   "@effect-agent/thread/ThreadImportResult",
@@ -354,6 +365,22 @@ export const prepareImportPage = Effect.fnUntraced(function* (
   );
 
   const { threadId } = archive;
+
+  // A final source page may omit its cursor. Restored facts must remain exportable after
+  // later admissions, commands or a worker seal change the manifest and continuation.
+  if (
+    !transferPageFits(threadId) ||
+    archive.admissions.some((fact) => !admissionFitsTransfer(threadId, fact)) ||
+    archive.commands.aborts.some((fact) => !abortFitsTransfer(threadId, fact)) ||
+    archive.commands.approvals.some((fact) => !approvalFitsTransfer(threadId, fact)) ||
+    archive.commands.resolutions.some((fact) => !resolutionFitsTransfer(threadId, fact)) ||
+    archive.deliveries.some((fact) => !deliveryFitsTransfer(threadId, fact))
+  )
+    return yield* ThreadImportRejected.make({
+      threadId,
+      reason: "unsupported-capacity",
+      message: "Imported fact exceeds its bounded transfer representation",
+    });
 
   if (state.ended) return yield* invalid("Page after the final transfer page", threadId);
   if (archive.format !== CURRENT_RECORD_FORMAT)
