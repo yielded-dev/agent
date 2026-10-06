@@ -2,4 +2,4 @@
 "@yielded/agent-platform-cloudflare": patch
 ---
 
-Check main-frame action targets by reference inside the page instead of through element handles, saving four browser round trips per click.
+Check and dispatch main-frame actions by reference inside the page instead of through element handles, which removes about half of each action's browser round trips.

@@ -744,16 +744,185 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return "not-dispatched" as const;
-        // A main-frame click needs only the checked point; other input acts on the element.
-        if (value.kind === "click" && frame.parentFrame() === null) {
-          const point = await frame
-            .isolatedRealm()
-            .evaluate(checkDom, value.ref, target.control, false, true);
+        // Main-frame input works on the ref in place, without resolving and releasing a handle.
+        // Focus and its check stay separate reads so focus handlers run before the check.
+        if (frame.parentFrame() === null) {
+          const realm = frame.isolatedRealm();
+
+          const point = await realm.evaluate(
+            checkDom,
+            value.ref,
+            target.control,
+            false,
+            value.kind !== "press",
+          );
 
           if (point === false) return "not-dispatched" as const;
           stage("dispatch-input");
-          dispatch = "unknown";
-          await page.mouse.click(point.x, point.y);
+          if (value.kind === "click") {
+            dispatch = "unknown";
+            await page.mouse.click(point.x, point.y);
+          } else if (value.kind === "select") {
+            dispatch = "unknown";
+
+            // Puppeteer's select: an enabled matching option, then input and change events.
+            const selected = await realm.evaluate(
+              (ref, value) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                if (
+                  !(node instanceof HTMLSelectElement) ||
+                  !Array.from(node.options).some(
+                    (option) =>
+                      !option.disabled &&
+                      !(
+                        option.parentElement instanceof HTMLOptGroupElement &&
+                        option.parentElement.disabled
+                      ) &&
+                      option.value === value,
+                  )
+                )
+                  return false;
+                if (node.multiple)
+                  for (const option of Array.from(node.options))
+                    option.selected = option.value === value;
+                else {
+                  for (const option of Array.from(node.options)) option.selected = false;
+                  const match = Array.from(node.options).find((option) => option.value === value);
+
+                  if (match !== undefined) match.selected = true;
+                }
+                node.dispatchEvent(new Event("input", { bubbles: true }));
+                node.dispatchEvent(new Event("change", { bubbles: true }));
+
+                return true;
+              },
+              value.ref,
+              value.value,
+            );
+
+            if (!selected) {
+              dispatch = "not-dispatched";
+
+              return "not-dispatched" as const;
+            }
+          } else if (value.kind === "press") {
+            const focused =
+              (await realm.evaluate((ref) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                if (!(node instanceof HTMLElement)) return false;
+                node.focus();
+
+                return true;
+              }, value.ref)) &&
+              (await realm.evaluate((ref) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                return (
+                  node instanceof Node &&
+                  node.isConnected &&
+                  Reflect.get(node.getRootNode(), "activeElement") === node
+                );
+              }, value.ref));
+
+            if (!focused) return "not-dispatched" as const;
+            dispatch = "unknown";
+            await page.keyboard.press(value.key);
+          } else {
+            const focused = await realm.evaluate((ref) => {
+              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                ref,
+              );
+
+              if (
+                !(
+                  (node instanceof HTMLInputElement &&
+                    ![
+                      "password",
+                      "file",
+                      "checkbox",
+                      "radio",
+                      "hidden",
+                      "submit",
+                      "button",
+                    ].includes(node.type) &&
+                    !node.readOnly) ||
+                  (node instanceof HTMLTextAreaElement && !node.readOnly) ||
+                  (node instanceof HTMLElement &&
+                    node.isContentEditable &&
+                    node.getAttribute("aria-readonly") !== "true")
+                )
+              )
+                return false;
+              node.focus();
+
+              return true;
+            }, value.ref);
+
+            if (!focused) return "not-dispatched" as const;
+
+            // Focus handlers can replace a field. Never transfer input to the new focus.
+            const selected = await realm.evaluate((ref) => {
+              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                ref,
+              );
+
+              if (
+                !(node instanceof HTMLElement) ||
+                !node.isConnected ||
+                !(
+                  node.getRootNode() instanceof Document || node.getRootNode() instanceof ShadowRoot
+                ) ||
+                Reflect.get(node.getRootNode(), "activeElement") !== node
+              )
+                return false;
+              let selected = false;
+
+              if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+                node.select();
+                selected =
+                  node.value.length === 0 ||
+                  (node.selectionStart === 0 && node.selectionEnd === node.value.length) ||
+                  globalThis.getSelection()?.toString() === node.value;
+              } else {
+                const selection = globalThis.getSelection();
+
+                if (selection === null) return false;
+                const range = document.createRange();
+
+                range.selectNodeContents(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                selected =
+                  selection.rangeCount === 1 &&
+                  selection.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, range) ===
+                    0 &&
+                  selection.getRangeAt(0).compareBoundaryPoints(Range.END_TO_END, range) === 0;
+              }
+
+              return (
+                selected &&
+                node.isConnected &&
+                Reflect.get(node.getRootNode(), "activeElement") === node
+              );
+            }, value.ref);
+
+            if (!selected) {
+              refusal =
+                "Native selection could not prepare this field for replacement. No input dispatched.";
+
+              return "not-dispatched" as const;
+            }
+            dispatch = "unknown";
+            await page.keyboard.sendCharacter(value.value);
+          }
           dispatch = "acknowledged";
 
           return "acknowledged" as const;
