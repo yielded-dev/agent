@@ -85,7 +85,7 @@ it.live(
       assert.isTrue(body.browserConfigured);
       assert.isFalse(body.agentConfigured);
       assert.isFalse(body.jevConfigured);
-      assert.strictEqual(body.models.length, 3);
+      assert.strictEqual(body.models.length, 4);
       assert.isTrue(body.models.every((model) => !model.configured));
       assert.isFalse(body.busy);
       assert.isNull(body.liveViewUrl);

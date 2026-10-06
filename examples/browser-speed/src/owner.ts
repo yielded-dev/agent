@@ -10,6 +10,7 @@ import {
   browserCommandTimeoutMillis,
   defaultChallenge,
   racePrompt,
+  requiresReasoning,
   Report,
   scenarios,
   shopPrompt,
@@ -287,13 +288,21 @@ export const makeOwner = (
       });
 
     const { temperature: _legacyTemperature, ...settings } = requested;
+    const reasoning = requested.reasoning ?? "none";
 
     const input: RunInput = {
       ...settings,
       engine: requested.engine ?? "chromium",
       ...(requested.scenario === "wikipedia" ? { wikipedia } : {}),
       ...(openai
-        ? { reasoning: requested.reasoning ?? "none", serviceTier: requested.serviceTier ?? "fast" }
+        ? {
+            // A model comparison sends one effort to every model; record what each one ran.
+            reasoning:
+              reasoning === "none" && requiresReasoning(requested.model ?? config.model)
+                ? "low"
+                : reasoning,
+            serviceTier: requested.serviceTier ?? "fast",
+          }
         : {}),
       prompt:
         requested.scenario === "wikipedia"

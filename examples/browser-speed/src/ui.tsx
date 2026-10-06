@@ -26,6 +26,7 @@ import {
   Mode,
   ModelId,
   modelChoices,
+  requiresReasoning,
   racePrompt,
   Reasoning,
   scenarios,
@@ -331,6 +332,8 @@ export const App = () => {
   // The real store runs one guarded action per call in Chromium.
   const effectiveEngine = isStore ? "chromium" : engine;
 
+  const effectiveReasoning = reasoning === "none" && requiresReasoning(model) ? "low" : reasoning;
+
   const effectiveMode: typeof Mode.Type =
     jev || isWiki || isStore
       ? "agent"
@@ -446,7 +449,9 @@ export const App = () => {
       ...(effectiveEngine === "all"
         ? { compareEngines: ["chromium", "kitesurf"] }
         : { engine: effectiveEngine }),
-      ...(!jev && !scripted && !model.startsWith("@cf/") ? { reasoning, serviceTier } : {}),
+      ...(!jev && !scripted && !model.startsWith("@cf/")
+        ? { reasoning: effectiveReasoning, serviceTier }
+        : {}),
       ...(jev || scripted
         ? {}
         : model === "all"
@@ -526,10 +531,10 @@ export const App = () => {
                     disabled={busy}
                     onChange={() => {
                       setScenario(task.id);
-                      // Store checkouts need payment frames: GPT-6 Sol at low effort finds them.
+                      // Store checkouts need payment frames: GPT-6.1 Sol at low effort finds them.
                       if (task.id === "coffee" || task.id === "shop") {
                         setDriver("model");
-                        setModel("gpt-6-sol");
+                        setModel("gpt-6.1-sol");
                         setReasoning("low");
                       }
                     }}
@@ -759,17 +764,19 @@ export const App = () => {
                   <label>
                     <span>Reasoning</span>
                     <select
-                      value={reasoning}
+                      value={effectiveReasoning}
                       disabled={busy || scripted || model.startsWith("@cf/")}
                       onChange={(event) =>
                         setReasoning(Schema.decodeUnknownSync(Reasoning)(event.target.value))
                       }
                     >
-                      {Reasoning.literals.map((effort) => (
-                        <option key={effort} value={effort}>
-                          {effort}
-                        </option>
-                      ))}
+                      {Reasoning.literals
+                        .filter((effort) => effort !== "none" || !requiresReasoning(model))
+                        .map((effort) => (
+                          <option key={effort} value={effort}>
+                            {effort}
+                          </option>
+                        ))}
                     </select>
                   </label>
                 </>

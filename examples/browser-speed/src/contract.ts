@@ -33,6 +33,7 @@ export type Mode = typeof Mode.Type;
 export const ModelId = Schema.Literals([
   "gpt-6-luna",
   "gpt-6-sol",
+  "gpt-6.1-sol",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
 ]);
 
@@ -85,11 +86,20 @@ export const defaultShopItem = "a bag of natural process coffee";
 export const shopPrompt = (shop: ShopRequest) =>
   `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill each checkout step with the test buyer and click Continue after each step. Leave marketing boxes unchecked. Fill the test card on the payment step, then stop: never place the order.`;
 
-export const modelChoices: ReadonlyArray<{ id: ModelId; label: string }> = [
+export const modelChoices: ReadonlyArray<{
+  id: ModelId;
+  label: string;
+  /** The model rejects reasoning effort "none"; runs use "low" instead. */
+  requiresReasoning?: true;
+}> = [
   { id: "gpt-6-luna", label: "GPT-6 Luna" },
   { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true },
   { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 · Workers AI" },
 ];
+
+export const requiresReasoning = (model: string) =>
+  modelChoices.some((choice) => choice.id === model && choice.requiresReasoning === true);
 
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),

@@ -73,9 +73,9 @@ ever pays:
   merchants with abandoned carts. Every run still leaves one.
 
 Store tasks need a model agent: Jev reads the main document only, so it cannot reach the address
-and card fields inside payment-provider frames. Choosing a store task selects GPT-6 Sol at low
-reasoning, which found those frames. A Hedge run takes about 30 actions and 0.7 to 1 million input
-tokens. Hedge uses whole-page observations; any store uses viewport observations and scrolling,
+and card fields inside payment-provider frames. Choosing a store task selects GPT-6.1 Sol at low
+reasoning: a Hedge run takes about 18 actions and 0.4 million input tokens, against about 30 and
+0.7 to 1 million for GPT-6 Sol. GPT-6.1 Sol rejects reasoning "none", so the lab runs it at "low". Hedge uses whole-page observations; any store uses viewport observations and scrolling,
 because whole catalog pages outgrow the agent's context. Any-store runs filled checkout on
 Sightglass and Verve; Onyx's signup popup has no control the agent can close.
 
