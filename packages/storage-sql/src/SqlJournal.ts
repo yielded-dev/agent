@@ -399,7 +399,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         FROM ${relation("effect_agent_canonical_records")}
         WHERE thread_id = ${request.threadId}
           AND record_id IN ${sql.in(recordIds)}
-        ORDER BY sequence
       `.pipe(execute, Effect.mapError(storageError("check canonical record identities")));
 
     const existingRecords = yield* decodeRecordRows(
