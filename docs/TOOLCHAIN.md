@@ -580,6 +580,10 @@ observe and must accompany claims about the exact candidate and configuration it
 
 ## CI and hooks
 
+Opening, reopening, updating, marking ready, or retargeting a PR runs CI. Title and
+description edits create only a skipped run; they do not cancel active CI or replace
+its required `ready` result.
+
 Every PR runs CI and reports the required `ready` result. CI selects work from the complete PR
 diff, including both paths of a rename:
 
