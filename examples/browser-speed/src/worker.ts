@@ -203,17 +203,21 @@ export class BrowserLab extends DurableObject<Env> {
               (yield* readAccount(this.env.AUTH, request))?.funded === true;
 
             return yield* this.withBrowser(
-              this.owner.run(payload, {
-                openai:
-                  headers["x-lab-openai-key"] ??
-                  (funded ? this.env.FUNDED_OPENAI_API_KEY : undefined),
-                typesafe:
-                  headers["x-lab-typesafe-key"] ??
-                  (funded ? this.env.FUNDED_TYPESAFE_API_KEY : undefined),
-                openrouter:
-                  headers["x-lab-openrouter-key"] ??
-                  (funded ? this.env.FUNDED_OPENROUTER_API_KEY : undefined),
-              }),
+              this.owner.run(
+                payload,
+                {
+                  openai:
+                    headers["x-lab-openai-key"] ??
+                    (funded ? this.env.FUNDED_OPENAI_API_KEY : undefined),
+                  typesafe:
+                    headers["x-lab-typesafe-key"] ??
+                    (funded ? this.env.FUNDED_TYPESAFE_API_KEY : undefined),
+                  openrouter:
+                    headers["x-lab-openrouter-key"] ??
+                    (funded ? this.env.FUNDED_OPENROUTER_API_KEY : undefined),
+                },
+                { funded },
+              ),
             );
           }),
         )

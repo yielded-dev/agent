@@ -55,6 +55,21 @@ With **Driver → Jev**, `BrowserUse.runJev` operates the board from Jev observa
 field values with Mercury 2.5 when `OPENROUTER_API_KEY` is set, otherwise GPT-6 Luna. The same
 verifier reads the saved board after Jev stops; a DONE claim alone never passes.
 
+**Check out a bag of coffee** runs on a real store, [Hedge Coffee](https://www.hedge.coffee/store):
+add one bag to the cart and open the checkout. The lab never enters details or pays:
+
+- A guard keeps every page navigation on `www.hedge.coffee`; payment and captcha frames still load.
+- The checkout page is read-only. Host authorization refuses every click, fill and key press there.
+- After the driver stops, the host reads the order summary itself. The run passes only on the
+  checkout's first step with exactly one bag, quantity 1.
+- The public lab runs it only for allowlisted accounts, so visitors cannot fill a real merchant's
+  store with abandoned carts. Every run still leaves one.
+
+The model agent uses whole-page observations here, because "Add To Cart" sits below the fold and
+the agent cannot scroll. Jev often adds two bags: Squarespace keeps the hidden "Added!" label in
+the button, so Jev's observed name never changes after the click. Jev's naming matches
+jev-ultrafast's, so changing it needs a new parity run.
+
 ## Run a standalone browser journey
 
 The `journey` task takes a goal and uses the public native tools without the comparison UI.

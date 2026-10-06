@@ -8,6 +8,7 @@ import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-brows
 
 import { Board, LabError, type Scenario } from "./contract.ts";
 import { fixtureHtml } from "./fixture.ts";
+import { refuseCheckoutInput } from "./store-policy.ts";
 import { Trace } from "./telemetry.ts";
 
 export { Action, Observation, ActionResult };
@@ -25,8 +26,11 @@ export const finishTool = Tool.make("finish", {
 
 export const completionTools = Toolkit.make(finishTool);
 
-/** `frontier`: viewport observations, settling and capped waits. `jev`: Jev observations. */
-export type BrowserProfile = "default" | "frontier" | "jev";
+/**
+ * `frontier`: viewport observations, settling and capped waits. `jev`: Jev observations.
+ * `store`: whole-page observations with settling, for a model agent that cannot scroll.
+ */
+export type BrowserProfile = "default" | "frontier" | "jev" | "store";
 
 export const makeBrowser = Effect.fnUntraced(function* (
   session: Pick<BrowserSession, "run">,
@@ -40,14 +44,14 @@ export const makeBrowser = Effect.fnUntraced(function* (
     new LabError({ code: "browser", message: error.message });
 
   const controller = yield* NativeBrowser.make(session, {
-    authorize: () => Effect.void,
+    authorize: refuseCheckoutInput,
     maxActions: 100,
     maxReturnedBytes: 256 * 1024,
-    viewportOnly: profile !== "default",
+    viewportOnly: profile === "frontier" || profile === "jev",
     ...(profile === "jev"
       ? { observationMode: "jev", settleAfterAction: "input" }
-      : { settleAfterAction: profile === "frontier" }),
-    ...(profile === "frontier" ? { maxWaitMillis: 5_000 } : {}),
+      : { settleAfterAction: profile === "frontier" || profile === "store" }),
+    ...(profile === "frontier" || profile === "store" ? { maxWaitMillis: 5_000 } : {}),
   }).pipe(Effect.mapError(asLabError));
 
   const native = <A>(action: (page: Page) => Promise<A>) =>

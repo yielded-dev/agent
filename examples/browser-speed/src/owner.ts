@@ -12,6 +12,7 @@ import {
   racePrompt,
   Report,
   scenarios,
+  storeTask,
   type ModelApi,
   type ModelId,
   type RunInput,
@@ -206,7 +207,11 @@ export const makeOwner = (
   });
 
   /** Visitor keys apply to one run only; they never enter owner state, reports or telemetry. */
-  const run = Effect.fnUntraced(function* (requested: RunInput, keys: VisitorKeys = {}) {
+  const run = Effect.fnUntraced(function* (
+    requested: RunInput,
+    keys: VisitorKeys = {},
+    access: { readonly funded: boolean } = { funded: false },
+  ) {
     const challenge = requested.wikipedia ?? defaultChallenge;
 
     const wikipedia = {
@@ -229,6 +234,20 @@ export const makeOwner = (
 
     const jev = requested.driver === "jev";
 
+    if (
+      requested.scenario === "coffee" &&
+      (requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium")
+    )
+      return yield* new LabError({
+        code: "invalid",
+        message: "The store task runs individual agent actions in Chromium.",
+      });
+    // A real merchant: strangers must not fill Hedge Coffee's store with abandoned carts.
+    if (config.public && requested.scenario === "coffee" && !access.funded)
+      return yield* new LabError({
+        code: "configuration",
+        message: "The Hedge Coffee task runs only for allowlisted accounts. Sign in to run it.",
+      });
     if (config.public && requested.mode === "scripted")
       return yield* new LabError({
         code: "invalid",
@@ -271,8 +290,10 @@ export const makeOwner = (
       prompt:
         requested.scenario === "wikipedia"
           ? racePrompt(wikipedia)
-          : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
-            requested.prompt),
+          : requested.scenario === "coffee"
+            ? storeTask.prompt
+            : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
+              requested.prompt),
     };
 
     const state = store.read();
@@ -433,7 +454,9 @@ export const makeOwner = (
           ? "default"
           : jev
             ? "jev"
-            : "frontier",
+            : input.scenario === "coffee"
+              ? "store"
+              : "frontier",
       );
 
       const identity = yield* current.measure(

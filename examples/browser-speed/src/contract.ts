@@ -15,7 +15,16 @@ export const Task = Schema.Struct({
 
 export type Task = typeof Task.Type;
 export const Board = Schema.Array(Task).check(Schema.isMaxLength(50));
-export const Scenario = Schema.Literals(["create", "triage", "batch", "custom", "wikipedia"]);
+
+export const Scenario = Schema.Literals([
+  "create",
+  "triage",
+  "batch",
+  "custom",
+  "wikipedia",
+  "coffee",
+]);
+
 export type Scenario = typeof Scenario.Type;
 export const Mode = Schema.Literals(["scripted", "agent", "batched"]);
 export type Mode = typeof Mode.Type;
@@ -269,6 +278,15 @@ export const scenarios = [
   },
 ] as const;
 
+/** A real store, outside the task-board presets: there is no scripted baseline or board verifier. */
+export const storeTask = {
+  id: "coffee",
+  title: "Check out a bag of coffee",
+  detail: "A real store, hedge.coffee · stops before payment",
+  prompt:
+    "On the Hedge Coffee store, open one coffee and click Add To Cart once. Then open the cart and click Checkout. Stop when the checkout page shows the order summary. Never enter an email, address or payment details.",
+} as const;
+
 export const seed: ReadonlyArray<Task> = [
   { id: 1, title: "Review onboarding", assignee: "Sam", priority: "Medium", status: "Todo" },
   { id: 2, title: "Fix keyboard navigation", assignee: "Alex", priority: "High", status: "Doing" },
@@ -303,6 +321,7 @@ export const verify = (scenario: Scenario, board: ReadonlyArray<Task>): boolean 
   return (
     scenario !== "custom" &&
     scenario !== "wikipedia" &&
+    scenario !== "coffee" &&
     expected.length === board.length &&
     expected.every((task) => {
       const actual = board.find((value) => value.id === task.id);
