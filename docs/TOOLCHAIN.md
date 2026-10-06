@@ -707,6 +707,8 @@ previous main revision, and have exactly the PR head's tree. Squash and two-pare
 supported; changed bases, merge resolutions and other topologies select ordinary CI. The proof
 rechecks ordinary source CI and the latest successful version-PR CI attempt, including its actual
 build, package checks and `ready` command. It never chains source approval through another fast path.
+Completed metadata skips do not supersede build or paid-gate evidence. A later failed,
+cancelled, or unfinished attempt still prevents reuse.
 
 Each build uploads one `release-build-<run>-<attempt>` artifact containing package `dist` files and
 the Action bundle, bound to its Git tree, commit and parents. Consumers check the authenticated

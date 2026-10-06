@@ -625,7 +625,11 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
       builds.total_count === builds.workflow_runs.length && builds.total_count <= 100,
       "Incomplete build listing",
     );
-    buildRun = builds.workflow_runs.toSorted((a, b) => b.id - a.id)[0];
+    // Metadata edits can finish a skipped run after the real CI attempt.
+    // Failed, cancelled, or unfinished attempts must still prevent reuse.
+    buildRun = builds.workflow_runs
+      .toSorted((a, b) => b.id - a.id)
+      .find((candidate) => candidate.status !== "completed" || candidate.conclusion !== "skipped");
     if (buildRun === undefined)
       return yield* new ProofUnavailable({ message: "No version PR build" });
 
@@ -746,7 +750,10 @@ export const proveGatedRelease = Effect.fn("releaseCi.proveGatedRelease")(functi
     runs.total_count === runs.workflow_runs.length && runs.total_count <= 100,
     "Incomplete gate run listing",
   );
-  const run = runs.workflow_runs.toSorted((a, b) => b.id - a.id)[0];
+
+  const run = runs.workflow_runs
+    .toSorted((a, b) => b.id - a.id)
+    .find((candidate) => candidate.status !== "completed" || candidate.conclusion !== "skipped");
 
   if (run === undefined) return yield* new ProofUnavailable({ message: "No version PR CI" });
 
