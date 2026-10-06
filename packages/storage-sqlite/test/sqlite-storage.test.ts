@@ -207,106 +207,6 @@ const withTemporaryDatabase = <A, E>(
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe("SqliteThreadStore", () => {
-  // An independently constructed store sharing the exclusive SQL client bypasses the
-  // host's administrative cache refresh. The database must still own tail and fence CAS.
-  it.effect.each(["tail", "fence"] as const)(
-    "honors an independent same-client writer (%s)",
-    (change) =>
-      withTemporaryDatabase((filename) => {
-        const dependencies = Layer.mergeAll(
-          SqliteClient.layer({ filename, disableWAL: true }),
-          storageConfigLayer({ filename }),
-          SqliteStorageFailpoint.layer,
-          NodeCrypto.layer,
-        );
-
-        const services = exclusiveRunStorageLayer.pipe(
-          Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
-        );
-
-        return Effect.gen(function* () {
-          const ledger = yield* SubmissionLedger;
-          const storage = yield* RunStorage;
-          const independent = Context.get(yield* Layer.build(threadStoreLayer), ThreadStore);
-          const producerId = id(ClaimRequest.fields.producerId, "independent-writer-proof");
-          const digest = id(Digest, "a".repeat(64));
-
-          const admitted = yield* ledger.admit(
-            AdmissionRequest.make({
-              threadId,
-              principal: id(AdmissionRequest.fields.principal, "proof-principal"),
-              idempotencyKey: id(AdmissionRequest.fields.idempotencyKey, change),
-              agentId: id(AdmissionRequest.fields.agentId, "proof-agent"),
-              agentDigests: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
-              deploymentId: id(AdmissionRequest.fields.deploymentId, "proof-deployment"),
-              inputPayload: "proof",
-              inputDigest: yield* digestJson("proof"),
-            }),
-          );
-
-          yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-          const claimed = yield* storage.claim(ClaimRequest.make({ threadId, producerId }));
-
-          if (Option.isNone(claimed)) return yield* Effect.die("Run not claimed");
-          const session = claimed.value;
-
-          const fact = (name: string) =>
-            batch(name, [
-              canonicalRecord(
-                name,
-                UserInputRecorded.make({
-                  submissionId: admitted.submissionId,
-                  runId: runIdForSubmission(admitted.submissionId),
-                  kind: "user",
-                  input: name,
-                }),
-              ),
-            ]);
-
-          const tailRequest = ThreadTailRequest.make({ threadId });
-          const before = yield* independent.inspectTail(tailRequest);
-
-          if (change === "tail") {
-            const external = yield* independent.append(
-              FencedAppendRequest.make({
-                threadId,
-                producerEpoch: session.producerEpoch,
-                expectedTailSequence: before.tailSequence,
-                expectedTailDigest: before.tailDigest,
-                batch: fact("independent-fact"),
-              }),
-            );
-
-            const appended = yield* session.append(fact("session-fact"));
-
-            expect(appended.firstSequence).toBe(external.lastSequence + 1);
-            const sql = yield* SqlClientService.SqlClient;
-
-            expect(
-              yield* sql`SELECT record_id FROM effect_agent_canonical_records
-            WHERE thread_id=${threadId} ORDER BY sequence`,
-            ).toEqual([{ record_id: "independent-fact" }, { record_id: "session-fact" }]);
-          } else {
-            yield* independent.materialize(
-              ThreadMaterialization.make({
-                threadId,
-                producerEpoch: epoch(session.producerEpoch + 1),
-              }),
-            );
-            const appended = yield* session.append(fact("obsolete-fact")).pipe(Effect.exit);
-            const after = yield* independent.inspectTail(tailRequest);
-
-            expect(Exit.isFailure(appended)).toBe(true);
-            if (Exit.isSuccess(appended)) return;
-            expect(Cause.squash(appended.cause)).toMatchObject({ _tag: "FenceRejected" });
-            expect(after.producerEpoch).toBe(session.producerEpoch + 1);
-            expect(after.tailSequence).toBe(before.tailSequence);
-            expect(after.tailDigest).toBe(before.tailDigest);
-          }
-        }).pipe(Effect.scoped, Effect.provide(services));
-      }),
-  );
-
   it.effect("rejects canonical records beyond the captured export tail", () =>
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
@@ -678,6 +578,106 @@ describe("SqliteThreadStore", () => {
         }),
       ),
     ),
+  );
+
+  // An independently constructed store sharing the exclusive SQL client bypasses the
+  // host's administrative cache refresh. The database must still own tail and fence CAS.
+  it.effect.each(["tail", "fence"] as const)(
+    "honors an independent same-client writer (%s)",
+    (change) =>
+      withTemporaryDatabase((filename) => {
+        const dependencies = Layer.mergeAll(
+          SqliteClient.layer({ filename, disableWAL: true }),
+          storageConfigLayer({ filename }),
+          SqliteStorageFailpoint.layer,
+          NodeCrypto.layer,
+        );
+
+        const services = exclusiveRunStorageLayer.pipe(
+          Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
+        );
+
+        return Effect.gen(function* () {
+          const ledger = yield* SubmissionLedger;
+          const storage = yield* RunStorage;
+          const independent = Context.get(yield* Layer.build(threadStoreLayer), ThreadStore);
+          const producerId = id(ClaimRequest.fields.producerId, "independent-writer-proof");
+          const digest = id(Digest, "a".repeat(64));
+
+          const admitted = yield* ledger.admit(
+            AdmissionRequest.make({
+              threadId,
+              principal: id(AdmissionRequest.fields.principal, "proof-principal"),
+              idempotencyKey: id(AdmissionRequest.fields.idempotencyKey, change),
+              agentId: id(AdmissionRequest.fields.agentId, "proof-agent"),
+              agentDigests: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
+              deploymentId: id(AdmissionRequest.fields.deploymentId, "proof-deployment"),
+              inputPayload: "proof",
+              inputDigest: yield* digestJson("proof"),
+            }),
+          );
+
+          yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+          const claimed = yield* storage.claim(ClaimRequest.make({ threadId, producerId }));
+
+          if (Option.isNone(claimed)) return yield* Effect.die("Run not claimed");
+          const session = claimed.value;
+
+          const fact = (name: string) =>
+            batch(name, [
+              canonicalRecord(
+                name,
+                UserInputRecorded.make({
+                  submissionId: admitted.submissionId,
+                  runId: runIdForSubmission(admitted.submissionId),
+                  kind: "user",
+                  input: name,
+                }),
+              ),
+            ]);
+
+          const tailRequest = ThreadTailRequest.make({ threadId });
+          const before = yield* independent.inspectTail(tailRequest);
+
+          if (change === "tail") {
+            const external = yield* independent.append(
+              FencedAppendRequest.make({
+                threadId,
+                producerEpoch: session.producerEpoch,
+                expectedTailSequence: before.tailSequence,
+                expectedTailDigest: before.tailDigest,
+                batch: fact("independent-fact"),
+              }),
+            );
+
+            const appended = yield* session.append(fact("session-fact"));
+
+            expect(appended.firstSequence).toBe(external.lastSequence + 1);
+            const sql = yield* SqlClientService.SqlClient;
+
+            expect(
+              yield* sql`SELECT record_id FROM effect_agent_canonical_records
+            WHERE thread_id=${threadId} ORDER BY sequence`,
+            ).toEqual([{ record_id: "independent-fact" }, { record_id: "session-fact" }]);
+          } else {
+            yield* independent.materialize(
+              ThreadMaterialization.make({
+                threadId,
+                producerEpoch: epoch(session.producerEpoch + 1),
+              }),
+            );
+            const appended = yield* session.append(fact("obsolete-fact")).pipe(Effect.exit);
+            const after = yield* independent.inspectTail(tailRequest);
+
+            expect(Exit.isFailure(appended)).toBe(true);
+            if (Exit.isSuccess(appended)) return;
+            expect(Cause.squash(appended.cause)).toMatchObject({ _tag: "FenceRejected" });
+            expect(after.producerEpoch).toBe(session.producerEpoch + 1);
+            expect(after.tailSequence).toBe(before.tailSequence);
+            expect(after.tailDigest).toBe(before.tailDigest);
+          }
+        }).pipe(Effect.scoped, Effect.provide(services));
+      }),
   );
 
   it.effect("classifies cross-connection write contention as retryable typed contention", () =>
