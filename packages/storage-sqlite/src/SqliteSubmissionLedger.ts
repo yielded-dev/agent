@@ -27,6 +27,7 @@ const makeServices = Effect.fnUntraced(function* () {
     errors: sqliteErrors,
     hitFailpoint: failpoint.hit,
     ownershipLeaseDuration: config.ownershipLeaseDuration,
+    offsetPrefix: "effect-agent-sqlite@1:",
     sqlFailure,
   });
 

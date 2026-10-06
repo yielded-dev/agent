@@ -305,6 +305,7 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
             errors: sqliteErrors,
             hitFailpoint: failpoint.hit,
             ownershipLeaseDuration: config.ownershipLeaseDuration,
+            offsetPrefix: "effect-agent-sqlite@1:",
             sqlFailure,
           },
         );

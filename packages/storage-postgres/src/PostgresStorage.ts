@@ -127,6 +127,7 @@ const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
     errors: postgresStorageErrors,
     hitFailpoint,
     ownershipLeaseDuration: config.ownershipLeaseDuration,
+    offsetPrefix: "effect-agent-postgres@1:",
     sqlFailure: (operation) => (cause) => {
       const internal = classifyWriteFailure(operation)(cause);
 

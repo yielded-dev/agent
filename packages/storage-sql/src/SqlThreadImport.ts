@@ -73,6 +73,7 @@ import {
   ThreadCheckpoint,
   streamExport,
   ThreadExportSource,
+  canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import {
   exportThreadPage,
@@ -1040,6 +1041,22 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   yield* work.initialize(threadId);
                 }
                 for (const batch of page.batches) {
+                  if (
+                    !canonicalBatchFitsTransfer(
+                      threadId,
+                      batch.batch,
+                      utf8ByteLength(batch.batchJson),
+                      utf8ByteLength(JSON.stringify(options.offsetPrefix)) +
+                        3 * utf8ByteLength(threadId) +
+                        25,
+                    )
+                  )
+                    return yield* ThreadImportRejected.make({
+                      threadId,
+                      reason: "unsupported-capacity",
+                      message: "Canonical batch exceeds its bounded transfer representation",
+                    });
+
                   if (
                     (yield* query(
                       sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${batch.batch.batchId} LIMIT 1`,

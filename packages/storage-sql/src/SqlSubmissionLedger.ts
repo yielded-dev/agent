@@ -395,6 +395,7 @@ export interface SqlSubmissionLedgerOptions<
   readonly errors: SqlStorageErrors<S, C>;
   readonly hitFailpoint: SqlStorageFailpoint<F>;
   readonly ownershipLeaseDuration: number;
+  readonly offsetPrefix: string;
   readonly sqlFailure: (operation: string) => (error: SqlError) => LedgerError;
 }
 
@@ -1922,7 +1923,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     const operation = "publish settlement";
     const { request, record, settlement } = yield* validatePublication(input);
 
-    const prepared = yield* prepareSqlAppend(request.append).pipe(
+    const prepared = yield* prepareSqlAppend(request.append, options.offsetPrefix).pipe(
       Effect.provideService(Crypto.Crypto, crypto),
     );
 

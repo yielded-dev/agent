@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
+import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { QueueSequence } from "../core/Receipt.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
 import type { IntegrityReport } from "./Admin.ts";
@@ -10,6 +11,7 @@ import {
   recordEncoding,
   type ProgressAppendRecord,
 } from "./internal/record-encoding.ts";
+import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { ExportRecord } from "./RecordFormat.ts";
@@ -39,6 +41,7 @@ import type { ThreadWorkStorage } from "./ThreadWork.ts";
 
 export const MAX_THREAD_EXPORT_PAGE_RECORDS = 256;
 export const MAX_THREAD_EXPORT_PAGE_BYTES = 32 * 1024 * 1024;
+export const MAX_THREAD_EXPORT_CURSOR_CHARS = 16_384;
 
 /** Only model input and the facts needed to validate its ownership and compaction. */
 export const PROMPT_EVIDENCE_TAGS = [
@@ -70,7 +73,10 @@ export const ThreadWorkerSeal = Schema.Struct({ terminal: Schema.optionalKey(Ass
 export type ThreadWorkerSeal = typeof ThreadWorkerSeal.Type;
 
 /** Opaque, snapshot-bound transfer position. Only the exporting adapter constructs it. */
-export const ThreadExportCursor = Schema.NonEmptyString.check(Schema.isMaxLength(16_384));
+export const ThreadExportCursor = Schema.NonEmptyString.check(
+  Schema.isMaxLength(MAX_THREAD_EXPORT_CURSOR_CHARS),
+);
+
 export type ThreadExportCursor = typeof ThreadExportCursor.Type;
 
 /** Exact canonical identity; absence is not proof that an admission was never accepted. */
@@ -293,6 +299,39 @@ const validateRecordCount = Schema.decodeUnknownSync(
 );
 
 const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
+
+/**
+ * Admission reserves one complete batch's envelope, references, snapshot and continuation cursor.
+ * Adapters supply their native offset byte bound. Dependency literals already occur in record
+ * wire, so ordinary batches need only arithmetic; near the page limit, charge the exact references.
+ */
+export const canonicalBatchFitsTransfer = (
+  threadId: ThreadId,
+  batch: Pick<CanonicalBatch, "batchId" | "records">,
+  batchBytes: number,
+  maxOffsetBytes: number,
+): boolean => {
+  const threadJson = JSON.stringify(threadId);
+
+  // Canonical cursors embed the Thread identity; other manifest and position fields are bounded.
+  if (threadJson.length + 2_048 > MAX_THREAD_EXPORT_CURSOR_CHARS) return false;
+
+  const threadBytes = utf8ByteLength(threadJson);
+  const batchIdBytes = utf8ByteLength(JSON.stringify(batch.batchId));
+
+  // 128 bytes per envelope covers keys, sequence and punctuation. 128 KiB reserves the
+  // maximum JSON-escaped cursor plus bounded snapshot, seal, digest and page metadata.
+  const overhead =
+    batch.records.length * (batchIdBytes + threadBytes + maxOffsetBytes + 128) +
+    threadBytes +
+    128 * 1024;
+
+  if (2 * batchBytes + overhead + 2 <= MAX_THREAD_EXPORT_PAGE_BYTES) return true;
+
+  const dependencyBytes = utf8ByteLength(JSON.stringify(transferRecordDependencies(batch.records)));
+
+  return batchBytes + overhead + dependencyBytes <= MAX_THREAD_EXPORT_PAGE_BYTES;
+};
 
 /**
  * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON

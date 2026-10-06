@@ -332,8 +332,8 @@ const sourcePages = (filename: string, threadId: ThreadId) =>
   );
 
 /** NDJSON framing bounds an unfinished line before decoding its Schema. */
-const archivePages = (fs: FileSystem.FileSystem, input: string) =>
-  fs.stream(input).pipe(
+const archivePages = (input: string) =>
+  Stream.unwrap(Effect.map(FileSystem.FileSystem, (fs) => fs.stream(input))).pipe(
     Stream.decodeText(),
     Stream.concat(Stream.succeed("\n")),
     Stream.mapAccumEffect(
@@ -432,10 +432,9 @@ const importCommand = CliCommand.make(
   ({ input }) =>
     Effect.gen(function* () {
       const { database: filename } = yield* admin;
-      const fs = yield* FileSystem.FileSystem;
 
       const result = yield* Effect.flatMap(ThreadImport, (target) =>
-        target.import(archivePages(fs, input)),
+        target.import(archivePages(input)),
       ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
 
       yield* Console.log(

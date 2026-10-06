@@ -1,4 +1,9 @@
-import { digestCanonicalBatch, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import {
+  digestCanonicalBatch,
+  digestJson,
+  EMPTY_TAIL_DIGEST,
+  utf8ByteLength,
+} from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId as importSubmissionId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
 import { ExportBatch } from "@yielded/agent/record-format";
@@ -93,6 +98,7 @@ import {
   ThreadWorkerCapacity,
   streamExport,
   ThreadExportSource,
+  canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import { exportThreadPage, ThreadExporterReader } from "@yielded/agent/thread-transfer";
 import {
@@ -1292,8 +1298,18 @@ const makeThreadStore = Effect.gen(function* () {
       Effect.mapError((cause) => storeError("append", "Unable to encode canonical batch", cause)),
     );
 
-    if (new TextEncoder().encode(batchJson).byteLength > 16 * 1024 * 1024)
+    const batchBytes = new TextEncoder().encode(batchJson).byteLength;
+
+    if (batchBytes > 16 * 1024 * 1024)
       return yield* storeError("append", "Canonical batch exceeds 16 MiB");
+
+    const offsetBytes = 4 * Math.ceil(utf8ByteLength(request.threadId) / 3) + 36;
+
+    if (!canonicalBatchFitsTransfer(request.threadId, request.batch, batchBytes, offsetBytes))
+      return yield* storeError(
+        "append",
+        "Canonical batch exceeds its bounded transfer representation",
+      );
 
     const digest = yield* digestCanonicalBatch(request.expectedTailDigest, request.batch).pipe(
       Effect.provideService(Crypto.Crypto, crypto),
@@ -2129,6 +2145,20 @@ const makeThreadStore = Effect.gen(function* () {
                     message: "A paired delivery store is required for delivery restore",
                   });
                 for (const batch of page.batches) {
+                  if (
+                    !canonicalBatchFitsTransfer(
+                      id,
+                      batch.batch,
+                      utf8ByteLength(batch.batchJson),
+                      4 * Math.ceil(utf8ByteLength(id) / 3) + 36,
+                    )
+                  )
+                    return yield* ThreadImportRejected.make({
+                      threadId: id,
+                      reason: "unsupported-capacity",
+                      message: "Canonical batch exceeds its bounded transfer representation",
+                    });
+
                   if (staged.batches.has(batch.batch.batchId))
                     return yield* invalidThreadArchive("Duplicate canonical batch identity", id);
 

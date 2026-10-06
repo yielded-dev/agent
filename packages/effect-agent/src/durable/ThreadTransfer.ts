@@ -2,6 +2,7 @@ import { Context, Effect, Schema } from "effect";
 
 import type { ThreadId } from "../core/Identifiers.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import {
   type RecordId,
@@ -112,32 +113,7 @@ export const transferSnapshotId = (manifest: TransferManifest) =>
 export const transferDependencies = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ): ReadonlyArray<RecordId> => {
-  const local = new Set(records.map((entry) => entry.record.recordId));
-  const dependencies = new Set<RecordId>();
-
-  for (const {
-    record: { payload },
-  } of records) {
-    if (payload._tag === "WorkerInputRefused")
-      for (const ref of [payload.reservation, payload.stop])
-        if (!local.has(ref.recordId)) dependencies.add(ref.recordId);
-    if (payload._tag === "WorkHandoffCompleted" && !local.has(payload.preparationId))
-      dependencies.add(payload.preparationId);
-    if (payload._tag === "RunContextRecorded")
-      for (const ref of payload.history)
-        if (!local.has(ref.recordId)) dependencies.add(ref.recordId);
-    if (payload._tag === "RunContinuation")
-      for (const ref of [
-        payload.originalInput,
-        payload.savedContext,
-        payload.latestResponse,
-        payload.terminal,
-        payload.lastFact,
-      ])
-        if (ref !== undefined && !local.has(ref.recordId)) dependencies.add(ref.recordId);
-  }
-
-  return [...dependencies].sort();
+  return transferRecordDependencies(records.map((entry) => entry.record));
 };
 
 export const checkTransferPageBytes = (page: ThreadExport) =>

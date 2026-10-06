@@ -44,15 +44,7 @@ import {
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
-import {
-  FencedAppendRequest,
-  ThreadExportRequest,
-  ThreadMaterialization,
-  ThreadStore,
-  ThreadTailRequest,
-  streamExport,
-  ThreadExportSource,
-} from "@yielded/agent/thread-store";
+import * as ThreadStorage from "@yielded/agent/thread-store";
 import {
   Cause,
   Clock,
@@ -189,10 +181,13 @@ const retainedOutput = (index: number) => ({ answer: `retained-${index}` });
 
 /** Match PersistentHistory's input/model/completion triples with native prompt suffixes. */
 const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number) {
-  const store = yield* ThreadStore;
+  const store = yield* ThreadStorage.ThreadStore;
 
   yield* store.materialize(
-    ThreadMaterialization.make({ threadId, producerEpoch: Schema.decodeSync(ProducerEpoch)(0) }),
+    ThreadStorage.ThreadMaterialization.make({
+      threadId,
+      producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
+    }),
   );
   for (let start = 0; start < count; start += 256) {
     const records: Array<RecordEnvelope> = [];
@@ -242,10 +237,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
       records: [first, ...rest],
     });
 
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+    const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
     yield* store.append(
-      FencedAppendRequest.make({
+      ThreadStorage.FencedAppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.tailSequence,
@@ -301,13 +296,16 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
       payload,
     });
 
-    const store = yield* ThreadStore;
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
+    const store = yield* ThreadStorage.ThreadStore;
+
+    const tail = yield* store.inspectTail(
+      ThreadStorage.ThreadTailRequest.make({ threadId: seedThread }),
+    );
 
     yield* publishSeedSettlement(
       admitted.submissionId,
       claim.value.ownershipToken,
-      FencedAppendRequest.make({
+      ThreadStorage.FencedAppendRequest.make({
         threadId: seedThread,
         producerEpoch: claim.value.producerEpoch,
         expectedTailSequence: tail.tailSequence,
@@ -699,8 +697,10 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         let completed = 0;
         let retained = 0;
 
-        yield* streamExport(ThreadExportRequest.make({ threadId })).pipe(
-          Stream.provide(ThreadExportSource.layer()),
+        yield* ThreadStorage.streamExport(
+          ThreadStorage.ThreadExportRequest.make({ threadId }),
+        ).pipe(
+          Stream.provide(ThreadStorage.ThreadExportSource.layer()),
           Stream.runForEach((page) =>
             Effect.gen(function* () {
               for (const { record } of page.records) {
@@ -736,9 +736,9 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             compactionCommitted: compactionCommitMs !== null,
             compactionCommitMs,
           });
-          const store = yield* ThreadStore;
+          const store = yield* ThreadStorage.ThreadStore;
 
-          const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+          const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
           const continuation = yield* store
             .read({

@@ -69,7 +69,7 @@ import {
   DoStorageError,
 } from "./DoStorageError.ts";
 import { DoStorageFailpoint, type DoStorageFailpointHandler } from "./DoStorageFailpoint.ts";
-import { prepareCanonicalAppend } from "./internal/canonical-append.ts";
+import { DO_OFFSET_PREFIX, prepareCanonicalAppend } from "./internal/canonical-append.ts";
 import {
   initializeDoJournal,
   RawCheckpoint,
@@ -113,7 +113,6 @@ export type DoStorageInitializationError =
   | DoStorageError;
 
 const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
-const DO_OFFSET_PREFIX = "effect-agent-do@1:";
 const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const isDigest = Schema.is(Digest);
 const isDoFenceRejected = Schema.is(DoFenceRejected);

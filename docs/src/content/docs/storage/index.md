@@ -65,6 +65,9 @@ Provide `ThreadExportSource.layer()` from the source `ThreadStore`, or SQLite's 
 `exportSourceLayer({ filename })`. Bind that source separately from the destination import Layer
 when transferring between stores.
 
+Appends and imports refuse a batch whose identities and references cannot fit its complete
+32 MiB transfer page, even when its canonical payload fits the 16 MiB batch bound.
+
 The unreleased protocol accepts only fresh layout-21 stores and `effect-agent/thread@3` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).

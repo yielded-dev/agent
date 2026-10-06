@@ -1,4 +1,4 @@
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { EMPTY_TAIL_DIGEST, utf8ByteLength } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { ExportRecord } from "@yielded/agent/record-format";
@@ -34,6 +34,7 @@ import {
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
+  canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
@@ -65,7 +66,10 @@ export interface SqlThreadStoreOptions<
 }
 
 /** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
-export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppendRequest) {
+export const prepareSqlAppend = Effect.fnUntraced(function* (
+  request: FencedAppendRequest,
+  offsetPrefix: string,
+) {
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
     ThreadStoreError.make({ operation, message: cause.message, cause });
 
@@ -73,7 +77,18 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
     Effect.mapError(invalid("validate canonical append")),
   );
 
+  const offsetBytes =
+    utf8ByteLength(JSON.stringify(offsetPrefix)) + 3 * utf8ByteLength(validated.threadId) + 25;
+
   const captured = yield* PreparedAppend.capture(validated);
+
+  if (
+    !canonicalBatchFitsTransfer(captured.threadId, captured.batch, captured.batchBytes, offsetBytes)
+  )
+    return yield* ThreadStoreError.make({
+      operation: "prepare canonical append",
+      message: "Canonical batch exceeds its bounded transfer representation",
+    });
 
   const records = captured.records.map((record) =>
     Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
@@ -304,7 +319,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
     Effect.fn("SqlThreadStore.append")(function* (request: FencedAppendRequest) {
-      const rawRequest = yield* prepareSqlAppend(request).pipe(
+      const rawRequest = yield* prepareSqlAppend(request, options.offsetPrefix).pipe(
         Effect.provideService(Crypto.Crypto, crypto),
       );
 
