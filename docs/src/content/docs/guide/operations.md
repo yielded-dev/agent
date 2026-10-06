@@ -511,6 +511,7 @@ before a single-Thread import. Retained deliveries transfer without their operat
 | Atomic canonical batch | 256 records, 16 MiB encoded batch                                                    |
 | Physical range         | Complete batches; 1,024 records and 32 MiB including batch and record payload copies |
 | Export/import page     | 256 records or independent facts, 32 MiB encoded page                                |
+| Work-index rebuild     | 256 records by default (lower with `limit`), 32 MiB per pass                         |
 | Archive range listing  | 32 range descriptors                                                                 |
 
 These are working-set bounds, independent of Thread age. The host owns total storage, archive
