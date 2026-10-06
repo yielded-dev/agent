@@ -6,12 +6,12 @@ import { RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.t
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { IdempotencyKey } from "../core/Receipt.ts";
 import { summarizeModelUsage } from "../core/Usage.ts";
-import { digestCanonicalJson } from "./Digest.ts";
+import { reference, resolveEvidence } from "./internal/evidence.ts";
+export { reference, resolveEvidence } from "./internal/evidence.ts";
 import {
   captureRecord,
   recordEncoding,
   type ProgressAppendRecord,
-  type RecordEncoding,
 } from "./internal/record-encoding.ts";
 import {
   canonicalRunIds,
@@ -20,7 +20,7 @@ import {
   isTerminalBudgetFact,
 } from "./internal/record-ownership.ts";
 export { terminalUsageCharge } from "./internal/record-ownership.ts";
-import { rebuildRunContext } from "./internal/run-context.ts";
+import { projectRunContext } from "./internal/run-context.ts";
 import {
   type CanonicalRecordEnvelope,
   type ContinuationAccounting,
@@ -182,44 +182,6 @@ export const prepareProgressAppend = (
 
 const factUsageCharge = (facts: ReadonlyArray<RecordEnvelope>): number =>
   facts.reduce((bytes, record) => bytes + recordEncoding(record).progress.terminalUsageBytes, 0);
-
-const evidenceDigests = new WeakMap<RecordEncoding, EvidenceReference>();
-
-export const reference = Effect.fnUntraced(function* (record: RecordEnvelope) {
-  const wire = yield* Effect.try({
-    try: () => recordEncoding(record),
-    catch: (cause) => failure("Cannot encode canonical evidence", cause),
-  });
-
-  const retained = evidenceDigests.get(wire);
-
-  if (retained !== undefined) return retained;
-  const recordId = wire.canonical.recordId;
-
-  const digest = yield* digestCanonicalJson(wire.json).pipe(
-    Effect.mapError((cause) => failure("Cannot fingerprint canonical evidence", cause)),
-  );
-
-  const result = EvidenceReference.make({ recordId, digest });
-
-  evidenceDigests.set(wire, result);
-
-  return result;
-});
-
-/** Resolve exact immutable content. A failed reference leaves the original work owed. */
-export const resolveEvidence = Effect.fnUntraced(function* (
-  threadId: ThreadId,
-  ref: EvidenceReference,
-) {
-  const found = yield* getRecord({ threadId, recordId: ref.recordId });
-
-  if (Option.isNone(found)) return yield* failure("Required canonical evidence is unavailable");
-  if ((yield* reference(found.value.record)).digest !== ref.digest)
-    return yield* failure("Required canonical evidence has invalid integrity");
-
-  return found.value;
-});
 
 export const readContinuation = Effect.fnUntraced(function* (
   threadId: ThreadId,
@@ -860,11 +822,11 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
 
         if (originalEntry === undefined || entry.sequence <= originalEntry.sequence)
           return yield* failure("Context has no exact original input boundary");
-        yield* rebuildRunContext(
+        yield* projectRunContext(
           entry.record.payload,
           originalEntry,
           (yield* reference(entry.record)).digest,
-          (ref) =>
+          yield* Effect.forEach(entry.record.payload.history, (ref) =>
             Effect.gen(function* () {
               const evidence = byId.get(ref.recordId);
 
@@ -876,6 +838,7 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
 
               return evidence;
             }),
+          ),
         ).pipe(
           Effect.mapError((cause) => failure("Context differs from its referenced facts", cause)),
         );

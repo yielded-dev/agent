@@ -4,25 +4,26 @@ import { Prompt } from "effect/ai";
 import {
   MAX_RUN_CONTEXT_BYTES,
   type CanonicalRecordEnvelope,
-  type EvidenceReference,
   type RunContextRecorded,
 } from "../Records.ts";
 import { projectRunJournalStream, RunJournalError, type RunJournalContext } from "../RunJournal.ts";
+import { resolveEvidence } from "./evidence.ts";
 import { recordEncoding } from "./record-encoding.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
 
-/** Resolve the original model history, never later traffic or execution authority. */
-export const rebuildRunContext = Effect.fnUntraced(function* <E, R>(
+/** Project integrity-checked immutable facts, including offline archive verification. */
+export const projectRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
   digest: string,
-  resolve: (ref: EvidenceReference) => Effect.Effect<CanonicalRecordEnvelope, E, R>,
-): Effect.fn.Return<RunJournalContext, E | RunJournalError, R> {
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+): Effect.fn.Return<RunJournalContext, RunJournalError> {
   if (
     original.record.payload._tag !== "UserInputRecorded" ||
     original.record.payload.runId !== context.runId ||
     context.historyThrough + 1 !== original.sequence ||
+    records.length !== context.history.length ||
     context.boundaries.some(
       (boundary) =>
         boundary.sequence > context.historyThrough ||
@@ -31,14 +32,16 @@ export const rebuildRunContext = Effect.fnUntraced(function* <E, R>(
   )
     return yield* invalid("Saved context has an invalid original admission boundary");
 
-  const records: Array<CanonicalRecordEnvelope> = [];
   let through = 0;
   let bytes = 0;
 
-  for (const ref of context.history) {
-    const entry = yield* resolve(ref);
+  for (const [index, ref] of context.history.entries()) {
+    const entry = records[index];
 
     if (
+      entry === undefined ||
+      entry.threadId !== original.threadId ||
+      entry.record.recordId !== ref.recordId ||
       entry.sequence !== ref.sequence ||
       entry.sequence <= through ||
       entry.sequence > context.historyThrough
@@ -48,7 +51,6 @@ export const rebuildRunContext = Effect.fnUntraced(function* <E, R>(
     bytes += recordEncoding(entry.record).bytes;
     if (bytes > MAX_RUN_CONTEXT_BYTES)
       return yield* invalid("Saved context exceeds its referenced byte bound");
-    records.push(entry);
   }
   if (bytes !== context.historyBytes)
     return yield* invalid("Saved context byte accounting differs from its facts");
@@ -76,4 +78,25 @@ export const rebuildRunContext = Effect.fnUntraced(function* <E, R>(
     digest,
     ...(context.contextWindowId === undefined ? {} : { contextWindowId: context.contextWindowId }),
   };
+});
+
+/** Read the original model history through ThreadReader and Crypto, never execution authority. */
+export const rebuildRunContext = Effect.fnUntraced(function* (
+  context: RunContextRecorded,
+  original: CanonicalRecordEnvelope,
+  digest: string,
+) {
+  const records: Array<CanonicalRecordEnvelope> = [];
+  let bytes = 0;
+
+  for (const ref of context.history) {
+    const entry = yield* resolveEvidence(original.threadId, ref);
+
+    bytes += recordEncoding(entry.record).bytes;
+    if (bytes > MAX_RUN_CONTEXT_BYTES)
+      return yield* invalid("Saved context exceeds its referenced byte bound");
+    records.push(entry);
+  }
+
+  return yield* projectRunContext(context, original, digest, records);
 });

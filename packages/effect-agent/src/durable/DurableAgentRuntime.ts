@@ -1249,6 +1249,25 @@ interface PendingToolBatch {
 }
 
 type AttemptAppendContext = RunWriter;
+
+interface RunTiming {
+  readonly startedAt: DateTime.Utc;
+  readonly deadline: DateTime.Utc;
+}
+
+/** Deferred start/context publication belongs to one owning Attempt. */
+class CurrentRunStart extends Context.Service<
+  CurrentRunStart,
+  {
+    readonly commit: (
+      context?: RecordEnvelope,
+    ) => Effect.Effect<
+      void,
+      Effect.Error<ReturnType<RunWriter["append"]>> | DurableRuntimeFailpointError
+    >;
+  }
+>()("@effect-agent/thread/CurrentRunStart") {}
+
 type PublishSettlement = (
   batch: CanonicalBatch,
 ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
@@ -1696,12 +1715,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ) {
           saved = cachedContext.value;
         } else {
-          saved = yield* rebuildRunContext(initial, input, cursor.savedContext.digest, (ref) =>
-            resolveEvidence(threadId, ref).pipe(
-              Effect.provideService(ThreadReader, reader),
-              Effect.provideService(Crypto.Crypto, crypto),
-            ),
-          ).pipe(
+          saved = yield* rebuildRunContext(initial, input, cursor.savedContext.digest).pipe(
+            Effect.provideService(ThreadReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
             Effect.mapError(() =>
               invalid("Saved original context cannot be resolved from its evidence"),
             ),
@@ -2604,7 +2620,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     return yield* attemptContextFor(threadId, tail.producerEpoch);
   });
 
-  const appendBatch = (ctx: AttemptAppendContext, batch: CanonicalBatch) =>
+  const appendBatch = (ctx: Pick<RunWriter, "threadId" | "append">, batch: CanonicalBatch) =>
     ctx.append(batch).pipe(Effect.tap(() => wake.notify(ctx.threadId, "progress")));
 
   const publicationFor =
@@ -3151,12 +3167,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     return existing?.record;
   });
 
-  const ensureRunStarted = Effect.fnUntraced(function* (
-    ctx: AttemptAppendContext,
+  const makeRunStart = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     maxDurationMillis: number,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
+    const writer = yield* CurrentRunWriter;
     const runId = runIdForSubmission(submission.submissionId);
     const recordId = runStartedRecordId(runId);
     const existing = yield* canonicalRunStartFromRecords(records, runId);
@@ -3193,7 +3209,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (committed) {
         if (context !== undefined)
           yield* appendBatch(
-            ctx,
+            writer,
             CanonicalBatch.make({
               batchId: decodeBatchIdSync(context.recordId),
               producerId: config.producerId,
@@ -3205,7 +3221,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
       yield* hit("run:before-start-append");
       yield* appendBatch(
-        ctx,
+        writer,
         CanonicalBatch.make({
           batchId: runStartedBatchId(runId),
           producerId: config.producerId,
@@ -3217,20 +3233,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     });
 
     return {
-      commit,
-      startedAt: start.createdAt,
-      // Downtime is not execution. Reuse the original per-Attempt allowance without
-      // moving the Run start or resetting journaled turn, Tool or cost accounting.
-      deadline: records.some(
-        ({ record }) =>
-          record.payload._tag === "RunDurationExhausted" && record.payload.runId === runId,
-      )
-        ? start.createdAt
-        : DateTime.addDuration(yield* DateTime.now, Duration.millis(allowance)),
+      publication: CurrentRunStart.of({ commit }),
+      timing: {
+        startedAt: start.createdAt,
+        // Downtime is not execution. Reuse the original per-Attempt allowance without
+        // moving the Run start or resetting journaled turn, Tool or cost accounting.
+        deadline: records.some(
+          ({ record }) =>
+            record.payload._tag === "RunDurationExhausted" && record.payload.runId === runId,
+        )
+          ? start.createdAt
+          : DateTime.addDuration(yield* DateTime.now, Duration.millis(allowance)),
+      } satisfies RunTiming,
     };
   });
-
-  type RunTiming = Effect.Success<ReturnType<typeof ensureRunStarted>>;
 
   /**
    * Cross-lane drive-forward after one child Submission settles (spec §12 step 10): the child's
@@ -5555,7 +5571,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const durability: RunDurabilityHook<
         CoordinatorHalt | AgentPersistenceCapacityError | CompactionError,
-        never
+        CurrentRunStart
       > = {
         toolResultMaxBytes: MAX_PERSISTED_JSON_BYTES,
         checkpoint,
@@ -5613,7 +5629,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
-              yield* runTiming.commit(yield* makeEnvelope(recordId, payload));
+              const start = yield* CurrentRunStart;
+
+              yield* start.commit(yield* makeEnvelope(recordId, payload));
               knownIds.add(runStartedRecordId(runId));
               knownIds.add(recordId);
               historyEvidence.clear();
@@ -8060,12 +8078,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
       yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
 
-      const savedRunTiming = yield* ensureRunStarted(
-        ctx,
+      const start = yield* makeRunStart(
         submission,
         Duration.toMillis(agent.definition.policy.maxDuration),
         yield* refreshControl(),
-      );
+      ).pipe(Effect.provideService(CurrentRunWriter, ctx));
+
+      const savedRunTiming = start.timing;
+
+      const commitStart = Effect.flatMap(CurrentRunStart, (publication) =>
+        publication.commit(),
+      ).pipe(Effect.provideService(CurrentRunStart, start.publication));
 
       const runTiming =
         workerOrigin === undefined
@@ -8083,7 +8106,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       let expiredChildObligation = false;
 
       if ((yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(runTiming.deadline)) {
-        yield* runTiming.commit();
+        yield* commitStart;
         yield* reconcileRetainedChildren(ctx, submission, session);
         expiredChildObligation = yield* completeJoinedReleases(submission);
       }
@@ -8342,7 +8365,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentContracts,
           runTiming,
           yieldAfter,
-        );
+        ).pipe(Effect.provideService(CurrentRunStart, start.publication));
 
         if (outcome._tag === "yielded") {
           if (outcome.nextSubmissionId !== undefined) onHandoff(outcome.nextSubmissionId);
@@ -8410,7 +8433,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           )).approvalDecisions;
           continue;
         }
-        yield* runTiming.commit();
+        yield* commitStart;
         if (outcome._tag === "aborted") {
           // Durable abort ended the Run while attached children may still be open:
           // request-abort-and-join before the aborted settlement (spec §13.1).

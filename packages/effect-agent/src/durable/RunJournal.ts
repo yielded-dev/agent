@@ -837,6 +837,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 
   let latestWindowId: string | undefined = savedContext?.contextWindowId;
   let latestWindowSequence = -1;
+  let latestWindow: CompactionView | undefined;
   let rolloverCoveredThrough = 0;
 
   for (const { payload, sequence } of compactions) {
@@ -844,6 +845,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     if (payload.kind === "rollover" && sequence > latestWindowSequence) {
       latestWindowId = contextWindowId(payload.runId, payload.turn);
       latestWindowSequence = sequence;
+      latestWindow = { payload, sequence };
     }
     if (payload.kind === "rollover")
       rolloverCoveredThrough = Math.max(rolloverCoveredThrough, payload.coversThrough);
@@ -853,12 +855,17 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     } else clearings = retainCompaction(clearings, { payload, sequence });
   }
 
-  const contextCompactions = new Set(
-    [...replacements, ...clearings].map(({ sequence }) => sequence),
-  );
+  // A superseding summary retires the overlay, but the latest rollover still owns the window.
+  const contextViews = [
+    ...replacements,
+    ...clearings,
+    ...(latestWindow === undefined ? [] : [latestWindow]),
+  ];
+
+  const contextCompactions = new Set(contextViews.map(({ sequence }) => sequence));
 
   const contextCreatorStarts = new Set(
-    [...replacements, ...clearings].flatMap(({ payload }) => {
+    contextViews.flatMap(({ payload }) => {
       const sequence = firstSequenceByRun.get(payload.runId);
 
       return sequence === undefined ? [] : [sequence];

@@ -30,6 +30,7 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
+import { reencodeThread } from "@yielded/agent/thread-import";
 import { ThreadExportRequest, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -77,9 +78,10 @@ const scenarios = [
 
 describe("retained Run recovery", () => {
   // #692/#731: keep the public prompt/compaction workflow after retiring its cache mechanism.
-  it.effect("retains fresh-Run handoffs, input and one instruction prefix across compaction", () =>
+  it.effect("retains original context across rollover, summary and cold recovery", () =>
     Effect.gen(function* () {
       const store = yield* ThreadStore;
+      const failpoints = yield* DurableRuntimeFailpointTestControl;
       const threadId = ThreadId.make("fresh-checkpoint");
       const requests: Array<Prompt.Prompt> = [];
 
@@ -112,14 +114,40 @@ describe("retained Run recovery", () => {
 
       const binding = yield* DurableWorkerBinding.make(agent, definitions);
 
-      const process = (input: string, rollover: boolean) =>
+      const process = (input: string, rollover: boolean, summarize = false) =>
         Effect.gen(function* () {
+          const compactor = yield* ContextCompactor.pipe(
+            Effect.provide(ContextCompactor.layerRollover),
+          );
+
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
               DurableAgentRuntime.layerWithBindings([binding]).pipe(
                 Layer.provide(runStorageLayer()),
                 Layer.provide(
-                  Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
+                  Layer.mergeAll(
+                    RunToolAuthorization.allowAll,
+                    Layer.succeed(ContextCompactor, {
+                      estimate: (messages) =>
+                        summarize &&
+                        messages.some((message) =>
+                          JSON.stringify(message).includes("new window request"),
+                        )
+                          ? 25_000
+                          : compactor.estimate(messages),
+                      compact: (request) =>
+                        summarize
+                          ? Stream.succeed({
+                              kind: "summarize",
+                              through:
+                                request.source.content.findLastIndex(
+                                  (message) => message.role === "assistant",
+                                ) + 1,
+                              summary: "Completed conversation.",
+                            })
+                          : compactor.compact(request),
+                    }),
+                  ),
                 ),
               ),
             ),
@@ -145,8 +173,10 @@ describe("retained Run recovery", () => {
 
           expect(Option.isSome(result) && result.value).toMatchObject({
             submissionId: receipt.submissionId,
+            receiptId: receipt.receiptId,
             outcome: "completed",
           });
+          expect((yield* runtime.verify(threadId)).ok).toBe(true);
         }).pipe(Effect.scoped);
 
       yield* process("retired request", false);
@@ -177,6 +207,48 @@ describe("retained Run recovery", () => {
       const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
 
       expect(completed.records.slice(0, original.records.length)).toEqual(original.records);
+
+      yield* process("summarize completed windows", false, true);
+      const summarized = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      const rollover = summarized.records.findLast(
+        ({ record: { payload } }) =>
+          payload._tag === "CompactionCreated" && payload.kind === "rollover",
+      );
+
+      const summary = summarized.records.findLast(
+        ({ record: { payload } }) =>
+          payload._tag === "CompactionCreated" && payload.kind === "summarize",
+      );
+
+      if (rollover === undefined || summary?.record.payload._tag !== "CompactionCreated")
+        return yield* Effect.die("Missing rollover and covering summary");
+      expect(summary.record.payload.coversThrough).toBeGreaterThan(rollover.sequence);
+
+      // Stop after start/context co-commit, then rebuild only their saved references in a new runtime.
+      yield* failpoints.setHandler((location) =>
+        location === "run:after-start-append"
+          ? DurableRuntimeFailpointError.make({ location })
+          : Effect.void,
+      );
+      const requestsBefore = requests.length;
+      const stopped = yield* Effect.exit(process("resume summarized window", false));
+
+      expect(Exit.isFailure(stopped)).toBe(true);
+      expect(requests).toHaveLength(requestsBefore);
+      yield* failpoints.clear;
+      yield* process("resume summarized window", false);
+      expect(requests).toHaveLength(requestsBefore + 1);
+      expect(JSON.stringify(requests.at(-1))).toContain("Completed conversation.");
+      expect(JSON.stringify(requests.at(-1))).toContain("resume summarized window");
+      expect(JSON.stringify(requests.at(-1))).not.toContain("Retained handoff.");
+      const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      const imported = yield* reencodeThread(Effect.succeed(archive)).pipe(
+        Effect.provide(Layer.fresh(base)),
+      );
+
+      expect(imported.recordCount).toBe(archive.records.length);
     }).pipe(Effect.provide(base)),
   );
 
