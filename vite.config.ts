@@ -98,6 +98,11 @@ const generatedPaths = [
   "action/dist/**",
   "docs/.astro/**",
   "examples/travel-planner/src/routeTree.gen.ts",
+  // pi-durable and tardie workers, installed and typechecked outside this workspace.
+  "examples/durable-bench/third-party/**",
+  "examples/durable-bench/fixtures/**",
+  "examples/durable-bench/results/**",
+  "examples/durable-bench/dist/**",
 ];
 
 export default defineConfig({
