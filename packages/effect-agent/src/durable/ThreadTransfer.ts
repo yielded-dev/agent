@@ -71,16 +71,17 @@ export class ThreadExporterReader extends Context.Service<
   }
 >()("@effect-agent/thread/ThreadExporterReader") {}
 
+const Manifest = Schema.Struct({
+  threadId: ThreadExport.fields.threadId,
+  format: ThreadExport.fields.format,
+  tailSequence: ThreadExport.fields.tailSequence,
+  tailDigest: Digest,
+  snapshot: ThreadExportSnapshot,
+  workerSeal: ThreadExport.fields.workerSeal,
+  externalObligations: ThreadExport.fields.externalObligations,
+});
+
 const Position = Schema.Struct({
-  manifest: Schema.Struct({
-    threadId: ThreadExport.fields.threadId,
-    format: ThreadExport.fields.format,
-    tailSequence: ThreadExport.fields.tailSequence,
-    tailDigest: Digest,
-    snapshot: ThreadExportSnapshot,
-    workerSeal: ThreadExport.fields.workerSeal,
-    externalObligations: ThreadExport.fields.externalObligations,
-  }),
   snapshotId: Digest,
   fromSequence: Schema.Int.check(Schema.isGreaterThan(0)),
   previousTailDigest: Digest,
@@ -103,7 +104,7 @@ const nextSection = (position: typeof Position.Type) => {
 };
 
 export const transferSnapshotId = (manifest: TransferManifest) =>
-  Schema.encodeEffect(Position.fields.manifest)(manifest).pipe(
+  Schema.encodeEffect(Manifest)(manifest).pipe(
     Effect.mapError(() => failure("Invalid transfer manifest")),
     Effect.flatMap(digestJson),
     Effect.mapError(() => failure("Cannot digest transfer snapshot")),
@@ -126,7 +127,7 @@ export const checkTransferPageBytes = (page: ThreadExport) =>
     ),
   );
 
-/** Opaque cursors pin the tail AND every independently mutable fact owner. No lifetime collection. */
+/** Opaque cursors pin the complete manifest by digest, including the Thread and mutable fact owners. */
 export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExportRequest) {
   const reader = yield* ThreadExporterReader;
 
@@ -140,7 +141,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
   let position =
     request.cursor === undefined
       ? {
-          manifest,
           snapshotId,
           fromSequence: 1,
           previousTailDigest: EMPTY_TAIL_DIGEST,
@@ -151,7 +151,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
           Effect.mapError((cause) => failure("Invalid transfer cursor", cause)),
         );
 
-  if (position.snapshotId !== snapshotId || position.manifest.threadId !== request.threadId)
+  if (position.snapshotId !== snapshotId || manifest.threadId !== request.threadId)
     return yield* failure("Source changed during transfer; restart from its first page");
   if (
     manifest.format !== CURRENT_RECORD_FORMAT ||

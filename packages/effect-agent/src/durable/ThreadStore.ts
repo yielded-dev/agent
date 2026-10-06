@@ -312,10 +312,6 @@ export const canonicalBatchFitsTransfer = (
   maxOffsetBytes: number,
 ): boolean => {
   const threadJson = JSON.stringify(threadId);
-
-  // Canonical cursors embed the Thread identity; other manifest and position fields are bounded.
-  if (threadJson.length + 2_048 > MAX_THREAD_EXPORT_CURSOR_CHARS) return false;
-
   const threadBytes = utf8ByteLength(threadJson);
   const batchIdBytes = utf8ByteLength(JSON.stringify(batch.batchId));
 
