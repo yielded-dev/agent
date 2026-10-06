@@ -91,7 +91,11 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "DoSubmissionLedger.publishSettlement",
     "DoSubmissionLedger.finalizeSettlement",
   ],
-  "packages/effect-agent/src/capabilities/BrowserUse.ts": ["BrowserUse.selectTargets"],
+  "packages/effect-agent/src/capabilities/BrowserUse.ts": [
+    "BrowserUse.runJev",
+    "BrowserUse.jevDecision",
+    "BrowserUse.jevWait",
+  ],
   "packages/sandbox-local/src/LocalSandbox.ts": ["LocalSandbox.execute"],
   "packages/platform-cloudflare/src/CloudflareThreadClient.ts": ["CloudflareThreadClient.call"],
   "packages/platform-cloudflare/src/internal/transport.ts": ["CloudflarePortTransport.call"],
