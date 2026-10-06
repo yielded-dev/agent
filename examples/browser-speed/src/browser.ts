@@ -82,11 +82,14 @@ export const makeBrowser = Effect.fnUntraced(function* (
       controller.actions.observe.pipe(Effect.mapError(asLabError)),
     );
 
-  const act = Effect.fnUntraced(function* (values: ReadonlyArray<Action>) {
+  const act = Effect.fnUntraced(function* (
+    values: ReadonlyArray<Action>,
+    options?: BrowserUse.ActOptions,
+  ) {
     const result = yield* trace.measure(
       "action",
       "Native browser actions",
-      controller.actions.act(values).pipe(Effect.mapError(asLabError)),
+      controller.actions.act(values, options).pipe(Effect.mapError(asLabError)),
     );
 
     yield* capture().pipe(Effect.ignore);

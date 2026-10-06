@@ -1,4 +1,5 @@
 import {
+  type ActOptions,
   type ActionResult,
   type NavigateRequest,
   Action,
@@ -623,6 +624,7 @@ export const make = Effect.fnUntraced(function* <R>(
     dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]>,
     frame?: string,
     alreadySettled = false,
+    observe = true,
   ) {
     if (dispatch === "acknowledged" && !alreadySettled)
       yield* settle().pipe(
@@ -632,16 +634,20 @@ export const make = Effect.fnUntraced(function* <R>(
           }),
         ),
       );
+    // Without an observation, refs from before the input can no longer be authorized.
+    if (!observe) targets.clear();
 
-    const observation = yield* inspect(frame === undefined ? {} : { frame }, {
-      kind: "observe",
-    }).pipe(
-      Effect.catch((failure) => {
-        error ??= `Input receipt retained; observation failed. Inspect before continuing. ${failure.message}`;
+    const observation = !observe
+      ? null
+      : yield* inspect(frame === undefined ? {} : { frame }, {
+          kind: "observe",
+        }).pipe(
+          Effect.catch((failure) => {
+            error ??= `Input receipt retained; observation failed. Inspect before continuing. ${failure.message}`;
 
-        return Effect.succeed(null);
-      }),
-    );
+            return Effect.succeed(null);
+          }),
+        );
 
     return {
       completed,
@@ -920,7 +926,10 @@ export const make = Effect.fnUntraced(function* <R>(
     return result.success;
   });
 
-  const act = Effect.fnUntraced(function* (values: ReadonlyArray<Action>) {
+  const act = Effect.fnUntraced(function* (
+    values: ReadonlyArray<Action>,
+    options: ActOptions = {},
+  ) {
     yield* Schema.decodeEffect(
       Schema.Array(Action).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
     )(values).pipe(Effect.mapError(() => invalid("Expected 1–8 valid actions.")));
@@ -959,7 +968,7 @@ export const make = Effect.fnUntraced(function* <R>(
       "browser.dispatch": dispatch,
     });
 
-    return yield* after(completed, error, dispatch, frame, true);
+    return yield* after(completed, error, dispatch, frame, true, options.observe !== false);
   });
 
   const navigate = Effect.fnUntraced(function* (request: typeof NavigateRequest.Type) {
@@ -1275,7 +1284,8 @@ export const make = Effect.fnUntraced(function* <R>(
 
   const actions = BrowserActions.of({
     observe: lock.withPermit(inspect({}, { kind: "observe" })),
-    act: (values) => lock.withPermit(act(values)).pipe(Effect.withSpan("BrowserUse.act")),
+    act: (values, options) =>
+      lock.withPermit(act(values, options)).pipe(Effect.withSpan("BrowserUse.act")),
   });
 
   const control = BrowserControl.of({

@@ -112,12 +112,21 @@ export class BrowserUseError extends Schema.TaggedError<BrowserUseError>()("Brow
 /** Application-owned page adapter. Revalidate refs before input; stop a batch at its first failure.
  * Return acknowledged actions even if the following observation fails. Never replay uncertain input.
  */
+export interface ActOptions {
+  /**
+   * `false` skips the observation after input: the result's `observation` is null and every
+   * observed ref is invalidated, so inspect before the next action. Defaults to `true`.
+   */
+  readonly observe?: boolean;
+}
+
 export class BrowserActions extends Context.Service<
   BrowserActions,
   {
     readonly observe: Effect.Effect<typeof Observation.Type, BrowserUseError>;
     readonly act: (
       actions: ReadonlyArray<Action>,
+      options?: ActOptions,
     ) => Effect.Effect<typeof ActionResult.Type, BrowserUseError>;
   }
 >()("@effect-agent/BrowserUse/BrowserActions") {}

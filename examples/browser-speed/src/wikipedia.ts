@@ -2,7 +2,7 @@ import { Agent, AgentRuntime } from "@yielded/agent";
 import { CompactionPolicy } from "@yielded/agent/agent-policy";
 import { Context, Effect, Option, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
-import type { HTTPRequest } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
+import type { Protocol } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { TaskResult, Browser } from "./browser.ts";
 import {
@@ -183,50 +183,55 @@ export const makeWikipedia = Effect.fnUntraced(function* (
   let observation: typeof WikiObservation.Type | undefined;
   let routePage: RoutePage | undefined;
 
+  // Only document requests pause. Each paused request costs a CDP round trip, and pausing
+  // every request (Puppeteer's interception) also disables the cache: about 1 s per hop.
   yield* Effect.acquireRelease(
     browser.native(async (page) => {
-      const guard = (request: HTTPRequest) => {
-        const url = new URL(request.url());
-        const document = request.isNavigationRequest();
+      const client = await page.createCDPSession();
+      const { frameTree } = await client.send("Page.getFrameTree");
+      // A server redirect keeps its network ID, so an approved navigation may redirect once.
+      const approvedChains = new Set<string>();
 
-        const allowed = document
-          ? request.frame() === page.mainFrame() &&
-            articleTitle(url.href) !== undefined &&
-            (articleTitle(url.href) === articleTitle(approved) ||
-              request
-                .redirectChain()
-                .some((prior) => articleTitle(prior.url()) === articleTitle(approved)))
-          : url.protocol === "data:" ||
-            (url.protocol === "https:" &&
-              ["en.wikipedia.org", "upload.wikimedia.org", "maps.wikimedia.org"].includes(
-                url.hostname,
-              ));
+      const guard = (event: Protocol.Fetch.RequestPausedEvent) => {
+        const title = articleTitle(event.request.url);
 
+        const allowed =
+          event.frameId === frameTree.frame.id &&
+          title !== undefined &&
+          (title === articleTitle(approved) ||
+            (event.networkId !== undefined && approvedChains.has(event.networkId)));
+
+        if (allowed && event.networkId !== undefined) approvedChains.add(event.networkId);
         // Navigation/observation reports the failure. Never leave an event callback rejection unhandled.
-        if (!request.isInterceptResolutionHandled())
-          void (allowed ? request.continue({}, 0) : request.abort("blockedbyclient", 2)).catch(
-            () => {},
-          );
+        void (
+          allowed
+            ? client.send("Fetch.continueRequest", { requestId: event.requestId })
+            : client.send("Fetch.failRequest", {
+                requestId: event.requestId,
+                errorReason: "BlockedByClient",
+              })
+        ).catch(() => {});
       };
 
-      await page.setRequestInterception(true);
-      page.on("request", guard);
+      client.on("Fetch.requestPaused", guard);
+      await client.send("Fetch.enable", {
+        patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }],
+      });
 
-      return { page, guard };
+      return client;
     }),
-    ({ page, guard }) =>
-      Effect.sync(() => page.off("request", guard)).pipe(
-        Effect.andThen(
-          trace.measure(
-            "cleanup",
-            "Release navigation guard",
-            browser.native(() => page.setRequestInterception(false)),
-          ),
+    (client) =>
+      trace
+        .measure(
+          "cleanup",
+          "Release navigation guard",
+          browser.native(() => client.send("Fetch.disable").then(() => client.detach())),
+        )
+        .pipe(
+          // A fenced/dead browser may reject cleanup commands. Keep that span and the original
+          // failure; the owner must confirm browser closure before retrying or releasing ownership.
+          Effect.catch(() => Effect.void),
         ),
-        // A fenced/dead browser may reject cleanup commands. Keep that span and the original
-        // failure; the owner must confirm browser closure before retrying or releasing ownership.
-        Effect.catch(() => Effect.void),
-      ),
   );
 
   yield* trace.measure(
@@ -534,7 +539,8 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     approved = link.url;
     observed.clear();
     uncertain = true;
-    const result = yield* browser.act([{ kind: "click", ref: control.ref }]);
+    // The race reads the next article itself, so the click skips the library's observation.
+    const result = yield* browser.act([{ kind: "click", ref: control.ref }], { observe: false });
 
     if (result.dispatch === "not-dispatched") uncertain = false;
     if (result.completed !== 1 || result.dispatch !== "acknowledged")

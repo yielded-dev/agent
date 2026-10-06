@@ -213,6 +213,8 @@ explicit condition wait for application readiness. A failed read reports that it
 input, without changing earlier input receipts or the session's outstanding-work fencing.
 Read-only navigation races retry with fresh host authorization. Input is never automatically
 retried, and a failed observation never authorizes replay. Use a specific condition wait or fresh inspection to reconcile state.
+A host that reads the next page itself can call `act(actions, { observe: false })`: the result
+has no observation, and every earlier reference is invalidated, so inspect before the next action.
 Password/file inputs remain host-owned; use the existing credential and file-selection
 contracts on the session's original page; selecting a tab does not retarget those host helpers. A blocking JavaScript dialog can be inspected and answered after an input;
 a dialog that prevents navigation from settling remains subject to the native timeout.
