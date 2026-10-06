@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -42,6 +42,24 @@ import type { ThreadWorkStorage } from "./ThreadWork.ts";
 export const MAX_THREAD_EXPORT_PAGE_RECORDS = 256;
 export const MAX_THREAD_EXPORT_PAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_THREAD_EXPORT_CURSOR_CHARS = 16_384;
+/** Includes a maximally JSON-escaped cursor, snapshot, seal, digests and page structure. */
+const THREAD_EXPORT_METADATA_BYTES = 128 * 1024;
+
+/** Reserve the manifest identity even when no canonical record or admission exists yet. */
+export const transferPageFits = (threadId: ThreadId, factBytes = 0): boolean =>
+  utf8ByteLength(JSON.stringify(threadId)) + factBytes + THREAD_EXPORT_METADATA_BYTES <=
+  MAX_THREAD_EXPORT_PAGE_BYTES;
+
+/** Check a complete retained fact before fresh acceptance; existing replays keep their identity. */
+export const makeTransferFactCheck = <A, I>(schema: Schema.Codec<A, I>) => {
+  const encode = Schema.encodeResult(Schema.fromJsonString(schema));
+
+  return (threadId: ThreadId, fact: A): boolean => {
+    const encoded = encode(fact);
+
+    return Result.isSuccess(encoded) && transferPageFits(threadId, utf8ByteLength(encoded.success));
+  };
+};
 
 /** Only model input and the facts needed to validate its ownership and compaction. */
 export const PROMPT_EVIDENCE_TAGS = [
@@ -320,7 +338,7 @@ export const canonicalBatchFitsTransfer = (
   const overhead =
     batch.records.length * (batchIdBytes + threadBytes + maxOffsetBytes + 128) +
     threadBytes +
-    128 * 1024;
+    THREAD_EXPORT_METADATA_BYTES;
 
   if (2 * batchBytes + overhead + 2 <= MAX_THREAD_EXPORT_PAGE_BYTES) return true;
 
@@ -678,30 +696,25 @@ export class ThreadAdmission extends Schema.Class<ThreadAdmission>(
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/** Reserve the complete immutable fact and manifest before accepting a fresh admission. */
-export const admissionFitsTransfer = (request: AdmissionRequest) =>
-  Schema.encodeEffect(AdmissionRequest)(request).pipe(
-    Effect.map(
-      (wire) =>
-        utf8ByteLength(JSON.stringify(wire)) +
-          utf8ByteLength(JSON.stringify(request.threadId)) +
-          // Generated receipt/Submission identities, timestamp, snapshot and escaped cursor.
-          128 * 1024 <=
-        MAX_THREAD_EXPORT_PAGE_BYTES,
-    ),
-  );
-
 /** Accepted operator commands are facts; their application markers are deliberately omitted. */
+export const ThreadAbortFact = AbortIntent.mapFields(Struct.omit(["canonicalRecordId"]));
+
+export const ThreadApprovalFact = ApprovalDecisionIntent.mapFields(
+  Struct.omit(["canonicalRecordId"]),
+);
+
+export const ThreadResolutionFact = UnknownResolutionIntent.mapFields(
+  Struct.omit(["canonicalRecordId"]),
+);
+
 export const ThreadCommands = Schema.Struct({
-  aborts: Schema.Array(
-    AbortIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
-  approvals: Schema.Array(
-    ApprovalDecisionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
-  resolutions: Schema.Array(
-    UnknownResolutionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
+  aborts: Schema.Array(ThreadAbortFact).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
+  approvals: Schema.Array(ThreadApprovalFact).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
+  ),
+  resolutions: Schema.Array(ThreadResolutionFact).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
+  ),
 });
 
 export const ThreadExportBatch = Schema.Struct({ batchId: BatchId, producerId: ProducerId });

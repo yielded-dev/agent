@@ -102,6 +102,7 @@ export const CrashScenario = Schema.Literals([
   "run-uncertain",
   "run-idempotent",
   "suspend-approval",
+  "suspend-sequential-approval",
   "run-steps",
   "run-join",
   "resolve-approval",
@@ -179,6 +180,21 @@ export const bookToolCallParts: ReadonlyArray<Response.StreamPartEncoded> = [
     id: BOOK_CALL_ID,
     name: "book",
     params: { ref: BOOK_REF },
+    providerExecuted: false,
+  },
+  { type: "finish", reason: "tool-calls", usage },
+];
+
+export const SECOND_BOOK_CALL_ID = "book-2";
+export const SECOND_BOOK_REF = "crash-booking-2";
+
+export const sequentialApprovalParts: ReadonlyArray<Response.StreamPartEncoded> = [
+  ...bookToolCallParts.slice(0, -1),
+  {
+    type: "tool-call",
+    id: SECOND_BOOK_CALL_ID,
+    name: "book",
+    params: { ref: SECOND_BOOK_REF },
     providerExecuted: false,
   },
   { type: "finish", reason: "tool-calls", usage },

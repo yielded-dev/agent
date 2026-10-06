@@ -102,9 +102,14 @@ import {
   type SuspensionOutcome,
 } from "@yielded/agent/submission-ledger";
 import {
-  admissionFitsTransfer,
   AppendConflict,
   FenceRejected,
+  ThreadAdmission,
+  ThreadAbortFact,
+  ThreadApprovalFact,
+  ThreadResolutionFact,
+  makeTransferFactCheck,
+  transferPageFits,
   type ThreadStoreFailure,
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream, Struct } from "effect";
@@ -134,6 +139,29 @@ type SubmissionId = SubmissionSnapshot["submissionId"];
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
 const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const BoundedTimestamp = Schema.NonEmptyString.check(Schema.isMaxLength(128));
+
+const transferCapacityError = (operation: string) =>
+  LedgerError.make({
+    operation,
+    message: "Accepted fact exceeds its bounded transfer representation",
+  });
+
+const transferCheck = <A, I>(schema: Schema.Codec<A, I>) => {
+  const fits = makeTransferFactCheck(schema);
+
+  return Effect.fnUntraced(function* (operation: string, threadId: string, fact: A) {
+    const owner = yield* Schema.decodeEffect(AdmissionRequest.fields.threadId)(threadId).pipe(
+      Effect.mapError(() => transferCapacityError(operation)),
+    );
+
+    if (!fits(owner, fact)) return yield* transferCapacityError(operation);
+  });
+};
+
+const checkAdmissionTransfer = transferCheck(ThreadAdmission);
+const checkAbortTransfer = transferCheck(ThreadAbortFact);
+const checkApprovalTransfer = transferCheck(ThreadApprovalFact);
+const checkResolutionTransfer = transferCheck(ThreadResolutionFact);
 
 const SCAN_PAGE_SIZE = 256;
 const EPOCH_ZERO = Schema.decodeSync(ProducerEpoch)(0);
@@ -546,6 +574,57 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     millis,
     iso: new Date(millis).toISOString(),
   }));
+
+  /** Preflight the exact fresh facts before the bulk seal/abort mutation. */
+  const checkWorkerStopTransfer = Effect.fnUntraced(function* (
+    operation: string,
+    threadId: string,
+    author: string,
+    reason: string,
+    requestedAt: string,
+    settlingSubmission?: string,
+  ) {
+    const owner = yield* Schema.decodeEffect(AdmissionRequest.fields.threadId)(threadId).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
+
+    if (!transferPageFits(owner)) {
+      const existing =
+        yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id=${threadId}`.pipe(
+          execute,
+          Effect.mapError(sqlFailure(operation)),
+        );
+
+      if (existing.length === 0) return yield* transferCapacityError(operation);
+    }
+    let after = 0;
+
+    while (true) {
+      const rows = yield* sql<Record<string, unknown>>`
+        SELECT s.submission_id, s.queue_sequence FROM ${relation("effect_agent_submissions")} s
+        WHERE s.thread_id=${threadId} AND s.queue_sequence>${after} AND s.state <> 'settled'
+          AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_abort_intents")} a WHERE a.submission_id=s.submission_id)
+          ${settlingSubmission === undefined ? sql`` : sql`AND s.submission_id<>${settlingSubmission} AND (s.joined_host_submission_id IS NULL OR s.joined_host_submission_id<>${settlingSubmission} OR s.input_applied_record_id IS NULL)`}
+        ORDER BY s.queue_sequence ASC LIMIT 256
+      `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+      for (const row of rows) {
+        const fact = yield* decodeAbortIntent({
+          submissionId: row.submission_id,
+          author,
+          reason,
+          requestedAt,
+        }).pipe(Effect.mapError(internalFailure(operation)));
+
+        yield* checkAbortTransfer(operation, threadId, fact);
+        after = yield* Schema.decodeUnknownEffect(SqlInteger.pipe(Schema.decodeTo(QueueSequence)))(
+          row.queue_sequence,
+        ).pipe(Effect.mapError(internalFailure(operation)));
+      }
+
+      if (rows.length < 256) return;
+    }
+  });
 
   const timestampMillis = (operation: string, rowKey: string) => (timestamp: string) =>
     decodeUtcInstant(timestamp).pipe(
@@ -1188,16 +1267,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           }).pipe(Effect.mapError(internalFailure(operation)));
         }
 
-        if (
-          !(yield* admissionFitsTransfer(validated).pipe(
-            Effect.mapError(internalFailure(operation)),
-          ))
-        )
-          return yield* LedgerError.make({
-            operation,
-            message: "Admission exceeds the complete transfer page byte bound",
-          });
-
         const stopped =
           yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id = ${validated.threadId}`.pipe(
             execute,
@@ -1270,6 +1339,32 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
 
         const now = yield* currentInstant;
 
+        const admissionFenceJson =
+          validated.admissionFence === undefined ? null : JSON.stringify(validated.admissionFence);
+
+        const admission = yield* decodeAdmissionFact({
+          submission_id: mintedSubmissionId,
+          thread_id: validated.threadId,
+          queue_sequence: queueSequence,
+          principal: validated.principal,
+          idempotency_key: validated.idempotencyKey,
+          agent_id: validated.agentId,
+          agent_digests_json: agentDigestsJson,
+          deployment_id: validated.deploymentId,
+          input_json: inputJson,
+          input_digest: validated.inputDigest,
+          receipt_id: mintedReceiptId,
+          created_at: now.iso,
+          parent_submission_id: validated.parentLinkage?.parentSubmissionId ?? null,
+          parent_tool_call_id: validated.parentLinkage?.parentToolCallId ?? null,
+          admission_group: validated.admissionGroup ?? null,
+          admission_fence_json: admissionFenceJson,
+          worker_admission_json: workerAdmissionJson,
+          message_admission_json: messageAdmissionJson,
+        }).pipe(Effect.mapError(internalFailure(operation)));
+
+        yield* checkAdmissionTransfer(operation, validated.threadId, admission);
+
         yield* sql`
             INSERT INTO ${relation("effect_agent_submissions")} (
               submission_id,
@@ -1308,7 +1403,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               ${validated.parentLinkage?.parentSubmissionId ?? null},
               ${validated.parentLinkage?.parentToolCallId ?? null},
               ${validated.admissionGroup ?? null},
-              ${validated.admissionFence === undefined ? null : JSON.stringify(validated.admissionFence)},
+              ${admissionFenceJson},
               ${workerAdmissionJson},
               ${messageAdmissionJson}
             )
@@ -2183,6 +2278,15 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           : [];
 
       if (pending.length === 0) {
+        yield* checkWorkerStopTransfer(
+          operation,
+          submission.thread_id,
+          submission.principal,
+          `Worker assignment ${terminal}`,
+          now.iso,
+          submission.submission_id,
+        );
+
         const sealed =
           yield* sql`INSERT INTO ${relation("effect_agent_worker_stops")} (thread_id, terminal)
           VALUES (${submission.thread_id}, ${terminal}) ON CONFLICT DO NOTHING RETURNING thread_id`.pipe(
@@ -2368,6 +2472,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       Effect.gen(function* () {
         const now = yield* currentInstant;
 
+        yield* checkWorkerStopTransfer(
+          operation,
+          validated.threadId,
+          validated.author,
+          "Worker owner stopped the worker",
+          now.iso,
+        );
+
         const sealed =
           yield* sql`INSERT INTO ${relation("effect_agent_worker_stops")} (thread_id) VALUES (${validated.threadId}) ON CONFLICT DO NOTHING RETURNING thread_id`.pipe(
             execute,
@@ -2460,6 +2572,15 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           );
         }
         const now = yield* currentInstant;
+
+        const accepted = yield* decodeAbortFact({
+          submission_id: validated.submissionId,
+          author: validated.author,
+          reason: validated.reason,
+          requested_at: now.iso,
+        }).pipe(Effect.mapError(internalFailure(operation)));
+
+        yield* checkAbortTransfer(operation, submission.thread_id, accepted);
 
         yield* sql`
           INSERT INTO ${relation("effect_agent_abort_intents")} (
@@ -2935,6 +3056,17 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           }
           const now = yield* currentInstant;
 
+          const accepted = yield* decodeApprovalDecisionIntent({
+            submissionId: validated.submissionId,
+            toolCallId: validated.toolCallId,
+            decision: validated.decision,
+            resolver: validated.resolver,
+            reason: validated.reason,
+            decidedAt: now.iso,
+          }).pipe(Effect.mapError(internalFailure(operation)));
+
+          yield* checkApprovalTransfer(operation, submission.thread_id, accepted);
+
           yield* sql`
           INSERT INTO ${relation("effect_agent_approval_decisions")} (
             submission_id,
@@ -2954,14 +3086,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         `.pipe(execute, Effect.mapError(sqlFailure(operation)));
           yield* wakeSuspendedIfCovered(operation, submission);
 
-          return yield* decodeApprovalDecisionIntent({
-            submissionId: validated.submissionId,
-            toolCallId: validated.toolCallId,
-            decision: validated.decision,
-            resolver: validated.resolver,
-            reason: validated.reason,
-            decidedAt: now.iso,
-          }).pipe(Effect.mapError(internalFailure(operation)));
+          return accepted;
         }),
       );
 
@@ -3169,6 +3294,21 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           } else {
             const now = yield* currentInstant;
 
+            const resolution = yield* parseStoredJsonText(resolutionJson).pipe(
+              Effect.mapError(internalFailure(operation)),
+            );
+
+            resolved = yield* decodeUnknownResolutionIntent({
+              submissionId: validated.submissionId,
+              toolCallId: validated.toolCallId,
+              author: validated.author,
+              reason: validated.reason,
+              resolution,
+              resolvedAt: now.iso,
+            }).pipe(Effect.mapError(internalFailure(operation)));
+
+            yield* checkResolutionTransfer(operation, submission.thread_id, resolved);
+
             yield* sql`
             INSERT INTO ${relation("effect_agent_unknown_resolutions")} (
               submission_id,
@@ -3188,19 +3328,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               ${now.iso}
             )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-
-            const resolution = yield* parseStoredJsonText(resolutionJson).pipe(
-              Effect.mapError(internalFailure(operation)),
-            );
-
-            resolved = yield* decodeUnknownResolutionIntent({
-              submissionId: validated.submissionId,
-              toolCallId: validated.toolCallId,
-              author: validated.author,
-              reason: validated.reason,
-              resolution,
-              resolvedAt: now.iso,
-            }).pipe(Effect.mapError(internalFailure(operation)));
           }
           // The lane reopens only when EVERY marked open call has a durable resolution intent:
           // unknown → input-applied (DUR-017). Replays re-run the coverage check so a

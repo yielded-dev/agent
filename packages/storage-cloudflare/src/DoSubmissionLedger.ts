@@ -115,7 +115,7 @@ import {
   type SuspensionOutcome,
 } from "@yielded/agent/submission-ledger";
 import {
-  admissionFitsTransfer,
+  makeTransferFactCheck,
   AppendConflict,
   FenceRejected,
   ThreadNotMaterialized,
@@ -168,6 +168,7 @@ const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const BoundedTimestamp = Schema.NonEmptyString.check(Schema.isMaxLength(128));
 
 const SCAN_PAGE_SIZE = 256;
+const admissionFitsTransfer = makeTransferFactCheck(AdmissionRequest);
 const EPOCH_ZERO = Schema.decodeSync(ProducerEpoch)(0);
 const RESUME_IMMEDIATELY: SuspensionOutcome = "resume-immediately";
 const SUSPENDED: SuspensionOutcome = "suspended";
@@ -1278,11 +1279,7 @@ const makeServices = Effect.fnUntraced(function* () {
           }).pipe(Effect.mapError(internalFailure(operation)));
         }
 
-        if (
-          !(yield* admissionFitsTransfer(validated).pipe(
-            Effect.mapError(internalFailure(operation)),
-          ))
-        )
+        if (!admissionFitsTransfer(validated.threadId, validated))
           return yield* LedgerError.make({
             operation,
             message: "Admission exceeds the complete transfer page byte bound",

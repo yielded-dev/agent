@@ -17,6 +17,7 @@ import {
 } from "@yielded/agent/run-journal";
 import {
   AbortCommand,
+  ApprovalDecisionCommand,
   ClaimRequest,
   RecoverySnapshotRequest,
   ReleaseOwnershipRequest,
@@ -30,6 +31,8 @@ import { Prompt } from "effect/ai";
 import {
   BOOK_CALL_ID,
   BOOK_REF,
+  SECOND_BOOK_CALL_ID,
+  SECOND_BOOK_REF,
   CHILD_ANSWER,
   CRASH_QUESTION,
   FENCED_EXIT_CODE,
@@ -1268,6 +1271,105 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 yield* assertConvergence(thread, [snapshot.submissionId], {
                   site,
                   counts: { [`book:${BOOK_REF}`]: 1 },
+                });
+              }),
+            );
+          }),
+        ),
+      30_000,
+    );
+
+    // The requests-first barrier rules out A's canonical decision preceding B's request.
+    // Kill at the reachable prefix instead: A requested, B absent, no handler dispatched.
+    it.effect(
+      "reopens sequential approvals after the first request without losing initial-dispatch proof",
+      () =>
+        withCrashSite((site) =>
+          Effect.gen(function* () {
+            const thread = "thread-kill-sequential-approval";
+            const key = "kill-sequential-approval";
+
+            const result = yield* runWorkerToExit({
+              db: site.db,
+              scenario: "suspend-sequential-approval",
+              thread,
+              key,
+              killAt: "approval:after-request-append",
+              leaseMillis: CHILD_LEASE_MS,
+              supplierDir: site.supplier,
+            });
+
+            expectKilled(result);
+            yield* withRuntime(
+              site.db,
+              Effect.gen(function* () {
+                const records = yield* readLog(thread);
+
+                const requests = records.flatMap(({ record: { payload } }) =>
+                  payload._tag === "ToolApprovalRequested" ? [payload.toolCallId] : [],
+                );
+
+                expect(requests).toEqual([BOOK_CALL_ID]);
+                expect(logTags(records)).not.toContain("ToolApprovalDecided");
+                expect(logTags(records)).not.toContain("ToolCallUnknown");
+              }),
+            );
+            expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
+            expect(supplierCount(site.supplier, "book", SECOND_BOOK_REF)).toBe(0);
+            yield* waitAfterChildExit;
+            yield* withHost(
+              site.db,
+              Effect.gen(function* () {
+                const runtime = yield* DurableAgentRuntime;
+                const snapshot = yield* lookupByKey(thread, key);
+
+                expect(snapshot.state).toBe("suspended");
+                yield* runtime.resolveApproval(
+                  ApprovalDecisionCommand.make({
+                    submissionId: snapshot.submissionId,
+                    toolCallId: decodeToolCallId(BOOK_CALL_ID),
+                    decision: "approved",
+                    resolver: "operator",
+                    reason: "Approve the first call after restart",
+                  }),
+                );
+                expect(yield* drainApprovalBook(site, thread, FRESH_ANSWER)).toEqual([]);
+                expect(yield* lookupState(snapshot.submissionId)).toBe("suspended");
+                expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
+                expect(supplierCount(site.supplier, "book", SECOND_BOOK_REF)).toBe(0);
+                const intermediate = yield* readLog(thread);
+
+                const secondRequest = intermediate.findIndex(
+                  ({ record: { payload } }) =>
+                    payload._tag === "ToolApprovalRequested" &&
+                    payload.toolCallId === SECOND_BOOK_CALL_ID,
+                );
+
+                const firstDecision = intermediate.findIndex(
+                  ({ record: { payload } }) =>
+                    payload._tag === "ToolApprovalDecided" && payload.toolCallId === BOOK_CALL_ID,
+                );
+
+                expect(secondRequest).toBeGreaterThan(-1);
+                expect(firstDecision).toBeGreaterThan(secondRequest);
+                expect(logTags(intermediate)).not.toContain("ToolCallUnknown");
+                yield* runtime.resolveApproval(
+                  ApprovalDecisionCommand.make({
+                    submissionId: snapshot.submissionId,
+                    toolCallId: decodeToolCallId(SECOND_BOOK_CALL_ID),
+                    decision: "approved",
+                    resolver: "operator",
+                    reason: "Approve the second call after restart",
+                  }),
+                );
+                const settlements = yield* drainApprovalBook(site, thread, FRESH_ANSWER);
+
+                expect(settlements).toHaveLength(1);
+                expect(settlements[0]?.outcome).toBe("completed");
+                expect(logTags(yield* readLog(thread))).not.toContain("ToolCallUnknown");
+                yield* assertConvergence(thread, [snapshot.submissionId], {
+                  site,
+                  counts: { [`book:${BOOK_REF}`]: 1, [`book:${SECOND_BOOK_REF}`]: 1 },
                 });
               }),
             );

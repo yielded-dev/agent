@@ -120,9 +120,13 @@ import {
   ThreadImportRejected,
 } from "@yielded/agent/thread-import";
 import {
-  admissionFitsTransfer,
   ThreadAdmission,
   ThreadStoreError,
+  ThreadAbortFact,
+  ThreadApprovalFact,
+  ThreadResolutionFact,
+  makeTransferFactCheck,
+  transferPageFits,
 } from "@yielded/agent/thread-store";
 import { admissionWork } from "@yielded/agent/thread-work";
 import {
@@ -361,6 +365,13 @@ const decodeQueueSequence = Schema.decodeSync(QueueSequence);
 const decodeProducerEpoch = Schema.decodeSync(ProducerEpoch);
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
 const equivalentUnknownResolution = Schema.toEquivalence(UnknownResolution);
+const admissionFitsTransfer = makeTransferFactCheck(ThreadAdmission);
+const abortFitsTransfer = makeTransferFactCheck(ThreadAbortFact);
+const approvalFitsTransfer = makeTransferFactCheck(ThreadApprovalFact);
+const resolutionFitsTransfer = makeTransferFactCheck(ThreadResolutionFact);
+
+const transferCapacityError = (operation: string) =>
+  ledgerError(operation, "Accepted fact exceeds its bounded transfer representation");
 
 const utc = (millis: number): DateTime.Utc => DateTime.toUtc(DateTime.makeUnsafe(millis));
 
@@ -836,10 +847,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     const admit: SubmissionLedger["Service"]["admit"] = Effect.fnUntraced(function* (unvalidated) {
       const request = yield* validate(AdmissionRequest, "admit", unvalidated);
 
-      const fitsTransfer = yield* admissionFitsTransfer(request).pipe(
-        Effect.mapError((cause) => ledgerError("admit", "Invalid admission transfer wire", cause)),
-      );
-
       const workerAdmissionJson =
         request.workerAdmission === undefined
           ? undefined
@@ -942,14 +949,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               current,
             ];
           }
-
-          if (!fitsTransfer)
-            return [
-              failure(
-                ledgerError("admit", "Admission exceeds the complete transfer page byte bound"),
-              ),
-              current,
-            ];
 
           if (current.stoppedWorkers.has(request.threadId))
             return [
@@ -1065,6 +1064,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
             unknownResolutions: new Map<string, StoredUnknownResolution>(),
           };
+
+          if (!admissionFitsTransfer(request.threadId, toAdmission(row)))
+            return [failure(transferCapacityError("admit")), current];
 
           journal.initializeWork(request.threadId);
           const admissionIndex = current.admissionIndex;
@@ -1675,27 +1677,38 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             ) {
               const submissions = current.submissions;
 
-              for (const id of current.activeByThread.get(stored.row.threadId) ?? []) {
-                const other = submissions.get(id);
+              if (!transferPageFits(stored.row.threadId))
+                return [failure(transferCapacityError("finalizeSettlement")), current];
 
-                if (other === undefined) continue;
-                if (
-                  id !== stored.row.submissionId &&
-                  !(
-                    other.joinedHostSubmissionId === stored.row.submissionId &&
-                    other.inputApplied !== undefined
-                  ) &&
-                  other.abortIntent === undefined
-                ) {
-                  withSubmission(current, {
-                    ...other,
-                    abortIntent: AbortIntent.make({
+              // Validate every fresh fact before mutating, without retaining a second active set.
+              for (const apply of [false, true]) {
+                for (const id of current.activeByThread.get(stored.row.threadId) ?? []) {
+                  const other = submissions.get(id);
+
+                  if (other === undefined) continue;
+                  if (
+                    id !== stored.row.submissionId &&
+                    !(
+                      other.joinedHostSubmissionId === stored.row.submissionId &&
+                      other.inputApplied !== undefined
+                    ) &&
+                    other.abortIntent === undefined
+                  ) {
+                    const abortIntent = AbortIntent.make({
                       submissionId: id,
                       author: stored.row.principal,
                       reason: `Worker assignment ${terminal}`,
                       requestedAt: utc(nowMillis),
-                    }),
-                  });
+                    });
+
+                    if (!apply && !abortFitsTransfer(other.row.threadId, abortIntent))
+                      return [failure(transferCapacityError("finalizeSettlement")), current];
+                    if (apply)
+                      withSubmission(current, {
+                        ...other,
+                        abortIntent,
+                      });
+                  }
                 }
               }
               sealed = {
@@ -1765,38 +1778,53 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       const request = yield* validate(WorkerStopCommand, "stopWorker", unvalidated);
       const now = yield* Clock.currentTimeMillis;
 
-      return yield* Ref.modify(state, (current) => {
-        const submissions = current.submissions;
-        let owned = 0;
+      const decision = yield* Ref.modify(
+        state,
+        (current): readonly [Decision<number, LedgerError>, LedgerState] => {
+          const submissions = current.submissions;
+          let owned = 0;
 
-        for (const id of current.activeByThread.get(request.threadId) ?? []) {
-          const stored = submissions.get(id);
+          if (!current.stoppedWorkers.has(request.threadId) && !transferPageFits(request.threadId))
+            return [failure(transferCapacityError("stopWorker")), current];
 
-          if (stored === undefined) continue;
-          if (stored.ownership !== undefined) owned++;
-          if (stored.abortIntent === undefined)
-            withSubmission(current, {
-              ...stored,
-              abortIntent: AbortIntent.make({
-                submissionId: id,
-                author: request.author,
-                reason: "Worker owner stopped the worker",
-                requestedAt: utc(now),
-              }),
-            });
-        }
+          // Both passes run in this Ref.modify; no mutation precedes complete validation.
+          for (const apply of [false, true]) {
+            for (const id of current.activeByThread.get(request.threadId) ?? []) {
+              const stored = submissions.get(id);
 
-        return [
-          owned,
-          {
-            ...current,
-            submissions,
-            stoppedWorkers: current.stoppedWorkers.has(request.threadId)
-              ? current.stoppedWorkers
-              : current.stoppedWorkers.set(request.threadId, undefined),
-          },
-        ] as const;
-      });
+              if (stored === undefined) continue;
+              if (!apply && stored.ownership !== undefined) owned++;
+              if (stored.abortIntent === undefined) {
+                const abortIntent = AbortIntent.make({
+                  submissionId: id,
+                  author: request.author,
+                  reason: "Worker owner stopped the worker",
+                  requestedAt: utc(now),
+                });
+
+                if (!apply && !abortFitsTransfer(stored.row.threadId, abortIntent))
+                  return [failure(transferCapacityError("stopWorker")), current];
+                if (apply) withSubmission(current, { ...stored, abortIntent });
+              }
+            }
+          }
+
+          return [
+            success(owned),
+            {
+              ...current,
+              submissions,
+              stoppedWorkers: current.stoppedWorkers.has(request.threadId)
+                ? current.stoppedWorkers
+                : current.stoppedWorkers.set(request.threadId, undefined),
+            },
+          ] as const;
+        },
+      );
+
+      if (decision._tag === "failure") return yield* decision.error;
+
+      return decision.value;
     });
 
     const requestAbort: SubmissionLedger["Service"]["requestAbort"] = Effect.fnUntraced(
@@ -1877,6 +1905,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               reason: request.reason,
               requestedAt: utc(nowMillis),
             });
+
+            if (!abortFitsTransfer(stored.row.threadId, intent))
+              return [failure(transferCapacityError("requestAbort")), current];
 
             return [success(intent), withSubmission(current, { ...stored, abortIntent: intent })];
           },
@@ -2353,6 +2384,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               decidedAt: utc(nowMillis),
             });
 
+            if (!approvalFitsTransfer(stored.row.threadId, intent))
+              return [failure(transferCapacityError("recordApprovalDecision")), current];
+
             const approvalDecisions = new Map(stored.approvalDecisions).set(
               command.toolCallId,
               intent,
@@ -2599,6 +2633,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 resolution: command.resolution,
                 resolvedAt: utc(nowMillis),
               });
+
+            if (existing === undefined && !resolutionFitsTransfer(stored.row.threadId, intent))
+              return [failure(transferCapacityError("recordUnknownResolution")), current];
 
             const unknownResolutions =
               existing !== undefined

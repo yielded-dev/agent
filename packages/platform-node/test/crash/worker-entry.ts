@@ -47,6 +47,7 @@ import {
   bookTools,
   approvalDefinition,
   approvalTools,
+  sequentialApprovalParts,
   coordinatorSubmitSlice,
   checkpointContextLayer,
   checkpointDefinition,
@@ -487,11 +488,16 @@ const scenario = Effect.gen(function* () {
 
       return;
     }
-    case "suspend-approval": {
+    case "suspend-approval":
+    case "suspend-sequential-approval": {
       const dir = requireSupplierDir();
 
       const model = yield* makeScriptedModel((call) =>
-        call === 0 ? bookToolCallParts : finalParts(CHILD_ANSWER),
+        call === 0
+          ? env.EFFECT_AGENT_SCENARIO === "suspend-sequential-approval"
+            ? sequentialApprovalParts
+            : bookToolCallParts
+          : finalParts(CHILD_ANSWER),
       );
 
       const agent = Agent.withModel(approvalDefinition, model);

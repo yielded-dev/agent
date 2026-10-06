@@ -522,11 +522,65 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       ),
   };
 
+  /**
+   * Reject authoritative rows excluded by owner/range traversal. Each probe returns at most
+   * one scalar, including for orphan payloads; digest verification still belongs to verifyThread.
+   */
+  const verifyCoverage = transactions.read(
+    Effect.gen(function* () {
+      const checks = [
+        [
+          "effect_agent_canonical_records",
+          sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_batches")} b
+            WHERE b.thread_id=c.thread_id AND b.batch_id=c.batch_id
+              AND c.sequence BETWEEN b.first_sequence AND b.last_sequence)`,
+        ],
+        [
+          "effect_agent_canonical_batches",
+          sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_journal_ranges")} r
+            WHERE r.thread_id=c.thread_id AND r.first_sequence=(
+              SELECT first_sequence FROM ${table("effect_agent_journal_ranges")}
+              WHERE thread_id=c.thread_id AND first_sequence<=c.first_sequence
+              ORDER BY first_sequence DESC LIMIT 1)
+              AND c.last_sequence<=r.last_sequence)`,
+        ],
+        ["effect_agent_journal_ranges", sql`FALSE`],
+        [
+          "effect_agent_archive_records",
+          sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_records")} b
+            JOIN ${table("effect_agent_journal_ranges")} r
+              ON r.thread_id=b.thread_id AND r.first_sequence=c.range_first_sequence
+            WHERE b.thread_id=c.thread_id AND b.sequence=c.sequence AND b.record_json IS NULL
+              AND r.state='archived' AND c.sequence BETWEEN r.first_sequence AND r.last_sequence)`,
+        ],
+        [
+          "effect_agent_archive_batches",
+          sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_batches")} b
+            JOIN ${table("effect_agent_journal_ranges")} r
+              ON r.thread_id=b.thread_id AND r.first_sequence=c.range_first_sequence
+            WHERE b.thread_id=c.thread_id AND b.batch_id=c.batch_id AND b.batch_json IS NULL
+              AND r.state='archived' AND b.first_sequence>=r.first_sequence
+              AND b.last_sequence<=r.last_sequence)`,
+        ],
+        ["effect_agent_checkpoints", sql`FALSE`],
+      ] as const;
+
+      for (const [name, excluded] of checks) {
+        const rows = yield* query(sql`SELECT 1 FROM ${table(name)} c
+          WHERE NOT EXISTS (SELECT 1 FROM ${table("effect_agent_threads")} t WHERE t.thread_id=c.thread_id)
+            OR ${excluded} LIMIT 1`);
+
+        if (rows.length !== 0) return yield* failure(`archive verification coverage: ${name}`);
+      }
+    }),
+  );
+
   /** Bounded header discovery for the integrator's startup verification; never returns payloads. */
   const threadPage = Effect.fnUntraced(function* (afterThreadId?: string) {
     return yield* transactions.read(
       query(sql`
-      SELECT thread_id FROM ${table("effect_agent_threads")} WHERE thread_id>${afterThreadId ?? ""}
+      SELECT thread_id FROM ${table("effect_agent_threads")}
+      ${afterThreadId === undefined ? sql`` : sql`WHERE thread_id>${afterThreadId}`}
       ORDER BY thread_id LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`).pipe(
         Effect.flatMap(
           Schema.decodeUnknownEffect(
@@ -550,18 +604,21 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         ).pipe(Effect.mapError((cause) => failure("archive verification tail", cause)));
 
         let after = 0;
+        let rangeAfter: CanonicalSequence | undefined;
         let previous = EMPTY_TAIL_DIGEST;
 
         while (true) {
           const rows = yield* decodeRanges(
             yield* query(sql`SELECT * FROM ${table("effect_agent_journal_ranges")}
-        WHERE thread_id=${threadId} AND first_sequence>${after} ORDER BY first_sequence LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`),
+        WHERE thread_id=${threadId} ${rangeAfter === undefined ? sql`` : sql`AND first_sequence>${rangeAfter}`}
+        ORDER BY first_sequence LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`),
           ).pipe(Effect.mapError((cause) => failure("archive verification ranges", cause)));
 
           for (const row of rows) {
             if (row.first_sequence !== after + 1 || row.previous_tail_digest !== previous)
               return yield* failure("archive verification chain");
             yield* verifyInTransaction(row);
+            rangeAfter = row.first_sequence;
             after = row.last_sequence;
             previous = row.tail_digest;
           }
@@ -569,12 +626,13 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         }
         if (after !== header.tail_sequence || previous !== header.tail_digest)
           return yield* failure("archive verification coverage");
-        let checkpointAfter = -1;
+        let checkpointAfter: number | undefined;
 
         while (true) {
           const plans = yield* query<{ through_sequence: number; byte_count: number }>(sql`
             SELECT through_sequence, ${sql.onDialectOrElse({ pg: () => sql`octet_length(checkpoint_json)`, orElse: () => sql`length(CAST(checkpoint_json AS BLOB))` })} AS byte_count
-            FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${threadId} AND through_sequence>${checkpointAfter}
+            FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${threadId}
+            ${checkpointAfter === undefined ? sql`` : sql`AND through_sequence>${checkpointAfter}`}
             ORDER BY through_sequence LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`);
 
           for (const plan of plans) {
@@ -614,5 +672,5 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       }),
     );
 
-  return { storage, append, verifyInTransaction, range, threadPage, verifyThread };
+  return { storage, append, verifyInTransaction, range, threadPage, verifyCoverage, verifyThread };
 });
