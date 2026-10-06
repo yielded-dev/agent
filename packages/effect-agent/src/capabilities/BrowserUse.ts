@@ -404,6 +404,7 @@ export const JevStop = Schema.Literals([
   "done",
   "blocked",
   "unchanged",
+  "looping",
   "wait-cap",
   "step-budget",
   "decision-failed",
@@ -691,6 +692,8 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
   let pendingText: { readonly input: string; readonly value: string } | undefined;
   let unchanged = 0;
   let waitingSince: bigint | undefined;
+  // How often an action arrived at each page; oscillating between pages never ends on its own.
+  const arrivals = new Map<string, number>();
 
   const observe = browser.observe.pipe(
     Effect.mapError(
@@ -927,6 +930,17 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
         stop: "unchanged",
         message: "Three consecutive actions left the page unchanged.",
       });
+    if (pageChanged && operation !== "WAIT") {
+      const page = pageJson(next.page);
+      const count = (arrivals.get(page) ?? 0) + 1;
+
+      arrivals.set(page, count);
+      if (count >= 3)
+        return yield* new JevStuck({
+          stop: "looping",
+          message: "Actions returned to the same page three times.",
+        });
+    }
 
     return next;
   });
