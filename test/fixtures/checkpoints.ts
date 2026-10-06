@@ -2,6 +2,7 @@ import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { CanonicalBatch, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
   ThreadProjection,
   replayThread,
@@ -9,7 +10,6 @@ import {
 } from "@yielded/agent/thread-projection";
 import {
   ThreadCheckpoint,
-  ThreadExportRequest,
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
@@ -194,7 +194,7 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
       .read(ThreadRead.make({ threadId, afterSequence: checkpoint.throughSequence, limit: 1024 }))
       .pipe(Stream.runCollect);
 
-    const full = yield* store.export(ThreadExportRequest.make({ threadId }));
+    const full = yield* readTestThread(store, { threadId });
 
     expect(suffix).toHaveLength(1);
     expect(replayThreadFromCheckpoint(projection, suffix, full.tailDigest)).toEqual(

@@ -45,6 +45,7 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
   ThreadExportRequest,
   FencedAppendRequest,
@@ -220,7 +221,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       ).toEqual(Option.none());
       expect(events).toHaveLength(1);
 
-      const records = yield* (yield* ThreadStore).export(
+      const records = yield* readTestThread(
+        yield* ThreadStore,
         ThreadExportRequest.make({ threadId: receipt.threadId }),
       );
 
@@ -379,7 +381,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
           yield* runtime.processThreadHead(first.threadId);
 
-          const original = yield* store.export(
+          const original = yield* readTestThread(
+            store,
             ThreadExportRequest.make({ threadId: first.threadId }),
           );
 
@@ -521,7 +524,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           );
         }
 
-        const before = yield* store.export(
+        const before = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: current.threadId }),
         );
 
@@ -545,7 +549,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
         expect(requests).toHaveLength(callsBefore);
 
-        const interrupted = yield* store.export(
+        const interrupted = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: current.threadId }),
         );
 
@@ -560,7 +565,11 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(requests).toHaveLength(callsBefore + 1);
         expect(JSON.stringify(requests.at(-1))).toContain("CURRENT REQUEST");
         expect(JSON.stringify(requests.at(-1))).not.toContain("OLD");
-        const after = yield* store.export(ThreadExportRequest.make({ threadId: current.threadId }));
+
+        const after = yield* readTestThread(
+          store,
+          ThreadExportRequest.make({ threadId: current.threadId }),
+        );
 
         expect(after.records.slice(0, before.records.length)).toEqual(before.records);
         expect(
@@ -670,7 +679,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
         expect(Option.isSome(yield* runtime.processThreadHead(first.threadId))).toBe(true);
 
-        const original = yield* store.export(
+        const original = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: first.threadId }),
         );
 
@@ -696,7 +706,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           expect(requests).toHaveLength(1);
           expect((yield* snapshot(second)).ownership).toBeUndefined();
 
-          const interrupted = yield* store.export(
+          const interrupted = yield* readTestThread(
+            store,
             ThreadExportRequest.make({ threadId: second.threadId }),
           );
 
@@ -718,7 +729,11 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(outgoing).toContain("Preserve the current request and return a JSON string.");
         expect(outgoing).not.toContain("OBSOLETE REQUEST");
         expect(outgoing).not.toContain("OBSOLETE COMPLETION");
-        const final = yield* store.export(ThreadExportRequest.make({ threadId: second.threadId }));
+
+        const final = yield* readTestThread(
+          store,
+          ThreadExportRequest.make({ threadId: second.threadId }),
+        );
 
         expect(final.records.slice(0, original.records.length)).toEqual(original.records);
         expect(
@@ -949,7 +964,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           expect((yield* snapshot(receipt)).ownership).toBeUndefined();
         }
 
-        const before = yield* store.export(
+        const before = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: receipt.threadId }),
         );
 
@@ -983,7 +999,11 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           expect(text).toContain("tokens 110/5000");
           expect(text).toContain(`elapsed ${restart ? 5 : 0}s/30s`);
         }
-        const after = yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId }));
+
+        const after = yield* readTestThread(
+          store,
+          ThreadExportRequest.make({ threadId: receipt.threadId }),
+        );
 
         const startedAfter = after.records.filter(
           (entry) => entry.record.payload._tag === "RunStarted",

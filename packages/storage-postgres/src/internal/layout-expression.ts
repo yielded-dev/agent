@@ -1,9 +1,13 @@
 /** Closed expression vocabulary for the frozen Postgres layout. */
 export type LayoutExpression =
   | readonly ["column" | "text" | "json" | "length", string]
-  | readonly ["integer", 0 | 1]
-  | readonly ["notNull", LayoutExpression]
-  | readonly ["eq" | "ne" | "gt", LayoutExpression, LayoutExpression]
+  | readonly ["integer", number]
+  | readonly ["notNull" | "null", LayoutExpression]
+  | readonly [
+      "eq" | "ne" | "gt" | "ge" | "lt" | "le" | "subtract" | "shift",
+      LayoutExpression,
+      LayoutExpression,
+    ]
   | readonly ["in" | "notIn", LayoutExpression, ReadonlyArray<string>]
   | readonly ["and", ReadonlyArray<LayoutExpression>];
 
@@ -13,7 +17,7 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
   const tokens: Array<{ kind: string; value: string }> = [];
 
   const token =
-    /\s+|"(?:[^"]|"")*"|'(?:[^']|'')*'|->>|::|<>|[a-z_][a-z_0-9]*|[01](?![0-9])|[=(),[\]>.]/giy;
+    /\s+|"(?:[^"]|"")*"|'(?:[^']|'')*'|->>|>>|::|<>|[a-z_][a-z_0-9]*|(?:256|[0-9]|[1-4][0-9]|5[0-2])(?![0-9])|>=|<=|[=(),[\]>.<-]/giy;
 
   while (token.lastIndex < input.length) {
     const match = token.exec(input)?.[0];
@@ -64,9 +68,10 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
 
         if (type !== "text" && type !== "pg_catalog.text") return undefined;
       }
-    } else if (take("0")) value = ["integer", 0];
-    else if (take("1")) value = ["integer", 1];
-    else {
+    } else if (next?.kind === "bare" && /^(?:256|[0-9]|[1-4][0-9]|5[0-2])$/.test(next.value)) {
+      position++;
+      value = ["integer", Number(next.value)];
+    } else {
       const name = identifier();
 
       if (name === undefined) return undefined;
@@ -84,6 +89,19 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
         return undefined;
 
       return ["json", key[1]];
+    }
+
+    if (take("-")) {
+      const right = operand();
+
+      return right === undefined || value === undefined ? undefined : ["subtract", value, right];
+    }
+    if (take(">>")) {
+      const right = operand();
+
+      return value === undefined || right?.[0] !== "integer" || right[1] > 52
+        ? undefined
+        : ["shift", value, right];
     }
 
     return value;
@@ -109,7 +127,11 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
     const left = operand();
 
     if (left === undefined) return undefined;
-    if (take("is")) return take("not") && take("null") ? ["notNull", left] : undefined;
+    if (take("is")) {
+      const tag = take("not") ? "notNull" : "null";
+
+      return take("null") ? [tag, left] : undefined;
+    }
     const negated = take("not");
 
     if (negated || take("in")) {
@@ -118,7 +140,20 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
 
       return values === undefined ? undefined : [negated ? "notIn" : "in", left, values];
     }
-    const operator = take("=") ? "eq" : take("<>") ? "ne" : take(">") ? "gt" : undefined;
+
+    const operator = take("=")
+      ? "eq"
+      : take("<>")
+        ? "ne"
+        : take(">=")
+          ? "ge"
+          : take("<=")
+            ? "le"
+            : take(">")
+              ? "gt"
+              : take("<")
+                ? "lt"
+                : undefined;
 
     if (operator === undefined) return left;
     if ((operator === "eq" && take("any")) || (operator === "ne" && take("all"))) {

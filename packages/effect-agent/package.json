@@ -131,7 +131,9 @@
     "./worker-host": "./src/durable/WorkerHost.ts",
     "./lifecycle-publication": "./src/durable/LifecyclePublication.ts",
     "./record-format": "./src/durable/RecordFormat.ts",
-    "./thread-import": "./src/durable/ThreadImport.ts"
+    "./thread-import": "./src/durable/ThreadImport.ts",
+    "./thread-archive-range": "./src/durable/ThreadArchiveRange.ts",
+    "./thread-transfer": "./src/durable/ThreadTransfer.ts"
   },
   "publishConfig": {
     "access": "public"

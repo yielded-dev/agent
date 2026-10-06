@@ -14,7 +14,11 @@ import {
   type ClaimRequest,
   type OwnershipToken,
 } from "@yielded/agent/submission-ledger";
-import { ThreadImport } from "@yielded/agent/thread-import";
+import {
+  ThreadImport,
+  captureImportSource,
+  type ThreadArchive,
+} from "@yielded/agent/thread-import";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import {
   AppendConflict,
@@ -80,7 +84,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   const rawLedger = ledgerKernel.ledger;
   const sql = Context.get(context, SqlClient);
 
-  const storageContext = (live: Context.Context<never>, scope?: Scope.Scope) =>
+  const storageContext = <R>(live: Context.Context<R>, scope?: Scope.Scope) =>
     Context.merge(
       Context.omit(CurrentTransformer, sql.transactionService)(live),
       scope === undefined ? context : Context.add(context, Scope.Scope, scope),
@@ -174,9 +178,16 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
   const stopWorker = rawLedger.stopWorker;
   const inspectWorker = rawLedger.inspectWorker;
+  const resolveFundingOwner = rawLedger.resolveFundingOwner;
 
   const ledger: SubmissionLedger["Service"] = {
     ...rawLedger,
+    ...(resolveFundingOwner === undefined
+      ? {}
+      : {
+          resolveFundingOwner: (request: Parameters<typeof resolveFundingOwner>[0]) =>
+            bind(resolveFundingOwner(request)),
+        }),
     capabilities: bind(rawLedger.capabilities),
     admit: (request) => admin(rawLedger.admit(request)),
     markReady: (request) =>
@@ -234,9 +245,36 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   const checkpoints = rawStore.checkpoints;
   const countPeerMessages = rawStore.countPeerMessages;
   const work = rawStore.work;
+  const archives = rawStore.archives;
+  const verification = rawStore.verification;
+  const readWorkerCapacity = rawStore.readWorkerCapacity;
+
+  const archiveMutation = <A, E>(effect: Effect.Effect<A, E>, threadId: string) =>
+    admin(effect, { threadId }).pipe(
+      Effect.mapError((cause) =>
+        Schema.is(LedgerError)(cause)
+          ? ThreadStoreError.make({ operation: "archive Thread", message: cause.message, cause })
+          : cause,
+      ),
+    );
 
   const store: ThreadStore["Service"] = {
     ...rawStore,
+    archives:
+      archives === undefined
+        ? undefined
+        : {
+            page: (request) => bind(archives.page(request)),
+            verify: (request) => bind(archives.verify(request)),
+            seal: (request) => archiveMutation(archives.seal(request), request.threadId),
+            archive: (request) => archiveMutation(archives.archive(request), request.threadId),
+          },
+    verification:
+      verification === undefined
+        ? undefined
+        : { verify: (request) => bind(verification.verify(request)) },
+    readWorkerCapacity:
+      readWorkerCapacity === undefined ? undefined : (request) => bind(readWorkerCapacity(request)),
     work:
       work === undefined
         ? undefined
@@ -759,7 +797,18 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
   const importer = ThreadImport.of({
     // Empty-target validation makes a successful import disjoint from every live claim.
-    import: (request) => bind(gate.withPermits(1)(storeKernel.importer.import(request))),
+    import: <E, R>(request: Stream.Stream<ThreadArchive, E, R>) =>
+      Effect.contextWith((live: Context.Context<R>) =>
+        bind(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const captured = yield* captureImportSource(Stream.provideContext(request, live));
+
+              return yield* gate.withPermits(1)(storeKernel.importer.import(captured));
+            }),
+          ),
+        ),
+      ),
   });
 
   return { store, importer, ledger, publisher, runStorage, reader: ThreadReader.fromStore(store) };

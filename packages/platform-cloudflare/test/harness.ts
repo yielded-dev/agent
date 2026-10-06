@@ -13,8 +13,7 @@ import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { scheduleOwnerKey } from "@yielded/agent/schedule-transition";
 import { type Scheduling } from "@yielded/agent/scheduling";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
-import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadStore } from "@yielded/agent/thread-store";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { Crypto, Effect, Layer, Option, Schema } from "effect";
 import { DurableObject } from "effect-cf";
@@ -351,11 +350,11 @@ export const assertConvergence = async (
 
           expect(submissions).toHaveLength(rows.length);
 
-          return yield* verifyThreadInvariants({
-            export: yield* store.export(
-              ThreadExportRequest.make({ threadId: decodeThreadId(thread) }),
-            ),
-            submissions,
+          if (store.verification === undefined)
+            return yield* Effect.die("Missing native verification");
+
+          return yield* store.verification.verify({
+            threadId: decodeThreadId(thread),
             requireAllSettled: true,
           });
         }),

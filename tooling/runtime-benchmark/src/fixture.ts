@@ -50,6 +50,7 @@ import {
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
+  streamExport,
 } from "@yielded/agent/thread-store";
 import {
   Cause,
@@ -695,23 +696,30 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         yield* markFinish;
         yield* check(settlement.outcome === "completed", "Durable submission did not complete");
         const store = yield* ThreadStore;
-        const log = yield* store.export(ThreadExportRequest.make({ threadId }));
+        let completed = 0;
+        let retained = 0;
 
-        const completed = log.records.filter(
-          ({ record }) =>
-            record.payload._tag === "RunCompleted" &&
-            record.payload.runId === runIdForSubmission(receipt.submissionId),
+        yield* streamExport(store, ThreadExportRequest.make({ threadId })).pipe(
+          Stream.runForEach((page) =>
+            Effect.gen(function* () {
+              for (const { record } of page.records) {
+                if (record.recordId.startsWith("retained-")) retained++;
+                if (
+                  record.payload._tag === "RunCompleted" &&
+                  record.payload.runId === runIdForSubmission(receipt.submissionId)
+                ) {
+                  completed++;
+                  yield* verify(record.payload.output);
+                }
+              }
+            }),
+          ),
         );
-
-        yield* check(completed.length === 1, "Expected one canonical RunCompleted");
+        yield* check(completed === 1, "Expected one canonical RunCompleted");
         yield* check(
-          log.records.filter(({ record }) => record.recordId.startsWith("retained-")).length ===
-            (workload.kind === "ledger" ? 0 : workload.records),
+          retained === (workload.kind === "ledger" ? 0 : workload.records),
           "Retained canonical archive changed during the measured submission",
         );
-        for (const envelope of completed)
-          if (envelope.record.payload._tag === "RunCompleted")
-            yield* verify(envelope.record.payload.output);
         yield* inspectScript;
       });
 
@@ -729,15 +737,24 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
           });
           const store = yield* ThreadStore;
 
-          const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
+          const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-          const continuation = archive.records.findLast(
-            ({ record }) => record.payload._tag === "RunContinuation",
-          );
+          const continuation = yield* store
+            .read({
+              threadId,
+              selection: {
+                _tag: "RunContinuation",
+                runId: runIdForSubmission(receipt.submissionId),
+                throughSequence: tail.tailSequence,
+              },
+              page: { limit: 1 },
+            })
+            .pipe(Stream.runHead);
 
           yield* check(
-            continuation?.record.payload._tag === "RunContinuation" &&
-              continuation.record.payload.runId === runIdForSubmission(receipt.submissionId),
+            Option.isSome(continuation) &&
+              continuation.value.record.payload._tag === "RunContinuation" &&
+              continuation.value.record.payload.runId === runIdForSubmission(receipt.submissionId),
             "Recovery fixture has no owning canonical progress",
           );
           yield* inspectScript;

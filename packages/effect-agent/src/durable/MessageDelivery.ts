@@ -45,27 +45,17 @@ export const defaultMessageDeliveryPolicy: MessageDeliveryPolicy = {
 
 export const MessageDeliveryStoreLimits = Schema.Struct({
   maxPendingPerOwner: Positive,
-  maxRetainedPerOwner: Positive,
   maxEnvelopeBytes: Positive,
   /** Separate update capacity preserves the full ordinary allowance for terminal reports. */
   maxPendingUpdatesPerOwner: Schema.optionalKey(Positive),
-  maxRetainedUpdatesPerOwner: Schema.optionalKey(Positive),
-}).check(
-  Schema.makeFilter(
-    (value) =>
-      value.maxPendingPerOwner <= value.maxRetainedPerOwner &&
-      (value.maxPendingUpdatesPerOwner ?? 32) <= (value.maxRetainedUpdatesPerOwner ?? 256),
-  ),
-);
+});
 
 export type MessageDeliveryStoreLimits = typeof MessageDeliveryStoreLimits.Type;
 
 export const defaultMessageDeliveryStoreLimits: MessageDeliveryStoreLimits = {
   maxPendingPerOwner: 100,
-  maxRetainedPerOwner: 1_000,
   maxEnvelopeBytes: 262_144,
   maxPendingUpdatesPerOwner: 32,
-  maxRetainedUpdatesPerOwner: 256,
 };
 
 const ParkReason = Schema.Literals([
@@ -237,7 +227,8 @@ export type MessageDeliveryPage = typeof MessageDeliveryPage.Type;
 /**
  * Trusted host port, independent of either Thread's active Submission. List/get require an owner.
  * Inserts and changes are atomic; identical inserts return current state even after completion.
- * No automatic deletion: completed rows retain deduplication evidence and count toward retention.
+ * Completed rows retain deduplication evidence without consuming pending capacity. The host owns
+ * total retention quotas; rows are never deleted automatically.
  * `due`/`nextDeadline` are bounded host recovery seams, never model-facing management operations.
  */
 export class MessageDeliveryStore extends Context.Service<
@@ -328,7 +319,6 @@ export const isWorkerUpdateDelivery = (record: MessageDeliveryRecord): boolean =
 
 export const messageDeliveryCapacity = (limits: MessageDeliveryStoreLimits, update: boolean) => ({
   pending: update ? (limits.maxPendingUpdatesPerOwner ?? 32) : limits.maxPendingPerOwner,
-  retained: update ? (limits.maxRetainedUpdatesPerOwner ?? 256) : limits.maxRetainedPerOwner,
 });
 
 export const messageDeliveryDeadline = (record: MessageDeliveryRecord): number | null =>

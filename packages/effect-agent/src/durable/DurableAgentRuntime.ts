@@ -121,12 +121,11 @@ import { SubagentHost } from "../engine/SubagentHost.ts";
 import { ThreadHistory } from "../engine/ThreadHistory.ts";
 import { RunToolVisibility } from "../engine/ToolExposure.ts";
 import {
+  type IntegrityReport,
   type RetryCommand,
   ExplainedEvidence,
   ExplainedSubmission,
   ExplainedUnknownCall,
-  IntegrityCheck,
-  IntegrityReport,
   ObligationEntry,
   ObligationReport,
   RecoveryExplanation,
@@ -158,6 +157,7 @@ import {
 } from "./internal/agent-registration.ts";
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
+import { initialContext } from "./internal/initial-context.ts";
 import { type makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import { rebuildRunContext } from "./internal/run-context.ts";
@@ -381,13 +381,10 @@ import {
 } from "./SubmissionLedger.ts";
 import { PendingSubmission, SettledSubmission, type SubmissionStatus } from "./SubmissionStatus.ts";
 import { PreparedInput } from "./Subscription.ts";
-import { verifyThreadInvariants } from "./ThreadInvariants.ts";
 import {
-  type ThreadCheckpoint,
   type AppendConflict,
   type ThreadNotMaterialized,
   type FenceRejected,
-  ThreadExportRequest,
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
@@ -397,7 +394,6 @@ import {
   ThreadStoreError,
   ThreadTailRequest,
   FencedAppendRequest,
-  LoadCheckpointRequest,
   getRecord,
   getRunInput,
   ThreadReader,
@@ -459,7 +455,6 @@ const decodeRecordId = Schema.decodeSync(RecordId);
 const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
 const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
-const READ_PAGE = 1_024;
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
 const RECONCILER_AUTHOR = "reconciler";
 /** Canonical `ToolApprovalDecided.resolver` for policy-auto decisions made by the delegate. */
@@ -1561,68 +1556,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       runDisposition: payload.runDisposition,
     });
   };
-
-  /** Re-readable, contiguous canonical prefix. Each traversal retains only the adapter's chunk. */
-  const canonicalRange = (
-    threadId: ThreadId,
-    throughSequence: CanonicalSequence,
-    afterSequence: CanonicalSequence = ZERO_SEQUENCE,
-  ): Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized> =>
-    Stream.suspend(() => {
-      let expected = afterSequence + 1;
-      let after = afterSequence;
-
-      const next = (): Stream.Stream<
-        CanonicalRecordEnvelope,
-        ThreadStoreError | ThreadNotMaterialized
-      > =>
-        Stream.suspend(() => {
-          if (expected > throughSequence) return Stream.empty;
-          const start = expected;
-          const limit = Math.min(READ_PAGE, throughSequence - start + 1);
-
-          const page = store
-            .read(
-              ThreadRead.make({
-                threadId,
-                limit,
-                ...(after === 0 ? {} : { afterSequence: after }),
-              }),
-            )
-            .pipe(
-              Stream.mapEffect((envelope) => {
-                if (envelope.sequence !== expected || expected >= start + limit) {
-                  return Effect.fail(
-                    ThreadStoreError.make({
-                      operation: "read recovery history",
-                      message: `Canonical history for ${threadId} is not contiguous: expected sequence ${expected}, received ${envelope.sequence}`,
-                    }),
-                  );
-                }
-                expected += 1;
-                after = envelope.sequence;
-
-                return Effect.succeed(envelope);
-              }),
-            );
-
-          return Stream.concat(
-            page,
-            Stream.suspend(() =>
-              expected === start + limit
-                ? next()
-                : Stream.fail(
-                    ThreadStoreError.make({
-                      operation: "read recovery history",
-                      message: `Canonical history for ${threadId} ended at ${after}; expected ${limit} records through sequence ${throughSequence}, received ${expected - start}`,
-                    }),
-                  ),
-            ),
-          );
-        });
-
-      return next();
-    });
 
   /** Canonical owner fields and exact admission identities define the control view. */
   const controlRecords = (submissionIds: ReadonlyArray<SubmissionId>) => {
@@ -5795,6 +5728,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
+              const historySequences = new Set(
+                [...historyEvidence.values()].map((entry) => entry.sequence),
+              );
+
               const payload = yield* RunContextRecorded.makeEffect({
                 version: 1,
                 runId,
@@ -5813,7 +5750,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 historyBytes,
                 priorHistoryLength,
                 boundaries: boundaries.filter(
-                  (boundary) => boundary.promptLength <= priorHistoryLength,
+                  (boundary) =>
+                    boundary.promptLength <= priorHistoryLength &&
+                    historySequences.has(boundary.sequence),
                 ),
                 ...(journal.contextWindowId === undefined
                   ? {}
@@ -8580,10 +8519,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             return yield* RunJournalError.make({
               message: "Run has no exact original input context boundary",
             });
+
           // Context assembly is paid once, bounded at the ORIGINAL admission, never the later
           // Thread tail. Subsequent recovery uses the immutable saved context and selected Run.
+          const history = yield* initialContext(original).pipe(
+            Effect.provideService(ThreadReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
           canonical = Stream.concat(
-            canonicalRange(threadId, original.sequence),
+            Stream.fromIterable(history),
             view.canonical.pipe(Stream.filter((entry) => entry.sequence > original.sequence)),
           );
         }
@@ -10520,21 +10465,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         payload._tag !== "WorkerInputRequested" ||
         payload.admission.messageId !== owner.messageId ||
         payload.admission.origin.worker.threadId !== owner.workerThreadId ||
+        (payload.admission.reportKind === "update") !== owner.update ||
         payload.admission.origin.source.threadId !== threadId
       )
         return yield* invalid();
 
-      const repaired = yield* workerRuntime
-        .repairInput(threadId, evidence.record.recordId, payload)
-        .pipe(
-          Effect.mapError((cause) =>
-            ThreadStoreError.make({
-              operation: "recover worker input",
-              message: "Worker effect evidence remains owed",
-              cause,
-            }),
-          ),
-        );
+      const repaired = yield* workerRuntime.repairInput(threadId, payload).pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "recover worker input",
+            message: "Worker effect evidence remains owed",
+            cause,
+          }),
+        ),
+      );
 
       return report(repaired ? "repaired" : "deferred");
     }
@@ -10706,7 +10650,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       owner.recordId !== evidence.record.recordId ||
       entry.id !==
         (owner.kind === "reservation"
-          ? workId("reservation", owner.childThreadId ?? "")
+          ? payload._tag === "SubtreeBudgetReserved"
+            ? workId("reservation", payload.reservationId)
+            : ""
           : workId("handoff", owner.recordId))
     )
       return yield* invalid();
@@ -10800,6 +10746,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           owner.childThreadId !== payload.childThreadId
         )
           return yield* invalid();
+        if (payload.lifetime === "background") {
+          const repaired = yield* workerRuntime.repairReservation(threadId, evidence).pipe(
+            Effect.mapError((cause) =>
+              ThreadStoreError.make({
+                operation: "recover background reservation",
+                message: "Worker admission closure remains owed",
+                cause,
+              }),
+            ),
+          );
+
+          return report(repaired ? "repaired" : "deferred");
+        }
         if (payload.executionRunId === null) return report("deferred");
         const parent = yield* originalSubmission(threadId, payload.executionRunId);
 
@@ -11731,7 +11690,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* operationAuthorizer.authorize(
       OperationAuthorizationRequest.make({ operation: "explain", threadId }),
     );
-    const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
+
+    const nonterminal = yield* Stream.runCollect(
+      ledger.scanNonterminal.pipe(Stream.filter((submission) => submission.threadId === threadId)),
+    );
+
     const explanations: Array<RecoveryExplanation> = [];
 
     for (const submission of nonterminal) {
@@ -11752,86 +11715,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* operationAuthorizer.authorize(
       OperationAuthorizationRequest.make({ operation: "verify", threadId }),
     );
-    const exported = yield* store.export(ThreadExportRequest.make({ threadId }));
-    // Lane rows: the nonterminal scan plus every Submission the canonical log itself names —
-    // the ledger port scans nonterminal work only, and canonical history is the authority for
-    // everything settled (DUR-015).
-    const rows = new Map<SubmissionId, SubmissionSnapshot>();
-    const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
-    const named = new Set<SubmissionId>();
-
-    for (const submission of nonterminal) {
-      if (submission.threadId === threadId) named.add(submission.submissionId);
-    }
-
-    for (const envelope of exported.records) {
-      const payload = envelope.record.payload;
-
-      if (
-        payload._tag === "UserInputRecorded" ||
-        payload._tag === "SubmissionSettled" ||
-        payload._tag === "AbortRequested"
-      ) {
-        if (payload.submissionId !== undefined) named.add(payload.submissionId);
-      }
-    }
-    for (const submissionId of named) {
-      if (rows.has(submissionId)) continue;
-      const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
-
-      if (Option.isSome(found) && found.value.threadId === threadId) {
-        rows.set(submissionId, found.value);
-      }
-    }
-
-    // The latest stored checkpoint binds against the report; a typed load rejection IS an
-    // integrity finding rather than an operation failure.
-    const checkpointLoad:
-      | { readonly _tag: "loaded"; readonly checkpoint: ThreadCheckpoint | undefined }
-      | { readonly _tag: "rejected"; readonly reason: string }
-      | { readonly _tag: "unsupported" } =
-      store.checkpoints === undefined
-        ? { _tag: "unsupported" }
-        : yield* store.checkpoints.load(LoadCheckpointRequest.make({ threadId })).pipe(
-            Effect.map((checkpoint) => ({
-              _tag: "loaded" as const,
-              checkpoint: Option.getOrUndefined(checkpoint),
-            })),
-            Effect.catchTag("CheckpointRejected", (rejected) =>
-              Effect.succeed({ _tag: "rejected" as const, reason: rejected.reason }),
-            ),
-          );
-
-    const report = yield* verifyThreadInvariants({
-      export: exported,
-      submissions: [...rows.values()],
-      checkpointsSupported: checkpointLoad._tag !== "unsupported",
-      ...(checkpointLoad._tag === "loaded" && checkpointLoad.checkpoint !== undefined
-        ? { checkpoint: checkpointLoad.checkpoint }
-        : {}),
-    }).pipe(withCrypto);
-
-    if (checkpointLoad._tag === "rejected") {
-      const checks = [
-        ...report.checks.filter((result) => result.name !== "checkpoint-binding"),
-        IntegrityCheck.make({
-          name: "checkpoint-binding",
-          status: "failed",
-          detail: `the stored checkpoint was rejected on load: ${checkpointLoad.reason}`,
-        }),
-      ];
-
-      return IntegrityReport.make({
-        threadId: report.threadId,
-        tailSequence: report.tailSequence,
-        recordCount: report.recordCount,
-        submissionCount: report.submissionCount,
-        checks,
-        ok: false,
+    if (store.verification === undefined)
+      return yield* ThreadStoreError.make({
+        operation: "verify Thread",
+        message: "This adapter does not provide snapshot-bound streaming verification",
       });
-    }
 
-    return report;
+    return yield* store.verification.verify({ threadId });
   });
 
   /**

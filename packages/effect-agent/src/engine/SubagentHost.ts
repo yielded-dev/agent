@@ -61,7 +61,10 @@ export interface DeferredStartWorkerRequest<E = never, R = never> extends Pick<
   | "encodedGrant"
   | "budgetScope"
 > {
-  readonly prepare: Effect.Effect<
+  /** The host resolves funding scope before policy/budget preparation. */
+  readonly prepare: (
+    budgetScope: WorkerBudgetScope,
+  ) => Effect.Effect<
     Pick<StartWorkerRequest, "encodedInput" | "policy" | "budget" | "toolCallAllowance">,
     E,
     R
@@ -170,7 +173,7 @@ export class SubagentHost extends Context.Service<
   SubagentHost,
   {
     readonly context: Effect.Effect<WorkerContext, WorkerError>;
-    /** Resolve prepared input through host authority; None retains legacy target inheritance. */
+    /** Resolve prepared input through host authority; None retains the registered target policy. */
     readonly resolveTargetPolicy: (request: {
       readonly continuationOf?: WorkerRef;
       readonly target: Agent.AnyDefinition;

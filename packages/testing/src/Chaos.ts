@@ -8,7 +8,6 @@ import {
 } from "@yielded/agent/agent-registration";
 import {
   DurableAgentRuntime,
-  DurableRuntimeConfig,
   type DurableSubmitFailure,
   type DurableWorkerFailure,
   type Receipt,
@@ -20,13 +19,7 @@ import {
 import { DurableStep, DurableStepError, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, ToolCallId, TurnId, type SubmissionId } from "@yielded/agent/identifiers";
-import {
-  DefinitionDigests,
-  Digest,
-  type CanonicalRecordEnvelope,
-  type BatchId,
-  type ProducerId,
-} from "@yielded/agent/records";
+import { DefinitionDigests, Digest, type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
@@ -42,15 +35,12 @@ import {
   ResolutionCompletedWithResult,
   ResolutionNeverHappened,
   SubmissionLedger,
-  SubmissionLookupById,
   UnknownResolutionCommand,
   type Settlement,
-  type SubmissionSnapshot,
   type UnknownResolution,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
-import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadExportRequest, ThreadStore, streamExport } from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream, Arbitrary } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
 
@@ -60,8 +50,7 @@ import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from 
  * deterministic runner that drives the durable coordinator over whatever adapter pair the test
  * provides. Every plan ends in the SAME claims the crash matrices make:
  *
- * 1. `verifyThreadInvariants` in convergence mode over every touched Thread (the
- *    shared WP1 checker — one set of claims for admin verify, certification, chaos, and soak);
+ * 1. native bounded verification in convergence mode over every touched Thread;
  * 2. `scanObligations` returning ZERO entries (everything settled; nothing invisibly stuck);
  * 3. supplier non-fabrication wherever the deterministic desk was in play (durability §10: no
  *    canonical Tool success exists that the external store did not actually produce).
@@ -918,26 +907,6 @@ const resolutionPass = Effect.fnUntraced(function* (
   }
 });
 
-const submissionIdsNamedBy = (
-  records: ReadonlyArray<CanonicalRecordEnvelope>,
-): ReadonlySet<SubmissionId> => {
-  const named = new Set<SubmissionId>();
-
-  for (const envelope of records) {
-    const payload = envelope.record.payload;
-
-    if (
-      payload._tag === "UserInputRecorded" ||
-      payload._tag === "SubmissionSettled" ||
-      payload._tag === "AbortRequested"
-    ) {
-      if (payload.submissionId !== undefined) named.add(payload.submissionId);
-    }
-  }
-
-  return named;
-};
-
 /**
  * The final non-fabrication sweep (durability §10): every canonical Tool success recorded on a
  * desk-backed lane must be a value the desk actually produced.
@@ -1006,7 +975,6 @@ export const runChaosPlan = Effect.fnUntraced(function* (
   const runtime = yield* DurableAgentRuntime;
   const ledger = yield* SubmissionLedger;
   const store = yield* ThreadStore;
-  const config = yield* DurableRuntimeConfig;
   const failpoints = yield* DurableRuntimeFailpointTestControl;
   const random = mulberry32(plan.seed);
   const desk = yield* makeChaosDesk;
@@ -1171,40 +1139,20 @@ export const runChaosPlan = Effect.fnUntraced(function* (
     kind: ChaosScenarioKind,
     deskInPlay: boolean,
   ) {
-    const exported = yield* store.export(ThreadExportRequest.make({ threadId })).pipe(
+    if (store.verification === undefined)
+      return yield* ChaosConvergenceFailure.make({
+        seed: plan.seed,
+        message: "The adapter must provide bounded native Thread verification",
+      });
+
+    const report = yield* store.verification.verify({ threadId, requireAllSettled: true }).pipe(
       Effect.mapError((error) =>
         ChaosConvergenceFailure.make({
           seed: plan.seed,
-          message: `export of ${threadId} failed: ${String(error)}`,
+          message: `verification of ${threadId} failed: ${String(error)}`,
         }),
       ),
     );
-
-    const rows: Array<SubmissionSnapshot> = [];
-
-    for (const submissionId of submissionIdsNamedBy(exported.records)) {
-      const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId })).pipe(
-        Effect.mapError((error) =>
-          ChaosConvergenceFailure.make({
-            seed: plan.seed,
-            message: `lookup of ${submissionId} failed: ${String(error)}`,
-          }),
-        ),
-      );
-
-      if (Option.isSome(found)) rows.push(found.value);
-    }
-
-    const batchProducers = new Map<BatchId, ProducerId>(
-      exported.records.map((envelope) => [envelope.batchId, config.producerId]),
-    );
-
-    const report = yield* verifyThreadInvariants({
-      export: exported,
-      submissions: rows,
-      batchProducers,
-      requireAllSettled: true,
-    });
 
     if (!report.ok) {
       const failed = report.checks
@@ -1218,13 +1166,25 @@ export const runChaosPlan = Effect.fnUntraced(function* (
       });
     }
     if (deskInPlay) {
-      yield* assertNoFabrication(plan, exported.records, produced);
+      yield* Stream.runForEach(
+        streamExport(store, ThreadExportRequest.make({ threadId })),
+        (page) => assertNoFabrication(plan, page.records, produced),
+      ).pipe(
+        Effect.mapError((error) =>
+          Schema.is(ChaosConvergenceFailure)(error)
+            ? error
+            : ChaosConvergenceFailure.make({
+                seed: plan.seed,
+                message: `canonical supplier verification failed: ${String(error)}`,
+              }),
+        ),
+      );
     }
     laneReports.push(
       ChaosLaneReport.make({
         threadId,
         kind,
-        submissionCount: rows.length,
+        submissionCount: report.submissionCount,
         verified: report.ok,
       }),
     );

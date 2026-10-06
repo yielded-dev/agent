@@ -19,7 +19,11 @@ import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect"
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 
-import { CurrentSqliteStorageVersion, readSqliteStorageHeader } from "./internal/migrations.ts";
+import {
+  CurrentSqliteStorageVersion,
+  readSqliteStorageHeader,
+  inspectManagedSqliteStorage,
+} from "./internal/migrations.ts";
 import {
   configureSqliteSynchronous,
   initializeSqliteJournal,
@@ -74,10 +78,6 @@ class ExclusiveSqliteHost extends Context.Service<
   { readonly sql: SqlClientService.SqlClient }
 >()("@effect-agent/storage-sqlite/internal/ExclusiveSqliteHost") {}
 
-const PersistentTriggerHeader = Schema.Tuple([
-  Schema.Struct({ user_version: SqlInteger, trigger_count: SqlInteger }),
-]);
-
 const ExclusiveMode = Schema.Tuple([Schema.Struct({ locking_mode: Schema.Literal("exclusive") })]);
 const JournalMode = Schema.Tuple([Schema.Struct({ journal_mode: Schema.String })]);
 
@@ -105,8 +105,8 @@ const RetainedOwnership = Schema.Array(
  * retire retained ownership and advance its Thread epochs in one transaction, then recover
  * through the ordinary ledger protocol. Producer names confer no takeover authority. Journals,
  * receipts, queue states and unresolved external effects are left intact. Managed databases
- * must contain no persistent SQL triggers: hidden metadata writes would invalidate claim-scoped
- * authority. Trigger-bearing databases are rejected before initialization or ownership retirement.
+ * allow only the exact declared transfer-counter triggers. Unknown or altered persistent triggers
+ * are rejected before initialization or ownership retirement.
  */
 export const exclusiveHostClientLayer: Layer.Layer<
   SqlClientService.SqlClient | ExclusiveSqliteHost,
@@ -159,21 +159,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
       // retains it after commit/rollback until this client's enclosing Scope closes.
       yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(Effect.void);
 
-      const [triggerHeader] = yield* Schema.decodeUnknownEffect(PersistentTriggerHeader)(
-        yield* sql`
-          SELECT (SELECT user_version FROM pragma_user_version) AS user_version,
-                 (SELECT COUNT(*) FROM main.sqlite_master WHERE type = 'trigger') AS trigger_count
-        `,
-      );
-
-      if (triggerHeader.trigger_count !== 0) {
-        return yield* SqliteStorageCompatibilityError.make({
-          actualVersion: triggerHeader.user_version,
-          supportedVersion: CurrentSqliteStorageVersion,
-          message:
-            "Managed-host databases cannot contain persistent SQL triggers; no schema or ownership data was changed.",
-        });
-      }
+      yield* inspectManagedSqliteStorage();
     }).pipe(
       Effect.mapError((error) =>
         Schema.is(SqliteStorageCompatibilityError)(error) ? error : acquireError(error),

@@ -6,6 +6,10 @@ import {
   SqlLifecycleRetainer,
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
+import {
+  canonicalRecordJson,
+  makeSqlThreadArchiveRange,
+} from "@yielded/agent-storage-sql/sql-thread-archive-range";
 import { makeProgressAppendValidation } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { makeSqlThreadWork } from "@yielded/agent-storage-sql/sql-thread-work";
 import { ThreadId } from "@yielded/agent/identifiers";
@@ -15,11 +19,7 @@ import {
 } from "@yielded/agent/lifecycle-publication";
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import {
-  MAX_THREAD_EXPORT_RECORDS,
-  ThreadStoreDiagnostic,
-  ThreadStoreError,
-} from "@yielded/agent/thread-store";
+import { ThreadStoreDiagnostic, ThreadStoreError } from "@yielded/agent/thread-store";
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
@@ -51,7 +51,6 @@ import {
  */
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(2_000_000));
 const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
-const MAX_RECORDS_PER_THREAD = MAX_THREAD_EXPORT_RECORDS;
 const MAX_IDENTIFIER_LENGTH = 1_024;
 const MAX_READ_PAGE_JSON_BYTES = 4 * 1024 * 1024;
 // A shared isolate budget permits multi-page hydration without multiplying its
@@ -414,6 +413,23 @@ const makeJournal = (
     }
     const recordCache = records;
 
+    const archives = yield* makeSqlThreadArchiveRange({
+      read: (body) => state.read(body),
+      write: (body) =>
+        owner.transaction(body.pipe(Effect.tap(() => state.invalidate))).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.catchTag("SqlError", (cause) =>
+            ThreadStoreError.make({
+              operation: "archive write",
+              message: "Archive transaction failed.",
+              cause,
+            }),
+          ),
+        ),
+    }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+
+    const recordJson = canonicalRecordJson(sql);
+
     /** Typed pre-write refusal for any single value over the configured byte bound. */
     const checkValueBound = (
       operation: string,
@@ -458,6 +474,19 @@ const makeJournal = (
           Effect.flatMap(Effect.fromResult),
         );
 
+    const requireTransferState = Effect.fnUntraced(function* (threadId: string) {
+      const rows = yield* state
+        .read(sql`SELECT thread_id FROM effect_agent_transfer_state WHERE thread_id=${threadId}`)
+        .pipe(Effect.mapError(storageError("read transfer counters")));
+
+      if (rows.length !== 1)
+        return yield* DoStorageCorruptionError.make({
+          table: "effect_agent_transfer_state",
+          rowKey: threadId,
+          message: "Materialized Thread has no transfer counter row.",
+        });
+    });
+
     const materialize = Effect.fnUntraced(
       function* (
         threadId: string,
@@ -479,7 +508,11 @@ const makeJournal = (
         const current = yield* getThread(threadId);
 
         if (current.length === 1 && producerEpoch <= current[0].producer_epoch) {
-          if (producerEpoch === current[0].producer_epoch) return;
+          if (producerEpoch === current[0].producer_epoch) {
+            yield* requireTransferState(threadId);
+
+            return;
+          }
 
           return yield* DoFenceRejected.make({
             producerEpoch,
@@ -530,6 +563,12 @@ const makeJournal = (
                 ),
               );
 
+              yield* sql`INSERT INTO effect_agent_transfer_state
+                (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count)
+                VALUES (${threadId}, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
+                Effect.mapError(storageError("initialize transfer counters")),
+              );
+
               yield* work
                 .initialize(
                   yield* Schema.decodeEffect(ThreadId)(threadId).pipe(Effect.mapError(workFailure)),
@@ -555,6 +594,7 @@ const makeJournal = (
                 message: `Producer epoch ${producerEpoch} is stale; current epoch is ${existing[0].producer_epoch}.`,
               });
             }
+            yield* requireTransferState(threadId);
             if (producerEpoch > existing[0].producer_epoch) {
               yield* sql`
             UPDATE effect_agent_threads
@@ -666,7 +706,7 @@ const makeJournal = (
             last_sequence,
             batch_digest,
             tail_digest,
-            batch_json
+            '' AS batch_json
           FROM effect_agent_canonical_batches
           WHERE thread_id = ${request.threadId}
             AND batch_id = ${request.batchId}
@@ -717,12 +757,6 @@ const makeJournal = (
           actualTailDigest: thread.tail_digest,
         });
       }
-      if (thread.tail_sequence + request.records.length > MAX_RECORDS_PER_THREAD) {
-        return yield* DoStorageError.make({
-          operation: "append canonical batch",
-          message: `Thread record limit ${MAX_RECORDS_PER_THREAD} would be exceeded.`,
-        });
-      }
 
       // Chunked to respect the Durable Object platform's 100-bound-parameter statement
       // limit: a batch may carry up to 256 records.
@@ -738,7 +772,7 @@ const makeJournal = (
               sequence,
               record_id,
               batch_id,
-              record_json
+              ${recordJson} AS record_json
             FROM effect_agent_canonical_records
             WHERE thread_id = ${request.threadId}
               AND record_id IN ${sql.in([...chunk])}
@@ -786,6 +820,7 @@ const makeJournal = (
       );
 
       yield* validateProgress(request);
+      yield* archives.append(request, firstSequence, lastSequence);
       yield* sql`
           INSERT INTO effect_agent_canonical_batches (
             thread_id,
@@ -821,8 +856,8 @@ const makeJournal = (
       }));
 
       // Captured scalar locators avoid parsing canonical JSON under the writer.
-      // Twelve bound columns per row stay within workerd's statement limit.
-      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 12))) {
+      // Seventeen bound columns per row stay within workerd's statement limit.
+      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 17))) {
         yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
           Effect.mapError(storageError("insert canonical records")),
         );
@@ -983,7 +1018,7 @@ const makeJournal = (
       const planRows = yield* sql<Record<string, unknown>>`
       SELECT
         sequence,
-        length(CAST(record_json AS BLOB)) AS record_json_bytes
+        length(CAST(${recordJson} AS BLOB)) AS record_json_bytes
       FROM effect_agent_canonical_records
       WHERE thread_id = ${request.threadId}
         AND sequence > ${request.fromSequenceExclusive}
@@ -1029,7 +1064,7 @@ const makeJournal = (
 
       const readPage = Effect.fnUntraced(function* (page: ReadPage) {
         const rows = yield* sql<Record<string, unknown>>`
-        SELECT thread_id, sequence, record_id, batch_id, record_json
+        SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
         FROM effect_agent_canonical_records
         WHERE thread_id = ${request.threadId}
           AND sequence >= ${page[0].sequence}
@@ -1206,7 +1241,7 @@ const makeJournal = (
         last_sequence,
         batch_digest,
         tail_digest,
-        batch_json
+        '' AS batch_json
       FROM effect_agent_canonical_batches
       WHERE thread_id = ${threadId}
         AND batch_id = (
@@ -1225,90 +1260,6 @@ const makeJournal = (
 
       return batches.map((batch) => batch.tail_digest);
     });
-
-    const scanStoredPayloads = () =>
-      state
-        .transaction(
-          Effect.gen(function* () {
-            const threads = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              created_at,
-              tail_sequence,
-              tail_digest,
-              producer_epoch
-            FROM effect_agent_threads
-            ORDER BY thread_id
-          `.pipe(Effect.mapError(storageError("scan threads")));
-
-            const batches = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              batch_id,
-              first_sequence,
-              last_sequence,
-              batch_digest,
-              tail_digest,
-              batch_json
-            FROM effect_agent_canonical_batches
-            ORDER BY thread_id, first_sequence
-          `.pipe(Effect.mapError(storageError("scan canonical batches")));
-
-            const records = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              sequence,
-              record_id,
-              batch_id,
-              record_json
-            FROM effect_agent_canonical_records
-            ORDER BY thread_id, sequence
-          `.pipe(Effect.mapError(storageError("scan canonical records")));
-
-            const checkpoints = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              through_sequence,
-              tail_digest,
-              checkpoint_json
-            FROM effect_agent_checkpoints
-            ORDER BY thread_id, through_sequence
-          `.pipe(Effect.mapError(storageError("scan checkpoints")));
-
-            return {
-              threads: yield* decodeRows(
-                Schema.Array(ThreadRow),
-                "effect_agent_threads",
-                "startup_scan",
-                threads,
-              ),
-              batches: yield* decodeRows(
-                Schema.Array(BatchRow),
-                "effect_agent_canonical_batches",
-                "startup_scan",
-                batches,
-              ),
-              records: yield* decodeRows(
-                Schema.Array(RecordRow),
-                "effect_agent_canonical_records",
-                "startup_scan",
-                records,
-              ),
-              checkpoints: yield* decodeRows(
-                Schema.Array(CheckpointRow),
-                "effect_agent_checkpoints",
-                "startup_scan",
-                checkpoints,
-              ),
-            };
-          }),
-        )
-        .pipe(
-          Effect.provideService(SqlClient.SqlClient, sql),
-          Effect.catchTag("SqlError", (error) =>
-            Effect.fail(storageError("startup scan transaction")(error)),
-          ),
-        );
 
     const sourceFailure = (cause: unknown) =>
       LifecyclePublicationError.make({ reason: "unavailable", cause });
@@ -1474,6 +1425,8 @@ const makeJournal = (
           };
 
     return {
+      archives: archives.storage,
+      archiveRanges: archives,
       work,
       state,
       owner,
@@ -1493,7 +1446,6 @@ const makeJournal = (
       materialize,
       read: (request: RawReadRequest) => state.read(read(request)),
       saveCheckpoint,
-      scanStoredPayloads,
       withWriteTransaction,
     } as const;
   });

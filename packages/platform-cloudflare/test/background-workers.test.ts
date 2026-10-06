@@ -589,8 +589,16 @@ it("retains captured worker policies and concurrency across native eviction and 
 }, 20_000);
 
 // Regression: https://github.com/yielded-dev/agent/commit/4600d240f44b1ef1fe9b0fc58f39e293a6434f85
-it("drains private worker progress through rebuilt runtime maintenance into an idle parent", async () => {
+it("drains private worker progress through rebuilt runtime maintenance into an idle parent", async ({
+  onTestFinished,
+}) => {
   const source = `background-cf-custom-${crypto.randomUUID()}`;
+
+  independentBudgetGrants.add(source);
+  onTestFinished(() => {
+    independentBudgetGrants.delete(source);
+    independentBudgetAuthorityCalls.delete(source);
+  });
 
   await runClient(
     Effect.flatMap(CloudflareThreadClient, (client) =>
@@ -733,8 +741,10 @@ it("delivers one frozen standard report after child eviction and source eviction
       { idempotencyKey: decodeIdempotencyKey("joined") },
     );
 
-    const joined = await withOwner(source, (host) =>
-      followUp.pipe(Effect.provideService(SubagentHost, host)),
+    const joined = await withOwner(
+      source,
+      (host) => followUp.pipe(Effect.provideService(SubagentHost, host)),
+      sourceReceipt.submissionId,
     );
 
     // The alarm pump can own acceptance; inspect its stable identity without another command.
@@ -1168,8 +1178,16 @@ it("retries unavailable worker funding admission with the same durable input ide
   }
 }, 20_000);
 
-it("routes worker stop through its owning Object and keeps queued input fenced after native eviction", async () => {
+it("routes worker stop through its owning Object and keeps queued input fenced after native eviction", async ({
+  onTestFinished,
+}) => {
   const source = `background-cf-report-stop-${crypto.randomUUID()}`;
+
+  independentBudgetGrants.add(source);
+  onTestFinished(() => {
+    independentBudgetGrants.delete(source);
+    independentBudgetAuthorityCalls.delete(source);
+  });
 
   await runClient(
     Effect.flatMap(CloudflareThreadClient, (client) =>

@@ -55,6 +55,8 @@ import {
   encodePortResponse,
   LedgerAdmitCall,
   LedgerAdmitResult,
+  LedgerFundingOwnerCall,
+  LedgerFundingOwnerResult,
   LedgerLookupCall,
   LedgerLookupResult,
   LedgerMarkReadyCall,
@@ -72,6 +74,14 @@ import {
   PortFailed,
   PortProtocolError,
   PortSucceeded,
+  StoreRangePageCall,
+  StoreRangePageResult,
+  StoreRangeSealCall,
+  StoreRangeSealResult,
+  StoreRangeArchiveCall,
+  StoreRangeArchiveResult,
+  StoreRangeVerifyCall,
+  StoreRangeVerifyResult,
   StoreAppendCall,
   StoreAppendResult,
   StoreCountPeerMessagesCall,
@@ -80,6 +90,10 @@ import {
   StoreExportResult,
   StoreInspectTailCall,
   StoreInspectTailResult,
+  StoreWorkerCapacityCall,
+  StoreWorkerCapacityResult,
+  StoreVerificationCall,
+  StoreVerificationResult,
   StoreReadIdentityCall,
   StoreReadIdentityResult,
   StoreMaterializeCall,
@@ -600,6 +614,37 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
               ),
             ),
 
+    resolveFundingOwner: (request) =>
+      (options.ownsThread(request.threadId)
+        ? local.resolveFundingOwner === undefined
+          ? Effect.fail(
+              LedgerError.make({
+                operation: "resolve funding owner",
+                message: "Native funding-owner lookup unavailable.",
+              }),
+            )
+          : local.resolveFundingOwner(request)
+        : foreignLedgerCall(
+            "resolve funding owner",
+            request.threadId,
+            LedgerFundingOwnerCall.make({ request }),
+            LedgerFundingOwnerResult,
+            NoAdditionalPortFailure,
+          ).pipe(Effect.map((reply) => reply.funding))
+      ).pipe(
+        Effect.filterOrFail(
+          (funding) =>
+            funding.selected.submissionId === request.submissionId &&
+            funding.selected.threadId === request.threadId &&
+            funding.owner.threadId === request.threadId,
+          () =>
+            LedgerError.make({
+              operation: "resolve funding owner",
+              message: "Funding-owner response belongs to another input or Thread.",
+            }),
+        ),
+      ),
+
     resolveAdmission: (request) =>
       options.ownsThread(request.threadId)
         ? local.resolveAdmission(request)
@@ -953,6 +998,56 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
   };
 
   const routed = ThreadStore.of({
+    archives: {
+      page: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.archives === undefined
+            ? Effect.fail(crossThreadStoreError("archive unavailable", request.threadId))
+            : local.archives.page(request)
+          : foreignStoreCall(
+              "archive page",
+              request.threadId,
+              StoreRangePageCall.make({ request }),
+              StoreRangePageResult,
+              ThreadNotMaterialized,
+            ).pipe(Effect.map((reply) => reply.page)),
+      seal: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.archives === undefined
+            ? Effect.fail(crossThreadStoreError("archive unavailable", request.threadId))
+            : local.archives.seal(request)
+          : foreignStoreCall(
+              "archive seal",
+              request.threadId,
+              StoreRangeSealCall.make({ request }),
+              StoreRangeSealResult,
+              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+            ).pipe(Effect.map((reply) => reply.range)),
+      archive: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.archives === undefined
+            ? Effect.fail(crossThreadStoreError("archive unavailable", request.threadId))
+            : local.archives.archive(request)
+          : foreignStoreCall(
+              "archive archive",
+              request.threadId,
+              StoreRangeArchiveCall.make({ request }),
+              StoreRangeArchiveResult,
+              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+            ).pipe(Effect.map((reply) => reply.range)),
+      verify: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.archives === undefined
+            ? Effect.fail(crossThreadStoreError("archive unavailable", request.threadId))
+            : local.archives.verify(request)
+          : foreignStoreCall(
+              "archive verify",
+              request.threadId,
+              StoreRangeVerifyCall.make({ request }),
+              StoreRangeVerifyResult,
+              ThreadNotMaterialized,
+            ).pipe(Effect.map((reply) => reply.range)),
+    },
     work: {
       threads: (request) =>
         Effect.flatMap(CurrentNativeSource, (nativeSource) =>
@@ -1013,6 +1108,42 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               ),
             ),
     },
+    readWorkerCapacity: (request) =>
+      (options.ownsThread(request.threadId)
+        ? local.readWorkerCapacity === undefined
+          ? Effect.fail(crossThreadStoreError("worker capacity unavailable", request.threadId))
+          : local.readWorkerCapacity(request)
+        : foreignStoreCall(
+            "worker capacity",
+            request.threadId,
+            StoreWorkerCapacityCall.make({ request }),
+            StoreWorkerCapacityResult,
+            ThreadNotMaterialized,
+          ).pipe(Effect.map((reply) => reply.capacity))
+      ).pipe(
+        Effect.filterOrFail(
+          (capacity) =>
+            capacity.threadId === request.threadId &&
+            capacity.tailSequence === request.expectedTailSequence &&
+            capacity.tailDigest === request.expectedTailDigest,
+          () => crossThreadStoreError("worker capacity response mismatch", request.threadId),
+        ),
+      ),
+    verification: {
+      verify: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.verification === undefined
+            ? Effect.fail(crossThreadStoreError("verification unavailable", request.threadId))
+            : local.verification.verify(request)
+          : foreignStoreCall(
+              "thread verification",
+              request.threadId,
+              StoreVerificationCall.make({ request }),
+              StoreVerificationResult,
+              ThreadNotMaterialized,
+            ).pipe(Effect.map((reply) => reply.report)),
+    },
+
     countPeerMessages: (request) =>
       options.ownsThread(request.threadId)
         ? local.countPeerMessages === undefined
@@ -1346,6 +1477,51 @@ export const executePortRequest = Effect.fnUntraced(function* (
   | DurableRuntimeFailpoint
 > {
   switch (request._tag) {
+    case "StoreRangePage": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.archives === undefined
+          ? crossThreadStoreError("archive unavailable", request.request.threadId)
+          : store.archives
+              .page(request.request)
+              .pipe(Effect.map((page) => StoreRangePageResult.make({ page }))),
+      );
+    }
+    case "StoreRangeSeal": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.archives === undefined
+          ? crossThreadStoreError("archive unavailable", request.request.threadId)
+          : store.archives
+              .seal(request.request)
+              .pipe(Effect.map((range) => StoreRangeSealResult.make({ range }))),
+      );
+    }
+    case "StoreRangeArchive": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.archives === undefined
+          ? crossThreadStoreError("archive unavailable", request.request.threadId)
+          : store.archives
+              .archive(request.request)
+              .pipe(Effect.map((range) => StoreRangeArchiveResult.make({ range }))),
+      );
+    }
+    case "StoreRangeVerify": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.archives === undefined
+          ? crossThreadStoreError("archive unavailable", request.request.threadId)
+          : store.archives
+              .verify(request.request)
+              .pipe(Effect.map((range) => StoreRangeVerifyResult.make({ range }))),
+      );
+    }
+
     case "StoreWorkPage": {
       const store = yield* ThreadStore;
 
@@ -1457,6 +1633,22 @@ export const executePortRequest = Effect.fnUntraced(function* (
           ),
       );
     }
+    case "LedgerFundingOwner": {
+      const ledger = yield* SubmissionLedger;
+
+      return yield* capture(
+        ledger.resolveFundingOwner === undefined
+          ? Effect.fail(
+              LedgerError.make({
+                operation: "resolve funding owner",
+                message: "Native funding-owner lookup unavailable.",
+              }),
+            )
+          : ledger
+              .resolveFundingOwner(request.request)
+              .pipe(Effect.map((funding) => LedgerFundingOwnerResult.make({ funding }))),
+      );
+    }
     case "LedgerResolveAdmission": {
       const ledger = yield* SubmissionLedger;
 
@@ -1555,6 +1747,30 @@ export const executePortRequest = Effect.fnUntraced(function* (
         store
           .readIdentity(request.request)
           .pipe(Effect.map((identity) => StoreReadIdentityResult.make({ identity }))),
+      );
+    }
+    case "StoreWorkerCapacity": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.readWorkerCapacity === undefined
+          ? Effect.fail(
+              crossThreadStoreError("worker capacity unavailable", request.request.threadId),
+            )
+          : store
+              .readWorkerCapacity(request.request)
+              .pipe(Effect.map((capacity) => StoreWorkerCapacityResult.make({ capacity }))),
+      );
+    }
+    case "StoreVerification": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.verification === undefined
+          ? Effect.fail(crossThreadStoreError("verification unavailable", request.request.threadId))
+          : store.verification
+              .verify(request.request)
+              .pipe(Effect.map((report) => StoreVerificationResult.make({ report }))),
       );
     }
     case "StoreExport": {

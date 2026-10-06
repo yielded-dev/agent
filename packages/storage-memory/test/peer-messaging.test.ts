@@ -35,13 +35,15 @@ import {
   Digest,
   PersistedJson,
   ProducerId,
+  type CanonicalRecordEnvelope,
 } from "@yielded/agent/records";
+import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadExportRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
@@ -127,7 +129,6 @@ const makeHarness = Effect.fn(function* (
         MemorySubmissionLedgerLive,
         memoryMessageDeliveryStoreLayer({
           maxPendingPerOwner: options.maxPendingPerOwner ?? 100,
-          maxRetainedPerOwner: 100,
           maxEnvelopeBytes: 262_144,
         }),
       ).pipe(Layer.provideMerge(MemoryThreadStoreLive)),
@@ -280,7 +281,24 @@ const makeHarness = Effect.fn(function* (
   });
 
   const driver = yield* makeDriver();
-  const history = (threadId: ThreadId) => store.export(ThreadExportRequest.make({ threadId }));
+
+  const history = Effect.fnUntraced(function* (threadId: ThreadId) {
+    const page = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+    if (page.tailSequence > 1024) return yield* Effect.die("Fixture history exceeds 1024 records");
+    let bytes = 0;
+    const records: Array<CanonicalRecordEnvelope> = [];
+
+    yield* Stream.runForEach(store.read(ThreadRead.make({ threadId, limit: 1024 })), (entry) => {
+      bytes += canonicalRecordBytes(entry.record);
+      if (bytes > 32 * 1024 * 1024) return Effect.die("Fixture history exceeds 32 MiB");
+      records.push(entry);
+
+      return Effect.void;
+    });
+
+    return { ...page, records };
+  });
 
   const proofs = (threadId = sourceThread) =>
     history(threadId).pipe(

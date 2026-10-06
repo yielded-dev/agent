@@ -1,6 +1,8 @@
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { ThreadExport, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
+import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { WorkerCompletion, WorkerUpdate } from "@yielded/agent/worker";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
@@ -210,9 +212,11 @@ export class TravelPlannerThread extends makeTravelPlannerThread(
         );
 
         return new Response(
-          yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(
-            yield* store.export(ThreadExportRequest.make({ threadId })),
-          ),
+          yield* Schema.encodeEffect(
+            Schema.fromJsonString(
+              Schema.Struct({ records: Schema.Array(CanonicalRecordEnvelope) }),
+            ),
+          )(yield* readTestThread(store, ThreadExportRequest.make({ threadId }))),
         );
       }),
     );

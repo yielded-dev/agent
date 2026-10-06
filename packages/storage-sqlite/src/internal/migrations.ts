@@ -12,14 +12,18 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 20;
+export const CurrentSqliteStorageVersion = 21;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
   'CREATE TABLE "effect_agent_threads" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )',
-  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
-  'CREATE TABLE "effect_agent_canonical_records" ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT NOT NULL, record_tag TEXT NOT NULL, run_id TEXT, tool_call_id TEXT, input_kind TEXT, source_submission_id TEXT, message_id TEXT, handoff INTEGER NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES "effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_json TEXT, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_canonical_records" ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT, record_tag TEXT NOT NULL, run_id TEXT, tool_call_id TEXT, input_kind TEXT, source_submission_id TEXT, message_id TEXT, submission_id TEXT, application_input INTEGER NOT NULL, context_through INTEGER, context_kind TEXT, worker_thread_id TEXT, handoff INTEGER NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES "effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_record_runs" ( thread_id TEXT NOT NULL, run_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES "effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
+  "CREATE TABLE effect_agent_tool_declarations (thread_id TEXT NOT NULL, settlement_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
+  "CREATE INDEX effect_agent_tool_declarations_sequence ON effect_agent_tool_declarations(thread_id, sequence)",
+  "CREATE TABLE effect_agent_record_refusals (thread_id TEXT NOT NULL, reservation_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
+  "CREATE INDEX effect_agent_record_refusals_sequence ON effect_agent_record_refusals(thread_id, sequence)",
   'CREATE INDEX effect_agent_canonical_records_batch ON "effect_agent_canonical_records" (thread_id, batch_id, sequence)',
   'CREATE TABLE "effect_agent_checkpoints" ( thread_id TEXT NOT NULL, through_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_submissions" ( submission_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, principal TEXT NOT NULL, idempotency_key TEXT NOT NULL, agent_id TEXT NOT NULL, agent_digests_json TEXT NOT NULL, deployment_id TEXT NOT NULL, input_json TEXT NOT NULL, input_digest TEXT NOT NULL, receipt_id TEXT NOT NULL, state TEXT NOT NULL, settled_outcome TEXT, settled_record_id TEXT, finalized_at TEXT, created_at TEXT NOT NULL, ready_at TEXT, input_applied_record_id TEXT, input_applied_sequence INTEGER, joined_host_submission_id TEXT, suspended_reason_json TEXT, suspended_at TEXT, unknown_reason TEXT, unknown_tool_call_ids_json TEXT, parent_submission_id TEXT, parent_tool_call_id TEXT, admission_group TEXT, admission_fence_json TEXT, worker_admission_json TEXT, message_admission_json TEXT, UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
@@ -60,17 +64,69 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_continuation ON \"effect_agent_canonical_records\"(thread_id, run_id, sequence) WHERE record_tag = 'RunContinuation'",
   'CREATE INDEX effect_agent_records_tag ON "effect_agent_canonical_records"(thread_id, record_tag, sequence)',
   'CREATE INDEX effect_agent_records_handoff ON "effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
+  "CREATE INDEX effect_agent_records_run_identity ON effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
+  "CREATE INDEX effect_agent_records_application_input ON effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
+  "CREATE INDEX effect_agent_records_context ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
+  "CREATE INDEX effect_agent_records_prompt ON effect_agent_canonical_records(thread_id, sequence) WHERE record_tag IN ('UserInputRecorded', 'RunStarted', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled')",
+  "CREATE INDEX effect_agent_records_admitted_input ON effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
+  // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
+  "CREATE INDEX effect_agent_records_rollover ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'",
+  ...Array.from(
+    { length: 52 },
+    (_, i) =>
+      `CREATE INDEX effect_agent_records_rollover_bucket_${i + 1} ON effect_agent_canonical_records(thread_id, (context_through >> ${i + 1}), sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'`,
+  ),
+  "CREATE INDEX effect_agent_records_worker_funding ON effect_agent_canonical_records(thread_id, source_submission_id, sequence, message_id) WHERE record_tag = 'WorkerInputRequested'",
+  "CREATE INDEX effect_agent_records_worker_completed ON effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 'WorkerInputCompleted'",
+  "CREATE INDEX effect_agent_records_worker_stop ON effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 'WorkerStopRequested'",
+  "CREATE INDEX effect_agent_message_deliveries_identity ON effect_agent_message_deliveries(owner_thread_id, json_quote(message_id))",
+  "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1",
+  "CREATE TABLE effect_agent_journal_ranges (thread_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, previous_tail_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, record_count INTEGER NOT NULL, batch_count INTEGER NOT NULL, byte_count INTEGER NOT NULL, state TEXT NOT NULL, locator TEXT, PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
+  "CREATE UNIQUE INDEX effect_agent_journal_ranges_open ON effect_agent_journal_ranges(thread_id) WHERE state = 'open'",
+  "CREATE TABLE effect_agent_archive_batches (thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, range_first_sequence INTEGER NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
+  "CREATE TABLE effect_agent_archive_records (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, range_first_sequence INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
+  "CREATE UNIQUE INDEX effect_agent_canonical_batches_sequence ON effect_agent_canonical_batches(thread_id, first_sequence)",
+  "CREATE INDEX effect_agent_canonical_batches_last ON effect_agent_canonical_batches(thread_id, last_sequence)",
+  "CREATE INDEX effect_agent_submissions_active_worker ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND worker_admission_json IS NOT NULL",
+  "CREATE INDEX effect_agent_submissions_active_parent ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND parent_submission_id IS NOT NULL",
+  "CREATE TABLE effect_agent_live_child_reservations (reservation_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL)",
+  "CREATE INDEX effect_agent_live_child_reservations_thread ON effect_agent_live_child_reservations(thread_id, reservation_id)",
+  "CREATE TABLE effect_agent_transfer_commands (thread_id TEXT NOT NULL, command_kind TEXT NOT NULL, submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, resolution_kind TEXT NOT NULL, PRIMARY KEY (thread_id, command_kind, submission_id, tool_call_id, resolution_kind), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT)",
+  // Persistent scalar FIFO derivatives; rebuild from canonical input/settlement boundaries.
+  "CREATE TABLE effect_agent_input_intervals (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, settlement_sequence INTEGER, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
+  "CREATE INDEX effect_agent_input_intervals_open ON effect_agent_input_intervals(thread_id, sequence) WHERE settlement_sequence IS NULL",
+  "CREATE TABLE effect_agent_settlement_spans (thread_id TEXT NOT NULL, height INTEGER NOT NULL, slot INTEGER NOT NULL, settlement_sequence INTEGER NOT NULL, input_sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, height, slot, settlement_sequence, input_sequence), FOREIGN KEY (thread_id, input_sequence) REFERENCES effect_agent_input_intervals(thread_id, sequence) ON DELETE RESTRICT)",
+  "CREATE INDEX effect_agent_settlement_spans_input ON effect_agent_settlement_spans(thread_id, input_sequence)",
+  // Writer-local import indexes; rows are removed before publication.
+  "CREATE TABLE effect_agent_import_fifo (thread_id TEXT NOT NULL, submission_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, submission_id))",
+  "CREATE INDEX effect_agent_import_fifo_active ON effect_agent_import_fifo(thread_id, queue_sequence)",
+  "CREATE TABLE effect_agent_import_delivery_visits (thread_id TEXT NOT NULL, message_id TEXT NOT NULL, path_id TEXT NOT NULL, completed INTEGER NOT NULL, PRIMARY KEY (thread_id, message_id))",
+  "CREATE INDEX effect_agent_import_delivery_visits_path ON effect_agent_import_delivery_visits(thread_id, path_id)",
+  "CREATE TABLE effect_agent_transfer_state (thread_id TEXT PRIMARY KEY NOT NULL, revision INTEGER NOT NULL, admissions_count INTEGER NOT NULL, aborts_count INTEGER NOT NULL, approvals_count INTEGER NOT NULL, resolutions_count INTEGER NOT NULL, deliveries_count INTEGER NOT NULL)",
+  "CREATE TRIGGER effect_agent_transfer_submissions_insert AFTER INSERT ON effect_agent_submissions FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (NEW.thread_id, 1, 1, 0, 0, 0, 0) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1, admissions_count=admissions_count+1; END",
+  "CREATE TRIGGER effect_agent_transfer_abort_intents_insert AFTER INSERT ON effect_agent_abort_intents FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_commands (thread_id, command_kind, submission_id, tool_call_id, resolution_kind) SELECT thread_id, 'aborts', NEW.submission_id, '', '' FROM effect_agent_submissions WHERE submission_id=NEW.submission_id; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 1, 0, 0, 0 FROM effect_agent_submissions WHERE submission_id=NEW.submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1, aborts_count=aborts_count+1; END",
+  "CREATE TRIGGER effect_agent_transfer_approval_decisions_insert AFTER INSERT ON effect_agent_approval_decisions FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_commands (thread_id, command_kind, submission_id, tool_call_id, resolution_kind) SELECT thread_id, 'approvals', NEW.submission_id, NEW.tool_call_id, '' FROM effect_agent_submissions WHERE submission_id=NEW.submission_id; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 0, 1, 0, 0 FROM effect_agent_submissions WHERE submission_id=NEW.submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1, approvals_count=approvals_count+1; END",
+  "CREATE TRIGGER effect_agent_transfer_unknown_resolutions_insert AFTER INSERT ON effect_agent_unknown_resolutions FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_commands (thread_id, command_kind, submission_id, tool_call_id, resolution_kind) SELECT thread_id, 'resolutions', NEW.submission_id, NEW.tool_call_id, NEW.resolution_kind FROM effect_agent_submissions WHERE submission_id=NEW.submission_id; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 0, 0, 1, 0 FROM effect_agent_submissions WHERE submission_id=NEW.submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1, resolutions_count=resolutions_count+1; END",
+  "CREATE TRIGGER effect_agent_transfer_message_deliveries_insert AFTER INSERT ON effect_agent_message_deliveries FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (NEW.owner_thread_id, 1, 0, 0, 0, 0, 1) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1, deliveries_count=deliveries_count+1; END",
+  "CREATE TRIGGER effect_agent_transfer_message_deliveries_update AFTER UPDATE ON effect_agent_message_deliveries FOR EACH ROW WHEN OLD.owner_thread_id IS NOT NEW.owner_thread_id OR OLD.message_id IS NOT NEW.message_id OR OLD.version IS NOT NEW.version OR OLD.state IS NOT NEW.state OR OLD.deadline_at_millis IS NOT NEW.deadline_at_millis OR OLD.record_json IS NOT NEW.record_json BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (NEW.owner_thread_id, 1, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_child_reservations_insert AFTER INSERT ON effect_agent_child_reservations FOR EACH ROW BEGIN INSERT INTO effect_agent_live_child_reservations (reservation_id, thread_id) SELECT NEW.reservation_id, thread_id FROM effect_agent_submissions WHERE submission_id=NEW.parent_submission_id AND NEW.status<>'released'; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 0, 0, 0, 0 FROM effect_agent_submissions WHERE submission_id=NEW.parent_submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_child_reservations_update AFTER UPDATE ON effect_agent_child_reservations FOR EACH ROW WHEN OLD.reservation_id IS NOT NEW.reservation_id OR OLD.parent_submission_id IS NOT NEW.parent_submission_id OR OLD.parent_tool_call_id IS NOT NEW.parent_tool_call_id OR OLD.child_submission_id IS NOT NEW.child_submission_id OR OLD.status IS NOT NEW.status OR OLD.allocation_json IS NOT NEW.allocation_json OR OLD.allocation_digest IS NOT NEW.allocation_digest OR OLD.accounting_json IS NOT NEW.accounting_json OR OLD.reserved_at IS NOT NEW.reserved_at OR OLD.release_began_at IS NOT NEW.release_began_at OR OLD.released_at IS NOT NEW.released_at BEGIN DELETE FROM effect_agent_live_child_reservations WHERE reservation_id=OLD.reservation_id; INSERT INTO effect_agent_live_child_reservations (reservation_id, thread_id) SELECT NEW.reservation_id, thread_id FROM effect_agent_submissions WHERE submission_id=NEW.parent_submission_id AND NEW.status<>'released'; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 0, 0, 0, 0 FROM effect_agent_submissions WHERE submission_id=NEW.parent_submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_child_reservations_delete AFTER DELETE ON effect_agent_child_reservations FOR EACH ROW BEGIN DELETE FROM effect_agent_live_child_reservations WHERE reservation_id=OLD.reservation_id; INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) SELECT thread_id, 1, 0, 0, 0, 0, 0 FROM effect_agent_submissions WHERE submission_id=OLD.parent_submission_id ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_worker_stops_insert AFTER INSERT ON effect_agent_worker_stops FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (NEW.thread_id, 1, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_worker_stops_update AFTER UPDATE ON effect_agent_worker_stops FOR EACH ROW WHEN OLD.thread_id IS NOT NEW.thread_id OR OLD.terminal IS NOT NEW.terminal BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (NEW.thread_id, 1, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE TRIGGER effect_agent_transfer_worker_stops_delete AFTER DELETE ON effect_agent_worker_stops FOR EACH ROW BEGIN INSERT INTO effect_agent_transfer_state (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count) VALUES (OLD.thread_id, 1, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO UPDATE SET revision=revision+1; END",
+  "CREATE INDEX effect_agent_message_deliveries_capacity ON effect_agent_message_deliveries(owner_thread_id, (COALESCE(json_extract(record_json, '$.envelope.messageAdmission._tag'), '') = 'WorkerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
 ] as const;
 
 const headerStatement =
   "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
 
 const layoutObjects = layoutStatements.map((statement, index) => {
-  const name = /^CREATE (TABLE|INDEX) "?([a-z_]+)"?/.exec(statement);
+  const name = /^CREATE (TABLE|(?:UNIQUE )?INDEX|TRIGGER) "?([a-z_][a-z_0-9]*)"?/.exec(statement);
 
   if (name === null) throw new Error("Invalid fresh layout statement");
 
-  return [name[1].toLowerCase(), name[2], index] as const;
+  return [name[1].replace("UNIQUE ", "").toLowerCase(), name[2], index] as const;
 });
 
 const Legacy = Schema.Tuple([Schema.Struct({ user_version: Schema.Int })]);
@@ -90,8 +146,8 @@ const incompatible = (actualVersion: number, message: string) =>
 const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
-const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: 20,
+const { decode, readObjects, readHeader, readManagedTriggers } = makeSqliteLayoutInspection({
+  version: 21,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -125,6 +181,13 @@ const inspectStorage = Effect.fnUntraced(function* (): Effect.fn.Return<
   if (version === 0 && objects.length === 0) return undefined;
 
   return yield* readHeader(objects, version);
+});
+
+/** The caller holds the dedicated client's exclusive lock across validation and ownership retirement. */
+export const inspectManagedSqliteStorage = Effect.fnUntraced(function* () {
+  const header = yield* inspectStorage();
+
+  yield* readManagedTriggers(header !== undefined);
 });
 
 /** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
@@ -161,8 +224,8 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         ),
       );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 20, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 20").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 21").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

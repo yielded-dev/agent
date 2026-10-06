@@ -600,6 +600,8 @@ interface RunContext {
         readonly protectedReferences: ReadonlyArray<Prompt.Message>;
         readonly protectedMessages: ReadonlyArray<Schema.Json>;
         prefix: ReadonlyArray<Schema.Json>;
+        modelSource: Prompt.Prompt | undefined;
+        sourceLength: number;
       }
     | undefined;
   windowId: string;
@@ -3010,7 +3012,18 @@ const advanceHistory = <HookError, HookRequirements>(
   Effect.gen(function* () {
     context.history = history;
     if (options.onHistory !== undefined) {
-      yield* options.onHistory(history);
+      const prepared = context.preparedCompactionSource;
+      const modelSource = prepared?.modelSource;
+
+      const messages =
+        modelSource === undefined || prepared === undefined
+          ? history.content
+          : [...modelSource.content, ...history.content.slice(prepared.sourceLength)];
+
+      yield* options.onHistory(
+        history,
+        Prompt.fromMessages(buildCompactedView(messages, context.compaction)),
+      );
     }
   });
 
@@ -5627,6 +5640,10 @@ const makeTurn = <
             message: "Prepared context changed a prefix already covered by compaction",
           });
         }
+      }
+      if (context.preparedCompactionSource !== undefined) {
+        context.preparedCompactionSource.modelSource = modelContext.prompt;
+        context.preparedCompactionSource.sourceLength = prompt.content.length;
       }
 
       let restartRequested = false;
@@ -8386,7 +8403,10 @@ function executeWithCompletion<
       const initialHistory = runOptions.history ?? retained?.prompt;
 
       if (retained !== undefined && runOptions.history !== undefined) {
-        yield* retained.stageHistory(runOptions.history);
+        yield* retained.stageHistory({
+          source: runOptions.history,
+          modelContext: runOptions.history,
+        });
       }
 
       const options: RunOptions<
@@ -8406,10 +8426,12 @@ function executeWithCompletion<
           ? {}
           : {
               history: initialHistory,
-              onHistory: (next) =>
+              onHistory: (next, modelContext) =>
                 retained
-                  .stageHistory(next)
-                  .pipe(Effect.andThen(() => runOptions.onHistory?.(next) ?? Effect.void)),
+                  .stageHistory({ source: next, modelContext })
+                  .pipe(
+                    Effect.andThen(() => runOptions.onHistory?.(next, modelContext) ?? Effect.void),
+                  ),
             }),
       };
 
@@ -8798,6 +8820,8 @@ function executeWithCompletion<
                   protectedReferences: protectedMessages,
                   protectedMessages: yield* snapshotCompactionMessages(protectedMessages),
                   prefix: [],
+                  modelSource: undefined,
+                  sourceLength: 0,
                 };
               }
               yield* advanceHistory(context, prompt, options);

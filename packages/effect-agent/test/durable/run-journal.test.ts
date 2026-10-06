@@ -2,7 +2,11 @@ import { NodeCrypto } from "@effect/platform-node";
 import { describe, expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
-import { contextWindowId, contextWindowMessage } from "@yielded/agent/compaction";
+import {
+  CLEARED_TOOL_RESULT,
+  contextWindowId,
+  contextWindowMessage,
+} from "@yielded/agent/compaction";
 import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId, SubmissionId, ToolCallId } from "@yielded/agent/identifiers";
 import {
@@ -1075,16 +1079,34 @@ describe("engine compaction records and projection (RUN-026)", () => {
       }),
     );
 
-    it.effect(
-      "keeps prepared metadata bound to its captured prefix when later evidence arrives",
-      () =>
+    it.effect.each(["summarize", "clear-tool-results", "rollover"] as const)(
+      "keeps %s captured compaction stable when a retired Tool result arrives",
+      (kind) =>
         Effect.gen(function* () {
           const batch = yield* turnCanonicalBatch(turnInput(toolTurnAppended));
           const records = envelopesOf([batch]).slice(0, 2);
 
+          records.push(
+            envelopeAt(
+              records.length + 1,
+              auditRecord("captured-terminal", {
+                _tag: "RunFailed",
+                runId: RUN_ID,
+                failure: { message: "Outcome unknown" },
+              }),
+            ),
+          );
+
           const replacement = envelopeAt(
             records.length + 1,
-            auditRecord("captured-summary", compactionPayload({ coversThrough: records.length })),
+            auditRecord(
+              "captured-summary",
+              compactionPayload({
+                kind,
+                coversThrough: records.length,
+                ...(kind === "summarize" ? {} : { summary: undefined }),
+              }),
+            ),
           );
 
           const prefix = [...records, replacement];
@@ -1096,7 +1118,7 @@ describe("engine compaction records and projection (RUN-026)", () => {
 
           if (settled === undefined) return yield* Effect.die("Expected a settled Tool fixture");
 
-          // Late settlement evidence would invalidate the summary in a newer prefix.
+          // KOM-416: committed coverage stays stable; newer history pairs factual late results.
           const late = envelopeAt(prefix.length + 1, settled.record);
 
           metadata.add(late);
@@ -1109,8 +1131,11 @@ describe("engine compaction records and projection (RUN-026)", () => {
             captured,
           );
 
-          expect(promptText(projected.prompt)).toContain("Goal: book the Kyoto trip");
-          expect(toolResults(projected.prompt)).toEqual([]);
+          if (kind === "summarize")
+            expect(promptText(projected.prompt)).toContain("Goal: book the Kyoto trip");
+          if (kind === "rollover")
+            expect(projected.contextWindowId).toBe(contextWindowId(LATER_RUN_ID, 1));
+          if (kind !== "clear-tool-results") expect(toolResults(projected.prompt)).toEqual([]);
           expect(projected).toEqual(yield* projectRunJournal(prefix, LATER_RUN_ID));
 
           const newer = yield* projectRunJournalStream(
@@ -1121,7 +1146,30 @@ describe("engine compaction records and projection (RUN-026)", () => {
             metadata.snapshot(),
           );
 
-          expect(promptText(newer.prompt)).not.toContain("Goal: book the Kyoto trip");
+          if (kind === "summarize") {
+            expect(promptText(newer.prompt)).toContain("Goal: book the Kyoto trip");
+            expect(toolResults(newer.prompt)).toEqual([{ bookingRef: "lodging-7" }]);
+            const pair = newer.prompt.content.slice(-2);
+
+            expect(pair[0]).toEqual(
+              Prompt.makeMessage("assistant", {
+                content: [
+                  Prompt.makePart("tool-call", {
+                    id: "call-2",
+                    name: "book_lodging",
+                    params: { nights: 3 },
+                    providerExecuted: false,
+                  }),
+                ],
+              }),
+            );
+            expect(pair[1]?.role).toBe("tool");
+          } else if (kind === "rollover") {
+            expect(newer.prompt).toEqual(projected.prompt);
+            expect(newer.contextWindowId).toBe(projected.contextWindowId);
+          } else {
+            expect(toolResults(newer.prompt)).toEqual([CLEARED_TOOL_RESULT, CLEARED_TOOL_RESULT]);
+          }
           expect(newer).toEqual(yield* projectRunJournal([...prefix, late], LATER_RUN_ID));
         }),
     );

@@ -1,4 +1,4 @@
-import type { ThreadExport } from "@yielded/agent/thread-store";
+import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { Schema } from "effect";
 
 import type { EditorActivity } from "../domain.ts";
@@ -8,7 +8,7 @@ import { AppEditor, EditorRequest } from "./editor.ts";
 /** The overview uses the already loaded source journal, including its exact request locator. */
 export const editorOverview = (
   tripId: string,
-  records: ThreadExport["records"],
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
 ): EditorActivity | null => {
   for (let index = records.length - 1; index >= 0; index--) {
     const entry = records[index];

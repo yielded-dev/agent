@@ -15,3 +15,4 @@ export * as SqlStorageProgress from "./SqlStorageProgress.ts";
 export * as SqlRunStorage from "./SqlRunStorage.ts";
 export * as SqlThreadImport from "./SqlThreadImport.ts";
 export * as SqlThreadWork from "./SqlThreadWork.ts";
+export * as SqlThreadArchiveRange from "./SqlThreadArchiveRange.ts";

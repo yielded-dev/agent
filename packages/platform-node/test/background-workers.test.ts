@@ -22,6 +22,7 @@ import {
   IdempotencyKey,
   Principal,
 } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
   readWorkerState,
   ThreadReader,
@@ -99,12 +100,17 @@ const declaration = Subagent.make("research", {
   }),
 });
 
-const authority = Layer.succeed(WorkerHostAuthorizer)({
-  authorize: (request) =>
-    request.principal === principal && request.sourceThreadId === sourceThreadId
-      ? Effect.succeed(principal)
-      : WorkerError.make({ operation: request.operation, reason: "denied" }),
-});
+const budgetAuthority = Layer.succeed(WorkerBudgetAuthorizer)({ authorize: () => Effect.void });
+
+const authority = Layer.merge(
+  budgetAuthority,
+  Layer.succeed(WorkerHostAuthorizer)({
+    authorize: (request) =>
+      request.principal === principal && request.sourceThreadId === sourceThreadId
+        ? Effect.succeed(principal)
+        : WorkerError.make({ operation: request.operation, reason: "denied" }),
+  }),
+);
 
 const withFacet = <A, E>(
   facet: SubagentHost["Service"],
@@ -237,13 +243,7 @@ it.effect(
             deploymentId: "ownership",
             producerId: "node",
           },
-        ).pipe(
-          Layer.provide([
-            authority,
-            handlers,
-            Layer.succeed(WorkerBudgetAuthorizer)({ authorize: () => Effect.void }),
-          ]),
-        );
+        ).pipe(Layer.provide([authority, handlers]));
 
         const firstScope = yield* Scope.make();
 
@@ -383,7 +383,7 @@ it.effect(
           workerState.records.filter(
             ({ record }) => record.payload._tag === "WorkerInputRequested",
           ),
-        ).toHaveLength(22);
+        ).toHaveLength(21);
         expect(
           handoffs.filter(({ record }) => record.payload._tag === "WorkerInputRequested"),
         ).toHaveLength(22);
@@ -565,11 +565,13 @@ for (const completion of ["interrupted"] as const) {
           expect(modelCalls).toBe(1);
           yield* Fiber.interrupt(pump);
 
-          const sourceLog = yield* history.export(
+          const sourceLog = yield* readTestThread(
+            history,
             ThreadExportRequest.make({ threadId: sourceThreadId }),
           );
 
-          const childLog = yield* history.export(
+          const childLog = yield* readTestThread(
+            history,
             ThreadExportRequest.make({ threadId: retained.worker.threadId }),
           );
 
@@ -746,7 +748,8 @@ it.effect(
         yield* Deferred.succeed(pay, undefined);
         expect(payments).toBe(0);
 
-        const interruptedLog = yield* Context.get(first, ThreadReader).export(
+        const interruptedLog = yield* readTestThread(
+          Context.get(first, ThreadReader),
           ThreadExportRequest.make({ threadId: start.worker.threadId }),
         );
 
@@ -795,7 +798,8 @@ it.effect(
         ).toMatchObject({ status: "refused", reason: "worker-stopped" });
         expect(payments).toBe(0);
 
-        const recoveredLog = yield* Context.get(second, ThreadReader).export(
+        const recoveredLog = yield* readTestThread(
+          Context.get(second, ThreadReader),
           ThreadExportRequest.make({ threadId: start.worker.threadId }),
         );
 
@@ -1190,7 +1194,8 @@ it.effect(
         expect(dispatches).toBe(0);
         expect(consentCalls).toEqual(["original request"]);
 
-        const log = yield* history.export(
+        const log = yield* readTestThread(
+          history,
           ThreadExportRequest.make({ threadId: start.worker.threadId }),
         );
 
@@ -1227,7 +1232,8 @@ it.effect(
         ).toHaveLength(1);
         expect(payloads.filter((payload) => payload._tag === "RunStarted")).toHaveLength(2);
 
-        const sourceLog = yield* history.export(
+        const sourceLog = yield* readTestThread(
+          history,
           ThreadExportRequest.make({ threadId: sourceThreadId }),
         );
 
@@ -1287,7 +1293,7 @@ it.effect.each(["same", "revoked"] as const)(
               deploymentId: "capture-v1",
               producerId: "capture-node",
             },
-          ).pipe(Layer.provide(currentAuthority)),
+          ).pipe(Layer.provide([currentAuthority, budgetAuthority])),
         );
 
         const runtime = Context.get(context, DurableAgentRuntime);
@@ -1729,7 +1735,7 @@ for (const point of ["worker:after-source-append", "worker:after-origin-append"]
                       ),
                     )
                   : Effect.void,
-            }).pipe(Layer.provide(guarded)),
+            }).pipe(Layer.provide([guarded, budgetAuthority])),
           ).pipe(Scope.provide(firstScope));
 
           const runtime = Context.get(first, DurableAgentRuntime);
@@ -1784,7 +1790,7 @@ for (const point of ["worker:after-source-append", "worker:after-origin-append"]
 
           const second = yield* Layer.build(
             NodeHost.NodeDurableHost.layerRegistered(registrations, options).pipe(
-              Layer.provide(guarded),
+              Layer.provide([guarded, budgetAuthority]),
             ),
           );
 

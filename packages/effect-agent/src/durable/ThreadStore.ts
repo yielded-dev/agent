@@ -2,9 +2,16 @@ import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { QueueSequence } from "../core/Receipt.ts";
+import { AssignmentTerminal } from "../core/Worker.ts";
+import type { IntegrityReport } from "./Admin.ts";
 import { digestCanonicalBatchJson } from "./Digest.ts";
-import { captureRecord, type ProgressAppendRecord } from "./internal/record-encoding.ts";
+import {
+  captureRecord,
+  recordEncoding,
+  type ProgressAppendRecord,
+} from "./internal/record-encoding.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
+import { MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import type { RecordJson } from "./Records.ts";
 import {
@@ -27,9 +34,44 @@ import {
   ApprovalDecisionIntent,
   UnknownResolutionIntent,
 } from "./SubmissionLedger.ts";
+import { MAX_CANONICAL_BATCH_BYTES, type ThreadArchiveStorage } from "./ThreadArchiveRange.ts";
 import type { ThreadWorkStorage } from "./ThreadWork.ts";
 
-export const MAX_THREAD_EXPORT_RECORDS = 131_072;
+export const MAX_THREAD_EXPORT_PAGE_RECORDS = 256;
+export const MAX_THREAD_EXPORT_PAGE_BYTES = 32 * 1024 * 1024;
+
+/** Only model input and the facts needed to validate its ownership and compaction. */
+export const PROMPT_EVIDENCE_TAGS = [
+  "UserInputRecorded",
+  "RunStarted",
+  "ModelCompleted",
+  "ModelResponseRecorded",
+  "ToolCallSettled",
+  "CompactionCreated",
+  "RunCompleted",
+  "RunFailed",
+  "SubmissionSettled",
+] as const;
+
+/** Captures every fact owner, including facts that do not advance the canonical tail. */
+export const ThreadExportSnapshot = Schema.Struct({
+  revision: Schema.Natural,
+  admissions: Schema.Natural,
+  aborts: Schema.Natural,
+  approvals: Schema.Natural,
+  resolutions: Schema.Natural,
+  deliveries: Schema.Natural,
+});
+
+export type ThreadExportSnapshot = typeof ThreadExportSnapshot.Type;
+
+/** Irreversible Thread-local admission restriction, independent of claims and worker completion. */
+export const ThreadWorkerSeal = Schema.Struct({ terminal: Schema.optionalKey(AssignmentTerminal) });
+export type ThreadWorkerSeal = typeof ThreadWorkerSeal.Type;
+
+/** Opaque, snapshot-bound transfer position. Only the exporting adapter constructs it. */
+export const ThreadExportCursor = Schema.NonEmptyString.check(Schema.isMaxLength(16_384));
+export type ThreadExportCursor = typeof ThreadExportCursor.Type;
 
 /** Exact canonical identity; absence is not proof that an admission was never accepted. */
 export const ThreadRecordRequest = Schema.Struct({ threadId: ThreadId, recordId: RecordId });
@@ -39,25 +81,63 @@ export type ThreadRecordRequest = typeof ThreadRecordRequest.Type;
 export const ThreadRunInputRequest = Schema.Struct({ threadId: ThreadId, runId: RunId });
 export type ThreadRunInputRequest = typeof ThreadRunInputRequest.Type;
 
-/** Native worker reservation/accounting snapshot at a captured canonical tail. */
+/** Native accounting for one funding Run; settled Thread history is never included. */
 export const ThreadWorkerStateRequest = Schema.Struct({
   threadId: ThreadId,
   sourceSubmissionId: Schema.optionalKey(SubmissionId),
-  limit: Schema.Int.check(
-    Schema.isGreaterThan(0),
-    Schema.isLessThanOrEqualTo(MAX_THREAD_EXPORT_RECORDS),
-  ),
+  limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(16_384)),
 });
 
 export type ThreadWorkerStateRequest = typeof ThreadWorkerStateRequest.Type;
 
-/** Saturating lifetime peer-message count: the result is at most the requested cap. */
+/** Saturating live peer-delivery count: retained terminal identities do not consume capacity. */
 export const ThreadPeerCountRequest = Schema.Struct({
   threadId: ThreadId,
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1000)),
 });
 
 export type ThreadPeerCountRequest = typeof ThreadPeerCountRequest.Type;
+
+/** Capacity is derived from unresolved canonical obligations at this exact tail. */
+export const ThreadWorkerCapacityRequest = Schema.Struct({
+  threadId: ThreadId,
+  workerThreadId: ThreadId,
+  expectedTailSequence: CanonicalSequence,
+  expectedTailDigest: Digest,
+  update: Schema.Boolean,
+  activeLimit: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(100)),
+  pendingLimit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(100)),
+});
+
+export type ThreadWorkerCapacityRequest = typeof ThreadWorkerCapacityRequest.Type;
+
+export const ThreadWorkerCapacity = Schema.Struct({
+  threadId: ThreadId,
+  tailSequence: CanonicalSequence,
+  tailDigest: Digest,
+  producerEpoch: ProducerEpoch,
+  /** min(actual distinct workers, activeLimit + 1); equality remains distinguishable. */
+  activeWorkers: Schema.Natural.check(Schema.isLessThanOrEqualTo(101)),
+  workerActive: Schema.Boolean,
+  /** min(actual inputs in the requested partition, pendingLimit + 1). */
+  pendingInputs: Schema.Natural.check(Schema.isLessThanOrEqualTo(101)),
+});
+
+export type ThreadWorkerCapacity = typeof ThreadWorkerCapacity.Type;
+
+/** Explicit maintenance may traverse all pages while retaining only one bounded page or Run. */
+export const ThreadVerificationRequest = Schema.Struct({
+  threadId: ThreadId,
+  requireAllSettled: Schema.optionalKey(Schema.Boolean),
+});
+
+export type ThreadVerificationRequest = typeof ThreadVerificationRequest.Type;
+
+export interface ThreadVerificationStorage {
+  readonly verify: (
+    request: ThreadVerificationRequest,
+  ) => Effect.Effect<IntegrityReport, ThreadStoreError | ThreadNotMaterialized>;
+}
 
 const incomplete = (operation: string) =>
   ThreadStoreError.make({
@@ -73,10 +153,11 @@ const selectedRecords = Effect.fnUntraced(function* (
 ) {
   const store = yield* ThreadReader;
   const records: Array<CanonicalRecordEnvelope> = [];
+  let bytes = 0;
   let afterSequence: CanonicalSequence | undefined;
 
   while (true) {
-    const pageLimit = Math.min(1024, limit + 1 - records.length);
+    const pageLimit = Math.min(8, limit + 1 - records.length);
 
     const page = yield* Stream.runCollect(
       store.read({
@@ -94,6 +175,12 @@ const selectedRecords = Effect.fnUntraced(function* (
       )
         return yield* incomplete("read selection identity");
       afterSequence = entry.sequence;
+      bytes += yield* Effect.try({
+        try: () => recordEncoding(entry.record).bytes,
+        catch: () => incomplete("read selection bytes"),
+      });
+      if (bytes > MAX_THREAD_EXPORT_PAGE_BYTES)
+        return yield* incomplete("read selection byte limit");
       records.push(entry);
     }
     if (page.length > pageLimit || records.length > limit)
@@ -144,7 +231,7 @@ export const getRunInput = Effect.fnUntraced(function* (request: ThreadRunInputR
   return Option.fromUndefinedOr(records[0]);
 });
 
-/** A bounded snapshot of native lifetime and source-submission worker accounting. */
+/** A bounded snapshot of source identity and the selected funding Run's accounting. */
 export const readWorkerState = Effect.fnUntraced(function* (request: ThreadWorkerStateRequest) {
   yield* Schema.decodeEffect(ThreadWorkerStateRequest)(request).pipe(
     Effect.mapError(() => incomplete("readWorkerState request")),
@@ -216,6 +303,7 @@ const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
  */
 export interface PreparedAppend extends FencedAppendRequest {
   readonly batchJson: string;
+  readonly batchBytes: number;
   readonly progress: ReadonlyArray<ProgressAppendRecord>;
   readonly records: ReadonlyArray<{
     readonly recordId: RecordId;
@@ -245,6 +333,14 @@ export const PreparedAppend = {
           validateRecordCount(input.batch.records);
           const encodings = input.batch.records.map(captureRecord);
           const batchJson = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[${encodings.map(({ json }) => json).join(",")}]}`;
+
+          const batchBytes = new TextEncoder().encode(batchJson).byteLength;
+
+          if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
+            throw ThreadStoreError.make({
+              operation: "prepare canonical append",
+              message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
+            });
           const first = encodings[0]!;
 
           const batch = Object.freeze(
@@ -289,6 +385,7 @@ export const PreparedAppend = {
           const captured = Object.freeze(
             Object.assign(request, {
               batchJson,
+              batchBytes,
               records,
               progress,
               digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
@@ -300,13 +397,15 @@ export const PreparedAppend = {
           return captured;
         },
         catch: (cause) =>
-          ThreadStoreError.make({
-            operation: "prepare canonical append",
-            message: Schema.isSchemaError(cause)
-              ? cause.message
-              : "Canonical append capture failed",
-            cause,
-          }),
+          Schema.is(ThreadStoreError)(cause)
+            ? cause
+            : ThreadStoreError.make({
+                operation: "prepare canonical append",
+                message: Schema.isSchemaError(cause)
+                  ? cause.message
+                  : "Canonical append capture failed",
+                cause,
+              }),
       });
     }),
 };
@@ -328,6 +427,12 @@ export class ThreadRead extends Schema.Class<ThreadRead>("@effect-agent/thread/T
 export const ThreadSelection = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("RecordId"), recordId: RecordId }),
   Schema.Struct({ _tag: Schema.Literal("RunInput"), runId: RunId }),
+  /** Exact original declaration indexed by its deterministic settlement identity. */
+  Schema.Struct({
+    _tag: Schema.Literal("ToolDeclaration"),
+    settlementRecordId: RecordId,
+    throughSequence: CanonicalSequence,
+  }),
   /** Canonical progress lookup. An absent locator never authorizes full-history fallback. */
   Schema.Struct({
     _tag: Schema.Literal("RunContinuation"),
@@ -360,6 +465,36 @@ export const ThreadSelection = Schema.Union([
     _tag: Schema.Literal("LastAgentUpdate"),
     throughSequence: CanonicalSequence,
   }),
+  /** Greatest original history boundary, including contexts committed late by parked Runs. */
+  Schema.Struct({
+    _tag: Schema.Literal("LatestRunContext"),
+    throughSequence: CanonicalSequence,
+  }),
+  /** Sparse canonical pages; callers bound total evidence before building model metadata. */
+  Schema.Struct({
+    _tag: Schema.Literal("PromptEvidence"),
+    throughSequence: CanonicalSequence,
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("LatestModelCompleted"),
+    throughSequence: CanonicalSequence,
+  }),
+  /** Latest application input; framework worker completion/update messages are excluded. */
+  Schema.Struct({
+    _tag: Schema.Literal("LatestApplicationInput"),
+    throughSequence: CanonicalSequence,
+  }),
+  /** Presence of durable ownership forbids an immediate-history writer on this Thread. */
+  Schema.Struct({
+    _tag: Schema.Literal("DurableHistoryOwner"),
+    throughSequence: CanonicalSequence,
+  }),
+  /** Latest rollover covering positions strictly before the addressed evidence. */
+  Schema.Struct({
+    _tag: Schema.Literal("ContextWindowBoundary"),
+    atSequence: CanonicalSequence,
+    throughSequence: CanonicalSequence,
+  }),
   Schema.Struct({
     _tag: Schema.Literal("DeliveryPredecessor"),
     throughSequence: CanonicalSequence,
@@ -367,6 +502,18 @@ export const ThreadSelection = Schema.Union([
   /** Canonical creation/handoff intents retained independently of Run settlement. */
   Schema.Struct({
     _tag: Schema.Literal("WorkHandoffs"),
+    throughSequence: CanonicalSequence,
+  }),
+  /** Unresolved inputs only, selected through disposable work membership. */
+  Schema.Struct({
+    _tag: Schema.Literal("LiveWorkerInputs"),
+    throughSequence: CanonicalSequence,
+    workerThreadId: Schema.optionalKey(ThreadId),
+  }),
+  /** A retained stop for the exact worker, independent of historical inputs. */
+  Schema.Struct({
+    _tag: Schema.Literal("WorkerStop"),
+    workerThreadId: ThreadId,
     throughSequence: CanonicalSequence,
   }),
   Schema.Struct({
@@ -409,6 +556,7 @@ export class ThreadExportRequest extends Schema.Class<ThreadExportRequest>(
   "@effect-agent/thread/ThreadExportRequest",
 )({
   threadId: ThreadId,
+  cursor: Schema.optionalKey(ThreadExportCursor),
 }) {}
 
 export class ThreadTailRequest extends Schema.Class<ThreadTailRequest>(
@@ -442,6 +590,8 @@ export class ThreadIdentity extends Schema.Class<ThreadIdentity>(
 )(
   Schema.Struct({
     ...ThreadTail.fields,
+    /** Immutable admissions, including accepted inputs not yet materialized in the log. */
+    admissions: Schema.Natural,
     records: Schema.Array(CanonicalRecordEnvelope).check(Schema.isMaxLength(3)),
   }).check(
     Schema.makeFilter((snapshot) => {
@@ -497,13 +647,13 @@ export class ThreadAdmission extends Schema.Class<ThreadAdmission>(
 export const ThreadCommands = Schema.Struct({
   aborts: Schema.Array(
     AbortIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
   approvals: Schema.Array(
     ApprovalDecisionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
   resolutions: Schema.Array(
     UnknownResolutionIntent.mapFields(({ canonicalRecordId: _, ...fields }) => fields),
-  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
 });
 
 export const ThreadExportBatch = Schema.Struct({ batchId: BatchId, producerId: ProducerId });
@@ -518,24 +668,83 @@ export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExp
   record: ExportRecord,
 }) {}
 
+/** One bounded, batch-aligned page. An absent cursor alone marks a complete transfer. */
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
+  transferFormat: Schema.Literal("effect-agent/thread-transfer@1"),
   format: Schema.NonEmptyString,
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
   tailDigest: Digest,
-  records: Schema.Array(ThreadExportRecord).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
-  /** Required for import of a non-empty log; earlier exports must be taken again. */
-  batches: Schema.optionalKey(
-    Schema.Array(ThreadExportBatch).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  snapshot: ThreadExportSnapshot,
+  snapshotId: Digest,
+  /** Presence seals the restored inbox; a terminal reason also requires exact settled worker evidence. */
+  workerSeal: Schema.optionalKey(ThreadWorkerSeal),
+  /** Inclusive first canonical position, even on a page containing only other owner facts. */
+  fromSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
+  previousTailDigest: Digest,
+  records: Schema.Array(ThreadExportRecord).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
-  admissions: Schema.optionalKey(
-    Schema.Array(ThreadAdmission).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
+  batches: Schema.Array(ThreadExportBatch).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
-  commands: Schema.optionalKey(ThreadCommands),
+  admissions: Schema.Array(ThreadAdmission).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
+  ),
+  commands: ThreadCommands,
+  /** Frozen delivery facts and outcomes; claims and leases are never transfer authority. */
+  deliveries: Schema.Array(MessageDeliveryRecord).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
+  ),
+  cursor: Schema.optionalKey(ThreadExportCursor),
+  /** Exact reference-bearing records identify cross-range recovery dependencies. */
+  dependencies: Schema.Array(RecordId).check(Schema.isMaxLength(256 * 4_096)),
   externalObligations: Schema.optionalKey(
     Schema.Array(ThreadExternalObligation).check(Schema.isMaxLength(3)),
   ),
 }) {}
+
+/** Pull bounded pages from one captured snapshot without collecting the Thread. */
+export const streamExport = <E, R>(
+  store: { readonly export: (request: ThreadExportRequest) => Effect.Effect<ThreadExport, E, R> },
+  request: ThreadExportRequest,
+) =>
+  Stream.suspend(() => {
+    let previous: ThreadExport | undefined;
+
+    return Stream.paginate(request, (current) =>
+      store.export(current).pipe(
+        Effect.flatMap((page) => {
+          if (
+            page.threadId !== request.threadId ||
+            (previous !== undefined &&
+              (page.snapshotId !== previous.snapshotId ||
+                page.tailSequence !== previous.tailSequence ||
+                page.tailDigest !== previous.tailDigest ||
+                page.fromSequence !==
+                  (previous.records.at(-1)?.sequence ?? previous.fromSequence - 1) + 1 ||
+                (page.cursor !== undefined && page.cursor === current.cursor)))
+          )
+            return Effect.fail(
+              ThreadStoreError.make({
+                operation: "stream Thread export",
+                message: "Transfer snapshot or cursor is inconsistent",
+              }),
+            );
+          previous = page;
+
+          return Effect.succeed([
+            [page],
+            page.cursor === undefined
+              ? Option.none()
+              : Option.some(
+                  ThreadExportRequest.make({ threadId: request.threadId, cursor: page.cursor }),
+                ),
+          ] as const);
+        }),
+      ),
+    );
+  });
 
 /**
  * A disposable projection snapshot. Adapters bind its sequence and digest to the canonical
@@ -649,6 +858,9 @@ export class ThreadStore extends Context.Service<
     readonly lifecyclePublications?: LifecyclePublicationStorage;
     /** Native owner inventory and explicit canonical-index reconstruction. Absence fails closed. */
     readonly work?: ThreadWorkStorage;
+    /** Bounded physical log ranges, independent of compaction and execution ownership. */
+    readonly archives?: ThreadArchiveStorage;
+    readonly verification?: ThreadVerificationStorage;
     readonly materialize: (
       request: ThreadMaterialization,
     ) => Effect.Effect<void, ThreadStoreError | FenceRejected>;
@@ -673,6 +885,9 @@ export class ThreadStore extends Context.Service<
     readonly readIdentity: (
       request: ThreadIdentityRequest,
     ) => Effect.Effect<ThreadIdentity, ThreadStoreError | ThreadNotMaterialized>;
+    readonly readWorkerCapacity?: (
+      request: ThreadWorkerCapacityRequest,
+    ) => Effect.Effect<ThreadWorkerCapacity, ThreadStoreError | ThreadNotMaterialized>;
     /** Absent when this adapter does not support disposable checkpoints. */
     readonly checkpoints?: ThreadCheckpoints | undefined;
     /** Indexed scalar count; unsupported adapters fail closed at the caller. */
@@ -689,7 +904,13 @@ export class ThreadReader extends Context.Service<
   ThreadReader,
   Pick<
     ThreadStore["Service"],
-    "read" | "observe" | "export" | "inspectTail" | "readIdentity" | "countPeerMessages"
+    | "read"
+    | "observe"
+    | "export"
+    | "inspectTail"
+    | "readIdentity"
+    | "countPeerMessages"
+    | "readWorkerCapacity"
   >
 >()("@effect-agent/thread/ThreadReader") {
   static fromStore(store: ThreadStore["Service"]): ThreadReader["Service"] {
@@ -699,6 +920,9 @@ export class ThreadReader extends Context.Service<
       export: store.export,
       inspectTail: store.inspectTail,
       readIdentity: store.readIdentity,
+      ...(store.readWorkerCapacity === undefined
+        ? {}
+        : { readWorkerCapacity: store.readWorkerCapacity }),
       ...(store.countPeerMessages === undefined
         ? {}
         : { countPeerMessages: store.countPeerMessages }),

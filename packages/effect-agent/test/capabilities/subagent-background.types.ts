@@ -207,7 +207,7 @@ const hostStartTypes = (host: SubagentHost["Service"], request: StartWorkerReque
 
   const deferred = host.start({
     ...request,
-    prepare: Effect.flatMap(Prepare, () => Effect.fail(new DeclaredFailure())),
+    prepare: () => Effect.flatMap(Prepare, () => Effect.fail(new DeclaredFailure())),
   });
 
   const proofs: [

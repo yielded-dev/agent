@@ -9,6 +9,7 @@ import { DefinitionDigestInput } from "@yielded/agent/records";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
 import { AbortCommand, IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { WorkerError, WorkerUpdate } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
@@ -201,7 +202,8 @@ for (const [parentState, failpoint] of [
             .pipe(Effect.forkIn(firstScope));
           yield* Deferred.await(lostAck);
 
-          const before = yield* Context.get(first, ThreadStore).export(
+          const before = yield* readTestThread(
+            Context.get(first, ThreadStore),
             ThreadExportRequest.make({ threadId: started.worker.threadId }),
           );
 
@@ -225,7 +227,9 @@ for (const [parentState, failpoint] of [
           const reopened = Context.get(second, DurableAgentRuntime);
           const store = Context.get(second, ThreadReader);
           const deliveries = Context.get(second, MessageDeliveryStore);
-          const read = (id: ThreadId) => store.export(ThreadExportRequest.make({ threadId: id }));
+
+          const read = (id: ThreadId) =>
+            readTestThread(store, ThreadExportRequest.make({ threadId: id }));
 
           yield* Effect.gen(function* () {
             for (;;) {

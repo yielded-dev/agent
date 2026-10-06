@@ -32,6 +32,7 @@ export const prepareCanonicalAppend = Effect.fnUntraced(function* (input: Fenced
     batchDigest: tailDigest,
     tailDigest,
     batchJson: request.batchJson,
+    batchBytes: request.batchBytes,
     records,
     progress: request.progress,
   };

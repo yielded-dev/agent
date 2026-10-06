@@ -47,14 +47,21 @@ Storage alone does not start workers or recover unfinished Runs.
 
 ## Back up or change record formats
 
-`ThreadStore.export` captures one complete, bounded Thread and its immutable admission facts.
-The local `ThreadImport` service validates that archive and atomically installs it into an empty
-Thread. Queued admissions keep their order, timestamps, and opaque policy facts. The destination
-checks its admission constraints. Import rebuilds ledger state from canonical records; projections
-and checkpoints are disposable.
-No claims or leases are copied, and unresolved mutating tools retain their uncertainty.
+A Thread keeps one canonical order and producer fence throughout its lifetime. Storage rotates
+complete batches into bounded ranges; archiving a range preserves exact record identities and
+digest anchors. Compaction changes the model view, independently of physical storage. SQL
+adapters verify archive contents and publish their locator before removing hot payload copies.
 
-The unreleased protocol accepts only fresh layout-20 stores and `effect-agent/thread@2` archives.
+`streamExport(store, { threadId })` yields snapshot-bound pages of canonical batches, immutable
+admissions, accepted commands, and retained deliveries. Pass those pages to the local `ThreadImport`
+service through `reencodeThread(source)`, or save the NDJSON archive with the admin CLI. Import
+validates every page and referenced fact, applies destination admission constraints, and publishes
+atomically into an empty Thread. Missing dependencies leave the destination unchanged. Historical
+closed workers and children remain evidence; unsupported live foreign obligations refuse transfer.
+Claims, leases, checkpoints, and recovery caches are not transferred. Unresolved effects retain
+their uncertainty.
+
+The unreleased protocol accepts only fresh layout-21 stores and `effect-agent/thread@3` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 

@@ -1,526 +1,259 @@
-import type { Crypto } from "effect";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
 
+import type { RunId, ThreadId } from "../core/Identifiers.ts";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
-import { digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import { ExportBatch } from "./RecordFormat.ts";
-import { type CanonicalRecordEnvelope, type BatchId, type ProducerId } from "./Records.ts";
+import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
+import { CanonicalSequence } from "./Records.ts";
 import { verifyRunContinuations } from "./RunContinuation.ts";
-import { runIdForSubmission } from "./RunJournal.ts";
 import {
   submissionInputRecordId,
   submissionSettlementRecordId,
+  workerTerminalFromRecord,
   type SubmissionSnapshot,
 } from "./SubmissionLedger.ts";
-import type { ThreadCheckpoint, ThreadExport } from "./ThreadStore.ts";
-import { ThreadExportRecord } from "./ThreadStore.ts";
+import {
+  ThreadArchive,
+  makeThreadImportProgress,
+  prepareImportPage,
+  finishThreadImport,
+  rebuildImportedSubmission,
+  verifyImportedReferences,
+  verifyImportedSettlementOrder,
+  ThreadImportRejected,
+  type ThreadSettlementPredecessorRequest,
+  type ThreadImportReader,
+} from "./ThreadImport.ts";
+import { ThreadExport, type ThreadCheckpoint, type ThreadStoreError } from "./ThreadStore.ts";
 
-/**
- * The production thread invariant checker, shared by the durable coordinator, admin
- * verification, and development harnesses. Keeping it independent of certification and
- * conformance modules prevents ordinary runtime imports from loading test-only dependencies.
- *
- * `verifyThreadInvariants` — hoisted from the DC eviction harness's `assertConvergence`
- * so the admin `verify` operation, the adapter certification tiers (WP2), and the chaos/soak
- * properties (WP4) all assert one set of claims.
- */
-
-/**
- * Input of one invariant verification, assembled entirely from port reads (or from a captured
- * copy under test):
- *
- * - `export` — the Thread's canonical export (`ThreadStore.export`).
- * - `submissions` — every known Submission row of the lane (ledger scan + lookups). Order is
- *   irrelevant; the checker sorts by `queueSequence`.
- * - `batchProducers` — optional producer identity directory for older exports lacking `batches`.
- *   Current exports carry the directory and preserve the validated original record wire,
- *   including additive fields unknown to this reader. Without either directory, `digest-chain`
- *   and `checkpoint-binding` report `skipped`; adapter-level `verifyOnOpen` still audits storage.
- * - `checkpoint` — the stored checkpoint to bind against the recomputed chain, when one exists.
- * - `checkpointsSupported` — whether the caller inspected a supporting adapter. Without this
- *   evidence or a supplied checkpoint, checkpoint verification is skipped.
- * - `requireAllSettled` — convergence mode (certification Tier 2, chaos, soak): additionally
- *   require every known Submission to be settled.
- */
-export interface ThreadInvariantInput {
-  readonly export: ThreadExport;
-  readonly submissions: ReadonlyArray<SubmissionSnapshot>;
-  readonly batchProducers?: ReadonlyMap<BatchId, ProducerId> | undefined;
-  readonly checkpoint?: ThreadCheckpoint | undefined;
-  /** Set only after checking the adapter's optional checkpoint capability. */
-  readonly checkpointsSupported?: boolean | undefined;
-  readonly requireAllSettled?: boolean | undefined;
+/** All reads share the export snapshot. No lifetime identity sets or materialization. */
+export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
+  readonly threadId: ThreadId;
+  readonly pages: Stream.Stream<ThreadExport, E, R>;
+  readonly reader: ThreadImportReader;
+  /** Complete directory, including settled rows, ordered by queueSequence. */
+  readonly submissions: Stream.Stream<SubmissionSnapshot, E, R>;
+  /** Earlier queued executed submissions whose canonical settlement follows this settlement. */
+  readonly settlementPredecessors: (
+    request: ThreadSettlementPredecessorRequest,
+  ) => Stream.Stream<Pick<SubmissionSnapshot, "submissionId">, E, R>;
+  readonly runs: Stream.Stream<RunId, E, R>;
+  readonly checkpoint?: ThreadCheckpoint;
+  readonly checkpointsSupported?: boolean;
+  readonly requireAllSettled?: boolean;
 }
 
-const encodeEnvelope = Schema.encodeEffect(ThreadExportRecord);
-const decodeEnvelope = Schema.decodeUnknownEffect(ThreadExportRecord);
+/** Indexed streaming verification; bounded Run evidence is the only retained selection. */
+export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
+  input: ThreadInvariantInput<E, R>,
+) {
+  const failures = new Map<IntegrityCheckName, string>();
 
-const check = (
-  name: IntegrityCheckName,
-  status: "passed" | "failed" | "skipped",
-  detail?: string,
-): IntegrityCheck =>
-  IntegrityCheck.make({
-    name,
-    status,
-    ...(detail === undefined ? {} : { detail: detail.slice(0, 4_096) }),
-  });
+  const fail = (name: IntegrityCheckName, detail: string) => {
+    if (!failures.has(name)) failures.set(name, detail.slice(0, 4096));
+  };
 
-interface BatchRun {
-  readonly batchId: BatchId;
-  readonly records: Array<ThreadExport["records"][number]["record"]>;
-  readonly lastSequence: number;
-}
+  const progress = makeThreadImportProgress();
+  let lastInputQueue = -1;
+  let checkpointDigest = input.checkpoint?.throughSequence === 0 ? EMPTY_TAIL_DIGEST : undefined;
 
-/** Group the export's records into their atomic append runs (batches append contiguously). */
-const batchRunsOf = (records: ThreadExport["records"]): Array<BatchRun> => {
-  const runs: Array<BatchRun> = [];
+  yield* Stream.runForEach(input.pages, (page) =>
+    Effect.gen(function* () {
+      if (page.threadId !== input.threadId)
+        fail("record-identity", "Export belongs to another Thread");
 
-  for (const envelope of records) {
-    const current = runs.at(-1);
+      const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
+        Effect.flatMap((archive) =>
+          prepareImportPage(progress, archive, { allowExternalObligations: true }),
+        ),
+        Effect.match({
+          onFailure: (e) => {
+            for (const name of [
+              "schema-round-trip",
+              "sequence-contiguity",
+              "digest-chain",
+            ] as const)
+              fail(name, e.message);
 
-    if (current !== undefined && current.batchId === envelope.batchId) {
-      current.records.push(envelope.record);
-      runs[runs.length - 1] = { ...current, lastSequence: envelope.sequence };
-      continue;
-    }
-    runs.push({
-      batchId: envelope.batchId,
-      records: [envelope.record],
-      lastSequence: envelope.sequence,
-    });
-  }
-
-  return runs;
-};
-
-/**
- * The shared thread invariant checker (plan §1/§3): the DC harness `assertConvergence`
- * claims, verbatim, as typed per-check results over a canonical export plus the lane's ledger
- * rows — read-only, never a repair:
- *
- * 1. `schema-round-trip` — every envelope re-encodes and re-decodes through its canonical
- *    Schema (a corrupted copy fails typed instead of decoding incorrectly).
- * 2. `record-identity` — no canonical record identity appears twice (DUR-007 dedupe held).
- * 3. `sequence-contiguity` — gap-free sequences from 1 through the exported tail.
- * 4. `digest-chain` — the tail digest recomputes from `EMPTY_TAIL_DIGEST` through every batch
- *    (requires the per-batch producer directory; skipped honestly otherwise).
- * 5. `fifo-input-order` / `fifo-settlement-order` — canonical input and settlement records
- *    follow the admitted queue order (DUR-004), except a later input may settle before a Run
- *    with canonically unresolved unknown calls when that input became active. Resolving those
- *    calls later does not revoke the later Run's ownership. Aborted settlements of never-run work (no
- *    canonical `input:{sid}` record) are exempt from the settlement comparison: P7 §7(c)
- *    settles them immediately without waiting for the head, and DUR-004 bounds execution
- *    order, which never-run work has none of.
- * 6. `terminal-uniqueness` — at most one canonical terminal record per Submission, exactly one
- *    for every settled ledger row (DUR-002).
- * 7. `ledger-canonical-agreement` — a settled ledger row has a canonical settlement record and
- *    the outcomes agree; canonical history remains the authority (DUR-015).
- * 8. `checkpoint-binding` — a stored checkpoint's digest matches the recomputed chain at its
- *    sequence (needs the chain; bounds are checked regardless).
- * 9. `all-settled` — convergence mode only: every known Submission settled.
- *
- * Requires only `Crypto.Crypto` (digest recomputation); it performs no port access, so the
- * admin operation, certification runners, and chaos properties feed it whatever copies they
- * hold.
- */
-export const verifyThreadInvariants = Effect.fnUntraced(function* (
-  input: ThreadInvariantInput,
-): Effect.fn.Return<IntegrityReport, never, Crypto.Crypto> {
-  const exported = input.export;
-  const records = exported.records;
-  const checks: Array<IntegrityCheck> = [];
-
-  // 1. schema-round-trip
-  {
-    let failure: string | undefined;
-
-    for (const envelope of records) {
-      const roundTrip = yield* encodeEnvelope(envelope).pipe(
-        Effect.flatMap(decodeEnvelope),
-        Effect.exit,
+            return undefined;
+          },
+          onSuccess: (p) => p,
+        }),
       );
 
-      if (roundTrip._tag === "Failure") {
-        failure = `record ${envelope.record.recordId} does not round-trip its Schema`;
-        break;
-      }
-    }
-    checks.push(
-      failure === undefined
-        ? check("schema-round-trip", "passed")
-        : check("schema-round-trip", "failed", failure),
-    );
-  }
+      if (prepared === undefined) return;
+      for (const batch of prepared.batches)
+        if (batch.lastSequence === input.checkpoint?.throughSequence)
+          checkpointDigest = batch.tailDigest;
+      for (const entry of prepared.records) {
+        yield* verifyImportedReferences(entry, input.reader.record, input.reader.delivery).pipe(
+          Effect.match({
+            onSuccess: () => undefined,
+            onFailure: (e) => fail("continuation-evidence", e.message),
+          }),
+        );
+        const exact = yield* input.reader.record(entry.record.recordId);
 
-  // 2. record-identity
-  {
-    const seen = new Set<string>();
-    const duplicates = new Set<string>();
-
-    for (const envelope of records) {
-      if (seen.has(envelope.record.recordId)) duplicates.add(envelope.record.recordId);
-      seen.add(envelope.record.recordId);
-    }
-    checks.push(
-      duplicates.size === 0
-        ? check("record-identity", "passed")
-        : check(
-            "record-identity",
-            "failed",
-            `duplicated canonical record identities: ${[...duplicates].join(", ")}`,
-          ),
-    );
-  }
-
-  // 3. sequence-contiguity
-  {
-    let contiguityFailure: string | undefined;
-
-    for (const [index, envelope] of records.entries()) {
-      if (envelope.sequence !== index + 1) {
-        contiguityFailure = `sequence ${envelope.sequence} at position ${index} (expected ${index + 1})`;
-        break;
-      }
-    }
-    if (contiguityFailure === undefined && records.length !== exported.tailSequence) {
-      contiguityFailure = `exported tail sequence ${exported.tailSequence} disagrees with ${records.length} records`;
-    }
-    checks.push(
-      contiguityFailure === undefined
-        ? check("sequence-contiguity", "passed")
-        : check("sequence-contiguity", "failed", contiguityFailure),
-    );
-  }
-
-  // 4. digest-chain (+ collect per-sequence chain digests for checkpoint binding)
-  const chainDigestAtSequence = new Map<number, string>();
-
-  const batchProducers =
-    input.batchProducers ??
-    (exported.batches === undefined
-      ? undefined
-      : new Map(exported.batches.map((batch) => [batch.batchId, batch.producerId])));
-
-  if (batchProducers === undefined) {
-    checks.push(
-      check(
-        "digest-chain",
-        "skipped",
-        "this older export has no batch producer directory; export the original store again or supply batchProducers to recompute the chain",
-      ),
-    );
-  } else {
-    let chain = EMPTY_TAIL_DIGEST;
-    let chainFailure: string | undefined;
-
-    for (const run of batchRunsOf(records)) {
-      const producerId = batchProducers.get(run.batchId);
-
-      if (producerId === undefined) {
-        chainFailure = `no producer identity supplied for batch ${run.batchId}`;
-        break;
-      }
-      const [first, ...rest] = run.records;
-
-      if (first === undefined) {
-        chainFailure = `batch ${run.batchId} grouped zero records`;
-        break;
-      }
-
-      const digest = yield* Schema.encodeUnknownEffect(ExportBatch)({
-        batchId: run.batchId,
-        producerId,
-        records: [first, ...rest],
-      }).pipe(
-        Effect.flatMap((batch) => digestJson({ previousTailDigest: chain, batch })),
-        Effect.exit,
-      );
-
-      if (digest._tag === "Failure") {
-        chainFailure = `batch ${run.batchId} could not be re-digested`;
-        break;
-      }
-      chain = digest.value;
-      chainDigestAtSequence.set(run.lastSequence, chain);
-    }
-    if (chainFailure === undefined && chain !== exported.tailDigest) {
-      chainFailure = `recomputed tail digest ${chain} disagrees with exported tail digest ${exported.tailDigest}`;
-    }
-    checks.push(
-      chainFailure === undefined
-        ? check("digest-chain", "passed")
-        : check("digest-chain", "failed", chainFailure),
-    );
-  }
-
-  checks.push(
-    yield* verifyRunContinuations(records).pipe(
-      Effect.matchCause({
-        onSuccess: () => check("continuation-evidence", "passed"),
-        onFailure: () =>
-          check(
-            "continuation-evidence",
-            "failed",
-            "Run continuation is not recomputable from its canonical facts and exact references",
-          ),
-      }),
-    ),
-  );
-
-  // Shared FIFO/terminal machinery
-  const ordered = [...input.submissions].sort(
-    (left, right) => left.queueSequence - right.queueSequence,
-  );
-
-  const recordIds = records.map((envelope) => envelope.record.recordId);
-
-  // 5a. fifo-input-order
-  {
-    const expectedInputs = ordered.map((row) => submissionInputRecordId(row.submissionId));
-    const expectedSet = new Set<string>(expectedInputs);
-    const inputOrder = recordIds.filter((recordId) => expectedSet.has(recordId));
-    const presentInputs = new Set(inputOrder);
-    const expectedPresent = expectedInputs.filter((expected) => presentInputs.has(expected));
-
-    const matches =
-      inputOrder.length === expectedPresent.length &&
-      inputOrder.every((recordId, index) => recordId === expectedPresent[index]);
-
-    checks.push(
-      matches
-        ? check("fifo-input-order", "passed")
-        : check(
-            "fifo-input-order",
-            "failed",
-            `canonical input order [${inputOrder.join(", ")}] violates queue order`,
-          ),
-    );
-  }
-
-  // 5b. fifo-settlement-order — P7 §7(c) exemption: an ABORTED settlement for never-run work
-  // (no canonical `input:{sid}` record) settles immediately by design, without waiting to
-  // head the lane, so it is excluded from the FIFO comparison. DUR-004 bounds EXECUTION
-  // order; the exempted rows provably never executed. Unknown work can also be bypassed,
-  // but only the inputs that became active while it was parked may settle ahead of it.
-  {
-    const recordIdSet = new Set<string>(recordIds);
-    const abortedNeverRun = new Set<string>();
-
-    const settlementByRun = new Map<string, string>(
-      ordered.map((row) => [
-        runIdForSubmission(row.submissionId),
-        submissionSettlementRecordId(row.submissionId),
-      ]),
-    );
-
-    const inputSettlements = new Map(
-      ordered.map((row) => [
-        submissionInputRecordId(row.submissionId),
-        submissionSettlementRecordId(row.submissionId),
-      ]),
-    );
-
-    const unknownCalls = new Map<string, Set<string>>();
-    const abortsOrTerminals = new Set<string>();
-    const bypassedSettlements = new Map<string, Set<string>>();
-
-    for (const envelope of records) {
-      const payload = envelope.record.payload;
-
-      if (payload._tag === "ToolCallUnknown" && !abortsOrTerminals.has(payload.runId)) {
-        const calls = unknownCalls.get(payload.runId) ?? new Set<string>();
-
-        calls.add(payload.toolCallId);
-        unknownCalls.set(payload.runId, calls);
-      } else if (payload._tag === "ToolCallResolved" || payload._tag === "ToolCallSettled") {
-        const calls = unknownCalls.get(payload.runId);
-
-        calls?.delete(payload.toolCallId);
-        if (calls?.size === 0) unknownCalls.delete(payload.runId);
-      } else if (payload._tag === "AbortRequested" || payload._tag === "SubmissionSettled") {
-        const runId = runIdForSubmission(payload.submissionId);
-
-        abortsOrTerminals.add(runId);
-        unknownCalls.delete(runId);
-      } else if (payload._tag === "RunCompleted" || payload._tag === "RunFailed") {
-        abortsOrTerminals.add(payload.runId);
-        unknownCalls.delete(payload.runId);
-      } else if (payload._tag === "UserInputRecorded") {
-        const settlementId = inputSettlements.get(envelope.record.recordId);
-
-        if (settlementId !== undefined) {
-          const bypassed = new Set<string>();
-
-          for (const runId of unknownCalls.keys()) {
-            const earlier = settlementByRun.get(runId);
-
-            if (earlier !== undefined) bypassed.add(earlier);
-          }
-          bypassedSettlements.set(settlementId, bypassed);
-        }
-      }
-      if (
-        payload._tag === "SubmissionSettled" &&
-        payload.outcome === "aborted" &&
-        !recordIdSet.has(submissionInputRecordId(payload.submissionId))
-      ) {
-        abortedNeverRun.add(payload.submissionId);
-      }
-    }
-
-    const expectedSettlements = ordered
-      .filter((row) => !abortedNeverRun.has(row.submissionId))
-      .map((row) => submissionSettlementRecordId(row.submissionId));
-
-    const expectedSet = new Set<string>(expectedSettlements);
-    const settlementOrder = recordIds.filter((recordId) => expectedSet.has(recordId));
-
-    const presentSettlements = new Set(settlementOrder);
-
-    const expectedPresent = expectedSettlements.filter((expected) =>
-      presentSettlements.has(expected),
-    );
-
-    const remaining = new Set(expectedPresent);
-    let matches = settlementOrder.length === expectedPresent.length;
-
-    for (const recordId of settlementOrder) {
-      for (const earlier of remaining) {
-        if (earlier === recordId) break;
-        if (!bypassedSettlements.get(recordId)?.has(earlier)) {
-          matches = false;
-          break;
-        }
-      }
-      if (!matches) break;
-      remaining.delete(recordId);
-    }
-
-    checks.push(
-      matches
-        ? check("fifo-settlement-order", "passed")
-        : check(
-            "fifo-settlement-order",
-            "failed",
-            `canonical settlement order [${settlementOrder.join(", ")}] violates queue order`,
-          ),
-    );
-  }
-
-  // 6 + 7. terminal-uniqueness and ledger-canonical-agreement
-  {
-    const settlementsBySubmission = new Map<string, Array<CanonicalRecordEnvelope>>();
-
-    for (const envelope of records) {
-      if (envelope.record.payload._tag !== "SubmissionSettled") continue;
-      const submissionId = envelope.record.payload.submissionId;
-      const existing = settlementsBySubmission.get(submissionId) ?? [];
-
-      existing.push(envelope);
-      settlementsBySubmission.set(submissionId, existing);
-    }
-    let uniquenessFailure: string | undefined;
-    let agreementFailure: string | undefined;
-
-    for (const [submissionId, settlements] of settlementsBySubmission) {
-      if (settlements.length > 1) {
-        uniquenessFailure = `submission ${submissionId} has ${settlements.length} canonical terminal records`;
-      }
-    }
-    for (const row of ordered) {
-      const settlements = settlementsBySubmission.get(row.submissionId) ?? [];
-      const canonical = settlements[0]?.record.payload;
-
-      if (row.state === "settled") {
-        if (settlements.length !== 1) {
-          uniquenessFailure ??= `settled submission ${row.submissionId} has ${settlements.length} canonical terminal records (expected exactly 1)`;
-        }
         if (
-          canonical !== undefined &&
-          canonical._tag === "SubmissionSettled" &&
-          row.settledOutcome !== undefined &&
-          canonical.outcome !== row.settledOutcome
-        ) {
-          agreementFailure = `submission ${row.submissionId}: ledger outcome ${row.settledOutcome} disagrees with canonical outcome ${canonical.outcome}`;
+          exact === undefined ||
+          exact.sequence !== entry.sequence ||
+          exact.threadId !== entry.threadId ||
+          exact.batchId !== entry.batchId
+        )
+          fail(
+            "record-identity",
+            `Record ${entry.record.recordId} has conflicting indexed identity`,
+          );
+        const payload = entry.record.payload;
+
+        if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
+          const admission = yield* input.reader.admission(payload.submissionId);
+
+          if (
+            admission === undefined ||
+            entry.record.recordId !== submissionInputRecordId(payload.submissionId)
+          )
+            fail("ledger-canonical-agreement", "Canonical input has no exact immutable admission");
+          else if (admission.queueSequence <= lastInputQueue)
+            fail("fifo-input-order", "Canonical inputs violate immutable admission order");
+          else lastInputQueue = admission.queueSequence;
         }
-        if (settlements.length === 0) {
-          agreementFailure ??= `settled submission ${row.submissionId} has no canonical settlement record (DUR-015: history is the authority)`;
+        if (payload._tag === "SubmissionSettled") {
+          if (entry.record.recordId !== submissionSettlementRecordId(payload.submissionId))
+            fail("terminal-uniqueness", "Settlement has a noncanonical identity");
+          if ((yield* input.reader.admission(payload.submissionId)) === undefined)
+            fail("ledger-canonical-agreement", "Settlement has no immutable admission");
         }
       }
-    }
-    checks.push(
-      uniquenessFailure === undefined
-        ? check("terminal-uniqueness", "passed")
-        : check("terminal-uniqueness", "failed", uniquenessFailure),
-    );
-    checks.push(
-      agreementFailure === undefined
-        ? check("ledger-canonical-agreement", "passed")
-        : check("ledger-canonical-agreement", "failed", agreementFailure),
-    );
-  }
+    }),
+  );
+  yield* finishThreadImport(progress).pipe(
+    Effect.match({
+      onSuccess: () => undefined,
+      onFailure: (e) => {
+        fail("sequence-contiguity", e.message);
+        fail("digest-chain", e.message);
+      },
+    }),
+  );
+  yield* Stream.runForEach(input.runs, (runId) =>
+    Effect.gen(function* () {
+      yield* verifyRunContinuations(
+        yield* input.reader.runRecords(runId),
+        input.reader.record,
+      ).pipe(
+        Effect.match({
+          onSuccess: () => undefined,
+          onFailure: (e) => fail("continuation-evidence", e.message),
+        }),
+      );
+    }),
+  );
+  let submissionCount = 0;
+  const workerSeal = progress.manifest?.workerSeal;
+  let sealTerminalEvidence = workerSeal?.terminal === undefined;
+  let lastQueue = -1;
 
-  // 8. checkpoint-binding
-  if (input.checkpoint === undefined && input.checkpointsSupported !== true) {
-    checks.push(check("checkpoint-binding", "skipped", "checkpoint support was not supplied"));
-  } else if (input.checkpoint === undefined) {
-    checks.push(check("checkpoint-binding", "passed", "no stored checkpoint"));
-  } else if (input.checkpoint.throughSequence > exported.tailSequence) {
-    checks.push(
-      check(
-        "checkpoint-binding",
-        "failed",
-        `checkpoint through-sequence ${input.checkpoint.throughSequence} is ahead of the tail ${exported.tailSequence}`,
-      ),
-    );
-  } else if (batchProducers === undefined) {
-    checks.push(
-      check(
-        "checkpoint-binding",
-        "skipped",
-        "digest binding needs the recomputed chain; supply batchProducers (the adapter rejects mismatched checkpoints on save/load regardless)",
-      ),
-    );
-  } else {
-    const bound = chainDigestAtSequence.get(input.checkpoint.throughSequence);
+  yield* Stream.runForEach(input.submissions, (row) =>
+    Effect.gen(function* () {
+      submissionCount++;
+      if (row.threadId !== input.threadId || row.queueSequence <= lastQueue)
+        fail("record-identity", "Admission directory is not unique and ordered");
+      lastQueue = row.queueSequence;
+      const admission = yield* input.reader.admission(row.submissionId);
 
-    checks.push(
-      bound === input.checkpoint.tailDigest
-        ? check("checkpoint-binding", "passed")
-        : check(
-            "checkpoint-binding",
-            "failed",
-            `checkpoint digest ${input.checkpoint.tailDigest} does not match the recomputed chain at sequence ${input.checkpoint.throughSequence}`,
-          ),
-    );
-  }
+      if (admission === undefined) {
+        fail("ledger-canonical-agreement", "Ledger row has no immutable admission");
 
-  // 9. all-settled (convergence mode)
-  if (input.requireAllSettled === true) {
-    const nonterminal = ordered.filter((row) => row.state !== "settled");
+        return;
+      }
+      yield* rebuildImportedSubmission(admission, input.reader).pipe(
+        Effect.match({
+          onFailure: (e) => {
+            fail("ledger-canonical-agreement", e.message);
 
-    checks.push(
-      nonterminal.length === 0 && ordered.length > 0
-        ? check("all-settled", "passed")
-        : check(
-            "all-settled",
-            "failed",
-            ordered.length === 0
-              ? "no Submissions are known to the lane"
-              : `nonterminal submissions: ${nonterminal
-                  .map((row) => `${row.submissionId}(${row.state})`)
-                  .join(", ")}`,
-          ),
-    );
-  }
+            return undefined;
+          },
+          onSuccess: (s) => s,
+        }),
+      );
+      const settlement = yield* input.reader.record(submissionSettlementRecordId(row.submissionId));
+
+      if (
+        row.state === "settled" &&
+        settlement !== undefined &&
+        workerTerminalFromRecord(row, settlement.record) === workerSeal?.terminal
+      )
+        sealTerminalEvidence = true;
+      const payload = settlement?.record.payload;
+
+      if (row.state === "settled" && payload?._tag !== "SubmissionSettled")
+        fail("terminal-uniqueness", "Settled ledger row has no canonical settlement");
+      if (
+        row.state === "settled" &&
+        (payload?._tag !== "SubmissionSettled" || row.settledOutcome !== payload.outcome)
+      )
+        fail(
+          "ledger-canonical-agreement",
+          "Ledger input or terminal projection differs from canonical evidence",
+        );
+      if (input.requireAllSettled && row.state !== "settled")
+        fail("all-settled", `Submission ${row.submissionId} is ${row.state}`);
+      yield* verifyImportedSettlementOrder(row, input.reader, input.settlementPredecessors).pipe(
+        Effect.catchIf(Schema.is(ThreadImportRejected), (e) =>
+          Effect.sync(() => fail("fifo-settlement-order", e.message)),
+        ),
+      );
+    }),
+  );
+  if (submissionCount !== progress.counts.admissions)
+    fail("ledger-canonical-agreement", "Admission directory differs from the captured fact count");
+  if (!sealTerminalEvidence)
+    fail("ledger-canonical-agreement", "Worker seal terminal has no exact settled worker evidence");
+  if (input.requireAllSettled && submissionCount === 0)
+    fail("all-settled", "No submissions are known");
+  if (
+    input.checkpoint !== undefined &&
+    (input.checkpoint.threadId !== input.threadId ||
+      checkpointDigest !== input.checkpoint.tailDigest)
+  )
+    fail("checkpoint-binding", "Checkpoint is not bound to a recomputed batch tail");
+
+  const names: Array<IntegrityCheckName> = [
+    "schema-round-trip",
+    "record-identity",
+    "sequence-contiguity",
+    "digest-chain",
+    "continuation-evidence",
+    "fifo-input-order",
+    "fifo-settlement-order",
+    "terminal-uniqueness",
+    "ledger-canonical-agreement",
+    "checkpoint-binding",
+  ];
+
+  if (input.requireAllSettled) names.push("all-settled");
+
+  const checks = names.map((name) =>
+    IntegrityCheck.make({
+      name,
+      status: failures.has(name)
+        ? "failed"
+        : name === "checkpoint-binding" &&
+            input.checkpoint === undefined &&
+            !input.checkpointsSupported
+          ? "skipped"
+          : "passed",
+      ...(failures.has(name) ? { detail: failures.get(name) } : {}),
+    }),
+  );
 
   return IntegrityReport.make({
-    threadId: exported.threadId,
-    tailSequence: exported.tailSequence,
-    recordCount: records.length,
-    submissionCount: ordered.length,
+    threadId: input.threadId,
+    tailSequence: progress.manifest?.tailSequence ?? CanonicalSequence.make(0),
+    recordCount: progress.sequence,
+    submissionCount,
     checks,
-    ok: checks.every((result) => result.status !== "failed"),
+    ok: failures.size === 0,
   });
 });

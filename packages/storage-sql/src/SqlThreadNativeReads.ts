@@ -23,6 +23,7 @@ import {
   runIdForSubmission,
   subagentLineageRecordId,
   workerOriginRecordId,
+  toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
 import {
   submissionAbortRecordId,
@@ -33,19 +34,23 @@ import type { PreparedAppend, ThreadStore } from "@yielded/agent/thread-store";
 import {
   SelectedThreadRead,
   ThreadPeerCountRequest,
+  ThreadWorkerCapacityRequest,
+  ThreadWorkerCapacity,
+  PROMPT_EVIDENCE_TAGS,
   ThreadIdentity,
   ThreadIdentityRequest,
   ThreadNotMaterialized,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { Context, Effect, Predicate, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";
 
-import { nullSafeEquals } from "./internal/sql-json.ts";
 import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
+import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 
 const canonicalColumns = {
   tag: "record_tag",
@@ -105,8 +110,37 @@ export const canonicalRecordMetadata = (
       run_id: canonicalIdentifier(text("runId")),
       tool_call_id: canonicalIdentifier(text("toolCallId")),
       input_kind: text("kind"),
-      source_submission_id: canonicalIdentifier(text("sourceSubmissionId")),
-      message_id: canonicalIdentifier(text("admission", "messageId")),
+      source_submission_id: canonicalIdentifier(
+        tag === "WorkerInputRequested"
+          ? text("admission", "sourceSubmissionId")
+          : text("sourceSubmissionId"),
+      ),
+      message_id: canonicalIdentifier(
+        tag === "SubtreeBudgetReserved"
+          ? text("reservationId")
+          : (text("admission", "messageId") ?? text("messageId")),
+      ),
+      submission_id: canonicalIdentifier(text("submissionId")),
+      application_input:
+        tag === "UserInputRecorded" &&
+        text("messageAdmission", "_tag") !== "WorkerCompletion" &&
+        text("messageAdmission", "_tag") !== "WorkerUpdate"
+          ? 1
+          : 0,
+      context_through:
+        record.canonical.payload._tag === "RunContextRecorded"
+          ? record.canonical.payload.historyThrough
+          : record.canonical.payload._tag === "CompactionCreated"
+            ? record.canonical.payload.coversThrough
+            : null,
+      context_kind: tag === "CompactionCreated" ? text("kind") : null,
+      worker_thread_id: canonicalIdentifier(
+        tag === "WorkerInputRequested"
+          ? text("admission", "origin", "worker", "threadId")
+          : tag === "WorkerStopRequested"
+            ? text("command", "worker", "threadId")
+            : text("workerThreadId"),
+      ),
       handoff: isWorkHandoff(record.canonical) ? 1 : 0,
     }),
     runIds: Object.freeze(
@@ -115,6 +149,26 @@ export const canonicalRecordMetadata = (
         : canonicalRunIds(record.canonical).map((runId) => JSON.stringify(runId)),
     ),
   });
+};
+
+/** Exact opaque identities. Callers publish these persistent pointers with their canonical rows. */
+export const canonicalRecordPointers = (record: CanonicalRecord) => {
+  const payload = record.payload;
+
+  return {
+    toolSettlements:
+      payload._tag === "ModelResponseRecorded"
+        ? payload.toolOperations.map((operation) =>
+            JSON.stringify(
+              toolCallSettledRecordId(payload.runId, payload.turn, operation.toolCallId),
+            ),
+          )
+        : [],
+    refusalReservation:
+      payload._tag === "WorkerInputRefused"
+        ? JSON.stringify(payload.reservation.recordId)
+        : undefined,
+  };
 };
 
 export type CanonicalRecordMetadata = ReturnType<typeof canonicalRecordMetadata>;
@@ -149,6 +203,7 @@ const boundedCandidates = (
 export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
+  const recordJson = canonicalRecordJson(sql, namespace);
 
   const decode = Schema.decodeUnknownEffect(
     Schema.Array(
@@ -166,7 +221,7 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
       (runId) =>
         Effect.gen(function* () {
           const rows =
-            yield* sql`SELECT record_id, record_json FROM ${table("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_continuation")}
+            yield* sql`SELECT record_id, ${recordJson} AS record_json FROM ${table("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_continuation")}
         WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(runId)}
           AND ${canonicalField(sql, "tag")} = 'RunContinuation'
         ORDER BY sequence DESC LIMIT 1`.pipe(execute);
@@ -290,6 +345,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
   const sql = yield* SqlClient.SqlClient;
   const owner = yield* SelectedReadOwner;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
+  const recordJson = canonicalRecordJson(sql, namespace);
+  const membershipJson = canonicalRecordJson(sql, namespace, "canonical");
   const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
 
   const decodeTailRows = Schema.decodeUnknownEffect(
@@ -334,6 +391,35 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     return decoded[0];
   });
 
+  /** Disposable membership must cover this captured tail; historical liveness is unavailable. */
+  const requireReadyWork = Effect.fnUntraced(function* (
+    threadId: SelectedThreadRead["threadId"],
+    through: number,
+  ) {
+    const rows = yield* sql`SELECT version, state, through_sequence, entry_count,
+      (SELECT COUNT(*) FROM ${relation("effect_agent_work_entries")} WHERE thread_id=${threadId}) AS actual_count
+      FROM ${relation("effect_agent_work_index")} WHERE thread_id=${threadId}`.pipe(execute);
+
+    const [header] = yield* Schema.decodeUnknownEffect(
+      Schema.Tuple([
+        Schema.Struct({
+          version: SqlInteger,
+          state: Schema.Literal("ready"),
+          through_sequence: SqlInteger,
+          entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+          actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+        }),
+      ]),
+    )(rows);
+
+    if (
+      header.version !== WORK_INDEX_VERSION ||
+      header.through_sequence !== through ||
+      header.entry_count !== header.actual_count
+    )
+      return yield* failure("native work membership is incomplete");
+  });
+
   const read = Effect.fnUntraced(
     function* (request: SelectedThreadRead) {
       return yield* snapshot(
@@ -353,8 +439,168 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           let rows: unknown;
 
           switch (selection._tag) {
+            case "LatestApplicationInput":
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_application_input")}
+                WHERE thread_id=${request.threadId} AND application_input=1 AND sequence<=${selection.throughSequence}
+                ORDER BY sequence DESC LIMIT 1`.pipe(execute);
+              break;
+            case "LatestRunContext":
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_context")}
+                WHERE thread_id=${request.threadId} AND record_tag='RunContextRecorded'
+                  AND context_through<=${selection.throughSequence} AND sequence<=${selection.throughSequence}
+                ORDER BY context_through DESC, sequence DESC LIMIT 1`.pipe(execute);
+              break;
+            case "PromptEvidence":
+              // SQLite proves forced partial-index predicates at prepare time. These are closed
+              // library tags matching the fresh layout, never interpolated caller SQL.
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
+                WHERE thread_id=${request.threadId} AND ${sql.literal("record_tag IN ('UserInputRecorded', 'RunStarted', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled')")}
+                  AND sequence>${after} AND sequence<=${selection.throughSequence}
+                ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
+              break;
+            case "LatestModelCompleted":
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_tag")}
+                WHERE thread_id=${request.threadId} AND record_tag='ModelCompleted' AND sequence<=${selection.throughSequence}
+                ORDER BY sequence DESC LIMIT 1`.pipe(execute);
+              break;
+            case "DurableHistoryOwner": {
+              const candidates = boundedCandidates(
+                sql,
+                [
+                  sql`SELECT * FROM (SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                  FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_admitted_input")}
+                  WHERE thread_id=${request.threadId} AND record_tag='UserInputRecorded' AND submission_id IS NOT NULL
+                    AND sequence<=${selection.throughSequence} ORDER BY sequence LIMIT 1) AS admitted_owner`,
+                  ...[
+                    "RunStarted",
+                    "SubmissionSettled",
+                    "AbortRequested",
+                    "WorkerOriginRecorded",
+                    "SubagentLineageRecorded",
+                  ].map(
+                    (tag) => sql`SELECT * FROM (
+                  SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                  FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_tag")}
+                  WHERE thread_id=${request.threadId} AND record_tag=${tag} AND sequence<=${selection.throughSequence}
+                  ORDER BY sequence LIMIT 1) AS durable_owner`,
+                  ),
+                ],
+                1,
+                false,
+              );
+
+              rows =
+                yield* sql`SELECT * FROM (${candidates}) AS owners ORDER BY sequence LIMIT 1`.pipe(
+                  execute,
+                );
+              break;
+            }
+            case "ContextWindowBoundary": {
+              // Cover [0, atSequence) with disjoint power-of-two buckets. Each native
+              // prefix index seeks its newest visible sequence, even for nonmonotone
+              // coverage. At most 53 scalar candidates precede one payload lookup.
+              let candidates: Array<Fragment> = [];
+              let start = 0;
+
+              while (start < selection.atSequence) {
+                const remaining = selection.atSequence - start;
+                let height = Math.floor(Math.log2(remaining));
+
+                while (2 ** height > remaining) height--;
+                const width = 2 ** height;
+
+                const prefix =
+                  height === 0
+                    ? sql`context_through`
+                    : sql`(context_through >> ${sql.literal(String(height))})`;
+
+                candidates.push(sql`COALESCE((
+                  SELECT sequence FROM ${relation("effect_agent_canonical_records")}
+                  ${recoveryIndex(sql, height === 0 ? "effect_agent_records_rollover" : `effect_agent_records_rollover_bucket_${height}`)}
+                  WHERE thread_id=(SELECT thread_id FROM boundary_request)
+                    AND record_tag='CompactionCreated' AND context_kind='rollover'
+                    AND ${prefix}=${start / width}
+                    AND sequence<=(SELECT through_sequence FROM boundary_request)
+                  ORDER BY sequence DESC LIMIT 1
+                ), 0)`);
+                start += width;
+              }
+              // Binary scalar merges avoid workerd's compound-SELECT and function-arity
+              // limits. Materialize the winning sequence once before hydrating its record.
+              while (candidates.length > 1) {
+                const merged: Array<Fragment> = [];
+
+                for (let at = 0; at < candidates.length; at += 2) {
+                  const left = candidates[at];
+                  const right = candidates[at + 1];
+
+                  if (left !== undefined)
+                    merged.push(
+                      right === undefined
+                        ? left
+                        : sql.onDialectOrElse({
+                            pg: () => sql`GREATEST(${left}, ${right})`,
+                            orElse: () => sql`MAX(${left}, ${right})`,
+                          }),
+                    );
+                }
+                candidates = merged;
+              }
+              const winner = candidates[0];
+
+              if (winner === undefined) {
+                rows = [];
+                break;
+              }
+
+              rows = yield* sql`WITH boundary_request AS (
+                  SELECT ${request.threadId} AS thread_id, CAST(${selection.throughSequence} AS BIGINT) AS through_sequence
+                ), boundary AS MATERIALIZED (SELECT ${winner} AS sequence)
+                SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                FROM boundary
+                JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                  ON canonical.thread_id=${request.threadId} AND canonical.sequence=boundary.sequence`.pipe(
+                execute,
+              );
+              break;
+            }
+            case "LiveWorkerInputs": {
+              if (selection.throughSequence !== tail.tail_sequence)
+                return yield* failure("live worker membership requires current canonical tail");
+              yield* requireReadyWork(request.threadId, tail.tail_sequence);
+              rows =
+                yield* sql`SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                FROM (SELECT created_sequence FROM ${relation("effect_agent_work_entries")}
+                  ${recoveryIndex(sql, selection.workerThreadId === undefined ? "effect_agent_work_entries_worker_partition" : "effect_agent_work_entries_worker")}
+                  WHERE thread_id=${request.threadId} AND worker_thread_id IS NOT NULL
+                    ${selection.workerThreadId === undefined ? sql`` : sql`AND worker_thread_id=${canonicalIdentifier(selection.workerThreadId)}`}
+                    AND created_sequence>${after} AND created_sequence<=${selection.throughSequence}
+                  ORDER BY created_sequence LIMIT ${request.page.limit}) AS membership
+                LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                  ON canonical.thread_id=${request.threadId} AND canonical.sequence=membership.created_sequence`.pipe(
+                  execute,
+                );
+              break;
+            }
+            case "WorkerStop":
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_worker_stop")}
+                WHERE thread_id=${request.threadId} AND record_tag='WorkerStopRequested'
+                  AND worker_thread_id=${canonicalIdentifier(selection.workerThreadId)} AND sequence<=${selection.throughSequence}
+                ORDER BY sequence DESC LIMIT 1`.pipe(execute);
+              break;
             case "LastAgentUpdate":
-              rows = yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_tag")}
                 WHERE thread_id=${request.threadId} AND record_tag='AgentUpdateEmitted'
                   AND sequence<=${selection.throughSequence}
@@ -367,7 +613,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               )(
                 ["WorkerReportPrepared", "AgentUpdateEmitted"].map(
                   (tag) => sql`SELECT * FROM (
-                  SELECT thread_id, sequence, record_id, batch_id, record_json
+                  SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_delivery_predecessor")}
                   WHERE thread_id=${request.threadId} AND record_tag=${tag} AND handoff=1
                     AND sequence<=${selection.throughSequence}
@@ -383,7 +629,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               break;
             }
             case "RunContinuation":
-              rows = yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_continuation")}
                 WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(selection.runId)}
                   AND ${canonicalField(sql, "tag")} = 'RunContinuation' AND sequence <= ${selection.throughSequence}
@@ -399,17 +646,14 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               const candidates = boundedCandidates(
                 sql,
                 [
-                  sql`SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, canonical.record_json
-                    FROM (
+                  sql`SELECT * FROM (
                       SELECT sequence FROM ${relation("effect_agent_record_runs")}
                       WHERE thread_id = ${request.threadId} AND run_id = ${canonicalIdentifier(selection.runId)}
                         AND sequence > ${after} AND sequence <= ${selection.throughSequence}
                       ORDER BY sequence LIMIT ${request.page.limit}
-                    ) AS membership
-                    JOIN ${relation("effect_agent_canonical_records")} AS canonical
-                      ON canonical.thread_id = ${request.threadId} AND canonical.sequence = membership.sequence`,
+                    ) AS membership`,
                   ...controls.map(
-                    (recordId) => sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+                    (recordId) => sql`SELECT sequence
                     FROM ${relation("effect_agent_canonical_records")}
                     WHERE thread_id = ${request.threadId} AND record_id = ${recordId}
                       AND sequence > ${after} AND sequence <= ${selection.throughSequence}`,
@@ -419,13 +663,21 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 true,
               );
 
-              rows = yield* sql`${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(
-                execute,
-              );
+              // Deduplicate and page scalar identities before loading hot or archived wire.
+              // The materialized page keeps every payload probe on its exact primary key.
+              rows = yield* sql`WITH evidence AS MATERIALIZED (
+                  ${candidates} ORDER BY sequence LIMIT ${request.page.limit}
+                )
+                SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                FROM evidence
+                LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                  ON canonical.thread_id=${request.threadId} AND canonical.sequence=evidence.sequence
+                ORDER BY evidence.sequence`.pipe(execute);
               break;
             }
             case "WorkHandoffs":
-              rows = yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_handoff")}
                 WHERE thread_id = ${request.threadId} AND sequence > ${after} AND sequence <= ${selection.throughSequence}
                   AND handoff = 1
@@ -459,13 +711,13 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               const candidates = boundedCandidates(
                 sql,
                 [
-                  sql`SELECT thread_id, sequence, record_id, batch_id, record_json
+                  sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")}
                   WHERE thread_id=${request.threadId} AND record_id=${selection.originRecordId}
                     AND sequence>${after} AND sequence<=${selection.throughSequence}`,
                   ...tags.map(
                     (tag) => sql`SELECT * FROM (
-                  SELECT thread_id, sequence, record_id, batch_id, record_json
+                  SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
                   WHERE thread_id=${request.threadId} AND record_tag=${tag}
                     AND run_id=${canonicalIdentifier(selection.runId)}
@@ -489,73 +741,109 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             }
             case "RecordId":
               rows =
-                yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${selection.recordId} AND sequence > ${after}`.pipe(
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${selection.recordId} AND sequence > ${after}`.pipe(
+                  execute,
+                );
+              break;
+            case "ToolDeclaration":
+              rows =
+                yield* sql`SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                FROM (SELECT sequence FROM ${relation("effect_agent_tool_declarations")}
+                  WHERE thread_id=${request.threadId} AND settlement_record_id=${canonicalIdentifier(selection.settlementRecordId)}
+                    AND sequence<=${selection.throughSequence} ORDER BY sequence LIMIT 2) AS declaration
+                LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                  ON canonical.thread_id=${request.threadId} AND canonical.sequence=declaration.sequence`.pipe(
                   execute,
                 );
               break;
             case "RunInput":
               rows =
-                yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = 'UserInputRecorded' AND ${canonicalField(sql, "kind")} = 'user' AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(selection.runId)} LIMIT 2`.pipe(
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = 'UserInputRecorded' AND ${canonicalField(sql, "kind")} = 'user' AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(selection.runId)} LIMIT 2`.pipe(
                   execute,
                 );
               break;
             case "WorkerExecution":
               rows = (yield* Effect.forEach(["UserInputRecorded", "RunStarted"], (tag) =>
-                sql`SELECT thread_id, sequence, record_id, batch_id, record_json FROM ${relation("effect_agent_canonical_records")}
+                sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_worker_execution")}
                   WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = ${tag}
                     AND ${canonicalField(sql, "runId")} IS NOT NULL
                   ORDER BY sequence DESC LIMIT 1`.pipe(execute),
               )).flat();
               break;
             case "WorkerState": {
-              const runId =
-                selection.sourceSubmissionId === undefined
-                  ? null
-                  : runIdForSubmission(selection.sourceSubmissionId);
+              const funding = selection.sourceSubmissionId;
 
-              const predicates = [
-                ...[
-                  "ThreadCreated",
-                  "WorkerOriginRecorded",
-                  "SubagentLineageRecorded",
-                  "WorkerInputRequested",
-                  "WorkerInputCompleted",
-                  "WorkerStopRequested",
-                ].map((tag) => ({
-                  index: "effect_agent_records_tag",
-                  predicate: sql`record_tag = ${tag}`,
-                })),
-                {
-                  index: "effect_agent_records_subtree",
-                  predicate: sql`record_tag = 'SubtreeBudgetReserved' AND ${nullSafeEquals(sql, canonicalField(sql, "sourceSubmissionId"), canonicalIdentifier(selection.sourceSubmissionId ?? null))}`,
-                },
-                {
-                  index: "effect_agent_records_call",
-                  predicate: sql`record_tag = 'SubagentJoined' AND run_id = ${canonicalIdentifier(runId)}`,
-                },
-              ];
-
-              const candidates = boundedCandidates(
-                sql,
-                predicates.map(
-                  ({ index, predicate }) => sql`SELECT * FROM (
-                SELECT thread_id, sequence, record_id, batch_id, record_json
-                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, index)}
-                WHERE thread_id = ${request.threadId} AND sequence > ${after} AND ${predicate}
-                ORDER BY sequence LIMIT ${request.page.limit}
-              ) AS worker_branch`,
-                ),
-                request.page.limit,
-                false,
+              // Omission is identity-only. Null-funded programmatic lifetime history is not a Run.
+              const branches = [
+                "ThreadCreated",
+                "WorkerOriginRecorded",
+                "SubagentLineageRecorded",
+              ].map(
+                (tag) => sql`SELECT * FROM (
+                SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_tag")}
+                WHERE thread_id=${request.threadId} AND record_tag=${tag} AND sequence<=${selection.expectedTailSequence}
+                ORDER BY sequence LIMIT 1) AS worker_identity WHERE sequence>${after}`,
               );
 
-              rows = yield* sql`${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(
-                execute,
-              );
+              if (funding !== undefined) {
+                for (const [tag, index] of [
+                  ["WorkerInputRequested", "effect_agent_records_worker_funding"],
+                  ["SubtreeBudgetReserved", "effect_agent_records_subtree"],
+                ]) {
+                  const tagLiteral = sql.literal(
+                    tag === "WorkerInputRequested"
+                      ? "'WorkerInputRequested'"
+                      : "'SubtreeBudgetReserved'",
+                  );
+
+                  branches.push(sql`SELECT * FROM (
+                    SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                    FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, index)}
+                    WHERE thread_id=${request.threadId} AND record_tag=${tagLiteral} AND source_submission_id=${canonicalIdentifier(funding)}
+                      AND sequence>${after} AND sequence<=${selection.expectedTailSequence}
+                    ORDER BY sequence LIMIT ${request.page.limit}) AS funded_worker`);
+                  // Refusal closes the exact preparation identity, including a reservation which
+                  // never produced WorkerInputRequested. Reused message IDs cannot select another Run.
+                  branches.push(sql`SELECT * FROM (
+                    SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                    FROM ${relation("effect_agent_canonical_records")} AS funded ${recoveryIndex(sql, index)}
+                    JOIN ${relation("effect_agent_record_refusals")} AS refusal
+                      ON refusal.thread_id=funded.thread_id AND refusal.reservation_record_id=${sql.onDialectOrElse({ pg: () => sql`to_json(funded.record_id)::text`, orElse: () => sql`json_quote(funded.record_id)` })}
+                    LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                      ON canonical.thread_id=refusal.thread_id AND canonical.sequence=refusal.sequence
+                    WHERE funded.thread_id=${request.threadId} AND funded.record_tag=${tagLiteral} AND funded.source_submission_id=${canonicalIdentifier(funding)}
+                      AND refusal.sequence>${after} AND refusal.sequence<=${selection.expectedTailSequence}
+                    ORDER BY refusal.sequence LIMIT ${request.page.limit}) AS refused_worker`);
+                }
+                branches.push(sql`SELECT * FROM (
+                  SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, ${membershipJson} AS record_json
+                  FROM ${relation("effect_agent_canonical_records")} AS funded ${recoveryIndex(sql, "effect_agent_records_worker_funding")}
+                  JOIN ${relation("effect_agent_canonical_records")} AS canonical ${recoveryIndex(sql, "effect_agent_records_worker_completed")}
+                    ON canonical.thread_id=funded.thread_id AND canonical.message_id=funded.message_id AND canonical.record_tag='WorkerInputCompleted'
+                  WHERE funded.thread_id=${request.threadId} AND funded.record_tag='WorkerInputRequested' AND funded.source_submission_id=${canonicalIdentifier(funding)}
+                    AND canonical.sequence>${after} AND canonical.sequence<=${selection.expectedTailSequence}
+                  ORDER BY canonical.sequence LIMIT ${request.page.limit}) AS completed_worker`);
+                branches.push(sql`SELECT * FROM (
+                  SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+                  FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
+                  WHERE thread_id=${request.threadId} AND record_tag='SubagentJoined' AND run_id=${canonicalIdentifier(runIdForSubmission(funding))}
+                    AND sequence>${after} AND sequence<=${selection.expectedTailSequence}
+                  ORDER BY sequence LIMIT ${request.page.limit}) AS joined_worker`);
+              }
+              const candidates = boundedCandidates(sql, branches, request.page.limit, true);
+
+              rows =
+                yield* sql`SELECT * FROM (${candidates}) AS worker_state ORDER BY sequence LIMIT ${request.page.limit}`.pipe(
+                  execute,
+                );
               break;
             }
           }
           const decoded = yield* decodeRows(rows);
+
+          if (selection._tag === "ToolDeclaration" && decoded.length > 1)
+            return yield* failure("ambiguous original Tool declaration");
 
           if (selection._tag === "RunInput" && decoded.length > 1)
             return yield* failure("ambiguous original Run input");
@@ -605,6 +893,93 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   )
                 )
                   return yield* failure("invalid delivery predecessor membership");
+                const payload = value.record.payload;
+
+                if (
+                  selection._tag === "LatestApplicationInput" &&
+                  (payload._tag !== "UserInputRecorded" ||
+                    (payload.messageAdmission !== undefined &&
+                      "_tag" in payload.messageAdmission &&
+                      (payload.messageAdmission._tag === "WorkerCompletion" ||
+                        payload.messageAdmission._tag === "WorkerUpdate")))
+                )
+                  return yield* failure("invalid newest application input membership");
+                if (
+                  selection._tag === "ToolDeclaration" &&
+                  (payload._tag !== "ModelResponseRecorded" ||
+                    !payload.toolOperations.some(
+                      (operation) =>
+                        toolCallSettledRecordId(
+                          payload.runId,
+                          payload.turn,
+                          operation.toolCallId,
+                        ) === selection.settlementRecordId,
+                    ))
+                )
+                  return yield* failure("invalid original Tool declaration pointer");
+                if (
+                  selection._tag === "WorkerState" &&
+                  (payload._tag === "WorkerInputRequested"
+                    ? payload.admission.sourceSubmissionId !== selection.sourceSubmissionId
+                    : payload._tag === "SubtreeBudgetReserved"
+                      ? payload.sourceSubmissionId !== selection.sourceSubmissionId
+                      : payload._tag === "SubagentJoined"
+                        ? selection.sourceSubmissionId === undefined ||
+                          payload.runId !== runIdForSubmission(selection.sourceSubmissionId)
+                        : ![
+                            "ThreadCreated",
+                            "WorkerOriginRecorded",
+                            "SubagentLineageRecorded",
+                            "WorkerInputCompleted",
+                            "WorkerInputRefused",
+                          ].includes(payload._tag))
+                )
+                  return yield* failure("invalid Worker funding membership");
+                if (
+                  selection._tag === "LatestRunContext" &&
+                  (payload._tag !== "RunContextRecorded" ||
+                    payload.historyThrough > selection.throughSequence)
+                )
+                  return yield* failure("invalid Run context membership");
+                if (
+                  selection._tag === "PromptEvidence" &&
+                  !PROMPT_EVIDENCE_TAGS.some((tag) => tag === payload._tag)
+                )
+                  return yield* failure("invalid prompt evidence membership");
+                if (selection._tag === "LatestModelCompleted" && payload._tag !== "ModelCompleted")
+                  return yield* failure("invalid newest model membership");
+                if (
+                  selection._tag === "ContextWindowBoundary" &&
+                  (payload._tag !== "CompactionCreated" ||
+                    payload.kind !== "rollover" ||
+                    payload.coversThrough >= selection.atSequence)
+                )
+                  return yield* failure("invalid context boundary membership");
+                if (
+                  selection._tag === "DurableHistoryOwner" &&
+                  !(payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) &&
+                  ![
+                    "RunStarted",
+                    "SubmissionSettled",
+                    "AbortRequested",
+                    "WorkerOriginRecorded",
+                    "SubagentLineageRecorded",
+                  ].includes(payload._tag)
+                )
+                  return yield* failure("invalid durable owner membership");
+                if (
+                  selection._tag === "LiveWorkerInputs" &&
+                  (payload._tag !== "WorkerInputRequested" ||
+                    (selection.workerThreadId !== undefined &&
+                      payload.admission.origin.worker.threadId !== selection.workerThreadId))
+                )
+                  return yield* failure("invalid live worker membership");
+                if (
+                  selection._tag === "WorkerStop" &&
+                  (payload._tag !== "WorkerStopRequested" ||
+                    payload.command.worker.threadId !== selection.workerThreadId)
+                )
+                  return yield* failure("invalid worker stop membership");
                 if (selection._tag === "OperationEvidence") {
                   const payload = value.record.payload;
                   const origin = value.record.recordId === selection.originRecordId;
@@ -645,18 +1020,31 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
       return yield* snapshot(
         Effect.gen(function* () {
           const tail = yield* requireThread(request.threadId);
+
+          const [facts] = yield* Schema.decodeUnknownEffect(
+            Schema.Tuple([
+              Schema.Struct({
+                admissions_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+              }),
+            ]),
+          )(
+            yield* sql`SELECT admissions_count FROM ${relation("effect_agent_transfer_state")} WHERE thread_id=${request.threadId}`.pipe(
+              execute,
+            ),
+          );
+
           const origin = workerOriginRecordId(request.threadId);
           const lineage = subagentLineageRecordId(request.threadId);
 
           const rows =
             yield* sql`SELECT thread_id, sequence, record_id, batch_id, record_json FROM (
-            SELECT thread_id, sequence, record_id, batch_id, record_json, 0 AS identity_order
+            SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json, 0 AS identity_order
             FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND sequence = 1
             UNION ALL
-            SELECT thread_id, sequence, record_id, batch_id, record_json, 1 AS identity_order
+            SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json, 1 AS identity_order
             FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${origin} AND sequence <> 1
             UNION ALL
-            SELECT thread_id, sequence, record_id, batch_id, record_json, 2 AS identity_order
+            SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json, 2 AS identity_order
             FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND record_id = ${lineage} AND sequence <> 1
           ) ORDER BY identity_order`.pipe(execute);
 
@@ -678,6 +1066,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             tailSequence: tail.tail_sequence,
             tailDigest: tail.tail_digest,
             producerEpoch: tail.producer_epoch,
+            admissions: facts.admissions_count,
             records,
           });
         }),
@@ -690,18 +1079,94 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     ),
   );
 
+  const readWorkerCapacity: NonNullable<ThreadStore["Service"]["readWorkerCapacity"]> =
+    Effect.fnUntraced(
+      function* (request) {
+        yield* Schema.decodeEffect(ThreadWorkerCapacityRequest)(request);
+
+        return yield* snapshot(
+          Effect.gen(function* () {
+            const tail = yield* requireThread(request.threadId);
+
+            if (
+              tail.tail_sequence !== request.expectedTailSequence ||
+              tail.tail_digest !== request.expectedTailDigest
+            )
+              return yield* failure("worker capacity tail changed");
+            yield* requireReadyWork(request.threadId, tail.tail_sequence);
+
+            const active =
+              yield* sql`SELECT DISTINCT worker_thread_id FROM ${relation("effect_agent_work_entries")} ${recoveryIndex(sql, "effect_agent_work_entries_worker")}
+          WHERE thread_id=${request.threadId} AND worker_thread_id IS NOT NULL LIMIT ${request.activeLimit + 1}`.pipe(
+                execute,
+              );
+
+            const worker =
+              yield* sql`SELECT 1 FROM ${relation("effect_agent_work_entries")} ${recoveryIndex(sql, "effect_agent_work_entries_worker")}
+          WHERE thread_id=${request.threadId} AND worker_thread_id IS NOT NULL AND worker_thread_id=${canonicalIdentifier(request.workerThreadId)} LIMIT 1`.pipe(
+                execute,
+              );
+
+            const pending =
+              yield* sql`SELECT 1 FROM ${relation("effect_agent_work_entries")} ${recoveryIndex(sql, "effect_agent_work_entries_worker_capacity")}
+          WHERE thread_id=${request.threadId} AND worker_thread_id IS NOT NULL AND worker_thread_id=${canonicalIdentifier(request.workerThreadId)}
+            AND worker_update=${request.update ? 1 : 0} LIMIT ${request.pendingLimit + 1}`.pipe(
+                execute,
+              );
+
+            return yield* ThreadWorkerCapacity.makeEffect({
+              threadId: request.threadId,
+              tailSequence: tail.tail_sequence,
+              tailDigest: tail.tail_digest,
+              producerEpoch: tail.producer_epoch,
+              activeWorkers: active.length,
+              workerActive: worker.length === 1,
+              pendingInputs: pending.length,
+            });
+          }),
+        );
+      },
+      Effect.mapError((cause) =>
+        cause._tag === "ThreadNotMaterialized" || cause._tag === "ThreadStoreError"
+          ? cause
+          : failure("readWorkerCapacity", cause),
+      ),
+    );
+
   const countPeerMessages: NonNullable<ThreadStore["Service"]["countPeerMessages"]> =
     Effect.fnUntraced(
       function* (request) {
         yield* Schema.decodeEffect(ThreadPeerCountRequest)(request);
-        yield* requireThread(request.threadId);
 
-        const rows =
-          yield* sql`SELECT 1 FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = 'PeerMessagePrepared' LIMIT ${request.limit}`.pipe(
-            execute,
-          );
+        return yield* snapshot(
+          Effect.gen(function* () {
+            const tail = yield* requireThread(request.threadId);
 
-        return rows.length;
+            yield* requireReadyWork(request.threadId, tail.tail_sequence);
+
+            // Canonical handoffs disappear on transfer; every retained delivery identity suppresses
+            // its old handoff, including terminal identities. Both candidates contain only live rows.
+            const peer = sql.onDialectOrElse({
+              pg: () => sql`(read_metadata ->> 'peer') = 'true'`,
+              orElse: () =>
+                sql`json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1`,
+            });
+
+            const rows = yield* sql`SELECT message_id FROM (
+          SELECT message_id FROM (SELECT message_id FROM ${relation("effect_agent_work_entries")} AS work ${recoveryIndex(sql, "effect_agent_work_entries_peer")}
+            WHERE thread_id=${request.threadId} AND handoff_kind='peer' AND message_id IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_message_deliveries")} AS delivery ${recoveryIndex(sql, "effect_agent_message_deliveries_identity")}
+                WHERE delivery.owner_thread_id=work.thread_id AND ${sql.onDialectOrElse({ pg: () => sql`(delivery.read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(delivery.message_id)` })}=work.message_id)
+            ORDER BY message_id LIMIT ${request.limit}) AS handoffs
+          UNION SELECT message_id FROM (SELECT ${sql.onDialectOrElse({ pg: () => sql`(read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(message_id)` })} AS message_id
+            FROM ${relation("effect_agent_message_deliveries")} ${recoveryIndex(sql, "effect_agent_message_deliveries_peer")}
+            WHERE owner_thread_id=${request.threadId} AND state NOT IN ('processed', 'refused') AND ${peer}
+            ORDER BY message_id LIMIT ${request.limit}) AS deliveries
+          ) AS live_peers LIMIT ${request.limit}`.pipe(execute);
+
+            return rows.length;
+          }),
+        );
       },
       Effect.mapError((cause) =>
         cause._tag === "ThreadNotMaterialized" || cause._tag === "ThreadStoreError"
@@ -710,5 +1175,5 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
       ),
     );
 
-  return { read, countPeerMessages, readIdentity };
+  return { read, countPeerMessages, readIdentity, readWorkerCapacity };
 });

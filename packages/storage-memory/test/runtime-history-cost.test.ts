@@ -125,6 +125,16 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                       ]),
                     ),
                   ),
+                  history: Schema.decodeUnknownSync(PersistedJson)(
+                    Schema.encodeSync(Prompt.Prompt)(
+                      Prompt.make(
+                        retainedInputs.flatMap((text) => [
+                          { role: "user" as const, content: text },
+                          { role: "assistant" as const, content: "retained answer" },
+                        ]),
+                      ),
+                    ),
+                  ),
                 })
               : RepairAnnotated.make({
                   reason: "history-cost",
@@ -177,7 +187,12 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
           return Stream.fromEffect(Effect.interrupt);
         }
 
-        if (raceAppend && !raced && !("selection" in request) && request.afterSequence === 1_024) {
+        if (
+          raceAppend &&
+          !raced &&
+          "selection" in request &&
+          request.selection._tag === "PromptEvidence"
+        ) {
           raced = true;
 
           return Stream.unwrap(
@@ -208,6 +223,18 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                             messages: Schema.decodeUnknownSync(PersistedJson)(
                               Schema.encodeSync(Prompt.Prompt)(
                                 Prompt.make([
+                                  { role: "user", content: input },
+                                  { role: "assistant", content: "racing answer" },
+                                ]),
+                              ),
+                            ),
+                            history: Schema.decodeUnknownSync(PersistedJson)(
+                              Schema.encodeSync(Prompt.Prompt)(
+                                Prompt.make([
+                                  ...retainedInputs.flatMap((text) => [
+                                    { role: "user" as const, content: text },
+                                    { role: "assistant" as const, content: "retained answer" },
+                                  ]),
                                   { role: "user", content: input },
                                   { role: "assistant", content: "racing answer" },
                                 ]),

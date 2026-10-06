@@ -6,6 +6,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { submissionSettlementRecordId } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
@@ -167,7 +168,10 @@ describe("Cloudflare replaceable compaction", () => {
               outcome: "completed",
             });
 
-            return yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId }));
+            return yield* readTestThread(
+              store,
+              ThreadExportRequest.make({ threadId: receipt.threadId }),
+            );
           });
 
           yield* process("retired request");

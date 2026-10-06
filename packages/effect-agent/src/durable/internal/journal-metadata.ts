@@ -1,21 +1,35 @@
-import { type RunId } from "../../core/Identifiers.ts";
+import { Schema } from "effect";
+
+import { type RunId, type ToolCallId } from "../../core/Identifiers.ts";
 import {
   type CanonicalRecordEnvelope,
   type CompactionCreated,
   type ToolCallSettled,
+  RecordId,
 } from "../Records.ts";
+
+const decodeRecordId = Schema.decodeSync(RecordId);
+
+/** Deterministic canonical record identity of one Turn's Tool result. */
+export const toolCallSettledRecordId = (
+  runId: RunId,
+  turn: number,
+  toolCallId: ToolCallId,
+): RecordId => decodeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
 
 /** Metadata for one exact canonical prefix, including the exact selected Run evidence. */
 export interface JournalMetadata {
   readonly ownerRunId: RunId | undefined;
   readonly firstSequenceByRun: ReadonlyMap<string, number>;
-  readonly lastResponseSequenceByRun: ReadonlyMap<string, number>;
+  readonly responseSequencesByRun: ReadonlyMap<string, ReadonlyArray<number>>;
   readonly terminalSequenceByRun: ReadonlyMap<string, number>;
   readonly settledSpans: ReadonlyArray<{
     readonly from: number;
     readonly to: number;
     readonly runId: RunId;
+    readonly recordId: string;
   }>;
+  readonly settledSequenceById: ReadonlyMap<string, number>;
   readonly settledToolCallRecordIds: ReadonlySet<string>;
   readonly settledById: ReadonlyMap<
     string,
@@ -35,11 +49,27 @@ export interface JournalMetadata {
 export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
   const firstSequenceByRun = new Map<string, number>();
 
-  const lastResponseSequenceByRun = new Map<string, number>();
+  const responseSequencesByRun = new Map<string, Array<number>>();
+
+  const declarationsByRun = new Map<
+    RunId,
+    Array<{
+      readonly sequence: number;
+      readonly turn: number;
+      readonly callIds: ReadonlyArray<ToolCallId>;
+    }>
+  >();
+
   const terminalSequenceByRun = new Map<string, number>();
 
-  const settledSpans: Array<{ readonly from: number; readonly to: number; readonly runId: RunId }> =
-    [];
+  const settledSpans: Array<{
+    readonly from: number;
+    readonly to: number;
+    readonly runId: RunId;
+    readonly recordId: string;
+  }> = [];
+
+  const settledSequenceById = new Map<string, number>();
 
   const settledToolCallRecordIds = new Set<string>();
 
@@ -74,9 +104,23 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
       )
         firstSequenceByRun.set(payload.runId, envelope.sequence);
       if (payload._tag === "ModelResponseRecorded") {
-        lastResponseSequenceByRun.set(payload.runId, envelope.sequence);
+        const sequences = responseSequencesByRun.get(payload.runId) ?? [];
+
+        sequences.push(envelope.sequence);
+        responseSequencesByRun.set(payload.runId, sequences);
+        const declarations = declarationsByRun.get(payload.runId) ?? [];
+
+        // Retain references to bounded source identities, not an expanded settlement-ID
+        // string and Map entry for every declared operation in the context.
+        declarations.push({
+          sequence: envelope.sequence,
+          turn: payload.turn,
+          callIds: payload.toolOperations.map((operation) => operation.toolCallId),
+        });
+        declarationsByRun.set(payload.runId, declarations);
       } else if (payload._tag === "ToolCallSettled") {
         settledToolCallRecordIds.add(envelope.record.recordId);
+        settledSequenceById.set(envelope.record.recordId, envelope.sequence);
         if (payload.runId === ownerRunId)
           settledById.set(envelope.record.recordId, {
             isFailure: payload.isFailure,
@@ -87,18 +131,34 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
               ? {}
               : { budgetRejected: payload.budgetRejected }),
           });
-        const from = lastResponseSequenceByRun.get(payload.runId);
+
+        const from = declarationsByRun
+          .get(payload.runId)
+          ?.findLast(
+            (declaration) =>
+              declaration.callIds.includes(payload.toolCallId) &&
+              toolCallSettledRecordId(payload.runId, declaration.turn, payload.toolCallId) ===
+                envelope.record.recordId,
+          )?.sequence;
 
         if (from !== undefined && from < envelope.sequence)
-          settledSpans.push({ from, to: envelope.sequence, runId: payload.runId });
+          settledSpans.push({
+            from,
+            to: envelope.sequence,
+            runId: payload.runId,
+            recordId: envelope.record.recordId,
+          });
       }
     },
     snapshot: (): JournalMetadata => ({
       ownerRunId,
       firstSequenceByRun: new Map(firstSequenceByRun),
-      lastResponseSequenceByRun: new Map(lastResponseSequenceByRun),
+      responseSequencesByRun: new Map(
+        [...responseSequencesByRun].map(([runId, sequences]) => [runId, [...sequences]]),
+      ),
       terminalSequenceByRun: new Map(terminalSequenceByRun),
       settledSpans: [...settledSpans],
+      settledSequenceById: new Map(settledSequenceById),
       settledToolCallRecordIds: new Set(settledToolCallRecordIds),
       settledById: new Map(settledById),
       compactions: [...compactions],

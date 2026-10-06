@@ -129,15 +129,20 @@ lifetime.
 
 Retained history includes evaluated instructions, assistant messages, reasoning, provider options,
 and settled tool results. Context preparation and compaction change the current model view while
-the source history stays intact.
+the source history stays intact. Committed summaries describe their captured prefix. Later tool
+results keep their exact original declaration and enter the active view without expanding retired
+history. Cleared results and rollover boundaries continue to govern that view.
 
 A failure, defect, timeout, or interruption before commit retains none of the current run. A
 storage error after commit can leave the whole run recorded, so inspect history before retrying.
 The runtime never retries execution or resumes an interrupted run.
 
-Each encoded input, output, and native Prompt suffix has a 1 MiB limit. The supplied adapters and
-`ThreadExport` support up to 131,072 canonical records per Thread. If the next run would cross
-that limit, execution fails before model or tool calls. Start a new thread to continue.
+Each encoded input, output, Run message contribution, and retained model-context snapshot has a
+1 MiB limit. Configure context compaction below that bound, leaving room for the next input and
+response. Each successful Run retains its new source messages and its current compacted context
+separately. The next Run loads that context directly; older source messages remain available for
+recall. Thread age does not impose a canonical record limit. Storage and live-work capacity remain
+host-owned. See [archive and transfer bounds](/guide/operations/#adopting-these-contracts).
 
 <a id="history-policy-and-append-ownership"></a>
 
@@ -202,13 +207,16 @@ is append-only. It records user input, completed model output, settled tool call
 completion or failure, and repairs. Partial tool argument deltas and live queue state are absent.
 
 `PersistentHistory.layer` appends `UserInputRecorded`, `ModelCompleted`, and `RunCompleted` together.
-Durable execution records each turn and tool result separately for recovery. It can resume from a
-[canonical Run continuation](/concepts/durability/#run-continuations) and bounded exact Run evidence;
-retained-history execution still loads the complete export.
+It opens the latest bounded model-context snapshot; each Run also records its own message
+contribution. Durable execution records each turn and tool result separately and resumes from a
+[canonical Run continuation](/concepts/durability/#run-continuations), its original saved context,
+and bounded exact evidence.
 
 `ThreadStore.read` returns at most 1,024 records per request, and each atomic `CanonicalBatch`
-contains at most 256 records. SQLite and Cloudflare exports read payloads in bounded pages while
-preserving one captured snapshot; the returned export still contains the complete record array.
+contains at most 256 records. `streamExport` returns bounded pages under one captured tail and
+independent-fact revision. Archive ranges preserve record identities and digest anchors, so old
+facts remain directly addressable while newer facts append. See the
+[archive and transfer bounds](/guide/operations/#adopting-these-contracts).
 
 <a id="store-contract"></a>
 
@@ -217,9 +225,9 @@ preserving one captured snapshot; the returned export still contains the complet
 ## Choose storage
 
 The [Storage guides](/storage/) compare backends and show how to connect each one.
-SQLite, PostgreSQL, and Cloudflare apply supported table-layout steps atomically and accept only
-the current record format. See the
-[storage cutover procedure](/guide/operations/#adopting-these-contracts) before adopting a new
-version, and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.
+SQLite, PostgreSQL, and Cloudflare accept fresh layout-21 stores and the current record format.
+Other layouts fail before mutation. See
+[adopting these contracts](/guide/operations/#adopting-these-contracts) for same-format transfer,
+and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.
 
 For a custom adapter, follow the [store contract and certification guide](/guide/certify-adapters/#store-contract).

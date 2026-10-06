@@ -474,6 +474,12 @@ abort intent, and settlement obligations.
 **Canonical Batch**  
 An atomic append of one or more Canonical Records. Readers never observe part of a batch.
 
+**Archive Range**
+
+A bounded sequence of complete Canonical Batches with verified digest anchors and a stable storage
+locator. Ranges share one Thread order and producer fence. Archiving changes physical placement,
+not model context, grants, Run budgets, or unresolved obligations.
+
 **Projection**  
 A materialized view derived from Canonical Records, such as transcript, active resources, state, or
 client messages. Projections are rebuildable.

@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer, Schema } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { type ThreadId, type RunId } from "../core/Identifiers.ts";
@@ -23,11 +23,12 @@ import {
 } from "./Records.ts";
 import { promptFromCanonicalRecords } from "./RunJournal.ts";
 import {
-  ThreadExportRequest,
+  ThreadIdentityRequest,
+  SelectedThreadRead,
+  type ThreadIdentity,
   ThreadMaterialization,
   ThreadStore,
   FencedAppendRequest,
-  MAX_THREAD_EXPORT_RECORDS,
   type ThreadStoreFailure,
 } from "./ThreadStore.ts";
 
@@ -75,14 +76,74 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const store = yield* ThreadStore;
 
-    const load = Effect.fnUntraced(function* (threadId: ThreadId) {
-      const exported = yield* store
-        .export(ThreadExportRequest.make({ threadId }))
-        .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
+    const readHistory = Effect.fnUntraced(function* (base: ThreadIdentity) {
+      const threadId = base.threadId;
 
-      return yield* promptFromCanonicalRecords(exported.records).pipe(
+      const selected = (tag: "LatestModelCompleted" | "DurableHistoryOwner") =>
+        store
+          .read(
+            SelectedThreadRead.make({
+              threadId,
+              selection: { _tag: tag, throughSequence: base.tailSequence },
+              page: { limit: 2 },
+            }),
+          )
+          .pipe(
+            Stream.take(3),
+            Stream.runCollect,
+            Effect.mapError((cause) => storageError(threadId, cause)),
+          );
+
+      if (
+        base.admissions > 0 ||
+        base.producerEpoch !== HISTORY_EPOCH ||
+        (yield* selected("DurableHistoryOwner")).length > 0
+      )
+        return yield* historyError(
+          threadId,
+          "incompatible",
+          "This Thread belongs to durable accepted work; use a separate history Thread",
+        );
+      if (base.tailSequence === 0) return Prompt.empty;
+      const first = base.records[0]?.record.payload;
+
+      if (
+        base.records.length !== 1 ||
+        first?._tag !== "UserInputRecorded" ||
+        first.submissionId !== undefined
+      )
+        return yield* historyError(
+          threadId,
+          "incompatible",
+          "This Thread has another canonical history owner",
+        );
+      const records = yield* selected("LatestModelCompleted");
+      const latest = records[0];
+
+      if (
+        records.length !== 1 ||
+        latest?.threadId !== threadId ||
+        latest.sequence > base.tailSequence ||
+        latest.record.payload._tag !== "ModelCompleted" ||
+        latest.record.payload.history === undefined
+      )
+        return yield* historyError(
+          threadId,
+          "encoding",
+          "The retained model-context snapshot is missing or invalid",
+        );
+
+      return yield* promptFromCanonicalRecords(records).pipe(
         Effect.mapError((cause) => historyError(threadId, "encoding", cause.message, cause)),
       );
+    });
+
+    const load = Effect.fnUntraced(function* (threadId: ThreadId) {
+      const base = yield* store
+        .readIdentity(ThreadIdentityRequest.make({ threadId }))
+        .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
+
+      return yield* readHistory(base);
     });
 
     const open = Effect.fnUntraced(function* ({
@@ -107,33 +168,10 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
 
       const base = yield* store
-        .export(ThreadExportRequest.make({ threadId }))
+        .readIdentity(ThreadIdentityRequest.make({ threadId }))
         .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
 
-      if (base.records.length + 3 > MAX_THREAD_EXPORT_RECORDS) {
-        return yield* error(
-          "limit",
-          `This Run would exceed the history limit of ${MAX_THREAD_EXPORT_RECORDS} records; use a new Thread`,
-        );
-      }
-      if (
-        base.records.some(
-          ({ record }) =>
-            (record.payload._tag === "UserInputRecorded" &&
-              record.payload.submissionId !== undefined) ||
-            record.payload._tag === "SubmissionSettled" ||
-            record.payload._tag === "AbortRequested",
-        )
-      ) {
-        return yield* error(
-          "incompatible",
-          "This Thread belongs to durable accepted work; use a separate history Thread",
-        );
-      }
-
-      const prompt = yield* promptFromCanonicalRecords(base.records).pipe(
-        Effect.mapError((cause) => error("encoding", cause.message, cause)),
-      );
+      const prompt = yield* readHistory(base);
 
       const expectedTailSequence = base.tailSequence;
       const expectedTailDigest = base.tailDigest;
@@ -153,6 +191,7 @@ export const layer = Layer.effect(
 
       let input: RecordEnvelope | undefined;
       let messages: PersistedJson | undefined;
+      let history: PersistedJson | undefined;
       let stagedSource: ReadonlyArray<Prompt.Message> = [];
       let encodedMessages: ReadonlyArray<Prompt.MessageEncoded> = [];
 
@@ -168,7 +207,13 @@ export const layer = Layer.effect(
             }),
           );
         }),
-        stageHistory: Effect.fnUntraced(function* (next: Prompt.Prompt) {
+        stageHistory: Effect.fnUntraced(function* ({
+          source: next,
+          modelContext,
+        }: {
+          readonly source: Prompt.Prompt;
+          readonly modelContext: Prompt.Prompt;
+        }) {
           const source = next.content.slice(initialPromptLength);
           let retained = 0;
 
@@ -193,14 +238,26 @@ export const layer = Layer.effect(
           const nextEncoded = [...encodedMessages.slice(0, retained), ...suffix.content];
           const nextMessages = yield* persisted({ content: nextEncoded });
 
+          const nextHistory = yield* Schema.encodeEffect(Prompt.Prompt)(modelContext).pipe(
+            Effect.flatMap(persisted),
+            Effect.mapError((cause) =>
+              error(
+                "limit",
+                "Retained model context exceeds persistence bounds; configure context compaction",
+                cause,
+              ),
+            ),
+          );
+
           // Aggregate validation stays at every history update: per-message limits would admit
           // oversized Runs and move failures past the next model or Tool call.
           messages = nextMessages;
+          history = nextHistory;
           encodedMessages = nextEncoded;
           stagedSource = source;
         }),
         commit: Effect.fnUntraced(function* (completion: RunCompletedEvent) {
-          if (input === undefined || messages === undefined) {
+          if (input === undefined || messages === undefined || history === undefined) {
             return yield* error("encoding", "Run completed without its encoded input and history");
           }
           const output = yield* persisted(completion.output);
@@ -212,7 +269,12 @@ export const layer = Layer.effect(
 
           const completedAt = yield* DateTime.now;
 
-          const modelCompleted = yield* ModelCompleted.makeEffect({ runId, output, messages }).pipe(
+          const modelCompleted = yield* ModelCompleted.makeEffect({
+            runId,
+            output,
+            messages,
+            history,
+          }).pipe(
             Effect.mapError((cause) =>
               error("encoding", "Run history is not a canonical Prompt", cause),
             ),

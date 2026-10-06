@@ -208,8 +208,10 @@ another child. Handoff remains unsupported.
 
 ## Independently fund background Runs
 
-Background workers normally reserve against their source's subtree. A host may separately
-fund a root's reusable worker by supplying `WorkerBudgetAuthorizer` from
+Background descendants reserve against the exact native Run that funds their source input.
+A root programmatic start without a selected input defaults to independent `worker-run` funding;
+explicit `source-subtree` funding requires a selected owner for each input, including follow-ups.
+A host permits independent funding by supplying `WorkerBudgetAuthorizer` from
 `@yielded/agent/worker-host` and allowing the exact source, destination, and allowance.
 The default denies this permission. Request it from author-owned code:
 
@@ -237,8 +239,8 @@ Independent funding is available only to root-created workers. Root, worker, and
 still have depths zero, one, and two. Set the worker grant's `childLifetimes` to `["attached"]`
 and `maxDepth` to `2` to allow scouts without another background generation. Reserve enough
 `descendantInvocations` and allocation beyond the worker's own full ceiling for those scouts.
-Scouts share the immediate worker Run's remaining allocation. Host worker-count, pending-input,
-input-retention, concurrency, and lifetime limits still apply across the source Thread.
+Scouts share the immediate worker Run's remaining allocation. Host active-worker, pending-input,
+concurrency, and worker-expiry limits apply across the source Thread.
 Set `WorkerHostConfig.maxActiveWorkersPerSource` to bound concurrent background workers separately
 from the root's Tool execution concurrency; omission retains the prior concurrency ceiling.
 
@@ -460,9 +462,12 @@ at acquisition, using bounded storage pages. Pass its last `sequence` as the nex
 Observation acquires no execution permit and does not cancel work when interrupted.
 
 `WorkerHostAuthorizer` separates context, read, send, and control access and denies by default.
-`WorkerHostConfig` bounds retained workers, inputs per worker, pending inputs, and lifetime across
-coordinator Runs (defaults: 32 workers, 64 inputs, 8 pending, 24 hours). Started allocations are
-not refunded. Execution concurrency is a separate host setting; waiting attached parents release
+`WorkerHostConfig` bounds active workers, pending inputs, and worker lifetime (defaults: source
+Tool concurrency, 8 pending ordinary inputs per worker, 24 hours). Completed inputs and idle workers
+retain their replay identities without consuming live capacity. An accepted input releases capacity
+only after canonical acknowledgement proves its effects resolved. A refused, never-admitted input
+remains charged while its receiver inbox is open; an authorized owner stop allows exact nonadmission
+closure. Unavailable receiver evidence leaves that work owed. Started allocations are not refunded. Execution concurrency is a separate host setting; waiting attached parents release
 their permits. Configure sufficient host capacity for conversational work and the chosen child
 concurrency. Idle workers own no execution resources.
 
@@ -628,13 +633,12 @@ promised to execute exactly once.
 
 The runtime defaults to 32 updates and 16 KiB of total encoded update payload per Run. `RunOptions.updates`
 configures these limits. Durable acceptance rechecks canonical counts after a restart. The delivery
-store separately bounds update retention and pending work per worker (defaults: 256 retained and
-32 pending). `maxRetainedUpdatesPerOwner` and `maxPendingUpdatesPerOwner` configure that partition;
+store separately bounds pending update work per worker (default: 32).
+`maxPendingUpdatesPerOwner` configures that partition;
 updates cannot consume the ordinary capacity used for terminal reports. Capacity refusal happens
 before a new update is accepted. A parent that is itself a worker has separate update input quotas:
-`WorkerHostLimits.maxUpdateInputsPerWorker` defaults to 256 and
-`maxPendingUpdateInputsPerWorker` defaults to 32. Temporary pending or active-worker limits retry
-delivery; permanent retention or budget exhaustion refuses it. Parent admissions still obey
+`WorkerHostLimits.maxPendingUpdateInputsPerWorker` defaults to 32. Temporary pending or
+active-worker limits retry delivery; permanent budget exhaustion refuses it. Parent admissions still obey
 inherited budgets, grants, lifetime, and host limits.
 
 Retained findings and pending delivery survive parent completion or abort, dropped wake hints,

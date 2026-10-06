@@ -162,12 +162,14 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Change record formats through a one-time export/convert/import cutover: history re-encodes,
-  live state converts. Preserve immutable admission and accepted-command facts; rebuild derivatives
-  and digests without importing execution authority. Import atomically into empty Threads under
-  destination constraints; reject unsupported or ambiguous data without mutation or lost work.
-  Keep adapter layout steps separate, immutable, ordered and atomic; reject newer layouts.
-  No payload rewrites, history shims or migration framework.
+- Start the unreleased durable protocol in fresh layout-21 stores with
+  `effect-agent/thread@3` records. Reject predecessor formats and layouts before mutation; this
+  release includes no historical decoder, converter, layout upgrade, or migration path.
+  Same-format streaming transfers preserve immutable admission and accepted-command facts,
+  rebuild derivatives and digests, and import atomically into empty Threads under destination
+  constraints without importing execution authority. Reject unsupported or ambiguous recovery
+  views without mutation or lost obligations. Scope future format changes to a concrete need;
+  do not add speculative compatibility paths.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

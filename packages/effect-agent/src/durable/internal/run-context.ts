@@ -6,7 +6,12 @@ import {
   type CanonicalRecordEnvelope,
   type RunContextRecorded,
 } from "../Records.ts";
-import { projectRunJournalStream, RunJournalError, type RunJournalContext } from "../RunJournal.ts";
+import {
+  projectRunJournalStream,
+  RunJournalError,
+  type RunJournalContext,
+  type JournalBoundary,
+} from "../RunJournal.ts";
 import { resolveEvidence } from "./evidence.ts";
 import { recordEncoding } from "./record-encoding.ts";
 
@@ -55,10 +60,34 @@ export const projectRunContext = Effect.fnUntraced(function* (
   if (bytes !== context.historyBytes)
     return yield* invalid("Saved context byte accounting differs from its facts");
 
+  const referenced = new Set(records.map((entry) => entry.sequence));
+  const boundaries: Array<JournalBoundary> = [];
+
   const history = yield* projectRunJournalStream(
     Stream.fromIterable([...records, original]),
     context.runId,
+    (boundary) => {
+      if (referenced.has(boundary.sequence) && boundary.promptLength <= context.priorHistoryLength)
+        boundaries.push(boundary);
+    },
   );
+
+  if (
+    context.boundaries.length !== boundaries.length ||
+    context.boundaries.some((saved, index) => {
+      const actual = boundaries[index];
+
+      return (
+        actual === undefined ||
+        saved.sequence !== actual.sequence ||
+        saved.tag !== actual.tag ||
+        saved.promptLength !== actual.promptLength ||
+        saved.incomplete !== actual.incomplete ||
+        saved.terminalPriorRun !== actual.terminalPriorRun
+      );
+    })
+  )
+    return yield* invalid("Saved context boundaries differ from their canonical facts");
 
   if (
     history.prompt.content.length !== context.priorHistoryLength ||

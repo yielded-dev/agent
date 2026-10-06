@@ -109,7 +109,7 @@ export function ActivityPanel({
           <dd>{snapshot?.usage.model ?? "—"}</dd>
         </div>
         <div>
-          <dt>Input / output tokens</dt>
+          <dt>Recent input / output tokens</dt>
           <dd>
             {snapshot?.usage.inputTokens ?? "—"} / {snapshot?.usage.outputTokens ?? "—"}
           </dd>

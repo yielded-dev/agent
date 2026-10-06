@@ -17,7 +17,11 @@ import {
 } from "../engine/Compaction.ts";
 import type { RunTurnToolResult } from "../engine/RunOptions.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
-import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
+import {
+  makeJournalMetadata,
+  toolCallSettledRecordId,
+  type JournalMetadata,
+} from "./internal/journal-metadata.ts";
 import {
   type CompactionCreated,
   BatchId,
@@ -161,11 +165,7 @@ export const agentUpdateRecordId = Effect.fnUntraced(function* (
 });
 
 /** Deterministic canonical record identity of one Turn's `ToolCallSettled` record. */
-export const toolCallSettledRecordId = (
-  runId: RunId,
-  turn: number,
-  toolCallId: ToolCallId,
-): RecordId => decodeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
+export { toolCallSettledRecordId };
 
 /** Deterministic batch identity of one Turn's `ToolCallUnknown` marking append. */
 export const markUnknownBatchId = (submissionId: SubmissionId, turn: number): BatchId =>
@@ -387,8 +387,9 @@ const toolMessageFromSettled = (
  * - `UserInputRecorded` records input, with a Submission identity only for durable admission. Its
  *   Prompt-visible form (instructions + user message) becomes canonical inside the owning Run's
  *   first `ModelResponseRecorded`. The projection consumes it only for Run correlation.
- * - Immediate retained history uses `ModelCompleted.messages` for the successful Run's exact
- *   native Prompt suffix, including any input examples. It has no resumable Turn state.
+ * - Immediate retained history uses `ModelCompleted.history` as a full retained model-context
+ *   snapshot. Its `messages` separately preserve the successful Run's exact source contribution
+ *   for recall. It has no resumable Turn state.
  */
 /** Cumulative committed usage of the projected Run (RUN-023 resume re-seed). */
 export interface RunJournalUsage {
@@ -543,6 +544,7 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
   "WorkerInputRequested",
   "WorkerOriginRecorded",
   "WorkerInputCompleted",
+  "WorkerInputRefused",
   "WorkerReportPrepared",
   "AgentUpdateEmitted",
   "WorkerReportRefused",
@@ -634,12 +636,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   // Pruning and rollovers may cover complete owner-Run batches; a summarize record carries
   // its summary. Invalid records leave full history authoritative. A wider containing view
   // replaces earlier coverage, with equal bounds preferring the later record.
-  // One span per settled record, paired with its declaring response the same
-  // way the fold pairs them: a settled belongs to the most recent
-  // ModelResponseRecorded of its Run. A bound inside (response, settled)
-  // would orphan the tool message from its declaring response. Orphaned
-  // settleds (filtered later by the fold) still contribute spans —
-  // over-invalidating is the fail-safe direction.
+  // Exact declaration spans are validated at each compaction's own captured prefix.
+  // Later results preserve committed coverage and close retained or summarized calls below.
   if (preparedMetadata !== undefined && preparedMetadata.ownerRunId !== ownerRunId)
     return yield* journalError("Prepared journal metadata belongs to another replay");
 
@@ -654,14 +652,23 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 
   const {
     firstSequenceByRun,
-    lastResponseSequenceByRun,
+    responseSequencesByRun,
     terminalSequenceByRun,
     settledSpans,
+    settledSequenceById,
     settledToolCallRecordIds,
     settledById,
   } = metadata;
 
   const declarationByResultSequence = new Map(settledSpans.map(({ from, to }) => [to, from]));
+  const spansByDeclaration = new Map<number, Array<(typeof settledSpans)[number]>>();
+
+  for (const span of settledSpans) {
+    const spans = spansByDeclaration.get(span.from) ?? [];
+
+    spans.push(span);
+    spansByDeclaration.set(span.from, spans);
+  }
 
   const isInRunView = (
     sequence: number,
@@ -711,12 +718,18 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       candidateRunId !== compactionRunId &&
       terminal !== undefined &&
       terminal < beforeSequence &&
-      terminal > (lastResponseSequenceByRun.get(candidateRunId) ?? 0)
+      terminal >
+        (responseSequencesByRun
+          .get(candidateRunId)
+          ?.findLast((sequence) => sequence < beforeSequence) ?? 0)
     );
   };
 
-  const incompleteResponseSequences: Array<{ readonly sequence: number; readonly runId: RunId }> =
-    [];
+  const incompleteResponseSequences: Array<{
+    readonly sequence: number;
+    readonly runId: RunId;
+    readonly lastSettlementSequence: number;
+  }> = [];
 
   let ownerPrefixSequence = firstSequenceByRun.get(ownerRunId ?? "") ?? Number.POSITIVE_INFINITY;
 
@@ -734,6 +747,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         const messages = yield* decodePromptMessages(payload.messages);
         const declared = declaredApplicationToolCallIds(messages);
 
+        let lastSettlementSequence = 0;
+
         for (const id of declared) {
           const callId = yield* Schema.decodeEffect(ToolCallId)(id).pipe(
             Effect.mapError((cause) =>
@@ -741,15 +756,18 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
             ),
           );
 
-          if (
-            !settledToolCallRecordIds.has(
-              toolCallSettledRecordId(payload.runId, payload.turn, callId),
-            )
-          ) {
-            incompleteResponseSequences.push({ sequence: envelope.sequence, runId: payload.runId });
-            break;
-          }
+          lastSettlementSequence = Math.max(
+            lastSettlementSequence,
+            settledSequenceById.get(toolCallSettledRecordId(payload.runId, payload.turn, callId)) ??
+              Infinity,
+          );
         }
+        if (declared.length > 0)
+          incompleteResponseSequences.push({
+            sequence: envelope.sequence,
+            runId: payload.runId,
+            lastSettlementSequence,
+          });
         if (
           payload.runId === ownerRunId &&
           payload.turn === 1 &&
@@ -787,6 +805,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       incompleteResponseSequences.some(
         (response) =>
           response.sequence <= coversThrough &&
+          response.lastSettlementSequence >= ownSequence &&
           isInRunView(
             response.sequence,
             { _tag: "ModelResponseRecorded", runId: response.runId },
@@ -800,6 +819,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       if (
         span.from <= coversThrough &&
         coversThrough < span.to &&
+        span.to < ownSequence &&
         isInRunView(span.from, { _tag: "ModelResponseRecorded", runId: span.runId }, runId)
       )
         return false;
@@ -977,6 +997,17 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   const incompleteToolTurns = new Set<string>();
   const incompleteToolCalls = new Set<string>();
   const incompleteContextRuns = new Set<RunId>();
+
+  for (const response of incompleteResponseSequences)
+    if (
+      contextViews.some(
+        (view) =>
+          view.payload.kind !== "summarize" &&
+          response.sequence <= view.payload.coversThrough &&
+          response.lastSettlementSequence >= view.sequence,
+      )
+    )
+      incompleteContextRuns.add(response.runId);
   let pendingContextToolCallId: string | undefined;
   let ownerTerminated = false;
 
@@ -997,7 +1028,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     const record = envelope.record;
 
     const declared = declaredApplicationToolCallIds(messages);
-    const declaredRecordIds: Array<RecordId> = [];
+    const actualResultIds: Array<RecordId> = [];
+    let incomplete = false;
 
     for (const id of declared) {
       const toolCallId = yield* Effect.try({
@@ -1005,12 +1037,15 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         catch: (cause) => journalError("Failed to decode a declared Tool Call ID", cause),
       });
 
-      declaredRecordIds.push(toolCallSettledRecordId(payload.runId, payload.turn, toolCallId));
+      const resultId = toolCallSettledRecordId(payload.runId, payload.turn, toolCallId);
+
+      if (settledToolCallRecordIds.has(resultId)) actualResultIds.push(resultId);
+      else incomplete = true;
     }
-    if (declaredRecordIds.some((recordId) => !settledToolCallRecordIds.has(recordId))) {
+    if (incomplete) {
       incompleteToolTurns.add(envelope.record.recordId);
       incompleteContextRuns.add(payload.runId);
-      for (const recordId of declaredRecordIds) incompleteToolCalls.add(recordId);
+      for (const recordId of actualResultIds) incompleteToolCalls.add(recordId);
     }
     if (payload.runId !== ownerRunId) return;
     if (payload.turn === 1 && payload.runScopedPrefixLength !== undefined) {
@@ -1113,6 +1148,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     }
   >();
 
+  // Only exact calls needed by late results survive retirement, never their old messages.
+  const retiredLateCalls = new Map<string, Prompt.ToolCallPart>();
+
   let pendingToolOrder = new Map<string, number>();
 
   const flushTools = Effect.fnUntraced(function* (
@@ -1150,7 +1188,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
           payload._tag === "RunFailed" ||
           payload._tag === "SubmissionSettled") &&
         payload.runId !== undefined &&
-        incompleteContextRuns.has(payload.runId)
+        (incompleteContextRuns.has(payload.runId) ||
+          (responseSequencesByRun.has(payload.runId) &&
+            terminalSequenceByRun.get(payload.runId) === envelope.sequence))
       )
         onEvidence?.(envelope);
 
@@ -1220,6 +1260,40 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         return;
       }
       if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
+        if (
+          payload._tag === "ModelResponseRecorded" &&
+          payload.runId !== ownerRunId &&
+          !(latestWindow !== undefined && isCovered(envelope, latestWindow.payload))
+        ) {
+          const late = (spansByDeclaration.get(envelope.sequence) ?? []).filter((span) =>
+            replacements.some(
+              (view) =>
+                view.payload.kind === "summarize" &&
+                isCovered(envelope, view.payload) &&
+                span.to > view.sequence,
+            ),
+          );
+
+          if (late.length > 0) {
+            const messages = yield* decodePromptMessages(payload.messages);
+
+            for (const message of messages.content) {
+              if (message.role !== "assistant") continue;
+              for (const call of message.content) {
+                if (call.type !== "tool-call" || call.providerExecuted) continue;
+
+                const callId = yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(
+                  Effect.mapError((cause) => journalError("Invalid retired Tool Call ID", cause)),
+                );
+
+                const id = toolCallSettledRecordId(payload.runId, payload.turn, callId);
+
+                if (late.some((span) => span.recordId === id)) retiredLateCalls.set(id, call);
+              }
+            }
+            onEvidence?.(envelope);
+          }
+        }
         // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
         if (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) {
           const messages = yield* decodePromptMessages(payload.messages);
@@ -1229,7 +1303,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         }
         if (
           payload._tag === "ModelCompleted" ||
-          payload._tag === "ModelResponseRecorded" ||
+          (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) ||
           payload._tag === "ToolCallSettled"
         ) {
           onBoundary?.({
@@ -1250,12 +1324,60 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       emitSummary();
       if (payload._tag === "ToolCallSettled") {
+        const declaration = declarationByResultSequence.get(envelope.sequence);
+
+        const declarationFact = {
+          sequence: declaration ?? Infinity,
+          record: { payload: { _tag: "ModelResponseRecorded", runId: payload.runId } },
+        };
+
+        const declarationCovered = (compaction: CompactionCreated) =>
+          declarationFact.sequence <= compaction.coversThrough &&
+          isInRunView(declarationFact.sequence, declarationFact.record.payload, compaction.runId);
+
+        if (latestWindow !== undefined && declarationCovered(latestWindow.payload)) return;
         onEvidence?.(envelope);
         if (payload.runId !== ownerRunId) {
           const slot = historicalResults.get(envelope.record.recordId);
 
-          if (slot === undefined)
-            return yield* journalError("Historical Tool result has no matching declaration");
+          if (slot === undefined) {
+            const call = retiredLateCalls.get(envelope.record.recordId);
+
+            if (
+              call === undefined ||
+              call.id !== payload.toolCallId ||
+              call.name !== payload.toolName
+            )
+              return yield* journalError("Historical Tool result has no matching declaration");
+
+            const pair = [
+              Prompt.makeMessage("assistant", { content: [call] }),
+              Prompt.makeMessage("tool", {
+                content: [
+                  Prompt.makePart("tool-result", {
+                    id: call.id,
+                    name: call.name,
+                    result: clearings.some(({ payload }) => declarationCovered(payload))
+                      ? CLEARED_TOOL_RESULT
+                      : payload.result,
+                    isFailure: payload.isFailure,
+                    providerExecuted: false,
+                  }),
+                ],
+              }),
+            ];
+
+            state.all.push(...pair);
+            state.before.push(...pair);
+            retiredLateCalls.delete(envelope.record.recordId);
+            onBoundary?.({
+              sequence: envelope.sequence,
+              tag: payload._tag,
+              promptLength: state.all.length,
+            });
+
+            return;
+          }
           const declared = slot.parts[slot.partIndex];
 
           if (declared?.id !== payload.toolCallId || declared.name !== payload.toolName)
@@ -1263,7 +1385,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
           slot.parts[slot.partIndex] = Prompt.makePart("tool-result", {
             id: payload.toolCallId,
             name: payload.toolName,
-            result: clearings.some(({ payload }) => isCovered(envelope, payload))
+            result: clearings.some(
+              ({ payload }) => isCovered(envelope, payload) || declarationCovered(payload),
+            )
               ? CLEARED_TOOL_RESULT
               : payload.result,
             isFailure: payload.isFailure,
@@ -1313,9 +1437,13 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         return;
       }
       state = yield* flushTools(state);
-      if (payload._tag === "ModelCompleted" && payload.messages !== undefined) {
+      if (payload._tag === "ModelCompleted" && payload.history !== undefined) {
         onEvidence?.(envelope);
-        const messages = yield* decodePromptMessages(payload.messages);
+        const messages = yield* decodePromptMessages(payload.history);
+
+        state.all.length = 0;
+        state.before.length = 0;
+        historicalResults.clear();
 
         for (const message of messages.content) {
           state.all.push(message);
@@ -1386,7 +1514,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
               Effect.mapError((cause) => journalError("Invalid historical Tool Call ID", cause)),
             );
 
-            historicalResults.set(toolCallSettledRecordId(payload.runId, payload.turn, callId), {
+            const resultId = toolCallSettledRecordId(payload.runId, payload.turn, callId);
+
+            // A fixed replay can fill only a result present in its captured metadata. Missing
+            // calls retain their visible Unknown part without an expanded identity directory.
+            if (!settledToolCallRecordIds.has(resultId)) continue;
+            historicalResults.set(resultId, {
               allIndex,
               beforeIndex,
               parts,

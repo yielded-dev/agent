@@ -122,5 +122,39 @@ export const makeSqliteLayoutInspection = <C, K, S>(
     return header;
   });
 
-  return { decode, readObjects, readHeader };
+  /** Dedicated managed hosts allow exactly the current layout's declared triggers. */
+  const readManagedTriggers = Effect.fnUntraced(function* (initialized: boolean) {
+    const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+
+    const actual = yield* decode(
+      Objects,
+      yield* sql`SELECT name, type, sql FROM main.sqlite_master WHERE type='trigger' ORDER BY name`.pipe(
+        Effect.mapError(options.storageError),
+      ),
+      "sqlite_master",
+    );
+
+    const expected = initialized ? options.objects.filter(([type]) => type === "trigger") : [];
+
+    if (
+      actual.length !== expected.length ||
+      actual.some((row) => {
+        const declared = expected.find(([, name]) => name === row.name);
+
+        return (
+          declared === undefined ||
+          row.sql === null ||
+          normalize(row.sql) !== normalize(options.statements[declared[2]])
+        );
+      })
+    )
+      return yield* Effect.fail(
+        options.incompatible(
+          initialized ? options.version : 0,
+          "Managed-host database contains unknown or incompatible persistent SQL triggers.",
+        ),
+      );
+  });
+
+  return { decode, readObjects, readHeader, readManagedTriggers };
 };

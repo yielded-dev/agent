@@ -102,3 +102,5 @@ export * as LifecyclePublication from "./durable/LifecyclePublication.ts";
 export * as WorkerAdmission from "./durable/WorkerAdmission.ts";
 export * as RecordFormat from "./durable/RecordFormat.ts";
 export * as ThreadImport from "./durable/ThreadImport.ts";
+export * as ThreadArchiveRange from "./durable/ThreadArchiveRange.ts";
+export * as ThreadTransfer from "./durable/ThreadTransfer.ts";

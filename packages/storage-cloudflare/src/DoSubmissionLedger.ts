@@ -10,6 +10,7 @@ import {
   SqlStorageProgress,
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
+import { canonicalRecordJson } from "@yielded/agent-storage-sql/sql-thread-archive-range";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
@@ -92,6 +93,8 @@ import {
   SubmissionLookup,
   SubmissionLookupByKey,
   SubmissionSnapshot,
+  FundingOwnerRequest,
+  FundingOwner,
   SubmissionWorkItem,
   SubmissionState,
   settlementFailureFromRecord,
@@ -790,7 +793,7 @@ const makeServices = Effect.fnUntraced(function* () {
     const expected = yield* decodeSubmissionSnapshot(operation, submission);
     const recordId = submissionSettlementRecordId(expected.submissionId);
 
-    const found = yield* sql`SELECT batch_id, record_id, record_json
+    const found = yield* sql`SELECT batch_id, record_id, ${canonicalRecordJson(sql)} AS record_json
       FROM effect_agent_canonical_records WHERE thread_id = ${submission.thread_id}
       AND record_id = ${recordId}`.pipe(Effect.mapError(sqlFailure(operation)));
 
@@ -1473,6 +1476,66 @@ const makeServices = Effect.fnUntraced(function* () {
     );
     yield* hitFailpoint("ledger:mark-ready:after", operation);
   });
+
+  const resolveFundingOwner: NonNullable<SubmissionLedger["Service"]["resolveFundingOwner"]> =
+    Effect.fnUntraced(function* (input) {
+      const operation = "resolve funding owner";
+
+      const request = yield* Schema.decodeEffect(FundingOwnerRequest)(input).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
+
+      const selected = yield* requireSubmission(operation, request.submissionId);
+
+      if (selected.thread_id !== request.threadId)
+        return yield* LedgerError.make({
+          operation,
+          message: "Selected funding input belongs to another Thread.",
+        });
+      if (selected.state === "joining")
+        return yield* LedgerError.make({
+          operation,
+          message: "Selected funding input is still joining; retry after durable binding.",
+        });
+      const hostId = selected.joined_host_submission_id;
+
+      if (hostId === null && selected.state === "joined")
+        return yield* corruptionFailure(
+          operation,
+          "effect_agent_submissions",
+          selected.submission_id,
+          "Joined input has no stable host identity.",
+        );
+      if (hostId !== null && selected.state !== "joined" && selected.state !== "settled")
+        return yield* corruptionFailure(
+          operation,
+          "effect_agent_submissions",
+          selected.submission_id,
+          "Host linkage is inconsistent with selected input state.",
+        );
+      const owner = hostId === null ? selected : yield* requireSubmission(operation, hostId);
+
+      if (
+        owner.thread_id !== request.threadId ||
+        (hostId !== null &&
+          (owner.submission_id === selected.submission_id ||
+            owner.joined_host_submission_id !== null ||
+            owner.state === "joining" ||
+            owner.state === "joined" ||
+            owner.queue_sequence >= selected.queue_sequence))
+      )
+        return yield* corruptionFailure(
+          operation,
+          "effect_agent_submissions",
+          selected.submission_id,
+          "Funding host is not a stable earlier input in this Thread.",
+        );
+
+      return yield* Schema.decodeEffect(Schema.toType(FundingOwner))({
+        selected: yield* decodeSubmissionSnapshot(operation, selected),
+        owner: yield* decodeSubmissionSnapshot(operation, owner),
+      }).pipe(Effect.mapError(internalFailure(operation)));
+    }, state.read);
 
   const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fnUntraced(function* (
     request: SubmissionLookup,
@@ -3955,6 +4018,7 @@ const makeServices = Effect.fnUntraced(function* () {
       admit,
       markReady,
       lookup,
+      resolveFundingOwner,
       resolveAdmission,
       claim,
       renewOwnership,

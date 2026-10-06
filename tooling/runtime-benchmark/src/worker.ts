@@ -1,7 +1,7 @@
 import process from "node:process";
 
 import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Cause, Config, Effect, Exit, FileSystem, Layer, Schema } from "effect";
+import { Cause, Config, Effect, Exit, FileSystem, Layer, Option, Schema } from "effect";
 
 import {
   BenchmarkError,
@@ -16,7 +16,6 @@ import {
   type SteadyStateResult,
 } from "./contracts.js";
 import { BenchmarkProgress, writeEvidence } from "./evidence.js";
-import { BenchmarkRunner, SeedInitializerLive } from "./fixture.js";
 import { BenchmarkIdsLive } from "./ids.js";
 import { SeedTemplates } from "./seeds.js";
 
@@ -117,9 +116,24 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
 
       return;
     }
+
+    // Resident comparisons use only their frozen workload. Loading unrelated fixture APIs
+    // here would require both revisions to export APIs that the selected workload never uses.
+    const fixture = yield* Effect.tryPromise({
+      try: () => import("./fixture.js"),
+      catch: (cause) => BenchmarkError.make({ message: "Cannot load benchmark fixture", cause }),
+    });
+
+    const suppliedRunner = yield* Effect.serviceOption(fixture.BenchmarkRunner);
+
+    const runnerLayer = Option.match(suppliedRunner, {
+      onNone: () => fixture.BenchmarkRunner.layer,
+      onSome: (runner) => Layer.succeed(fixture.BenchmarkRunner, runner),
+    });
+
     // Acquire the cache after the first report so acquisition failures leave evidence, too.
     yield* Effect.gen(function* () {
-      const runner = yield* BenchmarkRunner;
+      const runner = yield* fixture.BenchmarkRunner;
 
       for (let index = 0; index < options.warmups + options.samples; index++) {
         const ordered = index % 2 === 0 ? workloads : [...workloads].reverse();
@@ -146,7 +160,13 @@ export const runWorker = Effect.fn("benchmark.runWorker")(function* (
           yield* persist();
         }
       }
-    }).pipe(Effect.provide(Layer.merge(SeedTemplates.layer, progressLayer)));
+    }).pipe(
+      Effect.provide(
+        Layer.merge(SeedTemplates.layer, progressLayer).pipe(
+          Layer.provideMerge(Layer.merge(runnerLayer, fixture.SeedInitializerLive)),
+        ),
+      ),
+    );
     if (samples.some((sample) => sample.status === "failed"))
       return yield* BenchmarkError.make({
         message: "Benchmark correctness assertions failed; see raw samples",
@@ -168,8 +188,6 @@ if (import.meta.main)
         yield* Config.String("RUNTIME_BENCHMARK_OPTIONS"),
       );
 
-      yield* runWorker(options).pipe(
-        Effect.provide(Layer.merge(BenchmarkRunner.layer, SeedInitializerLive)),
-      );
+      yield* runWorker(options);
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, BenchmarkIdsLive))),
   );

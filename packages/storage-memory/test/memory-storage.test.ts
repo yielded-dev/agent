@@ -18,7 +18,6 @@ import {
 } from "@yielded/agent/testing/thread-store-conformance";
 import {
   type AppendResult,
-  ThreadExportRequest,
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
@@ -136,7 +135,10 @@ describe("MemoryThreadStore", () => {
         first,
       );
 
-      const snapshot = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const snapshot = yield* store
+        .read(ThreadRead.make({ threadId, limit: 4 }))
+        .pipe(Stream.runCollect);
+
       const readStarted = yield* Deferred.make<void>();
       const resumeRead = yield* Deferred.make<void>();
 
@@ -155,7 +157,7 @@ describe("MemoryThreadStore", () => {
       const encodeRecords = Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope));
 
       expect(yield* encodeRecords(yield* Fiber.join(reader))).toEqual(
-        yield* encodeRecords(snapshot.records),
+        yield* encodeRecords(snapshot),
       );
     }).pipe(Effect.provide(testLayer)),
   );

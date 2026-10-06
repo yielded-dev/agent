@@ -196,18 +196,25 @@ const isMutatingPortRequest = (request: PortRequest): boolean => {
     case "StoreMaterialize":
     case "StoreAppend":
     case "StoreWorkRebuild":
+    case "StoreRangeSeal":
+    case "StoreRangeArchive":
     case "SettlementPublish":
     case "MessageDeliveryComplete":
       return true;
     case "LedgerInspectWorker":
     case "LedgerLookup":
     case "LedgerResolveAdmission":
+    case "LedgerFundingOwner":
     case "StoreReadPage":
     case "StoreWorkPage":
     case "StoreInspectTail":
     case "StoreReadIdentity":
     case "StoreCountPeerMessages":
     case "StoreExport":
+    case "StoreRangePage":
+    case "StoreRangeVerify":
+    case "StoreVerification":
+    case "StoreWorkerCapacity":
     case "MessageDeliveryList":
       return false;
   }
@@ -376,6 +383,10 @@ const requirePortThread = (request: PortRequest) => {
       return requireSubmissionThread(request.request.submissionId);
     case "LedgerRecordChildSettled":
       return requireSubmissionThread(request.request.parentSubmissionId);
+    case "LedgerFundingOwner":
+      return requireReceiptThread(request.request.threadId).pipe(
+        Effect.andThen(requireSubmissionThread(request.request.submissionId)),
+      );
     case "LedgerInspectWorker":
     case "LedgerStopWorker":
     case "WorkerAdmit":
@@ -390,6 +401,12 @@ const requirePortThread = (request: PortRequest) => {
     case "StoreExport":
     case "StoreWorkPage":
     case "StoreWorkRebuild":
+    case "StoreRangePage":
+    case "StoreRangeSeal":
+    case "StoreRangeArchive":
+    case "StoreRangeVerify":
+    case "StoreVerification":
+    case "StoreWorkerCapacity":
       return requireReceiptThread(request.request.threadId);
   }
   request satisfies never;
