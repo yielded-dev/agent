@@ -97,6 +97,7 @@ import {
   UnknownResolutionConflict,
   UnknownResolutionIntent,
   unknownResolutionKind,
+  unknownResolutionMatchesResult,
   type ChildReservationId,
   type ChildReservationStatus,
   type ChildSettledOutcome,
@@ -2167,6 +2168,46 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
         const nowMillis = yield* Clock.currentTimeMillis;
 
+        const before = (yield* Ref.get(state)).submissions.get(command.submissionId);
+        const kind = unknownResolutionKind(command.resolution);
+
+        if (
+          before !== undefined &&
+          kind === "factual" &&
+          !before.unknownResolutions.has(JSON.stringify([command.toolCallId, kind]))
+        ) {
+          const runId = runIdForSubmission(before.row.submissionId);
+
+          const outcomes = yield* journal.toolCallResults(
+            before.row.threadId,
+            runId,
+            command.toolCallId,
+          );
+
+          const result = outcomes[0]?.payload;
+
+          if (
+            outcomes.length > 1 ||
+            (result !== undefined &&
+              (result._tag !== "ToolCallSettled" ||
+                result.runId !== runId ||
+                result.toolCallId !== command.toolCallId))
+          )
+            return yield* ledgerError(
+              "recordUnknownResolution",
+              "Canonical Tool result identity is inconsistent",
+            );
+
+          if (
+            result?._tag === "ToolCallSettled" &&
+            !unknownResolutionMatchesResult(command.resolution, result)
+          )
+            return yield* UnknownResolutionConflict.make({
+              submissionId: command.submissionId,
+              toolCallId: command.toolCallId,
+            });
+        }
+
         const decision = yield* Ref.modify(
           state,
           (
@@ -2219,7 +2260,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   current,
                 ];
             }
-            const kind = unknownResolutionKind(command.resolution);
             const key = JSON.stringify([command.toolCallId, kind]);
             const existing = stored.unknownResolutions.get(key);
 

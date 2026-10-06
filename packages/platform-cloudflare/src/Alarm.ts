@@ -2203,7 +2203,10 @@ export class ThreadMaintenance extends Context.Service<
         const remaining = yield* Stream.runCollect(ledger.scanNonterminal);
         const waitingHeads = new Map<ThreadId, boolean>();
 
+        // Selected recovery must finish before its generation can be acknowledged: terminal
+        // owners can supply a retry deadline only after their evidence read completes.
         const autonomous =
+          recovery.pending.size > 0 ||
           recovery.discoveryPending ||
           recoveryFaults.size > 0 ||
           recovery.retryAtMillis !== undefined ||

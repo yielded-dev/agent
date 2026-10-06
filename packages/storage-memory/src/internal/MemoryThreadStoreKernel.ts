@@ -1,4 +1,4 @@
-import type { ThreadId } from "@yielded/agent/identifiers";
+import type { RunId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
 import type { Digest, ProducerEpoch, RecordEnvelope, RecordId } from "@yielded/agent/records";
 import type { PreparedThreadImport, ThreadImportRejected } from "@yielded/agent/thread-import";
@@ -88,6 +88,12 @@ export class MemoryThreadStoreKernel extends Context.Service<
       threadId: ThreadId,
       recordId: RecordId,
     ) => Effect.Effect<RecordEnvelope | undefined>;
+    /** Bounded canonical outcomes for one call; caller holds the shared mutation gate. */
+    readonly toolCallResults: (
+      threadId: ThreadId,
+      runId: RunId,
+      toolCallId: ToolCallId,
+    ) => Effect.Effect<ReadonlyArray<RecordEnvelope>>;
     readonly tail: (threadId: ThreadId) => Effect.Effect<ThreadTail, ThreadStoreFailure>;
   }
 >()("@effect-agent/storage-memory/internal/MemoryThreadStoreKernel") {}

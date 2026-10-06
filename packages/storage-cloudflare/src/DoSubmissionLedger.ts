@@ -104,6 +104,7 @@ import {
   UnknownResolutionIntent,
   UnknownResolutionKind,
   unknownResolutionKind,
+  unknownResolutionMatchesResult,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   submissionSettlementBatchId,
@@ -3070,6 +3071,56 @@ const makeServices = Effect.fnUntraced(function* () {
               submissionId: validated.submissionId,
               toolCallId: validated.toolCallId,
             });
+          }
+
+          if (existingIntent === undefined && kind === "factual") {
+            const runId = runIdForSubmission(validated.submissionId);
+
+            const found = yield* sql`
+              SELECT record_json FROM effect_agent_canonical_records
+              WHERE thread_id = ${submission.thread_id}
+                AND record_tag = 'ToolCallSettled'
+                AND run_id = ${JSON.stringify(runId)}
+                AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
+              LIMIT 2
+            `.pipe(Effect.mapError(sqlFailure(operation)));
+
+            const outcomes = yield* decodeRows(
+              Schema.Array(Schema.Struct({ record_json: BoundedStoredText })),
+              "effect_agent_canonical_records",
+              validated.toolCallId,
+              found,
+            ).pipe(Effect.mapError(internalFailure(operation)));
+
+            const result =
+              outcomes[0] === undefined
+                ? undefined
+                : (yield* decodeRecordEnvelopeText(outcomes[0].record_json).pipe(
+                    Effect.mapError(internalFailure(operation)),
+                  )).payload;
+
+            if (
+              outcomes.length > 1 ||
+              (result !== undefined &&
+                (result._tag !== "ToolCallSettled" ||
+                  result.runId !== runId ||
+                  result.toolCallId !== validated.toolCallId))
+            )
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_canonical_records",
+                validated.toolCallId,
+                "Canonical Tool result identity is inconsistent.",
+              );
+
+            if (
+              result?._tag === "ToolCallSettled" &&
+              !unknownResolutionMatchesResult(validated.resolution, result)
+            )
+              return yield* UnknownResolutionConflict.make({
+                submissionId: validated.submissionId,
+                toolCallId: validated.toolCallId,
+              });
           }
           let resolved: UnknownResolutionIntent;
 

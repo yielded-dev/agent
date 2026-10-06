@@ -2055,7 +2055,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     sourceThreadId: ThreadId,
     preparationId: RecordId,
     request: WorkerInputRequested,
-  ) {
+  ): Effect.fn.Return<"repaired" | "delivery-owned" | "awaiting-effects", WorkerError> {
     const admission = request.admission;
     const id = RecordId.make(`worker-effects-resolved:${admission.messageId}`);
 
@@ -2078,7 +2078,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       return yield* failure("inspect", "corrupt");
     // The original delivery owns unfinished admission and destination execution. Its terminal
     // transition makes acknowledgement inspection due; pending/parked inputs need no child RPC.
-    if (delivery.status !== "processed" && delivery.status !== "refused") return false;
+    if (delivery.status !== "processed" && delivery.status !== "refused") return "delivery-owned";
 
     // Refusal is committed only before destination admission. The source can close its own
     // reservation without inventing a destination Receipt, result, or effect acknowledgement.
@@ -2092,7 +2092,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         "inspect",
       );
 
-      return true;
+      return "repaired";
     }
 
     const child = Option.getOrUndefined(
@@ -2105,7 +2105,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
     // Only the child storage owner publishes factual acknowledgements. Its native WorkerEffects
     // obligation survives settlement and operation closure; source recovery copies that evidence.
-    if (child === undefined) return false;
+    if (child === undefined) return "awaiting-effects";
     const payload = child.record.payload;
 
     if (
@@ -2140,7 +2140,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         )
           return yield* failure("inspect", "corrupt");
 
-        return true;
+        return "repaired";
       }
 
       const tail = yield* deps.store
@@ -2148,7 +2148,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         .pipe(Effect.mapError(storageFailure("inspect")));
 
       if (yield* append(sourceThreadId, id, payload, { ...tail, records: [] }, "completion"))
-        return true;
+        return "repaired";
     }
 
     return yield* failure("inspect", "storage");

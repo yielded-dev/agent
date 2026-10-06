@@ -10524,7 +10524,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       )
         return yield* invalid();
 
-      const repaired = yield* workerRuntime
+      const repair = yield* workerRuntime
         .repairInput(threadId, evidence.record.recordId, payload)
         .pipe(
           Effect.mapError((cause) =>
@@ -10536,7 +10536,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
         );
 
-      return report(repaired ? "repaired" : "deferred");
+      // A processed delivery no longer owns retry. Keep source acknowledgement recovery due
+      // until the child publishes its factual evidence; remote wake hints may be lost.
+      return report(
+        repair === "repaired" ? "repaired" : "deferred",
+        undefined,
+        repair === "awaiting-effects"
+          ? (yield* Clock.currentTimeMillis) + Duration.toMillis(config.settlementPollInterval)
+          : undefined,
+      );
     }
     if (owner._tag === "WorkerEffects") {
       if (
