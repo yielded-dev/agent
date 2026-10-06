@@ -758,12 +758,15 @@ it("retains an alarm for a settled worker's factual acknowledgement with dropped
       maintenanceClocks.set(source, yield* Clock.Clock);
       droppedMessageWakes.add(source);
       backgroundWakeDropPrefixes.add("worker:");
+      independentBudgetGrants.add(source);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           maintenanceClocks.delete(source);
           droppedMessageWakes.delete(source);
           backgroundWakeDropPrefixes.delete("worker:");
           backgroundReportGates.delete(source);
+          independentBudgetGrants.delete(source);
+          independentBudgetAuthorityCalls.delete(source);
         }),
       );
 
