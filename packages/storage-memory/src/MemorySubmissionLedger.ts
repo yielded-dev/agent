@@ -129,6 +129,7 @@ import {
   Clock,
   Context,
   Cause,
+  Crypto,
   Exit,
   Fiber,
   DateTime,
@@ -321,8 +322,8 @@ interface LedgerState {
   readonly admissionIndex: Map<string, SubmissionId>;
   readonly lanes: Map<ThreadId, LaneState>;
   readonly childReservations: Map<ChildReservationId, StoredChildReservation>;
-  /** Imported numeric suffixes may exceed Number.MAX_SAFE_INTEGER. */
-  readonly mintCounter: bigint;
+  /** Bounded local ordering for fresh work identities; imported facts never seed it. */
+  readonly freshAdmissionSequence: number;
   readonly latestByThread: Map<ThreadId, SubmissionId>;
   readonly activeByThread: Map<ThreadId, Set<SubmissionId>>;
   readonly stoppedWorkers: Map<ThreadId, WorkerLedgerState["terminal"]>;
@@ -354,6 +355,8 @@ const decodeSubmissionId = Schema.decodeSync(SubmissionId);
 const decodeReceiptId = Schema.decodeSync(ReceiptId);
 const decodeAttemptId = Schema.decodeSync(AttemptId);
 const decodeOwnershipToken = Schema.decodeSync(OwnershipToken);
+// Imported identities are opaque facts and never influence fresh identity sizes.
+const MemoryIdentityNonce = Schema.String.check(Schema.isUUID(4));
 const decodeQueueSequence = Schema.decodeSync(QueueSequence);
 const decodeProducerEpoch = Schema.decodeSync(ProducerEpoch);
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
@@ -737,6 +740,13 @@ function* threadRows(state: LedgerState, threadId: ThreadId, after = -1) {
 const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
   Effect.gen(function* () {
     const journal = yield* MemoryThreadStoreKernel;
+    const crypto = yield* Crypto.Crypto;
+
+    const mintIdentity = (operation: string) =>
+      crypto.randomUUIDv4.pipe(
+        Effect.flatMap(Schema.decodeEffect(MemoryIdentityNonce)),
+        Effect.mapError((cause) => ledgerError(operation, "Cannot mint a Memory identity", cause)),
+      );
 
     const state = yield* Ref.make<LedgerState>({
       byThread: new Map(),
@@ -747,7 +757,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       admissionIndex: new Map(),
       lanes: new Map(),
       childReservations: new Map(),
-      mintCounter: 0n,
+      freshAdmissionSequence: 0,
       stoppedWorkers: new Map(),
       latestByThread: new Map(),
       activeByThread: new Map(),
@@ -852,6 +862,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         .checkThreadCapacity(request.threadId)
         .pipe(Effect.mapError((cause) => ledgerError("admit", cause.message, cause)));
       const nowMillis = yield* Clock.currentTimeMillis;
+      const identity = yield* mintIdentity("admit");
       const services = yield* Effect.context<never>();
 
       const decision = yield* Ref.modify(
@@ -996,10 +1007,27 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             producerEpoch: 0,
           };
 
-          const mintCounter = current.mintCounter + 1n;
+          const freshAdmissionSequence = current.freshAdmissionSequence + 1;
+
+          if (!Number.isSafeInteger(freshAdmissionSequence))
+            return [
+              failure(ledgerError("admit", "Fresh admission sequence is exhausted")),
+              current,
+            ];
+
+          // Native work scans compare Submission identities lexically.
+          const orderedIdentity = `${String(freshAdmissionSequence).padStart(16, "0")}-${identity}`;
+          const submissionId = decodeSubmissionId(`submission-memory-${orderedIdentity}`);
+          const receiptId = decodeReceiptId(`receipt-memory-${orderedIdentity}`);
+
+          if (current.submissions.has(submissionId) || current.receipts.has(receiptId))
+            return [
+              failure(ledgerError("admit", "Fresh admission identity already exists")),
+              current,
+            ];
 
           const row: SubmissionRow = {
-            submissionId: decodeSubmissionId(`submission-memory-${mintCounter}`),
+            submissionId,
             threadId: request.threadId,
             queueSequence: decodeQueueSequence(lane.nextQueueSequence),
             principal: request.principal,
@@ -1009,7 +1037,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             deploymentId: request.deploymentId,
             inputPayload: request.inputPayload,
             inputDigest: request.inputDigest,
-            receiptId: decodeReceiptId(`receipt-memory-${mintCounter}`),
+            receiptId,
             state: "admitted",
             settledOutcome: undefined,
             createdAtMillis: nowMillis,
@@ -1060,7 +1088,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               ...withSubmission(current, stored),
               admissionIndex,
               lanes,
-              mintCounter,
+              freshAdmissionSequence,
             },
           ];
         },
@@ -1169,6 +1197,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         Effect.gen(function* () {
           const request = yield* validate(ClaimRequest, "claim", unvalidated);
           const nowMillis = yield* Clock.currentTimeMillis;
+          const identity = yield* mintIdentity("claim");
 
           const decision = yield* Ref.modify(
             state,
@@ -1236,11 +1265,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 ];
               }
               const producerEpoch = decodeProducerEpoch(lane.producerEpoch + 1);
-              const mintCounter = current.mintCounter + 1n;
 
               const ownership: StoredOwnership = {
-                attemptId: decodeAttemptId(`attempt-memory-${mintCounter}`),
-                ownershipToken: decodeOwnershipToken(`ownership-memory-${mintCounter}`),
+                attemptId: decodeAttemptId(`attempt-memory-${identity}`),
+                ownershipToken: decodeOwnershipToken(`ownership-memory-${identity}`),
                 producerEpoch,
                 ownerProducerId: request.producerId,
                 leaseExpiresAtMillis: nowMillis + leaseMillis,
@@ -1269,7 +1297,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                     }),
                   ),
                 ),
-                { ...next, lanes, mintCounter },
+                { ...next, lanes },
               ];
             },
           );
@@ -3484,7 +3512,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           admissionIndex: new Map(),
           lanes: new Map(),
           childReservations: new Map(),
-          mintCounter: current.mintCounter,
+          freshAdmissionSequence: current.freshAdmissionSequence,
           stoppedWorkers: new Map(),
           latestByThread: new Map(),
           activeByThread: new Map(),
@@ -3494,16 +3522,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           childrenByParent: new Map(),
         };
 
-        const retainMint = (id: string | undefined) => {
-          const match =
-            id === undefined ? null : /^(?:submission|receipt|attempt)-memory-(\d+)$/.exec(id);
-
-          if (match !== null && BigInt(match[1]) > staged.mintCounter) return BigInt(match[1]);
-
-          return staged.mintCounter;
-        };
-
-        let mintCounter = current.mintCounter;
         const commandBytes = new Map<SubmissionId, number>();
 
         const retainCommandBytes = Effect.fnUntraced(function* <A, I>(
@@ -3578,10 +3596,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   }),
                 ),
               );
-              mintCounter =
-                retainMint(a.submissionId) > mintCounter ? retainMint(a.submissionId) : mintCounter;
-              mintCounter =
-                retainMint(a.receiptId) > mintCounter ? retainMint(a.receiptId) : mintCounter;
             }
             for (const fact of page.archive.commands.aborts) {
               const stored = staged.submissions.get(fact.submissionId);
@@ -3638,17 +3652,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               const resolutions = new Map(stored.unknownResolutions).set(key, { intent });
 
               withSubmission(staged, { ...stored, unknownResolutions: resolutions });
-            }
-            for (const { record } of page.records) {
-              if (record.payload._tag === "ModelResponseInterrupted") {
-                const value = retainMint(record.payload.attemptId);
-
-                if (value > mintCounter) mintCounter = value;
-              }
-              const attempt = settlementFailureFromRecord(record)?.context?.attemptId;
-              const value = retainMint(attempt);
-
-              if (value > mintCounter) mintCounter = value;
             }
           }),
           prepareCommit: Effect.fnUntraced(function* (producerEpoch, workerSeal) {
@@ -3723,7 +3726,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
               if (workerSeal !== undefined)
                 current.stoppedWorkers.set(threadId, workerSeal.terminal);
-              MutableRef.set(state.ref, { ...current, mintCounter });
             };
           }),
         };
@@ -3748,15 +3750,19 @@ export interface MemorySubmissionLedgerOptions {
 
 /**
  * In-memory reference SubmissionLedger Layer (durability `non-durable`). All state lives in one
- * `Ref` owned by the Layer's Scope; no daemon fibers are spawned and no wall clock is consulted.
+ * `Ref` owned by the Layer's Scope. Fresh identities use the supplied `Crypto` service;
+ * imported identities remain unchanged. No daemon fibers are spawned and no wall clock is consulted.
  */
 export const memorySubmissionLedgerLayer = (
   options: MemorySubmissionLedgerOptions = {},
-): Layer.Layer<SubmissionLedger | SettlementPublisher, never, MemoryThreadStoreKernel> =>
-  Layer.effectContext(makeSubmissionLedger(options));
+): Layer.Layer<
+  SubmissionLedger | SettlementPublisher,
+  never,
+  MemoryThreadStoreKernel | Crypto.Crypto
+> => Layer.effectContext(makeSubmissionLedger(options));
 
 export const MemorySubmissionLedgerLive: Layer.Layer<
   SubmissionLedger | SettlementPublisher,
   never,
-  MemoryThreadStoreKernel
+  MemoryThreadStoreKernel | Crypto.Crypto
 > = memorySubmissionLedgerLayer();
