@@ -93,8 +93,8 @@ const isTransactionFailure = Schema.is(
   Schema.Union([PostgresStorageError, PostgresWriteContention]),
 );
 
-/** Inspect under the writer lock before any DDL; header and legacy marker commit together. */
-export const initializePostgresStorage = Effect.fn("PostgresStorage.upgradeLayout")(function* ({
+/** Inspect under the writer lock before any DDL; current headers commit together. */
+export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLayout")(function* ({
   lockTimeout,
   schema,
 }: {

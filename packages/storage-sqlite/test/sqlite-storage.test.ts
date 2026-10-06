@@ -16,22 +16,30 @@ import { SqliteStorageFailpoint } from "@yielded/agent-storage-sqlite/sqlite-sto
 import { ledgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
 import { threadStoreLayer, layer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
   CanonicalBatch,
   CanonicalRecord,
   CanonicalSequence,
   ProducerEpoch,
   RunCompleted,
+  RunStartedRecord,
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
+import {
+  CurrentRunWriter,
+  makeProgressWriter,
+  readContinuation,
+} from "@yielded/agent/run-continuation";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { makeRunWriter } from "@yielded/agent/run-storage";
 import {
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
 import {
   ThreadCheckpoint,
-  ThreadTailRequest,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadObservation,
@@ -41,10 +49,10 @@ import {
   FencedAppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
-  SaveRecoveryCheckpointRequest,
   type AppendResult,
+  type ThreadReader,
 } from "@yielded/agent/thread-store";
-import type { PlatformError } from "effect";
+import type { PlatformError, Crypto } from "effect";
 import {
   DateTime,
   Cause,
@@ -214,277 +222,7 @@ describe("SqliteThreadStore", () => {
     ),
   );
 
-  it.effect("isolates, fences and replaces one durable recovery checkpoint across reopen", () =>
-    withTemporaryDatabase((filename) =>
-      Effect.gen(function* () {
-        const checkpoint = yield* Effect.gen(function* () {
-          const store = yield* ThreadStore;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
-
-          const empty = ThreadCheckpoint.make({
-            schemaVersion: 1,
-            threadId,
-            throughSequence: sequence(0),
-            tailDigest: EMPTY_TAIL_DIGEST,
-            engineVersion: "recovery-test",
-            agentDefinitionDigest: EMPTY_TAIL_DIGEST,
-            modelDigest: EMPTY_TAIL_DIGEST,
-            toolDigest: EMPTY_TAIL_DIGEST,
-            state: {},
-            createdAt: at(2),
-          });
-
-          yield* store.checkpoints!.save(SaveCheckpointRequest.make({ checkpoint: empty }));
-          yield* store.recoveryCheckpoints!.save(
-            SaveRecoveryCheckpointRequest.make({ checkpoint: empty, producerEpoch: epoch(1) }),
-          );
-
-          const appended = yield* store.append(
-            FencedAppendRequest.make({
-              threadId,
-              producerEpoch: epoch(1),
-              expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
-              batch: batch("recovery-batch", [
-                inputRecord("recovery-1", "Kyoto"),
-                inputRecord("recovery-2", "Nara"),
-              ]),
-            }),
-          );
-
-          const checkpoint = ThreadCheckpoint.make({
-            ...empty,
-            throughSequence: appended.lastSequence,
-            tailDigest: appended.tailDigest,
-            state: { version: 1 },
-          });
-
-          const save = (checkpoint: ThreadCheckpoint, producerEpoch = epoch(1)) =>
-            store.recoveryCheckpoints!.save(
-              SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch }),
-            );
-
-          yield* save(checkpoint);
-          yield* save(empty);
-          expect(
-            yield* store.recoveryCheckpoints!.load(LoadCheckpointRequest.make({ threadId })),
-          ).toEqual(Option.some(checkpoint));
-          expect(
-            Option.isNone(
-              yield* store.recoveryCheckpoints!.load(
-                LoadCheckpointRequest.make({ threadId, atOrBeforeSequence: sequence(0) }),
-              ),
-            ),
-          ).toBe(true);
-          expect(
-            yield* save(
-              ThreadCheckpoint.make({ ...checkpoint, throughSequence: sequence(1) }),
-            ).pipe(Effect.flip),
-          ).toMatchObject({ _tag: "CheckpointRejected", reason: "digest-mismatch" });
-          expect(
-            yield* save(
-              ThreadCheckpoint.make({ ...checkpoint, throughSequence: sequence(3) }),
-            ).pipe(Effect.flip),
-          ).toMatchObject({ _tag: "CheckpointRejected", reason: "ahead-of-tail" });
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(2) }),
-          );
-          expect(yield* save(checkpoint).pipe(Effect.flip)).toMatchObject({
-            _tag: "FenceRejected",
-            actualEpoch: 2,
-            attemptedEpoch: 1,
-          });
-
-          const replacement = ThreadCheckpoint.make({
-            ...checkpoint,
-            state: { version: 2 },
-            createdAt: at(3),
-          });
-
-          yield* save(replacement, epoch(2));
-          expect(yield* store.checkpoints!.load(LoadCheckpointRequest.make({ threadId }))).toEqual(
-            Option.some(empty),
-          );
-          expect(
-            (yield* store.export(ThreadExportRequest.make({ threadId }))).records,
-          ).toHaveLength(2);
-
-          return replacement;
-        }).pipe(Effect.provide(layer({ filename })));
-
-        const restored = yield* ThreadStore.pipe(
-          Effect.flatMap((store) =>
-            store.recoveryCheckpoints!.load(
-              LoadCheckpointRequest.make({ threadId: checkpoint.threadId }),
-            ),
-          ),
-          Effect.provide(layer({ filename })),
-        );
-
-        expect(restored).toEqual(Option.some(checkpoint));
-
-        const rows = yield* withSql(
-          filename,
-          Effect.flatMap(
-            SqlClientService.SqlClient,
-            (sql) => sql`SELECT COUNT(*) AS count FROM effect_agent_recovery_checkpoints`,
-          ),
-        );
-
-        expect(rows).toEqual([{ count: 1 }]);
-      }),
-    ),
-  );
-
-  for (const corruption of ["json", "thread"]) {
-    it.effect(`rejects ${corruption} recovery cache corruption and permits same-tail repair`, () =>
-      withTemporaryDatabase((filename) =>
-        Effect.gen(function* () {
-          const store = yield* ThreadStore;
-
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
-
-          const checkpoint = ThreadCheckpoint.make({
-            schemaVersion: 1,
-            threadId,
-            throughSequence: sequence(0),
-            tailDigest: EMPTY_TAIL_DIGEST,
-            engineVersion: "recovery-test",
-            agentDefinitionDigest: EMPTY_TAIL_DIGEST,
-            modelDigest: EMPTY_TAIL_DIGEST,
-            toolDigest: EMPTY_TAIL_DIGEST,
-            state: {},
-            createdAt: at(2),
-          });
-
-          const save = store.recoveryCheckpoints!.save(
-            SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch: epoch(1) }),
-          );
-
-          yield* save;
-          const encoded = yield* Schema.encodeEffect(ThreadCheckpoint)(checkpoint);
-
-          const json =
-            corruption === "json"
-              ? "{"
-              : JSON.stringify({
-                  ...encoded,
-                  ...(corruption === "thread" ? { threadId: "foreign" } : {}),
-                });
-
-          const storedSequence = 0;
-
-          yield* withSql(
-            filename,
-            Effect.flatMap(
-              SqlClientService.SqlClient,
-              (sql) =>
-                sql`UPDATE effect_agent_recovery_checkpoints SET checkpoint_json=${json}, through_sequence=${storedSequence} WHERE thread_id=${threadId}`,
-            ),
-          );
-          expect(
-            yield* store
-              .recoveryCheckpoints!.load(LoadCheckpointRequest.make({ threadId }))
-              .pipe(Effect.flip),
-          ).toMatchObject({ _tag: "CheckpointRejected", reason: "corrupt" });
-          yield* save;
-          expect(
-            yield* store.recoveryCheckpoints!.load(LoadCheckpointRequest.make({ threadId })),
-          ).toEqual(Option.some(checkpoint));
-          expect(
-            (yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence,
-          ).toBe(0);
-        }).pipe(Effect.provide(layer({ filename }))),
-      ),
-    );
-  }
-
-  for (const [location, mode] of [
-    ["save-recovery-checkpoint:before", "failure"],
-    ["save-recovery-checkpoint:after", "interrupt"],
-  ] as const) {
-    it.effect(`reopens safely after ${mode} at ${location}`, () =>
-      withTemporaryDatabase((filename) =>
-        Effect.gen(function* () {
-          const save = Effect.gen(function* () {
-            const store = yield* ThreadStore;
-
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
-
-            const checkpoint = ThreadCheckpoint.make({
-              schemaVersion: 1,
-              threadId,
-              throughSequence: sequence(0),
-              tailDigest: EMPTY_TAIL_DIGEST,
-              engineVersion: "recovery-test",
-              agentDefinitionDigest: EMPTY_TAIL_DIGEST,
-              modelDigest: EMPTY_TAIL_DIGEST,
-              toolDigest: EMPTY_TAIL_DIGEST,
-              state: {},
-              createdAt: at(2),
-            });
-
-            yield* store.recoveryCheckpoints!.save(
-              SaveRecoveryCheckpointRequest.make({ checkpoint, producerEpoch: epoch(1) }),
-            );
-          });
-
-          const entered = yield* Deferred.make<void>();
-
-          const failed = yield* Effect.scoped(
-            Effect.gen(function* () {
-              const fiber = yield* save.pipe(
-                Effect.provide(
-                  layer({
-                    filename,
-                    failpoint: (point) =>
-                      point !== location
-                        ? Effect.void
-                        : Deferred.succeed(entered, undefined).pipe(
-                            Effect.andThen(
-                              mode === "failure"
-                                ? SqliteStorageFailpointError.make({ location })
-                                : Effect.interrupt,
-                            ),
-                          ),
-                  }),
-                ),
-                Effect.timeout("1 second"),
-                Effect.forkChild,
-              );
-
-              yield* Deferred.await(entered);
-
-              return yield* Fiber.await(fiber);
-            }),
-          );
-
-          expect(Exit.isFailure(failed)).toBe(true);
-          yield* Effect.gen(function* () {
-            const store = yield* ThreadStore;
-
-            expect(
-              Option.isSome(
-                yield* store.recoveryCheckpoints!.load(LoadCheckpointRequest.make({ threadId })),
-              ),
-            ).toBe(location === "save-recovery-checkpoint:after");
-            expect(
-              (yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence,
-            ).toBe(0);
-          }).pipe(Effect.provide(layer({ filename })));
-        }),
-      ),
-    );
-  }
-
-  for (const historical of [false, true]) {
+  for (const historical of [false]) {
     it.effect(
       `reopens ${historical ? "historical" : "metadata-free"} checkpoints without rewriting storage`,
       () =>
@@ -594,7 +332,7 @@ describe("SqliteThreadStore", () => {
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
-            yield* sql`PRAGMA user_version = 99`;
+            yield* sql`PRAGMA user_version = 17`;
           }),
         );
 
@@ -886,7 +624,34 @@ describe("SqliteThreadStore", () => {
         Effect.gen(function* () {
           const active = yield* Ref.make<SqliteStorageFailpointLocation | undefined>(undefined);
 
-          const withFailpoints = <A, E>(effect: Effect.Effect<A, E, ThreadStore>) =>
+          // Requested replacement for retired checkpoint crash matrices: native facts,
+          // progress and lifecycle intent must reopen at one atomic prefix.
+          const nativeRunId = runIdForSubmission(submissionId);
+
+          const acceptedInput = canonicalRecord(
+            "reopen-accepted-input",
+            UserInputRecorded.make({
+              submissionId,
+              runId: nativeRunId,
+              kind: "user",
+              input: "Sapporo",
+            }),
+          );
+
+          const start = canonicalRecord(
+            "reopen-run-start",
+            RunStartedRecord.make({
+              runId: nativeRunId,
+              policyAccountingVersion: 1,
+              maxDurationMillis: 30_000,
+            }),
+          );
+
+          let firstBatch: CanonicalBatch | undefined;
+
+          const withFailpoints = <A, E>(
+            effect: Effect.Effect<A, E, ThreadStore | ThreadReader | Crypto.Crypto>,
+          ) =>
             Effect.provide(
               effect,
               layer({
@@ -900,25 +665,27 @@ describe("SqliteThreadStore", () => {
                         : Effect.void,
                     ),
                   ),
-              }),
+              }).pipe(
+                Layer.provideMerge(
+                  lifecyclePublicationLayer.pipe(Layer.provideMerge(NodeCrypto.layer)),
+                ),
+              ),
             );
 
           const select = (location: SqliteStorageFailpointLocation | undefined) =>
             Ref.set(active, location);
 
-          yield* withFailpoints(
+          const seeded = yield* withFailpoints(
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
               yield* store.materialize(
                 ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
               );
+
+              return yield* append(store, batch("reopen-accepted-input", [acceptedInput]));
             }),
           );
-
-          const firstBatch = batch("failpoint-append", [
-            inputRecord("failpoint-record", "Sapporo"),
-          ]);
 
           yield* Effect.forEach(
             [
@@ -934,7 +701,23 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
-                    yield* append(store, firstBatch);
+                    if (firstBatch !== undefined) {
+                      yield* append(store, firstBatch, seeded);
+
+                      return;
+                    }
+                    const writer = yield* makeRunWriter(threadId, epoch(1));
+                    const progress = yield* makeProgressWriter(threadId, start.deploymentId);
+
+                    yield* progress.commit(batch("failpoint-append", [start])).pipe(
+                      Effect.provideService(CurrentRunWriter, {
+                        ...writer,
+                        append: (prepared) =>
+                          Effect.sync(() => {
+                            firstBatch = prepared;
+                          }).pipe(Effect.andThen(writer.append(prepared))),
+                      }),
+                    );
                   }),
                 ).pipe(Effect.exit);
 
@@ -954,13 +737,26 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
+                    expect(
+                      Option.isNone(
+                        yield* readContinuation(threadId, nativeRunId, seeded.lastSequence),
+                      ),
+                    ).toBe(true);
+                    const pending = yield* store.lifecyclePublications!.pending(1, 1);
+
+                    expect(pending.flat().map(({ fact }) => fact._tag)).toEqual([
+                      "UserInputRecorded",
+                    ]);
+
                     return yield* store.export(ThreadExportRequest.make({ threadId }));
                   }),
                 );
 
-                expect(exported.records).toEqual([]);
-                expect(exported.tailSequence).toBe(0);
-                expect(exported.tailDigest).toBe(EMPTY_TAIL_DIGEST);
+                expect(exported.records.map(({ record }) => record.recordId)).toEqual([
+                  acceptedInput.recordId,
+                ]);
+                expect(exported.tailSequence).toBe(seeded.lastSequence);
+                expect(exported.tailDigest).toBe(seeded.tailDigest);
               }),
           );
 
@@ -971,7 +767,9 @@ describe("SqliteThreadStore", () => {
                 Effect.gen(function* () {
                   const store = yield* ThreadStore;
 
-                  yield* append(store, firstBatch);
+                  if (firstBatch === undefined)
+                    return yield* Effect.die("Start progress was not prepared");
+                  yield* append(store, firstBatch, seeded);
                 }),
               ).pipe(Effect.exit),
             ),
@@ -982,7 +780,28 @@ describe("SqliteThreadStore", () => {
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              return yield* append(store, firstBatch);
+              if (firstBatch === undefined)
+                return yield* Effect.die("Start progress was not prepared");
+              const replayed = yield* append(store, firstBatch, seeded);
+
+              const continuation = yield* readContinuation(
+                threadId,
+                nativeRunId,
+                replayed.lastSequence,
+              );
+
+              expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
+                revision: 1,
+                recordCount: 2,
+                lastFact: { recordId: start.recordId },
+              });
+              expect(
+                (yield* store.lifecyclePublications!.pending(1, 1))
+                  .flat()
+                  .map(({ fact }) => fact._tag),
+              ).toEqual(["UserInputRecorded", "RunStarted"]);
+
+              return replayed;
             }),
           );
 

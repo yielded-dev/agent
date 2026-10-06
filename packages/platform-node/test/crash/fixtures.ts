@@ -60,7 +60,7 @@ export const CrashEnv = {
  *
  * - `submit` — durably submit one Submission and print its Receipt.
  * - `run` — submit, then drain the lane to Settlement with a single-turn model.
- * - `run-checkpoint` — roll over before Turn 3 and kill around the recovery-cache write.
+ * - `run-checkpoint` — roll over before Turn 3 and kill around canonical compaction publication.
  * - `run-two` — submit two FIFO Submissions, then drain the lane.
  * - `run-blocked` — submit, commit Turn 1 (a tool call), then block Turn 2's model stream until
  *   `EFFECT_AGENT_RELEASE_FILE` appears (writing `EFFECT_AGENT_MARKER_FILE` first).

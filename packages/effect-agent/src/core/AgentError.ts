@@ -3,10 +3,22 @@ import * as Schema from "effect/Schema";
 import * as FailureDiagnostic from "./FailureDiagnostic.ts";
 import { ToolCallId } from "./Identifiers.ts";
 
-/** Run input failed to decode through the agent definition's input Schema. */
+/** Input projection, encoding, or host preparation failed during a Run. */
 export class AgentInputError extends Schema.TaggedError<AgentInputError>()("AgentInputError", {
   message: Schema.String,
 }) {}
+
+/** The current Definition's input Schema cannot interpret this input. */
+export class AgentInputDecodeError extends Schema.TaggedError<AgentInputDecodeError>()(
+  "AgentInputDecodeError",
+  { message: Schema.String },
+) {}
+
+/** A dispatch or local result exceeds canonical capacity; retain room for a bounded failure. */
+export class AgentPersistenceCapacityError extends Schema.TaggedError<AgentPersistenceCapacityError>()(
+  "AgentPersistenceCapacityError",
+  { message: Schema.String.check(Schema.isMaxLength(4_096)) },
+) {}
 
 /** Final model output failed to decode through the agent definition's output Schema. */
 export class AgentOutputError extends Schema.TaggedError<AgentOutputError>()("AgentOutputError", {
@@ -155,6 +167,8 @@ export class ContextBudgetError extends Schema.TaggedError<ContextBudgetError>()
 
 /** Schema for framework-owned agent errors; application and Effect AI failures remain separate. */
 export const AgentError = Schema.Union([
+  AgentInputDecodeError,
+  AgentPersistenceCapacityError,
   AgentInputError,
   AgentOutputError,
   AgentRunDispositionError,

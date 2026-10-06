@@ -1,5 +1,3 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { upgradeV2Subscriptions } from "@yielded/agent-storage-sql/sql-storage-v2-upgrade";
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
 import {
   SourcePartition,
@@ -152,44 +150,6 @@ const initializeDoSubscriptionStore = Effect.fnUntraced(function* () {
   );
 
   const state = yield* decodeRows(StoreStateRow, rows, "read subscription storage version");
-
-  if (state.length === 1 && state[0].storage_version === 2) {
-    const failpoint = yield* SubscriptionFailpoint;
-
-    yield* sql
-      .withTransaction(
-        Effect.gen(function* () {
-          const current = yield* sql<{
-            storage_version: number;
-          }>`SELECT storage_version FROM effect_agent_subscription_store_state WHERE singleton=1`;
-
-          if (current.length === 1 && current[0].storage_version === 3) return;
-          if (current.length !== 1 || current[0].storage_version !== 2)
-            return yield* corrupt("subscription version changed during upgrade");
-          yield* upgradeV2Subscriptions(1_900_000);
-          yield* failpoint.hit("upgrade:before-version");
-          yield* sql`UPDATE effect_agent_subscription_store_state SET storage_version=3 WHERE singleton=1`;
-          yield* failpoint.hit("upgrade:after-version");
-        }),
-      )
-      .pipe(
-        Effect.provide(BrowserCrypto.layer),
-        Effect.catchTag("StorageUpgradeError", (error) =>
-          SubscriptionError.make({
-            reason: "corrupt",
-            code: "upgrade-v2-subscriptions",
-            cause: error,
-          }),
-        ),
-        Effect.catchTag("SqlError", () => unavailable("upgrade v2 subscriptions")),
-        Effect.catchTag("SchemaError", () => corrupt("upgrade v2 subscription encoding")),
-        Effect.catchTag("SubscriptionFailpointError", () =>
-          unavailable("upgrade v2 subscriptions failpoint"),
-        ),
-      );
-
-    return;
-  }
 
   if (state.length !== 1 || state[0].storage_version !== CURRENT_SUBSCRIPTION_STORE_VERSION)
     return yield* corrupt(

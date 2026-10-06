@@ -28,13 +28,12 @@ import { RunContextPreparation } from "@yielded/agent/run-options";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import {
   FencedAppendRequest,
-  LoadCheckpointRequest,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import {
   AiError,
@@ -394,6 +393,8 @@ const application = Layer.unwrap(
                 );
 
                 payload = ModelResponseRecorded.make({
+                  toolResultMaxBytes: 1024 * 1024,
+                  toolSelectionMaxBytes: 0,
                   toolOperations: [],
                   runId,
                   turnId: TurnId.make(`seed-turn-${index}`),
@@ -638,20 +639,21 @@ const application = Layer.unwrap(
               }),
           );
 
-          const loaded =
-            store.recoveryCheckpoints === undefined
-              ? Option.none()
-              : yield* store.recoveryCheckpoints.load(LoadCheckpointRequest.make({ threadId }));
+          const latest = log.records.findLast(
+            ({ record }) => record.payload._tag === "RunContinuation",
+          );
 
-          const checkpoint = Option.isSome(loaded)
-            ? {
-                present: true,
-                throughSequence: loaded.value.throughSequence,
-                stateBytes: bytes(JSON.stringify(loaded.value.state)),
-                engineVersion: loaded.value.engineVersion ?? null,
-                state: loaded.value.state,
-              }
-            : { present: false };
+          const progress = latest?.record.payload;
+
+          const continuation =
+            latest !== undefined && progress?._tag === "RunContinuation"
+              ? {
+                  present: true,
+                  sequence: latest.sequence,
+                  encodedBytes: bytes(JSON.stringify(progress)),
+                  progress,
+                }
+              : { present: false };
 
           const successful =
             state.operations.length === state.phase &&
@@ -710,7 +712,7 @@ const application = Layer.unwrap(
             operations: state.operations,
             appends: state.appends,
             audits,
-            checkpoint,
+            continuation,
             databaseBytes: ctx.storage.sql.databaseSize,
             checks,
             valid: Object.values(checks).every(Boolean),

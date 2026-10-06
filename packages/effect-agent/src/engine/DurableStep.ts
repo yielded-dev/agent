@@ -52,15 +52,18 @@ export interface PersistedStepResult {
  * coordinator and consumed by the engine-provided `DurableStep` service.
  *
  * `lookup` returns the committed result for a Step identity when one exists;
+ * `reserve` admits room for a valid result before the body runs and returns its release;
  * `commit` durably records one successful encoded output. Only success is
  * ever committed — recording failures would replay a transient failure
- * forever. Both operations are keyed by the deterministic `RunStepKey`, so
+ * forever. Operations are keyed by the deterministic `RunStepKey`, so
  * replays and racing writers dedupe on record identity in the adapter.
  */
 export interface RunStepHook<Error = never, Requirements = never> {
   readonly lookup: (
     key: RunStepKey,
   ) => Effect.Effect<Option.Option<PersistedStepResult>, Error, Requirements>;
+  /** Reserve one maximum-sized valid result before execution; release on every exit. */
+  readonly reserve: (key: RunStepKey) => Effect.Effect<Effect.Effect<void>, Error, Requirements>;
   readonly commit: (
     key: RunStepKey,
     encodedOutput: unknown,
@@ -81,6 +84,8 @@ export class DurableStepError extends Schema.TaggedError<DurableStepError>()("Du
   reason: Schema.Literals([
     "duplicate-step-name",
     "lookup-failed",
+    "capacity-exhausted",
+    "reservation-failed",
     "recorded-result-invalid",
     "output-encoding-failed",
     "commit-failed",
@@ -99,8 +104,10 @@ export class DurableStepError extends Schema.TaggedError<DurableStepError>()("Du
  * semantics: a committed result decodes through `output` and returns without
  * executing the body; otherwise the body runs (a crash mid-body re-executes
  * on the next Attempt), the success is encoded through `output`, and only
- * then committed. The Schema argument is the canonical codec for the recorded
- * result, not decoration. A Step never makes a non-idempotent external API
+ * then committed. Durable execution reserves room for a full valid persisted result
+ * before starting a new body; `capacity-exhausted` leaves that body unexecuted.
+ * The Schema argument is the canonical codec for the recorded result, not decoration.
+ * A Step never makes a non-idempotent external API
  * exactly-once — the body must use the external system's idempotency key,
  * reconciliation API, or compensating workflow.
  */

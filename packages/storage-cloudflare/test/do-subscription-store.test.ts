@@ -28,9 +28,8 @@ let objectCounter = 0;
 
 describe("Durable Object SubscriptionStore conformance", () => {
   for (const testCase of subscriptionStoreConformanceCases) {
-    // oxlint-disable-next-line vitest/valid-title -- exported contract cases own their names
     it(
-      String(testCase.name),
+      `${testCase.name}`,
       () =>
         expect(
           withScheduleStorage(`subscription-store-${objectCounter++}`, (storage) =>

@@ -32,11 +32,9 @@ import {
 } from "@yielded/agent/run-journal";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { Selection, Snapshot } from "@yielded/agent/tool-exposure";
-import { summarizeModelUsage } from "@yielded/agent/usage";
 import { DateTime, Effect, Layer, Ref, Schema, Stream } from "effect";
 import { LanguageModel, Model, Prompt, Tool, Toolkit, type Response } from "effect/ai";
 
-import { JournalCheckpointSeed } from "../../src/durable/internal/journal-checkpoint.ts";
 import { makeJournalMetadata } from "../../src/durable/internal/journal-metadata.ts";
 
 const SUBMISSION_ID = Schema.decodeSync(SubmissionId)("submission-journal");
@@ -1183,34 +1181,6 @@ layer(NodeCrypto.layer)("Tool exposure journal", (it) => {
         expect((yield* projectRunJournal([...records, compacted], RUN_ID)).toolSelection).toEqual(
           expected,
         );
-
-        const seed = JournalCheckpointSeed.make({
-          runId: RUN_ID,
-          retiredToolCallIds: [CALL_ONE, CALL_TWO],
-          throughSequence: CanonicalSequence.make(3),
-          firstSequence: CanonicalSequence.make(1),
-          committedTurns: projected.committedTurns,
-          policyUsage: projected.policyUsage,
-          modelCalls: projected.usage.modelCalls,
-          unobservedModelCalls: 0,
-          inputTokens: projected.usage.inputTokens,
-          outputTokens: projected.usage.outputTokens,
-          lastInputTokens: projected.usage.lastInputTokens,
-          lastOutputTokens: projected.usage.lastOutputTokens,
-          costMicrousd: projected.usage.costMicrousd,
-          summarizedModelUsage: yield* summarizeModelUsage(projected.usage.modelUsage),
-          compaction: compacted,
-          toolSelection: expected,
-        });
-
-        expect(
-          (yield* projectRunJournalStream(
-            Stream.fromIterable([compacted]),
-            RUN_ID,
-            undefined,
-            seed,
-          )).toolSelection,
-        ).toEqual(expected);
 
         const hostReplacement = yield* turnCanonicalBatch({
           ...turnInput(finalTurnAppended),

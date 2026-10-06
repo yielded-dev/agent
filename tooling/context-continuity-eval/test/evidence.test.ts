@@ -112,6 +112,8 @@ it("rejects aged copies and later transcripts instead of trusting a model-select
 
   const original = envelope(16, source, {
     _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: 1024 * 1024,
+    toolSelectionMaxBytes: 0,
     toolOperations: [],
     runId: "archive",
     turnId: "archive:1",
@@ -122,6 +124,8 @@ it("rejects aged copies and later transcripts instead of trusting a model-select
 
   const later = envelope(17, "later-transcript", {
     _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: 1024 * 1024,
+    toolSelectionMaxBytes: 0,
     toolOperations: [],
     runId: "archive",
     turnId: "archive:2",

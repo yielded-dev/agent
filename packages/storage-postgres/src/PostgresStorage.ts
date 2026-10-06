@@ -171,7 +171,7 @@ export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
     ),
   );
 
-/** Export a quiesced layout-16 or current store through a read-only snapshot; never run DDL. */
+/** Export a quiesced current-layout store through a read-only snapshot; never run DDL. */
 export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* (
   request: ThreadExportRequest,
   options: PostgresStorageOptions = {},

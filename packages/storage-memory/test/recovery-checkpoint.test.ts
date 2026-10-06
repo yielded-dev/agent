@@ -3,12 +3,19 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
-import { digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { DurableStep, DurableStepError, ToolExecutionClass } from "@yielded/agent/durable-step";
-import { RunId, SubmissionId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
-import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
+import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
+import {
+  DefinitionDigests,
+  DeploymentId,
+  Digest,
+  ProducerId,
+  CanonicalRecord,
+  CanonicalRecordEnvelope,
+  RepairAnnotated,
+} from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
@@ -19,15 +26,12 @@ import {
   RecoverySnapshotRequest,
   ResolutionCompletedWithResult,
   SubmissionLedger,
+  submissionInputRecordId,
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
-import {
-  LoadCheckpointRequest,
-  ThreadCheckpoint,
-  ThreadExportRequest,
-  ThreadStore,
-} from "@yielded/agent/thread-store";
+import { reencodeThread } from "@yielded/agent/thread-import";
+import { ThreadExportRequest, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Effect, Exit, Layer, Option, Schema, Stream } from "effect";
@@ -65,21 +69,19 @@ const final: ReadonlyArray<Response.StreamPartEncoded> = [
 ];
 
 const scenarios = [
-  "cache",
-  "corrupt",
-  "gap",
+  "missing-evidence",
+  "corrupt-evidence",
   "uncertain",
   "approval",
   "reused-call-id",
-  "checkpoint-after-interruption",
 ];
 
-describe("disposable durable recovery checkpoint", () => {
-  // https://github.com/yielded-dev/agent/issues/692
-  // Same-Run recovery tests do not detect replay of retired history by each new Run.
-  it.effect("keeps fresh Runs bounded and falls back from incompatible Thread context", () =>
+describe("retained Run recovery", () => {
+  // #692/#731: keep the public prompt/compaction workflow after retiring its cache mechanism.
+  it.effect("retains original context across rollover, summary and cold recovery", () =>
     Effect.gen(function* () {
       const store = yield* ThreadStore;
+      const failpoints = yield* DurableRuntimeFailpointTestControl;
       const threadId = ThreadId.make("fresh-checkpoint");
       const requests: Array<Prompt.Prompt> = [];
 
@@ -112,18 +114,43 @@ describe("disposable durable recovery checkpoint", () => {
 
       const binding = yield* DurableWorkerBinding.make(agent, definitions);
 
-      const process = (input: string, rollover: boolean, observed = store) =>
+      const process = (input: string, rollover: boolean, summarize = false) =>
         Effect.gen(function* () {
+          const compactor = yield* ContextCompactor.pipe(
+            Effect.provide(ContextCompactor.layerRollover),
+          );
+
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
               DurableAgentRuntime.layerWithBindings([binding]).pipe(
                 Layer.provide(runStorageLayer()),
                 Layer.provide(
-                  Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
+                  Layer.mergeAll(
+                    RunToolAuthorization.allowAll,
+                    Layer.succeed(ContextCompactor, {
+                      estimate: (messages) =>
+                        summarize &&
+                        messages.some((message) =>
+                          JSON.stringify(message).includes("new window request"),
+                        )
+                          ? 25_000
+                          : compactor.estimate(messages),
+                      compact: (request) =>
+                        summarize
+                          ? Stream.succeed({
+                              kind: "summarize",
+                              through:
+                                request.source.content.findLastIndex(
+                                  (message) => message.role === "assistant",
+                                ) + 1,
+                              summary: "Completed conversation.",
+                            })
+                          : compactor.compact(request),
+                    }),
+                  ),
                 ),
               ),
             ),
-            Effect.provideService(ThreadStore, observed),
             Effect.provideService(RunContextPreparation, {
               hook: {
                 prepare: (request) =>
@@ -146,8 +173,10 @@ describe("disposable durable recovery checkpoint", () => {
 
           expect(Option.isSome(result) && result.value).toMatchObject({
             submissionId: receipt.submissionId,
+            receiptId: receipt.receiptId,
             outcome: "completed",
           });
+          expect((yield* runtime.verify(threadId)).ok).toBe(true);
         }).pipe(Effect.scoped);
 
       yield* process("retired request", false);
@@ -155,24 +184,10 @@ describe("disposable durable recovery checkpoint", () => {
       const original = yield* store.export(ThreadExportRequest.make({ threadId }));
 
       for (const input of ["first fresh request", "second fresh request"]) {
-        const before = yield* store.export(ThreadExportRequest.make({ threadId }));
-        let retiredReads = 0;
+        yield* process(input, false);
+        const prompt = requests.at(-1);
 
-        const observed = ThreadStore.of({
-          ...store,
-          read: (request) =>
-            store.read(request).pipe(
-              Stream.tap((entry) =>
-                Effect.sync(() => {
-                  if (entry.sequence <= before.records.length) retiredReads++;
-                }),
-              ),
-            ),
-        });
-
-        yield* process(input, false, observed);
-        const prompt = requests.at(-1)!;
-
+        if (prompt === undefined) return yield* Effect.die("Missing fresh-Run model request");
         expect(JSON.stringify(prompt)).toContain("Retained handoff.");
         expect(JSON.stringify(prompt)).toContain("begin compacted conversation");
         expect(JSON.stringify(prompt)).toContain(input);
@@ -184,266 +199,288 @@ describe("disposable durable recovery checkpoint", () => {
               JSON.stringify(message).includes("Use the instructions for this Run."),
           ),
         ).toHaveLength(1);
-        expect(retiredReads).toBe(0);
       }
       expect(JSON.stringify(requests.at(-1))).toContain("first fresh request");
-
-      // https://github.com/yielded-dev/agent/commit/57411e0591424908211c2adc128d64b3563f1d37
-      // A valid checksum must not hide an incompatible Prompt from cache eligibility checks.
-      const checkpoints = store.recoveryCheckpoints!;
-      const saved = yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }));
-
-      if (Option.isNone(saved)) return yield* Effect.die("missing Thread context checkpoint");
-      const jsonObject = Schema.Record(Schema.String, Schema.Json);
-
-      const contents = yield* Schema.decodeUnknownEffect(Schema.Struct({ state: jsonObject }))(
-        saved.value.state,
-      );
-
-      const context = yield* Schema.decodeUnknownEffect(jsonObject)(contents.state.context);
-      const invalidState = { ...contents.state, context: { ...context, prompt: null } };
-      const invalidContents = { state: invalidState, digest: yield* digestJson(invalidState) };
-
-      const invalidContext = ThreadStore.of({
-        ...store,
-        recoveryCheckpoints: {
-          ...checkpoints,
-          load: (request) =>
-            checkpoints
-              .load(request)
-              .pipe(
-                Effect.map(
-                  Option.map((checkpoint) =>
-                    ThreadCheckpoint.make({ ...checkpoint, state: invalidContents }),
-                  ),
-                ),
-              ),
-        },
-      });
-
-      yield* process("fresh request with invalid cache", false, invalidContext);
-      expect(JSON.stringify(requests.at(-1))).toContain("Retained handoff.");
-      expect(JSON.stringify(requests.at(-1))).toContain("second fresh request");
-      expect(JSON.stringify(requests.at(-1))).toContain("fresh request with invalid cache");
-
-      // A new compaction still maps the actual canonical prefix, even after cached fresh Runs.
       yield* process("new window request", true);
       expect(JSON.stringify(requests.at(-1))).toContain("new window request");
       expect(JSON.stringify(requests.at(-1))).not.toContain("first fresh request");
       const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
 
       expect(completed.records.slice(0, original.records.length)).toEqual(original.records);
+
+      yield* process("summarize completed windows", false, true);
+      const summarized = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      const rollover = summarized.records.findLast(
+        ({ record: { payload } }) =>
+          payload._tag === "CompactionCreated" && payload.kind === "rollover",
+      );
+
+      const summary = summarized.records.findLast(
+        ({ record: { payload } }) =>
+          payload._tag === "CompactionCreated" && payload.kind === "summarize",
+      );
+
+      if (rollover === undefined || summary?.record.payload._tag !== "CompactionCreated")
+        return yield* Effect.die("Missing rollover and covering summary");
+      expect(summary.record.payload.coversThrough).toBeGreaterThan(rollover.sequence);
+
+      // Stop after start/context co-commit, then rebuild only their saved references in a new runtime.
+      yield* failpoints.setHandler((location) =>
+        location === "run:after-start-append"
+          ? DurableRuntimeFailpointError.make({ location })
+          : Effect.void,
+      );
+      const requestsBefore = requests.length;
+      const stopped = yield* Effect.exit(process("resume summarized window", false));
+
+      expect(Exit.isFailure(stopped)).toBe(true);
+      expect(requests).toHaveLength(requestsBefore);
+      yield* failpoints.clear;
+      yield* process("resume summarized window", false);
+      expect(requests).toHaveLength(requestsBefore + 1);
+      expect(JSON.stringify(requests.at(-1))).toContain("Completed conversation.");
+      expect(JSON.stringify(requests.at(-1))).toContain("resume summarized window");
+      expect(JSON.stringify(requests.at(-1))).not.toContain("Retained handoff.");
+      const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      const imported = yield* reencodeThread(Effect.succeed(archive)).pipe(
+        Effect.provide(Layer.fresh(base)),
+      );
+
+      expect(imported.recordCount).toBe(archive.records.length);
     }).pipe(Effect.provide(base)),
   );
 
-  it.effect(
-    "resumes retained older work through canonical history when the checkpoint belongs to a later Run",
-    () =>
-      Effect.gen(function* () {
-        const store = yield* ThreadStore;
-        const ledger = yield* SubmissionLedger;
-        const failpoints = yield* DurableRuntimeFailpointTestControl;
-        const threadId = ThreadId.make("checkpoint-foreign-owner");
-        let phase: "prefix" | "unknown" | "later" | "resume" = "prefix";
-        let laterTurns = 0;
-        let handlerCalls = 0;
-        const requests: Array<Prompt.Prompt> = [];
+  it.effect("resumes retained older work after a later Run settles", () =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+      const ledger = yield* SubmissionLedger;
+      const failpoints = yield* DurableRuntimeFailpointTestControl;
+      const threadId = ThreadId.make("checkpoint-foreign-owner");
+      let phase: "prefix" | "unknown" | "later" | "resume" = "prefix";
+      let laterTurns = 0;
+      let handlerCalls = 0;
+      const requests: Array<Prompt.Prompt> = [];
 
-        const tools = Toolkit.make(
-          Tool.make("write", { parameters: Tool.EmptyParams, success: Schema.String }),
-        );
+      const tools = Toolkit.make(
+        Tool.make("write", { parameters: Tool.EmptyParams, success: Schema.String }),
+      );
 
-        const handlers = tools.toLayer({
-          write: () =>
-            Effect.sync(() => {
-              handlerCalls++;
+      const handlers = tools.toLayer({
+        write: () =>
+          Effect.sync(() => {
+            handlerCalls++;
 
-              return "recorded";
-            }),
-        });
+            return "recorded";
+          }),
+      });
 
-        const model = Model.make(
-          "scripted",
-          "foreign-checkpoint",
-          Layer.effect(
-            LanguageModel.LanguageModel,
-            LanguageModel.make({
-              generateText: () => Effect.succeed([]),
-              streamText: (request) => {
-                requests.push(request.prompt);
-                if (phase === "later") laterTurns++;
+      const model = Model.make(
+        "scripted",
+        "foreign-checkpoint",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: (request) => {
+              requests.push(request.prompt);
+              if (phase === "later") laterTurns++;
 
-                const call =
-                  phase === "unknown"
-                    ? "call-a"
-                    : phase === "later" && laterTurns <= 2
-                      ? `call-b-${laterTurns}`
-                      : undefined;
+              const call =
+                phase === "unknown"
+                  ? "call-a"
+                  : phase === "later" && laterTurns <= 2
+                    ? `call-b-${laterTurns}`
+                    : undefined;
 
-                return Stream.fromIterable<Response.StreamPartEncoded>(
-                  call === undefined
-                    ? final
-                    : [{ type: "tool-call", id: call, name: "write", params: {} }, finish],
-                );
-              },
-            }),
-          ),
-        );
-
-        const agent = Agent.withModel(
-          Agent.make("foreign-checkpoint", {
-            input: Schema.String,
-            output: Schema.String,
-            instructions: "Keep original instructions.",
-            toolkit: tools,
-            policy: {
-              maxTurns: 10,
-              maxToolCalls: 10,
-              maxDuration: "30 seconds",
-              contextTokenLimit: 20_000,
+              return Stream.fromIterable<Response.StreamPartEncoded>(
+                call === undefined
+                  ? final
+                  : [{ type: "tool-call", id: call, name: "write", params: {} }, finish],
+              );
             },
           }),
-          model,
-        );
+        ),
+      );
 
-        const binding = yield* DurableWorkerBinding.make(agent, definitions).pipe(
-          Effect.provide(handlers),
-        );
+      const agent = Agent.withModel(
+        Agent.make("foreign-checkpoint", {
+          input: Schema.String,
+          output: Schema.String,
+          instructions: "Keep original instructions.",
+          toolkit: tools,
+          policy: {
+            maxTurns: 10,
+            maxToolCalls: 10,
+            maxDuration: "30 seconds",
+            contextTokenLimit: 20_000,
+          },
+        }),
+        model,
+      );
 
-        const runtime = yield* DurableAgentRuntime.pipe(
-          Effect.provide(
-            DurableAgentRuntime.layerWithBindings([binding]).pipe(
-              Layer.provide(runStorageLayer()),
-              Layer.provide(
-                Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
-              ),
+      const binding = yield* DurableWorkerBinding.make(agent, definitions).pipe(
+        Effect.provide(handlers),
+      );
+
+      const runtime = yield* DurableAgentRuntime.pipe(
+        Effect.provide(
+          DurableAgentRuntime.layerWithBindings([binding]).pipe(
+            Layer.provide(runStorageLayer()),
+            Layer.provide(
+              Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
             ),
           ),
-          Effect.provideService(RunContextPreparation, {
-            hook: {
-              prepare: (request) =>
-                Effect.sync(() => {
-                  const compactPrefix = phase === "later" && request.turn === 3;
+        ),
+        Effect.provideService(RunContextPreparation, {
+          hook: {
+            prepare: (request) =>
+              Effect.sync(() => {
+                const compactPrefix = phase === "later" && request.turn === 3;
 
-                  if (compactPrefix) {
-                    expect(
-                      request.source.content.slice(0, 2).map((message) => message.role),
-                    ).toEqual(["user", "assistant"]);
-                  }
+                if (compactPrefix) {
+                  expect(request.source.content.slice(0, 2).map((message) => message.role)).toEqual(
+                    ["user", "assistant"],
+                  );
+                }
 
-                  return {
-                    prompt: request.source,
-                    ...(compactPrefix
-                      ? { rollover: { handoff: "The initial request completed.", through: 2 } }
-                      : {}),
-                  };
-                }),
-            },
-          }),
-        );
+                return {
+                  prompt: request.source,
+                  ...(compactPrefix
+                    ? { rollover: { handoff: "The initial request completed.", through: 2 } }
+                    : {}),
+                };
+              }),
+          },
+        }),
+      );
 
-        const submit = (input: string) =>
-          runtime.submit(agent, input, {
-            threadId,
-            principal: Principal.make("test"),
-            idempotencyKey: IdempotencyKey.make(input),
-            definitions,
-          });
-
-        const prefix = yield* submit("settled prefix");
-
-        yield* runtime.processThreadHead(threadId);
-        phase = "unknown";
-        const older = yield* submit("older unresolved input");
-
-        yield* failpoints.setHandler((location) =>
-          location === "tools:after-dispatch-fence"
-            ? DurableRuntimeFailpointError.make({ location })
-            : Effect.void,
-        );
-        expect(Exit.isFailure(yield* Effect.exit(runtime.processThreadHead(threadId)))).toBe(true);
-        yield* failpoints.clear;
-        yield* runtime.runRecovery();
-        expect(
-          (yield* ledger.loadRecoverySnapshot(
-            RecoverySnapshotRequest.make({ submissionId: older.submissionId }),
-          )).submission.state,
-        ).toBe("unknown");
-        expect(handlerCalls).toBe(0);
-
-        phase = "later";
-        const later = yield* submit("later input");
-        const laterOutcome = yield* runtime.processThreadHead(threadId);
-
-        expect(Option.isSome(laterOutcome) && laterOutcome.value.submissionId).toBe(
-          later.submissionId,
-        );
-        expect(handlerCalls).toBe(2);
-
-        const checkpoint = yield* store.recoveryCheckpoints!.load(
-          LoadCheckpointRequest.make({ threadId }),
-        );
-
-        if (Option.isNone(checkpoint)) return yield* Effect.die("missing later-owned checkpoint");
-
-        const retained = yield* Schema.decodeUnknownEffect(
-          Schema.Struct({
-            state: Schema.Struct({
-              submissionId: SubmissionId,
-              submissionIds: Schema.Array(SubmissionId),
-              seed: Schema.Struct({ runId: RunId }),
-            }),
-          }),
-        )(checkpoint.value.state);
-
-        expect(retained.state.submissionId).toBe(later.submissionId);
-        expect(retained.state.seed.runId).toBe(runIdForSubmission(later.submissionId));
-        expect(retained.state.submissionIds).toContain(older.submissionId);
-        const before = yield* store.export(ThreadExportRequest.make({ threadId }));
-
-        yield* ledger.recordUnknownResolution(
-          UnknownResolutionCommand.make({
-            submissionId: older.submissionId,
-            toolCallId: ToolCallId.make("call-a"),
-            author: "operator",
-            reason: "The service confirmed completion",
-            resolution: ResolutionCompletedWithResult.make({
-              result: "confirmed older result",
-              isFailure: false,
-            }),
-          }),
-        );
-        phase = "resume";
-        const resumed = yield* runtime.processThreadHead(threadId);
-
-        expect(Option.isSome(resumed) && resumed.value).toMatchObject({
-          submissionId: older.submissionId,
-          receiptId: older.receiptId,
-          outcome: "completed",
+      const submit = (input: string) =>
+        runtime.submit(agent, input, {
+          threadId,
+          principal: Principal.make("test"),
+          idempotencyKey: IdempotencyKey.make(input),
+          definitions,
         });
-        expect(handlerCalls).toBe(2);
-        expect(JSON.stringify(requests.at(-1))).toContain("confirmed older result");
-        const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
 
-        expect(completed.records.slice(0, before.records.length)).toEqual(before.records);
-        expect(
-          completed.records.flatMap(({ record: { payload } }) =>
-            payload._tag === "ToolCallSettled" ? [payload.toolCallId] : [],
-          ),
-        ).toEqual(["call-b-1", "call-b-2", "call-a"]);
-        expect(
-          completed.records.flatMap(({ record: { payload } }) =>
-            payload._tag === "SubmissionSettled" ? [payload.submissionId] : [],
-          ),
-        ).toEqual([prefix.submissionId, later.submissionId, older.submissionId]);
-        expect(
-          completed.records.filter(
-            ({ record: { payload } }) =>
-              payload._tag === "RunStarted" &&
-              payload.runId === runIdForSubmission(older.submissionId),
-          ),
-        ).toHaveLength(1);
-      }).pipe(Effect.provide(base)),
+      const prefix = yield* submit("settled prefix");
+
+      yield* runtime.processThreadHead(threadId);
+      phase = "unknown";
+      const older = yield* submit("older unresolved input");
+
+      yield* failpoints.setHandler((location) =>
+        location === "tools:after-dispatch-fence"
+          ? DurableRuntimeFailpointError.make({ location })
+          : Effect.void,
+      );
+      expect(Exit.isFailure(yield* Effect.exit(runtime.processThreadHead(threadId)))).toBe(true);
+      yield* failpoints.clear;
+      yield* runtime.runRecovery();
+      expect(
+        (yield* ledger.loadRecoverySnapshot(
+          RecoverySnapshotRequest.make({ submissionId: older.submissionId }),
+        )).submission.state,
+      ).toBe("unknown");
+      expect(handlerCalls).toBe(0);
+
+      phase = "later";
+      const later = yield* submit("later input");
+      const laterOutcome = yield* runtime.processThreadHead(threadId);
+
+      expect(Option.isSome(laterOutcome) && laterOutcome.value.submissionId).toBe(
+        later.submissionId,
+      );
+      expect(handlerCalls).toBe(2);
+
+      const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const captured = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+      const [olderProgress, laterProgress] = yield* Effect.forEach([older, later], (receipt) =>
+        Stream.runCollect(
+          store.read({
+            threadId,
+            selection: {
+              _tag: "RunContinuation",
+              runId: runIdForSubmission(receipt.submissionId),
+              throughSequence: captured.tailSequence,
+            },
+            page: { limit: 1 },
+          }),
+        ).pipe(Effect.map((records) => records[0]?.record.payload)),
+      );
+
+      if (olderProgress?._tag !== "RunContinuation" || laterProgress?._tag !== "RunContinuation")
+        return yield* Effect.die("Missing exact older/later Run continuation");
+      expect(olderProgress.originalInput.recordId).toBe(
+        submissionInputRecordId(older.submissionId),
+      );
+      expect(laterProgress.originalInput.recordId).toBe(
+        submissionInputRecordId(later.submissionId),
+      );
+      expect(olderProgress.savedContext).toBeDefined();
+      expect(olderProgress.savedContext).not.toEqual(laterProgress.savedContext);
+      expect(
+        before.records.find(
+          (entry) => entry.record.recordId === olderProgress.savedContext?.recordId,
+        )?.record.payload,
+      ).toMatchObject({
+        _tag: "RunContextRecorded",
+        runId: runIdForSubmission(older.submissionId),
+      });
+
+      yield* ledger.recordUnknownResolution(
+        UnknownResolutionCommand.make({
+          submissionId: older.submissionId,
+          toolCallId: ToolCallId.make("call-a"),
+          author: "operator",
+          reason: "The service confirmed completion",
+          resolution: ResolutionCompletedWithResult.make({
+            result: "confirmed older result",
+            isFailure: false,
+          }),
+        }),
+      );
+      phase = "resume";
+      const resumed = yield* runtime.processThreadHead(threadId);
+
+      expect(Option.isSome(resumed) && resumed.value).toMatchObject({
+        submissionId: older.submissionId,
+        receiptId: older.receiptId,
+        outcome: "completed",
+        usageSummary: {
+          modelCalls: 2,
+          inputTokens: { total: 200 },
+          outputTokens: { total: 20 },
+        },
+      });
+      expect(handlerCalls).toBe(2);
+      expect(JSON.stringify(requests.at(-1))).toContain("confirmed older result");
+      expect(JSON.stringify(requests.at(-1))).toContain("older unresolved input");
+      expect(JSON.stringify(requests.at(-1))).toContain("Keep original instructions.");
+      expect(JSON.stringify(requests.at(-1))).not.toContain("later input");
+      const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      expect(completed.records.slice(0, before.records.length)).toEqual(before.records);
+      expect(
+        completed.records.flatMap(({ record: { payload } }) =>
+          payload._tag === "ToolCallSettled" ? [payload.toolCallId] : [],
+        ),
+      ).toEqual(["call-b-1", "call-b-2", "call-a"]);
+      expect(
+        completed.records.flatMap(({ record: { payload } }) =>
+          payload._tag === "SubmissionSettled" ? [payload.submissionId] : [],
+        ),
+      ).toEqual([prefix.submissionId, later.submissionId, older.submissionId]);
+      expect(
+        completed.records.filter(
+          ({ record: { payload } }) =>
+            payload._tag === "RunStarted" &&
+            payload.runId === runIdForSubmission(older.submissionId),
+        ),
+      ).toHaveLength(1);
+    }).pipe(Effect.provide(base)),
   );
 
   it.effect.each(scenarios)("preserves canonical obligations across %s", (scenario) =>
@@ -587,13 +624,8 @@ describe("disposable durable recovery checkpoint", () => {
       });
 
       yield* failpoints.setHandler((location) => {
-        const atCheckpoint =
-          (scenario.startsWith("checkpoint-") || scenario === "reused-call-id") &&
-          location === "checkpoint:after-save";
-
         const atBatch =
-          !scenario.startsWith("checkpoint-") &&
-          requests.length === 4 &&
+          requests.length === (scenario === "reused-call-id" ? 2 : 4) &&
           location ===
             (scenario === "uncertain"
               ? "tools:after-dispatch-fence"
@@ -601,8 +633,7 @@ describe("disposable durable recovery checkpoint", () => {
                 ? "approval:after-request-append"
                 : "turn:after-results-append");
 
-        if (!atCheckpoint && !atBatch) return Effect.void;
-        if (scenario.endsWith("interruption")) return Effect.interrupt;
+        if (!atBatch) return Effect.void;
 
         return DurableRuntimeFailpointError.make({ location });
       });
@@ -619,12 +650,6 @@ describe("disposable durable recovery checkpoint", () => {
 
       expect(snapshot.ownership).toBeUndefined();
 
-      const checkpoint = yield* store.recoveryCheckpoints!.load(
-        LoadCheckpointRequest.make({ threadId: receipt.threadId }),
-      );
-
-      expect(Option.isSome(checkpoint)).toBe(true);
-
       const original = yield* store.export(
         ThreadExportRequest.make({ threadId: receipt.threadId }),
       );
@@ -633,46 +658,55 @@ describe("disposable durable recovery checkpoint", () => {
       const callsBefore = calls;
 
       yield* failpoints.clear;
-      const checkpoints = store.recoveryCheckpoints!;
+
+      // Former cache-gap/corruption cases now exercise required canonical evidence.
+      const cursor = original.records.findLast(
+        (entry) => entry.record.payload._tag === "RunContinuation",
+      )?.record.payload;
+
+      if (cursor?._tag !== "RunContinuation" || cursor.savedContext === undefined)
+        return yield* Effect.die("Missing current Run continuation/context reference");
+      const contextId = cursor.savedContext.recordId;
 
       const observed = ThreadStore.of({
         ...store,
-        recoveryCheckpoints: {
-          ...checkpoints,
-          load: (request) =>
-            checkpoints.load(request).pipe(
-              Effect.map(
-                Option.map((saved) => {
-                  if (scenario === "corrupt")
-                    return ThreadCheckpoint.make({ ...saved, state: { invalid: true } });
-
-                  return saved;
-                }),
-              ),
-            ),
-        },
         read: (request) =>
-          store
-            .read(request)
-            .pipe(
-              Stream.filter(
-                (entry) =>
-                  scenario !== "gap" ||
-                  Option.isNone(checkpoint) ||
-                  entry.sequence !== checkpoint.value.throughSequence + 1,
-              ),
+          store.read(request).pipe(
+            Stream.filter(
+              (entry) => scenario !== "missing-evidence" || entry.record.recordId !== contextId,
             ),
+            Stream.map((entry) =>
+              scenario === "corrupt-evidence" && entry.record.recordId === contextId
+                ? CanonicalRecordEnvelope.make({
+                    ...entry,
+                    record: CanonicalRecord.make({
+                      ...entry.record,
+                      payload: RepairAnnotated.make({
+                        reason: "altered required evidence",
+                        details: {},
+                      }),
+                    }),
+                  })
+                : entry,
+            ),
+          ),
       });
 
       const resumed = yield* makeRuntime.pipe(Effect.provideService(ThreadStore, observed));
 
-      if (scenario === "gap") {
-        expect((yield* resumed.runRecovery()).blocked).toMatchObject([{ _tag: "RecoveryBlocked" }]);
+      if (scenario === "missing-evidence" || scenario === "corrupt-evidence") {
+        const report = yield* resumed.runRecovery();
+
+        expect(report.blocked).toMatchObject([{ _tag: "RecoveryBlocked" }]);
         expect(requests).toHaveLength(requestsBefore);
         expect(calls).toBe(callsBefore);
+        expect(
+          yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId })),
+        ).toEqual(original);
 
         return;
       }
+
       yield* resumed.runRecovery();
       if (scenario === "approval") {
         yield* resumed.resolveApproval(
@@ -681,7 +715,7 @@ describe("disposable durable recovery checkpoint", () => {
             toolCallId: ToolCallId.make("call-4"),
             decision: "approved",
             resolver: "test",
-            reason: "resume checkpointed approval",
+            reason: "resume retained approval",
           }),
         );
       }
@@ -693,7 +727,7 @@ describe("disposable durable recovery checkpoint", () => {
 
         expect(failure._tag).toBe("RunJournalError");
         expect(requests).toHaveLength(4);
-        // The checkpoint precedes call-3's dispatch; recovery may finish that unique call.
+        // Recovery may finish call-3 before rejecting the reused call identity.
         expect(callsBefore).toBe(2);
         expect(calls).toBe(3);
         expect(stepEffects).toBe(3);

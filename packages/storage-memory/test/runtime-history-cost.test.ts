@@ -80,7 +80,7 @@ const base = Layer.mergeAll(
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
 type ReadFault = "interruption";
-type ReadPhase = "suffix";
+type ReadPhase = "selected-run";
 
 const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   historySize: number,
@@ -162,11 +162,14 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
     ...store,
     read: (request) =>
       Stream.suspend(() => {
-        if ("selection" in request) return store.read(request);
         openedPages++;
-        requests.push(request);
+        if (!("selection" in request)) requests.push(request);
 
-        const inject = !injected && fault !== undefined && request.afterSequence === historySize;
+        const inject =
+          !injected &&
+          fault !== undefined &&
+          "selection" in request &&
+          request.selection._tag === "RunEvidence";
 
         if (inject) {
           injected = true;
@@ -174,7 +177,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
           return Stream.fromEffect(Effect.interrupt);
         }
 
-        if (raceAppend && !raced && request.afterSequence === 1_024) {
+        if (raceAppend && !raced && !("selection" in request) && request.afterSequence === 1_024) {
           raced = true;
 
           return Stream.unwrap(
@@ -182,7 +185,6 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
               const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
               const input = "retained input racing append";
 
-              retainedInputs.push(input);
               yield* store
                 .append(
                   FencedAppendRequest.make({
@@ -294,7 +296,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   };
 });
 
-it.live.each([{ kind: "interruption", phase: "suffix" }] satisfies ReadonlyArray<{
+it.live.each([{ kind: "interruption", phase: "selected-run" }] satisfies ReadonlyArray<{
   readonly kind: ReadFault;
   readonly phase: ReadPhase;
 }>)("releases startup reads and ownership after $phase $kind", (fault) =>
@@ -310,7 +312,7 @@ it.live.each([{ kind: "interruption", phase: "suffix" }] satisfies ReadonlyArray
   }),
 );
 
-it.live("captures the initial tail and incorporates racing appends through a later suffix", () =>
+it.live("captures original context before racing later appends", () =>
   Effect.gen(function* () {
     const result = yield* measure(1_025, undefined, true).pipe(Effect.provide(base));
 

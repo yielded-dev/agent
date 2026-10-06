@@ -14,12 +14,15 @@ import {
   submissionLedgerLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
 import {
+  exclusiveHostClientLayer,
+  exclusiveRunStorageLayer,
   threadStoreLayer,
   storageConfigLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import {
   CanonicalBatch,
+  AbortRequested,
   CanonicalRecord,
   CanonicalSequence,
   DefinitionDigests,
@@ -28,13 +31,20 @@ import {
   ProducerEpoch,
   ProducerId,
   RecordEnvelope,
+  RunStartedRecord,
   SubmissionSettled,
   SubmissionSettledRecord,
   UserInputRecorded,
   type PersistedJson,
   type SettlementOutcome,
 } from "@yielded/agent/records";
+import {
+  CurrentRunSettlement,
+  CurrentRunWriter,
+  makeProgressWriter,
+} from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { makeRunWriter, RunStorage } from "@yielded/agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionPolicyError,
@@ -74,6 +84,9 @@ import {
   WaitingChild,
   WaitingForChildSuspension,
   submissionInputRecordId,
+  submissionInputBatchId,
+  submissionAbortRecordId,
+  submissionAbortBatchId,
   submissionSettlementId,
   submissionSettlementBatchId,
   submissionSettlementRecordId,
@@ -84,6 +97,7 @@ import {
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
 import {
   ThreadMaterialization,
+  ThreadExportRequest,
   ThreadStore,
   FencedAppendRequest,
   FenceRejected,
@@ -121,6 +135,145 @@ const isFenceRejected = Schema.is(FenceRejected);
 const isLedgerError = Schema.is(LedgerError);
 const isSqliteStorageCompatibilityError = Schema.is(SqliteStorageCompatibilityError);
 const isSqliteStorageFailpointError = Schema.is(SqliteStorageFailpointError);
+
+// Requested native CAS proof: administrative writes refresh native authority while
+// settlement progress was prepared against the earlier frontier. It must reprepare.
+it.effect("reprepares native settlement progress after a same-epoch administrative append", () =>
+  withTemporaryDatabase((filename) => {
+    const dependencies = Layer.mergeAll(
+      SqliteClient.layer({ filename, disableWAL: true }),
+      storageConfigLayer({ filename }),
+      SqliteStorageFailpoint.layer,
+      NodeCrypto.layer,
+    );
+
+    const services = exclusiveRunStorageLayer.pipe(
+      Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
+    );
+
+    return Effect.gen(function* () {
+      const ledger = yield* SubmissionLedger;
+      const store = yield* ThreadStore;
+      const storage = yield* RunStorage;
+      const lane = "native-settlement-reprepare";
+      const admitted = yield* ledger.admit(yield* admission(lane, "native-owner", "Kyoto"));
+
+      yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+
+      const claimed = yield* storage.claim(
+        ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
+      );
+
+      if (Option.isNone(claimed)) return yield* Effect.die("Native Run was not claimed");
+      const session = claimed.value;
+      const runId = runIdForSubmission(admitted.submissionId);
+
+      const record = (recordId: CanonicalRecord["recordId"], payload: CanonicalRecord["payload"]) =>
+        CanonicalRecord.make({
+          recordId,
+          family: "thread",
+          schemaVersion: 1,
+          createdAt: at(1),
+          deploymentId: TEST_DEPLOYMENT,
+          payload,
+        });
+
+      const progress = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
+
+      const input = record(
+        submissionInputRecordId(admitted.submissionId),
+        UserInputRecorded.make({
+          submissionId: admitted.submissionId,
+          runId,
+          kind: "user",
+          input: "Kyoto",
+        }),
+      );
+
+      yield* progress
+        .commit(
+          CanonicalBatch.make({
+            batchId: submissionInputBatchId(admitted.submissionId),
+            producerId: TEST_PRODUCER,
+            records: [input],
+          }),
+        )
+        .pipe(Effect.provideService(CurrentRunWriter, session));
+      yield* progress
+        .commit(
+          batch("native-reprepare-start", [
+            record(
+              id(RecordEnvelope.fields.recordId, "native-reprepare-start"),
+              RunStartedRecord.make({
+                runId,
+                policyAccountingVersion: 1,
+                maxDurationMillis: 30_000,
+              }),
+            ),
+          ]),
+        )
+        .pipe(Effect.provideService(CurrentRunWriter, session));
+
+      const publication = yield* settlementPublication(admitted, session.claim, lane, "aborted");
+      let injected = false;
+
+      const published = yield* progress.publish(publication.append.batch).pipe(
+        Effect.provideService(CurrentRunSettlement, {
+          threadId: session.threadId,
+          tail: session.tail,
+          publishSettlement: (prepared) =>
+            Effect.gen(function* () {
+              if (!injected) {
+                injected = true;
+                const administrative = yield* makeRunWriter(thread(lane), session.producerEpoch);
+                const repair = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
+
+                const abort = record(
+                  submissionAbortRecordId(admitted.submissionId),
+                  AbortRequested.make({
+                    submissionId: admitted.submissionId,
+                    author: "operator",
+                    reason: "Abort raced settlement preparation",
+                  }),
+                );
+
+                yield* repair
+                  .commit(
+                    CanonicalBatch.make({
+                      batchId: submissionAbortBatchId(admitted.submissionId),
+                      producerId: OTHER_PRODUCER,
+                      records: [abort],
+                    }),
+                  )
+                  .pipe(Effect.provideService(CurrentRunWriter, administrative));
+              }
+
+              return yield* session.publishSettlement(prepared);
+            }),
+        }),
+      );
+
+      expect(published.replayed).toBe(false);
+      const exported = yield* store.export(ThreadExportRequest.make({ threadId: thread(lane) }));
+
+      expect(
+        exported.records.flatMap(({ record }) =>
+          record.payload._tag === "RunContinuation" ? [record.payload.revision] : [],
+        ),
+      ).toEqual([1, 2, 3, 4]);
+      expect(
+        exported.records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
+      ).toHaveLength(1);
+
+      const recovered = yield* ledger.loadRecoverySnapshot(
+        RecoverySnapshotRequest.make({ submissionId: admitted.submissionId }),
+      );
+
+      expect(recovered.submission.state).toBe("settled");
+      expect(recovered.ownership).toBeUndefined();
+    }).pipe(Effect.scoped, Effect.provide(services));
+  }),
+);
 
 const TEST_PRINCIPAL = id(Principal, "principal-sqlite-ledger");
 const TEST_PRODUCER = id(ProducerId, "producer-sqlite-ledger");

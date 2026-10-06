@@ -348,14 +348,14 @@ const command = Command.make(
               yield* requireReplayCpu(
                 proof.valid &&
                   Object.values(proof.checks).every(Boolean) &&
-                  proof.checkpoint.present &&
+                  proof.continuation.present &&
                   proof.objectId === seeded.objectId &&
                   proof.threadId === seeded.threadId &&
                   proof.operations.length === 10 &&
                   proof.revision === target.identity.revision &&
                   proof.fixtureSha256 === target.identity.fixtureSha256 &&
                   proof.deploymentVersion === target.identity.deploymentVersion,
-                "Final canonical/provider/checkpoint evidence failed",
+                "Final canonical/provider/continuation evidence failed",
               );
               const prompts = [];
 

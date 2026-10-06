@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 
-export const FIXTURE_VERSION = "runtime-v4";
+export const FIXTURE_VERSION = "runtime-v5";
 
 export class BenchmarkError extends Schema.TaggedError<BenchmarkError>()("BenchmarkError", {
   message: Schema.String,
@@ -161,7 +161,7 @@ export const Sample = Schema.Struct({
   setupMs: Schema.Finite,
   failurePhase: Schema.NullOr(SamplePhase),
   modelEntryMs: Schema.NullOr(Schema.Finite),
-  checkpointCreationMs: Schema.NullOr(Schema.Finite),
+  compactionCommitMs: Schema.NullOr(Schema.Finite),
   retainedPromptMessages: Schema.Natural,
   modelCalls: Schema.Natural,
   finalizers: Schema.Natural,

@@ -46,6 +46,8 @@ import {
 import {
   AgentApprovalDenied,
   AgentApprovalPending,
+  AgentInputDecodeError,
+  AgentPersistenceCapacityError,
   AgentInputError,
   AgentOutputError,
   AgentRunDispositionError,
@@ -117,7 +119,7 @@ import {
   TruncatedToolResult,
   applyToolResultBounds,
   unserializableToolResult,
-  type ToolResultBounds,
+  ToolResultBounds,
 } from "../../core/ToolResult.ts";
 import {
   InputTokenUsage,
@@ -453,6 +455,7 @@ export type AgentRuntimeFailure<
   | RunContextPreparationError
   | AgentToolAuthorizationCheckError
   | ModelProtocolError
+  | AgentPersistenceCapacityError
   | AgentApprovalDenied
   | AgentToolAuthorizationDenied
   | AgentApprovalPending
@@ -3188,6 +3191,21 @@ const boundEncodedToolResult = (encodedResult: unknown, bounds: ToolResultBounds
   }
 };
 
+const durableResultBounds = <E, R>(
+  bounds: ToolResultBounds,
+  options: RunOptions<E, R>,
+  turn: number,
+): ToolResultBounds =>
+  ToolResultBounds.make({
+    maxBytes: Math.min(
+      bounds.maxBytes,
+      options.durability?.toolResultMaxBytes ?? bounds.maxBytes,
+      options.resume?.turn === turn
+        ? (options.resume.toolResultMaxBytes ?? bounds.maxBytes)
+        : bounds.maxBytes,
+    ),
+  });
+
 /** Deterministic inputs of one run-status message (RUN-024). */
 export interface RunStatusView {
   readonly turn: number;
@@ -4465,12 +4483,12 @@ const decodeInput = <AgentValue extends Agent.Any>(
   input: unknown,
 ): Effect.Effect<
   Agent.Input<AgentValue>,
-  AgentInputError,
+  AgentInputDecodeError,
   AgentValue["definition"]["input"]["DecodingServices"]
 > =>
   Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
     Effect.mapError((cause) =>
-      AgentInputError.make({
+      AgentInputDecodeError.make({
         message: cause.message,
       }),
     ),
@@ -7290,7 +7308,7 @@ const makeTurn = <
                     maxToolCalls: bounds.maxToolCalls,
                     declaredToolCalls: toolCalls,
                   },
-                  agent.definition.policy.toolResultBounds,
+                  durableResultBounds(agent.definition.policy.toolResultBounds, options, turn),
                 );
 
                 return toolResults.pipe(
@@ -7847,7 +7865,10 @@ const makeResumeTurn = <
             id: call.id,
             isFailure: true,
             result: yield* decodeEventJson(
-              boundEncodedToolResult(rejection.error, agent.definition.policy.toolResultBounds),
+              boundEncodedToolResult(
+                rejection.error,
+                durableResultBounds(agent.definition.policy.toolResultBounds, options, turn),
+              ),
               "Rejected Tool result",
             ),
           });
@@ -8192,7 +8213,7 @@ const makeResumeTurn = <
           maxToolCalls: bounds.maxToolCalls,
           declaredToolCalls: toolCalls,
         },
-        agent.definition.policy.toolResultBounds,
+        durableResultBounds(agent.definition.policy.toolResultBounds, options, turn),
         settledIds,
       );
 
@@ -8737,6 +8758,12 @@ function executeWithCompletion<
 
                     const source = agent.definition.instructions;
 
+                    if (options.retainedContext !== undefined) {
+                      if (typeof source === "function") yield* decodeInput(agent, encodedInput);
+
+                      return { instructions: "", encodedInput, inputPrompt: undefined };
+                    }
+
                     const instructions =
                       typeof source === "function"
                         ? yield* evaluateInstructions<
@@ -8798,7 +8825,14 @@ function executeWithCompletion<
                     );
 
               const priorHistoryLength = context.history.content.length;
-              const prompt = yield* makeInitialPrompt(instructions, inputPrompt, context.history);
+
+              const prompt =
+                options.retainedContext === undefined
+                  ? yield* makeInitialPrompt(instructions, inputPrompt, context.history)
+                  : Prompt.fromMessages([
+                      ...context.history.content,
+                      ...options.retainedContext.content,
+                    ]);
 
               if (options.durability !== undefined) {
                 if ((resumeUsage?.committedTurns ?? 0) === 0) {
@@ -8819,14 +8853,16 @@ function executeWithCompletion<
                 const currentPrefix = prompt.content.slice(priorHistoryLength);
 
                 const protectedMessages =
-                  options.protectedContext === undefined
-                    ? currentPrefix
-                    : [
-                        ...currentPrefix.filter((message) => message.role === "system"),
-                        ...options.protectedContext.content.filter(
-                          (message) => message.role !== "system",
-                        ),
-                      ];
+                  options.retainedContext !== undefined
+                    ? options.retainedContext.content
+                    : options.protectedContext === undefined
+                      ? currentPrefix
+                      : [
+                          ...currentPrefix.filter((message) => message.role === "system"),
+                          ...options.protectedContext.content.filter(
+                            (message) => message.role !== "system",
+                          ),
+                        ];
 
                 context.preparedCompactionSource = {
                   protectedReferences: protectedMessages,
@@ -10518,32 +10554,56 @@ const makeDurableStepService = <HookError, HookRequirements>(
             ),
           );
         }
-        const value = yield* execute;
 
-        const encodedOutput = yield* Schema.encodeEffect(output)(value).pipe(
-          Effect.mapError(() =>
-            DurableStepError.make({
-              toolCallId,
-              stepName: name,
-              reason: "output-encoding-failed",
-              message: "Durable Step output failed the declared output Schema",
-            }),
+        return yield* Effect.acquireUseRelease(
+          provideHookServices(hook.reserve(key), hookServices).pipe(
+            Effect.mapError((cause) =>
+              DurableStepError.make({
+                toolCallId,
+                stepName: name,
+                reason:
+                  cause instanceof AgentPersistenceCapacityError
+                    ? "capacity-exhausted"
+                    : "reservation-failed",
+                message:
+                  cause instanceof AgentPersistenceCapacityError
+                    ? "Durable Step has no room for a valid saved result"
+                    : "Durable Step capacity reservation failed",
+                cause,
+              }),
+            ),
           ),
-        );
+          () =>
+            Effect.gen(function* () {
+              const value = yield* execute;
 
-        yield* provideHookServices(hook.commit(key, encodedOutput), hookServices).pipe(
-          Effect.mapError((cause) =>
-            DurableStepError.make({
-              toolCallId,
-              stepName: name,
-              reason: "commit-failed",
-              message: "Durable Step commit failed",
-              cause,
+              const encodedOutput = yield* Schema.encodeEffect(output)(value).pipe(
+                Effect.mapError(() =>
+                  DurableStepError.make({
+                    toolCallId,
+                    stepName: name,
+                    reason: "output-encoding-failed",
+                    message: "Durable Step output failed the declared output Schema",
+                  }),
+                ),
+              );
+
+              yield* provideHookServices(hook.commit(key, encodedOutput), hookServices).pipe(
+                Effect.mapError((cause) =>
+                  DurableStepError.make({
+                    toolCallId,
+                    stepName: name,
+                    reason: "commit-failed",
+                    message: "Durable Step commit failed",
+                    cause,
+                  }),
+                ),
+              );
+
+              return value;
             }),
-          ),
+          (release) => release,
         );
-
-        return value;
       }),
   };
 };

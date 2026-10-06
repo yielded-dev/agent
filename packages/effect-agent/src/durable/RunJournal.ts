@@ -17,16 +17,13 @@ import {
 } from "../engine/Compaction.ts";
 import type { RunTurnToolResult } from "../engine/RunOptions.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
-import {
-  type JournalCheckpointSeed,
-  type ThreadContextCheckpoint,
-} from "./internal/journal-checkpoint.ts";
 import { makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import {
+  type CompactionCreated,
   BatchId,
   CanonicalBatch,
-  CompactionCreated,
   ModelResponseRecorded,
+  MAX_PERSISTED_JSON_BYTES,
   PersistedJson,
   RecordEnvelope,
   RecordId,
@@ -36,6 +33,7 @@ import {
   type CanonicalSequence,
   type DeploymentId,
   type ProducerId,
+  type ContextBoundary,
 } from "./Records.ts";
 import { IdempotencyKey } from "./SubmissionLedger.ts";
 
@@ -528,6 +526,8 @@ const declaredApplicationToolCallIds = (prompt: Prompt.Prompt): ReadonlyArray<st
 const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
   "RunPolicyUsageReserved",
   "RunStarted",
+  "RunContextRecorded",
+  "RunContinuation",
   "RunDurationExhausted",
   "ToolCallUnknown",
   "ToolCallResolved",
@@ -580,13 +580,23 @@ export interface JournalBoundary {
   readonly terminalPriorRun?: true | undefined;
 }
 
+/** Resolved immutable context. Persisted context stores references instead of this Prompt. */
+export interface RunJournalContext {
+  readonly runId: RunId;
+  readonly prompt: Prompt.Prompt;
+  readonly priorHistoryLength: number;
+  readonly boundaries: ReadonlyArray<typeof ContextBoundary.Type>;
+  readonly contextWindowId?: string | undefined;
+  readonly digest: string;
+}
+
 /**
  * Reconstruct a fixed canonical prefix from a re-readable stream. The caller must keep the same
  * records visible on every traversal. The first collects compaction and settlement metadata;
  * rollovers additionally validate covered Tool batches before rebuilding Prompt and usage. Metadata and the
  * live Prompt remain resident; covered historical message/tool payloads do not. An uncompacted Prompt still grows
  * with its conversation, so hosts must configure an appropriate context compaction policy.
- * Prepared metadata must describe exactly this stream and seed through the same fixed tail;
+ * Prepared metadata must describe exactly this stream through the same fixed tail;
  * it skips only the metadata scan, never covered-Tool validation or the canonical fold.
  * @internal
  */
@@ -594,24 +604,29 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   records: Stream.Stream<CanonicalRecordEnvelope, E, R>,
   ownerRunId: RunId | undefined,
   onBoundary?: (boundary: JournalBoundary) => void,
-  seed?: JournalCheckpointSeed,
+  savedContext?: RunJournalContext,
   preparedMetadata?: JournalMetadata,
-  priorContext?: ThreadContextCheckpoint,
+  onEvidence?: (envelope: CanonicalRecordEnvelope) => void,
 ): Effect.fn.Return<RunJournalProjection, RunJournalError | E, R> {
-  if (seed !== undefined && seed.runId !== ownerRunId)
-    return yield* journalError("Recovery checkpoint belongs to another Run");
-  if (seed !== undefined && priorContext !== undefined)
-    return yield* journalError("Run recovery and prior Thread context cannot seed the same replay");
+  if (savedContext !== undefined && savedContext.runId !== ownerRunId)
+    return yield* journalError("Saved original context belongs to another Run");
 
-  const historical =
-    priorContext === undefined ? [] : (yield* decodePromptMessages(priorContext.prompt)).content;
+  const initialContext = savedContext?.prompt;
+
+  if (
+    initialContext !== undefined &&
+    savedContext !== undefined &&
+    savedContext.priorHistoryLength > initialContext.content.length
+  )
+    return yield* journalError("Saved original context has an invalid ownership boundary");
+  const historical = initialContext?.content.slice(0, savedContext?.priorHistoryLength) ?? [];
 
   let state: FoldState = {
-    all: [...historical],
-    before: [...historical],
+    all: [],
+    before: [],
     pendingTools: [],
     pendingToolsForRun: false,
-    committedTurns: seed?.committedTurns ?? 0,
+    committedTurns: 0,
   };
 
   // RUN-026 pre-scan: valid compactions retire only their creator's Run view. A bound
@@ -625,16 +640,13 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   // would orphan the tool message from its declaring response. Orphaned
   // settleds (filtered later by the fold) still contribute spans —
   // over-invalidating is the fail-safe direction.
-  if (
-    preparedMetadata !== undefined &&
-    (preparedMetadata.ownerRunId !== ownerRunId || preparedMetadata.seed !== seed)
-  )
+  if (preparedMetadata !== undefined && preparedMetadata.ownerRunId !== ownerRunId)
     return yield* journalError("Prepared journal metadata belongs to another replay");
 
   let metadata = preparedMetadata;
 
   if (metadata === undefined) {
-    const collected = makeJournalMetadata(ownerRunId, seed);
+    const collected = makeJournalMetadata(ownerRunId);
 
     yield* Stream.runForEach(records, (envelope) => Effect.sync(() => collected.add(envelope)));
     metadata = collected.snapshot();
@@ -669,9 +681,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   const compactions = metadata.compactions.filter(({ sequence, payload }) =>
     isInRunView(sequence, payload, ownerRunId),
   );
-
-  if (priorContext !== undefined && compactions.length > 0)
-    return yield* journalError("New compaction requires the complete canonical context mapping");
 
   const recordsForRun = records.pipe(
     Stream.filter(({ sequence, record: { payload } }) =>
@@ -709,12 +718,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   const incompleteResponseSequences: Array<{ readonly sequence: number; readonly runId: RunId }> =
     [];
 
-  let ownerPrefixSequence = seed?.firstSequence ?? Number.POSITIVE_INFINITY;
+  let ownerPrefixSequence = firstSequenceByRun.get(ownerRunId ?? "") ?? Number.POSITIVE_INFINITY;
 
   let protectedContext: Prompt.Prompt | undefined =
-    seed?.protectedContext === undefined
+    initialContext === undefined
       ? undefined
-      : yield* decodePromptMessages(seed.protectedContext);
+      : Prompt.fromMessages(initialContext.content.slice(savedContext?.priorHistoryLength));
 
   if (settledCoverage > 0) {
     yield* Stream.runForEach(recordsForRun, (envelope) =>
@@ -759,14 +768,19 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     const { runId, coversThrough } = payload;
 
     if (coversThrough <= 0 || coversThrough >= ownSequence) return false;
-    if (seed !== undefined && ownSequence === seed.compaction.sequence)
-      return (
-        seed.compaction.record.payload._tag === "CompactionCreated" &&
-        Schema.toEquivalence(CompactionCreated)(payload, seed.compaction.record.payload)
-      );
     const ownerFirst = firstSequenceByRun.get(runId);
 
     if (payload.kind === "summarize" && ownerFirst !== undefined && coversThrough >= ownerFirst)
+      return false;
+    if (
+      payload.kind !== "summarize" &&
+      savedContext?.boundaries.some(
+        (boundary) =>
+          boundary.sequence <= coversThrough &&
+          boundary.incomplete === true &&
+          boundary.terminalPriorRun !== true,
+      )
+    )
       return false;
     if (
       payload.kind !== "summarize" &&
@@ -821,8 +835,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     ];
   };
 
-  let latestWindowId: string | undefined = seed?.contextWindowId ?? priorContext?.contextWindowId;
-  let latestWindowSequence = seed?.throughSequence ?? -1;
+  let latestWindowId: string | undefined = savedContext?.contextWindowId;
+  let latestWindowSequence = -1;
+  let latestWindow: CompactionView | undefined;
   let rolloverCoveredThrough = 0;
 
   for (const { payload, sequence } of compactions) {
@@ -830,6 +845,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     if (payload.kind === "rollover" && sequence > latestWindowSequence) {
       latestWindowId = contextWindowId(payload.runId, payload.turn);
       latestWindowSequence = sequence;
+      latestWindow = { payload, sequence };
     }
     if (payload.kind === "rollover")
       rolloverCoveredThrough = Math.max(rolloverCoveredThrough, payload.coversThrough);
@@ -838,6 +854,24 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       replacements = retainCompaction(replacements, { payload, sequence });
     } else clearings = retainCompaction(clearings, { payload, sequence });
   }
+
+  // A superseding summary retires the overlay, but the latest rollover still owns the window.
+  const contextViews = [
+    ...replacements,
+    ...clearings,
+    ...(latestWindow === undefined ? [] : [latestWindow]),
+  ];
+
+  const contextCompactions = new Set(contextViews.map(({ sequence }) => sequence));
+
+  const contextCreatorStarts = new Set(
+    contextViews.flatMap(({ payload }) => {
+      const sequence = firstSequenceByRun.get(payload.runId);
+
+      return sequence === undefined ? [] : [sequence];
+    }),
+  );
+
   let summaryEmitted = false;
 
   const retainedPrefix = replacements.some(
@@ -850,9 +884,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     : [];
 
   const replacementLength = retainedPrefix.length + replacements.length;
-
-  if (seed?.frontier !== undefined)
-    onBoundary?.({ ...seed.frontier, promptLength: replacementLength });
 
   const emitSummary = () => {
     if (summaryEmitted || replacements.length === 0) return;
@@ -879,35 +910,83 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     }
   };
 
+  // The original context is canonical model input, not a reconstruction of later Thread
+  // traffic. Its bounded mapping lets compaction cover exactly the same historical prefix.
+  if (savedContext !== undefined) {
+    emitSummary();
+    for (const [index, message] of historical.entries()) {
+      const boundary = savedContext.boundaries.find((entry) => entry.promptLength > index);
+
+      if (boundary === undefined && replacements.length > 0)
+        return yield* journalError("Saved context lacks its canonical compaction boundary");
+      if (
+        boundary !== undefined &&
+        replacements.some(({ payload }) => boundary.sequence <= payload.coversThrough)
+      )
+        continue;
+
+      const visible =
+        message.role === "tool" &&
+        boundary !== undefined &&
+        clearings.some(({ payload }) => boundary.sequence <= payload.coversThrough)
+          ? Prompt.makeMessage("tool", {
+              content: message.content.map((part) =>
+                part.type === "tool-result"
+                  ? Prompt.makePart("tool-result", { ...part, result: CLEARED_TOOL_RESULT })
+                  : part,
+              ),
+            })
+          : message;
+
+      state.all.push(visible);
+      state.before.push(visible);
+    }
+    for (const boundary of savedContext.boundaries) {
+      const removed = savedContext.boundaries.reduce(
+        (length, candidate) =>
+          candidate.sequence <= boundary.sequence &&
+          replacements.some(({ payload }) => candidate.sequence <= payload.coversThrough)
+            ? Math.max(length, candidate.promptLength)
+            : length,
+        0,
+      );
+
+      onBoundary?.({
+        ...boundary,
+        promptLength: replacementLength + Math.max(0, boundary.promptLength - removed),
+      });
+    }
+  }
+
   const modelUsage: Array<ModelCallUsage> = [];
-  let unobservedModelCalls = seed?.unobservedModelCalls ?? 0;
+  let unobservedModelCalls = 0;
 
   const usage = {
-    modelCalls: seed?.modelCalls ?? 0,
-    inputTokens: seed?.inputTokens ?? 0,
-    outputTokens: seed?.outputTokens ?? 0,
-    lastInputTokens: seed?.lastInputTokens ?? 0,
-    lastOutputTokens: seed?.lastOutputTokens ?? 0,
-    costMicrousd: seed?.costMicrousd ?? 0,
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    lastInputTokens: 0,
+    lastOutputTokens: 0,
+    costMicrousd: 0,
     modelUsage,
-    ...(seed === undefined ? {} : { summarizedModelUsage: seed.summarizedModelUsage }),
   };
 
-  let toolSelection = seed?.toolSelection;
-  let usageTurn = seed?.committedTurns ?? 0;
+  let toolSelection: Selection | undefined;
+  let usageTurn = 0;
 
   const incompleteToolTurns = new Set<string>();
   const incompleteToolCalls = new Set<string>();
+  const incompleteContextRuns = new Set<RunId>();
   let pendingContextToolCallId: string | undefined;
   let ownerTerminated = false;
 
   const policyUsage = {
-    committedTurns: seed?.policyUsage.committedTurns ?? 0,
-    toolCalls: seed?.policyUsage.toolCalls ?? 0,
-    programmaticToolCalls: seed?.policyUsage.programmaticToolCalls ?? 0,
-    consecutiveToolFailures: seed?.policyUsage.consecutiveToolFailures ?? 0,
-    finalizationUsed: seed?.policyUsage.finalizationUsed ?? false,
-    modelRestarts: seed?.policyUsage.modelRestarts ?? 0,
+    committedTurns: 0,
+    toolCalls: 0,
+    programmaticToolCalls: 0,
+    consecutiveToolFailures: 0,
+    finalizationUsed: false,
+    modelRestarts: 0,
   };
 
   const accountResponse = Effect.fnUntraced(function* (
@@ -930,10 +1009,10 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     }
     if (declaredRecordIds.some((recordId) => !settledToolCallRecordIds.has(recordId))) {
       incompleteToolTurns.add(envelope.record.recordId);
+      incompleteContextRuns.add(payload.runId);
       for (const recordId of declaredRecordIds) incompleteToolCalls.add(recordId);
     }
     if (payload.runId !== ownerRunId) return;
-    if (seed !== undefined && envelope.sequence <= seed.throughSequence) return;
     if (payload.turn === 1 && payload.runScopedPrefixLength !== undefined) {
       protectedContext = Prompt.fromMessages(
         messages.content.slice(0, payload.runScopedPrefixLength),
@@ -1065,6 +1144,16 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     Effect.gen(function* () {
       const payload = envelope.record.payload;
 
+      if (contextCreatorStarts.has(envelope.sequence)) onEvidence?.(envelope);
+      if (
+        (payload._tag === "RunCompleted" ||
+          payload._tag === "RunFailed" ||
+          payload._tag === "SubmissionSettled") &&
+        payload.runId !== undefined &&
+        incompleteContextRuns.has(payload.runId)
+      )
+        onEvidence?.(envelope);
+
       if (
         ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
           payload.runId === ownerRunId) ||
@@ -1074,7 +1163,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         ownerTerminated = true;
 
       if (payload._tag === "RunPolicyUsageReserved" && payload.runId === ownerRunId) {
-        if (seed !== undefined && envelope.sequence <= seed.throughSequence) return;
         if (
           payload.programmaticToolCalls < policyUsage.programmaticToolCalls ||
           (policyUsage.finalizationUsed && !payload.finalizationUsed)
@@ -1085,7 +1173,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         policyUsage.finalizationUsed = payload.finalizationUsed;
       }
       if (payload._tag === "ModelCallAborted" && payload.runId === ownerRunId) {
-        if (seed !== undefined && envelope.sequence <= seed.throughSequence) return;
         if (payload.restart !== policyUsage.modelRestarts + 1)
           return yield* journalError("Model restart reservations must advance once");
         policyUsage.modelRestarts = payload.restart;
@@ -1127,13 +1214,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       // The compaction record governs the fold (pre-scan) and contributes no
       // message of its own; records at or below the summarize bound render as
       // the one summary message emitted at the covered/kept transition.
-      if (payload._tag === "CompactionCreated") return;
-      if (
-        seed !== undefined &&
-        envelope.sequence <= seed.throughSequence &&
-        (payload._tag === "ModelResponseRecorded" || payload._tag === "ToolCallSettled")
-      )
+      if (payload._tag === "CompactionCreated") {
+        if (contextCompactions.has(envelope.sequence)) onEvidence?.(envelope);
+
         return;
+      }
       if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
         // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
         if (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) {
@@ -1161,6 +1246,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       emitSummary();
       if (payload._tag === "ToolCallSettled") {
+        onEvidence?.(envelope);
         if (payload.runId !== ownerRunId) {
           const slot = historicalResults.get(envelope.record.recordId);
 
@@ -1224,6 +1310,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       state = yield* flushTools(state);
       if (payload._tag === "ModelCompleted" && payload.messages !== undefined) {
+        onEvidence?.(envelope);
         const messages = yield* decodePromptMessages(payload.messages);
 
         for (const message of messages.content) {
@@ -1234,6 +1321,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         return;
       }
       if (payload._tag !== "ModelResponseRecorded") return;
+      onEvidence?.(envelope);
       const messages = yield* decodePromptMessages(payload.messages);
       const forRun = payload.runId === ownerRunId;
 
@@ -1370,6 +1458,8 @@ const validStagedUsage = (label: string, value: number): Effect.Effect<number, R
       );
 
 export interface TurnCommitInput {
+  readonly toolResultMaxBytes?: number | undefined;
+  readonly toolSelectionMaxBytes?: number | undefined;
   readonly toolOperations?: ModelResponseRecorded["toolOperations"] | undefined;
   readonly toolParameterRejections?: ReadonlyArray<ToolParameterRejection> | undefined;
   readonly toolExposure?: Snapshot | undefined;
@@ -1493,6 +1583,8 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
     payload: yield* ModelResponseRecorded.makeEffect({
+      toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
+      toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
       toolOperations: input.toolOperations ?? [],
       ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
         ? {}

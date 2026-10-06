@@ -87,6 +87,7 @@ export default defineConfig({
       "src/durable/Records.ts",
       "src/durable/Recovery.ts",
       "src/durable/RunJournal.ts",
+      "src/durable/RunContinuation.ts",
       "src/durable/RunStorage.ts",
       "src/durable/Schedule.ts",
       "src/durable/ScheduleTransition.ts",

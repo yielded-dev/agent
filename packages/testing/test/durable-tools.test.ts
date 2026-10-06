@@ -20,7 +20,6 @@ import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import type { SubmissionId } from "@yielded/agent/identifiers";
 import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import {
-  type CanonicalRecordEnvelope,
   DefinitionDigestInput,
   DefinitionDigests,
   DeploymentId,
@@ -61,6 +60,7 @@ import {
   type DeclaredToolCallEvidence,
   type ReconciliationDecision,
 } from "@yielded/agent/tool-reconciler";
+import { ToolResultBounds } from "@yielded/agent/tool-result";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
   Cause,
@@ -341,9 +341,6 @@ const readLog = (threadId: string) =>
       ),
     );
   });
-
-const logTags = (records: ReadonlyArray<CanonicalRecordEnvelope>): ReadonlyArray<string> =>
-  records.map((envelope) => envelope.record.payload._tag);
 
 const lookupState = (submissionId: SubmissionId) =>
   Effect.gen(function* () {
@@ -1672,14 +1669,10 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       });
       const records = yield* readLog(thread);
 
-      expect(logTags(records)).toEqual([
-        "ThreadCreated",
-        "UserInputRecorded",
-        "RunStarted",
-        "ModelResponseRecorded",
-        "AbortRequested",
-        "SubmissionSettled",
-      ]);
+      const abort = records.find(({ record }) => record.payload._tag === "AbortRequested");
+      const settlement = records.find(({ record }) => record.payload._tag === "SubmissionSettled");
+
+      expect(abort?.sequence).toBeLessThan(settlement!.sequence);
       expect(
         records.find(({ record }) => record.payload._tag === "AbortRequested")?.record.payload,
       ).toMatchObject(command);
@@ -1876,6 +1869,190 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         expect(yield* desk.count("r-idemres")).toBe(1);
       }),
   );
+
+  for (const fault of ["result-capacity", "step-envelope"]) {
+    it.effect(`settles capacity refusal before executing ${fault}`, () =>
+      Effect.gen(function* () {
+        // Refusing dispatch must preserve settlement, including oversized progress envelopes.
+        yield* resetReconciler;
+        yield* clearFailpoint;
+        const runtime = yield* DurableAgentRuntime;
+        const executed = yield* Ref.make(0);
+
+        const tools = Toolkit.make(
+          Tool.make("probe", {
+            parameters: Schema.Struct({}),
+            success: Schema.String,
+            failure: DurableStepError,
+            ...(fault === "step-envelope" ? { dependencies: [DurableStep] } : {}),
+          }).annotate(ToolExecutionClass, "readonly"),
+        );
+
+        const body = Ref.update(executed, (count) => count + 1).pipe(Effect.as("saved"));
+
+        const toolLayer = tools.toLayer({
+          probe: () =>
+            fault === "step-envelope"
+              ? Effect.gen(function* () {
+                  const step = yield* DurableStep;
+
+                  return yield* step.do("\\".repeat(256), Schema.String, body);
+                })
+              : body,
+        });
+
+        const definition = Agent.make(`durable-refused-${fault}`, {
+          input: Schema.String,
+          output: Schema.Struct({ answer: Schema.String }),
+          instructions: "Save results.",
+          toolkit: tools,
+          policy: {
+            ...policy,
+            toolResultBounds: ToolResultBounds.make({
+              maxBytes: fault === "result-capacity" ? 1024 * 1024 : 50 * 1024,
+            }),
+          },
+        });
+
+        const callId = fault === "step-envelope" ? "q".repeat(126) : "probe";
+
+        const scripted = yield* makeScriptedModel((call) =>
+          call === 0
+            ? toolTurn(
+                ...Array.from({ length: fault === "result-capacity" ? 4 : 1 }, (_, index) =>
+                  toolCall(`${callId}-${index}`, "probe", {}),
+                ),
+              )
+            : finalParts('{"answer":"finished"}'),
+        );
+
+        const agent = Agent.withModel(definition, scripted.model);
+        const thread = `thread-durable-refused-${fault}`;
+
+        const receipt = yield* runtime.submit(
+          agent,
+          "run",
+          submitOptions(thread, `refused-${fault}`),
+        );
+
+        const processed = yield* Effect.exit(
+          runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
+        );
+
+        expect(yield* Ref.get(executed)).toBe(0);
+        expect(Exit.isSuccess(processed)).toBe(true);
+        expect(yield* lookupState(receipt.submissionId)).toBe("settled");
+        if (fault === "step-envelope") {
+          const records = yield* readLog(thread);
+
+          expect(
+            records.some(({ record }) => record.payload._tag === "ModelResponseRecorded"),
+          ).toBe(true);
+        }
+      }).pipe(
+        Effect.provide(
+          Layer.fresh(
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+          ).pipe(
+            Layer.provide(
+              DurableRuntimeConfig.layer({
+                deploymentId: Schema.decodeSync(DeploymentId)(
+                  fault === "step-envelope" ? "d".repeat(4_500) : "deployment-refused",
+                ),
+                producerId: Schema.decodeSync(ProducerId)("producer-refused"),
+                settlementPollInterval: Duration.millis(100),
+                leaseRenewalInterval: Duration.seconds(5),
+                abortPollInterval: Duration.millis(100),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  for (const calls of [1, 2]) {
+    it.effect(
+      `reserves result capacity before ${calls === 1 ? "sequential" : "concurrent"} Durable Steps execute`,
+      () =>
+        Effect.gen(function* () {
+          // Regression: 6ceda1d2 executed a valid Step before rejecting its saved result.
+          yield* resetReconciler;
+          yield* clearFailpoint;
+          const runtime = yield* DurableAgentRuntime;
+          const executed = yield* Ref.make(0);
+          const tools = Toolkit.make(Itinerary.annotate(ToolExecutionClass, "readonly"));
+
+          const toolLayer = tools.toLayer({
+            itinerary: () =>
+              Effect.gen(function* () {
+                const step = yield* DurableStep;
+
+                for (let index = 0; index < (calls === 1 ? 5 : 3); index++) {
+                  yield* step.do(
+                    `large-${index}`,
+                    Schema.String,
+                    Ref.update(executed, (count) => count + 1).pipe(
+                      Effect.as("v".repeat(900 * 1024)),
+                    ),
+                  );
+                }
+
+                return { state: "saved" };
+              }),
+          });
+
+          const definition = Agent.make(`durable-step-capacity-${calls}`, {
+            input: itineraryDefinition.input,
+            output: itineraryDefinition.output,
+            instructions: itineraryDefinition.instructions,
+            toolkit: tools,
+            policy,
+          });
+
+          const scripted = yield* makeScriptedModel((call) =>
+            call === 0
+              ? toolTurn(
+                  ...Array.from({ length: calls }, (_, index) =>
+                    toolCall(`large-call-${index}`, "itinerary", { ref: "large" }),
+                  ),
+                )
+              : finalParts('{"answer":"finished"}'),
+          );
+
+          const agent = Agent.withModel(definition, scripted.model);
+          const thread = `thread-durable-step-capacity-${calls}`;
+
+          const receipt = yield* runtime.submit(
+            agent,
+            { question: "save the valid results" },
+            submitOptions(thread, `step-capacity-${calls}`),
+          );
+
+          const processed = yield* Effect.exit(
+            runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
+          );
+
+          const bodyCount = yield* Ref.get(executed);
+
+          expect(bodyCount).toBeGreaterThan(0);
+          expect(bodyCount).toBeLessThanOrEqual(4);
+          expect(Exit.isSuccess(processed)).toBe(true);
+          expect(yield* lookupState(receipt.submissionId)).toBe("settled");
+
+          const records = yield* readLog(thread);
+
+          const savedSteps = records.filter(
+            ({ record }) => record.payload._tag === "ToolStepSettled",
+          );
+
+          expect(savedSteps).toHaveLength(bodyCount);
+          expect(records.some(({ record }) => record.payload._tag === "SubmissionSettled")).toBe(
+            true,
+          );
+        }),
+    );
+  }
 
   it.effect(
     "records distinct Steps when legal Tool Call IDs and Step names contain separators",

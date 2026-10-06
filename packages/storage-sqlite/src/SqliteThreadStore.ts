@@ -180,7 +180,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
       ),
     );
 
-    // Supported upgrades and malformed/unsupported storage checks precede ownership mutation.
+    // Current-format validation precedes retained ownership mutation.
     yield* initializeSqliteJournal();
     yield* sql
       .withTransaction(
@@ -255,12 +255,17 @@ const makeServices = Effect.fnUntraced(function* () {
 /**
  * SQLite Thread Store implementation with configuration, failpoint, SQL, and Crypto
  * authority kept visible in its input channel.
+ * Inject a client opened with `disableWAL: true`; this adapter enables WAL only for a
+ * fresh file so unsupported files reject before persistent driver configuration changes.
  */
 export const threadStoreLayer: Layer.Layer<
   ThreadStore | ThreadReader | ThreadImport,
   SqliteStorageInitializationError,
   SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
-> = Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore)).pipe(
+> = Layer.effect(
+  ThreadReader,
+  Effect.map(ThreadStore, (store) => ThreadReader.fromStore(store)),
+).pipe(
   Layer.provideMerge(
     Layer.effectContext(
       Effect.map(makeServices(), ({ store, importer }) =>
@@ -378,7 +383,8 @@ export const layer = (
           Layer.mergeAll(
             Layer.succeed(SqliteStorageConfig)(config),
             storageFailpointLayer(options),
-            SqliteClient.layer({ filename: options.filename }),
+            // The journal enables WAL only after proving the file is fresh.
+            SqliteClient.layer({ filename: options.filename, disableWAL: true }),
             NodeCrypto.layer,
           ),
         ),
@@ -387,7 +393,7 @@ export const layer = (
   ).pipe(Layer.provide(storageConfigLayer(options)));
 
 /**
- * Export a quiesced layout-16 or current database without initializing layout or retiring
+ * Export a quiesced current-layout database without initializing layout or retiring
  * ownership. Its read-only connection closes before returning; the source remains untouched.
  */
 export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function* (

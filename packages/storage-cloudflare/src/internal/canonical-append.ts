@@ -1,3 +1,4 @@
+import { canonicalRecordMetadata } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import type { FencedAppendRequest } from "@yielded/agent/thread-store";
 import { PreparedAppend, ThreadStoreError } from "@yielded/agent/thread-store";
 import { Effect } from "effect";
@@ -7,6 +8,10 @@ import type { RawAppendRequest } from "./do-journal.ts";
 /** Prepare the publisher's privately captured canonical request before the writer. */
 export const prepareCanonicalAppend = Effect.fnUntraced(function* (input: FencedAppendRequest) {
   const request = yield* PreparedAppend.capture(input);
+
+  const records = request.records.map((record) =>
+    Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
+  );
 
   const tailDigest = yield* request.digest().pipe(
     Effect.mapError((cause) =>
@@ -27,7 +32,8 @@ export const prepareCanonicalAppend = Effect.fnUntraced(function* (input: Fenced
     batchDigest: tailDigest,
     tailDigest,
     batchJson: request.batchJson,
-    records: request.records,
+    records,
+    progress: request.progress,
   };
 
   return { request, raw };

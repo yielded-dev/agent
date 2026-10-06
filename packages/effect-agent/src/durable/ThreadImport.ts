@@ -10,10 +10,11 @@ import {
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
   Digest,
-  PersistedJson,
   ProducerEpoch,
   RecordEnvelope,
+  RecordJson,
 } from "./Records.ts";
+import { verifyRunContinuations } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import { validateCanonicalSettlement, validateJoinedSettlement } from "./SettlementPublisher.ts";
 import {
@@ -44,7 +45,7 @@ export const ThreadArchive = Schema.Struct({
   records: Schema.Array(
     Schema.Struct({
       ...CanonicalRecordEnvelope.fields,
-      record: PersistedJson,
+      record: RecordJson,
     }),
   ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_RECORDS)),
   batches: Schema.optionalKey(
@@ -161,7 +162,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     return yield* ThreadImportRejected.make({
       threadId,
       reason: "unsupported-format",
-      message: `Unsupported record format ${format}; run the matching release exporter and the release-specific archive conversion before importing`,
+      message: `Unsupported record format ${format}; this unreleased protocol accepts only ${CURRENT_RECORD_FORMAT} archives into fresh stores`,
     });
   if ((archive.externalObligations?.length ?? 0) > 0)
     return yield* ThreadImportRejected.make({
@@ -190,7 +191,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
     if (batchIds.has(batch.batchId)) return yield* invalid("Duplicate canonical batch", threadId);
     batchIds.add(batch.batchId);
     const currentRecords: Array<RecordEnvelope> = [];
-    const encodedRecords: Array<PersistedJson> = [];
+    const encodedRecords: Array<RecordJson> = [];
     const firstSequence = sequence(index + 1);
 
     while (archive.records[index]?.batchId === batch.batchId) {
@@ -240,6 +241,12 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   }
   if (index !== archive.records.length || tailDigest !== archive.tailDigest)
     return yield* invalid("The canonical batch chain does not match the exported tail", threadId);
+
+  yield* verifyRunContinuations(records).pipe(
+    Effect.mapError(() =>
+      invalid("Run continuation differs from its exact canonical facts", threadId),
+    ),
+  );
 
   // A fresh fence is not restored execution authority. Leave room for the next claim and
   // keep its interruption audit distinct from every generation already in the log.

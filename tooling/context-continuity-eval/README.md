@@ -26,18 +26,15 @@ boundaries occur immediately before and after a canonical rollover append. Proce
 reuses persisted usage and refuses any unsettled provider reservation. Cloudflare confirms its
 evaluator-state writes before eviction; the next incarnation reads the same native notes revision.
 
-The follow-up includes the native [recovery checkpoint capability from #380](https://github.com/yielded-dev/agent/pull/380).
-`ThreadStore.recoveryCheckpoints` is an optional, latest-only cache bound to a canonical batch tail;
-it is separate from this evaluator's `resume.json` and Cloudflare audit/phase bookkeeping. Native
-recovery validates the cache and replays its suffix, or falls back to complete canonical replay
-when the cache is absent, rejected or incompatible. The canonical log and submission ledger
-remain authoritative. The evaluator observes public cache metadata in `recovery-checkpoint.json`
-(SQLite) or `host-snapshot.json` (Cloudflare), distinguishing missing/rejected caches from storage
-failures. It keeps the full canonical transcript and original-source oracle independent of that cache.
+Run recovery uses canonical `RunContinuation` records and their exact saved original context.
+Missing or invalid evidence leaves work owed and fails before execution; it requires explicit
+index repair. The evaluator inspects progress in `run-continuation.json` (SQLite) or
+`host-snapshot.json` (Cloudflare), alongside an independent full-transcript and original-source
+oracle. Its `resume.json` and Cloudflare phase bookkeeping belong only to the evaluator.
 
-The deterministic SIGKILL and workerd tests require a valid native checkpoint covering the last
-committed rollover, alongside the existing recovery, usage and original-history checks. Checkpoint
-presence does not establish fast-path selection, bounded startup work, or latency/CPU improvement.
+The deterministic SIGKILL and workerd checks require canonical progress covering the last
+committed rollover, alongside recovery, usage and original-history checks. Progress presence
+alone does not establish bounded startup work or a latency/CPU improvement.
 Actual hosted Cloudflare invocation latency and CPU remain open under
 [#356](https://github.com/yielded-dev/agent/issues/356). The green live baseline in #372 is tied
 to `ad4b70a557b6e561e8471eae2fd3b57373bfdb3b`, before #380, and provides no live acceptance claim
@@ -105,7 +102,7 @@ See [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pric
 The distinct #356 performance case still needs a hosted benchmark adapter for the existing
 1k/10k/100k-history recovery workload, with a fixed active suffix and cold/warm cohorts. Keep model
 inference out of that benchmark, exclude seeding from recovery timing, and measure canonical reads,
-checkpoint selection, invocation CPU and client latency together. The continuity Worker is ready
+continuation selection, invocation CPU and client latency together. The continuity Worker is ready
 for isolated deployment preparation; its 12-window run alone does not close this scaling gate.
 
 Prepare a full-capacity workload without inference:
@@ -261,9 +258,9 @@ prompts are retained per Object until its final audit; both cycles use this same
 retention policy. The warmed cycle also includes the first cycle's canonical records and
 retained captures, so it does not isolate JIT warm-up from that accumulated state.
 
-No archive exports, prompt encoding, hashes or checkpoint inspections run between measured
+No archive exports, prompt encoding, hashes or progress inspections run between measured
 operations. The final audit verifies canonical append digests, retained context, exact finite
-model/tool/finalizer counts, settlements and checkpoint presence. Normalized captured prompts
+model/tool/finalizer counts, settlements and canonical progress. Normalized captured prompts
 must agree across all roles and archive sizes. This proves durable cross-Run continuity;
 existing recovery checks separately cover crashes and ownership loss.
 

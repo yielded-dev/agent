@@ -93,7 +93,7 @@ export const verifyRecordFormat = Effect.fnUntraced(function* () {
   }
   if (CURRENT_RECORD_VERSION > baseline.version) {
     return yield* RecordCompatibilityError.make({
-      message: `Stale record schema baseline: scripts/record-format.schema.json is at version ${baseline.version}, but CURRENT_RECORD_VERSION is ${CURRENT_RECORD_VERSION}. Regenerate the checked-in baseline from the approved schema for current record version ${CURRENT_RECORD_VERSION} as part of the explicit export/convert/import cutover, then rerun vp run check:record-format.`,
+      message: `Stale record schema baseline: scripts/record-format.schema.json is at version ${baseline.version}, but CURRENT_RECORD_VERSION is ${CURRENT_RECORD_VERSION}. Regenerate the checked-in baseline from the approved schema for current record version ${CURRENT_RECORD_VERSION} for the explicitly approved fresh-store format boundary, then rerun vp run check:record-format.`,
     });
   }
 
@@ -110,7 +110,7 @@ export const verifyRecordFormat = Effect.fnUntraced(function* () {
 
   if (incompatible.length > 0) {
     return yield* RecordCompatibilityError.make({
-      message: `Existing record wire meaning changed at ${incompatible.slice(0, 8).join(", ")}. Bump CURRENT_RECORD_VERSION and CURRENT_RECORD_FORMAT and provide an explicit export/convert/import cutover. Runtime import only accepts the current record format.`,
+      message: `Existing record wire meaning changed at ${incompatible.slice(0, 8).join(", ")}. Bump CURRENT_RECORD_VERSION and CURRENT_RECORD_FORMAT and document its fresh-store boundary. Runtime import only accepts the current record format.`,
     });
   }
 });

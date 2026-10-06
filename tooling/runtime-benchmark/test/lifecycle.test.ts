@@ -31,7 +31,7 @@ const sample = (ordinal: number): Sample => ({
   setupMs: 1,
   failurePhase: null,
   modelEntryMs: 0.5,
-  checkpointCreationMs: null,
+  compactionCommitMs: null,
   retainedPromptMessages: 0,
   modelCalls: 1,
   finalizers: 1,

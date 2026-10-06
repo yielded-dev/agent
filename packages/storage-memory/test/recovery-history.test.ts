@@ -63,10 +63,14 @@ const countingThreadStoreLayer = Layer.effectContext(
       read: (request) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            if ("selection" in request) return store.read(request);
             const failure = yield* Ref.get(failingAfter);
 
-            if (Option.isSome(failure) && request.afterSequence === failure.value) {
+            if (
+              Option.isSome(failure) &&
+              "selection" in request &&
+              request.selection._tag === "RunEvidence" &&
+              request.page.afterSequence === failure.value
+            ) {
               yield* Ref.set(failingAfter, Option.none());
 
               return Stream.fail(ThreadNotMaterialized.make({ threadId: request.threadId }));
@@ -194,88 +198,90 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
 });
 
 describe("DurableAgentRuntime recovery history", () => {
-  it.effect("STORE-015 issue #96: normalizes disappearance during suffix refresh", () =>
-    Effect.gen(function* () {
-      yield* seedHistory();
-      const ledger = yield* SubmissionLedger;
-      const runtime = yield* DurableAgentRuntime;
-      const probe = yield* RecoveryReadProbe;
-      const store = yield* ThreadStore;
-      let prefixTail = HISTORY_TAIL;
+  it.effect(
+    "STORE-015 issue #96: normalizes disappearance during selected Run suffix refresh",
+    () =>
+      Effect.gen(function* () {
+        yield* seedHistory();
+        const ledger = yield* SubmissionLedger;
+        const runtime = yield* DurableAgentRuntime;
+        const probe = yield* RecoveryReadProbe;
+        const store = yield* ThreadStore;
+        let prefixTail = HISTORY_TAIL;
 
-      for (let index = 0; index < 2; index++) {
-        const input = { work: `suffix-race-${index}` };
-        const inputDigest = yield* digestJson(input);
+        for (let index = 0; index < 2; index++) {
+          const input = { work: `suffix-race-${index}` };
+          const inputDigest = yield* digestJson(input);
 
-        const admitted = yield* ledger.admit(
-          AdmissionRequest.make({
-            threadId: THREAD_ID,
-            principal: PRINCIPAL,
-            idempotencyKey: decodeIdempotencyKey(`recovery-suffix-race-${index}`),
-            agentId: AGENT_ID,
-            agentDigests: DEFINITIONS,
-            deploymentId: DEPLOYMENT_ID,
-            inputPayload: input,
-            inputDigest,
-          }),
-        );
-
-        yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-        if (index === 0) {
-          yield* ledger.requestAbort(
-            AbortCommand.make({
-              submissionId: admitted.submissionId,
-              author: "issue-96-test",
-              reason: "exercise suffix refresh after a repaired predecessor",
-            }),
-          );
-        } else {
-          // A lost input marker requires suffix repair; untouched ready input does not.
-          const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: THREAD_ID }));
-
-          const appended = yield* store.append(
-            FencedAppendRequest.make({
+          const admitted = yield* ledger.admit(
+            AdmissionRequest.make({
               threadId: THREAD_ID,
-              expectedTailSequence: tail.tailSequence,
-              expectedTailDigest: tail.tailDigest,
-              producerEpoch: tail.producerEpoch,
-              batch: CanonicalBatch.make({
-                batchId: submissionInputBatchId(admitted.submissionId),
-                producerId: PRODUCER_ID,
-                records: [
-                  CanonicalRecord.make({
-                    recordId: submissionInputRecordId(admitted.submissionId),
-                    family: "thread",
-                    schemaVersion: 1,
-                    createdAt: DateTime.toUtc(DateTime.makeUnsafe(HISTORY_RECORDS + 1)),
-                    deploymentId: DEPLOYMENT_ID,
-                    payload: UserInputRecorded.make({
-                      submissionId: admitted.submissionId,
-                      kind: "user",
-                      runId: runIdForSubmission(admitted.submissionId),
-                      input,
-                    }),
-                  }),
-                ],
-              }),
+              principal: PRINCIPAL,
+              idempotencyKey: decodeIdempotencyKey(`recovery-suffix-race-${index}`),
+              agentId: AGENT_ID,
+              agentDigests: DEFINITIONS,
+              deploymentId: DEPLOYMENT_ID,
+              inputPayload: input,
+              inputDigest,
             }),
           );
 
-          prefixTail = appended.lastSequence;
+          yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+          if (index === 0) {
+            yield* ledger.requestAbort(
+              AbortCommand.make({
+                submissionId: admitted.submissionId,
+                author: "issue-96-test",
+                reason: "exercise suffix refresh after a repaired predecessor",
+              }),
+            );
+          } else {
+            // A lost input marker requires suffix repair; untouched ready input does not.
+            const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: THREAD_ID }));
+
+            const appended = yield* store.append(
+              FencedAppendRequest.make({
+                threadId: THREAD_ID,
+                expectedTailSequence: tail.tailSequence,
+                expectedTailDigest: tail.tailDigest,
+                producerEpoch: tail.producerEpoch,
+                batch: CanonicalBatch.make({
+                  batchId: submissionInputBatchId(admitted.submissionId),
+                  producerId: PRODUCER_ID,
+                  records: [
+                    CanonicalRecord.make({
+                      recordId: submissionInputRecordId(admitted.submissionId),
+                      family: "thread",
+                      schemaVersion: 1,
+                      createdAt: DateTime.toUtc(DateTime.makeUnsafe(HISTORY_RECORDS + 1)),
+                      deploymentId: DEPLOYMENT_ID,
+                      payload: UserInputRecorded.make({
+                        submissionId: admitted.submissionId,
+                        kind: "user",
+                        runId: runIdForSubmission(admitted.submissionId),
+                        input,
+                      }),
+                    }),
+                  ],
+                }),
+              }),
+            );
+
+            prefixTail = appended.lastSequence;
+          }
         }
-      }
 
-      yield* probe.failReadAfter(prefixTail);
-      const result = yield* runtime.runRecovery();
+        yield* probe.failReadAfter(prefixTail);
+        const result = yield* runtime.runRecovery();
 
-      expect(result.reports).toEqual([]);
-      expect(result.blocked).toMatchObject([
-        {
-          threadId: THREAD_ID,
-          failure: { errorTag: "ThreadStoreError", operation: "read recovery history" },
-        },
-      ]);
-      expect(result.blocked).toHaveLength(1);
-    }).pipe(Effect.provide(runtimeLayer)),
+        expect(result.reports).toEqual([]);
+        expect(result.blocked).toMatchObject([
+          {
+            threadId: THREAD_ID,
+            failure: { errorTag: "ThreadStoreError", operation: "RunContinuation" },
+          },
+        ]);
+        expect(result.blocked).toHaveLength(1);
+      }).pipe(Effect.provide(runtimeLayer)),
   );
 });

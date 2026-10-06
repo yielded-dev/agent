@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node";
 import { ConfigProvider, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { RecoveryCheckpointEvidence } from "../src/contracts.ts";
+import { RunContinuationEvidence } from "../src/contracts.ts";
 import { supervise } from "../src/process-host.ts";
 
 it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumulative accounting", async () => {
@@ -29,9 +29,9 @@ it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumula
         yield* path.fromFileUrl(new URL("./scripted-worker.ts", import.meta.url)),
       );
 
-      const checkpoint = yield* Schema.decodeEffect(
-        Schema.fromJsonString(RecoveryCheckpointEvidence),
-      )(yield* fs.readFileString(path.join(outputDirectory, "recovery-checkpoint.json")));
+      const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(RunContinuationEvidence))(
+        yield* fs.readFileString(path.join(outputDirectory, "run-continuation.json")),
+      );
 
       return { report, checkpoint };
     }).pipe(
@@ -47,8 +47,8 @@ it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumula
 
   expect(report.status).toBe("passed");
   expect(checkpoint.status).toBe("present");
-  if (checkpoint.status !== "present") throw new Error("Native SQLite checkpoint absent");
-  expect(checkpoint.throughSequence).toBeGreaterThanOrEqual(report.windows.at(-1)?.sequence ?? 1);
+  if (checkpoint.status !== "present") throw new Error("Canonical SQLite Run continuation absent");
+  expect(checkpoint.sequence).toBeGreaterThanOrEqual(report.windows.at(-1)?.sequence ?? 1);
 
   expect(report.windows.length).toBeGreaterThanOrEqual(12);
   expect(report.restarts.map((r) => r.killConfirmed)).toEqual([true, true]);

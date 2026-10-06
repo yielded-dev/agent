@@ -96,7 +96,7 @@ export const ReplayCpuEvidence = Schema.Struct({
       prompt: Schema.optionalKey(Schema.Json),
     }),
   ),
-  checkpoint: Schema.Struct({ present: Schema.Boolean }),
+  continuation: Schema.Struct({ present: Schema.Boolean }),
 });
 
 export class ReplayCpuError extends Schema.TaggedError<ReplayCpuError>()("ReplayCpuError", {

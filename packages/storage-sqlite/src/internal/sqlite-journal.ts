@@ -1,5 +1,10 @@
 import { makeSqlJournalKernel } from "@yielded/agent-storage-sql/sql-journal";
-import { makeRowDecoder, makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
+import {
+  makeRowDecoder,
+  makeSqlTransaction,
+  type CorruptionErrorFields,
+  type StorageErrorFields,
+} from "@yielded/agent-storage-sql/sql-storage";
 import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { Connection } from "effect/sql/SqlConnection";
@@ -29,15 +34,20 @@ const storageError =
     });
 
 export const sqliteErrors = {
-  storage: SqliteStorageError.make,
-  corruption: SqliteStorageCorruptionError.make,
+  storage: (fields: StorageErrorFields) => SqliteStorageError.make(fields),
+  corruption: (fields: CorruptionErrorFields) => SqliteStorageCorruptionError.make(fields),
   isCorruption: Schema.is(SqliteStorageCorruptionError),
 };
 
-const { decodeSingleRow } = makeRowDecoder(SqliteStorageCorruptionError.make);
+const { decodeSingleRow } = makeRowDecoder((fields) => SqliteStorageCorruptionError.make(fields));
 const decodeJournalModeRow = decodeSingleRow(Schema.Array(SqliteJournalModeRow));
 
 const SynchronousRow = Schema.Tuple([Schema.Struct({ synchronous: Schema.Int })]);
+
+const DatabaseHeader = Schema.Tuple([
+  Schema.Struct({ user_version: Schema.Int, schema_object_count: Schema.Natural }),
+]);
+
 const connectionModes = new WeakMap<Connection, "FULL" | "NORMAL">();
 
 /** Select once per actual connection, including aliases with different SQL transformations. */
@@ -103,18 +113,49 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
     Effect.mapError(storageError("read journal mode")),
   );
 
-  const journalMode = yield* decodeJournalModeRow(
+  let journalMode = yield* decodeJournalModeRow(
     "pragma_journal_mode",
     "singleton",
     journalModeRows,
   );
 
   if (journalMode.journal_mode.toLowerCase() !== "wal") {
-    return yield* SqliteStorageCompatibilityError.make({
-      actualVersion: 0,
-      supportedVersion: CurrentSqliteStorageVersion,
-      message: `SQLite WAL mode is required; the database reported ${journalMode.journal_mode}.`,
-    });
+    const [header] = yield* Schema.decodeUnknownEffect(DatabaseHeader)(
+      yield* sql`SELECT (SELECT user_version FROM pragma_user_version) AS user_version,
+        (SELECT COUNT(*) FROM sqlite_master) AS schema_object_count`.pipe(
+        Effect.mapError(storageError("inspect fresh SQLite file")),
+      ),
+    ).pipe(
+      Effect.mapError((cause) =>
+        SqliteStorageError.make({
+          operation: "inspect fresh SQLite file",
+          message: "Cannot determine whether the SQLite file is empty",
+          cause,
+        }),
+      ),
+    );
+
+    if (header.user_version !== 0 || header.schema_object_count !== 0)
+      return yield* SqliteStorageCompatibilityError.make({
+        actualVersion: header.user_version,
+        supportedVersion: CurrentSqliteStorageVersion,
+        message: `Existing SQLite storage must use WAL; the file was not changed (${journalMode.journal_mode}).`,
+      });
+
+    journalMode = yield* decodeJournalModeRow(
+      "pragma_journal_mode",
+      "singleton",
+      yield* sql`PRAGMA journal_mode = WAL`.pipe(
+        Effect.mapError(storageError("enable WAL for fresh SQLite file")),
+      ),
+    );
+
+    if (journalMode.journal_mode.toLowerCase() !== "wal")
+      return yield* SqliteStorageCompatibilityError.make({
+        actualVersion: 0,
+        supportedVersion: CurrentSqliteStorageVersion,
+        message: `SQLite WAL mode is required; the database reported ${journalMode.journal_mode}.`,
+      });
   }
 
   yield* ensureSqliteStorageLayout();

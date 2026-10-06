@@ -639,6 +639,8 @@ export class AgentUpdateAcceptance extends Context.Service<
  * the ephemeral runtime always has.
  */
 export interface RunDurabilityHook<Error = never, Requirements = never> {
+  /** Upper bound the coordinator can durably retain for one application Tool result. */
+  readonly toolResultMaxBytes: number;
   /** Fail with retained infrastructure errors before the next execution or commit boundary. */
   readonly checkpoint: Effect.Effect<void, Error, Requirements>;
   /** Capture initial instruction/projection metadata once, before input/context preparation. */
@@ -920,6 +922,8 @@ export type RunResumeUsage = typeof RunResumeUsageSchema.Type;
  * proceeds through the normal continuation.
  */
 export interface RunTurnResume {
+  /** Original application-result bound promised by this canonical response. */
+  readonly toolResultMaxBytes?: number | undefined;
   /** A successful settled call whose original operation contract still supports completion projection. */
   readonly settledCompletion?: ToolCallId | undefined;
   /** Canonical rejection evidence, matched to the exact call; never permits handler execution. */
@@ -1019,6 +1023,13 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
    * is restored through `context` instead of rerendering the application's input prompt.
    */
   readonly retainedInput?: Schema.Json | undefined;
+
+  /**
+   * Canonical evaluated instructions and input messages of an unfinished Run. Reuse their
+   * exact model context under a compatible current Binding; do not reevaluate instructions
+   * or render the original input again. Input-dependent Bindings still decode retainedInput.
+   */
+  readonly retainedContext?: Prompt.Prompt | undefined;
 
   /** Initial or canonically restored run-scoped native selection. */
   readonly toolSelection?: Selection | undefined;

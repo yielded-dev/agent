@@ -9,7 +9,7 @@ import {
   MessageDeliveryPageRequest,
   MessageDeliveryPage,
 } from "@yielded/agent/message-delivery";
-import { CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { ReadEnvelope } from "@yielded/agent/record-format";
 import {
   SettlementPublication,
   SettlementPublicationResult,
@@ -53,7 +53,7 @@ import {
   FencedAppendRequest,
 } from "@yielded/agent/thread-store";
 import { WorkerAdmissionRequest } from "@yielded/agent/worker-admission";
-import { Schema } from "effect";
+import { Schema, SchemaGetter } from "effect";
 
 /**
  * The cross-Durable-Object port protocol (plan §1.3, D-P6-3): Schema request/response/error
@@ -74,9 +74,8 @@ import { Schema } from "effect";
  * - publisher: `publish`;
  * - store: `materialize`, `append`, `read` (one page), `readIdentity`, `inspectTail`, `export`.
  *
- * Every other port operation is lane-local and has no envelope. A foreign disposable
- * recovery-cache load returns a miss so the caller can replay canonical history. Other
- * foreign operations fail fast and typed instead of widening the distributed surface.
+ * Every other port operation is lane-local and has no envelope. Foreign operations
+ * fail fast and typed instead of widening the distributed surface.
  *
  * Failures cross the boundary as the `PortFailure` union and re-decode on the caller side to
  * the SAME tagged error types the local facet would have produced, so routed calls keep
@@ -336,7 +335,7 @@ export class StoreAppendResult extends Schema.TaggedClass<StoreAppendResult>(
 export class StoreReadPageResult extends Schema.TaggedClass<StoreReadPageResult>(
   "@effect-agent/storage-cloudflare/StoreReadPageResult",
 )("StoreReadPageResult", {
-  records: Schema.Array(CanonicalRecordEnvelope).check(Schema.isMaxLength(1_024)),
+  records: Schema.Array(ReadEnvelope).check(Schema.isMaxLength(1_024)),
 }) {}
 
 export class StoreInspectTailResult extends Schema.TaggedClass<StoreInspectTailResult>(
@@ -348,7 +347,15 @@ export class StoreInspectTailResult extends Schema.TaggedClass<StoreInspectTailR
 export class StoreReadIdentityResult extends Schema.TaggedClass<StoreReadIdentityResult>(
   "@effect-agent/storage-cloudflare/StoreReadIdentityResult",
 )("StoreReadIdentityResult", {
-  identity: ThreadIdentity,
+  identity: Schema.Struct({
+    ...ThreadIdentity.fields,
+    records: Schema.Array(ReadEnvelope).check(Schema.isMaxLength(3)),
+  }).pipe(
+    Schema.decodeTo(Schema.toType(ThreadIdentity), {
+      decode: SchemaGetter.transform((fields) => ThreadIdentity.make(fields)),
+      encode: SchemaGetter.transform((identity) => identity),
+    }),
+  ),
 }) {}
 
 export class StoreExportResult extends Schema.TaggedClass<StoreExportResult>(

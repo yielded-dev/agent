@@ -46,7 +46,6 @@ import {
 } from "@yielded/agent/submission-ledger";
 import {
   FencedAppendRequest,
-  LoadCheckpointRequest,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadStore,
@@ -109,11 +108,11 @@ const ambientModel = Layer.effectContext(
 const binding = { definition: agent, model: ambientModel };
 
 /** A completed worker Effect can return failed Settlements; retain those bounded diagnostics. */
-export const assertCheckpointFault = Effect.fn("benchmark.assertCheckpointFault")(function* <E>(
+export const assertRecoveryFault = Effect.fn("benchmark.assertRecoveryFault")(function* <E>(
   attempt: Exit.Exit<ReadonlyArray<Settlement>, E>,
   phase: {
     readonly compactionCommitted: boolean;
-    readonly checkpointCreationMs: number | null;
+    readonly compactionCommitMs: number | null;
   },
 ) {
   const fault = Exit.isFailure(attempt) ? Cause.findErrorOption(attempt.cause) : Option.none();
@@ -121,7 +120,7 @@ export const assertCheckpointFault = Effect.fn("benchmark.assertCheckpointFault"
   if (
     Option.isSome(fault) &&
     Schema.is(DurableRuntimeFailpointError)(fault.value) &&
-    fault.value.location === "checkpoint:after-save"
+    fault.value.location === "compaction:after-canonical-append"
   )
     return;
 
@@ -145,7 +144,7 @@ export const assertCheckpointFault = Effect.fn("benchmark.assertCheckpointFault"
       });
 
   return yield* BenchmarkError.make({
-    message: `Expected checkpoint fault was not observed: ${outcome}; checkpoint phase: ${JSON.stringify(phase)}`,
+    message: `Expected recovery fault was not observed: ${outcome}; compaction phase: ${JSON.stringify(phase)}`,
   });
 });
 
@@ -379,8 +378,8 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
   let activeTools = 0;
   let maxActiveTools = 0;
   let recovering = false;
-  let checkpointStarted: bigint | undefined;
-  let checkpointCreationMs: number | null = null;
+  let compactionStarted: bigint | undefined;
+  let compactionCommitMs: number | null = null;
   let retainedPromptMessages = 0;
   const priorText = "h".repeat(workload.historyBytes);
   const expectedRetainedRuns = workload.kind === "ledger" ? 0 : retainedRuns(workload.records);
@@ -646,12 +645,12 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             : {}),
           runtimeFailpoint: (location) =>
             Effect.gen(function* () {
-              if (location === "compaction:after-canonical-append")
-                checkpointStarted = yield* Clock.monotonicTimeNanos;
-              if (location === "checkpoint:after-save") {
-                if (checkpointStarted !== undefined)
-                  checkpointCreationMs ??=
-                    Number((yield* Clock.monotonicTimeNanos) - checkpointStarted) / 1e6;
+              if (location === "compaction:before-canonical-append")
+                compactionStarted = yield* Clock.monotonicTimeNanos;
+              if (location === "compaction:after-canonical-append") {
+                if (compactionStarted !== undefined)
+                  compactionCommitMs ??=
+                    Number((yield* Clock.monotonicTimeNanos) - compactionStarted) / 1e6;
                 if (crash) return yield* DurableRuntimeFailpointError.make({ location });
               }
             }),
@@ -721,21 +720,26 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;
 
-          yield* submit;
+          const receipt = yield* submit;
           const attempt = yield* runtime.processThread(binding, threadId).pipe(Effect.exit);
 
-          yield* assertCheckpointFault(attempt, {
-            compactionCommitted: checkpointStarted !== undefined,
-            checkpointCreationMs,
+          yield* assertRecoveryFault(attempt, {
+            compactionCommitted: compactionCommitMs !== null,
+            compactionCommitMs,
           });
           const store = yield* ThreadStore;
 
-          const checkpoint =
-            store.recoveryCheckpoints === undefined
-              ? Option.none()
-              : yield* store.recoveryCheckpoints.load(LoadCheckpointRequest.make({ threadId }));
+          const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
 
-          yield* check(Option.isSome(checkpoint), "Recovery fixture has no persisted checkpoint");
+          const continuation = archive.records.findLast(
+            ({ record }) => record.payload._tag === "RunContinuation",
+          );
+
+          yield* check(
+            continuation?.record.payload._tag === "RunContinuation" &&
+              continuation.record.payload.runId === runIdForSubmission(receipt.submissionId),
+            "Recovery fixture has no owning canonical progress",
+          );
           yield* inspectScript;
         }).pipe(
           Effect.provide(Layer.mergeAll(host(true), model([script(toolParts(0, 1))]), handlers)),
@@ -743,7 +747,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         );
         yield* check(
           finalized === calls && activeTools === 0,
-          "Checkpoint fault did not finalize model/tools",
+          "Recovery fault did not finalize model/tools",
         );
         calls = 0;
         finalized = 0;
@@ -756,10 +760,10 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
           ),
           Effect.scoped,
         );
-        yield* check(toolCalls === 1, "Checkpoint recovery repeated completed tools");
+        yield* check(toolCalls === 1, "Run recovery repeated completed tools");
         yield* check(
-          checkpointCreationMs !== null && checkpointCreationMs >= 0,
-          "Missing inline checkpoint creation interval",
+          compactionCommitMs !== null && compactionCommitMs >= 0,
+          "Missing inline compaction commit interval",
         );
       } else {
         yield* markStart;
@@ -797,7 +801,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
     setupMs: Number((started === 0n ? attemptFinished : started) - attemptStarted) / 1e6,
     failurePhase: Exit.isFailure(result) ? phase : null,
     modelEntryMs: entered === undefined || started === 0n ? null : Number(entered - started) / 1e6,
-    checkpointCreationMs,
+    compactionCommitMs,
     retainedPromptMessages,
     modelCalls: calls,
     finalizers: finalized,

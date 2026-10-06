@@ -56,10 +56,12 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "SqlThreadImport.import",
   ],
   "packages/storage-sqlite/src/SqliteThreadStore.ts": ["SqliteThreadStore.exportThread"],
-  "packages/storage-sqlite/src/internal/migrations.ts": ["SqliteStorage.upgradeLayout"],
+  "packages/storage-sqlite/src/internal/migrations.ts": ["SqliteStorage.initializeLayout"],
   "packages/storage-postgres/src/PostgresStorage.ts": ["PostgresStorage.exportThread"],
-  "packages/storage-postgres/src/internal/postgres-storage.ts": ["PostgresStorage.upgradeLayout"],
-  "packages/storage-cloudflare/src/internal/migrations.ts": ["DoStorage.upgradeLayout"],
+  "packages/storage-postgres/src/internal/postgres-storage.ts": [
+    "PostgresStorage.initializeLayout",
+  ],
+  "packages/storage-cloudflare/src/internal/migrations.ts": ["DoStorage.initializeLayout"],
   "packages/storage-sql/src/SqlRunStorage.ts": ["SqlRunStorage.claim"],
   "packages/storage-sql/src/SqlThreadStore.ts": ["SqlThreadStore.append"],
   "packages/storage-sql/src/SqlSubmissionLedger.ts": [

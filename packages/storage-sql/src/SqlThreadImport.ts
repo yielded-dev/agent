@@ -1,10 +1,10 @@
 import { EMPTY_TAIL_DIGEST, canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
-import { decodeExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecord, ExportedRecord } from "@yielded/agent/record-format";
 import {
   CURRENT_RECORD_FORMAT,
   Digest,
   ObservationOffset,
-  PersistedJson,
+  RecordJson,
 } from "@yielded/agent/records";
 import {
   ApprovalDecisionIntent,
@@ -41,7 +41,7 @@ import {
 } from "./SqlAdmissionFacts.ts";
 import { BatchRow, RecordRow, ThreadRow } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
-import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
+import { canonicalRecordMetadata, type CanonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
@@ -82,7 +82,7 @@ const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.field
 
 const WireBatch = Schema.Struct({
   ...ThreadExportBatch.fields,
-  records: Schema.NonEmptyArray(PersistedJson).check(Schema.isMaxLength(256)),
+  records: Schema.NonEmptyArray(RecordJson).check(Schema.isMaxLength(256)),
 });
 
 const AdmissionRow = Schema.Struct({
@@ -269,7 +269,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     "export complete Thread",
                     "Overlapping or non-contiguous canonical prefix",
                   );
-                const encoded = yield* json(PersistedJson, row.record_json);
+                const encoded = yield* json(RecordJson, row.record_json);
 
                 if (canonicalJson(encoded) !== canonicalJson(wire))
                   return yield* failure(
@@ -440,6 +440,20 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     );
 
     const { threadId } = prepared.result;
+    const readMetadata = new Map<string, CanonicalRecordMetadata>();
+
+    for (const { record } of prepared.records) {
+      if (!(record instanceof ExportedRecord))
+        return yield* ThreadImportRejected.make({
+          threadId,
+          reason: "invalid-archive",
+          message: "Imported canonical evidence has no owned wire",
+        });
+      readMetadata.set(
+        record.recordId,
+        canonicalRecordMetadata({ canonical: record, wire: record.wire }),
+      );
+    }
     const maxBytes = options.maxValueBytes ?? 16 * 1024 * 1024;
 
     const checkValues = (values: ReadonlyArray<string | undefined | null>) =>
@@ -536,9 +550,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           for (const name of [
             "effect_agent_submissions",
             "effect_agent_canonical_records",
+            "effect_agent_record_runs",
             "effect_agent_canonical_batches",
             "effect_agent_checkpoints",
-            "effect_agent_recovery_checkpoints",
             "effect_agent_worker_stops",
             "effect_agent_attempts",
           ]) {
@@ -611,10 +625,25 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             yield* query(
               sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_json) VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batch.batchJson})`,
             );
-            for (const [index, record] of batch.batch.records.entries())
+            for (const [index, record] of batch.batch.records.entries()) {
+              const metadata = readMetadata.get(record.recordId);
+
+              if (metadata === undefined)
+                return yield* failure("index imported record", "Owned import metadata is missing");
               yield* query(
-                sql`INSERT INTO ${table("effect_agent_canonical_records")} (thread_id, sequence, record_id, batch_id, record_json${sql.onDialectOrElse({ pg: () => sql`, read_metadata`, orElse: () => sql`` })}) VALUES (${threadId}, ${batch.firstSequence + index}, ${record.recordId}, ${batch.batch.batchId}, ${batch.recordJson[index]}${sql.onDialectOrElse({ pg: () => sql`, ${canonicalRecordMetadata(record)}::jsonb`, orElse: () => sql`` })})`,
+                sql`INSERT INTO ${table("effect_agent_canonical_records")} ${sql.insert({
+                  thread_id: threadId,
+                  sequence: batch.firstSequence + index,
+                  record_id: record.recordId,
+                  batch_id: batch.batch.batchId,
+                  record_json: batch.recordJson[index],
+                  ...metadata.columns,
+                })}`,
               );
+              for (const runId of metadata.runIds)
+                yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
+                  VALUES (${threadId}, ${runId}, ${batch.firstSequence + index})`);
+            }
           }
           for (const rebuilt of prepared.submissions) {
             // Preserve the accepted fact; destination policy interprets its opaque coordinates.

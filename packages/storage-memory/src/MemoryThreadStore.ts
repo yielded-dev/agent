@@ -13,10 +13,22 @@ import {
   type Digest,
 } from "@yielded/agent/records";
 import {
+  canonicalRunIds,
+  isWorkHandoff,
+  prepareProgressAppend,
+  ProgressAppendReader,
+  validateProgressAppend,
+} from "@yielded/agent/run-continuation";
+import {
   runIdForSubmission,
   subagentLineageRecordId,
   workerOriginRecordId,
 } from "@yielded/agent/run-journal";
+import {
+  submissionAbortRecordId,
+  submissionInputRecordId,
+  submissionSettlementRecordId,
+} from "@yielded/agent/submission-ledger";
 import {
   prepareThreadImport,
   ThreadImport,
@@ -47,8 +59,6 @@ import {
   FencedAppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
-  SaveRecoveryCheckpointRequest,
-  type ThreadRecoveryCheckpoints,
   MAX_THREAD_EXPORT_RECORDS,
 } from "@yielded/agent/thread-store";
 import {
@@ -89,8 +99,12 @@ interface StoredBatch {
 }
 
 interface StoredThread {
+  /** Append-only owner indexes; readers must constrain them to their captured canonical tail. */
+  readonly runRecords: Map<string, Array<CanonicalRecordEnvelope>>;
+  readonly continuations: Map<string, Array<CanonicalRecordEnvelope>>;
+  readonly handoffs: ReadonlyArray<CanonicalRecordEnvelope>;
   readonly peerCount: number;
-  readonly workerRecords: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
+  readonly workerRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly byId: ReadonlyMap<string, CanonicalRecordEnvelope>;
   readonly runInputs: ReadonlyMap<string, CanonicalRecordEnvelope | null>;
   readonly producerEpoch: ProducerEpoch;
@@ -101,25 +115,82 @@ interface StoredThread {
   readonly batches: ReadonlyMap<BatchId, StoredBatch>;
   readonly tailDigests: ReadonlyMap<CanonicalSequence, Digest>;
   readonly checkpoints: ReadonlyMap<CanonicalSequence, ThreadCheckpoint>;
-  readonly recoveryCheckpoint?: ThreadCheckpoint;
 }
 
 interface MemoryState {
   readonly threads: ReadonlyMap<ThreadId, StoredThread>;
 }
 
-const indexRecords = (
-  previous: Pick<StoredThread, "peerCount" | "workerRecords" | "byId" | "runInputs">,
+/** First sequence strictly after the cursor, without traversing a Run's earlier facts. */
+const upperSequence = (records: ReadonlyArray<CanonicalRecordEnvelope>, sequence: number) => {
+  let low = 0;
+  let high = records.length;
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+
+    if (records[mid].sequence <= sequence) low = mid + 1;
+    else high = mid;
+  }
+
+  return low;
+};
+
+const appendToIndex = (
+  index: Map<string, Array<CanonicalRecordEnvelope>>,
+  key: string,
+  entry: CanonicalRecordEnvelope,
+) => {
+  const records = index.get(key);
+
+  if (records === undefined) index.set(key, [entry]);
+  else records.push(entry);
+};
+
+/** Only call at successful synchronous publication, or on indexes not yet reachable by readers. */
+const commitIndex = (
+  index: Map<string, Array<CanonicalRecordEnvelope>>,
+  additions: ReadonlyMap<string, Array<CanonicalRecordEnvelope>>,
+) => {
+  for (const [key, entries] of additions) {
+    const records = index.get(key);
+
+    if (records === undefined) index.set(key, entries);
+    else for (const entry of entries) records.push(entry);
+  }
+};
+
+const prepareIndexes = (
+  previous: Pick<
+    StoredThread,
+    | "peerCount"
+    | "workerRecords"
+    | "byId"
+    | "runInputs"
+    | "runRecords"
+    | "continuations"
+    | "handoffs"
+  >,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ) => {
   let peerCount = previous.peerCount;
+  // Latest execution entries are replaced in this private map; owner histories only append.
   const workerRecords = new Map(previous.workerRecords);
+  const workerAppends = new Map<string, Array<CanonicalRecordEnvelope>>();
   const byId = new Map(previous.byId);
   const runInputs = new Map(previous.runInputs);
+  const runRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
+  const continuations = new Map<string, Array<CanonicalRecordEnvelope>>();
+  const handoffs = [...previous.handoffs];
 
   for (const entry of records) {
     byId.set(entry.record.recordId, entry);
     const payload = entry.record.payload;
+
+    for (const runId of canonicalRunIds(entry.record))
+      if (payload._tag === "RunContinuation") appendToIndex(continuations, runId, entry);
+      else appendToIndex(runRecords, runId, entry);
+    if (isWorkHandoff(entry.record)) handoffs.push(entry);
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
@@ -144,8 +215,7 @@ const indexRecords = (
             ? "worker"
             : undefined;
 
-    if (workerKey !== undefined)
-      workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
+    if (workerKey !== undefined) appendToIndex(workerAppends, workerKey, entry);
     if (
       payload._tag === "UserInputRecorded" &&
       payload.kind === "user" &&
@@ -154,7 +224,22 @@ const indexRecords = (
       runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
   }
 
-  return { peerCount, workerRecords, byId, runInputs };
+  return {
+    indexes: {
+      peerCount,
+      workerRecords,
+      byId,
+      runInputs,
+      runRecords: previous.runRecords,
+      continuations: previous.continuations,
+      handoffs,
+    },
+    commit: () => {
+      commitIndex(previous.runRecords, runRecords);
+      commitIndex(previous.continuations, continuations);
+      commitIndex(workerRecords, workerAppends);
+    },
+  };
 };
 
 type AppendDecision =
@@ -341,6 +426,9 @@ const makeThreadStore = Effect.gen(function* () {
             workerRecords: new Map(),
             peerCount: 0,
             runInputs: new Map(),
+            runRecords: new Map(),
+            continuations: new Map(),
+            handoffs: [],
             records: [],
             recordIds: new Set(),
             batches: new Map(),
@@ -383,6 +471,34 @@ const makeThreadStore = Effect.gen(function* () {
     digest,
     batchJson,
   }: PreparedMemoryAppend) {
+    // Every caller holds the shared kernel mutation gate across validation and Ref publication.
+    const current = yield* Ref.get(state);
+    const thread = current.threads.get(request.threadId);
+
+    if (
+      thread !== undefined &&
+      thread.producerEpoch === request.producerEpoch &&
+      thread.tailSequence === request.expectedTailSequence &&
+      thread.tailDigest === request.expectedTailDigest &&
+      !thread.batches.has(request.batch.batchId)
+    )
+      yield* validateProgressAppend(prepareProgressAppend(request.batch.records)).pipe(
+        Effect.provideService(ProgressAppendReader, {
+          previous: (runId) =>
+            Effect.gen(function* () {
+              const latest = thread.continuations.get(runId)?.at(-1);
+
+              if (latest === undefined) return undefined;
+              if (latest.record.payload._tag !== "RunContinuation")
+                return yield* storeError("append", "Invalid newest Run continuation");
+
+              return latest.record.payload;
+            }),
+          initial: (next) =>
+            Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
+        }),
+      );
+
     const decision = yield* Effect.uninterruptible(
       Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
         const thread = current.threads.get(request.threadId);
@@ -521,10 +637,11 @@ const makeThreadStore = Effect.gen(function* () {
 
         tailDigests.set(lastSequence, digest);
         const threads = new Map(current.threads);
+        const indexes = prepareIndexes(thread, records);
 
         threads.set(request.threadId, {
           ...thread,
-          ...indexRecords(thread, records),
+          ...indexes.indexes,
           tailSequence: lastSequence,
           tailDigest: digest,
           records: [...thread.records, ...records],
@@ -533,7 +650,15 @@ const makeThreadStore = Effect.gen(function* () {
           tailDigests,
         });
 
-        return [{ _tag: "success", result, records }, { threads }];
+        const publication: readonly [AppendDecision, MemoryState] = [
+          { _tag: "success", result, records },
+          { threads },
+        ];
+
+        // All rejection paths and preparation precede mutation. Ref.modify publishes without a yield.
+        indexes.commit();
+
+        return publication;
       }).pipe(
         Effect.tap((decision) =>
           decision._tag === "success" && decision.records.length > 0
@@ -593,9 +718,73 @@ const makeThreadStore = Effect.gen(function* () {
               selection.expectedTailDigest !== thread.tailDigest)
           )
             return yield* storeError("selected read", "Canonical tail changed");
+          if ("throughSequence" in selection && selection.throughSequence > thread.tailSequence)
+            return yield* storeError(
+              "selected read",
+              "Captured sequence is ahead of the canonical tail",
+            );
           let records: ReadonlyArray<CanonicalRecordEnvelope>;
 
           switch (selection._tag) {
+            case "RunContinuation": {
+              const candidates = thread.continuations.get(selection.runId) ?? [];
+              const index = upperSequence(candidates, selection.throughSequence) - 1;
+              const latest = candidates[index];
+
+              if (
+                latest !== undefined &&
+                (latest.record.payload._tag !== "RunContinuation" ||
+                  latest.record.payload.runId !== selection.runId)
+              )
+                return yield* storeError("selected read", "Invalid newest Run continuation");
+              records = latest === undefined ? [] : [latest];
+              break;
+            }
+            case "RunEvidence": {
+              const candidates = thread.runRecords.get(selection.runId) ?? [];
+              const after = request.page.afterSequence ?? 0;
+
+              const facts = candidates.slice(
+                upperSequence(candidates, after),
+                Math.min(
+                  upperSequence(candidates, selection.throughSequence),
+                  upperSequence(candidates, after) + request.page.limit,
+                ),
+              );
+
+              const controls = [
+                submissionInputRecordId(selection.submissionId),
+                submissionAbortRecordId(selection.submissionId),
+                submissionSettlementRecordId(selection.submissionId),
+              ].flatMap((id) => {
+                const entry = thread.byId.get(id);
+
+                return entry === undefined ||
+                  entry.sequence <= after ||
+                  entry.sequence > selection.throughSequence
+                  ? []
+                  : [entry];
+              });
+
+              records = [
+                ...new Map(
+                  [...facts, ...controls].map((entry) => [entry.sequence, entry]),
+                ).values(),
+              ];
+              if (records.some((entry) => entry.record.payload._tag === "RunContinuation"))
+                return yield* storeError("selected read", "Invalid Run control identity");
+              break;
+            }
+            case "WorkHandoffs":
+              records = thread.handoffs.slice(
+                upperSequence(thread.handoffs, request.page.afterSequence ?? 0),
+                Math.min(
+                  upperSequence(thread.handoffs, selection.throughSequence),
+                  upperSequence(thread.handoffs, request.page.afterSequence ?? 0) +
+                    request.page.limit,
+                ),
+              );
+              break;
             case "RecordId": {
               const record = thread.byId.get(selection.recordId);
 
@@ -629,9 +818,14 @@ const makeThreadStore = Effect.gen(function* () {
               break;
           }
 
+          // Append-only owner histories may have grown since this Thread snapshot was captured.
           return Stream.fromIterable(
             records
-              .filter((entry) => entry.sequence > (request.page.afterSequence ?? 0))
+              .filter(
+                (entry) =>
+                  entry.sequence > (request.page.afterSequence ?? 0) &&
+                  entry.sequence <= thread.tailSequence,
+              )
               .sort((a, b) => a.sequence - b.sequence)
               .slice(0, request.page.limit),
           );
@@ -766,8 +960,7 @@ const makeThreadStore = Effect.gen(function* () {
             existing !== undefined &&
             (existing.records.length > 0 ||
               existing.batches.size > 0 ||
-              existing.checkpoints.size > 0 ||
-              existing.recoveryCheckpoint !== undefined)
+              existing.checkpoints.size > 0)
           )
             return yield* ThreadImportRejected.make({
               threadId,
@@ -819,11 +1012,21 @@ const makeThreadStore = Effect.gen(function* () {
           }
           const threads = new Map(current.threads);
 
+          const indexes = prepareIndexes(
+            {
+              peerCount: 0,
+              workerRecords: new Map(),
+              byId: new Map(),
+              runInputs: new Map(),
+              runRecords: new Map(),
+              continuations: new Map(),
+              handoffs: [],
+            },
+            records,
+          );
+
           threads.set(threadId, {
-            ...indexRecords(
-              { peerCount: 0, workerRecords: new Map(), byId: new Map(), runInputs: new Map() },
-              records,
-            ),
+            ...indexes.indexes,
             producerEpoch,
             records,
             batches,
@@ -843,6 +1046,7 @@ const makeThreadStore = Effect.gen(function* () {
           yield* Effect.uninterruptible(
             Effect.sync(() => {
               commitLedger?.();
+              indexes.commit();
               MutableRef.set(state.ref, { threads });
             }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
           );
@@ -1002,106 +1206,6 @@ const makeThreadStore = Effect.gen(function* () {
     return Option.fromNullishOr(selected);
   });
 
-  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fnUntraced(
-    function* (unvalidated) {
-      const request = yield* validate(
-        SaveRecoveryCheckpointRequest,
-        "saveRecoveryCheckpoint",
-        unvalidated,
-      );
-
-      const decision = yield* Ref.modify(
-        state,
-        (
-          current,
-        ): readonly [
-          CheckpointDecision | { readonly _tag: "failure"; readonly error: FenceRejected },
-          MemoryState,
-        ] => {
-          const checkpoint = request.checkpoint;
-          const thread = current.threads.get(checkpoint.threadId);
-
-          if (thread === undefined)
-            return [
-              {
-                _tag: "failure",
-                error: ThreadNotMaterialized.make({ threadId: checkpoint.threadId }),
-              },
-              current,
-            ];
-          if (thread.producerEpoch !== request.producerEpoch)
-            return [
-              {
-                _tag: "failure",
-                error: FenceRejected.make({
-                  threadId: checkpoint.threadId,
-                  actualEpoch: thread.producerEpoch,
-                  attemptedEpoch: request.producerEpoch,
-                }),
-              },
-              current,
-            ];
-          if (checkpoint.throughSequence > thread.tailSequence)
-            return [
-              {
-                _tag: "failure",
-                error: CheckpointRejected.make({
-                  threadId: checkpoint.threadId,
-                  reason: "ahead-of-tail",
-                }),
-              },
-              current,
-            ];
-          if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
-            return [
-              {
-                _tag: "failure",
-                error: CheckpointRejected.make({
-                  threadId: checkpoint.threadId,
-                  reason: "digest-mismatch",
-                }),
-              },
-              current,
-            ];
-          if ((thread.recoveryCheckpoint?.throughSequence ?? -1) > checkpoint.throughSequence)
-            return [{ _tag: "success" }, current];
-          const threads = new Map(current.threads);
-
-          threads.set(checkpoint.threadId, { ...thread, recoveryCheckpoint: checkpoint });
-
-          return [{ _tag: "success" }, { threads }];
-        },
-      );
-
-      if (decision._tag === "failure") return yield* decision.error;
-    },
-  );
-
-  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fnUntraced(
-    function* (unvalidated) {
-      const request = yield* validate(LoadCheckpointRequest, "loadRecoveryCheckpoint", unvalidated);
-
-      const thread = yield* Ref.get(state).pipe(
-        Effect.flatMap((current) => findThread(current, request.threadId)),
-      );
-
-      const checkpoint = thread.recoveryCheckpoint;
-
-      if (
-        checkpoint === undefined ||
-        checkpoint.throughSequence > (request.atOrBeforeSequence ?? thread.tailSequence)
-      )
-        return Option.none();
-      if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest)
-        return yield* CheckpointRejected.make({
-          threadId: request.threadId,
-          reason: "digest-mismatch",
-        });
-
-      return Option.some(checkpoint);
-    },
-  );
-
   const threadStore = ThreadStore.of({
     readIdentity,
     countPeerMessages,
@@ -1112,10 +1216,6 @@ const makeThreadStore = Effect.gen(function* () {
     export: (request) => withMutation(exportThread(request)),
     inspectTail,
     checkpoints: { save: (request) => withMutation(saveCheckpoint(request)), load: loadCheckpoint },
-    recoveryCheckpoints: {
-      save: (request) => withMutation(saveRecoveryCheckpoint(request)),
-      load: loadRecoveryCheckpoint,
-    },
   });
 
   return Context.make(ThreadStore, threadStore).pipe(

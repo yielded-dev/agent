@@ -285,6 +285,9 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
       yield* ledger.finalizeSettlement(request);
       const recordId = submissionSettlementRecordId(request.submissionId);
 
+      yield* sql`DELETE FROM effect_agent_record_runs WHERE (thread_id, sequence) IN (
+        SELECT thread_id, sequence FROM effect_agent_canonical_records WHERE record_id=${recordId}
+      )`;
       yield* sql`DELETE FROM effect_agent_canonical_records WHERE record_id=${recordId}`;
       yield* invalidateReadState;
 

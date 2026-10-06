@@ -2,7 +2,6 @@ import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/dig
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
 import {
-  CanonicalRecord,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
@@ -27,8 +26,6 @@ import {
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
-  SaveRecoveryCheckpointRequest,
-  type ThreadRecoveryCheckpoints,
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 
@@ -41,7 +38,7 @@ import {
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 import { makeSqlThreadImport } from "./SqlThreadImport.ts";
-import { makeSelectedReads } from "./SqlThreadNativeReads.ts";
+import { canonicalRecordMetadata, makeSelectedReads } from "./SqlThreadNativeReads.ts";
 
 export interface SqlThreadStoreOptions<
   S extends Diagnostic,
@@ -67,6 +64,10 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
 
   const captured = yield* PreparedAppend.capture(validated);
 
+  const records = captured.records.map((record) =>
+    Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
+  );
+
   const tailDigest = yield* captured
     .digest()
     .pipe(Effect.mapError(invalid("digest canonical append")));
@@ -79,7 +80,8 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
     expectedTailSequence: captured.expectedTailSequence,
     expectedTailDigest: captured.expectedTailDigest,
     producerEpoch: captured.producerEpoch,
-    records: captured.records,
+    records,
+    progress: captured.progress,
     tailDigest,
   } satisfies RawAppendRequest;
 });
@@ -97,7 +99,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const isFenceRejected = Schema.is(FenceRejected);
   const isAppendConflict = Schema.is(AppendConflict);
   const isCheckpointRejected = Schema.is(CheckpointRejected);
-  const canonicalRecordJson = Schema.fromJsonString(CanonicalRecord);
+  const canonicalRecordJson = Schema.fromJsonString(ExportRecord);
   const decodeRecordJson = Schema.decodeEffect(canonicalRecordJson);
 
   const encodeRecordJson = (record: typeof ExportRecord.Type) =>
@@ -274,7 +276,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   /**
    * Opt-in integrity audit (`verifyOnOpen`) of canonical payloads, their digest chains and generic
-   * projection checkpoints. Disposable recovery checkpoints are validated when loaded. Routine opens
+   * projection checkpoints. Routine opens
    * skip this scan: per-operation Schema decoding fails clearly on corrupt canonical rows.
    */
   const decodeStartupPayloads = Effect.fnUntraced(function* (
@@ -751,90 +753,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     return Option.some(checkpoint);
   });
 
-  const saveRecoveryCheckpoint: ThreadRecoveryCheckpoints["save"] = Effect.fnUntraced(
-    function* (request) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(SaveRecoveryCheckpointRequest))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate recovery checkpoint", error)));
-
-      const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
-
-      yield* journal
-        .saveRecoveryCheckpoint(validated, checkpointJson)
-        .pipe(
-          Effect.mapError((error) =>
-            Schema.is(CheckpointRejected)(error) ||
-            Schema.is(FenceRejected)(error) ||
-            Schema.is(ThreadNotMaterialized)(error)
-              ? error
-              : storeError("save recovery checkpoint", error),
-          ),
-        );
-    },
-  );
-
-  const loadRecoveryCheckpoint: ThreadRecoveryCheckpoints["load"] = Effect.fnUntraced(
-    function* (request) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
-        request,
-      ).pipe(
-        Effect.mapError((error) => schemaStoreError("validate recovery checkpoint lookup", error)),
-      );
-
-      const thread = yield* requireThread(journal, validated.threadId);
-
-      const corrupt = () =>
-        CheckpointRejected.make({ threadId: validated.threadId, reason: "corrupt" });
-
-      const rows = yield* journal
-        .loadRecoveryCheckpoint(validated.threadId)
-        .pipe(
-          Effect.mapError((error) =>
-            options.errors.isCorruption(error)
-              ? corrupt()
-              : storeError("load recovery checkpoint", error),
-          ),
-        );
-
-      if (rows.length === 0) return Option.none();
-      if (rows.length !== 1) return yield* corrupt();
-      const row = rows[0];
-
-      const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
-        row.checkpoint_json,
-      ).pipe(Effect.mapError(corrupt));
-
-      if (
-        row.thread_id !== validated.threadId ||
-        checkpoint.threadId !== row.thread_id ||
-        checkpoint.throughSequence !== row.through_sequence ||
-        checkpoint.tailDigest !== row.tail_digest
-      )
-        return yield* corrupt();
-      if (checkpoint.throughSequence > thread.tail_sequence)
-        return yield* CheckpointRejected.make({
-          threadId: validated.threadId,
-          reason: "ahead-of-tail",
-        });
-      if (checkpoint.throughSequence > (validated.atOrBeforeSequence ?? thread.tail_sequence))
-        return Option.none();
-
-      const canonicalDigest = yield* tailDigestAt(
-        journal,
-        checkpoint.threadId,
-        checkpoint.throughSequence,
-      );
-
-      if (canonicalDigest !== checkpoint.tailDigest)
-        return yield* CheckpointRejected.make({
-          threadId: validated.threadId,
-          reason: "digest-mismatch",
-        });
-
-      return Option.some(checkpoint);
-    },
-  );
-
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
 
   const store = ThreadStore.of({
@@ -850,7 +768,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     observe,
     read,
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
-    recoveryCheckpoints: { save: saveRecoveryCheckpoint, load: loadRecoveryCheckpoint },
   });
 
   return {

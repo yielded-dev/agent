@@ -9,15 +9,15 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 17;
-const LEGACY_RECORD_FORMAT = "effect-agent/thread@1";
+export const CurrentPostgresStorageVersion = 18;
 
-// Frozen statements captured while executing the shipped layout16 initializer on PostgreSQL 17.
-const baseline16 = [
+/** Fresh layout only; inspection rejects every predecessor before DDL. */
+const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
   'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C" NOT NULL, record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_canonical_records_batch ON __NAMESPACE__."effect_agent_canonical_records" (thread_id, batch_id, sequence)',
   'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, agent_digests_json TEXT COLLATE "C" NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
@@ -45,18 +45,19 @@ const baseline16 = [
   'CREATE INDEX effect_agent_subscription_deliveries_registration ON __NAMESPACE__."effect_agent_subscription_deliveries" (tenant_id, source_address, owner_id, subscription_id, delivery_key)',
   'CREATE TABLE __NAMESPACE__."effect_agent_message_deliveries" ( owner_thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, version BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, deadline_at_millis BIGINT, record_json TEXT COLLATE "C" NOT NULL, read_metadata JSONB NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
   'CREATE INDEX effect_agent_message_deliveries_due ON __NAMESPACE__."effect_agent_message_deliveries" (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL',
-  'CREATE TABLE __NAMESPACE__."effect_agent_recovery_checkpoints" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, through_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   "CREATE INDEX effect_agent_submissions_nonterminal ON __NAMESPACE__.\"effect_agent_submissions\" (thread_id, queue_sequence) WHERE state <> 'settled'",
   'CREATE TABLE __NAMESPACE__."effect_agent_worker_stops" (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, terminal TEXT COLLATE "C")',
   "CREATE INDEX effect_agent_worker_starts ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'delegationId'), (read_metadata ->> 'targetAgentId'), message_id) WHERE (read_metadata ->> 'workerStart') = 'true'",
   "CREATE INDEX effect_agent_worker_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'threadId'), message_id) WHERE state IN ('pending', 'parked') AND (read_metadata ->> 'hasReceipt') = 'false'",
-  'ALTER TABLE __NAMESPACE__."effect_agent_canonical_records" ADD COLUMN read_metadata JSONB NOT NULL',
-  "CREATE INDEX effect_agent_records_call ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, (read_metadata ->> 'tag'), (read_metadata ->> 'runId'), (read_metadata ->> 'toolCallId'))",
-  "CREATE INDEX effect_agent_records_run_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, (read_metadata ->> 'runId')) WHERE (read_metadata ->> 'tag') = 'UserInputRecorded' AND (read_metadata ->> 'kind') = 'user'",
-  "CREATE INDEX effect_agent_records_subtree ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, (read_metadata ->> 'sourceSubmissionId'), sequence) WHERE (read_metadata ->> 'tag') = 'SubtreeBudgetReserved'",
-  "CREATE INDEX effect_agent_records_worker_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, (read_metadata ->> 'messageId')) WHERE (read_metadata ->> 'tag') = 'WorkerInputRequested'",
-  "CREATE INDEX effect_agent_worker_execution ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, (read_metadata ->> 'tag'), sequence) WHERE (read_metadata ->> 'runId') IS NOT NULL",
+  'CREATE INDEX effect_agent_records_call ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id)',
+  "CREATE INDEX effect_agent_records_run_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id) WHERE record_tag = 'UserInputRecorded' AND input_kind = 'user'",
+  "CREATE INDEX effect_agent_records_subtree ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, source_submission_id, sequence) WHERE record_tag = 'SubtreeBudgetReserved'",
+  "CREATE INDEX effect_agent_records_worker_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, message_id) WHERE record_tag = 'WorkerInputRequested'",
+  'CREATE INDEX effect_agent_worker_execution ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence) WHERE run_id IS NOT NULL',
   "CREATE INDEX effect_agent_message_deliveries_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
+  "CREATE INDEX effect_agent_records_continuation ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id, sequence) WHERE record_tag = 'RunContinuation'",
+  'CREATE INDEX effect_agent_records_tag ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence)',
+  'CREATE INDEX effect_agent_records_handoff ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
 ] as const;
 
 type LayoutConstraint =
@@ -81,7 +82,7 @@ interface LayoutIndex {
 // Logical layout expectations. Physical index storage parameters and tablespaces are not
 // part of compatibility. Expression expectations are canonical data; a closed recognizer
 // accepts the deparser spellings of these forms and rejects every other form.
-const baselineShape: Readonly<
+const layoutShape: Readonly<
   Record<
     string,
     {
@@ -166,6 +167,18 @@ const baselineShape: Readonly<
       ],
     },
   },
+  effect_agent_record_runs: {
+    columns: ["thread_id:text:true", "run_id:text:true", "sequence:bigint:true"],
+    constraints: {
+      effect_agent_record_runs_pkey: ["p", ["thread_id", "run_id", "sequence"]],
+      effect_agent_record_runs_thread_id_sequence_fkey: [
+        "f",
+        ["thread_id", "sequence"],
+        "effect_agent_canonical_records",
+        ["thread_id", "sequence"],
+      ],
+    },
+  },
   effect_agent_canonical_records: {
     columns: [
       "thread_id:text:true",
@@ -173,7 +186,13 @@ const baselineShape: Readonly<
       "record_id:text:true",
       "batch_id:text:true",
       "record_json:text:true",
-      "read_metadata:jsonb:true",
+      "record_tag:text:true",
+      "run_id:text:false",
+      "tool_call_id:text:false",
+      "input_kind:text:false",
+      "source_submission_id:text:false",
+      "message_id:text:false",
+      "handoff:bigint:true",
     ],
     constraints: {
       effect_agent_canonical_records_pkey: ["p", ["thread_id", "sequence"]],
@@ -242,23 +261,6 @@ const baselineShape: Readonly<
       "read_metadata:jsonb:true",
     ],
     constraints: { effect_agent_message_deliveries_pkey: ["p", ["owner_thread_id", "message_id"]] },
-  },
-  effect_agent_recovery_checkpoints: {
-    columns: [
-      "thread_id:text:true",
-      "through_sequence:bigint:true",
-      "tail_digest:text:true",
-      "checkpoint_json:text:true",
-    ],
-    constraints: {
-      effect_agent_recovery_checkpoints_pkey: ["p", ["thread_id"]],
-      effect_agent_recovery_checkpoints_thread_id_fkey: [
-        "f",
-        ["thread_id"],
-        "effect_agent_threads",
-        ["thread_id"],
-      ],
-    },
   },
   effect_agent_schedules: {
     columns: [
@@ -459,7 +461,21 @@ const baselineShape: Readonly<
   },
 };
 
-const baselineIndexes: Readonly<Record<string, LayoutIndex>> = {
+const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
+  effect_agent_records_continuation: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "run_id", "sequence"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "RunContinuation"]],
+  },
+  effect_agent_records_tag: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "record_tag", "sequence"],
+  },
+  effect_agent_records_handoff: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "sequence"],
+    predicate: ["eq", ["column", "handoff"], ["integer", 1]],
+  },
   effect_agent_canonical_records_batch: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "batch_id", "sequence"],
@@ -476,32 +492,28 @@ const baselineIndexes: Readonly<Record<string, LayoutIndex>> = {
   },
   effect_agent_records_call: {
     table: "effect_agent_canonical_records",
-    columns: ["thread_id", null, null, null],
-    expressions: ["tag", "runId", "toolCallId"],
+    columns: ["thread_id", "record_tag", "run_id", "tool_call_id"],
   },
   effect_agent_records_run_input: {
     table: "effect_agent_canonical_records",
-    columns: ["thread_id", null],
-    expressions: ["runId"],
+    columns: ["thread_id", "run_id"],
     predicate: [
       "and",
       [
-        ["eq", ["json", "tag"], ["text", "UserInputRecorded"]],
-        ["eq", ["json", "kind"], ["text", "user"]],
+        ["eq", ["column", "record_tag"], ["text", "UserInputRecorded"]],
+        ["eq", ["column", "input_kind"], ["text", "user"]],
       ],
     ],
   },
   effect_agent_records_subtree: {
     table: "effect_agent_canonical_records",
-    columns: ["thread_id", null, "sequence"],
-    expressions: ["sourceSubmissionId"],
-    predicate: ["eq", ["json", "tag"], ["text", "SubtreeBudgetReserved"]],
+    columns: ["thread_id", "source_submission_id", "sequence"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "SubtreeBudgetReserved"]],
   },
   effect_agent_records_worker_input: {
     table: "effect_agent_canonical_records",
-    columns: ["thread_id", null],
-    expressions: ["messageId"],
-    predicate: ["eq", ["json", "tag"], ["text", "WorkerInputRequested"]],
+    columns: ["thread_id", "message_id"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputRequested"]],
   },
   effect_agent_schedules_deadline: {
     table: "effect_agent_schedules",
@@ -570,9 +582,8 @@ const baselineIndexes: Readonly<Record<string, LayoutIndex>> = {
   },
   effect_agent_worker_execution: {
     table: "effect_agent_canonical_records",
-    columns: ["thread_id", null, "sequence"],
-    expressions: ["tag"],
-    predicate: ["notNull", ["json", "runId"]],
+    columns: ["thread_id", "record_tag", "sequence"],
+    predicate: ["notNull", ["column", "run_id"]],
   },
   effect_agent_worker_pending: {
     table: "effect_agent_message_deliveries",
@@ -596,25 +607,6 @@ const baselineIndexes: Readonly<Record<string, LayoutIndex>> = {
 
 const headerStatement =
   "CREATE TABLE __NAMESPACE__.effect_agent_schema (singleton BIGINT PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version BIGINT NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
-
-/** Ordered immutable DDL; namespace substitution only quotes an SQL identifier. */
-export const postgresLayoutSteps = [
-  {
-    version: 16,
-    statements: [
-      ...baseline16,
-      "INSERT INTO __NAMESPACE__.effect_agent_storage_version (id, version) VALUES (TRUE, 16)",
-    ],
-  },
-  {
-    version: 17,
-    statements: [
-      headerStatement,
-      "INSERT INTO __NAMESPACE__.effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 17, 'effect-agent/thread@1')",
-      "UPDATE __NAMESPACE__.effect_agent_storage_version SET version = 17 WHERE id",
-    ],
-  },
-] as const;
 
 const quote = (namespace: string) => `"${namespace.replaceAll('"', '""')}"`;
 
@@ -694,7 +686,7 @@ const incompatible = (actualVersion: number, message: string) =>
   PostgresStorageCompatibilityError.make({
     actualVersion,
     supportedVersion: CurrentPostgresStorageVersion,
-    message: `${message} Keep the original database; no layout upgrade was committed.`,
+    message: `${message} Keep the original database; the store was not changed.`,
   });
 
 const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown, table: string) =>
@@ -742,7 +734,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
 
     return yield* incompatible(0, "Unversioned or incomplete Effect Agent storage.");
   }
-  if (versionTable.kind !== "r") return yield* incompatible(0, "Malformed legacy version table.");
+  if (versionTable.kind !== "r") return yield* incompatible(0, "Malformed version table.");
 
   const [legacy] = yield* decode(
     Legacy,
@@ -752,33 +744,25 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     "effect_agent_storage_version",
   );
 
-  if (!postgresLayoutSteps.some((step) => step.version === legacy.version))
+  if (legacy.version !== CurrentPostgresStorageVersion)
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
-  let header: PostgresStorageHeader;
+  if (schemaTable?.kind !== "r")
+    return yield* incompatible(legacy.version, "Missing or malformed singleton schema table.");
 
-  if (schemaTable === undefined) {
-    if (legacy.version !== 16)
-      return yield* incompatible(legacy.version, "Missing singleton schema header.");
-    header = { layoutVersion: 16, recordFormat: LEGACY_RECORD_FORMAT };
-  } else {
-    if (schemaTable.kind !== "r")
-      return yield* incompatible(legacy.version, "Malformed singleton schema table.");
+  const [row] = yield* decode(
+    Header,
+    yield* execute(sql<Record<string, unknown>>`SELECT * FROM ${table("effect_agent_schema")}`),
+    "effect_agent_schema",
+  );
 
-    const [row] = yield* decode(
-      Header,
-      yield* execute(sql<Record<string, unknown>>`SELECT * FROM ${table("effect_agent_schema")}`),
-      "effect_agent_schema",
-    );
+  if (
+    row.singleton !== 1 ||
+    row.layout_version !== CurrentPostgresStorageVersion ||
+    row.layout_version !== legacy.version
+  )
+    return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
+  const header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
 
-    if (
-      row.singleton !== 1 ||
-      row.layout_version < 17 ||
-      !postgresLayoutSteps.some((step) => step.version === row.layout_version) ||
-      row.layout_version !== legacy.version
-    )
-      return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
-    header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
-  }
   if (header.recordFormat !== CURRENT_RECORD_FORMAT)
     return yield* incompatible(
       header.layoutVersion,
@@ -823,9 +807,9 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
             AND d.objid=k.oid AND d.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass))
           AND (k.contype NOT IN ('p','u') OR ic.relname=k.conname)
           AND (k.contype<>'f' OR (k.confupdtype='a' AND k.confdeltype='r' AND k.confmatchtype='s'
-            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conpfeqop)
-            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conppeqop)
-            AND 'pg_catalog.=(text,text)'::regoperator=ALL(k.conffeqop)))) AS enforcement_ok
+            AND k.conpfeqop <@ ARRAY['pg_catalog.=(text,text)'::regoperator, 'pg_catalog.=(bigint,bigint)'::regoperator]::oid[]
+            AND k.conppeqop <@ ARRAY['pg_catalog.=(text,text)'::regoperator, 'pg_catalog.=(bigint,bigint)'::regoperator]::oid[]
+            AND k.conffeqop <@ ARRAY['pg_catalog.=(text,text)'::regoperator, 'pg_catalog.=(bigint,bigint)'::regoperator]::oid[]))) AS enforcement_ok
       FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid
       JOIN pg_namespace n ON n.oid=c.relnamespace
       LEFT JOIN pg_class r ON r.oid=k.confrelid LEFT JOIN pg_namespace rn ON rn.oid=r.relnamespace
@@ -867,37 +851,30 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     "pg_index",
   );
 
-  const expectedShape: typeof baselineShape =
-    schemaTable === undefined
-      ? baselineShape
-      : {
-          ...baselineShape,
-          effect_agent_schema: {
-            columns: [
-              "singleton:bigint:true",
-              "layout_version:bigint:true",
-              "record_format:text:true",
-            ],
-            constraints: {
-              effect_agent_schema_pkey: ["p", ["singleton"]],
-              effect_agent_schema_singleton_check: [
-                "c",
-                ["singleton"],
-                ["eq", ["column", "singleton"], ["integer", 1]],
-              ],
-              effect_agent_schema_layout_version_check: [
-                "c",
-                ["layout_version"],
-                ["gt", ["column", "layout_version"], ["integer", 0]],
-              ],
-              effect_agent_schema_record_format_check: [
-                "c",
-                ["record_format"],
-                ["gt", ["length", "record_format"], ["integer", 0]],
-              ],
-            },
-          },
-        };
+  const expectedShape: typeof layoutShape = {
+    ...layoutShape,
+    effect_agent_schema: {
+      columns: ["singleton:bigint:true", "layout_version:bigint:true", "record_format:text:true"],
+      constraints: {
+        effect_agent_schema_pkey: ["p", ["singleton"]],
+        effect_agent_schema_singleton_check: [
+          "c",
+          ["singleton"],
+          ["eq", ["column", "singleton"], ["integer", 1]],
+        ],
+        effect_agent_schema_layout_version_check: [
+          "c",
+          ["layout_version"],
+          ["gt", ["column", "layout_version"], ["integer", 0]],
+        ],
+        effect_agent_schema_record_format_check: [
+          "c",
+          ["record_format"],
+          ["gt", ["length", "record_format"], ["integer", 0]],
+        ],
+      },
+    },
+  };
 
   for (const [name, expected] of Object.entries(expectedShape)) {
     const tableColumns = columns.filter((row) => row.name === name);
@@ -959,7 +936,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
         );
     }
   }
-  for (const [name, expected] of Object.entries(baselineIndexes)) {
+  for (const [name, expected] of Object.entries(layoutIndexes)) {
     if (
       !matchesIndex(
         indexes.find((row) => row.name === name),
@@ -982,28 +959,25 @@ export const readPostgresStorageHeader = Effect.fnUntraced(function* (namespace:
   return header;
 });
 
-/** The caller owns one writer transaction encompassing inspection, every step, and final validation. */
+/** The caller owns one writer transaction encompassing inspection, fresh initialization, and final validation. */
 export const applyPostgresLayout = Effect.fnUntraced(function* (
   namespace: string,
   header: PostgresStorageHeader | undefined,
 ) {
   const sql = yield* SqlClient.SqlClient;
-  const version = header?.layoutVersion ?? 0;
 
-  for (const step of postgresLayoutSteps) {
-    if (step.version <= version) continue;
-    for (const statement of step.statements)
-      yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
-  }
+  if (header !== undefined) return header;
+  for (const statement of layoutStatements)
+    yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
+  yield* sql.unsafe(qualify(headerStatement, namespace)).withoutTransform;
+  const { table, execute } = yield* makeSqlQuery(namespace);
 
-  // Fresh storage uses today's record format; frozen steps retain the legacy format.
-  if (header === undefined) {
-    const { table, execute } = yield* makeSqlQuery(namespace);
-
-    yield* execute(
-      sql`UPDATE ${table("effect_agent_schema")} SET record_format = ${CURRENT_RECORD_FORMAT} WHERE singleton = 1`,
-    );
-  }
+  yield* execute(
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 18)`,
+  );
+  yield* execute(
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`,
+  );
 
   return yield* readPostgresStorageHeader(namespace);
 });

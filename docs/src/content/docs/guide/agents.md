@@ -192,8 +192,9 @@ changed handler code or codec transforms, so keep those declarations accurate.
 Queued and resumed work selects the current binding by `agentId`. Historical Agent or toolbox
 digests do not gate execution. A committed continuation retains its original input and prompt;
 static instructions do not require a future input codec to accept that value. Input-dependent
-instructions still decode their required input. Admission, lineage, and prepared delivery evidence
-remain exact and are never rewritten.
+instructions still decode their required input. An incompatible current input Schema returns
+`BindingUnavailable` and leaves the original Receipt owed. Admission, lineage, and prepared
+delivery evidence remain exact and are never rewritten.
 
 Recovery checks each pending operation against its recorded execution contract. A changed or
 removed mutating Tool that was never dispatched receives `ToolUnavailable` with
@@ -242,7 +243,7 @@ receive a number.
 
 Encode a decoded value with `Schema.encodeEffect(definition.input)`. Use `runUnknown`,
 `streamUnknown`, or `startUnknown` for untrusted external data. Invalid input fails with
-`AgentInputError` before instructions or model execution.
+`AgentInputDecodeError` before instructions or model execution.
 
 ## Complete through a tool
 

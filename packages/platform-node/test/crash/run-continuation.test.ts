@@ -3,8 +3,7 @@ import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { LoadCheckpointRequest, ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, Layer, Option, Stream } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { LanguageModel, Model, type Prompt } from "effect/ai";
 
 import {
@@ -32,14 +31,22 @@ import {
 } from "./harness.ts";
 
 const crashPoints = [
-  { name: "SQLite before save", killAtStorage: "save-recovery-checkpoint:before", present: false },
-  { name: "SQLite after save", killAtStorage: "save-recovery-checkpoint:after", present: true },
+  {
+    name: "before canonical compaction",
+    killAt: "compaction:before-canonical-append",
+    present: false,
+  },
+  {
+    name: "after canonical compaction",
+    killAt: "compaction:after-canonical-append",
+    present: true,
+  },
 ] as const;
 
 // Each child exits without finalizers after committing the native compaction. Reopening the
-// same SQLite file must treat that canonical record as authoritative with or without its cache.
+// same SQLite file must use exact canonical progress, input, and context across either boundary.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
-  "recovery checkpoint process loss",
+  "Run continuation process loss",
   (it) => {
     it.effect.each(crashPoints)(
       "recovers after $name",
@@ -69,12 +76,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             const before = yield* withRuntime(
               site.db,
               Effect.gen(function* () {
-                const store = yield* ThreadStore;
-                const cache = store.recoveryCheckpoints;
-
-                if (cache === undefined)
-                  throw new Error("SQLite recovery checkpoints are required");
-                const checkpoint = yield* cache.load(LoadCheckpointRequest.make({ threadId }));
                 const records = yield* readLog(thread);
                 const snapshot = yield* lookupByKey(thread, key);
 
@@ -82,9 +83,21 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   ({ record }) => record.payload._tag === "CompactionCreated",
                 );
 
-                expect(Option.isSome(checkpoint)).toBe(point.present);
-                expect(compactions).toHaveLength(1);
-                expect(JSON.stringify(compactions)).toContain(CHECKPOINT_HANDOFF);
+                expect(compactions).toHaveLength(point.present ? 1 : 0);
+                if (point.present)
+                  expect(JSON.stringify(compactions)).toContain(CHECKPOINT_HANDOFF);
+
+                const continuation = records.findLast(
+                  ({ record }) => record.payload._tag === "RunContinuation",
+                );
+
+                expect(continuation?.record.payload).toMatchObject({
+                  version: 1,
+                  accounting: { committedTurns: 2, modelCalls: 2 },
+                });
+                expect(
+                  records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
+                ).toHaveLength(1);
                 expect(
                   records.filter(({ record }) => record.payload._tag === "ModelResponseRecorded"),
                 ).toHaveLength(2);

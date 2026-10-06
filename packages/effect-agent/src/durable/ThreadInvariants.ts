@@ -5,6 +5,7 @@ import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admi
 import { digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
 import { ExportBatch } from "./RecordFormat.ts";
 import { type CanonicalRecordEnvelope, type BatchId, type ProducerId } from "./Records.ts";
+import { verifyRunContinuations } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import {
   submissionInputRecordId,
@@ -252,6 +253,20 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* (
         : check("digest-chain", "failed", chainFailure),
     );
   }
+
+  checks.push(
+    yield* verifyRunContinuations(records).pipe(
+      Effect.matchCause({
+        onSuccess: () => check("continuation-evidence", "passed"),
+        onFailure: () =>
+          check(
+            "continuation-evidence",
+            "failed",
+            "Run continuation is not recomputable from its canonical facts and exact references",
+          ),
+      }),
+    ),
+  );
 
   // Shared FIFO/terminal machinery
   const ordered = [...input.submissions].sort(

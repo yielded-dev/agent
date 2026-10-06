@@ -17,6 +17,7 @@ import {
 import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import {
+  AppendConflict,
   FenceRejected,
   FencedAppendRequest,
   ThreadReader,
@@ -24,6 +25,7 @@ import {
 } from "@yielded/agent/thread-store";
 import {
   Channel,
+  Cause,
   Clock,
   Context,
   Crypto,
@@ -230,7 +232,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   });
 
   const checkpoints = rawStore.checkpoints;
-  const recoveryCheckpoints = rawStore.recoveryCheckpoints;
   const countPeerMessages = rawStore.countPeerMessages;
 
   const store: ThreadStore["Service"] = {
@@ -272,13 +273,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         : {
             save: (request) => bind(checkpoints.save(request)),
             load: (request) => bind(checkpoints.load(request)),
-          },
-    recoveryCheckpoints:
-      recoveryCheckpoints === undefined
-        ? undefined
-        : {
-            save: (request) => bind(recoveryCheckpoints.save(request)),
-            load: (request) => bind(recoveryCheckpoints.load(request)),
           },
   };
 
@@ -386,6 +380,32 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
     state = owned;
     active.add(owned);
+    // Authority refresh may observe administrative commits after progress preparation.
+    // Keep the writer's observed CAS frontier separate so stale progress returns to reprepare.
+    let writerTail = { sequence: authority.thread.tail_sequence, digest: initialDigest };
+
+    const acceptTailConflict = (cause: Cause.Cause<unknown>) => {
+      const error = Cause.squash(cause);
+
+      if (
+        !Schema.is(AppendConflict)(error) ||
+        error.reason !== "tail" ||
+        error.actualTailSequence === undefined ||
+        error.actualTailDigest === undefined ||
+        authority.thread.producer_epoch !== owned.epoch
+      )
+        return false;
+      writerTail = { sequence: error.actualTailSequence, digest: error.actualTailDigest };
+      authority.thread = Object.freeze({
+        ...authority.thread,
+        tail_sequence: writerTail.sequence,
+        tail_digest: writerTail.digest,
+      });
+      owned.digest = writerTail.digest;
+
+      return true;
+    };
+
     let renewedAt = acquiredAt;
     const commands = ledgerKernel.bindAuthority(authority);
 
@@ -414,7 +434,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
               const exit = yield* restore(effect).pipe(Effect.exit);
 
               if (Exit.isFailure(exit)) {
-                close(owned);
+                if (!acceptTailConflict(exit.cause)) close(owned);
 
                 return yield* exit;
               }
@@ -465,10 +485,20 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       Effect.fnUntraced(function* (raw: RawAppendRequest) {
         const record = raw.records[0]?.canonical;
 
+        // Original input and its own progress share the existing applied-input transaction.
+        // The journal validates sidecar revision, frontier and charges before either write.
         if (
           !authority.owned ||
           authority.submission.input_applied_record_id !== null ||
-          raw.records.length !== 1 ||
+          raw.records
+            .slice(1)
+            .some(
+              ({ canonical: sidecar }) =>
+                sidecar.payload._tag !== "RunContinuation" ||
+                sidecar.payload.runId !== runIdForSubmission(submissionId) ||
+                sidecar.payload.submissionId !== submissionId ||
+                sidecar.payload.lastFact.recordId !== record?.recordId,
+            ) ||
           raw.batchId !== submissionInputBatchId(submissionId) ||
           record?.recordId !== submissionInputRecordId(submissionId) ||
           record.payload._tag !== "UserInputRecorded" ||
@@ -530,31 +560,42 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   message: "Run storage session is closed",
                 });
 
-              const request = FencedAppendRequest.make({
-                threadId: claimedThreadId,
-                producerEpoch: owned.epoch,
-                expectedTailSequence: authority.thread.tail_sequence,
-                expectedTailDigest: owned.digest,
-                batch,
-              });
-
-              const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
-
-              if (Exit.isFailure(result)) {
-                close(owned);
-
-                return yield* result;
-              }
-              if (!result.value.replayed) {
-                authority.thread = Object.freeze({
-                  ...authority.thread,
-                  tail_sequence: result.value.lastSequence,
-                  tail_digest: result.value.tailDigest,
+              for (let retries = 0; ; retries++) {
+                const request = FencedAppendRequest.make({
+                  threadId: claimedThreadId,
+                  producerEpoch: owned.epoch,
+                  expectedTailSequence: writerTail.sequence,
+                  expectedTailDigest: writerTail.digest,
+                  batch,
                 });
-                owned.digest = result.value.tailDigest;
-              }
 
-              return result.value;
+                const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
+
+                if (Exit.isFailure(result)) {
+                  if (!acceptTailConflict(result.cause)) {
+                    close(owned);
+
+                    return yield* result;
+                  }
+                  if (
+                    retries >= 8 ||
+                    batch.records.some(({ payload }) => payload._tag === "RunContinuation")
+                  )
+                    return yield* result;
+                  continue;
+                }
+                if (!result.value.replayed) {
+                  authority.thread = Object.freeze({
+                    ...authority.thread,
+                    tail_sequence: result.value.lastSequence,
+                    tail_digest: result.value.tailDigest,
+                  });
+                  owned.digest = result.value.tailDigest;
+                }
+                writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
+
+                return result.value;
+              }
             }),
           ),
         ),
@@ -580,14 +621,18 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       claim: claimed,
       threadId: claimedThreadId,
       producerEpoch: owned.epoch,
-      tail: bind(
-        Effect.sync(() => ({ sequence: authority.thread.tail_sequence, digest: owned.digest })),
-      ),
+      tail: bind(Effect.sync(() => ({ ...writerTail }))),
       append,
       release,
       renew,
       checkFence,
-      refresh: checkFence,
+      refresh: checkFence.pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
+          }),
+        ),
+      ),
       maintain: (interval: Duration.Duration) =>
         bind(
           Effect.forever(
@@ -633,8 +678,8 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                 append: FencedAppendRequest.make({
                   threadId: claimedThreadId,
                   producerEpoch: owned.epoch,
-                  expectedTailSequence: authority.thread.tail_sequence,
-                  expectedTailDigest: owned.digest,
+                  expectedTailSequence: writerTail.sequence,
+                  expectedTailDigest: writerTail.digest,
                   batch,
                 }),
               }),
@@ -652,6 +697,10 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
               tail_digest: result.publication.tailDigest,
             });
             owned.digest = result.publication.tailDigest;
+            writerTail = {
+              sequence: result.publication.tailSequence,
+              digest: result.publication.tailDigest,
+            };
           },
           // The publisher checks live authority even on replay. Finalization releases
           // the token; only joined follow-up appends may keep this same-epoch writer.

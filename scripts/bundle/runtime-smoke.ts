@@ -12,7 +12,7 @@ import {
 } from "@yielded/agent";
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
 import * as DirectAgent from "@yielded/agent/agent";
-import { AgentInputError } from "@yielded/agent/agent-error";
+import { AgentInputDecodeError } from "@yielded/agent/agent-error";
 import * as DirectRuntime from "@yielded/agent/agent-runtime";
 import { IdGenerator as DirectIdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
@@ -53,7 +53,10 @@ const identifiers = Layer.succeed(DirectIdGenerator, {
 export const program = Effect.gen(function* () {
   yield* check(Agent.make === DirectAgent.make, "Agent.make root/direct identity changed");
   yield* check(AgentRuntime.run === DirectRuntime.run, "AgentRuntime.run identity changed");
-  yield* check(AgentError.AgentInputError === AgentInputError, "Schema class identity changed");
+  yield* check(
+    AgentError.AgentInputDecodeError === AgentInputDecodeError,
+    "Schema class identity changed",
+  );
   yield* check(IdGenerator.IdGenerator === DirectIdGenerator, "Service identity changed");
   yield* check(InMemory.layer === DirectInMemory.layer, "InMemory.layer identity changed");
   yield* check(Subagent.layer === DirectSubagent.layer, "Subagent.layer identity changed");
@@ -88,12 +91,12 @@ export const program = Effect.gen(function* () {
 
     const invalid = yield* AgentRuntime.run(agent, "").pipe(
       Effect.as(false),
-      Effect.catchTag("AgentInputError", (error) =>
-        Effect.succeed(error instanceof AgentInputError && error.message.length > 0),
+      Effect.catchTag("AgentInputDecodeError", (error) =>
+        Effect.succeed(error instanceof AgentInputDecodeError && error.message.length > 0),
       ),
     );
 
-    yield* check(invalid, "Invalid input did not produce the typed AgentInputError");
+    yield* check(invalid, "Invalid input did not produce the typed AgentInputDecodeError");
 
     const scripted = yield* ScriptedModel;
 

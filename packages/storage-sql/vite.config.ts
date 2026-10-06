@@ -20,7 +20,6 @@ export default defineConfig({
       "src/SqlMessageDeliveryStore.ts",
       "src/SqlLifecyclePublication.ts",
       "src/SqlSubscriptionStore.ts",
-      "src/SqlStorageV2Upgrade.ts",
     ],
     dts: true,
     sourcemap: true,

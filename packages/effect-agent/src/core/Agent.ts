@@ -4,7 +4,12 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as S from "effect/Schema";
 
-import type { AgentInputError, AgentOutputError, AgentRunDispositionError } from "./AgentError.ts";
+import type {
+  AgentInputDecodeError,
+  AgentInputError,
+  AgentOutputError,
+  AgentRunDispositionError,
+} from "./AgentError.ts";
 import { AgentPolicy, type AgentPolicyInput } from "./AgentPolicy.ts";
 import { AgentId } from "./Identifiers.ts";
 import { type UpdateToolkit, withUpdateTool } from "./internal/agent-updates.ts";
@@ -401,6 +406,7 @@ type DefinitionFailure<DefinitionValue extends AnyDefinition> = DefinitionValue 
 export type Failure<AgentValue extends AnyDefinition | Any> =
   | DefinitionFailure<DefinitionOf<AgentValue>>
   | AiError.AiError
+  | AgentInputDecodeError
   | AgentInputError
   | AgentOutputError
   | RunDispositionFailure<AgentValue>;

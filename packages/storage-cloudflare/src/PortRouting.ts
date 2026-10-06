@@ -869,7 +869,6 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
 const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPortOptions) {
   const local = yield* ThreadStore;
   const checkpoints = local.checkpoints;
-  const recoveryCheckpoints = local.recoveryCheckpoints;
   const lifecyclePublications = local.lifecyclePublications;
   const acknowledgeMany = lifecyclePublications?.acknowledgeMany;
   const transport = yield* ThreadPortTransport;
@@ -1036,8 +1035,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
           ).pipe(Effect.map((reply) => reply.export)),
 
     // Observation and checkpoints are lane-local: the closed route-capable store subset
-    // is materialize/append/read/readIdentity/inspectTail/export. Recovery cache misses can fall back
-    // to those canonical reads, including when the cache belongs to a foreign Object.
+    // is materialize/append/read/readIdentity/inspectTail/export.
     observe: (request) =>
       options.ownsThread(request.threadId)
         ? local.observe(request)
@@ -1071,25 +1069,6 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               options.ownsThread(ownerThreadId)
                 ? lifecyclePublications.retryParked(ownerThreadId, nowMillis)
                 : Effect.fail(LifecyclePublicationError.make({ reason: "unavailable" })),
-          },
-        }),
-    ...(recoveryCheckpoints === undefined
-      ? {}
-      : {
-          recoveryCheckpoints: {
-            save: (request) =>
-              options.ownsThread(request.checkpoint.threadId)
-                ? recoveryCheckpoints.save(request)
-                : Effect.fail(
-                    crossThreadStoreError(
-                      "thread save recovery checkpoint",
-                      request.checkpoint.threadId,
-                    ),
-                  ),
-            load: (request) =>
-              options.ownsThread(request.threadId)
-                ? recoveryCheckpoints.load(request)
-                : Effect.succeed(Option.none()),
           },
         }),
     ...(checkpoints === undefined
@@ -1128,8 +1107,7 @@ export const routedSubmissionLedgerLayer = (
 /**
  * Routing decorator over the LOCAL `ThreadStore` facet (plan §1.3): this-thread
  * requests execute locally; foreign materialize/append/read/inspectTail/export travel the
- * transport. Foreign recovery-cache loads return none for canonical replay; other foreign
- * checkpoint operations and observation fail fast typed.
+ * transport. Foreign checkpoint operations and observation fail fast typed.
  */
 export const routedThreadStoreLayer = (
   options: RoutedPortOptions,

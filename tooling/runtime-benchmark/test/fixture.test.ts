@@ -10,7 +10,7 @@ import { Effect, Exit, FileSystem, Layer, Schema } from "effect";
 import { Model, Toolkit } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
-import { assertCheckpointFault } from "../src/fixture.ts";
+import { assertRecoveryFault } from "../src/fixture.ts";
 
 it("reports failed durable Settlements even when processThread succeeds", async () => {
   const agent = Agent.make("checkpoint-diagnostic", {
@@ -54,9 +54,9 @@ it("reports failed durable Settlements even when processThread succeeds", async 
           .processThread({ definition: agent, model }, receipt.threadId)
           .pipe(Effect.exit);
 
-        const diagnostic = yield* assertCheckpointFault(attempt, {
+        const diagnostic = yield* assertRecoveryFault(attempt, {
           compactionCommitted: false,
-          checkpointCreationMs: null,
+          compactionCommitMs: null,
         }).pipe(Effect.flip);
 
         return { attempt, diagnostic };

@@ -1277,16 +1277,12 @@ returning the first page again. The built-in `ThreadContextHistory.layer` implem
 over every `ThreadStore`; its default scan ceiling and deadline are unchanged, and storage
 adapters need no persisted-format migration.
 
-An evidence index supplies retrieval candidates; canonical history and the submission ledger own
-recovery. After a committed rollover, the runtime can use a compatible
-[recovery checkpoint](/concepts/durability/#recovery-checkpoints) containing the replacement
-context, cumulative accounting, and retained control and Durable Step evidence. It reads at most
-4,096 suffix records through pages of at most 1,024. After completion, eligible sequential Runs
-reuse canonical Thread context and refresh it from their new records. A new compaction, late
-evidence, or an absent, invalid, or incompatible checkpoint or suffix uses the captured canonical
-prefix. Checkpoint eligibility is separate from
-index coverage and prompt size, so measure both the checkpoint path and full-replay fallback before
-adopting longer histories.
+An evidence index supplies retrieval candidates; canonical facts and the submission ledger own
+recovery. A [Run continuation](/concepts/durability/#run-continuations) references the exact
+original input, saved context, and declared operations. Compaction changes model context without
+changing those execution facts or accumulated charges. Selected recovery reads a bounded Run
+prefix and suffix; unavailable or corrupt required evidence fails typed and leaves the work owed.
+Initial context assembly and complete history export have their own costs and storage bounds.
 
 <a id="explicit-compaction-artifacts"></a>
 

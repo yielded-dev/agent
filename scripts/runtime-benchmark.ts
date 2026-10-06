@@ -391,7 +391,7 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
   if (workloads.some((workload) => workload.kind === "recovery"))
     lines.push(
       "",
-      "Inline checkpoint construction and save (outside recovery total):",
+      "Inline compaction and progress commit (outside recovery total):",
       "",
       "| Workload | Base | Head |",
       "| --- | ---: | ---: |",
@@ -409,7 +409,7 @@ export const renderPerformanceReport = (report: PerformanceReport): string => {
               sample.case === workload.name && !sample.warmup && sample.status === "passed",
           )
           .flatMap((sample) =>
-            sample.checkpointCreationMs === null ? [] : [sample.checkpointCreationMs],
+            sample.compactionCommitMs === null ? [] : [sample.compactionCommitMs],
           ),
       );
 

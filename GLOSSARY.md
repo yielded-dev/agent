@@ -161,6 +161,22 @@ Input delivered only when the Agent would otherwise stop.
 Durable states for queued input claimed by an active Run. `joining` precedes canonical input
 append; `joined` follows it and settles with the host Run.
 
+**Run Continuation**
+
+Versioned canonical semantic progress for one Run, atomically fenced with its execution facts.
+It retains cumulative charges and exact references to original input, saved context, declared
+operations, and terminal evidence. Its index is disposable and grants no ownership.
+
+**Saved Run context**
+
+The original evaluated instructions, input messages, and prior conversation of a Run, recorded
+once independently of execution progress and later compaction. Another Run cannot replace it.
+
+**Work handoff**
+
+A retained canonical preparation whose destination acceptance or acknowledgement is still owed.
+Its identity remains discoverable before the first Run continuation and after Run settlement.
+
 **Ordinary Tool**  
 A Tool without durable replay semantics. If ownership is lost after its effect may have happened
 but before an outcome is recorded, recovery records an unknown outcome and does not replay it.
@@ -445,7 +461,7 @@ recovery truth.
 **Activity processor**
 
 An optional application-invoked consumer of committed Thread records. Its versioned, per-Thread
-progress and prepared output are separate from canonical history, engine checkpoints, and
+progress and prepared output are separate from canonical history, Run continuations, and
 submission ownership. The application owns extraction, destination idempotency, and sharing.
 
 **Thread Log**

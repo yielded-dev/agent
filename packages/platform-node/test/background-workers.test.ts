@@ -8,6 +8,12 @@ import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import { MessageDeliveryFailpoint, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import type { Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
+import {
+  canonicalRecordBytes,
+  readContinuation,
+  runEvidence,
+} from "@yielded/agent/run-continuation";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
@@ -16,9 +22,15 @@ import {
   IdempotencyKey,
   Principal,
 } from "@yielded/agent/submission-ledger";
-import { ThreadReader, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import {
+  readWorkerState,
+  ThreadReader,
+  ThreadExportRequest,
+  ThreadIdentityRequest,
+  ThreadStore,
+} from "@yielded/agent/thread-store";
 import { AssignmentDisposition, WorkerError, type WorkerSummary } from "@yielded/agent/worker";
-import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
+import { WorkerBudgetAuthorizer, WorkerHostAuthorizer } from "@yielded/agent/worker-host";
 import {
   Clock,
   Context,
@@ -28,6 +40,7 @@ import {
   Fiber,
   FileSystem,
   Layer,
+  Option,
   Schema,
   Scope,
   Stream,
@@ -97,6 +110,290 @@ const withFacet = <A, E>(
   facet: SubagentHost["Service"],
   effect: Effect.Effect<A, E, SubagentHost>,
 ) => effect.pipe(Effect.provideService(SubagentHost, facet));
+
+// Regression: https://github.com/yielded-dev/agent/commit/6ceda1d221d990d4959f21596eedad84e742c95f
+it.effect(
+  "keeps launching Run evidence unchanged across independently funded worker follow-ups",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "worker-ownership-" });
+
+        const research = Subagent.make("ownership", {
+          target: target.definition,
+          parameters: Schema.Struct({ note: Schema.String }),
+          prepareInput: ({ note }) =>
+            Effect.succeed({ question: `Correction length: ${note.length}` }),
+          policy: declaration.policy,
+        });
+
+        const toolkit = Toolkit.make(
+          Tool.make("coordinate", {
+            parameters: Schema.Struct({ action: Schema.Literals(["launch", "followUp"]) }),
+            success: Schema.String,
+            failure: Schema.Union([
+              Subagent.SubagentPrestartDenied,
+              Subagent.SubagentProjectionFailure,
+              WorkerError,
+            ]),
+            dependencies: [SubagentHost],
+          }),
+        );
+
+        let independent: Subagent.Worker<"ownership"> | undefined;
+        let conserved: Subagent.Worker<"ownership"> | undefined;
+        let sourceCalls = 0;
+
+        const handlers = toolkit.toLayer({
+          coordinate: ({ action }) =>
+            Effect.gen(function* () {
+              if (action === "launch") {
+                independent = (yield* Subagent.start(
+                  research,
+                  { note: "initial" },
+                  {
+                    idempotencyKey: key("independent"),
+                    budgetScope: "worker-run",
+                  },
+                )).worker;
+                conserved = (yield* Subagent.start(
+                  research,
+                  { note: "initial" },
+                  {
+                    idempotencyKey: key("conserved"),
+                  },
+                )).worker;
+              } else {
+                if (independent === undefined) return yield* Effect.die("Worker not launched");
+
+                const delivery = yield* Subagent.followUp(
+                  research,
+                  independent,
+                  { note: "Run B" },
+                  {
+                    idempotencyKey: key("run-b"),
+                  },
+                );
+
+                expect(delivery.receipt).not.toBeNull();
+              }
+
+              return "accepted";
+            }),
+        });
+
+        const parent = Agent.withModel(
+          Agent.make("ownership-parent", {
+            input: source.definition.input,
+            output: source.definition.output,
+            instructions: "Coordinate the workers.",
+            toolkit,
+            policy: source.definition.policy,
+          }),
+          Model.make(
+            "scripted",
+            "ownership-parent",
+            Layer.effect(
+              LanguageModel.LanguageModel,
+              LanguageModel.make({
+                generateText: () => Effect.succeed([]),
+                streamText: () => {
+                  const call = sourceCalls++;
+
+                  return Stream.fromIterable<Response.StreamPartEncoded>(
+                    call % 2 === 0
+                      ? [
+                          {
+                            type: "tool-call",
+                            id: `coordinate-${call}`,
+                            name: "coordinate",
+                            params: { action: call === 0 ? "launch" : "followUp" },
+                          },
+                          {
+                            type: "finish",
+                            reason: "tool-calls",
+                            usage: { inputTokens: {}, outputTokens: {} },
+                          },
+                        ]
+                      : parts,
+                  );
+                },
+              }),
+            ),
+          ),
+        );
+
+        const hostLayer = NodeHost.NodeDurableHost.layerRegistered(
+          [
+            {
+              agent: parent,
+              definitions: { ...definitions, tools: [{ name: "coordinate", version: "1" }] },
+            },
+            { agent: target, definitions },
+          ],
+          {
+            filename: `${directory}/runtime.sqlite`,
+            deploymentId: "ownership",
+            producerId: "node",
+          },
+        ).pipe(
+          Layer.provide([
+            authority,
+            handlers,
+            Layer.succeed(WorkerBudgetAuthorizer)({ authorize: () => Effect.void }),
+          ]),
+        );
+
+        const firstScope = yield* Scope.make();
+
+        yield* Effect.addFinalizer(() => Scope.close(firstScope, Exit.void));
+        const first = yield* Layer.build(hostLayer).pipe(Scope.provide(firstScope));
+        const runtime = Context.get(first, DurableAgentRuntime);
+        const reader = Context.get(first, ThreadReader);
+
+        const launch = yield* runtime.submitRegistered(
+          parent,
+          { question: "launch" },
+          {
+            threadId: sourceThreadId,
+            principal,
+            idempotencyKey: key("launch"),
+          },
+        );
+
+        yield* runtime.processThreadResolved(sourceThreadId);
+        expect((yield* runtime.awaitSettlement(launch)).outcome).toBe("completed");
+        if (independent === undefined || conserved === undefined)
+          return yield* Effect.die("Both workers must be launched by Run A");
+        yield* runtime.processThreadResolved(independent.threadId);
+        yield* runtime.processThreadResolved(conserved.threadId);
+
+        const snapshot = Effect.fnUntraced(function* (receipt: Receipt) {
+          const reader = yield* ThreadReader;
+
+          const tail = yield* reader.readIdentity(
+            ThreadIdentityRequest.make({ threadId: sourceThreadId }),
+          );
+
+          const continuation = Option.getOrThrow(
+            yield* readContinuation(
+              sourceThreadId,
+              runIdForSubmission(receipt.submissionId),
+              tail.tailSequence,
+            ),
+          );
+
+          const evidence = yield* Stream.runCollect(
+            runEvidence(sourceThreadId, receipt.submissionId, tail.tailSequence),
+          );
+
+          return { continuation, evidence };
+        });
+
+        const before = yield* snapshot(launch).pipe(Effect.provideService(ThreadReader, reader));
+
+        const owner = yield* runtime.workerHost({
+          sourceThreadId,
+          principal,
+          sourceSubmissionId: launch.submissionId,
+        });
+
+        const correction = yield* withFacet(
+          owner,
+          Subagent.followUp(
+            research,
+            conserved,
+            { note: "host correction" },
+            {
+              idempotencyKey: key("host-conserved"),
+            },
+          ),
+        );
+
+        expect(correction.receipt).not.toBeNull();
+        yield* runtime.processThreadResolved(conserved.threadId);
+        // Each envelope fits the default 256 KiB limit; together they exceed A's 4 MiB Turn limit.
+        for (let index = 0; index < 18; index++) {
+          const delivery = yield* withFacet(
+            owner,
+            Subagent.followUp(
+              research,
+              independent,
+              { note: "x".repeat(240 * 1024) },
+              {
+                idempotencyKey: key(`large-${index}`),
+              },
+            ),
+          );
+
+          expect.soft(delivery.receipt, `large follow-up ${index} must be admitted`).not.toBeNull();
+          if (delivery.receipt !== null) yield* runtime.processThreadResolved(independent.threadId);
+        }
+
+        const next = yield* runtime.submitRegistered(
+          parent,
+          { question: "follow up" },
+          {
+            threadId: sourceThreadId,
+            principal,
+            idempotencyKey: key("source-b"),
+          },
+        );
+
+        yield* runtime.processThreadResolved(sourceThreadId);
+        expect((yield* runtime.awaitSettlement(next)).outcome).toBe("completed");
+        yield* Scope.close(firstScope, Exit.void);
+        const second = yield* Layer.build(hostLayer);
+        const reopened = Context.get(second, ThreadReader);
+        const after = yield* snapshot(launch).pipe(Effect.provideService(ThreadReader, reopened));
+
+        expect.soft(after.continuation).toEqual(before.continuation);
+        expect
+          .soft(after.evidence.map((entry) => entry.record.recordId))
+          .toEqual(before.evidence.map((entry) => entry.record.recordId));
+        const current = yield* snapshot(next).pipe(Effect.provideService(ThreadReader, reopened));
+
+        const handoff = current.evidence.find(
+          ({ record }) => record.payload._tag === "WorkerInputRequested",
+        );
+
+        expect(handoff?.record.payload).toMatchObject({
+          admission: { parameters: { note: "Run B" } },
+        });
+        expect(current.continuation.continuation.recordBytes).toBe(
+          current.evidence.reduce((sum, entry) => sum + canonicalRecordBytes(entry.record), 0),
+        );
+
+        const workerState = yield* readWorkerState({
+          threadId: sourceThreadId,
+          sourceSubmissionId: launch.submissionId,
+          limit: 64,
+        }).pipe(Effect.provideService(ThreadReader, reopened));
+
+        const handoffs = yield* reopened
+          .read({
+            threadId: sourceThreadId,
+            selection: { _tag: "WorkHandoffs", throughSequence: workerState.tailSequence },
+            page: { limit: 64 },
+          })
+          .pipe(Stream.runCollect);
+
+        expect(
+          workerState.records.filter(
+            ({ record }) => record.payload._tag === "WorkerInputRequested",
+          ),
+        ).toHaveLength(22);
+        expect(
+          handoffs.filter(({ record }) => record.payload._tag === "WorkerInputRequested"),
+        ).toHaveLength(22);
+        expect(
+          handoffs.filter(({ record }) => record.payload._tag === "SubtreeBudgetReserved"),
+        ).toHaveLength(2);
+      }),
+    ).pipe(Effect.provide(NodeFileSystem.layer)),
+  15_000,
+);
 
 // Regression: https://github.com/yielded-dev/agent/blob/4c417d98e8cc790c42ab4200a54a0548fe32e6e3/packages/effect-agent/src/durable/internal/worker-host.ts#L1645-L1691
 for (const completion of ["interrupted"] as const) {

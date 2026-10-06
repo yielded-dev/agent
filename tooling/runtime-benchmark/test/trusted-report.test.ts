@@ -73,7 +73,7 @@ const makeReport = (): Report => ({
               setupMs: 1,
               failurePhase: null,
               modelEntryMs: 1,
-              checkpointCreationMs: workload.kind === "recovery" ? 1 : null,
+              compactionCommitMs: workload.kind === "recovery" ? 1 : null,
               retainedPromptMessages: 0,
               modelCalls: 1,
               finalizers: 1,

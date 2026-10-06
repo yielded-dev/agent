@@ -32,20 +32,20 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
-Record-format cutovers use the same boundary: export the log, convert the archive explicitly,
-and import into an empty Thread. Import accepts only the current record format. Archives also
-retain immutable admission facts that the log cannot reconstruct, including receipt identities,
-principals, keys and queued input, with their original admission order and time. Every canonical
-admission reference must have its matching fact; pending admissions need not have reached the log.
-Import rebuilds execution state without transferring ownership;
-unresolved mutating tools in unfinished Runs remain Unknown. Table-layout steps are independent of record meaning.
-See [backup and re-encoding](/guide/operations/#adopting-these-contracts) for the procedure and limits.
+The execution protocol uses `effect-agent/thread@2` records in fresh layout-18 stores.
+This format is unreleased: install matching runtime and storage packages, and retain predecessor
+stores with their matching release. Opening or importing a predecessor format fails before mutation;
+this release has no converter, predecessor decoder, or layout upgrade.
 
-An Attempt captures a fixed canonical tail and validates contiguous pages. Without a recovery
-checkpoint, it gathers control and journal metadata together, including compaction boundaries.
-Later appends enter through a separately captured suffix; a gap or short page fails before that
-view can drive recovery. Compaction metadata is discarded after projection, before model waits.
-Canonical prompt and unresolved-tool validation still apply, including when reusing metadata.
+Same-format archives preserve canonical records, immutable admission facts, and accepted commands.
+Pending admissions need not have reached the log. Import validates every reference and rebuilds
+operational state in an empty Thread without importing execution ownership. Unresolved ordinary
+mutating calls remain Unknown. See [backup and restore](/guide/operations/#adopting-these-contracts).
+
+A selected Run recovers from its canonical continuation and exact Run evidence at one captured
+tail. Later facts enter through a bounded selected-Run suffix. Unrelated later Thread history never
+becomes recovery input. Missing or invalid evidence leaves the work owed with a typed failure;
+there is no full-Thread replay fallback.
 
 `ThreadProjection` version 3 derives open tool calls from committed model responses and scopes
 calls and subagent invocations by Run and Tool Call ID. Decode projection state with its Schema
@@ -73,51 +73,66 @@ the handler again. It may reevaluate the completion projection, so keep that fun
 deterministic. `RunCompleted` fixes the output and disposition for subsequent recovery. A final
 response with no application tool calls commits atomically with its `RunCompleted` record.
 
-<a id="recovery-checkpoints"></a>
+## Run continuations
 
-## Resume through a recovery checkpoint
+`RunContinuation` records a semantic boundary: preparing context, awaiting a model, processing
+declared operations, waiting, uncertain, or settling. It commits in the same fenced transaction
+as the execution facts it references. Its latest-record index is disposable; the ledger alone
+admits work and grants ownership.
+Offline `verify` recomputes each continuation from its referenced facts, including accounting.
 
-After a durable compaction or context rollover commits its replacement, the runtime can save a
-recovery checkpoint through `ThreadStore.recoveryCheckpoints`. The checkpoint preserves the
-replacement context, protected instructions and input, cumulative usage and policy accounting,
-the latest replayable tool batch, and required control and Durable Step evidence. Completed Step
-results remain available for reuse after an ownership change.
+```mermaid
+flowchart LR
+  A[Accepted input in ledger] --> B[Current fenced Attempt]
+  B --> C[Execution facts + RunContinuation]
+  C --> D[Exact input, context, and operation evidence]
+  D --> B
+```
 
-Checkpoints also retain retired application call IDs, so compaction never permits their reuse
-within the same Run.
+The continuation contains cumulative policy and model charges plus bounded, integrity-checked
+references to the original input, original evaluated context, latest native response, and terminal
+facts. Results, Durable Steps, approval decisions, and original operation contracts keep their own
+canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats
+recorded results. An unresolved ordinary mutating call still requires reconciliation.
 
-When that Run completes, an eligible checkpoint also preserves the complete Thread's canonical
-conversation. A later Run can start from that context and its own records, with fresh instructions
-and accounting. Each completion refreshes the context from the new records, so sequential Runs
-need not reread the retired archive. The snapshot contains canonical messages, never transient
-context or provider-only prompt transformations.
-If retaining the completed Run's recovery data would exceed cache bounds, the snapshot keeps
-only Thread context and identity records; recovering that Run uses canonical history.
+`RunContextRecorded` preserves evaluated instructions and this Run's input, plus digest-checked
+references to prior model history at the original admission boundary. It shares the start
+transaction and copies no prior Prompt payloads. Compaction changes the model view independently.
+A compatible current Binding supplies execution services, while saved instructions, user intent, and the Run's
+own continuation remain unchanged by another Run's later traffic. New Runs evaluate current
+instructions. Input-dependent Bindings must still decode the original admitted value. A current
+input Schema refusal returns `BindingUnavailable`, releases the Attempt, and leaves the original
+receipt pending until a usable Binding returns. Missing Bindings and incompatible pending
+operation semantics also leave work owed.
 
-This optional cache holds one latest snapshot per Thread. Saves require the current producer
-epoch and bind the snapshot to a canonical batch tail. It is separate from the generic
-`ThreadStore.checkpoints` slot used by application projections. Neither slot changes canonical
-history or owns a submission.
+Execution dispatch is bounded at 16,384 facts and 32 MiB, in pages of eight records.
+Preparations before the first continuation and a post-continuation suffix each have a limit of
+64 records and 2 MiB. The continuation record is limited to 8 KiB; incremental record JSON is
+capped at 4 MiB per Turn, including continuations and the first Turn's initial context and retained
+preparations. Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
+4 MiB limit to include its envelope. Duplicate SQL batch JSON and indexes are separate costs.
+Dispatch reserves bounded Tool outcomes and a full valid Step result before a new Step body
+starts. Concurrent Steps share that capacity. Every dispatch retains room for a bounded failure
+settlement and usage metadata; insufficient capacity refuses execution or fails the Run.
+Abort, failure, and settlement consume their reserved room and can commit after ordinary capacity
+is exhausted. Terminal evidence has a separate hard allowance of four facts and 8.25 MiB;
+successful output still requires its dispatch capacity. Reservations are conservative and can
+refuse work before the byte limit itself is reached. Original context references are bounded at
+4,096 records and 32 MiB of referenced wire; evaluated Run input uses the individual persisted
+JSON limit. Active Attempts retain a validated prefix and read only new facts. Cold recovery
+resolves the immutable context references.
 
-Recovery checks the checkpoint's versions, state digest, agent/model/tool definitions, retained
-submissions, and canonical binding before replaying the suffix. The suffix is limited to 4,096
-records, read in pages of at most 1,024. Missing, corrupt, incompatible, or ineligible checkpoints
-fall back to the captured canonical prefix. A longer or incompatible suffix also uses full replay;
-cache capacity never justifies dropping control or Step evidence. Storage infrastructure failures
-remain typed failures.
+Worker lineage and subtree funding remain immutable provenance. Each worker input records its own
+execution owner: a Tool handoff charges its emitting Run, while host follow-ups and receiving
+framework reports have no source Run charge. Later inputs never enlarge a settled launching Run.
 
-Cross-Run reuse requires proven original-input boundaries and an unambiguous, single-Run suffix.
-Opaque Submission IDs, including Cloudflare's routed IDs, can reuse context when their lengths
-match the checkpoint owner's. A different length, ambiguous control markers, interleaved
-continuations, late results, joined settlements, or a new compaction can require full replay.
-New compaction reconstructs canonical coverage and certifies another snapshot. This also replaces
-checkpoints from an incompatible runtime version; caching resumes after that compaction. Context
-without compaction can still grow with the conversation; a checkpoint does not make every Thread
-operation independent of history size.
+Exact evidence reads and same-format archives retain additive fields and the original wire values.
+Reading a typed view never changes the content pinned by an evidence digest.
 
-The canonical log and submission ledger remain authoritative. A history-search index supplies
-retrieval candidates and cannot stand in for this recovery state. Ordinary unresolved tools keep
-the same reconciliation and unknown-outcome rules with or without a checkpoint.
+Initial context assembly for a new Run can read history preceding its original input. Full Thread
+work inventory, resumable index reconstruction, archive partitioning, and streamed transfer are
+separate concerns. This protocol boundary does not remove existing Thread storage/export caps.
+Generic `ThreadStore.checkpoints` remain optional application projections and never govern execution.
 
 <a id="operational-obligation"></a>
 
@@ -137,8 +152,6 @@ resume with their original authority and deadlines. Their model context contains
 their start and their own Turns. Later results can close prior historical calls, but another Run's
 continuation cannot replace the current input. Compaction covers its creator's context while
 complete Thread history retains interleaved exchanges from other Runs.
-Recovery checkpoints from the previous context projection rebuild from canonical history.
-Install matching runtime and storage packages.
 
 `SubmissionLedger.scanNonterminal` discovers work through `SubmissionWorkItem`: identities,
 receipt, deployment, queue order and state, without execution payloads. Read `lookup` or
@@ -161,8 +174,7 @@ their external execution can repeat and still needs idempotency or reconciliatio
 
 Step identity includes the Run ID, Tool Call ID, and Step name. New Step record and batch IDs use
 a versioned JSON tuple so separator characters cannot merge distinct Steps. Recovery derives
-the same identity from each recorded payload, preserving completed Steps stored with older IDs
-without executing their bodies again.
+the same identity from each recorded payload without executing completed Step bodies again.
 
 <a id="one-authoring-model"></a>
 

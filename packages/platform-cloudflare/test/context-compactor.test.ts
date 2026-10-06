@@ -6,7 +6,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { submissionSettlementRecordId } from "@yielded/agent/submission-ledger";
-import { ThreadCheckpoint, ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
@@ -86,8 +86,8 @@ const abortIncarnation = (thread: string): Promise<void> =>
 
 describe("Cloudflare replaceable compaction", () => {
   // https://github.com/yielded-dev/agent/issues/692
-  // Memory IDs do not expose native routed IDs rejecting the fresh-Run context cache.
-  it("reuses compacted context with native routed IDs and falls back from older certificates", () => {
+  // Native routed identities remain opaque while canonical context survives rollover.
+  it("retains canonical rollover context with native routed identities", () => {
     const thread = lane("checkpoint:run:nested:tool-settled");
 
     return runInDurableObject(stubFor(thread), (instance) =>
@@ -96,9 +96,6 @@ describe("Cloudflare replaceable compaction", () => {
           const store = yield* ThreadStore;
           const prompts: Array<string> = [];
           let rollover = false;
-          let legacy = false;
-          let retiredThrough = 0;
-          let retiredReads = 0;
 
           const model = Model.make(
             "scripted",
@@ -137,35 +134,6 @@ describe("Cloudflare replaceable compaction", () => {
           );
 
           const binding = yield* DurableWorkerBinding.make(agent, TEST_DIGESTS);
-          const checkpoints = store.recoveryCheckpoints!;
-
-          const observed = ThreadStore.of({
-            ...store,
-            read: (request) =>
-              store.read(request).pipe(
-                Stream.tap((entry) =>
-                  Effect.sync(() => {
-                    if (entry.sequence <= retiredThrough) retiredReads++;
-                  }),
-                ),
-              ),
-            recoveryCheckpoints: {
-              ...checkpoints,
-              load: (request) =>
-                checkpoints.load(request).pipe(
-                  Effect.map(
-                    Option.map((checkpoint) =>
-                      legacy
-                        ? ThreadCheckpoint.make({
-                            ...checkpoint,
-                            engineVersion: "effect-agent/recovery@3",
-                          })
-                        : checkpoint,
-                    ),
-                  ),
-                ),
-            },
-          });
 
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
@@ -176,7 +144,7 @@ describe("Cloudflare replaceable compaction", () => {
                 ),
               ),
             ),
-            Effect.provideService(ThreadStore, observed),
+            Effect.provideService(ThreadStore, store),
             Effect.provideService(RunContextPreparation, {
               hook: {
                 prepare: (request) =>
@@ -205,15 +173,13 @@ describe("Cloudflare replaceable compaction", () => {
           yield* process("retired request");
           rollover = true;
 
-          // The context fits by itself; copying it beside the completed Run's input/response
-          // records must not disable the cache by exceeding the persisted JSON byte bound.
+          // A large current input remains canonical beside its original context and rollover.
           const original = yield* process(
             `begin compacted conversation ${"x".repeat(400_000)}`,
             "begin compacted conversation",
           );
 
           rollover = false;
-          retiredThrough = original.records.length;
 
           for (const input of ["first fresh request", "second fresh request"]) {
             const completed = yield* process(input);
@@ -223,17 +189,9 @@ describe("Cloudflare replaceable compaction", () => {
             expect(prompts.at(-1)).toContain(input);
             expect(prompts.at(-1)).not.toContain("retired request");
             expect(completed.records.slice(0, original.records.length)).toEqual(original.records);
-            expect(retiredReads).toBe(0);
-            retiredThrough = completed.records.length;
           }
           expect(prompts.at(-1)).toContain("first fresh request");
 
-          legacy = true;
-          yield* process("fresh request with older certificate");
-          expect(retiredReads).toBeGreaterThan(0);
-          expect(prompts.at(-1)).toContain("second fresh request");
-          expect(prompts.at(-1)).toContain("fresh request with older certificate");
-          legacy = false;
           rollover = true;
           yield* process("new window request");
           expect(prompts.at(-1)).toContain("new window request");

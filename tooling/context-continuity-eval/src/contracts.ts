@@ -90,18 +90,20 @@ export const RestartEvidence = Schema.Struct({
 
 export type RestartEvidence = typeof RestartEvidence.Type;
 
-/** Observation of the optional native cache, not proof that recovery selected its fast path. */
-export const RecoveryCheckpointEvidence = Schema.Union([
-  Schema.Struct({ status: Schema.Literals(["unsupported", "missing"]) }),
-  Schema.Struct({ status: Schema.Literal("rejected"), reason: Schema.String }),
+/** Canonical progress observed alongside the independent full-transcript oracle. */
+export const RunContinuationEvidence = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("missing") }),
   Schema.Struct({
     status: Schema.Literal("present"),
-    throughSequence: Schema.Natural,
-    tailDigest: Schema.String,
+    sequence: Schema.Natural,
+    runId: Schema.String,
+    revision: Schema.Natural,
+    recordBytes: Schema.Natural,
+    turnBytes: Schema.Natural,
   }),
 ]);
 
-export type RecoveryCheckpointEvidence = typeof RecoveryCheckpointEvidence.Type;
+export type RunContinuationEvidence = typeof RunContinuationEvidence.Type;
 
 export const ModelUsage = Schema.Struct({
   calls: Schema.Natural,
