@@ -26,6 +26,7 @@ import {
   FencedAppendRequest,
   ThreadReader,
   ThreadStoreError,
+  ThreadTailRequest,
 } from "@yielded/agent/thread-store";
 import {
   Channel,
@@ -57,7 +58,7 @@ import { makeSqlThreadStoreKernel, type SqlThreadStoreOptions } from "./SqlThrea
 
 /**
  * Required storage owner for a process-exclusive database. Construction and every operation
- * pin private storage services while preserving caller diagnostics and Clock. Only claim-scoped
+ * pin private storage services while preserving caller Scope, diagnostics and Clock. Only claim-scoped
  * state is retained; canonical facts, queued followers, aborts, approvals and reservations remain
  * database-authoritative.
  */
@@ -74,8 +75,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   const context = Context.pick(
     SqlClient,
     Crypto.Crypto,
-    Scope.Scope,
-  )(yield* Effect.context<SqlClient | Crypto.Crypto | Scope.Scope>());
+  )(yield* Effect.context<SqlClient | Crypto.Crypto>());
 
   const gate = yield* Semaphore.make(1);
   const storeKernel = yield* makeSqlThreadStoreKernel(journalKernel.journal, storeOptions);
@@ -84,11 +84,8 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   const rawLedger = ledgerKernel.ledger;
   const sql = Context.get(context, SqlClient);
 
-  const storageContext = <R>(live: Context.Context<R>, scope?: Scope.Scope) =>
-    Context.merge(
-      Context.omit(CurrentTransformer, sql.transactionService)(live),
-      scope === undefined ? context : Context.add(context, Scope.Scope, scope),
-    );
+  const storageContext = <R>(live: Context.Context<R>) =>
+    Context.merge(Context.omit(CurrentTransformer, sql.transactionService)(live), context);
 
   const bind = <A, E>(effect: Effect.Effect<A, E>) =>
     Effect.contextWith((live: Context.Context<never>) =>
@@ -100,7 +97,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       Channel.fromTransform((upstream, scope) => {
         const scoped = <A, E>(effect: Effect.Effect<A, E>) =>
           Effect.contextWith((live: Context.Context<never>) =>
-            Effect.setContext(effect, storageContext(live, scope)),
+            Effect.setContext(effect, Context.add(storageContext(live), Scope.Scope, scope)),
           );
 
         return Effect.map(
@@ -342,13 +339,19 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     const acquiredAt = yield* Clock.currentTimeMillis;
 
     const granted = yield* rawLedger.claim(request).pipe(
-      Effect.catchCause((cause) => {
-        // A claim may have committed its epoch before an acknowledgement hook failed.
-        for (const previous of active)
-          if (previous.authority.submission.thread_id === claimedThreadId) close(previous);
+      Effect.catchCause((cause) =>
+        Effect.gen(function* () {
+          // Refresh committed authority: failure may precede the claim or lose its acknowledgement.
+          for (const previous of active) {
+            if (previous.authority.submission.thread_id !== claimedThreadId) continue;
+            yield* refresh(previous).pipe(
+              Effect.catchCause(() => Effect.sync(() => close(previous))),
+            );
+          }
 
-        return Effect.failCause(cause);
-      }),
+          return yield* Effect.failCause(cause);
+        }),
+      ),
     );
 
     if (Option.isNone(granted)) return Option.none<RunStorageSession>();
@@ -564,7 +567,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
           record.payload.submissionId !== submissionId ||
           record.payload.runId !== runIdForSubmission(submissionId)
         )
-          return yield* journalKernel.appendWithThread(raw, authority.thread);
+          return yield* journalKernel.journal.append(raw);
 
         const committed = yield* journalKernel.journal.withWriteTransaction(
           "append applied input transaction",
@@ -572,10 +575,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
           Effect.gen(function* () {
             yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:before");
 
-            const appended = yield* journalKernel.appendWithThreadInTransaction(
-              raw,
-              authority.thread,
-            );
+            const appended = yield* journalKernel.journal.appendInTransaction(raw);
 
             const submission = yield* commands
               .markInputAppliedInTransaction(
@@ -661,17 +661,32 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
     const checkFence = bind(
       gate.withPermits(1)(
-        Effect.suspend(() =>
-          owned.closed
-            ? Effect.fail(
-                FenceRejected.make({
-                  threadId: claimedThreadId,
-                  attemptedEpoch: owned.epoch,
-                  actualEpoch: authority.thread.producer_epoch,
-                }),
-              )
-            : Effect.void,
-        ),
+        Effect.gen(function* () {
+          if (owned.closed)
+            return yield* FenceRejected.make({
+              threadId: claimedThreadId,
+              attemptedEpoch: owned.epoch,
+              actualEpoch: authority.thread.producer_epoch,
+            });
+
+          const current = yield* rawStore.inspectTail(
+            ThreadTailRequest.make({ threadId: claimedThreadId }),
+          );
+
+          authority.thread = Object.freeze({
+            ...authority.thread,
+            producer_epoch: current.producerEpoch,
+            tail_sequence: current.tailSequence,
+            tail_digest: current.tailDigest,
+          });
+          owned.digest = current.tailDigest;
+          if (current.producerEpoch !== owned.epoch)
+            return yield* FenceRejected.make({
+              threadId: claimedThreadId,
+              attemptedEpoch: owned.epoch,
+              actualEpoch: current.producerEpoch,
+            });
+        }).pipe(Effect.onError(() => Effect.sync(() => close(owned)))),
       ),
     );
 
@@ -789,7 +804,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
               return yield* result;
             }).pipe(Effect.uninterruptible),
-            storageContext(live, scope),
+            Context.add(storageContext(live), Scope.Scope, scope),
           ),
         ),
       ),

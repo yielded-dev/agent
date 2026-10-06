@@ -22,7 +22,7 @@ export const WORK_INDEX_VERSION = 2;
 export const MAX_WORK_PAGE_ENTRIES = 128;
 export const MAX_WORK_ENTRY_BYTES = 8 * 1024;
 export const MAX_WORK_PAGE_BYTES = MAX_WORK_PAGE_ENTRIES * MAX_WORK_ENTRY_BYTES;
-export const MAX_WORK_REBUILD_RECORDS = 8;
+export const MAX_WORK_REBUILD_RECORDS = 256;
 export const MAX_WORK_REBUILD_BYTES = 32 * 1024 * 1024;
 export const MAX_RECOVERY_WORK_ITEMS = 32;
 export const MAX_RECOVERY_PAGES = 8;
@@ -162,6 +162,7 @@ export const WorkIndexRebuildRequest = Schema.Struct({
   threadId: ThreadId,
   /** Explicitly discard a damaged derivative; canonical facts and owner state are untouched. */
   restart: Schema.optionalKey(Schema.Boolean),
+  /** At most 256 records per pass by default; the 32 MiB byte cap may stop a pass sooner. */
   limit: Schema.optionalKey(
     Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_WORK_REBUILD_RECORDS })),
   ),
