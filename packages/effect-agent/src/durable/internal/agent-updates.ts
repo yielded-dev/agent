@@ -34,9 +34,9 @@ import {
 } from "../ThreadStore.ts";
 import {
   deliveryPredecessor,
+  decodeWorkCursor,
   encodeWorkCursor,
   MAX_RECOVERY_PAGES,
-  WORK_INDEX_VERSION,
   type ThreadWorkPage,
 } from "../ThreadWork.ts";
 import { WakeScheduler } from "../WakeScheduler.ts";
@@ -104,11 +104,12 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   const pendingUpdates = Effect.fnUntraced(function* (threadId: ThreadId) {
     if (store.work === undefined) return yield* rejected("unavailable");
 
-    let cursor: string | undefined = encodeWorkCursor({
-      version: WORK_INDEX_VERSION,
-      threadId,
-      source: "canonical",
-    });
+    const initial = yield* decodeWorkCursor({ threadId, limit: 128 }).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError(storage),
+    );
+
+    let cursor: string | undefined = encodeWorkCursor({ ...initial, source: "canonical" });
 
     let count = 0;
 

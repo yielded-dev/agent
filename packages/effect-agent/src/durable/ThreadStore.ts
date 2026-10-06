@@ -678,6 +678,19 @@ export class ThreadAdmission extends Schema.Class<ThreadAdmission>(
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/** Reserve the complete immutable fact and manifest before accepting a fresh admission. */
+export const admissionFitsTransfer = (request: AdmissionRequest) =>
+  Schema.encodeEffect(AdmissionRequest)(request).pipe(
+    Effect.map(
+      (wire) =>
+        utf8ByteLength(JSON.stringify(wire)) +
+          utf8ByteLength(JSON.stringify(request.threadId)) +
+          // Generated receipt/Submission identities, timestamp, snapshot and escaped cursor.
+          128 * 1024 <=
+        MAX_THREAD_EXPORT_PAGE_BYTES,
+    ),
+  );
+
 /** Accepted operator commands are facts; their application markers are deliberately omitted. */
 export const ThreadCommands = Schema.Struct({
   aborts: Schema.Array(

@@ -490,7 +490,11 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       return yield* read(
         Effect.gen(function* () {
           yield* requireReady(request.threadId);
-          const cursor = yield* decodeWorkCursor(request);
+
+          const cursor = yield* decodeWorkCursor(request).pipe(
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
           const after = cursor.after;
           let entries: ReadonlyArray<ThreadWorkEntry>;
           let next: string | undefined;
@@ -524,7 +528,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             entries = rows.slice(0, request.limit).map(admissionWork);
             next = encodeWorkCursor({
               version: WORK_INDEX_VERSION,
-              threadId: request.threadId,
+              threadDigest: cursor.threadDigest,
               source: more === undefined ? "canonical" : "admissions",
               ...(more === undefined ? {} : { after: String(more.queueSequence) }),
             });
@@ -540,7 +544,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             entries = yield* Effect.forEach(rows.slice(0, request.limit), decodeEntry);
             next = encodeWorkCursor({
               version: WORK_INDEX_VERSION,
-              threadId: request.threadId,
+              threadDigest: cursor.threadDigest,
               source: more === undefined ? "deliveries" : "canonical",
               ...(more === undefined ? {} : { after: more.id }),
             });
@@ -578,7 +582,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             if (more !== undefined)
               next = encodeWorkCursor({
                 version: WORK_INDEX_VERSION,
-                threadId: request.threadId,
+                threadDigest: cursor.threadDigest,
                 source: "deliveries",
                 after: more.message_id,
               });

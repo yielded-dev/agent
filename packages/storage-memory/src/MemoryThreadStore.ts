@@ -994,7 +994,11 @@ const makeThreadStore = Effect.gen(function* () {
       withMutation(
         Effect.gen(function* () {
           const request = yield* validate(ThreadWorkRequest, "work page", unvalidated);
-          const cursor = yield* decodeWorkCursor(request);
+
+          const cursor = yield* decodeWorkCursor(request).pipe(
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
+
           const thread = (yield* Ref.get(state)).threads.get(request.threadId);
           // Accepted input can precede canonical Thread materialization entirely.
           const index = yield* readyIndex(request.threadId, thread?.tailSequence ?? 0);
@@ -1017,7 +1021,7 @@ const makeThreadStore = Effect.gen(function* () {
                 entries,
                 cursor: encodeWorkCursor({
                   version: WORK_INDEX_VERSION,
-                  threadId: request.threadId,
+                  threadDigest: cursor.threadDigest,
                   source: after === undefined ? "deliveries" : "canonical",
                   ...(after === undefined ? {} : { after }),
                 }),
@@ -1046,7 +1050,7 @@ const makeThreadStore = Effect.gen(function* () {
                 : {
                     cursor: encodeWorkCursor({
                       version: WORK_INDEX_VERSION,
-                      threadId: request.threadId,
+                      threadDigest: cursor.threadDigest,
                       source: next,
                       ...(page.after === undefined ? {} : { after: page.after }),
                     }),

@@ -119,7 +119,11 @@ import {
   RebuiltSubmission,
   ThreadImportRejected,
 } from "@yielded/agent/thread-import";
-import { ThreadAdmission, ThreadStoreError } from "@yielded/agent/thread-store";
+import {
+  admissionFitsTransfer,
+  ThreadAdmission,
+  ThreadStoreError,
+} from "@yielded/agent/thread-store";
 import { admissionWork } from "@yielded/agent/thread-work";
 import {
   Clock,
@@ -822,6 +826,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     const admit: SubmissionLedger["Service"]["admit"] = Effect.fnUntraced(function* (unvalidated) {
       const request = yield* validate(AdmissionRequest, "admit", unvalidated);
 
+      const fitsTransfer = yield* admissionFitsTransfer(request).pipe(
+        Effect.mapError((cause) => ledgerError("admit", "Invalid admission transfer wire", cause)),
+      );
+
       const workerAdmissionJson =
         request.workerAdmission === undefined
           ? undefined
@@ -923,6 +931,14 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               current,
             ];
           }
+
+          if (!fitsTransfer)
+            return [
+              failure(
+                ledgerError("admit", "Admission exceeds the complete transfer page byte bound"),
+              ),
+              current,
+            ];
 
           if (current.stoppedWorkers.has(request.threadId))
             return [

@@ -102,6 +102,7 @@ import {
   type SuspensionOutcome,
 } from "@yielded/agent/submission-ledger";
 import {
+  admissionFitsTransfer,
   AppendConflict,
   FenceRejected,
   type ThreadStoreFailure,
@@ -1186,6 +1187,16 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             replayed: true,
           }).pipe(Effect.mapError(internalFailure(operation)));
         }
+
+        if (
+          !(yield* admissionFitsTransfer(validated).pipe(
+            Effect.mapError(internalFailure(operation)),
+          ))
+        )
+          return yield* LedgerError.make({
+            operation,
+            message: "Admission exceeds the complete transfer page byte bound",
+          });
 
         const stopped =
           yield* sql`SELECT thread_id FROM ${relation("effect_agent_worker_stops")} WHERE thread_id = ${validated.threadId}`.pipe(

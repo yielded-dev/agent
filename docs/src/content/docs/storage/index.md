@@ -67,6 +67,8 @@ when transferring between stores.
 
 Appends and imports refuse a batch whose identities and references cannot fit its complete
 32 MiB transfer page, even when its canonical payload fits the 16 MiB batch bound.
+Fresh admissions also reserve a complete transfer page, including their immutable input and
+Thread identity, before the ledger accepts them.
 
 The unreleased protocol accepts only fresh layout-21 stores and `effect-agent/thread@3` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
