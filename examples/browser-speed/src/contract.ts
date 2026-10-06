@@ -23,6 +23,7 @@ export const Scenario = Schema.Literals([
   "custom",
   "wikipedia",
   "coffee",
+  "shop",
 ]);
 
 export type Scenario = typeof Scenario.Type;
@@ -69,6 +70,21 @@ export const WikiRace = Schema.Struct({
   path: Schema.Array(WikiHop),
 });
 
+// Public https store pages only: no IP literals, ports or credentials in the address.
+export const ShopRequest = Schema.Struct({
+  url: Schema.String.check(
+    Schema.isMaxLength(500),
+    Schema.isPattern(/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]\S*)?$/i),
+  ),
+  item: Schema.NonEmptyString.check(Schema.isMaxLength(120)),
+});
+
+export type ShopRequest = typeof ShopRequest.Type;
+export const defaultShopItem = "a bag of natural process coffee";
+
+export const shopPrompt = (shop: ShopRequest) =>
+  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill each checkout step with the test buyer and click Continue after each step. Leave marketing boxes unchecked. Fill the test card on the payment step, then stop: never place the order.`;
+
 export const modelChoices: ReadonlyArray<{ id: ModelId; label: string }> = [
   { id: "gpt-6-luna", label: "GPT-6 Luna" },
   { id: "gpt-6-sol", label: "GPT-6 Sol" },
@@ -91,6 +107,7 @@ export const RunInput = Schema.Struct({
   reasoning: Schema.optionalKey(Reasoning),
   serviceTier: Schema.optionalKey(ServiceTier),
   wikipedia: Schema.optionalKey(WikipediaChallenge),
+  shop: Schema.optionalKey(ShopRequest),
 });
 
 export type RunInput = typeof RunInput.Type;
@@ -282,9 +299,15 @@ export const scenarios = [
 export const storeTask = {
   id: "coffee",
   title: "Check out a bag of coffee",
-  detail: "A real store, hedge.coffee · stops before payment",
+  detail: "A real store, hedge.coffee · test details, never pays",
   prompt:
-    "On the Hedge Coffee store, open one coffee and click Add To Cart once. Then open the cart and click Checkout. Stop when the checkout page shows the order summary. Never enter an email, address or payment details.",
+    "On the Hedge Coffee store, open one coffee and click Add To Cart once. Then open the cart and click Checkout. Fill each checkout step with the test buyer and click Continue after the email and delivery steps; choose shipping. Leave the mailing-list box unchecked. On the payment step, fill the test card, then stop: never click Continue, Purchase or Place order there.",
+} as const;
+
+export const shopTask = {
+  id: "shop",
+  title: "Check out on any store",
+  detail: "Your store link · test details, never pays · not verified",
 } as const;
 
 export const seed: ReadonlyArray<Task> = [
@@ -322,6 +345,7 @@ export const verify = (scenario: Scenario, board: ReadonlyArray<Task>): boolean 
     scenario !== "custom" &&
     scenario !== "wikipedia" &&
     scenario !== "coffee" &&
+    scenario !== "shop" &&
     expected.length === board.length &&
     expected.every((task) => {
       const actual = board.find((value) => value.id === task.id);

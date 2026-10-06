@@ -361,7 +361,15 @@ textarea {
   margin-top: 12px;
 }
 
-.race-inputs label span {
+.shop-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.race-inputs label span,
+.shop-inputs label span {
   display: block;
   margin-bottom: 4px;
   color: var(--text-faint);
@@ -1343,6 +1351,10 @@ tr.selected td {
 
   .hero {
     padding: 40px 0 28px;
+  }
+
+  .shop-inputs {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .lede {

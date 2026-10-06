@@ -56,19 +56,27 @@ field values with Mercury 2.5 when `OPENROUTER_API_KEY` is set, otherwise GPT-6 
 verifier reads the saved board after Jev stops; a DONE claim alone never passes.
 
 **Check out a bag of coffee** runs on a real store, [Hedge Coffee](https://www.hedge.coffee/store):
-add one bag to the cart and open the checkout. The lab never enters details or pays:
+add one bag to the cart, then fill checkout with a test buyer (`buyer@example.com`) and the 4242
+test card. **Check out on any store** does the same for a store link and item you choose. Neither
+ever pays:
 
-- A guard keeps every page navigation on `www.hedge.coffee`; payment and captcha frames still load.
-- The checkout page is read-only. Host authorization refuses every click, fill and key press there.
-- After the driver stops, the host reads the order summary itself. The run passes only on the
-  checkout's first step with exactly one bag, quantity 1.
-- The public lab runs it only for allowlisted accounts, so visitors cannot fill a real merchant's
-  store with abandoned carts. Every run still leaves one.
+- A guard keeps every page navigation on the store's site: its host without `www.`, and its
+  subdomains. Payment and captcha frames still load. Checkouts hosted elsewhere, such as Shop Pay
+  on `shop.app`, are blocked.
+- Host authorization refuses order and payment buttons, account creation and marketing opt-ins.
+  Once a card field is filled it refuses every further click and key press, so payment is never
+  submitted.
+- On Hedge Coffee the host then reads the checkout itself. The run passes only with exactly one
+  bag, quantity 1, completed email and delivery steps, the payment step active, and the test card
+  entered. Any-store runs are not verified; the report says whether the host saw the card entered.
+- The public lab runs store tasks only for allowlisted accounts, so visitors cannot fill real
+  merchants with abandoned carts. Every run still leaves one.
 
-The model agent uses whole-page observations here, because "Add To Cart" sits below the fold and
-the agent cannot scroll. Jev often adds two bags: Squarespace keeps the hidden "Added!" label in
-the button, so Jev's observed name never changes after the click. Jev's naming matches
-jev-ultrafast's, so changing it needs a new parity run.
+Store tasks need a model agent: Jev reads the main document only, so it cannot reach the address
+and card fields inside payment-provider frames. Choosing a store task selects GPT-6 Sol at low
+reasoning, which found those frames. A Hedge run takes about 30 actions and 0.7 to 1 million input
+tokens. Hedge uses whole-page observations; any store uses viewport observations and scrolling,
+because whole catalog pages outgrow the agent's context.
 
 ## Run a standalone browser journey
 

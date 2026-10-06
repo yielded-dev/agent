@@ -3,20 +3,34 @@ import type { Protocol } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-b
 
 import { Browser } from "./browser.ts";
 import { LabError } from "./contract.ts";
-import { isCheckout, storeHost, storeUrl } from "./store-policy.ts";
+import { isCheckout } from "./store-policy.ts";
 import { Trace } from "./telemetry.ts";
 
 const CheckoutSummary = Schema.Struct({
   url: Schema.String,
-  /** The first step (email) is still the active one, so no customer details were submitted. */
-  atEmailStep: Schema.Boolean,
+  /** Squarespace step markers: `<step>-section-<state>`, and `payment-options-select-<state>`. */
+  sections: Schema.Array(Schema.String),
   items: Schema.Array(Schema.Struct({ name: Schema.String, quantity: Schema.String })),
 });
 
-/** Opens the store with a guard that keeps every page navigation on the store's own host. */
-export const openStore = Effect.fnUntraced(function* () {
+/**
+ * Opens a store with a guard that keeps every page navigation on the store's own site: its host
+ * without `www.`, and subdomains of it. `product` scrolls the first matching link into view.
+ */
+export const openStore = Effect.fnUntraced(function* (url: string, product?: string) {
   const browser = yield* Browser;
   const trace = yield* Trace;
+  const site = new URL(url).host.replace(/^www\./, "");
+
+  const onSite = (address: string) => {
+    try {
+      const { host } = new URL(address);
+
+      return host === site || host.endsWith(`.${site}`);
+    } catch {
+      return false;
+    }
+  };
 
   yield* Effect.acquireRelease(
     browser.native(async (page) => {
@@ -25,8 +39,7 @@ export const openStore = Effect.fnUntraced(function* () {
 
       // Only main-frame documents are checked; Stripe and reCAPTCHA frames load normally.
       const guard = (event: Protocol.Fetch.RequestPausedEvent) => {
-        const allowed =
-          event.frameId !== frameTree.frame.id || new URL(event.request.url).host === storeHost;
+        const allowed = event.frameId !== frameTree.frame.id || onSite(event.request.url);
 
         void (
           allowed
@@ -50,26 +63,28 @@ export const openStore = Effect.fnUntraced(function* () {
         .measure(
           "cleanup",
           "Release store guard",
-          browser.native(() => client.send("Fetch.disable").then(() => client.detach())),
+          browser.native(() => client.send("Fetch.disable")),
         )
-        .pipe(Effect.catch(() => Effect.void)),
+        .pipe(
+          Effect.catch(() => Effect.void),
+          // The CDP session is the lab's own: detaching it ends the guard even behind a fence.
+          Effect.ensuring(Effect.promise(() => client.detach().catch(() => {}))),
+        ),
   );
 
   yield* trace.measure(
     "setup",
-    "Open Hedge Coffee store",
+    "Open store",
     browser.native(async (page) => {
       await page.setViewport({ width: 1100, height: 740 });
-      await page.goto(storeUrl, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      if (product === undefined) return;
 
-      const product = await page.waitForSelector('a[href*="/store/p/"]', {
-        visible: true,
-        timeout: 10_000,
-      });
+      const link = await page.waitForSelector(product, { visible: true, timeout: 10_000 });
 
-      // Start with the bags in view; viewport observations otherwise see only the header.
-      await product?.evaluate((node) => node.scrollIntoView({ block: "start" }));
-      await product?.dispose();
+      // Start with the products in view; viewport observations otherwise see only the header.
+      await link?.evaluate((node) => node.scrollIntoView({ block: "start" }));
+      await link?.dispose();
     }),
   );
 });
@@ -97,8 +112,9 @@ export const verifyCheckout = Effect.gen(function* () {
 
         return {
           url: location.href,
-          atEmailStep:
-            document.querySelector('[data-test="customer-info-section-active"]') !== null,
+          sections: Array.from(document.querySelectorAll("[data-test]"))
+            .map((node) => node.getAttribute("data-test") ?? "")
+            .filter((marker) => marker.includes("section") || marker.includes("select")),
           items: Array.from(box.querySelectorAll('[class*="OrderSummary-cartItem-"]')).map(
             (item) => ({
               name: item.querySelector('[class*="productName"]')?.textContent?.trim() ?? "",
@@ -121,12 +137,27 @@ export const verifyCheckout = Effect.gen(function* () {
     };
   if (item.quantity !== "1")
     return { passed: false, message: `The checkout lists ${item.quantity || "?"} × ${item.name}.` };
-  if (!summary.atEmailStep)
-    return { passed: false, message: "The checkout moved past the email step." };
+  const step = (name: string) => summary.sections.find((marker) => marker.startsWith(name)) ?? "";
+
+  if (
+    !/visited|complete/.test(step("customer-info")) ||
+    !/visited|complete/.test(step("fulfillment"))
+  )
+    return {
+      passed: false,
+      message: "The checkout's email and delivery steps were not completed.",
+    };
+  if (!step("payment").endsWith("active") || !step("review").endsWith("incomplete"))
+    return {
+      passed: false,
+      message: "The checkout is not on its payment step, or it moved past it.",
+    };
+  if (!browser.cardEntered())
+    return { passed: false, message: "The test card was not entered on the payment step." };
 
   return {
     passed: true,
-    message: `Verified: the checkout lists 1 × ${item.name}, and no details were entered.`,
+    message: `Verified: the checkout lists 1 × ${item.name}, the test buyer's email and delivery are complete, and the test card is entered. Payment was never submitted.`,
   };
 }).pipe(
   Effect.mapError(

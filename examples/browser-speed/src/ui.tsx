@@ -22,12 +22,16 @@ import {
   ArticleTitle,
   BrowserEngine,
   defaultChallenge,
+  defaultShopItem,
   Mode,
   ModelId,
   modelChoices,
   racePrompt,
   Reasoning,
   scenarios,
+  ShopRequest,
+  shopPrompt,
+  shopTask,
   storeTask,
   ServiceTier,
   type Phase,
@@ -60,6 +64,14 @@ import {
   type ProviderKeys,
 } from "./state.ts";
 
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
+
 const seconds = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : (value / 1000).toFixed(2);
 
@@ -87,6 +99,7 @@ const tasks: ReadonlyArray<{ id: Scenario; title: string; detail: string }> = [
   },
   ...scenarios.map(({ id, title, detail }) => ({ id, title, detail })),
   { id: storeTask.id, title: storeTask.title, detail: storeTask.detail },
+  shopTask,
   { id: "custom", title: "Your own task", detail: "Free-form on the task board · not verified" },
 ];
 
@@ -274,6 +287,8 @@ export const App = () => {
   const [wikiStart, setWikiStart] = useState(defaultChallenge.start);
   const [wikiTarget, setWikiTarget] = useState(defaultChallenge.target);
   const [prompt, setPrompt] = useState("");
+  const [shopUrl, setShopUrl] = useState("");
+  const [shopItem, setShopItem] = useState(defaultShopItem);
   const [driver, setDriver] = useState<typeof Driver.Type>("jev");
   const [mode, setMode] = useState<typeof Mode.Type>("batched");
   const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
@@ -308,7 +323,9 @@ export const App = () => {
   const failure = errorMessage(run) ?? errorMessage(control) ?? errorMessage(snapshot);
 
   const isWiki = scenario === "wikipedia";
-  const isStore = scenario === "coffee";
+  const isStore = scenario === "coffee" || scenario === "shop";
+  const shop = { url: shopUrl.trim(), item: shopItem.trim() };
+  const validShop = Schema.is(ShopRequest)(shop);
   const jev = driver === "jev";
   const scripted = !jev && !isWiki && !isStore && !publicLab && mode === "scripted";
   // The real store runs one guarded action per call in Chromium.
@@ -327,9 +344,11 @@ export const App = () => {
     ? racePrompt({ start: wikiStart, target: wikiTarget })
     : scenario === "custom"
       ? prompt
-      : isStore
-        ? storeTask.prompt
-        : (scenarios.find((preset) => preset.id === scenario)?.prompt ?? "");
+      : scenario === "shop"
+        ? shopPrompt(shop)
+        : isStore
+          ? storeTask.prompt
+          : (scenarios.find((preset) => preset.id === scenario)?.prompt ?? "");
 
   const validChallenge =
     Schema.is(ArticleTitle)(wikiStart.trim()) &&
@@ -356,7 +375,7 @@ export const App = () => {
       ? availableModels.length > 0
       : availableModels.some((choice) => choice.id === model);
 
-  // Hedge Coffee is a real merchant, so the public lab runs it only for allowlisted accounts.
+  // Real merchants: the public lab runs store tasks only for allowlisted accounts.
   const needsAccount = isStore && publicLab;
 
   const needs = [
@@ -382,6 +401,7 @@ export const App = () => {
     !busy &&
     !control.waiting &&
     (!isWiki || validChallenge) &&
+    (scenario !== "shop" || validShop) &&
     effectivePrompt.trim() !== "" &&
     (scripted ? scenario !== "custom" : needs.every((need) => need.ok));
 
@@ -399,6 +419,7 @@ export const App = () => {
   const live = !selected && remote?.liveViewUrl;
   const captured = !selected && remote?.image;
   const lastHop = report?.race?.path.at(-1);
+  const shopAddress = report?.input.shop?.url ?? (scenario === "shop" ? shop.url : "");
 
   const flow = report
     ? (verifiedMillis(report) ?? fromReady(report, report.finishedAt ?? report.elapsed))
@@ -418,6 +439,7 @@ export const App = () => {
       driver,
       prompt: effectivePrompt,
       ...(isWiki ? { wikipedia: { start: wikiStart.trim(), target: wikiTarget.trim() } } : {}),
+      ...(scenario === "shop" ? { shop } : {}),
       screenshots,
       liveView: liveView && effectiveEngine !== "kitesurf",
       repetitions,
@@ -502,7 +524,15 @@ export const App = () => {
                     value={task.id}
                     checked={scenario === task.id}
                     disabled={busy}
-                    onChange={() => setScenario(task.id)}
+                    onChange={() => {
+                      setScenario(task.id);
+                      // Store checkouts need payment frames: GPT-6 Sol at low effort finds them.
+                      if (task.id === "coffee" || task.id === "shop") {
+                        setDriver("model");
+                        setModel("gpt-6-sol");
+                        setReasoning("low");
+                      }
+                    }}
                   />
                   <span className="task-title">{task.title}</span>
                   <span className="task-detail">{task.detail}</span>
@@ -530,6 +560,29 @@ export const App = () => {
                     disabled={busy}
                     maxLength={180}
                     onChange={(event) => setWikiTarget(event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : scenario === "shop" ? (
+              <div className="shop-inputs">
+                <label>
+                  <span>Store link</span>
+                  <input
+                    value={shopUrl}
+                    disabled={busy}
+                    maxLength={500}
+                    inputMode="url"
+                    placeholder="https://store.example/"
+                    onChange={(event) => setShopUrl(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Item</span>
+                  <input
+                    value={shopItem}
+                    disabled={busy}
+                    maxLength={120}
+                    onChange={(event) => setShopItem(event.target.value)}
                   />
                 </label>
               </div>
@@ -563,7 +616,7 @@ export const App = () => {
                     name="driver"
                     value={value}
                     checked={driver === value}
-                    disabled={busy}
+                    disabled={busy || (isStore && value === "jev")}
                     onChange={() => setDriver(value)}
                   />
                   <strong>{label}</strong>
@@ -822,9 +875,11 @@ export const App = () => {
               <span className="address mono">
                 {isWiki || report?.race
                   ? (lastHop?.url.replace("https://", "") ?? "en.wikipedia.org")
-                  : isStore || report?.input.scenario === "coffee"
-                    ? "www.hedge.coffee"
-                    : "task-board · synthetic data"}
+                  : shopAddress
+                    ? hostOf(shopAddress)
+                    : isStore || report?.input.scenario === "coffee"
+                      ? "www.hedge.coffee"
+                      : "task-board · synthetic data"}
               </span>
               <span className={`view-label mono ${live ? "live" : ""}`}>
                 {live ? "LIVE" : captured ? "SCREENSHOT" : busy ? "CONNECTING" : "IDLE"}
@@ -848,9 +903,11 @@ export const App = () => {
                       ? "Connecting to the Cloudflare browser…"
                       : isWiki
                         ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and follows article links to ${wikiTarget || "the destination"}. No search, no typed URLs.`
-                        : isStore
-                          ? "A Cloudflare browser opens the Hedge Coffee store, adds one bag to the cart and stops on the checkout page. Checkout is read-only: no details are entered and nothing is paid."
-                          : "A Cloudflare browser opens a small task board. The run passes only if the saved board exactly matches the request."}
+                        : scenario === "shop"
+                          ? "A Cloudflare browser opens your store link, adds the item to the cart and fills checkout with a test buyer and the 4242 test card. The host refuses order and payment buttons, so nothing is bought. Each store differs, so the run is not verified."
+                          : isStore
+                            ? "A Cloudflare browser opens the Hedge Coffee store, adds one bag to the cart and fills checkout with a test buyer and the 4242 test card. The host refuses order and payment buttons, so nothing is bought, and then checks the checkout page itself."
+                            : "A Cloudflare browser opens a small task board. The run passes only if the saved board exactly matches the request."}
                   </p>
                 </div>
               )}

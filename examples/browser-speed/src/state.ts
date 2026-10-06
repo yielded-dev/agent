@@ -245,6 +245,8 @@ const sameWorkload = (value: Report, report: Report) =>
   value.input.scenario === report.input.scenario &&
   value.input.wikipedia?.start === report.input.wikipedia?.start &&
   value.input.wikipedia?.target === report.input.wikipedia?.target &&
+  value.input.shop?.url === report.input.shop?.url &&
+  value.input.shop?.item === report.input.shop?.item &&
   value.input.mode === report.input.mode &&
   value.timing === report.timing &&
   (value.timing === "page-ready-v1" || value.input.temperature === report.input.temperature) &&

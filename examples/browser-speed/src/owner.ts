@@ -12,6 +12,7 @@ import {
   racePrompt,
   Report,
   scenarios,
+  shopPrompt,
   storeTask,
   type ModelApi,
   type ModelId,
@@ -233,20 +234,27 @@ export const makeOwner = (
       });
 
     const jev = requested.driver === "jev";
+    const shopping = requested.scenario === "coffee" || requested.scenario === "shop";
 
+    // Jev reads the main document only, so it cannot reach payment-provider frames.
     if (
-      requested.scenario === "coffee" &&
-      (requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium")
+      shopping &&
+      (jev || requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium")
     )
       return yield* new LabError({
         code: "invalid",
-        message: "The store task runs individual agent actions in Chromium.",
+        message: "Store tasks run a model agent with individual actions in Chromium.",
       });
-    // A real merchant: strangers must not fill Hedge Coffee's store with abandoned carts.
-    if (config.public && requested.scenario === "coffee" && !access.funded)
+    if (requested.scenario === "shop" && requested.shop === undefined)
+      return yield* new LabError({
+        code: "invalid",
+        message: "The store task needs a store link and an item.",
+      });
+    // Real merchants: strangers must not fill stores with abandoned carts and test orders.
+    if (config.public && shopping && !access.funded)
       return yield* new LabError({
         code: "configuration",
-        message: "The Hedge Coffee task runs only for allowlisted accounts. Sign in to run it.",
+        message: "Store tasks run only for allowlisted accounts. Sign in to run them.",
       });
     if (config.public && requested.mode === "scripted")
       return yield* new LabError({
@@ -292,8 +300,10 @@ export const makeOwner = (
           ? racePrompt(wikipedia)
           : requested.scenario === "coffee"
             ? storeTask.prompt
-            : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
-              requested.prompt),
+            : requested.scenario === "shop" && requested.shop
+              ? shopPrompt(requested.shop)
+              : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
+                requested.prompt),
     };
 
     const state = store.read();
@@ -456,7 +466,9 @@ export const makeOwner = (
             ? "jev"
             : input.scenario === "coffee"
               ? "store"
-              : "frontier",
+              : input.scenario === "shop"
+                ? "shop"
+                : "frontier",
       );
 
       const identity = yield* current.measure(
