@@ -1,16 +1,10 @@
 import { Context, Effect, Pull, Schema, Stream } from "effect";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
-import {
-  SubmissionId,
-  ThreadId,
-  ToolCallId,
-  type RunId,
-  type AgentId,
-} from "../core/Identifiers.ts";
-import type { IdempotencyKey } from "../core/Receipt.ts";
+import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { WorkerRef } from "../core/Worker.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { decodeExportRecord, ExportedRecord, ExportRecord } from "./RecordFormat.ts";
@@ -24,7 +18,6 @@ import {
   RecordEnvelope,
   RecordJson,
   SubtreeBudgetReserved,
-  type RecordId,
 } from "./Records.ts";
 import { isPreContinuationFact } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
@@ -43,7 +36,6 @@ import {
   submissionAbortRecordId,
 } from "./SubmissionLedger.ts";
 import {
-  type ThreadCommands,
   MAX_THREAD_EXPORT_PAGE_BYTES,
   MAX_THREAD_EXPORT_PAGE_RECORDS,
   ThreadAdmission,
@@ -52,6 +44,11 @@ import {
 } from "./ThreadStore.ts";
 import { transferDependencies, transferSnapshotId, transferSections } from "./ThreadTransfer.ts";
 import { workIndexChanges } from "./ThreadWork.ts";
+
+export {
+  ThreadImportReader,
+  type ThreadSettlementPredecessorRequest,
+} from "./internal/thread-import-reader.ts";
 
 const sameInputMessage = Schema.toEquivalence(InputMessage);
 
@@ -136,33 +133,12 @@ export interface PreparedImportPage {
   readonly batches: ReadonlyArray<PreparedImportBatch>;
 }
 
-/** Adapter-private exact indexes. runRecords and commands must enforce per-Run count AND byte limits. */
-export interface ThreadImportReader {
-  readonly delivery: (
-    messageId: IdempotencyKey,
-  ) => Effect.Effect<MessageDeliveryRecord | undefined, ThreadStoreError>;
-  readonly record: (
-    id: RecordId,
-  ) => Effect.Effect<CanonicalRecordEnvelope | undefined, ThreadStoreError>;
-  readonly admission: (
-    id: SubmissionId,
-  ) => Effect.Effect<ThreadAdmission | undefined, ThreadStoreError>;
-  readonly runOwner: (id: RunId) => Effect.Effect<ThreadAdmission | undefined, ThreadStoreError>;
-  readonly runRecords: (
-    id: RunId,
-  ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ThreadStoreError>;
-  readonly commands: (
-    id: SubmissionId,
-  ) => Effect.Effect<typeof ThreadCommands.Type, ThreadStoreError>;
-  readonly hasAgent: (id: AgentId) => Effect.Effect<boolean, ThreadStoreError>;
-}
-
 /** Resolve every declared immutable reference, even in a preparation without a continuation. */
 export const verifyImportedReferences = Effect.fnUntraced(function* (
   entry: CanonicalRecordEnvelope,
-  resolve: ThreadImportReader["record"],
-  delivery: ThreadImportReader["delivery"],
 ) {
+  const reader = yield* ThreadImportReader;
+  const resolve = reader.record;
   const payload = entry.record.payload;
 
   if (payload._tag === "WorkHandoffCompleted") {
@@ -229,7 +205,7 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
   if (payload._tag === "WorkerInputRefused") {
     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
-    const retained = yield* delivery(payload.messageId);
+    const retained = yield* reader.delivery(payload.messageId);
 
     if (
       retained === undefined ||
@@ -583,21 +559,11 @@ export const finishThreadImport = (state: ThreadImportProgress) =>
     });
   });
 
-export interface ThreadSettlementPredecessorRequest {
-  readonly submissionId: SubmissionId;
-  readonly queueSequence: number;
-  readonly inputSequence: number;
-  readonly settlementSequence: number;
-}
-
 /** Check FIFO against indexed earlier executed inputs, including those still without a settlement. */
-export const verifyImportedSettlementOrder = Effect.fnUntraced(function* <E, R>(
+export const verifyImportedSettlementOrder = Effect.fnUntraced(function* (
   admission: Pick<ThreadAdmission, "threadId" | "submissionId" | "queueSequence">,
-  reader: ThreadImportReader,
-  predecessors: (
-    request: ThreadSettlementPredecessorRequest,
-  ) => Stream.Stream<Pick<ThreadAdmission, "submissionId">, E, R>,
 ) {
+  const reader = yield* ThreadImportReader;
   const settlement = yield* reader.record(submissionSettlementRecordId(admission.submissionId));
 
   if (settlement === undefined) return;
@@ -617,7 +583,7 @@ export const verifyImportedSettlementOrder = Effect.fnUntraced(function* <E, R>(
     );
 
   yield* Stream.runForEach(
-    predecessors({
+    reader.settlementPredecessors({
       submissionId: admission.submissionId,
       queueSequence: admission.queueSequence,
       inputSequence: applied.sequence,
@@ -655,10 +621,8 @@ export const verifyImportedSettlementOrder = Effect.fnUntraced(function* <E, R>(
 });
 
 /** Rebuild ONE admitted submission from exact staged evidence; terminal state does not erase uncertainty. */
-export const rebuildImportedSubmission = Effect.fnUntraced(function* (
-  admission: ThreadAdmission,
-  reader: ThreadImportReader,
-) {
+export const rebuildImportedSubmission = Effect.fnUntraced(function* (admission: ThreadAdmission) {
+  const reader = yield* ThreadImportReader;
   const threadId = admission.threadId;
   const inputEntry = yield* reader.record(submissionInputRecordId(admission.submissionId));
   const payload = inputEntry?.record.payload;

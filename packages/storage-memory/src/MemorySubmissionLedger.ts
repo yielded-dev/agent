@@ -3595,83 +3595,81 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               if (value > mintCounter) mintCounter = value;
             }
           }),
-          prepareCommit: Effect.fnUntraced(
-            function* (exact, predecessors, producerEpoch, workerSeal) {
-              const services = yield* Effect.context<never>();
-              const activeGroups = new Set<string>();
-              let lastQueue = 0;
-              let terminalEvidence = workerSeal?.terminal === undefined;
+          prepareCommit: Effect.fnUntraced(function* (producerEpoch, workerSeal) {
+            const services = yield* Effect.context<never>();
+            const activeGroups = new Set<string>();
+            let lastQueue = 0;
+            let terminalEvidence = workerSeal?.terminal === undefined;
 
-              for (const stored of threadRows(staged, threadId)) {
-                const a = toAdmission(stored.row);
-                const rebuilt = yield* rebuildImportedSubmission(a, exact);
+            for (const stored of threadRows(staged, threadId)) {
+              const a = toAdmission(stored.row);
+              const rebuilt = yield* rebuildImportedSubmission(a);
 
-                yield* verifyImportedSettlementOrder(a, exact, predecessors);
+              yield* verifyImportedSettlementOrder(a);
 
+              if (
+                rebuilt.settlement !== undefined &&
+                workerTerminalFromRecord(toSnapshot(stored.row), rebuilt.settlement) ===
+                  workerSeal?.terminal
+              )
+                terminalEvidence = true;
+              if (rebuilt.state !== "settled") {
                 if (
-                  rebuilt.settlement !== undefined &&
-                  workerTerminalFromRecord(toSnapshot(stored.row), rebuilt.settlement) ===
-                    workerSeal?.terminal
+                  workerSeal !== undefined ||
+                  a.parentLinkage !== undefined ||
+                  a.workerAdmission !== undefined
                 )
-                  terminalEvidence = true;
-                if (rebuilt.state !== "settled") {
-                  if (
-                    workerSeal !== undefined ||
-                    a.parentLinkage !== undefined ||
-                    a.workerAdmission !== undefined
-                  )
-                    return yield* ThreadImportRejected.make({
-                      threadId,
-                      reason: "unsupported-obligations",
-                      message: "Live foreign child or worker admission cannot be restored",
-                    });
-                  const checked = Effect.runSyncExitWith(services)(admissionFence.check(a));
+                  return yield* ThreadImportRejected.make({
+                    threadId,
+                    reason: "unsupported-obligations",
+                    message: "Live foreign child or worker admission cannot be restored",
+                  });
+                const checked = Effect.runSyncExitWith(services)(admissionFence.check(a));
 
-                  if (Exit.isFailure(checked)) {
-                    for (const reason of checked.cause.reasons)
-                      if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect))
-                        yield* Fiber.interrupt(reason.defect.fiber);
+                if (Exit.isFailure(checked)) {
+                  for (const reason of checked.cause.reasons)
+                    if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect))
+                      yield* Fiber.interrupt(reason.defect.fiber);
 
-                    return yield* ThreadImportRejected.make({
-                      threadId,
-                      reason: "admission-policy-unavailable",
-                      message: "Destination admission policy rejected restore",
-                    });
-                  }
-                  if (a.admissionGroup !== undefined) {
-                    if (activeGroups.has(a.admissionGroup))
-                      return yield* ThreadImportRejected.make({
-                        threadId,
-                        reason: "admission-policy-conflict",
-                        message: "Active admission group conflict",
-                      });
-                    activeGroups.add(a.admissionGroup);
-                  }
+                  return yield* ThreadImportRejected.make({
+                    threadId,
+                    reason: "admission-policy-unavailable",
+                    message: "Destination admission policy rejected restore",
+                  });
                 }
-                withSubmission(staged, fromRebuilt(rebuilt));
-                lastQueue = Math.max(lastQueue, a.queueSequence);
+                if (a.admissionGroup !== undefined) {
+                  if (activeGroups.has(a.admissionGroup))
+                    return yield* ThreadImportRejected.make({
+                      threadId,
+                      reason: "admission-policy-conflict",
+                      message: "Active admission group conflict",
+                    });
+                  activeGroups.add(a.admissionGroup);
+                }
               }
-              if (!terminalEvidence)
-                return yield* invalidThreadArchive(
-                  "Worker seal terminal has no exact completed input evidence",
-                  threadId,
-                );
-              if (!Number.isSafeInteger(lastQueue + 1))
-                return yield* ThreadImportRejected.make({
-                  threadId,
-                  reason: "unsupported-capacity",
-                  message: "Admission queue sequence is exhausted",
-                });
+              withSubmission(staged, fromRebuilt(rebuilt));
+              lastQueue = Math.max(lastQueue, a.queueSequence);
+            }
+            if (!terminalEvidence)
+              return yield* invalidThreadArchive(
+                "Worker seal terminal has no exact completed input evidence",
+                threadId,
+              );
+            if (!Number.isSafeInteger(lastQueue + 1))
+              return yield* ThreadImportRejected.make({
+                threadId,
+                reason: "unsupported-capacity",
+                message: "Admission queue sequence is exhausted",
+              });
 
-              return () => {
-                for (const stored of staged.submissions.values()) withSubmission(current, stored);
-                current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
-                if (workerSeal !== undefined)
-                  current.stoppedWorkers.set(threadId, workerSeal.terminal);
-                MutableRef.set(state.ref, { ...current, mintCounter });
-              };
-            },
-          ),
+            return () => {
+              for (const stored of staged.submissions.values()) withSubmission(current, stored);
+              current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
+              if (workerSeal !== undefined)
+                current.stoppedWorkers.set(threadId, workerSeal.terminal);
+              MutableRef.set(state.ref, { ...current, mintCounter });
+            };
+          }),
         };
       }),
     });

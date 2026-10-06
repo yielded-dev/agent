@@ -58,7 +58,7 @@ import {
   verifyImportedSettlementOrder,
   invalidThreadArchive,
   type ThreadArchive,
-  type ThreadImportReader,
+  ThreadImportReader,
   type ThreadImportResult,
   type PreparedImportPage,
 } from "@yielded/agent/thread-import";
@@ -74,13 +74,14 @@ import {
   streamExport,
 } from "@yielded/agent/thread-store";
 import {
-  makeThreadExporter,
+  exportThreadPage,
+  ThreadExporterReader,
   type TransferSection,
   type TransferFacts,
 } from "@yielded/agent/thread-transfer";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { AssignmentTerminal } from "@yielded/agent/worker";
-import { Clock, Crypto, DateTime, Effect, Schema, Stream, Struct, Option } from "effect";
+import { Clock, Crypto, DateTime, Effect, Layer, Schema, Stream, Struct, Option } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -432,7 +433,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     return [...live];
   });
 
-  const exporter = makeThreadExporter({
+  const exportReader = ThreadExporterReader.of({
     snapshot: Effect.fnUntraced(function* (threadId: ThreadId) {
       const headers = yield* query(
         sql`SELECT thread_id, tail_sequence, tail_digest, producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
@@ -681,10 +682,19 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     }),
   });
 
-  const exportThread = (request: ThreadExportRequest) =>
-    options.read(exporter(request).pipe(Effect.provideService(Crypto.Crypto, crypto)));
+  const exportPage = (request: ThreadExportRequest) =>
+    exportThreadPage(request).pipe(
+      Effect.provideService(ThreadExporterReader, exportReader),
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
 
-  const makeReader = (id: ThreadId, tailSequence: CanonicalSequence): ThreadImportReader => {
+  const exportThread = (request: ThreadExportRequest) => options.read(exportPage(request));
+
+  const readerLayer = (
+    id: ThreadId,
+    tailSequence: CanonicalSequence,
+    mode: "import" | "verify",
+  ): Layer.Layer<ThreadImportReader> => {
     const readRecord = (recordId: RecordId) =>
       rows(id, sql`r.record_id=${recordId} AND r.sequence<=${tailSequence}`, 1).pipe(
         Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : envelope(r[0]))),
@@ -699,7 +709,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       2 * (MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS) +
       MAX_RUN_RECOVERY_SUFFIX_RECORDS;
 
-    const reader: ThreadImportReader = {
+    return Layer.succeed(ThreadImportReader, {
       delivery: (messageId) =>
         query(
           sql`SELECT record_json FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=${id} AND message_id=${messageId} LIMIT 1`,
@@ -838,9 +848,40 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         AND ${sql.onDialectOrElse({ pg: () => sql`(${recordJson})::jsonb -> 'payload' ->> 'agentId'`, orElse: () => sql`json_extract(${recordJson}, '$.payload.agentId')` })}=${agentId} LIMIT 1`).pipe(
           Effect.map((r) => r.length === 1),
         ),
-    };
+      settlementPredecessors: (request) =>
+        mode === "verify"
+          ? intervals.predecessors(id, request)
+          : Stream.paginate<number, Pick<SubmissionSnapshot, "submissionId">, ThreadStoreError>(
+              -1,
+              (after) =>
+                Effect.gen(function* () {
+                  const candidates = yield* query(sql`SELECT submission_id, queue_sequence
+                    FROM ${table("effect_agent_import_fifo")}
+                    ${seekIndex("effect_agent_import_fifo_active")}
+                    WHERE thread_id=${id} AND queue_sequence>${after} AND queue_sequence<${request.queueSequence}
+                    ORDER BY queue_sequence LIMIT 1`).pipe(
+                    Effect.flatMap((r) =>
+                      decode(
+                        Schema.Array(
+                          Schema.Struct({
+                            submission_id: SubmissionId,
+                            queue_sequence: SqlInteger,
+                          }),
+                        ),
+                        r,
+                      ),
+                    ),
+                  );
 
-    return reader;
+                  const prior = candidates[0];
+
+                  return [
+                    prior === undefined ? [] : [{ submissionId: prior.submission_id }],
+                    prior === undefined ? Option.none<number>() : Option.some(prior.queue_sequence),
+                  ] as const;
+                }),
+            ),
+    });
   };
 
   const importThread = <E2, R>(pages: Stream.Stream<ThreadArchive, E2, R>) =>
@@ -1298,492 +1339,469 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               }),
             );
             const result = yield* finishThreadImport(progress);
-            const id = result.threadId;
-            const workerSeal = progress.manifest?.workerSeal;
-            let terminalEvidence = workerSeal?.terminal === undefined;
 
-            yield* query(
-              sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence}, tail_digest=${result.tailDigest} WHERE thread_id=${id}`,
-            );
-            const reader = makeReader(id, result.tailSequence);
-            const readRecord = reader.record;
-            const readAdmission = reader.admission;
-            // Exact Run selections include continuations as well as the sparse record_runs membership.
-            let afterRun: string | undefined;
+            return yield* Effect.gen(function* () {
+              const id = result.threadId;
+              const workerSeal = progress.manifest?.workerSeal;
+              let terminalEvidence = workerSeal?.terminal === undefined;
 
-            while (true) {
-              const found =
-                yield* query(sql`SELECT run_id FROM ${table("effect_agent_canonical_records")} ${seekIndex("effect_agent_records_run_identity")}
-        WHERE thread_id=${id} AND run_id IS NOT NULL
-        ${afterRun === undefined ? sql`` : sql`AND run_id>${afterRun}`} GROUP BY run_id ORDER BY run_id LIMIT 1`).pipe(
-                  Effect.flatMap((r) =>
-                    decode(Schema.Array(Schema.Struct({ run_id: Schema.String })), r),
-                  ),
-                );
-
-              const next = found[0];
-
-              if (next === undefined) break;
-              const runId = yield* json(RunId, next.run_id);
-
-              yield* verifyRunContinuations(yield* reader.runRecords(runId), readRecord).pipe(
-                Effect.mapError((e) => invalidThreadArchive(e.message, id)),
-              );
-              afterRun = next.run_id;
-            }
-            let afterQueue = -1;
-
-            while (true) {
-              const selected = yield* admissionRows(id, sql`s.queue_sequence>${afterQueue}`, 1);
-              const row = selected[0];
-
-              if (row === undefined) break;
-              const a = yield* admission(row);
-              const rebuilt = yield* rebuildImportedSubmission(a, reader);
-
-              if (workerSeal !== undefined && rebuilt.state !== "settled")
-                return yield* reject(
-                  "unsupported-obligations",
-                  "Sealed worker retains outstanding admissions",
-                );
-              if (
-                rebuilt.settlement !== undefined &&
-                workerTerminalFromRecord(
-                  SubmissionSnapshot.make({ ...a, state: rebuilt.state }),
-                  rebuilt.settlement,
-                ) === workerSeal?.terminal
-              )
-                terminalEvidence = true;
-              const settled = rebuilt.settlement?.payload;
-
-              const suspension =
-                rebuilt.state === "suspended" && rebuilt.suspension !== undefined
-                  ? yield* encode(SuspensionSnapshot, rebuilt.suspension)
-                  : undefined;
-
-              yield* checkValues([
-                suspension === undefined ? undefined : canonicalJson(suspension.reason),
-                canonicalJson(rebuilt.unknownToolCallIds),
-              ]);
               yield* query(
-                sql`UPDATE ${table("effect_agent_submissions")} SET ${sql.update({
-                  state: rebuilt.state,
-                  settled_outcome: settled?._tag === "SubmissionSettled" ? settled.outcome : null,
-                  settled_record_id: rebuilt.settlement?.recordId ?? null,
-                  finalized_at:
-                    rebuilt.settlement === undefined
-                      ? null
-                      : DateTime.formatIso(rebuilt.settlement.createdAt),
-                  ready_at: rebuilt.state === "ready" ? row.created_at : null,
-                  input_applied_record_id: rebuilt.inputApplied?.recordId ?? null,
-                  input_applied_sequence: rebuilt.inputApplied?.sequence ?? null,
-                  joined_host_submission_id: rebuilt.joinedHostSubmissionId ?? null,
-                  suspended_reason_json:
-                    suspension === undefined ? null : canonicalJson(suspension.reason),
-                  suspended_at: suspension?.suspendedAt ?? null,
-                  unknown_reason: rebuilt.state === "unknown" ? "ownership-lost" : null,
-                  unknown_tool_call_ids_json:
-                    rebuilt.state === "unknown" ? canonicalJson(rebuilt.unknownToolCallIds) : null,
-                })} WHERE submission_id=${a.submissionId}`,
+                sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence}, tail_digest=${result.tailDigest} WHERE thread_id=${id}`,
               );
-              if (rebuilt.abort?.canonicalRecordId !== undefined)
-                yield* query(
-                  sql`UPDATE ${table("effect_agent_abort_intents")} SET canonical_record_id=${rebuilt.abort.canonicalRecordId} WHERE submission_id=${a.submissionId}`,
-                );
-              afterQueue = a.queueSequence;
-            }
-            if (!terminalEvidence)
-              return yield* invalidThreadArchive(
-                "Worker seal terminal has no exact completed input evidence",
-                id,
-              );
-
-            const conflict = yield* query(
-              sql`SELECT admission_group FROM ${table("effect_agent_submissions")} WHERE thread_id=${id} AND state<>'settled' AND admission_group IS NOT NULL GROUP BY admission_group HAVING COUNT(*)>1 LIMIT 1`,
-            );
-
-            if (conflict.length > 0)
-              return yield* reject(
-                "admission-policy-conflict",
-                "Imported active admissions conflict in a destination group",
-              );
-            // Each command insert already required its exact staged admission in this Thread.
-            let afterSequence = 0;
-            let lastInputQueue = -1;
-
-            while (true) {
-              const selected = yield* rows(id, sql`r.sequence>${afterSequence}`, 1);
-              const row = selected[0];
-
-              if (row === undefined) break;
-              const entry = yield* envelope(row);
-              const payload = entry.record.payload;
-
-              yield* verifyImportedReferences(entry, readRecord, reader.delivery);
-              if (
-                payload._tag !== "WorkerInputCompleted" &&
-                "submissionId" in payload &&
-                payload.submissionId !== undefined &&
-                (yield* readAdmission(payload.submissionId)) === undefined
-              )
-                return yield* invalidThreadArchive(
-                  "Canonical submission reference has no immutable admission",
-                  id,
-                );
-              if (
-                payload._tag === "UserInputRecorded" &&
-                payload.submissionId !== undefined &&
-                entry.record.recordId !== submissionInputRecordId(payload.submissionId)
-              )
-                return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
-              if (
-                payload._tag === "SubmissionSettled" &&
-                entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
-              )
-                return yield* invalidThreadArchive(
-                  "Canonical settlement identity is ambiguous",
-                  id,
-                );
-              if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
-                const admitted = yield* readAdmission(payload.submissionId);
-
-                if (admitted === undefined || admitted.queueSequence <= lastInputQueue)
-                  return yield* invalidThreadArchive("Canonical inputs violate admission FIFO", id);
-                lastInputQueue = admitted.queueSequence;
-                yield* query(sql`INSERT INTO ${table("effect_agent_import_fifo")}
-                  (thread_id, submission_id, queue_sequence)
-                  VALUES (${id}, ${admitted.submissionId}, ${admitted.queueSequence})`);
-              }
-              if (payload._tag === "SubmissionSettled") {
-                const admitted = yield* readAdmission(payload.submissionId);
-
-                if (admitted === undefined)
-                  return yield* invalidThreadArchive("Settlement has no immutable admission", id);
-                // Only earlier executed inputs still open at this settlement can be predecessors.
-                yield* verifyImportedSettlementOrder(admitted, reader, ({ queueSequence }) =>
-                  Stream.paginate<
-                    number,
-                    Pick<SubmissionSnapshot, "submissionId">,
-                    ThreadStoreError
-                  >(-1, (after) =>
-                    Effect.gen(function* () {
-                      const candidates = yield* query(sql`SELECT submission_id, queue_sequence
-                        FROM ${table("effect_agent_import_fifo")}
-                        ${seekIndex("effect_agent_import_fifo_active")}
-                        WHERE thread_id=${id} AND queue_sequence>${after} AND queue_sequence<${queueSequence}
-                        ORDER BY queue_sequence LIMIT 1`).pipe(
-                        Effect.flatMap((r) =>
-                          decode(
-                            Schema.Array(
-                              Schema.Struct({
-                                submission_id: SubmissionId,
-                                queue_sequence: SqlInteger,
-                              }),
-                            ),
-                            r,
-                          ),
-                        ),
-                      );
-
-                      const prior = candidates[0];
-
-                      return [
-                        prior === undefined ? [] : [{ submissionId: prior.submission_id }],
-                        prior === undefined
-                          ? Option.none<number>()
-                          : Option.some(prior.queue_sequence),
-                      ] as const;
-                    }),
-                  ),
-                );
-                yield* query(sql`DELETE FROM ${table("effect_agent_import_fifo")}
-                  WHERE thread_id=${id} AND submission_id=${payload.submissionId}`);
-              }
-              afterSequence = row.sequence;
-            }
-            let afterDelivery: string | undefined;
-            let pending = 0;
-            let pendingUpdates = 0;
-
-            const readDelivery = Effect.fnUntraced(function* (
-              messageId: MessageDeliveryRecord["key"]["messageId"],
-            ) {
-              const found = yield* query(
-                sql`SELECT record_json FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=${id} AND message_id=${messageId} LIMIT 1`,
-              ).pipe(
-                Effect.flatMap((r) =>
-                  decode(Schema.Array(Schema.Struct({ record_json: Schema.String })), r),
-                ),
-              );
-
-              if (found[0] === undefined)
-                return yield* invalidThreadArchive("Delivery predecessor is missing", id);
-              const value = yield* json(MessageDeliveryRecord, found[0].record_json);
-
-              if (value.key.ownerThreadId !== id || value.key.messageId !== messageId)
-                return yield* invalidThreadArchive(
-                  "Delivery index differs from its exact wire",
-                  id,
-                );
-
-              return value;
-            });
-
-            const visitDelivery = Effect.fnUntraced(function* (root: MessageDeliveryRecord) {
-              let current = root;
+              const reader = yield* ThreadImportReader;
+              const readAdmission = reader.admission;
+              // Exact Run selections include continuations as well as the sparse record_runs membership.
+              let afterRun: string | undefined;
 
               while (true) {
-                const visits =
-                  yield* query(sql`SELECT path_id, completed FROM ${table("effect_agent_import_delivery_visits")}
-                  WHERE thread_id=${id} AND message_id=${current.key.messageId}`).pipe(
+                const found =
+                  yield* query(sql`SELECT run_id FROM ${table("effect_agent_canonical_records")} ${seekIndex("effect_agent_records_run_identity")}
+        WHERE thread_id=${id} AND run_id IS NOT NULL
+        ${afterRun === undefined ? sql`` : sql`AND run_id>${afterRun}`} GROUP BY run_id ORDER BY run_id LIMIT 1`).pipe(
                     Effect.flatMap((r) =>
-                      decode(
-                        Schema.Array(
-                          Schema.Struct({ path_id: Schema.String, completed: SqlInteger }),
-                        ),
-                        r,
-                      ),
+                      decode(Schema.Array(Schema.Struct({ run_id: Schema.String })), r),
                     ),
                   );
 
-                const prior = visits[0];
+                const next = found[0];
 
-                if (prior !== undefined) {
-                  if (prior.completed === 1) break;
-                  if (prior.completed !== 0 || prior.path_id !== root.key.messageId)
-                    return yield* invalidThreadArchive("Delivery visitation is inconsistent", id);
+                if (next === undefined) break;
+                const runId = yield* json(RunId, next.run_id);
 
-                  return yield* invalidThreadArchive("Delivery predecessor cycle", id);
-                }
-                yield* query(sql`INSERT INTO ${table("effect_agent_import_delivery_visits")}
-                  (thread_id, message_id, path_id, completed) VALUES (${id}, ${current.key.messageId}, ${root.key.messageId}, 0)`);
-                if (current.predecessor === undefined) break;
-                const predecessor = yield* readDelivery(current.predecessor);
-
-                if (predecessor.createdAtMillis > current.createdAtMillis)
-                  return yield* invalidThreadArchive(
-                    "Delivery predecessor has a later creation boundary",
-                    id,
-                  );
-                current = predecessor;
-              }
-              yield* query(sql`UPDATE ${table("effect_agent_import_delivery_visits")} SET completed=1
-                WHERE thread_id=${id} AND path_id=${root.key.messageId} AND completed=0`);
-            });
-
-            while (true) {
-              const selected = yield* deliveries(id, afterDelivery);
-              const d = selected[0];
-
-              if (d === undefined) break;
-
-              const encoded = yield* Schema.encodeEffect(MessageDeliveryRecord)(d).pipe(
-                Effect.mapError((e) => failure("validate restored delivery", e)),
-              );
-
-              if (utf8ByteLength(canonicalJson(encoded.envelope)) > deliveryLimits.maxEnvelopeBytes)
-                return yield* reject(
-                  "unsupported-capacity",
-                  "Delivery envelope exceeds destination capacity",
+                yield* verifyRunContinuations(yield* reader.runRecords(runId)).pipe(
+                  Effect.mapError((e) => invalidThreadArchive(e.message, id)),
                 );
-              if (!["processed", "refused"].includes(d.status)) {
-                if (isWorkerUpdateDelivery(d)) pendingUpdates++;
-                else pending++;
+                afterRun = next.run_id;
               }
-              yield* visitDelivery(d);
-              if (d.receipt !== null) {
-                if (
-                  d.settlement !== null &&
-                  d.settlement.settlementId !== submissionSettlementId(d.receipt.submissionId)
-                )
-                  return yield* invalidThreadArchive(
-                    "Delivery settlement identity is noncanonical",
-                    id,
-                  );
-                const foreign = d.receipt.threadId !== id;
+              let afterQueue = -1;
 
-                if (foreign && d.status !== "processed")
+              while (true) {
+                const selected = yield* admissionRows(id, sql`s.queue_sequence>${afterQueue}`, 1);
+                const row = selected[0];
+
+                if (row === undefined) break;
+                const a = yield* admission(row);
+                const rebuilt = yield* rebuildImportedSubmission(a);
+
+                if (workerSeal !== undefined && rebuilt.state !== "settled")
                   return yield* reject(
                     "unsupported-obligations",
-                    "Live foreign delivery receipt cannot be restored",
+                    "Sealed worker retains outstanding admissions",
                   );
-
-                const evidence =
-                  yield* query(sql`SELECT s.* FROM ${table("effect_agent_submissions")} s WHERE thread_id=${d.receipt.threadId}
-          AND submission_id=${d.receipt.submissionId} LIMIT 1`).pipe(
-                    Effect.flatMap((r) => decode(Schema.Array(AdmissionRow), r)),
-                  );
-
-                const destinationRow = evidence[0];
-
-                // Closed foreign facts do not require importing the receiver's execution authority.
-                if (destinationRow === undefined) {
-                  if (foreign && d.status === "processed") {
-                    afterDelivery = d.key.messageId;
-                    continue;
-                  }
-
-                  return yield* invalidThreadArchive(
-                    "Delivery destination receipt evidence is missing",
-                    id,
-                  );
-                }
-                const destination = yield* admission(destinationRow);
-
-                const expected = PreparedInput.make({
-                  schemaVersion: 1,
-                  authorization: d.envelope.authorization,
-                  threadId: destination.threadId,
-                  deliveryPrincipal: destination.principal,
-                  admissionKey: destination.idempotencyKey,
-                  agentId: destination.agentId,
-                  definitions: destination.agentDigests,
-                  input: destination.inputPayload,
-                  inputDigest: destination.inputDigest,
-                  ...(destination.admissionGroup === undefined
-                    ? {}
-                    : { admissionGroup: destination.admissionGroup }),
-                  ...(destination.admissionFence === undefined
-                    ? {}
-                    : { admissionFence: destination.admissionFence }),
-                  ...(destination.workerAdmission === undefined
-                    ? {}
-                    : { workerAdmission: destination.workerAdmission }),
-                  ...(destination.messageAdmission === undefined
-                    ? {}
-                    : { messageAdmission: destination.messageAdmission }),
-                });
-
                 if (
-                  d.receipt.receiptId !== destination.receiptId ||
-                  d.receipt.queueSequence !== destination.queueSequence ||
-                  !Schema.toEquivalence(PreparedInput)(d.envelope, expected)
+                  rebuilt.settlement !== undefined &&
+                  workerTerminalFromRecord(
+                    SubmissionSnapshot.make({ ...a, state: rebuilt.state }),
+                    rebuilt.settlement,
+                  ) === workerSeal?.terminal
+                )
+                  terminalEvidence = true;
+                const settled = rebuilt.settlement?.payload;
+
+                const suspension =
+                  rebuilt.state === "suspended" && rebuilt.suspension !== undefined
+                    ? yield* encode(SuspensionSnapshot, rebuilt.suspension)
+                    : undefined;
+
+                yield* checkValues([
+                  suspension === undefined ? undefined : canonicalJson(suspension.reason),
+                  canonicalJson(rebuilt.unknownToolCallIds),
+                ]);
+                yield* query(
+                  sql`UPDATE ${table("effect_agent_submissions")} SET ${sql.update({
+                    state: rebuilt.state,
+                    settled_outcome: settled?._tag === "SubmissionSettled" ? settled.outcome : null,
+                    settled_record_id: rebuilt.settlement?.recordId ?? null,
+                    finalized_at:
+                      rebuilt.settlement === undefined
+                        ? null
+                        : DateTime.formatIso(rebuilt.settlement.createdAt),
+                    ready_at: rebuilt.state === "ready" ? row.created_at : null,
+                    input_applied_record_id: rebuilt.inputApplied?.recordId ?? null,
+                    input_applied_sequence: rebuilt.inputApplied?.sequence ?? null,
+                    joined_host_submission_id: rebuilt.joinedHostSubmissionId ?? null,
+                    suspended_reason_json:
+                      suspension === undefined ? null : canonicalJson(suspension.reason),
+                    suspended_at: suspension?.suspendedAt ?? null,
+                    unknown_reason: rebuilt.state === "unknown" ? "ownership-lost" : null,
+                    unknown_tool_call_ids_json:
+                      rebuilt.state === "unknown"
+                        ? canonicalJson(rebuilt.unknownToolCallIds)
+                        : null,
+                  })} WHERE submission_id=${a.submissionId}`,
+                );
+                if (rebuilt.abort?.canonicalRecordId !== undefined)
+                  yield* query(
+                    sql`UPDATE ${table("effect_agent_abort_intents")} SET canonical_record_id=${rebuilt.abort.canonicalRecordId} WHERE submission_id=${a.submissionId}`,
+                  );
+                afterQueue = a.queueSequence;
+              }
+              if (!terminalEvidence)
+                return yield* invalidThreadArchive(
+                  "Worker seal terminal has no exact completed input evidence",
+                  id,
+                );
+
+              const conflict = yield* query(
+                sql`SELECT admission_group FROM ${table("effect_agent_submissions")} WHERE thread_id=${id} AND state<>'settled' AND admission_group IS NOT NULL GROUP BY admission_group HAVING COUNT(*)>1 LIMIT 1`,
+              );
+
+              if (conflict.length > 0)
+                return yield* reject(
+                  "admission-policy-conflict",
+                  "Imported active admissions conflict in a destination group",
+                );
+              // Each command insert already required its exact staged admission in this Thread.
+              let afterSequence = 0;
+              let lastInputQueue = -1;
+
+              while (true) {
+                const selected = yield* rows(id, sql`r.sequence>${afterSequence}`, 1);
+                const row = selected[0];
+
+                if (row === undefined) break;
+                const entry = yield* envelope(row);
+                const payload = entry.record.payload;
+
+                yield* verifyImportedReferences(entry);
+                if (
+                  payload._tag !== "WorkerInputCompleted" &&
+                  "submissionId" in payload &&
+                  payload.submissionId !== undefined &&
+                  (yield* readAdmission(payload.submissionId)) === undefined
                 )
                   return yield* invalidThreadArchive(
-                    "Delivery envelope disagrees with destination admission",
+                    "Canonical submission reference has no immutable admission",
                     id,
                   );
-                if (d.settlement !== null) {
-                  const found = yield* rows(
-                    destination.threadId,
-                    sql`r.record_id=${submissionSettlementRecordId(destination.submissionId)}`,
-                    1,
+                if (
+                  payload._tag === "UserInputRecorded" &&
+                  payload.submissionId !== undefined &&
+                  entry.record.recordId !== submissionInputRecordId(payload.submissionId)
+                )
+                  return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
+                if (
+                  payload._tag === "SubmissionSettled" &&
+                  entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
+                )
+                  return yield* invalidThreadArchive(
+                    "Canonical settlement identity is ambiguous",
+                    id,
+                  );
+                if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
+                  const admitted = yield* readAdmission(payload.submissionId);
+
+                  if (admitted === undefined || admitted.queueSequence <= lastInputQueue)
+                    return yield* invalidThreadArchive(
+                      "Canonical inputs violate admission FIFO",
+                      id,
+                    );
+                  lastInputQueue = admitted.queueSequence;
+                  yield* query(sql`INSERT INTO ${table("effect_agent_import_fifo")}
+                  (thread_id, submission_id, queue_sequence)
+                  VALUES (${id}, ${admitted.submissionId}, ${admitted.queueSequence})`);
+                }
+                if (payload._tag === "SubmissionSettled") {
+                  const admitted = yield* readAdmission(payload.submissionId);
+
+                  if (admitted === undefined)
+                    return yield* invalidThreadArchive("Settlement has no immutable admission", id);
+                  // Only earlier executed inputs still open at this settlement can be predecessors.
+                  yield* verifyImportedSettlementOrder(admitted);
+                  yield* query(sql`DELETE FROM ${table("effect_agent_import_fifo")}
+                  WHERE thread_id=${id} AND submission_id=${payload.submissionId}`);
+                }
+                afterSequence = row.sequence;
+              }
+              let afterDelivery: string | undefined;
+              let pending = 0;
+              let pendingUpdates = 0;
+
+              const readDelivery = Effect.fnUntraced(function* (
+                messageId: MessageDeliveryRecord["key"]["messageId"],
+              ) {
+                const found = yield* query(
+                  sql`SELECT record_json FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=${id} AND message_id=${messageId} LIMIT 1`,
+                ).pipe(
+                  Effect.flatMap((r) =>
+                    decode(Schema.Array(Schema.Struct({ record_json: Schema.String })), r),
+                  ),
+                );
+
+                if (found[0] === undefined)
+                  return yield* invalidThreadArchive("Delivery predecessor is missing", id);
+                const value = yield* json(MessageDeliveryRecord, found[0].record_json);
+
+                if (value.key.ownerThreadId !== id || value.key.messageId !== messageId)
+                  return yield* invalidThreadArchive(
+                    "Delivery index differs from its exact wire",
+                    id,
                   );
 
-                  if (found[0] === undefined) {
-                    if (foreign) {
+                return value;
+              });
+
+              const visitDelivery = Effect.fnUntraced(function* (root: MessageDeliveryRecord) {
+                let current = root;
+
+                while (true) {
+                  const visits =
+                    yield* query(sql`SELECT path_id, completed FROM ${table("effect_agent_import_delivery_visits")}
+                  WHERE thread_id=${id} AND message_id=${current.key.messageId}`).pipe(
+                      Effect.flatMap((r) =>
+                        decode(
+                          Schema.Array(
+                            Schema.Struct({ path_id: Schema.String, completed: SqlInteger }),
+                          ),
+                          r,
+                        ),
+                      ),
+                    );
+
+                  const prior = visits[0];
+
+                  if (prior !== undefined) {
+                    if (prior.completed === 1) break;
+                    if (prior.completed !== 0 || prior.path_id !== root.key.messageId)
+                      return yield* invalidThreadArchive("Delivery visitation is inconsistent", id);
+
+                    return yield* invalidThreadArchive("Delivery predecessor cycle", id);
+                  }
+                  yield* query(sql`INSERT INTO ${table("effect_agent_import_delivery_visits")}
+                  (thread_id, message_id, path_id, completed) VALUES (${id}, ${current.key.messageId}, ${root.key.messageId}, 0)`);
+                  if (current.predecessor === undefined) break;
+                  const predecessor = yield* readDelivery(current.predecessor);
+
+                  if (predecessor.createdAtMillis > current.createdAtMillis)
+                    return yield* invalidThreadArchive(
+                      "Delivery predecessor has a later creation boundary",
+                      id,
+                    );
+                  current = predecessor;
+                }
+                yield* query(sql`UPDATE ${table("effect_agent_import_delivery_visits")} SET completed=1
+                WHERE thread_id=${id} AND path_id=${root.key.messageId} AND completed=0`);
+              });
+
+              while (true) {
+                const selected = yield* deliveries(id, afterDelivery);
+                const d = selected[0];
+
+                if (d === undefined) break;
+
+                const encoded = yield* Schema.encodeEffect(MessageDeliveryRecord)(d).pipe(
+                  Effect.mapError((e) => failure("validate restored delivery", e)),
+                );
+
+                if (
+                  utf8ByteLength(canonicalJson(encoded.envelope)) > deliveryLimits.maxEnvelopeBytes
+                )
+                  return yield* reject(
+                    "unsupported-capacity",
+                    "Delivery envelope exceeds destination capacity",
+                  );
+                if (!["processed", "refused"].includes(d.status)) {
+                  if (isWorkerUpdateDelivery(d)) pendingUpdates++;
+                  else pending++;
+                }
+                yield* visitDelivery(d);
+                if (d.receipt !== null) {
+                  if (
+                    d.settlement !== null &&
+                    d.settlement.settlementId !== submissionSettlementId(d.receipt.submissionId)
+                  )
+                    return yield* invalidThreadArchive(
+                      "Delivery settlement identity is noncanonical",
+                      id,
+                    );
+                  const foreign = d.receipt.threadId !== id;
+
+                  if (foreign && d.status !== "processed")
+                    return yield* reject(
+                      "unsupported-obligations",
+                      "Live foreign delivery receipt cannot be restored",
+                    );
+
+                  const evidence =
+                    yield* query(sql`SELECT s.* FROM ${table("effect_agent_submissions")} s WHERE thread_id=${d.receipt.threadId}
+          AND submission_id=${d.receipt.submissionId} LIMIT 1`).pipe(
+                      Effect.flatMap((r) => decode(Schema.Array(AdmissionRow), r)),
+                    );
+
+                  const destinationRow = evidence[0];
+
+                  // Closed foreign facts do not require importing the receiver's execution authority.
+                  if (destinationRow === undefined) {
+                    if (foreign && d.status === "processed") {
                       afterDelivery = d.key.messageId;
                       continue;
                     }
 
                     return yield* invalidThreadArchive(
-                      "Processed delivery has no exact destination settlement",
+                      "Delivery destination receipt evidence is missing",
                       id,
                     );
                   }
-                  const record = (yield* envelope(found[0])).record;
+                  const destination = yield* admission(destinationRow);
 
-                  const settled = yield* validateCanonicalSettlement(record, destination).pipe(
-                    Effect.mapError(() =>
-                      invalidThreadArchive("Delivery destination settlement is inconsistent", id),
-                    ),
-                  );
-
-                  // Preserve the frozen receipt time; destination finalization caches are rebuilt.
-                  const failureDiagnostic = settlementFailureFromRecord(record);
-
-                  const expectedSettlement = Settlement.make({
-                    submissionId: settled.submissionId,
-                    receiptId: settled.receiptId,
-                    settlementId: settled.settlementId,
-                    outcome: settled.outcome,
-                    settledAt: d.settlement.settledAt,
-                    ...(failureDiagnostic === undefined ? {} : { failure: failureDiagnostic }),
-                    ...(d.settlement.runDisposition === undefined ||
-                    settled.runDisposition === undefined
+                  const expected = PreparedInput.make({
+                    schemaVersion: 1,
+                    authorization: d.envelope.authorization,
+                    threadId: destination.threadId,
+                    deliveryPrincipal: destination.principal,
+                    admissionKey: destination.idempotencyKey,
+                    agentId: destination.agentId,
+                    definitions: destination.agentDigests,
+                    input: destination.inputPayload,
+                    inputDigest: destination.inputDigest,
+                    ...(destination.admissionGroup === undefined
                       ? {}
-                      : { runDisposition: settled.runDisposition }),
-                    ...(d.settlement.usageSummary === undefined ||
-                    settled.usageSummary === undefined
+                      : { admissionGroup: destination.admissionGroup }),
+                    ...(destination.admissionFence === undefined
                       ? {}
-                      : { usageSummary: settled.usageSummary }),
+                      : { admissionFence: destination.admissionFence }),
+                    ...(destination.workerAdmission === undefined
+                      ? {}
+                      : { workerAdmission: destination.workerAdmission }),
+                    ...(destination.messageAdmission === undefined
+                      ? {}
+                      : { messageAdmission: destination.messageAdmission }),
                   });
 
-                  if (!Schema.toEquivalence(Settlement)(d.settlement, expectedSettlement))
+                  if (
+                    d.receipt.receiptId !== destination.receiptId ||
+                    d.receipt.queueSequence !== destination.queueSequence ||
+                    !Schema.toEquivalence(PreparedInput)(d.envelope, expected)
+                  )
                     return yield* invalidThreadArchive(
-                      "Delivery settlement disagrees with exact destination evidence",
+                      "Delivery envelope disagrees with destination admission",
                       id,
                     );
+                  if (d.settlement !== null) {
+                    const found = yield* rows(
+                      destination.threadId,
+                      sql`r.record_id=${submissionSettlementRecordId(destination.submissionId)}`,
+                      1,
+                    );
+
+                    if (found[0] === undefined) {
+                      if (foreign) {
+                        afterDelivery = d.key.messageId;
+                        continue;
+                      }
+
+                      return yield* invalidThreadArchive(
+                        "Processed delivery has no exact destination settlement",
+                        id,
+                      );
+                    }
+                    const record = (yield* envelope(found[0])).record;
+
+                    const settled = yield* validateCanonicalSettlement(record, destination).pipe(
+                      Effect.mapError(() =>
+                        invalidThreadArchive("Delivery destination settlement is inconsistent", id),
+                      ),
+                    );
+
+                    // Preserve the frozen receipt time; destination finalization caches are rebuilt.
+                    const failureDiagnostic = settlementFailureFromRecord(record);
+
+                    const expectedSettlement = Settlement.make({
+                      submissionId: settled.submissionId,
+                      receiptId: settled.receiptId,
+                      settlementId: settled.settlementId,
+                      outcome: settled.outcome,
+                      settledAt: d.settlement.settledAt,
+                      ...(failureDiagnostic === undefined ? {} : { failure: failureDiagnostic }),
+                      ...(d.settlement.runDisposition === undefined ||
+                      settled.runDisposition === undefined
+                        ? {}
+                        : { runDisposition: settled.runDisposition }),
+                      ...(d.settlement.usageSummary === undefined ||
+                      settled.usageSummary === undefined
+                        ? {}
+                        : { usageSummary: settled.usageSummary }),
+                    });
+
+                    if (!Schema.toEquivalence(Settlement)(d.settlement, expectedSettlement))
+                      return yield* invalidThreadArchive(
+                        "Delivery settlement disagrees with exact destination evidence",
+                        id,
+                      );
+                  }
                 }
+                afterDelivery = d.key.messageId;
               }
-              afterDelivery = d.key.messageId;
-            }
-            if (
-              pending > deliveryLimits.maxPendingPerOwner ||
-              pendingUpdates > (deliveryLimits.maxPendingUpdatesPerOwner ?? 32)
-            )
-              return yield* reject(
-                "unsupported-capacity",
-                "Imported pending deliveries exceed destination capacity",
-              );
+              if (
+                pending > deliveryLimits.maxPendingPerOwner ||
+                pendingUpdates > (deliveryLimits.maxPendingUpdatesPerOwner ?? 32)
+              )
+                return yield* reject(
+                  "unsupported-capacity",
+                  "Imported pending deliveries exceed destination capacity",
+                );
 
-            const staged =
-              yield* query(sql`SELECT admissions_count AS admissions, aborts_count AS aborts, approvals_count AS approvals,
+              const staged =
+                yield* query(sql`SELECT admissions_count AS admissions, aborts_count AS aborts, approvals_count AS approvals,
           resolutions_count AS resolutions, deliveries_count AS deliveries FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${id}`).pipe(
-                Effect.flatMap((r) =>
-                  decode(
-                    Schema.Array(
-                      Schema.Struct({
-                        admissions: SqlInteger,
-                        aborts: SqlInteger,
-                        approvals: SqlInteger,
-                        resolutions: SqlInteger,
-                        deliveries: SqlInteger,
-                      }),
+                  Effect.flatMap((r) =>
+                    decode(
+                      Schema.Array(
+                        Schema.Struct({
+                          admissions: SqlInteger,
+                          aborts: SqlInteger,
+                          approvals: SqlInteger,
+                          resolutions: SqlInteger,
+                          deliveries: SqlInteger,
+                        }),
+                      ),
+                      r,
                     ),
-                    r,
                   ),
-                ),
-              );
+                );
 
-            if (staged.length !== 1 || canonicalJson(staged[0]!) !== canonicalJson(progress.counts))
-              return yield* invalidThreadArchive(
-                "Staged native fact counts differ from the captured manifest",
-                id,
-              );
-            const obligations = yield* checkForeignWork(id);
+              if (
+                staged.length !== 1 ||
+                canonicalJson(staged[0]!) !== canonicalJson(progress.counts)
+              )
+                return yield* invalidThreadArchive(
+                  "Staged native fact counts differ from the captured manifest",
+                  id,
+                );
+              const obligations = yield* checkForeignWork(id);
 
-            if (obligations.length > 0)
-              return yield* reject(
-                "unsupported-obligations",
-                "Staged canonical history retains unsupported live foreign obligations",
-              );
-            const epoch = Math.max(destinationEpoch, progress.producerEpoch);
+              if (obligations.length > 0)
+                return yield* reject(
+                  "unsupported-obligations",
+                  "Staged canonical history retains unsupported live foreign obligations",
+                );
+              const epoch = Math.max(destinationEpoch, progress.producerEpoch);
 
-            if (!Number.isSafeInteger(epoch) || epoch >= Number.MAX_SAFE_INTEGER)
-              return yield* reject(
-                "unsupported-capacity",
-                "No fresh producer generation is available",
-              );
-            if (workerSeal !== undefined)
+              if (!Number.isSafeInteger(epoch) || epoch >= Number.MAX_SAFE_INTEGER)
+                return yield* reject(
+                  "unsupported-capacity",
+                  "No fresh producer generation is available",
+                );
+              if (workerSeal !== undefined)
+                yield* query(
+                  sql`INSERT INTO ${table("effect_agent_worker_stops")} (thread_id, terminal) VALUES (${id}, ${workerSeal.terminal ?? null})`,
+                );
               yield* query(
-                sql`INSERT INTO ${table("effect_agent_worker_stops")} (thread_id, terminal) VALUES (${id}, ${workerSeal.terminal ?? null})`,
+                sql`DELETE FROM ${table("effect_agent_import_fifo")} WHERE thread_id=${id}`,
               );
-            yield* query(
-              sql`DELETE FROM ${table("effect_agent_import_fifo")} WHERE thread_id=${id}`,
-            );
-            yield* query(
-              sql`DELETE FROM ${table("effect_agent_import_delivery_visits")} WHERE thread_id=${id}`,
-            );
-            yield* query(
-              sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence}, tail_digest=${result.tailDigest}, producer_epoch=${epoch} WHERE thread_id=${id}`,
-            );
-            if (options.afterImport !== undefined)
-              yield* options
-                .afterImport({ result })
-                .pipe(Effect.mapError((e) => failure("publish imported Thread", e)));
+              yield* query(
+                sql`DELETE FROM ${table("effect_agent_import_delivery_visits")} WHERE thread_id=${id}`,
+              );
+              yield* query(
+                sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence}, tail_digest=${result.tailDigest}, producer_epoch=${epoch} WHERE thread_id=${id}`,
+              );
+              if (options.afterImport !== undefined)
+                yield* options
+                  .afterImport({ result })
+                  .pipe(Effect.mapError((e) => failure("publish imported Thread", e)));
 
-            return result;
+              return result;
+            }).pipe(Effect.provide(readerLayer(result.threadId, result.tailSequence, "import")));
           }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
         );
       }),
@@ -1795,9 +1813,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   }) {
     return yield* options.read(
       Effect.gen(function* () {
-        const first = yield* exporter({ threadId: request.threadId });
+        const first = yield* exportPage({ threadId: request.threadId });
         const id = first.threadId;
-        const reader = makeReader(id, first.tailSequence);
 
         const LedgerRow = Schema.Struct({
           ...AdmissionRow.fields,
@@ -1874,8 +1891,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
         const pages = streamExport(
           {
-            export: (request) =>
-              exporter(request).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+            export: (request) => exportPage(request),
           },
           { threadId: id },
         ).pipe(
@@ -1892,18 +1908,16 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         const result = yield* verifyThreadInvariants({
           threadId: id,
           pages,
-          reader,
           submissions,
           runs,
-          settlementPredecessors: (request) => intervals.predecessors(id, request),
           ...(checkpoint === undefined ? {} : { checkpoint }),
           checkpointsSupported: true,
           ...(request.requireAllSettled === undefined
             ? {}
             : { requireAllSettled: request.requireAllSettled }),
-        });
+        }).pipe(Effect.provide(readerLayer(id, first.tailSequence, "verify")));
 
-        const last = yield* exporter({ threadId: id });
+        const last = yield* exportPage({ threadId: id });
 
         if (last.snapshotId !== first.snapshotId)
           return yield* failure("verify snapshot", "Thread changed during verification");

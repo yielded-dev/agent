@@ -6,7 +6,6 @@ import type {
   PreparedImportPage,
   ThreadImportReader,
   ThreadImportRejected,
-  ThreadSettlementPredecessorRequest,
 } from "@yielded/agent/thread-import";
 import type {
   AppendResult,
@@ -34,18 +33,14 @@ export interface PreparedMemoryAppend {
 
 /** Private storage, not a whole-Thread preparation value. Publication callbacks never yield. */
 export interface MemoryLedgerImport {
-  readonly reader: Pick<ThreadImportReader, "admission" | "runOwner" | "commands">;
+  readonly reader: Pick<ThreadImportReader["Service"], "admission" | "runOwner" | "commands">;
   readonly stage: (
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
   readonly prepareCommit: (
-    reader: ThreadImportReader,
-    predecessors: (
-      request: ThreadSettlementPredecessorRequest,
-    ) => Stream.Stream<Pick<ThreadAdmission, "submissionId">, ThreadStoreError>,
     producerEpoch: ProducerEpoch,
     workerSeal?: Pick<WorkerLedgerState, "terminal">,
-  ) => Effect.Effect<() => void, ThreadImportRejected | ThreadStoreError>;
+  ) => Effect.Effect<() => void, ThreadImportRejected | ThreadStoreError, ThreadImportReader>;
 }
 
 export interface MemoryLedgerTransfer {
@@ -69,11 +64,11 @@ export interface MemoryLedgerTransfer {
     threadId: ThreadId,
     submissionId: SubmissionId,
   ) => Effect.Effect<ThreadAdmission | undefined, ThreadStoreError>;
-  readonly commands: ThreadImportReader["commands"];
+  readonly commands: ThreadImportReader["Service"]["commands"];
 }
 
 export interface MemoryDeliveryImport {
-  readonly record: ThreadImportReader["delivery"];
+  readonly record: ThreadImportReader["Service"]["delivery"];
   readonly stage: (
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
@@ -91,7 +86,7 @@ export interface MemoryDeliveryTransfer {
   readonly record: (
     threadId: ThreadId,
     messageId: IdempotencyKey,
-  ) => ReturnType<ThreadImportReader["delivery"]>;
+  ) => ReturnType<ThreadImportReader["Service"]["delivery"]>;
   readonly snapshot: (threadId: ThreadId) => {
     readonly revision: number;
     readonly deliveries: number;

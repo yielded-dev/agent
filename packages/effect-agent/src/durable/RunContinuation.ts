@@ -21,6 +21,7 @@ import {
 } from "./internal/record-ownership.ts";
 export { terminalUsageCharge } from "./internal/record-ownership.ts";
 import { projectRunContext } from "./internal/run-context.ts";
+import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import {
   type CanonicalRecordEnvelope,
   type ContinuationAccounting,
@@ -806,10 +807,8 @@ const advanceFacts = Effect.fnUntraced(function* (
  */
 export const verifyRunContinuations = Effect.fnUntraced(function* (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-  resolveRecord: (
-    recordId: RecordId,
-  ) => Effect.Effect<CanonicalRecordEnvelope | undefined, ThreadStoreError>,
 ) {
+  const { record: resolveRecord } = yield* ThreadImportReader;
   const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
   const states = new Map<RunId, ProgressState>();
   const preparations = new Map<RunId, Array<RecordEnvelope>>();

@@ -20,8 +20,7 @@ import {
   verifyImportedReferences,
   verifyImportedSettlementOrder,
   ThreadImportRejected,
-  type ThreadSettlementPredecessorRequest,
-  type ThreadImportReader,
+  ThreadImportReader,
 } from "./ThreadImport.ts";
 import { ThreadExport, type ThreadCheckpoint, type ThreadStoreError } from "./ThreadStore.ts";
 
@@ -29,13 +28,8 @@ import { ThreadExport, type ThreadCheckpoint, type ThreadStoreError } from "./Th
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   readonly threadId: ThreadId;
   readonly pages: Stream.Stream<ThreadExport, E, R>;
-  readonly reader: ThreadImportReader;
   /** Complete directory, including settled rows, ordered by queueSequence. */
   readonly submissions: Stream.Stream<SubmissionSnapshot, E, R>;
-  /** Earlier queued executed submissions whose canonical settlement follows this settlement. */
-  readonly settlementPredecessors: (
-    request: ThreadSettlementPredecessorRequest,
-  ) => Stream.Stream<Pick<SubmissionSnapshot, "submissionId">, E, R>;
   readonly runs: Stream.Stream<RunId, E, R>;
   readonly checkpoint?: ThreadCheckpoint;
   readonly checkpointsSupported?: boolean;
@@ -46,6 +40,7 @@ export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
 export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   input: ThreadInvariantInput<E, R>,
 ) {
+  const reader = yield* ThreadImportReader;
   const failures = new Map<IntegrityCheckName, string>();
 
   const fail = (name: IntegrityCheckName, detail: string) => {
@@ -86,13 +81,13 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         if (batch.lastSequence === input.checkpoint?.throughSequence)
           checkpointDigest = batch.tailDigest;
       for (const entry of prepared.records) {
-        yield* verifyImportedReferences(entry, input.reader.record, input.reader.delivery).pipe(
+        yield* verifyImportedReferences(entry).pipe(
           Effect.match({
             onSuccess: () => undefined,
             onFailure: (e) => fail("continuation-evidence", e.message),
           }),
         );
-        const exact = yield* input.reader.record(entry.record.recordId);
+        const exact = yield* reader.record(entry.record.recordId);
 
         if (
           exact === undefined ||
@@ -107,7 +102,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         const payload = entry.record.payload;
 
         if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
-          const admission = yield* input.reader.admission(payload.submissionId);
+          const admission = yield* reader.admission(payload.submissionId);
 
           if (
             admission === undefined ||
@@ -121,7 +116,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         if (payload._tag === "SubmissionSettled") {
           if (entry.record.recordId !== submissionSettlementRecordId(payload.submissionId))
             fail("terminal-uniqueness", "Settlement has a noncanonical identity");
-          if ((yield* input.reader.admission(payload.submissionId)) === undefined)
+          if ((yield* reader.admission(payload.submissionId)) === undefined)
             fail("ledger-canonical-agreement", "Settlement has no immutable admission");
         }
       }
@@ -138,10 +133,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   );
   yield* Stream.runForEach(input.runs, (runId) =>
     Effect.gen(function* () {
-      yield* verifyRunContinuations(
-        yield* input.reader.runRecords(runId),
-        input.reader.record,
-      ).pipe(
+      yield* verifyRunContinuations(yield* reader.runRecords(runId)).pipe(
         Effect.match({
           onSuccess: () => undefined,
           onFailure: (e) => fail("continuation-evidence", e.message),
@@ -160,14 +152,14 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       if (row.threadId !== input.threadId || row.queueSequence <= lastQueue)
         fail("record-identity", "Admission directory is not unique and ordered");
       lastQueue = row.queueSequence;
-      const admission = yield* input.reader.admission(row.submissionId);
+      const admission = yield* reader.admission(row.submissionId);
 
       if (admission === undefined) {
         fail("ledger-canonical-agreement", "Ledger row has no immutable admission");
 
         return;
       }
-      yield* rebuildImportedSubmission(admission, input.reader).pipe(
+      yield* rebuildImportedSubmission(admission).pipe(
         Effect.match({
           onFailure: (e) => {
             fail("ledger-canonical-agreement", e.message);
@@ -177,7 +169,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
           onSuccess: (s) => s,
         }),
       );
-      const settlement = yield* input.reader.record(submissionSettlementRecordId(row.submissionId));
+      const settlement = yield* reader.record(submissionSettlementRecordId(row.submissionId));
 
       if (
         row.state === "settled" &&
@@ -199,7 +191,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         );
       if (input.requireAllSettled && row.state !== "settled")
         fail("all-settled", `Submission ${row.submissionId} is ${row.state}`);
-      yield* verifyImportedSettlementOrder(row, input.reader, input.settlementPredecessors).pipe(
+      yield* verifyImportedSettlementOrder(row).pipe(
         Effect.catchIf(Schema.is(ThreadImportRejected), (e) =>
           Effect.sync(() => fail("fifo-settlement-order", e.message)),
         ),

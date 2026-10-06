@@ -58,7 +58,7 @@ import {
   verifyImportedReferences,
   type ThreadSettlementPredecessorRequest,
   invalidThreadArchive,
-  type ThreadImportReader,
+  ThreadImportReader,
   ThreadImport,
   ThreadImportRejected,
 } from "@yielded/agent/thread-import";
@@ -92,7 +92,7 @@ import {
   ThreadWorkerCapacity,
   streamExport,
 } from "@yielded/agent/thread-store";
-import { makeThreadExporter } from "@yielded/agent/thread-transfer";
+import { exportThreadPage, ThreadExporterReader } from "@yielded/agent/thread-transfer";
 import {
   WORK_INDEX_VERSION,
   MAX_WORK_REBUILD_RECORDS,
@@ -1873,7 +1873,7 @@ const makeThreadStore = Effect.gen(function* () {
     checkpoints: new Map(),
   });
 
-  const exporter = makeThreadExporter({
+  const exportReader = ThreadExporterReader.of({
     snapshot: Effect.fnUntraced(function* (threadId: ThreadId) {
       const thread = MutableRef.get(state.ref).threads.get(threadId);
 
@@ -1977,7 +1977,10 @@ const makeThreadStore = Effect.gen(function* () {
   });
 
   const exportThread: ThreadStore["Service"]["export"] = (request) =>
-    exporter(request).pipe(Effect.provideService(Crypto.Crypto, crypto));
+    exportThreadPage(request).pipe(
+      Effect.provideService(ThreadExporterReader, exportReader),
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
 
   const exactRunRecords = (thread: StoredThread, runId: RunId) =>
     Effect.gen(function* () {
@@ -2009,13 +2012,9 @@ const makeThreadStore = Effect.gen(function* () {
       return records.sort((a, b) => a.sequence - b.sequence);
     });
 
-  const exactReader = (
+  const exactRecordReader = (
     thread: StoredThread,
-    ledger: Pick<ThreadImportReader, "admission" | "runOwner" | "commands">,
-    delivery: ThreadImportReader["delivery"],
-  ): ThreadImportReader => ({
-    delivery,
-    ...ledger,
+  ): Pick<ThreadImportReader["Service"], "record" | "runRecords" | "hasAgent"> => ({
     record: (id) => Effect.succeed(thread.byId.get(id)),
     runRecords: (id) => exactRunRecords(thread, id),
     hasAgent: (id) =>
@@ -2026,11 +2025,7 @@ const makeThreadStore = Effect.gen(function* () {
       ),
   });
 
-  const settlementPredecessors = (
-    thread: StoredThread,
-    reader: ThreadImportReader,
-    request: ThreadSettlementPredecessorRequest,
-  ) =>
+  const settlementInputs = (thread: StoredThread, request: ThreadSettlementPredecessorRequest) =>
     Stream.fromIterable(
       earlierSettlementInputs(
         thread.settlementIntervals,
@@ -2047,19 +2042,10 @@ const makeThreadStore = Effect.gen(function* () {
               "settlement predecessors",
               "Indexed input evidence is missing",
             );
-          const admission = yield* reader.admission(input.submissionId);
 
-          if (admission === undefined)
-            return yield* storeError(
-              "settlement predecessors",
-              "Indexed input admission is missing",
-            );
-
-          return admission;
+          return input.submissionId;
         }),
       ),
-      Stream.filter((admission) => admission.queueSequence < request.queueSequence),
-      Stream.map(({ submissionId }) => ({ submissionId })),
     );
 
   const importThread: ThreadImport["Service"]["import"] = (pages) =>
@@ -2218,117 +2204,133 @@ const makeThreadStore = Effect.gen(function* () {
               commands: () => Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
             };
 
-            const reader = exactReader(
-              staged,
-              stagedLedger?.reader ?? fallback,
-              stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
-            );
+            const reader: ThreadImportReader["Service"] = {
+              ...exactRecordReader(restoredThread),
+              ...(stagedLedger?.reader ?? fallback),
+              delivery: stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
+              settlementPredecessors: (request) =>
+                settlementInputs(restoredThread, request).pipe(
+                  Stream.mapEffect((sid) =>
+                    reader.admission(sid).pipe(
+                      Effect.filterOrFail(
+                        (admission) => admission !== undefined,
+                        () =>
+                          storeError(
+                            "settlement predecessors",
+                            "Indexed input admission is missing",
+                          ),
+                      ),
+                    ),
+                  ),
+                  Stream.filter((admission) => admission.queueSequence < request.queueSequence),
+                  Stream.map(({ submissionId }) => ({ submissionId })),
+                ),
+            };
 
-            for (const runId of staged.runRecords.keys())
-              yield* verifyRunContinuations(
-                yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
-                reader.record,
-              ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
-            for (const runId of staged.continuations.keys())
-              if (!staged.runRecords.has(runId))
+            return yield* Effect.gen(function* () {
+              for (const runId of restoredThread.runRecords.keys())
                 yield* verifyRunContinuations(
                   yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
-                  reader.record,
                 ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
-            let lastInputQueue = -1;
+              for (const runId of restoredThread.continuations.keys())
+                if (!restoredThread.runRecords.has(runId))
+                  yield* verifyRunContinuations(
+                    yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
+                  ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
+              let lastInputQueue = -1;
 
-            for (let sequence = 1; sequence <= staged.tailSequence; sequence++) {
-              const entry = storedRecord(staged, sequence);
+              for (let sequence = 1; sequence <= restoredThread.tailSequence; sequence++) {
+                const entry = storedRecord(restoredThread, sequence);
 
-              if (entry === undefined)
-                return yield* invalidThreadArchive("Incomplete canonical staging", id);
-              yield* verifyImportedReferences(entry, reader.record, reader.delivery);
-              const payload = entry.record.payload;
+                if (entry === undefined)
+                  return yield* invalidThreadArchive("Incomplete canonical staging", id);
+                yield* verifyImportedReferences(entry);
+                const payload = entry.record.payload;
 
-              if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
-                const admission = yield* reader.admission(payload.submissionId);
+                if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
+                  const admission = yield* reader.admission(payload.submissionId);
 
-                if (admission === undefined || admission.queueSequence <= lastInputQueue)
+                  if (admission === undefined || admission.queueSequence <= lastInputQueue)
+                    return yield* invalidThreadArchive(
+                      "Canonical inputs violate immutable admission order",
+                      id,
+                    );
+                  lastInputQueue = admission.queueSequence;
+                }
+
+                if (
+                  payload._tag === "UserInputRecorded" &&
+                  payload.submissionId !== undefined &&
+                  entry.record.recordId !== submissionInputRecordId(payload.submissionId)
+                )
+                  return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
+                if (
+                  payload._tag === "SubmissionSettled" &&
+                  entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
+                )
                   return yield* invalidThreadArchive(
-                    "Canonical inputs violate immutable admission order",
+                    "Canonical settlement identity is ambiguous",
                     id,
                   );
-                lastInputQueue = admission.queueSequence;
+                if (
+                  payload._tag !== "WorkerInputCompleted" &&
+                  "submissionId" in payload &&
+                  payload.submissionId !== undefined &&
+                  (yield* reader.admission(payload.submissionId)) === undefined
+                )
+                  return yield* invalidThreadArchive("Canonical submission has no admission", id);
               }
+              if (Object.values(stagedWork.foreign).some((count) => count > 0))
+                return yield* ThreadImportRejected.make({
+                  threadId: id,
+                  reason: "unsupported-obligations",
+                  message: "Live foreign ownership cannot be restored",
+                });
 
-              if (
-                payload._tag === "UserInputRecorded" &&
-                payload.submissionId !== undefined &&
-                entry.record.recordId !== submissionInputRecordId(payload.submissionId)
-              )
-                return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
-              if (
-                payload._tag === "SubmissionSettled" &&
-                entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
-              )
-                return yield* invalidThreadArchive(
-                  "Canonical settlement identity is ambiguous",
-                  id,
-                );
-              if (
-                payload._tag !== "WorkerInputCompleted" &&
-                "submissionId" in payload &&
-                payload.submissionId !== undefined &&
-                (yield* reader.admission(payload.submissionId)) === undefined
-              )
-                return yield* invalidThreadArchive("Canonical submission has no admission", id);
-            }
-            if (Object.values(stagedWork.foreign).some((count) => count > 0))
-              return yield* ThreadImportRejected.make({
-                threadId: id,
-                reason: "unsupported-obligations",
-                message: "Live foreign ownership cannot be restored",
-              });
-            const nextEpoch = Math.max(progress.producerEpoch, (existing?.producerEpoch ?? 0) + 1);
+              const nextEpoch = Math.max(
+                progress.producerEpoch,
+                (existing?.producerEpoch ?? 0) + 1,
+              );
 
-            if (!Number.isSafeInteger(nextEpoch))
-              return yield* invalidThreadArchive("Producer epoch cannot be fenced safely", id);
-            const producerEpoch = decodeProducerEpoch(nextEpoch);
+              if (!Number.isSafeInteger(nextEpoch))
+                return yield* invalidThreadArchive("Producer epoch cannot be fenced safely", id);
+              const producerEpoch = decodeProducerEpoch(nextEpoch);
 
-            const commitLedger =
-              stagedLedger === undefined
-                ? undefined
-                : yield* stagedLedger.prepareCommit(
-                    reader,
-                    (request) => settlementPredecessors(restoredThread, reader, request),
-                    producerEpoch,
-                    progress.manifest?.workerSeal,
-                  );
+              const commitLedger =
+                stagedLedger === undefined
+                  ? undefined
+                  : yield* stagedLedger.prepareCommit(producerEpoch, progress.manifest?.workerSeal);
 
-            const commitDelivery =
-              stagedDelivery === undefined
-                ? undefined
-                : yield* stagedDelivery.prepareCommit(
-                    (threadId, sid) =>
-                      threadId === id
-                        ? reader.admission(sid)
-                        : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
-                    (threadId, recordId) =>
-                      Effect.succeed(
+              const commitDelivery =
+                stagedDelivery === undefined
+                  ? undefined
+                  : yield* stagedDelivery.prepareCommit(
+                      (threadId, sid) =>
                         threadId === id
-                          ? staged?.byId.get(recordId)?.record
-                          : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)
-                              ?.record,
-                      ),
-                  );
+                          ? reader.admission(sid)
+                          : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
+                      (threadId, recordId) =>
+                        Effect.succeed(
+                          threadId === id
+                            ? staged?.byId.get(recordId)?.record
+                            : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)
+                                ?.record,
+                        ),
+                    );
 
-            const installed = { ...staged, producerEpoch };
+              const installed = { ...restoredThread, producerEpoch };
 
-            yield* Effect.uninterruptible(
-              Effect.sync(() => {
-                commitLedger?.();
-                commitDelivery?.();
-                publishWork(id, stagedWork);
-                MutableRef.get(state.ref).threads.set(id, installed);
-              }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
-            );
+              yield* Effect.uninterruptible(
+                Effect.sync(() => {
+                  commitLedger?.();
+                  commitDelivery?.();
+                  publishWork(id, stagedWork);
+                  MutableRef.get(state.ref).threads.set(id, installed);
+                }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
+              );
 
-            return result;
+              return result;
+            }).pipe(Effect.provideService(ThreadImportReader, reader));
           }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
         );
       }),
@@ -2692,23 +2694,36 @@ const makeThreadStore = Effect.gen(function* () {
           const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
           const id = request.threadId;
 
-          const reader = exactReader(
-            thread,
-            {
-              admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
-              runOwner: (runId) =>
-                runId.startsWith("run:")
-                  ? (ledgerTransfer?.admission(
-                      id,
-                      Schema.decodeSync(importSubmissionId)(runId.slice(4)),
-                    ) ?? Effect.succeed(undefined))
-                  : Effect.succeed(undefined),
-              commands: (sid) =>
-                ledgerTransfer?.commands(sid) ??
-                Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
-            },
-            (messageId) => deliveryTransfer?.record(id, messageId) ?? Effect.succeed(undefined),
-          );
+          const reader: ThreadImportReader["Service"] = {
+            ...exactRecordReader(thread),
+            admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
+            runOwner: (runId) =>
+              runId.startsWith("run:")
+                ? (ledgerTransfer?.admission(
+                    id,
+                    Schema.decodeSync(importSubmissionId)(runId.slice(4)),
+                  ) ?? Effect.succeed(undefined))
+                : Effect.succeed(undefined),
+            commands: (sid) =>
+              ledgerTransfer?.commands(sid) ??
+              Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
+            delivery: (messageId) =>
+              deliveryTransfer?.record(id, messageId) ?? Effect.succeed(undefined),
+            settlementPredecessors: (request) =>
+              settlementInputs(thread, request).pipe(
+                Stream.mapEffect((sid) =>
+                  reader.admission(sid).pipe(
+                    Effect.filterOrFail(
+                      (admission) => admission !== undefined,
+                      () =>
+                        storeError("settlement predecessors", "Indexed input admission is missing"),
+                    ),
+                  ),
+                ),
+                Stream.filter((admission) => admission.queueSequence < request.queueSequence),
+                Stream.map(({ submissionId }) => ({ submissionId })),
+              ),
+          };
 
           const submissions = () => ledgerTransfer?.submissions(id) ?? Stream.empty;
 
@@ -2733,17 +2748,18 @@ const makeThreadStore = Effect.gen(function* () {
 
           return yield* verifyThreadInvariants({
             threadId: id,
-            reader,
             runs,
             submissions: submissions(),
             pages: streamExport({ export: exportThread }, { threadId: id }),
-            settlementPredecessors: (request) => settlementPredecessors(thread, reader, request),
             ...(Option.isNone(checkpoint) ? {} : { checkpoint: checkpoint.value }),
             checkpointsSupported: true,
             ...(request.requireAllSettled === undefined
               ? {}
               : { requireAllSettled: request.requireAllSettled }),
-          }).pipe(Effect.provideService(Crypto.Crypto, crypto));
+          }).pipe(
+            Effect.provideService(ThreadImportReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
+          );
         }),
       ),
   };
