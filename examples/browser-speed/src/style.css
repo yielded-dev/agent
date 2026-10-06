@@ -416,7 +416,7 @@ textarea:disabled {
 
 .segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 6px;
 }
 

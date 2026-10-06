@@ -235,16 +235,19 @@ export const makeOwner = (
       });
 
     const jev = requested.driver === "jev";
+    const hybrid = requested.driver === "hybrid";
     const shopping = requested.scenario === "coffee" || requested.scenario === "shop";
 
-    // Jev reads the main document only, so it cannot reach payment-provider frames.
-    if (
-      shopping &&
-      (jev || requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium")
-    )
+    if (hybrid && !shopping)
       return yield* new LabError({
         code: "invalid",
-        message: "Store tasks run a model agent with individual actions in Chromium.",
+        message: "Jev with a model fallback runs on store tasks only.",
+      });
+
+    if (shopping && (requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium"))
+      return yield* new LabError({
+        code: "invalid",
+        message: "Store tasks run individual actions in Chromium.",
       });
     if (requested.scenario === "shop" && requested.shop === undefined)
       return yield* new LabError({
@@ -377,12 +380,12 @@ export const makeOwner = (
           ? "This model is not available in the lab."
           : "Add your OpenAI key to run the model agent.",
       });
-    if (jev && !jevKey)
+    if ((jev || hybrid) && !jevKey)
       return yield* new LabError({
         code: "configuration",
         message: "Add your TypeSafe key to run Jev.",
       });
-    if (jev && input.scenario !== "wikipedia" && jevText === undefined)
+    if ((jev || hybrid) && input.scenario !== "wikipedia" && jevText === undefined)
       return yield* new LabError({
         code: "configuration",
         message: "Add an OpenRouter or OpenAI key so Jev can type into fields.",
@@ -398,9 +401,11 @@ export const makeOwner = (
         ? input.scenario === "wikipedia"
           ? "jev-latest"
           : `jev-latest · ${jevText?.model ?? ""}`
-        : input.mode === "scripted"
-          ? "none"
-          : selectedModel.model,
+        : hybrid
+          ? `jev-latest · ${jevText?.model ?? ""} → ${selectedModel.model}`
+          : input.mode === "scripted"
+            ? "none"
+            : selectedModel.model,
     );
     const current = trace;
 
@@ -471,8 +476,10 @@ export const makeOwner = (
         },
         input.scenario === "wikipedia" || input.mode === "scripted"
           ? "default"
-          : jev
-            ? "jev"
+          : jev || hybrid
+            ? input.scenario === "coffee" || input.scenario === "shop"
+              ? "jev-store"
+              : "jev"
             : input.scenario === "coffee"
               ? "store"
               : input.scenario === "shop"

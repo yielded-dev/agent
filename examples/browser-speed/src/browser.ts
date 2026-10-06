@@ -30,9 +30,9 @@ export const completionTools = Toolkit.make(finishTool);
  * `frontier`: viewport observations, settling and capped waits. `jev`: Jev observations.
  * `store` and `shop` add the checkout policy that keeps a real store from taking an order:
  * `store` observes Hedge Coffee's whole page, and `shop` the viewport of any store, whose catalog
- * pages can outgrow the agent's context.
+ * pages can outgrow the agent's context. `jev-store` gives Jev the checkout policy.
  */
-export type BrowserProfile = "default" | "frontier" | "jev" | "store" | "shop";
+export type BrowserProfile = "default" | "frontier" | "jev" | "store" | "shop" | "jev-store";
 
 export const makeBrowser = Effect.fnUntraced(function* (
   session: Pick<BrowserSession, "run">,
@@ -41,22 +41,33 @@ export const makeBrowser = Effect.fnUntraced(function* (
   profile: BrowserProfile = "default",
 ) {
   const trace = yield* Trace;
+  // One policy per session: a card entered through any controller stops every controller.
   const checkout = makeCheckoutPolicy();
-  const waits = profile === "frontier" || profile === "store" || profile === "shop";
 
   const asLabError = (error: { readonly message: string }) =>
     new LabError({ code: "browser", message: error.message });
 
-  const controller = yield* NativeBrowser.make(session, {
-    authorize: profile === "store" || profile === "shop" ? checkout.authorize : () => Effect.void,
-    maxActions: 100,
-    maxReturnedBytes: 256 * 1024,
-    viewportOnly: profile === "frontier" || profile === "jev" || profile === "shop",
-    ...(profile === "jev"
-      ? { observationMode: "jev", settleAfterAction: "input" }
-      : { settleAfterAction: waits }),
-    ...(waits ? { maxWaitMillis: 5_000 } : {}),
-  }).pipe(Effect.mapError(asLabError));
+  const makeController = (profile: BrowserProfile) => {
+    const waits = profile === "frontier" || profile === "store" || profile === "shop";
+    const jev = profile === "jev" || profile === "jev-store";
+    // Every real-store profile carries the checkout policy.
+    const store = profile === "store" || profile === "shop" || profile === "jev-store";
+
+    return NativeBrowser.make(session, {
+      authorize: store ? checkout.authorize : () => Effect.void,
+      maxActions: 100,
+      maxReturnedBytes: 256 * 1024,
+      viewportOnly: profile === "frontier" || jev || profile === "shop",
+      ...(jev
+        ? { observationMode: "jev", settleAfterAction: "input" }
+        : { settleAfterAction: waits }),
+      // Checkout steps render after input; wait for DOM quiet, not two frames.
+      ...(profile === "jev-store" ? { settleAfterAction: true, maxWaitMillis: 5_000 } : {}),
+      ...(waits ? { maxWaitMillis: 5_000 } : {}),
+    }).pipe(Effect.mapError(asLabError));
+  };
+
+  const controller = yield* makeController(profile);
 
   const native = <A>(action: (page: Page) => Promise<A>) =>
     session.run(Effect.void, action).pipe(
@@ -83,27 +94,53 @@ export const makeBrowser = Effect.fnUntraced(function* (
           )
       : Effect.void;
 
-  const observe = () =>
-    trace.measure(
-      "observation",
-      "Read current controls",
-      controller.actions.observe.pipe(Effect.mapError(asLabError)),
+  type Controller = Effect.Success<ReturnType<typeof makeController>>;
+
+  const drive = (controller: Controller) => {
+    const observe = () =>
+      trace.measure(
+        "observation",
+        "Read current controls",
+        controller.actions.observe.pipe(Effect.mapError(asLabError)),
+      );
+
+    const act = Effect.fnUntraced(function* (
+      values: ReadonlyArray<Action>,
+      options?: BrowserUse.ActOptions,
+    ) {
+      const result = yield* trace.measure(
+        "action",
+        "Native browser actions",
+        controller.actions.act(values, options).pipe(Effect.mapError(asLabError)),
+      );
+
+      yield* capture().pipe(Effect.ignore);
+
+      return result;
+    });
+
+    const actionsLayer = Layer.merge(
+      Layer.succeed(BrowserUse.BrowserActions, {
+        observe: trace.measure("observation", "Read current controls", controller.actions.observe),
+        act: (values) =>
+          act(values).pipe(
+            Effect.mapError(
+              (error) =>
+                new BrowserUse.BrowserUseError({ code: "browser", message: error.message }),
+            ),
+          ),
+      }),
+      Layer.succeed(BrowserUse.BrowserControl, {
+        ...controller.control,
+        scroll: (request) => trace.measure("action", "Scroll", controller.control.scroll(request)),
+        press: (request) => trace.measure("action", "Press", controller.control.press(request)),
+      }),
     );
 
-  const act = Effect.fnUntraced(function* (
-    values: ReadonlyArray<Action>,
-    options?: BrowserUse.ActOptions,
-  ) {
-    const result = yield* trace.measure(
-      "action",
-      "Native browser actions",
-      controller.actions.act(values, options).pipe(Effect.mapError(asLabError)),
-    );
+    return { observe, act, actionsLayer };
+  };
 
-    yield* capture().pipe(Effect.ignore);
-
-    return result;
-  });
+  const { observe, act, actionsLayer } = drive(controller);
 
   return {
     native,
@@ -149,23 +186,9 @@ export const makeBrowser = Effect.fnUntraced(function* (
           () => new LabError({ code: "browser", message: "Could not validate the task ledger." }),
         ),
       ),
-    actionsLayer: Layer.merge(
-      Layer.succeed(BrowserUse.BrowserActions, {
-        observe: trace.measure("observation", "Read current controls", controller.actions.observe),
-        act: (values) =>
-          act(values).pipe(
-            Effect.mapError(
-              (error) =>
-                new BrowserUse.BrowserUseError({ code: "browser", message: error.message }),
-            ),
-          ),
-      }),
-      Layer.succeed(BrowserUse.BrowserControl, {
-        ...controller.control,
-        scroll: (request) => trace.measure("action", "Scroll", controller.control.scroll(request)),
-        press: (request) => trace.measure("action", "Press", controller.control.press(request)),
-      }),
-    ),
+    actionsLayer,
+    /** A second controller on this session and checkout policy, for a driver hand-off. */
+    handoff: (next: BrowserProfile) => makeController(next).pipe(Effect.map(drive)),
     inspect: controller.control.inspect,
     /** True once a card field was filled; nothing after that can submit payment. */
     cardEntered: checkout.cardEntered,

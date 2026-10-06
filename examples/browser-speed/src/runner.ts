@@ -227,35 +227,11 @@ export const executeTask = Effect.fnUntraced(function* (
         ? storeTask.prompt
         : (scenarios.find((scenario) => scenario.id === input.scenario)?.prompt ?? "");
 
-  if (input.driver === "jev") {
-    if (jevText === undefined)
-      return yield* new LabError({
-        code: "configuration",
-        message: "Jev task-board runs need a field-text model.",
-      });
-    trace.update({ message: "Jev is driving the browser…" });
-
-    const result = yield* traceModels(
-      BrowserUse.runJev({ goal: prompt, observation: initial }).pipe(
-        Effect.provide([
-          browser.actionsLayer,
-          jevDecisionLayer(jevApiKey),
-          textModelLayer(jevText),
-        ]),
-      ),
-    ).pipe(Effect.mapError((error) => new LabError({ code: "invalid", message: error.message })));
-
-    trace.update({
-      message:
-        result.stop === "done" ? "Jev claimed the task is done." : `Jev stopped: ${result.message}`,
-    });
-  } else if (input.mode === "scripted") {
-    trace.update({ message: "Running browser sequence…" });
-    yield* scripted(input.scenario, initial);
-  } else {
-    trace.update({ message: "Agent is working…" });
-    const message = `${prompt}\n\nInitial browser observation:\n${Schema.encodeSync(Schema.fromJsonString(Observation))(initial)}`;
-
+  // One model-agent run, from a given observation, through a given controller.
+  const runAgent = Effect.fnUntraced(function* (
+    message: string,
+    actions: typeof browser.actionsLayer,
+  ) {
     const clientOptions = {
       apiKey: Redacted.make(apiKey),
       apiUrl,
@@ -296,7 +272,7 @@ export const executeTask = Effect.fnUntraced(function* (
           : AgentRuntime.run(individualAgent, message).pipe(Effect.provide(directSingle.layer()));
 
     const result = yield* traceModels(
-      run.pipe(Effect.provide([InMemory.layer, modelLayer, browser.actionsLayer, completionLayer])),
+      run.pipe(Effect.provide([InMemory.layer, modelLayer, actions, completionLayer])),
     ).pipe(
       Effect.mapError(
         (error) =>
@@ -315,6 +291,71 @@ export const executeTask = Effect.fnUntraced(function* (
     );
 
     trace.update({ message: result.output.message });
+  });
+
+  const encodeObservation = Schema.encodeSync(Schema.fromJsonString(Observation));
+
+  if (input.driver === "jev" || input.driver === "hybrid") {
+    if (jevText === undefined)
+      return yield* new LabError({
+        code: "configuration",
+        message: "Jev task-board runs need a field-text model.",
+      });
+    trace.update({ message: "Jev is driving the browser…" });
+
+    const result = yield* traceModels(
+      BrowserUse.runJev({
+        // Jev's field-text model fills values from the goal, so it carries the test buyer.
+        goal: store ? `${prompt} Test buyer: ${JSON.stringify(testBuyer)}.` : prompt,
+        observation: initial,
+        // A fallback is waiting: stop early rather than spend the whole budget.
+        ...(input.driver === "hybrid" ? { maxSteps: 30 } : {}),
+      }).pipe(
+        Effect.provide([
+          browser.actionsLayer,
+          jevDecisionLayer(jevApiKey),
+          textModelLayer(jevText),
+        ]),
+      ),
+    ).pipe(Effect.mapError((error) => new LabError({ code: "invalid", message: error.message })));
+
+    trace.update({
+      message:
+        result.stop === "done" ? "Jev claimed the task is done." : `Jev stopped: ${result.message}`,
+    });
+
+    // Neither store task is complete without the card, so skip the verifier's wait without it.
+    const finished =
+      browser.cardEntered() && (input.scenario !== "coffee" || (yield* verifyCheckout).passed);
+
+    // Never hand off unresolved input: its outcome is unknown and is never replayed.
+    if (input.driver === "hybrid" && !finished && result.stop !== "input-unresolved") {
+      const next = yield* browser.handoff(input.scenario === "coffee" ? "store" : "shop");
+      const observation = yield* next.observe();
+
+      const steps = result.steps
+        .slice(-20)
+        .map(
+          (step) =>
+            `${step.operation} ${step.target ?? ""}${step.text === null ? "" : ` "${step.text}"`} (${step.dispatch})`,
+        )
+        .join("; ");
+
+      trace.update({ message: `Jev stopped (${result.stop}); a model agent continues…` });
+      yield* runAgent(
+        `${prompt}\n\nJev drove this browser first and stopped: ${result.message} Its last steps: ${steps}. Continue from the current page; check the cart and fix anything Jev got wrong.\n\nCurrent browser observation:\n${encodeObservation(observation)}`,
+        next.actionsLayer,
+      );
+    }
+  } else if (input.mode === "scripted") {
+    trace.update({ message: "Running browser sequence…" });
+    yield* scripted(input.scenario, initial);
+  } else {
+    trace.update({ message: "Agent is working…" });
+    yield* runAgent(
+      `${prompt}\n\nInitial browser observation:\n${encodeObservation(initial)}`,
+      browser.actionsLayer,
+    );
   }
   if (input.scenario === "shop") {
     trace.update({

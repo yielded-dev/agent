@@ -38,8 +38,11 @@ export const ModelId = Schema.Literals([
 ]);
 
 export type ModelId = typeof ModelId.Type;
-/** `model`: an agent picks observed refs. `jev`: Jev decides every step, without an agent. */
-export const Driver = Schema.Literals(["model", "jev"]);
+/**
+ * `model`: an agent picks observed refs. `jev`: Jev decides every step, without an agent.
+ * `hybrid`: Jev drives a store task first; when it stops short, a model agent continues.
+ */
+export const Driver = Schema.Literals(["model", "jev", "hybrid"]);
 export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
 export const ServiceTier = Schema.Literals(["fast", "default"]);
 

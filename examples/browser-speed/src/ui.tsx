@@ -328,6 +328,7 @@ export const App = () => {
   const shop = { url: shopUrl.trim(), item: shopItem.trim() };
   const validShop = Schema.is(ShopRequest)(shop);
   const jev = driver === "jev";
+  const hybrid = driver === "hybrid";
   const scripted = !jev && !isWiki && !isStore && !publicLab && mode === "scripted";
   // The real store runs one guarded action per call in Chromium.
   const effectiveEngine = isStore ? "chromium" : engine;
@@ -383,19 +384,20 @@ export const App = () => {
 
   const needs = [
     ...(needsAccount ? [{ label: "Allowlisted account", ok: funded }] : []),
-    ...(jev
+    ...(jev || hybrid
       ? [
           { label: "TypeSafe", ok: hasTypesafe },
           ...(isWiki ? [] : [{ label: "OpenRouter or OpenAI", ok: hasFieldText }]),
         ]
-      : scripted
-        ? []
-        : [
-            {
-              label: model.startsWith("@cf/") ? "Workers AI (lab key)" : "OpenAI",
-              ok: modelReady,
-            },
-          ]),
+      : []),
+    ...(jev || scripted
+      ? []
+      : [
+          {
+            label: model.startsWith("@cf/") ? "Workers AI (lab key)" : "OpenAI",
+            ok: modelReady,
+          },
+        ]),
   ];
 
   const canRun =
@@ -536,7 +538,7 @@ export const App = () => {
                         setDriver("model");
                         setModel("gpt-6.1-sol");
                         setReasoning("low");
-                      }
+                      } else if (driver === "hybrid") setDriver("jev");
                     }}
                   />
                   <span className="task-title">{task.title}</span>
@@ -613,6 +615,7 @@ export const App = () => {
                 [
                   ["jev", "Jev", "One decision per step"],
                   ["model", "Model agent", "An LLM calls browser tools"],
+                  ["hybrid", "Jev → model", "Jev first; a model finishes · stores"],
                 ] as const
               ).map(([value, label, detail]) => (
                 <label key={value} className={driver === value ? "selected" : ""}>
@@ -621,7 +624,7 @@ export const App = () => {
                     name="driver"
                     value={value}
                     checked={driver === value}
-                    disabled={busy || (isStore && value === "jev")}
+                    disabled={busy || (isStore ? value === "jev" : value === "hybrid")}
                     onChange={() => setDriver(value)}
                   />
                   <strong>{label}</strong>
@@ -1031,7 +1034,13 @@ export const App = () => {
                   <tbody>
                     {comparison.map((group) => (
                       <tr key={group.key}>
-                        <td>{group.driver === "jev" ? "Jev" : "Model agent"}</td>
+                        <td>
+                          {group.driver === "jev"
+                            ? "Jev"
+                            : group.driver === "hybrid"
+                              ? "Jev → model"
+                              : "Model agent"}
+                        </td>
                         <td>
                           {modelChoices.find((value) => value.id === group.model)?.label ??
                             group.model}
@@ -1079,9 +1088,11 @@ export const App = () => {
                       <td>
                         {row.input.driver === "jev"
                           ? "Jev"
-                          : row.input.mode === "scripted"
-                            ? "Scripted"
-                            : `Model · ${row.input.mode === "batched" ? "batched" : "single"}`}
+                          : row.input.driver === "hybrid"
+                            ? "Jev → model"
+                            : row.input.mode === "scripted"
+                              ? "Scripted"
+                              : `Model · ${row.input.mode === "batched" ? "batched" : "single"}`}
                       </td>
                       <td>
                         {modelChoices.find((value) => value.id === row.model)?.label ?? row.model}
