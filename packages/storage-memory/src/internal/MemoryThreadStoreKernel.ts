@@ -5,6 +5,7 @@ import type { SubmissionSnapshot, WorkerLedgerState } from "@yielded/agent/submi
 import type {
   PreparedImportPage,
   ThreadImportReader,
+  ThreadDeliveryImportReader,
   ThreadImportRejected,
 } from "@yielded/agent/thread-import";
 import type {
@@ -73,13 +74,11 @@ export interface MemoryDeliveryImport {
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
   readonly has: (messageId: IdempotencyKey) => boolean;
-  readonly prepareCommit: (
-    readAdmission: MemoryLedgerTransfer["admission"],
-    readRecord: (
-      threadId: ThreadId,
-      recordId: RecordId,
-    ) => Effect.Effect<RecordEnvelope | undefined, ThreadStoreError>,
-  ) => Effect.Effect<() => void, ThreadImportRejected | ThreadStoreError>;
+  readonly prepareCommit: () => Effect.Effect<
+    () => void,
+    ThreadImportRejected | ThreadStoreError,
+    ThreadDeliveryImportReader
+  >;
 }
 
 export interface MemoryDeliveryTransfer {

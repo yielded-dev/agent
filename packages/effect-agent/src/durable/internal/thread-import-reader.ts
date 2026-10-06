@@ -1,9 +1,9 @@
 import { Context, type Effect, type Stream } from "effect";
 
-import type { AgentId, RunId, SubmissionId } from "../../core/Identifiers.ts";
+import type { AgentId, RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
 import type { IdempotencyKey } from "../../core/Receipt.ts";
 import type { MessageDeliveryRecord } from "../MessageDelivery.ts";
-import type { CanonicalRecordEnvelope, RecordId } from "../Records.ts";
+import type { CanonicalRecordEnvelope, RecordEnvelope, RecordId } from "../Records.ts";
 import type { ThreadAdmission, ThreadCommands, ThreadStoreError } from "../ThreadStore.ts";
 
 export interface ThreadSettlementPredecessorRequest {
@@ -39,3 +39,18 @@ export class ThreadImportReader extends Context.Service<
     ) => Stream.Stream<Pick<ThreadAdmission, "submissionId">, ThreadStoreError>;
   }
 >()("@effect-agent/thread/ThreadImportReader") {}
+
+/** Delivery evidence reads: the importing Thread uses staged facts; foreign Threads use retained facts. */
+export class ThreadDeliveryImportReader extends Context.Service<
+  ThreadDeliveryImportReader,
+  {
+    readonly admission: (
+      threadId: ThreadId,
+      submissionId: SubmissionId,
+    ) => Effect.Effect<ThreadAdmission | undefined, ThreadStoreError>;
+    readonly record: (
+      threadId: ThreadId,
+      recordId: RecordId,
+    ) => Effect.Effect<RecordEnvelope | undefined, ThreadStoreError>;
+  }
+>()("@effect-agent/thread/ThreadDeliveryImportReader") {}

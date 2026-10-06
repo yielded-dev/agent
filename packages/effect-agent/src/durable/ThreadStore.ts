@@ -704,47 +704,60 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
   ),
 }) {}
 
-/** Pull bounded pages from one captured snapshot without collecting the Thread. */
-export const streamExport = <E, R>(
-  store: { readonly export: (request: ThreadExportRequest) => Effect.Effect<ThreadExport, E, R> },
-  request: ThreadExportRequest,
-) =>
-  Stream.suspend(() => {
-    let previous: ThreadExport | undefined;
-
-    return Stream.paginate(request, (current) =>
-      store.export(current).pipe(
-        Effect.flatMap((page) => {
-          if (
-            page.threadId !== request.threadId ||
-            (previous !== undefined &&
-              (page.snapshotId !== previous.snapshotId ||
-                page.tailSequence !== previous.tailSequence ||
-                page.tailDigest !== previous.tailDigest ||
-                page.fromSequence !==
-                  (previous.records.at(-1)?.sequence ?? previous.fromSequence - 1) + 1 ||
-                (page.cursor !== undefined && page.cursor === current.cursor)))
-          )
-            return Effect.fail(
-              ThreadStoreError.make({
-                operation: "stream Thread export",
-                message: "Transfer snapshot or cursor is inconsistent",
-              }),
-            );
-          previous = page;
-
-          return Effect.succeed([
-            [page],
-            page.cursor === undefined
-              ? Option.none()
-              : Option.some(
-                  ThreadExportRequest.make({ threadId: request.threadId, cursor: page.cursor }),
-                ),
-          ] as const);
-        }),
-      ),
+/** Export-only authority. Native verification binds this port to its existing read snapshot. */
+export class ThreadExportSource extends Context.Service<
+  ThreadExportSource,
+  Pick<ThreadStore["Service"], "export">
+>()("@effect-agent/thread/ThreadExportSource") {
+  static layer() {
+    return Layer.effect(
+      ThreadExportSource,
+      Effect.map(ThreadStore, (store) => ThreadExportSource.of({ export: store.export })),
     );
-  });
+  }
+}
+
+/** Pull bounded pages from one captured snapshot without collecting the Thread. Requires ThreadExportSource. */
+export const streamExport = (request: ThreadExportRequest) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const source = yield* ThreadExportSource;
+      let previous: ThreadExport | undefined;
+
+      return Stream.paginate(request, (current) =>
+        source.export(current).pipe(
+          Effect.flatMap((page) => {
+            if (
+              page.threadId !== request.threadId ||
+              (previous !== undefined &&
+                (page.snapshotId !== previous.snapshotId ||
+                  page.tailSequence !== previous.tailSequence ||
+                  page.tailDigest !== previous.tailDigest ||
+                  page.fromSequence !==
+                    (previous.records.at(-1)?.sequence ?? previous.fromSequence - 1) + 1 ||
+                  (page.cursor !== undefined && page.cursor === current.cursor)))
+            )
+              return Effect.fail(
+                ThreadStoreError.make({
+                  operation: "stream Thread export",
+                  message: "Transfer snapshot or cursor is inconsistent",
+                }),
+              );
+            previous = page;
+
+            return Effect.succeed([
+              [page],
+              page.cursor === undefined
+                ? Option.none()
+                : Option.some(
+                    ThreadExportRequest.make({ threadId: request.threadId, cursor: page.cursor }),
+                  ),
+            ] as const);
+          }),
+        ),
+      );
+    }),
+  );
 
 /**
  * A disposable projection snapshot. Adapters bind its sequence and digest to the canonical

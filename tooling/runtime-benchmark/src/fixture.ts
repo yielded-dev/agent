@@ -51,6 +51,7 @@ import {
   ThreadStore,
   ThreadTailRequest,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import {
   Cause,
@@ -695,11 +696,11 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
 
         yield* markFinish;
         yield* check(settlement.outcome === "completed", "Durable submission did not complete");
-        const store = yield* ThreadStore;
         let completed = 0;
         let retained = 0;
 
-        yield* streamExport(store, ThreadExportRequest.make({ threadId })).pipe(
+        yield* streamExport(ThreadExportRequest.make({ threadId })).pipe(
+          Stream.provide(ThreadExportSource.layer()),
           Stream.runForEach((page) =>
             Effect.gen(function* () {
               for (const { record } of page.records) {

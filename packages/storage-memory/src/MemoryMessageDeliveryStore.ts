@@ -27,7 +27,11 @@ import {
   submissionSettlementId,
 } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
-import { ThreadImportRejected, invalidThreadArchive } from "@yielded/agent/thread-import";
+import {
+  ThreadDeliveryImportReader,
+  ThreadImportRejected,
+  invalidThreadArchive,
+} from "@yielded/agent/thread-import";
 import { ThreadStoreError } from "@yielded/agent/thread-store";
 import { workId, type ThreadWorkEntry } from "@yielded/agent/thread-work";
 import { Effect, Layer, MutableRef, Ref, Schema } from "effect";
@@ -590,7 +594,9 @@ export const memoryMessageDeliveryStoreLayer = (
                 commitInto(staged, record, text, false);
               }
             }),
-            prepareCommit: Effect.fnUntraced(function* (readAdmission, readRecord) {
+            prepareCommit: Effect.fnUntraced(function* () {
+              const reader = yield* ThreadDeliveryImportReader;
+
               const read = (messageId: MessageDeliveryKey["messageId"]) => {
                 const text = staged.records.get(
                   messageDeliveryKeyString({ ownerThreadId: threadId, messageId }),
@@ -669,7 +675,7 @@ export const memoryMessageDeliveryStoreLayer = (
                       message: "Live foreign delivery receipt cannot be restored",
                     });
 
-                  const destination = yield* readAdmission(
+                  const destination = yield* reader.admission(
                     d.receipt.threadId,
                     d.receipt.submissionId,
                   );
@@ -718,7 +724,7 @@ export const memoryMessageDeliveryStoreLayer = (
                       threadId,
                     );
                   if (d.settlement !== null) {
-                    const record = yield* readRecord(
+                    const record = yield* reader.record(
                       destination.threadId,
                       submissionSettlementRecordId(destination.submissionId),
                     );

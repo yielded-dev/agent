@@ -59,6 +59,7 @@ import {
   type ThreadSettlementPredecessorRequest,
   invalidThreadArchive,
   ThreadImportReader,
+  ThreadDeliveryImportReader,
   ThreadImport,
   ThreadImportRejected,
 } from "@yielded/agent/thread-import";
@@ -91,6 +92,7 @@ import {
   ThreadWorkerCapacityRequest,
   ThreadWorkerCapacity,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import { exportThreadPage, ThreadExporterReader } from "@yielded/agent/thread-transfer";
 import {
@@ -2302,21 +2304,7 @@ const makeThreadStore = Effect.gen(function* () {
                   : yield* stagedLedger.prepareCommit(producerEpoch, progress.manifest?.workerSeal);
 
               const commitDelivery =
-                stagedDelivery === undefined
-                  ? undefined
-                  : yield* stagedDelivery.prepareCommit(
-                      (threadId, sid) =>
-                        threadId === id
-                          ? reader.admission(sid)
-                          : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
-                      (threadId, recordId) =>
-                        Effect.succeed(
-                          threadId === id
-                            ? staged?.byId.get(recordId)?.record
-                            : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)
-                                ?.record,
-                        ),
-                    );
+                stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit();
 
               const installed = { ...restoredThread, producerEpoch };
 
@@ -2330,7 +2318,21 @@ const makeThreadStore = Effect.gen(function* () {
               );
 
               return result;
-            }).pipe(Effect.provideService(ThreadImportReader, reader));
+            }).pipe(
+              Effect.provideService(ThreadImportReader, reader),
+              Effect.provideService(ThreadDeliveryImportReader, {
+                admission: (threadId, sid) =>
+                  threadId === id
+                    ? reader.admission(sid)
+                    : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
+                record: (threadId, recordId) =>
+                  Effect.succeed(
+                    threadId === id
+                      ? restoredThread.byId.get(recordId)?.record
+                      : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)?.record,
+                  ),
+              }),
+            );
           }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
         );
       }),
@@ -2750,7 +2752,9 @@ const makeThreadStore = Effect.gen(function* () {
             threadId: id,
             runs,
             submissions: submissions(),
-            pages: streamExport({ export: exportThread }, { threadId: id }),
+            pages: streamExport({ threadId: id }).pipe(
+              Stream.provideService(ThreadExportSource, { export: exportThread }),
+            ),
             ...(Option.isNone(checkpoint) ? {} : { checkpoint: checkpoint.value }),
             checkpointsSupported: true,
             ...(request.requireAllSettled === undefined

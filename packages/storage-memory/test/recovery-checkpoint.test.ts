@@ -38,6 +38,7 @@ import {
   ThreadTailRequest,
   ThreadRead,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -275,9 +276,11 @@ describe("retained Run recovery", () => {
       expect(JSON.stringify(requests.at(-1))).not.toContain("Retained handoff.");
       const archive = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
-      const imported = yield* reencodeThread(streamExport(store, { threadId })).pipe(
-        Effect.provide(Layer.fresh(base)),
-      );
+      const imported = yield* reencodeThread(
+        streamExport({ threadId }).pipe(
+          Stream.provideService(ThreadExportSource, { export: store.export }),
+        ),
+      ).pipe(Effect.provide(Layer.fresh(base)));
 
       expect(imported.recordCount).toBe(archive.tailSequence);
     }).pipe(Effect.provide(base)),

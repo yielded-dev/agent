@@ -14,7 +14,12 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadExportRequest } from "@yielded/agent/thread-store";
-import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
+import {
+  ThreadExportSource,
+  ThreadReader,
+  ThreadStore,
+  ThreadStoreError,
+} from "@yielded/agent/thread-store";
 import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
@@ -424,3 +429,22 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
     ),
   );
 });
+
+/** Read-only page exports retain native diagnostics in the transfer port's typed storage failure. */
+export const exportSourceLayer = (
+  options: Pick<SqliteStorageOptions, "filename" | "busyTimeout">,
+): Layer.Layer<ThreadExportSource> => {
+  const failure = (cause: SqliteStorageInitializationError) =>
+    ThreadStoreError.make({ operation: "export Thread snapshot", message: cause.message, cause });
+
+  return Layer.succeed(ThreadExportSource, {
+    export: (request) =>
+      exportThread(options, request).pipe(
+        Effect.catchTags({
+          SqliteStorageCompatibilityError: failure,
+          SqliteStorageCorruptionError: failure,
+          SqliteStorageError: failure,
+        }),
+      ),
+  });
+};

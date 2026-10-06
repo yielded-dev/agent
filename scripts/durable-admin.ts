@@ -327,11 +327,8 @@ const obligationsCommand = CliCommand.make(
 
 /** Each source page pins the same canonical tail and independent fact revision. */
 const sourcePages = (filename: string, threadId: ThreadId) =>
-  streamExport(
-    {
-      export: (request) => SqliteThreadStore.exportThread({ filename }, request),
-    },
-    { threadId },
+  streamExport({ threadId }).pipe(
+    Stream.provide(SqliteThreadStore.exportSourceLayer({ filename })),
   );
 
 /** NDJSON framing bounds an unfinished line before decoding its Schema. */

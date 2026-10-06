@@ -56,12 +56,8 @@ const derivativeCounts = (db: DatabaseSync) =>
 const exportFixture = Effect.fnUntraced(function* (filename: string, request: ThreadExportRequest) {
   let bytes = 0;
 
-  const pages = yield* streamExport(
-    {
-      export: (page) => SqliteThreadStore.exportThread({ filename }, page),
-    },
-    request,
-  ).pipe(
+  const pages = yield* streamExport(request).pipe(
+    Stream.provide(SqliteThreadStore.exportSourceLayer({ filename })),
     Stream.take(65),
     Stream.mapEffect((page) =>
       Effect.gen(function* () {

@@ -47,6 +47,7 @@ import { workIndexChanges } from "./ThreadWork.ts";
 
 export {
   ThreadImportReader,
+  ThreadDeliveryImportReader,
   type ThreadSettlementPredecessorRequest,
 } from "./internal/thread-import-reader.ts";
 

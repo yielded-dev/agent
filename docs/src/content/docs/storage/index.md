@@ -52,14 +52,18 @@ complete batches into bounded ranges; archiving a range preserves exact record i
 digest anchors. Compaction changes the model view, independently of physical storage. SQL
 adapters verify archive contents and publish their locator before removing hot payload copies.
 
-`streamExport(store, { threadId })` yields snapshot-bound pages of canonical batches, immutable
-admissions, accepted commands, and retained deliveries. Pass those pages to the local `ThreadImport`
+`streamExport({ threadId })` acquires `ThreadExportSource` and yields snapshot-bound pages of
+canonical batches, immutable admissions, accepted commands, and retained deliveries. Pass those pages to the local `ThreadImport`
 service through `reencodeThread(source)`, or save the NDJSON archive with the admin CLI. Import
 validates every page and referenced fact, applies destination admission constraints, and publishes
 atomically into an empty Thread. Missing dependencies leave the destination unchanged. Historical
 closed workers and children remain evidence; unsupported live foreign obligations refuse transfer.
 Claims, leases, checkpoints, and recovery caches are not transferred. Unresolved effects retain
 their uncertainty.
+
+Provide `ThreadExportSource.layer()` from the source `ThreadStore`, or SQLite's read-only
+`exportSourceLayer({ filename })`. Bind that source separately from the destination import Layer
+when transferring between stores.
 
 The unreleased protocol accepts only fresh layout-21 stores and `effect-agent/thread@3` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.

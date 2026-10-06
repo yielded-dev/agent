@@ -56,6 +56,7 @@ import {
   type AppendResult,
   type ThreadReader,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import type { PlatformError, Crypto } from "effect";
 import {
@@ -519,9 +520,8 @@ describe("SqliteThreadStore", () => {
         const current = yield* withStorage(
           filename,
           Effect.gen(function* () {
-            const store = yield* ThreadStore;
-
-            return yield* streamExport(store, { threadId }).pipe(
+            return yield* streamExport({ threadId }).pipe(
+              Stream.provide(ThreadExportSource.layer()),
               Stream.flatMap((page) => Stream.fromIterable(page.records)),
               Stream.take(3),
               Stream.runCollect,

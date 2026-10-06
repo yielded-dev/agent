@@ -40,7 +40,12 @@ import {
   type UnknownResolution,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
-import { ThreadExportRequest, ThreadStore, streamExport } from "@yielded/agent/thread-store";
+import {
+  ThreadExportRequest,
+  ThreadExportSource,
+  ThreadStore,
+  streamExport,
+} from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream, Arbitrary } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
 
@@ -1167,7 +1172,9 @@ export const runChaosPlan = Effect.fnUntraced(function* (
     }
     if (deskInPlay) {
       yield* Stream.runForEach(
-        streamExport(store, ThreadExportRequest.make({ threadId })),
+        streamExport(ThreadExportRequest.make({ threadId })).pipe(
+          Stream.provide(ThreadExportSource.layer()),
+        ),
         (page) => assertNoFabrication(plan, page.records, produced),
       ).pipe(
         Effect.mapError((error) =>

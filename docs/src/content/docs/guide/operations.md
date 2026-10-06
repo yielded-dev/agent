@@ -481,9 +481,10 @@ layout-21 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and 
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 
-Quiesce the source and retain a backup before transferring it. `streamExport(store, { threadId })`
-yields bounded pages. `ThreadImport.import(pages)` consumes an archive Stream within one destination
-transaction; `reencodeThread(source)` composes export pages with that import. Check the restored tail
+Quiesce the source and retain a backup before transferring it. `streamExport({ threadId })`
+yields bounded pages through `ThreadExportSource`; provide its Layer from the source `ThreadStore`
+separately from the destination import Layer. `ThreadImport.import(pages)` consumes an archive
+Stream within one destination transaction; `reencodeThread(source)` composes export pages with that import. Check the restored tail
 before resuming accepted work under compatible Bindings. SQLite's admin CLI saves pages as NDJSON:
 
 ```sh

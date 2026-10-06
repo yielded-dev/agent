@@ -32,6 +32,7 @@ import {
   ThreadStoreError,
   type AppendResult,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Exit, Fiber, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
@@ -283,7 +284,8 @@ describe("PostgresThreadStore faults", () => {
             )
             .pipe(Effect.exit);
 
-          const exported = yield* streamExport(store, { threadId: validId }).pipe(
+          const exported = yield* streamExport({ threadId: validId }).pipe(
+            Stream.provide(ThreadExportSource.layer()),
             Stream.flatMap((page) => Stream.fromIterable(page.records)),
             Stream.take(3),
             Stream.runCollect,

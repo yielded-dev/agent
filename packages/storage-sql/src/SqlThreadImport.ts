@@ -72,6 +72,7 @@ import {
   ThreadStoreError,
   ThreadCheckpoint,
   streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import {
   exportThreadPage,
@@ -1889,12 +1890,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             ? undefined
             : yield* json(ThreadCheckpoint, checkpoints[0].checkpoint_json);
 
-        const pages = streamExport(
-          {
-            export: (request) => exportPage(request),
-          },
-          { threadId: id },
-        ).pipe(
+        const pages = streamExport({ threadId: id }).pipe(
+          Stream.provideService(ThreadExportSource, { export: exportPage }),
           Stream.tap((page) =>
             Effect.gen(function* () {
               if (page.snapshotId !== first.snapshotId)
