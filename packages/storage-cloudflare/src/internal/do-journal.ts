@@ -776,7 +776,6 @@ const makeJournal = (
             FROM effect_agent_canonical_records
             WHERE thread_id = ${request.threadId}
               AND record_id IN ${sql.in([...chunk])}
-            ORDER BY sequence
           `.pipe(Effect.mapError(storageError("check canonical record identities")));
 
         existingRecords.push(
