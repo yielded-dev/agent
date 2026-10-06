@@ -3,7 +3,7 @@ import { ScheduleStore } from "@yielded/agent/schedule";
 import { Effect, Layer } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { initializeSqliteJournal } from "./internal/sqlite-journal.ts";
+import { initializeSqliteStorage } from "./internal/sqlite-journal.ts";
 import type { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
 import type { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import type { SqliteStorageInitializationError } from "./SqliteThreadStore.ts";
@@ -18,7 +18,7 @@ export const scheduleStoreLayer: Layer.Layer<
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
 
-    yield* initializeSqliteJournal();
+    yield* initializeSqliteStorage();
 
     return yield* makeSqlScheduleStore(sql.withTransaction);
   }),

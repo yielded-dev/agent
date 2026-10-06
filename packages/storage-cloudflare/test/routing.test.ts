@@ -165,6 +165,7 @@ const withRoutedPorts = <A, E>(
                       export: store.export,
                       inspectTail: store.inspectTail,
                       readIdentity: store.readIdentity,
+                      ...(store.work === undefined ? {} : { work: store.work }),
                     },
               ),
               Layer.provide(

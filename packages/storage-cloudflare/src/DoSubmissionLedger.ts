@@ -1399,6 +1399,17 @@ const makeServices = Effect.fnUntraced(function* () {
             )
            RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
 
+        if (queueSequence === 1) {
+          const threads = yield* journal
+            .getThread(validated.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)));
+
+          if (threads.length === 0)
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
+        }
+
         // The INSERT (never replay or hydration) proves these new submission-owned sets
         // empty. Gated writes update them; rollback/invalidation discards that proof.
         rows.aborts.seed("submission_id", mintedSubmissionId, []);
@@ -3014,10 +3025,15 @@ const makeServices = Effect.fnUntraced(function* () {
               );
             }
 
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: submission.settled_outcome,
-            });
+            // Factual closure may outlive settlement; it never restores execution authority.
+            if (
+              validated.resolution._tag !== "CompletedWithResult" &&
+              validated.resolution._tag !== "NeverHappened"
+            )
+              return yield* SettlementConflict.make({
+                submissionId: validated.submissionId,
+                existingOutcome: submission.settled_outcome,
+              });
           }
           const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
           const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);

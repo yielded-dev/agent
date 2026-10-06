@@ -7,7 +7,7 @@ import {
   CheckpointRejected,
   FenceRejected,
   type PreparedAppend,
-  type ThreadStoreError,
+  ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -27,6 +27,7 @@ import {
   type CanonicalRecordMetadata,
   makeProgressAppendValidation,
 } from "./SqlThreadNativeReads.ts";
+import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
 export interface SqlJournalOptions<
   S extends Diagnostic,
@@ -152,6 +153,30 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
   const failpoint = options.hitFailpoint;
   const { withReadTransaction, withWriteTransaction } = options.transactions;
+
+  const work = yield* makeSqlThreadWork({
+    ...(options.namespace === undefined ? {} : { namespace: options.namespace }),
+    read: (body) =>
+      withReadTransaction("work snapshot")(body).pipe(
+        Effect.mapError((cause) =>
+          options.transactions.isTransactionFailure(cause)
+            ? ThreadStoreError.make({ operation: "work snapshot", message: cause.message, cause })
+            : cause,
+        ),
+      ),
+    write: (body) =>
+      withWriteTransaction("work rebuild")(body).pipe(
+        Effect.mapError((cause) =>
+          options.transactions.isTransactionFailure(cause)
+            ? ThreadStoreError.make({ operation: "work rebuild", message: cause.message, cause })
+            : cause,
+        ),
+      ),
+  });
+
+  const workFailure = (cause: ThreadStoreError) =>
+    options.errors.storage({ operation: cause.operation, message: cause.message, cause });
+
   const { decodeRows, decodeSingleRow } = makeRowDecoder(options.errors.corruption);
   const decodeThreadRows = decodeRows(Schema.Array(ThreadRow));
   const decodeThreadRow = decodeSingleRow(Schema.Array(ThreadRow));
@@ -221,6 +246,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
               ${producerEpoch}
             )
           `.pipe(execute, Effect.mapError(storageError("materialize thread")));
+
+          yield* work.initialize(threadId).pipe(Effect.mapError(workFailure));
 
           return;
         }
@@ -528,6 +555,13 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           producer_epoch = ${request.producerEpoch}
         WHERE thread_id = ${request.threadId}
       `.pipe(execute, Effect.mapError(storageError("advance thread tail")));
+    yield* work
+      .apply(
+        request.threadId,
+        firstSequence,
+        request.records.map((record) => record.canonical),
+      )
+      .pipe(Effect.mapError(workFailure));
     yield* failpoint("append:after-tail-update");
 
     return RawAppendResult.make({
@@ -794,6 +828,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
   const journal = {
     lifecycle,
+    work,
     append: (request: RawAppendRequest) =>
       appendKernel(
         request,

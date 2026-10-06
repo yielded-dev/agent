@@ -637,7 +637,8 @@ describe("recovery faults independent of execution history", () => {
           ["created", thread, first.submissionId],
           ["created", thread, second.submissionId],
         ]);
-        expect(events[0]?.failure).toMatchObject({ phase: "history", reason: "failure" });
+        // Metadata discovery succeeds; the selected admission's continuation fails recovery.
+        expect(events[0]?.failure).toMatchObject({ phase: "recovery", reason: "failure" });
         expect(
           JSON.stringify(events, (_key, value) =>
             typeof value === "bigint" ? String(value) : value,

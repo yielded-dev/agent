@@ -4,9 +4,8 @@ import {
   type DurableWorkerFailure,
 } from "@yielded/agent/durable-agent-runtime";
 import type { ThreadId } from "@yielded/agent/identifiers";
-import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Queue, Stream } from "effect";
+import { Effect, Option, Queue, Stream } from "effect";
 
 const PENDING_CAPACITY = 1_024;
 
@@ -22,12 +21,11 @@ export const runNodeWorkerDispatch = (
 ): Effect.Effect<
   void,
   DurableWorkerFailure | DurableBindingFailure,
-  DurableAgentRuntime | SubmissionLedger | WakeScheduler
+  DurableAgentRuntime | WakeScheduler
 > =>
   Effect.scoped(
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
-      const ledger = yield* SubmissionLedger;
       const wake = yield* WakeScheduler;
       const pending = yield* Queue.bounded<ThreadId>(PENDING_CAPACITY);
       const states = new Map<ThreadId, DispatchState>();
@@ -56,7 +54,21 @@ export const runNodeWorkerDispatch = (
           if (offer) yield* Queue.offer(pending, threadId);
         });
 
-      const initial = ledger.scanNonterminal.pipe(Stream.map((item) => item.threadId));
+      const initial = Stream.paginate(undefined, (afterThreadId: ThreadId | undefined) =>
+        runtime
+          .discoverWorkThreads({
+            limit: 32,
+            ...(afterThreadId === undefined ? {} : { afterThreadId }),
+          })
+          .pipe(
+            Effect.map(
+              (page): readonly [ReadonlyArray<ThreadId>, Option.Option<ThreadId | undefined>] => [
+                page.threadIds,
+                page.afterThreadId === undefined ? Option.none() : Option.some(page.afterThreadId),
+              ],
+            ),
+          ),
+      );
 
       // Merge acquires both streams concurrently; it does not guarantee that the wake
       // subscription precedes the initial read. The scheduler's fallback repairs lost hints.
@@ -71,11 +83,21 @@ export const runNodeWorkerDispatch = (
         yield* Effect.sync(() => states.set(threadId, "active"));
 
         let again = true;
+        let recoveryCursor: string | undefined;
 
         while (again) {
+          const recovered = yield* runtime.runRecovery({
+            threadId,
+            ...(recoveryCursor === undefined ? {} : { cursor: recoveryCursor }),
+          });
+
+          const blocked = recovered.blocked[0];
+
+          if (blocked !== undefined) return yield* blocked;
+          recoveryCursor = recovered.cursor;
           yield* runtime.processThreadResolved(threadId);
           again = yield* Effect.sync(() => {
-            if (states.get(threadId) === "dirty") {
+            if (states.get(threadId) === "dirty" || recoveryCursor !== undefined) {
               states.set(threadId, "active");
 
               return true;

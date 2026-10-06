@@ -41,6 +41,8 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
   ],
   "packages/effect-agent/src/durable/DurableAgentRuntime.ts": [
     "DurableAgentRuntime.recoverSubmission",
+    "DurableAgentRuntime.discoverWork",
+    "DurableAgentRuntime.recoverWork",
     "DurableAgentRuntime.runRecovery",
     "DurableAgentRuntime.retry",
     "DurableAgentRuntime.resolveUnknown",

@@ -20,6 +20,7 @@
     "./sql-storage": "./src/SqlStorage.ts",
     "./sql-storage-failpoint": "./src/SqlStorageFailpoint.ts",
     "./sql-journal": "./src/SqlJournal.ts",
+    "./sql-thread-work": "./src/SqlThreadWork.ts",
     "./sql-thread-store": "./src/SqlThreadStore.ts",
     "./sql-submission-ledger": "./src/SqlSubmissionLedger.ts",
     "./sql-admission-facts": "./src/SqlAdmissionFacts.ts",

@@ -22,6 +22,7 @@ import {
   DurableAgentRuntime,
   DurableRuntimeConfig,
   RecoveryReport,
+  RecoveryBlocked,
   type DurableSubmitAgent,
 } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
@@ -50,6 +51,7 @@ import {
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
+import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import {
@@ -193,6 +195,7 @@ const isMutatingPortRequest = (request: PortRequest): boolean => {
     case "LedgerRecordChildSettled":
     case "StoreMaterialize":
     case "StoreAppend":
+    case "StoreWorkRebuild":
     case "SettlementPublish":
     case "MessageDeliveryComplete":
       return true;
@@ -200,6 +203,7 @@ const isMutatingPortRequest = (request: PortRequest): boolean => {
     case "LedgerLookup":
     case "LedgerResolveAdmission":
     case "StoreReadPage":
+    case "StoreWorkPage":
     case "StoreInspectTail":
     case "StoreReadIdentity":
     case "StoreCountPeerMessages":
@@ -384,6 +388,8 @@ const requirePortThread = (request: PortRequest) => {
     case "StoreReadIdentity":
     case "StoreCountPeerMessages":
     case "StoreExport":
+    case "StoreWorkPage":
+    case "StoreWorkRebuild":
       return requireReceiptThread(request.request.threadId);
   }
   request satisfies never;
@@ -709,6 +715,8 @@ export const AdminFailure = Schema.Union([
   DurableRuntimeFailpointError,
   DurableAlarmError,
   HostProtocolError,
+  RecoveryBlocked,
+  WorkDiscoveryUnavailable,
 ]);
 
 export type AdminFailure = typeof AdminFailure.Type;

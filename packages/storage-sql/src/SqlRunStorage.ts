@@ -233,9 +233,29 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
   const checkpoints = rawStore.checkpoints;
   const countPeerMessages = rawStore.countPeerMessages;
+  const work = rawStore.work;
 
   const store: ThreadStore["Service"] = {
     ...rawStore,
+    work:
+      work === undefined
+        ? undefined
+        : {
+            page: (request) => bind(work.page(request)),
+            threads: (request) => bind(work.threads(request)),
+            rebuild: (request) =>
+              admin(work.rebuild(request), { threadId: request.threadId }).pipe(
+                Effect.mapError((cause) =>
+                  cause._tag === "LedgerError"
+                    ? ThreadStoreError.make({
+                        operation: "rebuild work",
+                        message: cause.message,
+                        cause,
+                      })
+                    : cause,
+                ),
+              ),
+          },
     materialize: (request) =>
       admin(rawStore.materialize(request), { threadId: request.threadId }).pipe(
         Effect.mapError((cause) =>

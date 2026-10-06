@@ -1,4 +1,5 @@
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
+import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -11,7 +12,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 18;
+export const CurrentSqliteStorageVersion = 19;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -90,7 +91,7 @@ const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: 18,
+  version: 19,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -154,9 +155,14 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
 
       if (header !== undefined) return header;
       for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
+      yield* createSqlThreadWorkTables().pipe(
+        Effect.mapError((cause) =>
+          SqliteStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+        ),
+      );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 18").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 19, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 19").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

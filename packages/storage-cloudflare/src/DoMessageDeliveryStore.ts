@@ -1,3 +1,4 @@
+import { BrowserCrypto } from "@effect/platform-browser";
 import { SqlLifecycleSource } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {
@@ -36,4 +37,4 @@ export const doMessageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits)
         }),
       );
     }),
-  );
+  ).pipe(Layer.provide(BrowserCrypto.layer));

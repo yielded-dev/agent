@@ -19,9 +19,12 @@ import {
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
 import { ScheduleInstant } from "@yielded/agent/schedule";
-import { Effect, Layer, Ref, Schema } from "effect";
+import { ThreadStoreError } from "@yielded/agent/thread-store";
+import { workId, type ThreadWorkEntry } from "@yielded/agent/thread-work";
+import { Effect, Layer, MutableRef, Ref, Schema } from "effect";
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
+import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
 const codec = Schema.fromJsonString(MessageDeliveryRecord);
 
@@ -63,6 +66,7 @@ export const memoryMessageDeliveryStoreLayer = (
 
       const state = yield* Ref.make({
         records: new Map<string, string>(),
+        work: new Map<string, ThreadWorkEntry>(),
         owners: new Set<ThreadId>(),
         pending: new Map<ThreadId, ReadonlySet<MessageDeliveryKey["messageId"]>>(),
         workers: new Map<string, ReadonlySet<MessageDeliveryKey["messageId"]>>(),
@@ -71,6 +75,65 @@ export const memoryMessageDeliveryStoreLayer = (
       yield* journal.registerMessageDeliveryStore((threadId) =>
         Ref.get(state).pipe(Effect.map((current) => current.owners.has(threadId))),
       );
+
+      yield* journal.registerDeliveryLookup((threadId, messageId) =>
+        MutableRef.get(state.ref).records.has(
+          messageDeliveryKeyString({ ownerThreadId: threadId, messageId }),
+        ),
+      );
+      yield* journal.registerWorkOwner("deliveries", {
+        threads: (request) =>
+          Ref.get(state).pipe(
+            Effect.map((current) => {
+              const candidates = boundedWorkSelection<ThreadId>(
+                request.limit,
+                (id) => id,
+                request.afterThreadId,
+              );
+
+              for (const threadId of current.pending.keys()) candidates.add(threadId);
+              const threadIds = candidates.values;
+
+              const afterThreadId =
+                threadIds.length === request.limit ? threadIds.at(-1) : undefined;
+
+              return {
+                threadIds,
+                ...(afterThreadId === undefined ? {} : { afterThreadId }),
+              };
+            }),
+          ),
+        page: (threadId, after, limit) =>
+          Effect.gen(function* () {
+            const current = yield* Ref.get(state);
+
+            const candidates = boundedWorkSelection<MessageDeliveryKey["messageId"]>(
+              limit + 1,
+              (id) => id,
+              after,
+            );
+
+            for (const id of current.pending.get(threadId) ?? []) candidates.add(id);
+            const ids = candidates.values;
+
+            const entries: Array<ThreadWorkEntry> = [];
+
+            for (const messageId of ids.slice(0, limit)) {
+              const key = messageDeliveryKeyString({ ownerThreadId: threadId, messageId });
+              const entry = current.work.get(key);
+
+              if (entry === undefined || !current.records.has(key))
+                return yield* ThreadStoreError.make({
+                  operation: "delivery work",
+                  message: "Pending delivery index is incomplete or corrupt",
+                });
+              entries.push(entry);
+            }
+            const next = ids.length > limit ? ids[limit - 1] : undefined;
+
+            return { entries, ...(next === undefined ? {} : { after: next }) };
+          }),
+      });
 
       const commit = (record: MessageDeliveryRecord, encoded: string) =>
         Ref.update(state, (current) => {
@@ -113,7 +176,40 @@ export const memoryMessageDeliveryStoreLayer = (
             workers.set(pendingKey, inputs);
           }
 
+          const work = new Map(current.work);
+          const notBeforeMillis = messageDeliveryDeadline(record);
+
+          if (messageDeliveryUsesCapacity(record))
+            work.set(key, {
+              id: workId("delivery", record.key.messageId),
+              owner: { _tag: "Delivery", messageId: record.key.messageId },
+              partition: isWorkerUpdateDelivery(record) ? "update" : "ordinary",
+              stateReference: {
+                _tag: "Delivery",
+                messageId: record.key.messageId,
+                version: record.version,
+              },
+              state: record.status === "pending" ? "ready" : "waiting",
+              ...(record.status === "parked"
+                ? { wait: "parked" as const }
+                : record.receipt !== null
+                  ? { wait: "destination" as const }
+                  : {}),
+              ...(notBeforeMillis === null ? {} : { notBeforeMillis }),
+              ...(record.receipt === null
+                ? {}
+                : {
+                    receiptId: record.receipt.receiptId,
+                    queueSequence: record.receipt.queueSequence,
+                  }),
+            });
+          else work.delete(key);
+          // Source work and authoritative delivery membership publish in one synchronous turn.
+          journal.initializeWork(record.key.ownerThreadId);
+          journal.retainDelivery(record.key.ownerThreadId, record.key.messageId);
+
           return {
+            work,
             records: new Map(current.records).set(key, encoded),
             owners: current.owners.has(record.key.ownerThreadId)
               ? current.owners
@@ -194,6 +290,8 @@ export const memoryMessageDeliveryStoreLayer = (
                       reason: "conflict",
                       operation: "insert",
                     });
+
+                  journal.retainDelivery(existing.key.ownerThreadId, existing.key.messageId);
 
                   return existing;
                 }

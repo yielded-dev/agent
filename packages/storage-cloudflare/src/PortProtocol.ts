@@ -52,6 +52,13 @@ import {
   FenceRejected,
   FencedAppendRequest,
 } from "@yielded/agent/thread-store";
+import {
+  ThreadWorkRequest,
+  ThreadWorkPage,
+  WorkIndexRebuildRequest,
+  WorkIndexProgress,
+  WorkDiscoveryUnavailable,
+} from "@yielded/agent/thread-work";
 import { WorkerAdmissionRequest } from "@yielded/agent/worker-admission";
 import { Schema, SchemaGetter } from "effect";
 
@@ -72,7 +79,8 @@ import { Schema, SchemaGetter } from "effect";
  * - ledger: `admit`, `markReady`, `lookup`, `resolveAdmission`, `requestAbort`,
  *   `recordChildSettled`;
  * - publisher: `publish`;
- * - store: `materialize`, `append`, `read` (one page), `readIdentity`, `inspectTail`, `export`.
+ * - store: `materialize`, `append`, `read` (one page), `readIdentity`, `inspectTail`, `export`,
+ *   `countPeerMessages`, `work.page`, `work.rebuild`.
  *
  * Every other port operation is lane-local and has no envelope. Foreign operations
  * fail fast and typed instead of widening the distributed surface.
@@ -237,6 +245,16 @@ export class StoreCountPeerMessagesCall extends Schema.TaggedClass<StoreCountPee
   { request: ThreadPeerCountRequest },
 ) {}
 
+/** Work maintenance is routed to the exact Thread's authoritative owner. */
+export class StoreWorkPageCall extends Schema.TaggedClass<StoreWorkPageCall>()("StoreWorkPage", {
+  request: ThreadWorkRequest,
+}) {}
+
+export class StoreWorkRebuildCall extends Schema.TaggedClass<StoreWorkRebuildCall>()(
+  "StoreWorkRebuild",
+  { request: WorkIndexRebuildRequest },
+) {}
+
 export class MessageDeliveryListCall extends Schema.TaggedClass<MessageDeliveryListCall>()(
   "MessageDeliveryList",
   { request: MessageDeliveryPageRequest },
@@ -268,6 +286,8 @@ export const PortRequest = Schema.Union([
   StoreReadIdentityCall,
   StoreExportCall,
   StoreCountPeerMessagesCall,
+  StoreWorkPageCall,
+  StoreWorkRebuildCall,
 ]);
 
 export type PortRequest = typeof PortRequest.Type;
@@ -369,6 +389,16 @@ export class StoreCountPeerMessagesResult extends Schema.TaggedClass<StoreCountP
   { count: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })) },
 ) {}
 
+export class StoreWorkPageResult extends Schema.TaggedClass<StoreWorkPageResult>()(
+  "StoreWorkPageResult",
+  { page: ThreadWorkPage },
+) {}
+
+export class StoreWorkRebuildResult extends Schema.TaggedClass<StoreWorkRebuildResult>()(
+  "StoreWorkRebuildResult",
+  { progress: WorkIndexProgress },
+) {}
+
 export class MessageDeliveryListResult extends Schema.TaggedClass<MessageDeliveryListResult>()(
   "MessageDeliveryListResult",
   { page: MessageDeliveryPage },
@@ -400,6 +430,8 @@ export const PortResult = Schema.Union([
   StoreReadIdentityResult,
   StoreExportResult,
   StoreCountPeerMessagesResult,
+  StoreWorkPageResult,
+  StoreWorkRebuildResult,
 ]);
 
 export type PortResult = typeof PortResult.Type;
@@ -424,6 +456,7 @@ export const PortFailure = Schema.Union([
   JoinedToHost,
   LedgerError,
   ThreadStoreError,
+  WorkDiscoveryUnavailable,
   ThreadNotMaterialized,
   AppendConflict,
   FenceRejected,

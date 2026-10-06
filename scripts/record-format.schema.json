@@ -167,6 +167,9 @@
             "$ref": "#/$defs/WorkerStopRequestedEncoded"
           },
           {
+            "$ref": "#/$defs/WorkHandoffCompletedEncoded"
+          },
+          {
             "$ref": "#/$defs/WorkerOriginRecordedEncoded"
           },
           {
@@ -2536,9 +2539,38 @@
           },
           "required": ["worker", "idempotencyKey"],
           "additionalProperties": true
+        },
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sourceSubmissionId": {
+          "type": "string",
+          "minLength": 1
         }
       },
-      "required": ["_tag", "command"],
+      "required": ["_tag", "command", "principal"],
+      "additionalProperties": true
+    },
+    "WorkHandoffCompletedEncoded": {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": ["WorkHandoffCompleted"]
+        },
+        "preparationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "required": ["_tag", "preparationId", "ownerId"],
       "additionalProperties": true
     },
     "WorkerOriginRecordedEncoded": {
@@ -3194,7 +3226,7 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["ModelResponseRecorded", "ToolCallSettled"]
+                "enum": ["ModelCompleted", "ModelResponseRecorded", "ToolCallSettled"]
               },
               "promptLength": {
                 "type": "integer",

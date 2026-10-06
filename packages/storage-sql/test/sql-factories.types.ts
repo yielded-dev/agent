@@ -26,7 +26,7 @@ type LedgerConstruction = ReturnType<
 >;
 
 expectTypeOf<Effect.Error<JournalConstruction>>().toEqualTypeOf<StorageFailure>();
-expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<SqlClient>();
+expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
 expectTypeOf<Effect.Error<ReturnType<Journal["append"]>>>().toEqualTypeOf<
   | StorageFailure
   | Corruption

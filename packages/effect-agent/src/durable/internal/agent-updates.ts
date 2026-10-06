@@ -1,7 +1,7 @@
-import { Clock, Crypto, DateTime, Effect, Option, Schema } from "effect";
+import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
 
 import { Update, UpdateError } from "../../core/AgentUpdates.ts";
-import type { RunId, ThreadId } from "../../core/Identifiers.ts";
+import type { RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import { digestJson } from "../Digest.ts";
@@ -9,15 +9,12 @@ import { DurableRuntimeFailpoint } from "../DurableFailpoint.ts";
 import {
   MessageDeliveryStore,
   MessageDeliveryRecord,
-  messageDeliveryCapacity,
-  messageDeliveryUsesCapacity,
   prepareMessageDelivery,
 } from "../MessageDelivery.ts";
 import {
   AgentUpdateEmitted,
   BatchId,
   CanonicalBatch,
-  type CanonicalRecordEnvelope,
   DefinitionDigests,
   type DeploymentId,
   PersistedJson,
@@ -26,28 +23,24 @@ import {
   RecordEnvelope,
   RecordId,
 } from "../Records.ts";
+import { readRunEvidenceSnapshot } from "../RunContinuation.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
 import {
   FencedAppendRequest,
-  ThreadExportRequest,
+  ThreadReader,
   ThreadStore,
   ThreadTailRequest,
 } from "../ThreadStore.ts";
+import {
+  deliveryPredecessor,
+  encodeWorkCursor,
+  MAX_RECOVERY_PAGES,
+  WORK_INDEX_VERSION,
+  type ThreadWorkPage,
+} from "../ThreadWork.ts";
 import { WakeScheduler } from "../WakeScheduler.ts";
 import { WorkerRuntime } from "./worker-runtime.ts";
-
-export const lastWorkerReportMessageId = (records: ReadonlyArray<CanonicalRecordEnvelope>) => {
-  for (let index = records.length - 1; index >= 0; index--) {
-    const payload = records[index]?.record.payload;
-
-    if (payload?._tag === "WorkerReportPrepared") return payload.messageId;
-    if (payload?._tag === "AgentUpdateEmitted" && payload.delivery !== undefined)
-      return payload.delivery.messageId;
-  }
-
-  return undefined;
-};
 
 type Delivery = NonNullable<AgentUpdateEmitted["delivery"]>;
 
@@ -68,8 +61,75 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   const crypto = yield* Crypto.Crypto;
   const failpoint = yield* DurableRuntimeFailpoint;
 
-  const read = (threadId: ThreadId) =>
-    store.export(ThreadExportRequest.make({ threadId })).pipe(Effect.mapError(storage));
+  const reader = ThreadReader.fromStore(store);
+
+  const readRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
+    const tail = yield* store
+      .inspectTail(ThreadTailRequest.make({ threadId }))
+      .pipe(Effect.mapError(storage));
+
+    const records = yield* readRunEvidenceSnapshot(threadId, submissionId, tail.tailSequence).pipe(
+      Effect.provideService(ThreadReader, reader),
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError(storage),
+    );
+
+    const latest = yield* Stream.runCollect(
+      reader.read({
+        threadId,
+        selection: { _tag: "LastAgentUpdate", throughSequence: tail.tailSequence },
+        page: { limit: 1 },
+      }),
+    ).pipe(Effect.mapError(storage));
+
+    if (
+      latest.length > 1 ||
+      latest.some(
+        (entry) =>
+          entry.threadId !== threadId ||
+          entry.sequence > tail.tailSequence ||
+          entry.record.payload._tag !== "AgentUpdateEmitted",
+      )
+    )
+      return yield* storage();
+    const payload = latest[0]?.record.payload;
+
+    return {
+      ...tail,
+      records,
+      updateSequence: payload?._tag === "AgentUpdateEmitted" ? payload.update.sequence : 0,
+    };
+  });
+
+  const pendingUpdates = Effect.fnUntraced(function* (threadId: ThreadId) {
+    if (store.work === undefined) return yield* rejected("unavailable");
+
+    let cursor: string | undefined = encodeWorkCursor({
+      version: WORK_INDEX_VERSION,
+      threadId,
+      source: "canonical",
+    });
+
+    let count = 0;
+
+    for (let pages = 0; pages < MAX_RECOVERY_PAGES; pages++) {
+      const page: ThreadWorkPage = yield* store.work
+        .page({ threadId, limit: 128, cursor })
+        .pipe(Effect.mapError(() => rejected("unavailable")));
+
+      for (const entry of page.entries) {
+        if (entry.owner._tag === "Handoff" && entry.owner.kind === "update") count++;
+        if (entry.owner._tag === "Delivery") {
+          if (entry.partition === undefined) return yield* rejected("unavailable");
+          if (entry.partition === "update") count++;
+        }
+      }
+      cursor = page.cursor;
+      if (cursor === undefined) return count;
+    }
+
+    return yield* rejected("capacity");
+  });
 
   const prepareDelivery = Effect.fnUntraced(function* (update: Update, delivery: Delivery) {
     const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(delivery.envelope).pipe(
@@ -97,8 +157,8 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     yield* failpoint.hit("update:after-delivery-insert");
   });
 
-  const repair = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const history = yield* read(threadId);
+  const repairRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
+    const history = yield* readRun(threadId, submissionId);
 
     for (const { record } of history.records) {
       if (record.payload._tag === "AgentUpdateEmitted" && record.payload.delivery !== undefined)
@@ -146,7 +206,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       return yield* rejected("validation");
 
     for (let attempt = 0; attempt < 32; attempt++) {
-      const history = yield* read(request.submission.threadId);
+      const history = yield* readRun(request.submission.threadId, request.submission.submissionId);
 
       const updates = history.records.flatMap(({ record }) =>
         record.payload._tag === "AgentUpdateEmitted" ? [record.payload] : [],
@@ -197,7 +257,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         threadId: request.submission.threadId,
         runId: request.runId,
         updateId,
-        sequence: (updates.at(-1)?.update.sequence ?? 0) + 1,
+        sequence: history.updateSequence + 1,
         value,
       });
 
@@ -206,31 +266,21 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
 
       if (prepared !== undefined) {
         if (Option.isNone(deliveries)) return yield* rejected("unavailable");
-        const retained = updates.filter((entry) => entry.delivery !== undefined);
-        const capacity = messageDeliveryCapacity(deliveries.value.limits, true);
-
         if (
-          retained.length >= capacity.retained ||
           utf8ByteLength(JSON.stringify(prepared.envelope)) >
-            deliveries.value.limits.maxEnvelopeBytes
+          deliveries.value.limits.maxEnvelopeBytes
         )
           return yield* rejected("capacity");
-        let pending = 0;
+        if (
+          (yield* pendingUpdates(request.submission.threadId)) >=
+          (deliveries.value.limits.maxPendingUpdatesPerOwner ?? 32)
+        )
+          return yield* rejected("capacity");
 
-        for (const accepted of retained) {
-          if (accepted.delivery === undefined) continue;
-
-          const row = yield* deliveries.value
-            .get({
-              ownerThreadId: request.submission.threadId,
-              messageId: accepted.delivery.messageId,
-            })
-            .pipe(Effect.mapError(storage));
-
-          if (row === null || messageDeliveryUsesCapacity(row)) pending++;
-        }
-        if (pending >= capacity.pending) return yield* rejected("capacity");
-        const predecessor = lastWorkerReportMessageId(history.records);
+        const predecessor = yield* deliveryPredecessor(
+          request.submission.threadId,
+          history.tailSequence,
+        ).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
 
         delivery = { ...prepared, ...(predecessor === undefined ? {} : { predecessor }) };
         const deliveryRecord = yield* prepareDelivery(update, delivery);
@@ -299,5 +349,5 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     return yield* storage();
   });
 
-  return { emit, repair };
+  return { emit, repair: insert, repairRun };
 });

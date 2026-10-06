@@ -11,6 +11,7 @@ export default defineConfig({
       "src/SqlStorageProgress.ts",
       "src/SqlJournal.ts",
       "src/SqlThreadStore.ts",
+      "src/SqlThreadWork.ts",
       "src/SqlSubmissionLedger.ts",
       "src/SqlAdmissionFacts.ts",
       "src/SqlActivityStore.ts",

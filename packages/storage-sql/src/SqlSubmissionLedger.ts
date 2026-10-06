@@ -1285,6 +1285,17 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
+        if (queueSequence === 1) {
+          const threads = yield* journal
+            .getThread(validated.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)));
+
+          if (threads.length === 0)
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
+        }
+
         return yield* decodeAdmissionResult({
           submissionId: mintedSubmissionId,
           receiptId: mintedReceiptId,
@@ -1581,6 +1592,9 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
                 ${producerEpoch}
               )
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+            yield* journal.work
+              .initialize(validated.threadId)
+              .pipe(Effect.mapError(internalFailure(operation)));
           } else {
             producerEpoch = threads[0].producer_epoch + 1;
             yield* sql`
@@ -2950,10 +2964,16 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               );
             }
 
-            return yield* SettlementConflict.make({
-              submissionId: validated.submissionId,
-              existingOutcome: submission.settled_outcome,
-            });
+            // Factual resolutions can outlive the run. Retain the command without reopening
+            // the settled lane, clearing its unknown identities, or touching execution ownership.
+            if (
+              validated.resolution._tag !== "CompletedWithResult" &&
+              validated.resolution._tag !== "NeverHappened"
+            )
+              return yield* SettlementConflict.make({
+                submissionId: validated.submissionId,
+                existingOutcome: submission.settled_outcome,
+              });
           }
           const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
           const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);

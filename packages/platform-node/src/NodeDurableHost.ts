@@ -48,6 +48,7 @@ import {
   type ThreadNotMaterialized,
   type ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { MAX_RECOVERY_WORK_ITEMS } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { type Stream, Context, Effect, Fiber, Layer, Ref, Schema } from "effect";
 
@@ -83,13 +84,21 @@ const makeHost = Effect.fnUntraced(function* (
   // stays a visible obligation for `runWorkers`; submissions parked on an Unknown Outcome are
   // reported `unknown` and wait for the authorized `resolveUnknown` path (DUR-017) — they consume
   // no worker permit while the settlement obligation stays owed and later input can run.
-  const startupRecovery = yield* runtime.runRecovery();
+  let recoveryCursor: string | undefined;
+  let startupReports: ReadonlyArray<RecoveryReport> = [];
 
-  // This host opens one shared worker pool. A blocked Thread cannot safely enter it:
-  // recovery has not established execution authority, including after a read timeout.
-  const blocked = startupRecovery.blocked[0];
+  do {
+    const recovered = yield* runtime.runRecovery(
+      recoveryCursor === undefined ? undefined : { cursor: recoveryCursor },
+    );
 
-  if (blocked !== undefined) return yield* blocked;
+    // This host opens one shared pool; every selected owner must pass the readiness gate.
+    const blocked = recovered.blocked[0];
+
+    if (blocked !== undefined) return yield* blocked;
+    startupReports = [...startupReports, ...recovered.reports].slice(-MAX_RECOVERY_WORK_ITEMS);
+    recoveryCursor = recovered.cursor;
+  } while (recoveryCursor !== undefined);
 
   const admission = yield* Ref.make(true);
 
@@ -178,7 +187,7 @@ const makeHost = Effect.fnUntraced(function* (
   yield* Effect.addFinalizer(() => Ref.set(admission, false));
 
   return NodeDurableHost.of({
-    startupRecovery: startupRecovery.reports,
+    startupRecovery: startupReports,
     admissionOpen: Ref.get(admission),
     submit,
     awaitSettlement: runtime.awaitSettlement,
@@ -191,6 +200,11 @@ const makeHost = Effect.fnUntraced(function* (
     retry: runtime.retry,
     wake: runtime.wake,
     scanObligations: runtime.scanObligations,
+    discoverWork: runtime.discoverWork,
+    discoverWorkThreads: runtime.discoverWorkThreads,
+    rebuildWorkIndex: runtime.rebuildWorkIndex,
+    recoverWork: runtime.recoverWork,
+    runRecovery: runtime.runRecovery,
     runWorkers,
     run,
     runResolvedWorkers: run,
@@ -203,8 +217,8 @@ const makeHost = Effect.fnUntraced(function* (
  *
  * Startup gates run during Layer construction, so the service existing implies readiness:
  * configuration was schema-decoded, the SQLite file passed the exact-version compatibility check,
- * and every nonterminal Submission went through one full recovery pass BEFORE admission opened.
- * `startupRecovery` is the auditable evidence of that reconciliation pass.
+ * and the complete native work inventory passed recovery BEFORE admission opened.
+ * `startupRecovery` retains the last bounded page of Submission decisions.
  *
  * Shutdown runs in reverse Layer order when the owning Scope closes: `submit` starts refusing
  * with `AdmissionClosed` first, then the runtime Layer's ownership drain releases every claim
@@ -216,12 +230,18 @@ export class NodeDurableHost extends Context.Service<
   NodeDurableHost,
   {
     /**
-     * The recovery decisions executed (or deferred) by this host's startup reconciliation.
+     * The last 32 Submission decisions executed (or deferred) at startup. Earlier pages are
+     * released as reconciliation advances, so startup memory does not grow with Thread count.
      * Reports with the `unknown` disposition identify parked Submissions with Unknown Outcomes.
      * They retain their settlement obligation while later input can run; authorized resolution
      * or abort advances the parked Submission.
      */
     readonly startupRecovery: ReadonlyArray<RecoveryReport>;
+    readonly discoverWork: DurableAgentRuntime["Service"]["discoverWork"];
+    readonly discoverWorkThreads: DurableAgentRuntime["Service"]["discoverWorkThreads"];
+    readonly rebuildWorkIndex: DurableAgentRuntime["Service"]["rebuildWorkIndex"];
+    readonly recoverWork: DurableAgentRuntime["Service"]["recoverWork"];
+    readonly runRecovery: DurableAgentRuntime["Service"]["runRecovery"];
     /** Admission-role readiness (deployment §7): true until shutdown begins. */
     readonly admissionOpen: Effect.Effect<boolean>;
     /** Observe the managed worker pool, preserving its failure. Manual hosts start their pool here. */

@@ -77,6 +77,7 @@
     "./run-hooks": "./src/capabilities/RunHooks.ts",
     "./run-journal": "./src/durable/RunJournal.ts",
     "./run-continuation": "./src/durable/RunContinuation.ts",
+    "./thread-work": "./src/durable/ThreadWork.ts",
     "./run-options": "./src/engine/RunOptions.ts",
     "./run-policy-usage": "./src/core/RunPolicyUsage.ts",
     "./run-storage": "./src/durable/RunStorage.ts",

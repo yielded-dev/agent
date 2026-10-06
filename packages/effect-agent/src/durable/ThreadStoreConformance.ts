@@ -1035,6 +1035,7 @@ const nativeWorkerAccounting = conformanceCase(
           envelope(
             "stop-worker",
             WorkerStopRequested.make({
+              principal: Schema.decodeSync(WorkerStopRequested.fields.principal)("owner"),
               command: {
                 worker: origin.worker,
                 idempotencyKey: Schema.decodeSync(IdempotencyKey)("stop-worker"),

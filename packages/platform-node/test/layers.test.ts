@@ -427,7 +427,7 @@ describe("NodeDurableAgentRuntime", () => {
           expect(failureOf(yield* Fiber.join(startup))).toMatchObject({
             _tag: "RecoveryBlocked",
             threadId: receipt.threadId,
-            failure: { phase: "history", reason: mode },
+            failure: { phase: "recovery", reason: mode },
           });
           expect(admitted).toBe(false);
           expect(active).toBe(0);

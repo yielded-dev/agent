@@ -42,6 +42,7 @@ import {
 import { BatchRow, RecordRow, ThreadRow } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordMetadata, type CanonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
+import { createSqlThreadWorkTables, makeSqlThreadWork } from "./SqlThreadWork.ts";
 
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
@@ -154,6 +155,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const crypto = yield* Crypto.Crypto;
   const admissionFence = yield* SubmissionAdmissionFence;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
+
+  const work = yield* makeSqlThreadWork(
+    options.namespace === undefined ? {} : { namespace: options.namespace },
+  );
 
   const query = <A extends object>(statement: ReturnType<typeof sql<A>>) =>
     execute(statement).pipe(
@@ -621,6 +626,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             yield* query(
               sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${prepared.result.tailSequence}, tail_digest=${prepared.result.tailDigest}, producer_epoch=${epoch} WHERE thread_id=${threadId}`,
             );
+          yield* createSqlThreadWorkTables(options.namespace).pipe(
+            Effect.provideService(SqlClient, sql),
+          );
+          yield* work.initialize(threadId);
           for (const batch of prepared.batches) {
             yield* query(
               sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_json) VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batch.batchJson})`,
@@ -645,6 +654,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   VALUES (${threadId}, ${runId}, ${batch.firstSequence + index})`);
             }
           }
+          for (const batch of prepared.batches)
+            yield* work.apply(threadId, batch.firstSequence, batch.batch.records);
           for (const rebuilt of prepared.submissions) {
             // Preserve the accepted fact; destination policy interprets its opaque coordinates.
             // Terminal history no longer competes for an active admission slot.

@@ -7,6 +7,7 @@ import {
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
 import { makeProgressAppendValidation } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import { makeSqlThreadWork } from "@yielded/agent-storage-sql/sql-thread-work";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   LifecyclePublicationFact,
@@ -14,8 +15,11 @@ import {
 } from "@yielded/agent/lifecycle-publication";
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import type { ThreadStoreError } from "@yielded/agent/thread-store";
-import { MAX_THREAD_EXPORT_RECORDS, ThreadStoreDiagnostic } from "@yielded/agent/thread-store";
+import {
+  MAX_THREAD_EXPORT_RECORDS,
+  ThreadStoreDiagnostic,
+  ThreadStoreError,
+} from "@yielded/agent/thread-store";
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
@@ -373,6 +377,28 @@ const makeJournal = (
     const owner = (yield* SqlStorageOwner) ?? state;
     const progress = yield* SqlStorageProgress;
 
+    const work = yield* makeSqlThreadWork({
+      read: (body) => state.read(body),
+      write: (body) =>
+        owner.transaction(body.pipe(Effect.tap(() => state.invalidate))).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.catchTag("SqlError", (cause) =>
+            ThreadStoreError.make({
+              operation: "rebuild Thread work",
+              message: "Thread work transaction failed",
+              cause,
+            }),
+          ),
+        ),
+    }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+
+    const workFailure = (cause: unknown) =>
+      DoStorageError.make({
+        operation: "publish Thread work",
+        message: "Canonical work metadata could not be published",
+        cause,
+      });
+
     const validateProgress = yield* makeProgressAppendValidation().pipe(
       Effect.provideService(SqlClient.SqlClient, sql),
     );
@@ -504,6 +530,11 @@ const makeJournal = (
                 ),
               );
 
+              yield* work
+                .initialize(
+                  yield* Schema.decodeEffect(ThreadId)(threadId).pipe(Effect.mapError(workFailure)),
+                )
+                .pipe(Effect.mapError(workFailure));
               if (lifecycle !== undefined)
                 yield* sql`INSERT INTO effect_agent_lifecycle_cursors (thread_id, through_sequence)
               VALUES (${threadId}, 0) RETURNING *`.pipe(
@@ -832,6 +863,13 @@ const makeJournal = (
           error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
         ),
       );
+      yield* work
+        .apply(
+          yield* Schema.decodeEffect(ThreadId)(request.threadId).pipe(Effect.mapError(workFailure)),
+          firstSequence,
+          request.records.map((record) => record.canonical),
+        )
+        .pipe(Effect.mapError(workFailure));
       yield* failpoint("append:after-tail-update");
 
       // Retain one start prefix atomically with its canonical proof, before model/tool
@@ -1436,6 +1474,7 @@ const makeJournal = (
           };
 
     return {
+      work,
       state,
       owner,
       threads,

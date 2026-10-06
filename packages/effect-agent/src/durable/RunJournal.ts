@@ -572,7 +572,7 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
 /** @internal Lightweight canonical boundaries collected without retaining record payloads. */
 export interface JournalBoundary {
   readonly sequence: CanonicalSequence;
-  readonly tag: "ModelResponseRecorded" | "ToolCallSettled";
+  readonly tag: typeof ContextBoundary.Type.tag;
   readonly promptLength: number;
   /** A declaration without all settled results requires terminal-prior-Run proof for coverage. */
   readonly incomplete?: true | undefined;
@@ -1227,7 +1227,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
           yield* accountResponse(envelope, payload, messages);
           state = { ...state, committedTurns: Math.max(state.committedTurns, payload.turn) };
         }
-        if (payload._tag === "ModelResponseRecorded" || payload._tag === "ToolCallSettled") {
+        if (
+          payload._tag === "ModelCompleted" ||
+          payload._tag === "ModelResponseRecorded" ||
+          payload._tag === "ToolCallSettled"
+        ) {
           onBoundary?.({
             sequence: envelope.sequence,
             tag: payload._tag,
@@ -1317,6 +1321,13 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
           state.all.push(message);
           if (payload.runId !== ownerRunId) state.before.push(message);
         }
+        // Persistent, non-durable model history needs the same original compaction mapping
+        // as durable responses; cold selected-Run recovery cannot infer it from later history.
+        onBoundary?.({
+          sequence: envelope.sequence,
+          tag: payload._tag,
+          promptLength: state.all.length,
+        });
 
         return;
       }

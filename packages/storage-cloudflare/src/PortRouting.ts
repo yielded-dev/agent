@@ -30,6 +30,7 @@ import {
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
+import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import type { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
   admitWorker,
@@ -85,6 +86,10 @@ import {
   StoreMaterializeResult,
   StoreReadPageCall,
   StoreReadPageResult,
+  StoreWorkPageCall,
+  StoreWorkPageResult,
+  StoreWorkRebuildCall,
+  StoreWorkRebuildResult,
   type PortFailure,
   type PortRequest,
   type PortRequestEnvelope,
@@ -97,6 +102,12 @@ type SubmissionId = SubmissionSnapshot["submissionId"];
 
 const ThreadIdSchema = ThreadMaterialization.fields.threadId;
 const decodeThreadId = Schema.decodeUnknownEffect(ThreadIdSchema);
+
+/** Owner-local maintenance scope; permits local inventory without global Object enumeration. */
+export const CurrentNativeSource = Context.Reference<boolean>(
+  "@effect-agent/storage-cloudflare/CurrentNativeSource",
+  { defaultValue: () => false },
+);
 
 /**
  * The ledger row bound routable Submission identities must respect (mirrors the local
@@ -942,6 +953,66 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
   };
 
   const routed = ThreadStore.of({
+    work: {
+      threads: (request) =>
+        Effect.flatMap(CurrentNativeSource, (nativeSource) =>
+          nativeSource && local.work !== undefined
+            ? local.work.threads(request)
+            : Effect.fail(
+                ThreadStoreError.make({
+                  operation: "work threads",
+                  message: nativeSource
+                    ? "The local Thread owner does not provide work inventory."
+                    : "Global Thread enumeration is unsupported by the owner-local Durable Object namespace. Use the local owner's work storage.",
+                }),
+              ),
+        ),
+      page: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.work === undefined
+            ? Effect.fail(
+                WorkDiscoveryUnavailable.make({
+                  threadId: request.threadId,
+                  reason: "unsupported",
+                }),
+              )
+            : local.work.page(request)
+          : foreignStoreCall(
+              "work page",
+              request.threadId,
+              StoreWorkPageCall.make({ request }),
+              StoreWorkPageResult,
+              WorkDiscoveryUnavailable,
+            ).pipe(Effect.map((reply) => reply.page)),
+      rebuild: (request) =>
+        options.ownsThread(request.threadId)
+          ? local.work === undefined
+            ? Effect.fail(
+                WorkDiscoveryUnavailable.make({
+                  threadId: request.threadId,
+                  reason: "unsupported",
+                }),
+              )
+            : local.work.rebuild(request)
+          : foreignStoreCall(
+              "rebuild work",
+              request.threadId,
+              StoreWorkRebuildCall.make({ request }),
+              StoreWorkRebuildResult,
+              WorkDiscoveryUnavailable,
+            ).pipe(
+              Effect.flatMap((reply) =>
+                reply.progress.threadId === request.threadId
+                  ? Effect.succeed(reply.progress)
+                  : Effect.fail(
+                      ThreadStoreError.make({
+                        operation: "rebuild work",
+                        message: "The rebuild progress belongs to another Thread.",
+                      }),
+                    ),
+              ),
+            ),
+    },
     countPeerMessages: (request) =>
       options.ownsThread(request.threadId)
         ? local.countPeerMessages === undefined
@@ -1035,7 +1106,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
           ).pipe(Effect.map((reply) => reply.export)),
 
     // Observation and checkpoints are lane-local: the closed route-capable store subset
-    // is materialize/append/read/readIdentity/inspectTail/export.
+    // includes exact-Thread work pages and rebuild, but no global Object enumeration.
     observe: (request) =>
       options.ownsThread(request.threadId)
         ? local.observe(request)
@@ -1106,8 +1177,9 @@ export const routedSubmissionLedgerLayer = (
 
 /**
  * Routing decorator over the LOCAL `ThreadStore` facet (plan §1.3): this-thread
- * requests execute locally; foreign materialize/append/read/inspectTail/export travel the
- * transport. Foreign checkpoint operations and observation fail fast typed.
+ * requests execute locally; foreign store reads, writes, and exact-Thread work pages/rebuild
+ * travel the transport. Work enumeration stays local under CurrentNativeSource; global
+ * enumeration, foreign checkpoints, and observation fail typed.
  */
 export const routedThreadStoreLayer = (
   options: RoutedPortOptions,
@@ -1274,6 +1346,38 @@ export const executePortRequest = Effect.fnUntraced(function* (
   | DurableRuntimeFailpoint
 > {
   switch (request._tag) {
+    case "StoreWorkPage": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.work === undefined
+          ? Effect.fail(
+              WorkDiscoveryUnavailable.make({
+                threadId: request.request.threadId,
+                reason: "unsupported",
+              }),
+            )
+          : store.work
+              .page(request.request)
+              .pipe(Effect.map((page) => StoreWorkPageResult.make({ page }))),
+      );
+    }
+    case "StoreWorkRebuild": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.work === undefined
+          ? Effect.fail(
+              WorkDiscoveryUnavailable.make({
+                threadId: request.request.threadId,
+                reason: "unsupported",
+              }),
+            )
+          : store.work
+              .rebuild(request.request)
+              .pipe(Effect.map((progress) => StoreWorkRebuildResult.make({ progress }))),
+      );
+    }
     case "SettlementPublish": {
       const publisher = yield* SettlementPublisher;
 

@@ -1,3 +1,4 @@
+import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -10,7 +11,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 18;
+export const CurrentDoStorageVersion = 19;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -86,7 +87,7 @@ const storageError = (cause: SqlError) =>
   DoStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: 18,
+  version: 19,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -151,9 +152,18 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
 
         if (header !== undefined) return header;
         for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
+        yield* createSqlThreadWorkTables().pipe(
+          Effect.mapError((cause) =>
+            DoStorageError.make({
+              operation: "initialize work catalogue",
+              message: cause.message,
+              cause,
+            }),
+          ),
+        );
         yield* sql.unsafe(headerStatement).withoutTransform;
-        yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`;
-        yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES ('storage_version', '18')`;
+        yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 19, ${CURRENT_RECORD_FORMAT})`;
+        yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES ('storage_version', '19')`;
 
         return yield* readDoStorageHeader();
       }),

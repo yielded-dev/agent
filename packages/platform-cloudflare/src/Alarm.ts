@@ -1,3 +1,4 @@
+import { CurrentNativeSource } from "@yielded/agent-storage-cloudflare/port-routing";
 import { type DurableBindingFailure } from "@yielded/agent/agent-registration";
 import {
   DurableAgentRuntime,
@@ -577,7 +578,16 @@ interface NativeRecovery {
   needsCheckpoint: boolean;
   recovered: number;
   repaired: boolean;
+  discoveryPending: boolean;
+  retryAtMillis?: number;
 }
+
+const NativeWorkCursor = Schema.Struct({
+  threadId: ThreadId,
+  cursor: Schema.NonEmptyString.check(Schema.isMaxLength(8192)),
+});
+
+const workCursorKey = (threadId: ThreadId) => `effect-agent:work-recovery-cursor:v1:${threadId}`;
 
 interface MaintenanceObservation {
   readonly queue: Map<string, DueQueue.DueLane>;
@@ -695,13 +705,6 @@ const CurrentMutationLanes = Context.Reference<ReadonlyArray<string>>(
 
 // Source changes made by this pass are certified after its Attempts join. External
 // producers still advance the dirty generation and fence that certification.
-const CurrentNativeSource = Context.Reference<boolean>(
-  "@effect-agent/platform-cloudflare/CurrentNativeSource",
-  {
-    defaultValue: () => false,
-  },
-);
-
 export class ThreadMutationGate extends Context.Service<
   ThreadMutationGate,
   {
@@ -1354,10 +1357,13 @@ export class ThreadMaintenance extends Context.Service<
         result: RecoverySweepResult,
         recovery: NativeRecovery,
         current?: ReadonlyArray<SubmissionWorkItem>,
+        selectedThread?: ThreadId,
       ) {
         const threads = new Map<ThreadId, RecoveryFailure | undefined>();
 
+        if (selectedThread !== undefined) threads.set(selectedThread, undefined);
         for (const report of result.reports) threads.set(report.threadId, undefined);
+        for (const report of result.workReports ?? []) threads.set(report.threadId, undefined);
         for (const blocked of result.blocked) threads.set(blocked.threadId, blocked.failure);
         if (threads.size === 0) return new Map<ThreadId, ThreadRecoveryFault>();
         const now = yield* Clock.currentTimeMillis;
@@ -1463,18 +1469,50 @@ export class ThreadMaintenance extends Context.Service<
         threadId: ThreadId,
         recovery: NativeRecovery,
       ) {
-        const result = yield* runtime
-          .runRecovery({ threadId })
-          .pipe(Effect.provideService(CurrentNativeSource, true));
+        let cursor = yield* runTransaction("read work recovery cursor", async () => {
+          const retained = await ctx.storage.get(workCursorKey(threadId));
 
-        // Visibility is committed before a claim or any fallible auxiliary join.
-        const faults = yield* recordRecoveryFaults(result, recovery);
+          if (retained === undefined) return undefined;
+          const decoded = Schema.decodeUnknownSync(NativeWorkCursor)(retained);
 
-        for (const report of result.reports) recovery.reports.set(report.submissionId, report);
-        recovery.faults.delete(threadId);
-        for (const [id, fault] of faults) recovery.faults.set(id, fault);
-        recovery.recovered += result.reports.length + result.blocked.length;
-        recovery.repaired ||= result.reports.some((report) => report.disposition === "repaired");
+          if (decoded.threadId !== threadId)
+            throw new Error("Work cursor belongs to another Thread");
+
+          return decoded.cursor;
+        });
+
+        do {
+          const result = yield* runtime
+            .runRecovery({ threadId, ...(cursor === undefined ? {} : { cursor }) })
+            .pipe(Effect.provideService(CurrentNativeSource, true));
+
+          // Persist each bounded pass before a claim; eviction resumes past consumed metadata.
+          const faults = yield* recordRecoveryFaults(result, recovery, undefined, threadId);
+
+          yield* runTransaction("checkpoint work recovery cursor", async () => {
+            if (result.cursor === undefined) await ctx.storage.delete(workCursorKey(threadId));
+            else
+              await ctx.storage.put(
+                workCursorKey(threadId),
+                Schema.encodeSync(NativeWorkCursor)({ threadId, cursor: result.cursor }),
+              );
+          });
+          for (const report of result.reports) recovery.reports.set(report.submissionId, report);
+          recovery.faults.delete(threadId);
+          for (const [id, fault] of faults) recovery.faults.set(id, fault);
+          recovery.recovered +=
+            (result.workReports?.length ?? result.reports.length) + result.blocked.length;
+          recovery.repaired ||= (result.workReports ?? result.reports).some(
+            (report) => report.disposition === "repaired",
+          );
+          for (const report of result.workReports ?? [])
+            if (report.retryAtMillis !== undefined)
+              recovery.retryAtMillis = Math.min(
+                recovery.retryAtMillis ?? Infinity,
+                report.retryAtMillis,
+              );
+          cursor = result.blocked.length > 0 ? undefined : result.cursor;
+        } while (cursor !== undefined);
       });
 
       // Registry changes, including upgrades from timed binding retries, create one native
@@ -1884,6 +1922,24 @@ export class ThreadMaintenance extends Context.Service<
         });
 
         const current = yield* Stream.runCollect(ledger.scanNonterminal);
+
+        const afterWorkThread = yield* runTransaction(
+          "read work discovery position",
+          async () => (await readMaintenanceState(ctx.storage)).state.lastRecoveredThreadId,
+        );
+
+        let workOwners = yield* runtime
+          .discoverWorkThreads({
+            limit: 32,
+            ...(afterWorkThread === undefined ? {} : { afterThreadId: afterWorkThread }),
+          })
+          .pipe(Effect.provideService(CurrentNativeSource, true));
+
+        if (workOwners.threadIds.length === 0 && afterWorkThread !== undefined)
+          workOwners = yield* runtime
+            .discoverWorkThreads({ limit: 32 })
+            .pipe(Effect.provideService(CurrentNativeSource, true));
+        recovery.discoveryPending ||= workOwners.afterThreadId !== undefined;
         const selectionTime = yield* Clock.currentTimeMillis;
         const submissionsByThread = new Map<ThreadId, Array<SubmissionId>>();
 
@@ -2068,7 +2124,7 @@ export class ThreadMaintenance extends Context.Service<
 
             const backlog = recovery.started
               ? []
-              : [...heads.keys()].filter((threadId) => {
+              : [...new Set([...heads.keys(), ...workOwners.threadIds])].filter((threadId) => {
                   const fault = recoveryFaults.get(threadId);
 
                   return (
@@ -2090,7 +2146,12 @@ export class ThreadMaintenance extends Context.Service<
                 threadId <= state.lastRecoveredThreadId,
             );
 
-            return { selected, waits, backlog: [...after, ...before] };
+            return {
+              selected,
+              waits,
+              backlog: [...after, ...before].slice(0, 32),
+              discoveryPending: backlog.length > 32,
+            };
           }),
         );
 
@@ -2098,6 +2159,7 @@ export class ThreadMaintenance extends Context.Service<
         if (!recovery.started) {
           recovery.started = true;
           recovery.needsCheckpoint = selection.backlog.length > 0;
+          recovery.discoveryPending ||= selection.discoveryPending;
           for (const threadId of selection.backlog) recovery.pending.add(threadId);
           yield* Deferred.succeed(recovery.queue, selection.backlog);
         }
@@ -2137,22 +2199,25 @@ export class ThreadMaintenance extends Context.Service<
         const remaining = yield* Stream.runCollect(ledger.scanNonterminal);
         const waitingHeads = new Map<ThreadId, boolean>();
 
-        const autonomous = remaining.some((snapshot) => {
-          if (snapshot.state === "unknown" && waiting(snapshot)) return false;
-          const headWaiting = waitingHeads.get(snapshot.threadId);
+        const autonomous =
+          recovery.discoveryPending ||
+          recovery.retryAtMillis !== undefined ||
+          remaining.some((snapshot) => {
+            if (snapshot.state === "unknown" && waiting(snapshot)) return false;
+            const headWaiting = waitingHeads.get(snapshot.threadId);
 
-          if (headWaiting === undefined) waitingHeads.set(snapshot.threadId, waiting(snapshot));
-          // FIFO followers cannot execute through a stable external wait. Only plain queued
-          // input is dormant here; admission repairs and accepted aborts still need a pass.
-          if (
-            headWaiting === true &&
-            snapshot.state === "ready" &&
-            reports.get(snapshot.submissionId)?.decision._tag === "ApplyInput"
-          )
-            return false;
+            if (headWaiting === undefined) waitingHeads.set(snapshot.threadId, waiting(snapshot));
+            // FIFO followers cannot execute through a stable external wait. Only plain queued
+            // input is dormant here; admission repairs and accepted aborts still need a pass.
+            if (
+              headWaiting === true &&
+              snapshot.state === "ready" &&
+              reports.get(snapshot.submissionId)?.decision._tag === "ApplyInput"
+            )
+              return false;
 
-          return !waiting(snapshot);
-        });
+            return !waiting(snapshot);
+          });
 
         const progressed = native.progressed || recovery.repaired;
 
@@ -2166,6 +2231,8 @@ export class ThreadMaintenance extends Context.Service<
               .filter((threadId) => !selection.waits.some((wait) => wait.threadId === threadId))
               .map(() => now),
           );
+
+        if (recovery.retryAtMillis !== undefined) nextEligible.push(recovery.retryAtMillis);
 
         const retryDelay =
           nextEligible.length === 0 ? 0 : Math.max(0, Math.min(...nextEligible) - now);
@@ -2341,6 +2408,7 @@ export class ThreadMaintenance extends Context.Service<
           needsCheckpoint: false,
           recovered: 0,
           repaired: false,
+          discoveryPending: false,
         };
 
         const recoveryFiber = yield* fork(

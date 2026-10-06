@@ -105,7 +105,8 @@ import {
   type SuspensionReason,
 } from "@yielded/agent/submission-ledger";
 import { RebuiltSubmission, ThreadImportRejected } from "@yielded/agent/thread-import";
-import { ThreadAdmission } from "@yielded/agent/thread-store";
+import { ThreadAdmission, ThreadStoreError } from "@yielded/agent/thread-store";
+import { admissionWork } from "@yielded/agent/thread-work";
 import {
   Clock,
   Context,
@@ -124,6 +125,7 @@ import {
 } from "effect";
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
+import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
 const MAX_SUBMISSIONS = 65_536;
 
@@ -461,6 +463,71 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       activeByThread: new Map(),
     });
 
+    yield* journal.registerWorkOwner("admissions", {
+      threads: (request) =>
+        Ref.get(state).pipe(
+          Effect.map((current) => {
+            const candidates = boundedWorkSelection<ThreadId>(
+              request.limit,
+              (id) => id,
+              request.afterThreadId,
+            );
+
+            for (const [threadId, ids] of current.activeByThread)
+              if (ids.size > 0) candidates.add(threadId);
+            const threadIds = candidates.values;
+
+            const afterThreadId = threadIds.length === request.limit ? threadIds.at(-1) : undefined;
+
+            return {
+              threadIds,
+              ...(afterThreadId === undefined ? {} : { afterThreadId }),
+            };
+          }),
+        ),
+      page: (threadId, after, limit) =>
+        Effect.gen(function* () {
+          const current = yield* Ref.get(state);
+
+          const candidates = boundedWorkSelection<SubmissionId>(limit + 1, (id) => id, after);
+
+          for (const id of current.activeByThread.get(threadId) ?? []) candidates.add(id);
+          const ids = candidates.values;
+
+          const entries = [];
+
+          for (const id of ids.slice(0, limit)) {
+            const stored = current.submissions.get(id);
+
+            if (
+              stored === undefined ||
+              stored.row.threadId !== threadId ||
+              stored.row.state === "settled"
+            )
+              return yield* ThreadStoreError.make({
+                operation: "admission work",
+                message: "Active admission index is incomplete or corrupt",
+              });
+            const entry = admissionWork(stored.row);
+
+            entries.push(
+              stored.suspension === undefined
+                ? entry
+                : {
+                    ...entry,
+                    wait:
+                      stored.suspension.reason._tag === "WaitingForChild"
+                        ? ("child" as const)
+                        : ("approval" as const),
+                  },
+            );
+          }
+          const next = ids.length > limit ? ids[limit - 1] : undefined;
+
+          return { entries, ...(next === undefined ? {} : { after: next }) };
+        }),
+    });
+
     const admissionFence = yield* SubmissionAdmissionFence;
     const leaseMillis = Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION);
 
@@ -679,6 +746,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             unknownResolutions: new Map<ToolCallId, StoredUnknownResolution>(),
           });
 
+          journal.initializeWork(request.threadId);
           const admissionIndex = new Map(current.admissionIndex).set(key, row.submissionId);
 
           const lanes = new Map(current.lanes).set(request.threadId, {
@@ -2132,15 +2200,20 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 ];
               }
 
-              return [
-                failure(
-                  SettlementConflict.make({
-                    submissionId: command.submissionId,
-                    existingOutcome: stored.row.settledOutcome,
-                  }),
-                ),
-                current,
-              ];
+              // Factual closure may outlive settlement; it never restores execution authority.
+              if (
+                command.resolution._tag !== "CompletedWithResult" &&
+                command.resolution._tag !== "NeverHappened"
+              )
+                return [
+                  failure(
+                    SettlementConflict.make({
+                      submissionId: command.submissionId,
+                      existingOutcome: stored.row.settledOutcome,
+                    }),
+                  ),
+                  current,
+                ];
             }
             const existing = stored.unknownResolutions.get(command.toolCallId);
 

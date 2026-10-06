@@ -476,7 +476,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased execution protocol
-uses fresh layout-18 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
+uses fresh layout-19 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
 Cloudflare. Opening predecessor or ambiguous stores fails before DDL or payload mutation. Keep
 them with their matching release; this protocol has no historical decoder, layout upgrade,
 archive converter, or mixed-format runtime.
@@ -485,7 +485,8 @@ For a same-format backup restore, quiesce the source, retain a backup, export ea
 import into an empty destination Thread. `ThreadStore.export` supplies the archive and the local
 `ThreadImport` service installs it. `reencodeThread(source)` composes these operations through its
 Effect environment. Check the imported tail before resuming accepted work under current compatible
-Bindings. This format stays unreleased until work discovery and long-history storage are complete.
+Bindings. This format stays unreleased until the parent issue's remaining long-history storage
+and transfer work is complete.
 
 For SQLite, the repository admin CLI uses the same operations:
 

@@ -37,4 +37,4 @@ expectTypeOf<
 >().toEqualTypeOf<SqlClient>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.messageDeliveryStoreLayer>>
->().toEqualTypeOf<SqlClient>();
+>().toEqualTypeOf<SqlClient | Crypto.Crypto>();

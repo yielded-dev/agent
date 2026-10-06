@@ -71,7 +71,7 @@ flowchart LR
   Recovery completes outstanding obligations from the same canonical record.
 - The append-only journal owns execution facts; the ledger owns what is still owed and who may
   advance it. Canonical continuations preserve semantic progress and exact original context;
-  projections, latest-record indexes, and application checkpoints are disposable. Current bindings select queued and
+  projections, work inventories, latest-record indexes, and application checkpoints are disposable. Current bindings select queued and
   resumed work; each committed model response owns its normalized tool arguments and original
   operation contracts. A declared mutating call without a result may have executed, including when
   ownership is lost before its handler starts. Initial blocked approvals and parameter rejections
@@ -84,7 +84,9 @@ flowchart LR
   committed views. Unfinished Runs read their exact canonical continuation and bounded selected
   evidence, independently of unrelated Thread history. Missing or corrupt progress fails typed
   and leaves accepted work owed; it cannot silently fall back to a full-Thread scan. First context
-  assembly, full work inventory, and exports have separate history costs and bounds.
+  assembly, explicit index reconstruction, and exports have separate history costs and bounds.
+  Native work pages include terminal side obligations and never grant execution authority.
+  Missing inventories fail explicitly; rebuild them in separate resumable maintenance passes.
   Canonical row caches share an isolate-wide bound; never allocate that budget per Object.
 
 ## Cloudflare wake rules

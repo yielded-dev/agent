@@ -1,10 +1,11 @@
 import { NodeFileSystem } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import { ledgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
-import { SubmissionLedger, SubmissionSnapshot } from "@yielded/agent/submission-ledger";
+import { layer as threadStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
+import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { SubmissionSnapshot } from "@yielded/agent/submission-ledger";
+import { ThreadStore, ThreadStoreError } from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
-  Clock,
   Deferred,
   Duration,
   Effect,
@@ -36,13 +37,45 @@ const snapshot = (index: number) =>
     createdAt: "2026-09-01T00:00:00.000Z",
   });
 
-// Retain the complete SQLite port; only its scan is controlled for scheduler lifecycle evidence.
+// Retain the SQLite port; control only paginated native owner discovery for lifecycle evidence.
 const schedulerLayer = (scan: SubmissionLedger["Service"]["scanNonterminal"]) =>
   nodeWakeSchedulerLayer.pipe(
     Layer.provide(
       Layer.effect(
-        SubmissionLedger,
-        Effect.map(SubmissionLedger, (ledger) => ({ ...ledger, scanNonterminal: scan })),
+        ThreadStore,
+        Effect.gen(function* () {
+          const store = yield* ThreadStore;
+          const work = store.work;
+
+          if (work === undefined)
+            return yield* ThreadStoreError.make({
+              operation: "wake fixture",
+              message: "Native work discovery is required",
+            });
+          const rows = (yield* Stream.runCollect(scan)).map((row) => row.threadId).sort();
+
+          return ThreadStore.of({
+            ...store,
+            work: {
+              ...work,
+              threads: (request) => {
+                const start =
+                  request.afterThreadId === undefined
+                    ? 0
+                    : rows.findIndex((id) => id === request.afterThreadId) + 1;
+
+                const threadIds = rows.slice(start, start + request.limit);
+
+                return Effect.succeed({
+                  threadIds,
+                  ...(start + request.limit < rows.length
+                    ? { afterThreadId: threadIds.at(-1) }
+                    : {}),
+                });
+              },
+            },
+          });
+        }),
       ).pipe(
         Layer.provide(
           Layer.unwrap(
@@ -50,7 +83,7 @@ const schedulerLayer = (scan: SubmissionLedger["Service"]["scanNonterminal"]) =>
               const fs = yield* FileSystem.FileSystem;
               const directory = yield* fs.makeTempDirectoryScoped({ prefix: "wake-scheduler-" });
 
-              return ledgerLayer({ filename: `${directory}/ledger.sqlite` });
+              return threadStoreLayer({ filename: `${directory}/ledger.sqlite` });
             }),
           ).pipe(Layer.provide(NodeFileSystem.layer)),
         ),
@@ -61,24 +94,8 @@ const schedulerLayer = (scan: SubmissionLedger["Service"]["scanNonterminal"]) =>
 
 const withScheduler = <A, E, R>(
   scan: SubmissionLedger["Service"]["scanNonterminal"],
-  body: (nextSleep: Effect.Effect<void>) => Effect.Effect<A, E, R | WakeScheduler>,
-) =>
-  Effect.gen(function* () {
-    const clock = yield* Clock.Clock;
-    const sleeps = yield* Queue.unbounded<void>();
-
-    const observedClock: Clock.Clock = {
-      ...clock,
-      sleep: (duration) =>
-        Queue.offer(sleeps, undefined).pipe(Effect.andThen(clock.sleep(duration))),
-    };
-
-    return yield* body(Queue.take(sleeps)).pipe(
-      Effect.provide(
-        schedulerLayer(scan).pipe(Layer.provide(Layer.succeed(Clock.Clock, observedClock))),
-      ),
-    );
-  }).pipe(Effect.scoped);
+  body: Effect.Effect<A, E, R | WakeScheduler>,
+) => body.pipe(Effect.provide(schedulerLayer(scan)), Effect.scoped);
 
 it.effect("retains every lane in a large scan without blocking faster subscribers", () => {
   const rows = Array.from({ length: 1_050 }, (_, index) => snapshot(index));
@@ -87,40 +104,60 @@ it.effect("retains every lane in a large scan without blocking faster subscriber
     return Stream.fromIterable(rows);
   });
 
-  return withScheduler(scan, (nextSleep) =>
+  return withScheduler(
+    scan,
     Effect.gen(function* () {
       const wake = yield* WakeScheduler;
       const parked = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
+      const slowFirstScan = yield* Deferred.make<void>();
+      const fastScans = yield* Queue.bounded<void>(4);
       let first = true;
+      let slowCount = 0;
+      let fastCount = 0;
 
       const slow = yield* wake.wakes.pipe(
-        Stream.tap(() => {
-          if (!first) return Effect.void;
-          first = false;
-
-          return Deferred.succeed(parked, undefined).pipe(Effect.andThen(Deferred.await(release)));
-        }),
+        Stream.tap(() =>
+          Effect.gen(function* () {
+            if (first) {
+              first = false;
+              yield* Deferred.succeed(parked, undefined);
+              yield* Deferred.await(release);
+            }
+            slowCount++;
+            if (slowCount === rows.length) yield* Deferred.succeed(slowFirstScan, undefined);
+          }),
+        ),
         Stream.take(rows.length * 2),
         Stream.runCollect,
         Effect.forkChild,
       );
 
-      const fast = yield* Stream.runCollect(Stream.take(wake.wakes, rows.length * 4)).pipe(
+      const fast = yield* wake.wakes.pipe(
+        Stream.tap(() =>
+          Effect.gen(function* () {
+            fastCount++;
+            if (fastCount % rows.length === 0) yield* Queue.offer(fastScans, undefined);
+          }),
+        ),
+        Stream.take(rows.length * 4),
+        Stream.runCollect,
         Effect.forkChild,
       );
 
-      yield* nextSleep;
       yield* TestClock.adjust("1 second");
       yield* Deferred.await(parked);
+      yield* Queue.take(fastScans);
       for (let i = 0; i < 3; i++) {
-        yield* nextSleep;
         yield* TestClock.adjust("1 second");
+        yield* Queue.take(fastScans);
       }
-      const expected = rows.map((row) => row.threadId);
+      const expected = rows.map((row) => row.threadId).sort();
 
       expect(yield* Fiber.join(fast)).toEqual(Array.from({ length: 4 }, () => expected).flat());
       yield* Deferred.succeed(release, undefined);
+      yield* Deferred.await(slowFirstScan);
+      yield* TestClock.adjust("1 second");
       expect(yield* Fiber.join(slow)).toEqual([...expected, ...expected]);
     }),
   );

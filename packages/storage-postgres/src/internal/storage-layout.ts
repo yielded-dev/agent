@@ -1,15 +1,17 @@
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
+import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   PostgresStorageCompatibilityError,
+  PostgresStorageError,
   PostgresStorageCorruptionError,
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 18;
+export const CurrentPostgresStorageVersion = 19;
 
 /** Fresh layout only; inspection rejects every predecessor before DDL. */
 const layoutStatements = [
@@ -969,14 +971,19 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   if (header !== undefined) return header;
   for (const statement of layoutStatements)
     yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
+  yield* createSqlThreadWorkTables(namespace).pipe(
+    Effect.mapError((cause) =>
+      PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+    ),
+  );
   yield* sql.unsafe(qualify(headerStatement, namespace)).withoutTransform;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 18)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 19)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 18, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 19, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);
