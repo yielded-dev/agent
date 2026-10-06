@@ -397,6 +397,7 @@ import {
   getRecord,
   getRunInput,
   ThreadReader,
+  MAX_THREAD_EXPORT_PAGE_BYTES,
 } from "./ThreadStore.ts";
 import {
   type WorkIndexRebuildRequest,
@@ -413,6 +414,8 @@ import {
   workId,
   MAX_RECOVERY_WORK_ITEMS,
   MAX_RECOVERY_PAGES,
+  MAX_WORK_CURSOR_CHARS,
+  decodeWorkCursor,
   type ThreadWorkPage,
 } from "./ThreadWork.ts";
 import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
@@ -807,11 +810,16 @@ export class WorkRecoveryReport extends Schema.Class<WorkRecoveryReport>("WorkRe
 export const WorkRecoveryRequest = Schema.Struct({ threadId: ThreadId, work: ThreadWorkEntry });
 export type WorkRecoveryRequest = typeof WorkRecoveryRequest.Type;
 
+// Global scans must retain one routing identity; scoped scans reuse their native work cursor.
+const MAX_RECOVERY_CURSOR_CHARS = MAX_THREAD_EXPORT_PAGE_BYTES + 6 * MAX_WORK_CURSOR_CHARS + 1024;
+const RecoveryCursor = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_RECOVERY_CURSOR_CHARS));
+
 const RecoverySweepCursor = Schema.Struct({
-  version: Schema.Literal(1),
-  selection: Schema.optionalKey(ThreadId),
+  version: Schema.Literal(2),
   threadId: Schema.optionalKey(ThreadId),
-  workCursor: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(4096))),
+  workCursor: Schema.optionalKey(
+    Schema.NonEmptyString.check(Schema.isMaxLength(MAX_WORK_CURSOR_CHARS)),
+  ),
   afterThreadId: Schema.optionalKey(ThreadId),
 });
 
@@ -825,14 +833,18 @@ export class RecoverySweepResult extends Schema.Class<RecoverySweepResult>("Reco
   workReports: Schema.optionalKey(
     Schema.Array(WorkRecoveryReport).check(Schema.isMaxLength(MAX_RECOVERY_WORK_ITEMS)),
   ),
-  /** Resume this bounded live scan; new work behind the cursor appears on the next scan. */
-  cursor: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(8192))),
+  /**
+   * Resume with the same Thread selection; new work behind the cursor appears on the next scan.
+   * Scoped cursors are compact and Thread-bound. Global cursors retain one routing identity,
+   * so their size can grow with a supported Thread identity.
+   */
+  cursor: Schema.optionalKey(RecoveryCursor),
 }) {}
 
 /** Recover one bounded page of native work, optionally confined to one Thread. */
 export interface RecoverySweepOptions {
   readonly threadId?: ThreadId;
-  /** Continue the previous pass until its result has no cursor. */
+  /** Continue the previous pass with the same Thread selection until its result has no cursor. */
   readonly cursor?: string;
 }
 
@@ -10843,12 +10855,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const runRecovery = Effect.fn("DurableAgentRuntime.runRecovery")(function* (
     options?: RecoverySweepOptions,
   ): Effect.fn.Return<RecoverySweepResult, DurableWorkerFailure> {
+    const selected = options?.threadId;
+
+    if (selected !== undefined && options?.cursor !== undefined)
+      yield* withCrypto(
+        decodeWorkCursor({
+          threadId: selected,
+          limit: MAX_RECOVERY_WORK_ITEMS,
+          cursor: options.cursor,
+        }),
+      );
+
     const cursor =
-      options?.cursor === undefined
+      selected !== undefined || options?.cursor === undefined
         ? undefined
-        : yield* Schema.decodeEffect(Schema.fromJsonString(RecoverySweepCursor))(
-            options.cursor,
-          ).pipe(
+        : yield* Schema.decodeEffect(RecoveryCursor)(options.cursor).pipe(
+            Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(RecoverySweepCursor))),
             Effect.mapError((cause) =>
               ThreadStoreError.make({
                 operation: "recover work cursor",
@@ -10860,12 +10882,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     if (
       cursor !== undefined &&
-      (cursor.selection !== options?.threadId ||
-        (options?.threadId !== undefined && cursor.threadId !== options.threadId))
+      ((cursor.threadId === undefined) === (cursor.afterThreadId === undefined) ||
+        (cursor.workCursor !== undefined && cursor.threadId === undefined))
     )
       return yield* ThreadStoreError.make({
         operation: "recover work cursor",
-        message: "The recovery cursor belongs to another selection",
+        message: "Invalid global recovery position",
       });
     const reports: Array<RecoveryReport> = [];
     const workReports: Array<WorkRecoveryReport> = [];
@@ -10874,8 +10896,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     // bounded pass; terminal obligations still repair independently from their own evidence.
     const recoveredAdmissions = new Map<SubmissionId, RecoveryReport>();
     const reportedAdmissions = new Set<SubmissionId>();
-
-    const selected = options?.threadId;
 
     const page =
       selected === undefined
@@ -10898,7 +10918,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const threadId = threadIds[index];
 
       if (threadId === undefined) break;
-      let workCursor = cursor?.threadId === threadId ? cursor.workCursor : undefined;
+
+      let workCursor =
+        selected !== undefined
+          ? options?.cursor
+          : cursor?.threadId === threadId
+            ? cursor.workCursor
+            : undefined;
+
       let complete = false;
       let phase: RecoveryFailure["phase"] = "history";
 
@@ -10945,12 +10972,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         complete = true;
       }
       if (!complete) {
-        continuation = encodeRecoveryCursor({
-          version: 1,
-          threadId,
-          ...(selected === undefined ? {} : { selection: selected }),
-          ...(workCursor === undefined ? {} : { workCursor }),
-        });
+        continuation =
+          selected !== undefined
+            ? workCursor
+            : encodeRecoveryCursor({
+                version: 2,
+                threadId,
+                ...(workCursor === undefined ? {} : { workCursor }),
+              });
         break;
       }
       if (workReports.length >= MAX_RECOVERY_WORK_ITEMS || index === threadIds.length - 1) {
@@ -10958,7 +10987,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           selected === undefined &&
           (index < threadIds.length - 1 || page.afterThreadId !== undefined)
         )
-          continuation = encodeRecoveryCursor({ version: 1, afterThreadId: threadId });
+          continuation = encodeRecoveryCursor({ version: 2, afterThreadId: threadId });
         break;
       }
     }

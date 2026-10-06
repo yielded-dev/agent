@@ -4,6 +4,7 @@ import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { IdempotencyKey, QueueSequence } from "../core/Receipt.ts";
+import { digestJson } from "./Digest.ts";
 import {
   CanonicalSequence,
   Digest,
@@ -26,8 +27,9 @@ export const MAX_WORK_REBUILD_RECORDS = 256;
 export const MAX_WORK_REBUILD_BYTES = 32 * 1024 * 1024;
 export const MAX_RECOVERY_WORK_ITEMS = 32;
 export const MAX_RECOVERY_PAGES = 8;
+export const MAX_WORK_CURSOR_CHARS = 32 * 1024;
 
-const Cursor = Schema.NonEmptyString.check(Schema.isMaxLength(4096));
+const Cursor = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_WORK_CURSOR_CHARS));
 const WorkId = Schema.NonEmptyString.check(Schema.isMaxLength(4096));
 
 /** Stable logical owners. Finding an owner does not acquire its lease, grant, or authority. */
@@ -137,9 +139,10 @@ export type ThreadWorkPage = typeof ThreadWorkPage.Type;
 
 export const ThreadWorkCursor = Schema.Struct({
   version: Schema.Literal(WORK_INDEX_VERSION),
-  threadId: ThreadId,
+  /** Bind the exact admitted identity without copying it into every continuation. */
+  threadDigest: Digest,
   source: Schema.Literals(["admissions", "canonical", "deliveries"]),
-  after: Schema.optionalKey(Cursor),
+  after: Schema.optionalKey(WorkId),
 });
 
 export type ThreadWorkCursor = typeof ThreadWorkCursor.Type;
@@ -260,10 +263,20 @@ export const admissionWork = (row: SubmissionWorkItem): ThreadWorkEntry => ({
 });
 
 export const decodeWorkCursor = Effect.fnUntraced(function* (request: ThreadWorkRequest) {
+  const threadDigest = yield* digestJson({ threadId: request.threadId }).pipe(
+    Effect.mapError((cause) =>
+      ThreadStoreError.make({
+        operation: "work cursor",
+        message: "Cannot bind work-discovery cursor to its Thread",
+        cause,
+      }),
+    ),
+  );
+
   if (request.cursor === undefined)
     return ThreadWorkCursor.make({
       version: WORK_INDEX_VERSION,
-      threadId: request.threadId,
+      threadDigest,
       source: "admissions",
     });
 
@@ -279,7 +292,7 @@ export const decodeWorkCursor = Effect.fnUntraced(function* (request: ThreadWork
     ),
   );
 
-  if (cursor.threadId !== request.threadId)
+  if (cursor.threadDigest !== threadDigest)
     return yield* ThreadStoreError.make({
       operation: "work cursor",
       message: "Work cursor belongs to another Thread",
