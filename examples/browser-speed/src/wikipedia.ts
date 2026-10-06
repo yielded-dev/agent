@@ -471,6 +471,11 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       totalLinks: links.length,
       nextOffset: !fullLinks && offset + linkPageSize < links.length ? offset + linkPageSize : null,
     };
+    // Jev does not reliably follow "avoid the route", so visited articles are not offered;
+    // a page whose every link was visited keeps them rather than ending the race.
+    const visited = new Set(path.map((hop) => articleTitle(hop.url)));
+    const unvisited = pageLinks.filter(({ title }) => !visited.has(title));
+
     routePage = {
       context: {
         current: observation.title,
@@ -479,7 +484,12 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         path: observation.path,
         remainingHops: observation.remainingHops,
       },
-      links: pageLinks.map(({ ref, label, title, url }) => ({ ref, label, title, href: url })),
+      links: (unvisited.length > 0 ? unvisited : pageLinks).map(({ ref, label, title, url }) => ({
+        ref,
+        label,
+        title,
+        href: url,
+      })),
     };
     trace.update({
       race: { start: challenge.start, target, targetUrl: articleUrl(target), maxHops, path },
@@ -508,6 +518,14 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       return yield* new LabError({
         code: "invalid",
         message: "The 20-hop limit was reached. End the race.",
+      });
+    // A race never revisits an article; going back only loops between the same pages.
+    const revisit = articleTitle(link.url);
+
+    if (revisit !== undefined && path.some((hop) => articleTitle(hop.url) === revisit))
+      return yield* new LabError({
+        code: "invalid",
+        message: `${revisit} is already in the route. No click was dispatched; choose an article you have not visited.`,
       });
 
     const current = yield* browser
