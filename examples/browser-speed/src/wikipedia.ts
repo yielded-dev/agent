@@ -561,9 +561,9 @@ export const makeWikipedia = Effect.fnUntraced(function* (
           document.body.classList.contains("ns-0") &&
           document.querySelector("#mw-content-text .mw-parser-output") !== null;
 
-        // The click's own observation usually waited for parsing already. A plain check
-        // avoids installing Puppeteer's polling helpers into every new article.
-        if (await page.evaluate(arrived, currentDocument)) return;
+        // A plain check avoids installing Puppeteer's polling helpers into every new article.
+        // It can race the navigation's commit and lose its context; the wait survives that.
+        if (await page.evaluate(arrived, currentDocument).catch(() => false)) return;
         const ready = await page.waitForFunction(arrived, { timeout: 12_000 }, currentDocument);
 
         await ready.dispose();

@@ -543,8 +543,14 @@ export const inspectDom = pageFunction(
  * keyboard actions verify native focus at dispatch instead. Never dispatches input.
  */
 export const checkDom = pageFunction(
-  (node: Element, expected: typeof Control.Type, scroll: boolean, pointer: boolean) => {
-    if (!node.isConnected || !(node instanceof HTMLElement)) return false;
+  (target: Element | string, expected: typeof Control.Type, scroll: boolean, pointer: boolean) => {
+    // A ref is looked up in this realm's registry, saving a handle round trip each way.
+    const node: unknown =
+      typeof target === "string"
+        ? Reflect.get(globalThis, "@effect-agent/native-browser")?.get(target)
+        : target;
+
+    if (!(node instanceof HTMLElement) || !node.isConnected) return false;
 
     const nameCheck:
       | {

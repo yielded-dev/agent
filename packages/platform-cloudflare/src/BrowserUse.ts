@@ -685,7 +685,16 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return false;
+        // Main-frame refs are checked in place, without resolving and releasing a handle.
+        if (frame.parentFrame() === null) {
+          stage("validate-and-scroll");
 
+          const checked = await frame
+            .isolatedRealm()
+            .evaluate(checkDom, value.ref, target.control, true, value.kind !== "press");
+
+          return checked !== false;
+        }
         stage("resolve-reference");
 
         const handle = await frame
@@ -735,6 +744,20 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return "not-dispatched" as const;
+        // A main-frame click needs only the checked point; other input acts on the element.
+        if (value.kind === "click" && frame.parentFrame() === null) {
+          const point = await frame
+            .isolatedRealm()
+            .evaluate(checkDom, value.ref, target.control, false, true);
+
+          if (point === false) return "not-dispatched" as const;
+          stage("dispatch-input");
+          dispatch = "unknown";
+          await page.mouse.click(point.x, point.y);
+          dispatch = "acknowledged";
+
+          return "acknowledged" as const;
+        }
 
         const handle = await frame
           .isolatedRealm()
