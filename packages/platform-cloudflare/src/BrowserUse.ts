@@ -553,7 +553,10 @@ export const make = Effect.fnUntraced(function* <R>(
         frames: currentFrames.slice(0, 32).map((frame) => ({
           ref: frameId(frame),
           name: frame.name().slice(0, 300),
-          url: observedUrl(frame.url()),
+          // Fragments are client-side state; payment frames put kilobytes of parameters there.
+          url: observedUrl(
+            frame.url().startsWith("data:") ? frame.url() : frame.url().split("#", 1)[0],
+          ),
           inspected: inspected.includes(frame),
         })),
         tabs: tabObservation,
