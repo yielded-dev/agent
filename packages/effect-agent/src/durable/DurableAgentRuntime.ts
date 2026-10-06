@@ -164,8 +164,8 @@ import { rebuildRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
+  isUnresolvedToolOperation,
   toolOperationStates,
-  unresolvedToolOperations,
 } from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
 import { WorkerRuntime } from "./internal/worker-runtime.ts";
@@ -2049,7 +2049,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     }
 
     const operationStates = toolOperationStates(records, runId);
-    const operations = operationsFor(records, runId);
+
+    const operations = new Map<string, ToolOperation>(
+      operationStates.map(({ operation }) => [operation.toolCallId, operation]),
+    );
 
     for (const toolCallId of unknownIds)
       if (!operations.has(toolCallId))
@@ -2057,7 +2060,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           message: "Unknown Tool call has no original declaration",
         });
 
-    const allOpenCalls = unresolvedToolOperations(records, runId).map((state) =>
+    const allOpenCalls = operationStates.filter(isUnresolvedToolOperation).map((state) =>
       OpenToolCallEvidence.make({
         toolCallId: state.operation.toolCallId,
         toolName: state.operation.toolName,
