@@ -118,9 +118,9 @@ Abort, failure, and settlement consume their reserved room and can commit after 
 is exhausted. Terminal evidence has a separate hard allowance of four facts and 8.25 MiB;
 successful output still requires its dispatch capacity. Reservations are conservative and can
 refuse work before the byte limit itself is reached. Original context references are bounded at
-4,096 records and 32 MiB of referenced wire; evaluated Run input uses the individual persisted
-JSON limit. Active Attempts retain a validated prefix and read only new facts. Cold recovery
-resolves the immutable context references.
+4,096 records and 32 MiB of referenced wire after valid compaction removes covered history;
+evaluated Run input uses the individual persisted JSON limit. Active Attempts retain a validated
+prefix and read only new facts. Cold recovery resolves the immutable context references.
 
 Worker lineage and subtree funding remain immutable provenance. Each worker input records its own
 execution owner: a Tool handoff charges its emitting Run, while host follow-ups and receiving
@@ -129,10 +129,12 @@ framework reports have no source Run charge. Later inputs never enlarge a settle
 Exact evidence reads and same-format archives retain additive fields and the original wire values.
 Reading a typed view never changes the content pinned by an evidence digest.
 
-Initial context assembly for a new Run can read history preceding its original input. Work
-discovery uses native owner indexes; explicit index reconstruction reads canonical history in
-bounded passes. Archive partitioning and streamed transfer remain separate concerns. Existing
-Thread storage/export caps still apply.
+Initial context assembly for a new Run reads a flat saved prefix and the evidence since that
+prefix's original admission, bounded separately at 20,480 records and 64 MiB including exact
+dependencies. Later compaction never rewrites an older Run's original context. Work discovery
+uses native owner indexes; explicit index reconstruction reads canonical history in bounded
+passes. Archive partitioning and streamed transfer have separate working-set bounds, without
+a lifetime Thread record limit.
 Generic `ThreadStore.checkpoints` remain optional application projections and never govern execution.
 
 <a id="operational-obligation"></a>

@@ -32,7 +32,7 @@ import {
   ThreadImportRejected,
   invalidThreadArchive,
 } from "@yielded/agent/thread-import";
-import { ThreadStoreError } from "@yielded/agent/thread-store";
+import { ThreadStoreError, makeTransferFactCheck } from "@yielded/agent/thread-store";
 import { workId, type ThreadWorkEntry } from "@yielded/agent/thread-work";
 import { Effect, Layer, MutableRef, Ref, Schema } from "effect";
 
@@ -40,6 +40,14 @@ import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
 const codec = Schema.fromJsonString(MessageDeliveryRecord);
+const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
+
+const checkTransfer = (record: MessageDeliveryRecord) =>
+  deliveryFitsTransfer(record.key.ownerThreadId, { ...record, leaseUntilMillis: null })
+    ? Effect.void
+    : Effect.fail(
+        MessageDeliveryError.make({ reason: "capacity", operation: "transfer-page-bytes" }),
+      );
 
 const decode = (text: string) =>
   Schema.decodeEffect(codec)(text).pipe(
@@ -400,6 +408,7 @@ export const memoryMessageDeliveryStoreLayer = (
                   return existing;
                 }
 
+                yield* checkTransfer(input);
                 const update = isWorkerUpdateDelivery(input);
                 const counts = MutableRef.get(state.ref).counts.get(input.key.ownerThreadId);
                 const capacity = messageDeliveryCapacity(config, update);
@@ -448,6 +457,9 @@ export const memoryMessageDeliveryStoreLayer = (
                     operation: "change",
                   });
                 const next = yield* Effect.fromResult(applyMessageDeliveryChange(existing, input));
+
+                if (next === existing) return existing;
+                yield* checkTransfer(next);
                 const encoded = yield* encode(next);
 
                 yield* commit(next, encoded);
