@@ -10415,7 +10415,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const recoverOwnedWork = Effect.fnUntraced(function* (
     request: WorkRecoveryRequest,
-    recoverAdmission: typeof recoverSubmission,
+    recoveredAdmissions = new Map<SubmissionId, RecoveryReport>(),
   ): Effect.fn.Return<WorkRecoveryReport, DurableWorkerFailure> {
     const { threadId, work: entry } = yield* Schema.decodeEffect(WorkRecoveryRequest)(request).pipe(
       Effect.mapError((cause) =>
@@ -10428,6 +10428,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     const owner = entry.owner;
+
+    const recoverAdmission = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+      const recovered = recoveredAdmissions.get(submissionId);
+
+      if (recovered !== undefined) return recovered;
+      const report = yield* recoverSubmission(submissionId);
+
+      recoveredAdmissions.set(submissionId, report);
+
+      return report;
+    });
 
     const report = (
       disposition: WorkRecoveryReport["disposition"],
@@ -10840,7 +10851,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   });
 
   const recoverWork = Effect.fn("DurableAgentRuntime.recoverWork")((request: WorkRecoveryRequest) =>
-    recoverOwnedWork(request, recoverSubmission),
+    recoverOwnedWork(request),
   );
 
   const runRecovery = Effect.fn("DurableAgentRuntime.runRecovery")(function* (
@@ -10877,17 +10888,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     // bounded pass; terminal obligations still repair independently from their own evidence.
     const recoveredAdmissions = new Map<SubmissionId, RecoveryReport>();
     const reportedAdmissions = new Set<SubmissionId>();
-
-    const recoverAdmission = Effect.fnUntraced(function* (submissionId: SubmissionId) {
-      const recovered = recoveredAdmissions.get(submissionId);
-
-      if (recovered !== undefined) return recovered;
-      const report = yield* recoverSubmission(submissionId);
-
-      recoveredAdmissions.set(submissionId, report);
-
-      return report;
-    });
 
     const selected = options?.threadId;
 
@@ -10933,7 +10933,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             phase = "recovery";
             for (const work of workPage.entries) {
-              const repaired = yield* recoverOwnedWork({ threadId, work }, recoverAdmission);
+              const repaired = yield* recoverOwnedWork({ threadId, work }, recoveredAdmissions);
 
               workReports.push(repaired);
               if (
