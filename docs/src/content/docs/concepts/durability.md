@@ -79,6 +79,7 @@ response with no application tool calls commits atomically with its `RunComplete
 declared operations, waiting, uncertain, or settling. It commits in the same fenced transaction
 as the execution facts it references. Its latest-record index is disposable; the ledger alone
 admits work and grants ownership.
+Offline `verify` recomputes each continuation from its referenced facts, including accounting.
 
 ```mermaid
 flowchart LR
@@ -94,25 +95,32 @@ facts. Results, Durable Steps, approval decisions, and original operation contra
 canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats
 recorded results. An unresolved ordinary mutating call still requires reconciliation.
 
-`RunContextRecorded` preserves the original model input independently of compaction. A compatible
-current Binding supplies execution services, while saved instructions, user intent, and the Run's
+`RunContextRecorded` preserves evaluated instructions and this Run's input, plus digest-checked
+references to prior model history at the original admission boundary. It shares the start
+transaction and copies no prior Prompt payloads. Compaction changes the model view independently.
+A compatible current Binding supplies execution services, while saved instructions, user intent, and the Run's
 own continuation remain unchanged by another Run's later traffic. New Runs evaluate current
 instructions. Input-dependent Bindings must still decode the original admitted value. A current
 input Schema refusal returns `BindingUnavailable`, releases the Attempt, and leaves the original
 receipt pending until a usable Binding returns. Missing Bindings and incompatible pending
 operation semantics also leave work owed.
 
-Exact Run reads are bounded: at most 16,384 execution facts and 32 MiB, in pages of eight records.
+Execution dispatch is bounded at 16,384 facts and 32 MiB, in pages of eight records.
 Preparations before the first continuation and a post-continuation suffix each have a limit of
 64 records and 2 MiB. The continuation record is limited to 8 KiB; incremental record JSON is
 capped at 4 MiB per Turn, including continuations and the first Turn's initial context and retained
 preparations. Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
 4 MiB limit to include its envelope. Duplicate SQL batch JSON and indexes are separate costs.
 Dispatch reserves bounded Tool outcomes and a full valid Step result before a new Step body
-starts. Concurrent Steps share that capacity. Every nonterminal append retains room for a bounded
-failure settlement and usage metadata; insufficient capacity refuses execution or fails the Run.
-Reservations are conservative and can refuse work before the byte limit itself is reached. Saved
-context uses the existing persisted JSON limit, including its canonical compaction mapping.
+starts. Concurrent Steps share that capacity. Every dispatch retains room for a bounded failure
+settlement and usage metadata; insufficient capacity refuses execution or fails the Run.
+Abort, failure, and settlement consume their reserved room and can commit after ordinary capacity
+is exhausted. Terminal evidence has a separate hard allowance of four facts and 8.25 MiB;
+successful output still requires its dispatch capacity. Reservations are conservative and can
+refuse work before the byte limit itself is reached. Original context references are bounded at
+4,096 records and 32 MiB of referenced wire; evaluated Run input uses the individual persisted
+JSON limit. Active Attempts retain a validated prefix and read only new facts. Cold recovery
+resolves the immutable context references.
 
 Worker lineage and subtree funding remain immutable provenance. Each worker input records its own
 execution owner: a Tool handoff charges its emitting Run, while host follow-ups and receiving

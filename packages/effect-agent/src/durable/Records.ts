@@ -1096,7 +1096,9 @@ export const MAX_RUN_CONTINUATION_BYTES = 8_192;
 /** Incremental record JSON per Turn, including progress and the first Turn's initial context. */
 export const MAX_TURN_CANONICAL_BYTES = MAX_CANONICAL_RECORD_BYTES;
 /** Room retained for a bounded terminal failure and its atomic progress publication. */
-export const RUN_TERMINAL_RESERVE_BYTES = 128 * 1024;
+export const RUN_TERMINAL_RESERVE_BYTES = 256 * 1024;
+/** Bounded closing facts remain publishable even after dispatch capacity is exhausted. */
+export const MAX_RUN_TERMINAL_BYTES = 2 * MAX_CANONICAL_RECORD_BYTES + RUN_TERMINAL_RESERVE_BYTES;
 export const RUN_TERMINAL_RESERVE_RECORDS = 4;
 export const MAX_RUN_EVIDENCE_RECORDS = 16_384;
 export const MAX_RUN_EVIDENCE_BYTES = 32 * 1024 * 1024;
@@ -1113,13 +1115,28 @@ export const ContextBoundary = Schema.Struct({
   terminalPriorRun: Schema.optionalKey(Schema.Literal(true)),
 });
 
+/** Referenced context is bounded separately from this Run's execution facts. */
+export const MAX_RUN_CONTEXT_RECORDS = 4_096;
+export const MAX_RUN_CONTEXT_BYTES = 32 * 1024 * 1024;
+
+export const ContextEvidenceReference = Schema.Struct({
+  ...EvidenceReference.fields,
+  sequence: CanonicalSequence,
+});
+
 export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()(
   "RunContextRecorded",
   {
     version: Schema.Literal(1),
     runId: RunId,
-    /** Exact initial history, including evaluated instructions and the original input. */
-    prompt: PersistedJson,
+    /** Only evaluated instructions and this Run's input; prior history remains in its facts. */
+    runScopedInput: PersistedJson,
+    /** Fixed prior-history boundary, before the original accepted input. */
+    historyThrough: CanonicalSequence,
+    history: Schema.Array(ContextEvidenceReference).check(
+      Schema.isMaxLength(MAX_RUN_CONTEXT_RECORDS),
+    ),
+    historyBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_CONTEXT_BYTES)),
     priorHistoryLength: Schema.Natural,
     boundaries: Schema.Array(ContextBoundary).check(Schema.isMaxLength(4_096)),
     contextWindowId: Schema.optionalKey(BoundedName),
@@ -1171,12 +1188,21 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     submissionId: SubmissionId,
     revision: Schema.Natural.check(Schema.isGreaterThan(0)),
     /** Number of this Run's non-continuation facts accounted for at the frontier. */
-    recordCount: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_RECORDS)),
+    recordCount: Schema.Natural.check(
+      Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS),
+    ),
     /** Cumulative owning fact bytes, excluding continuation records. */
-    recordBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
+    recordBytes: Schema.Natural.check(
+      Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES),
+    ),
     /** Logical Turn whose incremental canonical bytes are currently being charged. */
     turn: Schema.Natural,
-    turnBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES)),
+    turnBytes: Schema.Natural.check(
+      Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES + MAX_RUN_TERMINAL_BYTES),
+    ),
+    /** Closing facts consume the terminal reserve, rather than reserving it again. */
+    terminalBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_TERMINAL_BYTES)),
+    terminalRecords: Schema.Natural.check(Schema.isLessThanOrEqualTo(RUN_TERMINAL_RESERVE_RECORDS)),
     /** Conservative room for terminal usage grouping; derived only from canonical model usage. */
     terminalUsageBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
     originalInput: EvidenceReference,
@@ -1186,14 +1212,7 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     lastFact: EvidenceReference,
     position: RunPosition,
     accounting: ContinuationAccounting,
-  }).check(
-    Schema.makeFilter(
-      (value) => utf8ByteLength(JSON.stringify(value)) <= MAX_RUN_CONTINUATION_BYTES,
-      {
-        title: "Run continuation is at most 8192 encoded UTF-8 bytes",
-      },
-    ),
-  ),
+  }),
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */

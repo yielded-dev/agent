@@ -38,7 +38,7 @@ import {
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 import { makeSqlThreadImport } from "./SqlThreadImport.ts";
-import { makeSelectedReads } from "./SqlThreadNativeReads.ts";
+import { canonicalRecordMetadata, makeSelectedReads } from "./SqlThreadNativeReads.ts";
 
 export interface SqlThreadStoreOptions<
   S extends Diagnostic,
@@ -64,6 +64,10 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
 
   const captured = yield* PreparedAppend.capture(validated);
 
+  const records = captured.records.map((record) =>
+    Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
+  );
+
   const tailDigest = yield* captured
     .digest()
     .pipe(Effect.mapError(invalid("digest canonical append")));
@@ -76,7 +80,8 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
     expectedTailSequence: captured.expectedTailSequence,
     expectedTailDigest: captured.expectedTailDigest,
     producerEpoch: captured.producerEpoch,
-    records: captured.records,
+    records,
+    progress: captured.progress,
     tailDigest,
   } satisfies RawAppendRequest;
 });

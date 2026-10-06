@@ -23,7 +23,10 @@ import {
   type SqlStorageFailpoint,
   type SqlTransactions,
 } from "./SqlStorage.ts";
-import { canonicalRecordMetadata, makeProgressAppendValidation } from "./SqlThreadNativeReads.ts";
+import {
+  type CanonicalRecordMetadata,
+  makeProgressAppendValidation,
+} from "./SqlThreadNativeReads.ts";
 
 export interface SqlJournalOptions<
   S extends Diagnostic,
@@ -91,7 +94,12 @@ export interface RawAppendRequest {
   readonly expectedTailDigest: Digest;
   readonly expectedTailSequence: CanonicalSequence;
   readonly producerEpoch: ProducerEpoch;
-  readonly records: PreparedAppend["records"];
+  readonly records: ReadonlyArray<
+    PreparedAppend["records"][number] & {
+      readonly readMetadata: CanonicalRecordMetadata;
+    }
+  >;
+  readonly progress: PreparedAppend["progress"];
   readonly tailDigest: Digest;
 }
 
@@ -464,15 +472,26 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
                   sequence,
                   record_id,
                   batch_id,
-                  record_json${sql.onDialectOrElse({ pg: () => sql`, read_metadata`, orElse: () => sql`` })}
+                  record_json, record_tag, run_id, tool_call_id, input_kind,
+                  source_submission_id, message_id, handoff
                 ) VALUES (
                   ${request.threadId},
                   ${firstSequence + index},
                   ${record.recordId},
                   ${request.batchId},
-                  ${record.recordJson}${sql.onDialectOrElse({ pg: () => sql`, ${canonicalRecordMetadata(canonical)}::jsonb`, orElse: () => sql`` })}
+                  ${record.recordJson}, ${record.readMetadata.columns.record_tag},
+                  ${record.readMetadata.columns.run_id}, ${record.readMetadata.columns.tool_call_id},
+                  ${record.readMetadata.columns.input_kind}, ${record.readMetadata.columns.source_submission_id},
+                  ${record.readMetadata.columns.message_id}, ${record.readMetadata.columns.handoff}
                 )
               `.pipe(execute, Effect.mapError(storageError("insert canonical record")));
+
+          for (const runId of record.readMetadata.runIds)
+            yield* sql`INSERT INTO ${relation("effect_agent_record_runs")} (thread_id, run_id, sequence)
+              VALUES (${request.threadId}, ${runId}, ${firstSequence + index})`.pipe(
+              execute,
+              Effect.mapError(storageError("index canonical Run membership")),
+            );
 
           if (lifecycle !== undefined) {
             if (isLifecyclePublicationFact(canonical.payload))

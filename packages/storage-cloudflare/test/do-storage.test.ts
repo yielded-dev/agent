@@ -13,8 +13,25 @@ import {
   layer,
   storageConfigLayer,
 } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import {
+  SqlStorageProgress,
+  SqlStorageProgressError,
+} from "@yielded/agent-storage-sql/sql-storage-progress";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
-import { CanonicalBatch, CanonicalRecord, UserInputRecorded } from "@yielded/agent/records";
+import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
+import {
+  CanonicalBatch,
+  CanonicalRecord,
+  RunStartedRecord,
+  UserInputRecorded,
+} from "@yielded/agent/records";
+import {
+  CurrentRunWriter,
+  makeProgressWriter,
+  readContinuation,
+} from "@yielded/agent/run-continuation";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { makeRunWriter } from "@yielded/agent/run-storage";
 import {
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
@@ -25,6 +42,7 @@ import {
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
+  ThreadTailRequest,
   ThreadStore,
   ThreadStoreError,
   FencedAppendRequest,
@@ -37,6 +55,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { seedCheckpoint, assertCheckpoint } from "../../../test/fixtures/checkpoints.ts";
 import { snapshotStore } from "../../../test/fixtures/storage-upgrade.ts";
+import { evictionFailpointHandler } from "../src/DoStorageFailpointTesting.ts";
 import {
   thread,
   epoch,
@@ -52,6 +71,163 @@ const isThreadStoreError = Schema.is(ThreadStoreError);
 const isDoStorageCompatibilityError = Schema.is(DoStorageCompatibilityError);
 
 const isDoValueBoundExceeded = Schema.is(DoValueBoundExceeded);
+
+// Requested native replacement for the removed checkpoint matrices: DO caches and
+// lazy lifecycle start-prefix retention have distinct rollback/retirement windows.
+it("reopens atomic start progress and pending lifecycle intent after rollback and Object retirement", async () => {
+  const name = `start-prefix-retirement-${crypto.randomUUID()}`;
+  const threadId = thread(name);
+  const submissionId = id(SubmissionId, "submission-start-prefix-retirement");
+  const runId = runIdForSubmission(submissionId);
+
+  const accepted = CanonicalRecord.make({
+    ...inputRecord("start-prefix-input", "Kyoto"),
+    payload: UserInputRecorded.make({ submissionId, runId, kind: "user", input: "Kyoto" }),
+  });
+
+  const start = CanonicalRecord.make({
+    ...accepted,
+    recordId: id(CanonicalRecord.fields.recordId, "start-prefix-run"),
+    payload: RunStartedRecord.make({
+      runId,
+      policyAccountingVersion: 1,
+      maxDurationMillis: 30_000,
+    }),
+  });
+
+  const lifecycleLayer = lifecyclePublicationLayer.pipe(Layer.provideMerge(BrowserCrypto.layer));
+  let prepared: CanonicalBatch | undefined;
+  let reachedCanonicalCut = false;
+
+  await withThreadStorage(name, (storage) =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+
+      yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
+      expect((yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence).toBe(0);
+      expect(yield* store.lifecyclePublications!.pending(0, 1)).toEqual([]);
+      const writer = yield* makeRunWriter(threadId, epoch(1));
+      const progress = yield* makeProgressWriter(threadId, TEST_DEPLOYMENT);
+
+      const failed = yield* progress.commit(batch("start-prefix-batch", [accepted, start])).pipe(
+        Effect.provideService(CurrentRunWriter, {
+          ...writer,
+          append: (compiled) =>
+            Effect.sync(() => {
+              prepared = compiled;
+            }).pipe(Effect.andThen(writer.append(compiled))),
+        }),
+        Effect.exit,
+      );
+
+      expect(Exit.isFailure(failed)).toBe(true);
+      if (!reachedCanonicalCut && Exit.isFailure(failed)) return yield* failed;
+      expect(reachedCanonicalCut).toBe(true);
+
+      const assertRolledBack = Effect.gen(function* () {
+        expect((yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence).toBe(
+          0,
+        );
+        expect((yield* store.export(ThreadExportRequest.make({ threadId }))).records).toEqual([]);
+        expect(Option.isNone(yield* readContinuation(threadId, runId, sequence(0)))).toBe(true);
+        expect(yield* store.lifecyclePublications!.pending(0, 1)).toEqual([]);
+        expect([
+          ...storage.sql.exec(
+            "SELECT through_sequence FROM effect_agent_lifecycle_cursors WHERE thread_id = ?",
+            threadId,
+          ),
+        ]).toEqual([{ through_sequence: 0 }]);
+      });
+
+      yield* assertRolledBack;
+      yield* invalidate(storage);
+      yield* assertRolledBack;
+    }).pipe(
+      Effect.provide(layer({ storage }).pipe(Layer.provideMerge(lifecycleLayer))),
+      Effect.provideService(SqlStorageProgress, {
+        committed: (kind) =>
+          kind === "canonical"
+            ? Effect.sync(() => {
+                reachedCanonicalCut = true;
+              }).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    SqlStorageProgressError.make({
+                      operation: "native start cut",
+                      message: "rollback after lifecycle prefix",
+                    }),
+                  ),
+                ),
+              )
+            : Effect.void,
+      }),
+    ),
+  );
+  if (prepared === undefined) throw new Error("Production progress writer did not prepare start");
+
+  const appendRequest = FencedAppendRequest.make({
+    threadId,
+    producerEpoch: epoch(1),
+    expectedTailSequence: sequence(0),
+    expectedTailDigest: EMPTY_TAIL_DIGEST,
+    batch: prepared,
+  });
+
+  const retired = await withThreadStorage(name, (storage, state) =>
+    Effect.flatMap(ThreadStore, (store) => store.append(appendRequest)).pipe(
+      Effect.provide(
+        layer({
+          storage,
+          failpoint: evictionFailpointHandler({
+            isArmed: (location) => Effect.succeed(location === "append:after"),
+            evict: () => state.abort("retire after canonical start commit before acknowledgement"),
+          }),
+        }).pipe(Layer.provide(lifecycleLayer)),
+      ),
+    ),
+  ).then(
+    () => false,
+    () => true,
+  );
+
+  expect(retired).toBe(true);
+
+  await withThreadStorage(name, (storage) =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+      const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+      expect(tail.tailSequence).toBe(3);
+      const continuation = yield* readContinuation(threadId, runId, tail.tailSequence);
+
+      expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
+        revision: 1,
+        recordCount: 2,
+        lastFact: { recordId: start.recordId },
+      });
+      const pending = yield* store.lifecyclePublications!.pending(1, 1, { retainedOnly: true });
+
+      expect(pending.flat().map(({ id }) => id)).toEqual([
+        JSON.stringify([threadId, "record", accepted.recordId]),
+        JSON.stringify([threadId, "record", start.recordId]),
+      ]);
+      expect([
+        ...storage.sql.exec(
+          "SELECT through_sequence FROM effect_agent_lifecycle_cursors WHERE thread_id = ?",
+          threadId,
+        ),
+      ]).toEqual([{ through_sequence: 3 }]);
+      expect((yield* store.append(appendRequest)).replayed).toBe(true);
+      expect(yield* store.lifecyclePublications!.pending(1, 1, { retainedOnly: true })).toEqual(
+        pending,
+      );
+      yield* store.lifecyclePublications!.acknowledge(pending[0]!);
+      expect(yield* store.lifecyclePublications!.pending(1, 1)).toEqual([]);
+      expect((yield* store.append(appendRequest)).replayed).toBe(true);
+      expect(yield* store.lifecyclePublications!.pending(1, 1)).toEqual([]);
+    }).pipe(Effect.provide(layer({ storage }).pipe(Layer.provide(lifecycleLayer)))),
+  );
+});
 
 const inputRecord = (recordId: string, input: string): CanonicalRecord =>
   CanonicalRecord.make({

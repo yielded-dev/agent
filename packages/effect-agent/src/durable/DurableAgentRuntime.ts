@@ -160,6 +160,7 @@ import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import { type makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
+import { rebuildRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -199,6 +200,8 @@ import {
   MAX_RUN_TOOL_CALL_IDENTITIES,
   MAX_PERSISTED_JSON_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
+  MAX_RUN_CONTEXT_BYTES,
+  MAX_RUN_CONTEXT_RECORDS,
   RunDurationExhausted,
   SettlementFailureDiagnostic,
   SubagentJoined,
@@ -241,6 +244,7 @@ import {
   CurrentRunWriter,
   CurrentRunSettlement,
   canonicalRunIds,
+  executionRunIds,
   isPreContinuationFact,
   makeProgressWriter,
   readContinuation,
@@ -264,6 +268,7 @@ import {
   projectRunJournalStream,
   type JournalBoundary,
   type RunJournalProjection,
+  type RunJournalContext,
   type TurnCommitInput,
   runCompletedRecordId,
   runCompletionDigest,
@@ -1287,10 +1292,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         readonly threadId: ThreadId;
         readonly through: CanonicalSequence;
         readonly runId: RunId;
-        readonly contextRecord: RunContextRecorded | undefined;
+        readonly contextDigest: string | undefined;
+        readonly contextEvidence: ReadonlyArray<CanonicalRecordEnvelope>;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
       }
+    | undefined;
+
+  let resolvedContext:
+    | { readonly threadId: ThreadId; readonly digest: string; readonly value: RunJournalContext }
     | undefined;
 
   const wake = yield* WakeScheduler;
@@ -1570,11 +1580,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     throughSequence: CanonicalSequence,
     submissionIds: ReadonlyArray<SubmissionId>,
     journalOwner?: RunId,
+    retained?: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
-    const identity = yield* reader.readIdentity(ThreadIdentityRequest.make({ threadId }));
-    const selected = yield* selectedRange(threadId, submissionIds, throughSequence);
+    const identity =
+      retained === undefined
+        ? yield* reader.readIdentity(ThreadIdentityRequest.make({ threadId }))
+        : { records: [] };
+
+    const selected =
+      retained === undefined
+        ? yield* selectedRange(threadId, submissionIds, throughSequence)
+        : retained.filter((entry) => entry.sequence <= throughSequence);
+
     const byId = new Map(selected.map((entry) => [entry.record.recordId, entry]));
-    let context: RunContextRecorded | undefined;
+    let context: RunJournalContext | undefined;
     let progress: RunContinuation | undefined;
     let progressThrough: CanonicalSequence | undefined;
 
@@ -1586,7 +1605,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     for (const submissionId of submissionIds) {
       const runId = runIdForSubmission(submissionId);
-      const own = selected.filter((entry) => canonicalRunIds(entry.record).includes(runId));
+      const own = selected.filter((entry) => executionRunIds(entry.record).includes(runId));
 
       const loaded = yield* readContinuation(threadId, runId, throughSequence).pipe(
         Effect.provideService(ThreadReader, reader),
@@ -1640,28 +1659,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       )
         return yield* invalid("Run continuation has no exact original admitted input");
       const frontier = yield* resolve(cursor.lastFact);
-      const prefix = own.filter((entry) => entry.sequence <= frontier.sequence);
 
       if (
         frontier.batchId !== envelope.batchId ||
         frontier.sequence >= envelope.sequence ||
-        prefix.length !== cursor.recordCount ||
-        prefix.reduce((bytes, entry) => bytes + canonicalRecordBytes(entry.record), 0) !==
-          cursor.recordBytes ||
-        prefix.reduce(
-          (bytes, { record: { payload } }) =>
-            bytes +
-            (payload._tag === "ModelResponseRecorded" || payload._tag === "ModelCallAborted"
-              ? terminalUsageCharge(payload.modelUsage ?? [])
-              : 0),
-          0,
-        ) !== cursor.terminalUsageBytes ||
         !validateSuffix(own, envelope.sequence)
       )
         return yield* invalid(
           "Run continuation has an invalid frontier or exceeds its selected suffix bound",
         );
-      let saved: RunContextRecorded | undefined;
+      let saved: RunJournalContext | undefined;
 
       if (cursor.savedContext !== undefined) {
         const savedEnvelope = yield* resolve(cursor.savedContext);
@@ -1672,22 +1679,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         )
           return yield* invalid("Run continuation has invalid saved original context");
         const initial = savedEnvelope.record.payload;
-
-        saved = initial;
-
-        const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(initial.prompt).pipe(
-          Effect.mapError(() => invalid("Saved original model context is malformed")),
-        );
+        const cachedContext = resolvedContext;
 
         if (
-          initial.priorHistoryLength > prompt.content.length ||
-          initial.boundaries.some(
-            (boundary) =>
-              boundary.sequence >= input.sequence ||
-              boundary.promptLength > initial.priorHistoryLength,
-          )
-        )
-          return yield* invalid("Saved original context has an invalid canonical boundary");
+          cachedContext?.threadId === threadId &&
+          cachedContext.digest === cursor.savedContext.digest
+        ) {
+          saved = cachedContext.value;
+        } else {
+          saved = yield* rebuildRunContext(initial, input, cursor.savedContext.digest, (ref) =>
+            resolveEvidence(threadId, ref).pipe(
+              Effect.provideService(ThreadReader, reader),
+              Effect.provideService(Crypto.Crypto, crypto),
+            ),
+          ).pipe(
+            Effect.mapError(() =>
+              invalid("Saved original context cannot be resolved from its evidence"),
+            ),
+          );
+          resolvedContext = { threadId, digest: cursor.savedContext.digest, value: saved };
+        }
         if (own.filter(({ record }) => record.payload._tag === "RunContextRecorded").length !== 1)
           return yield* invalid("Run has conflicting saved original contexts");
       }
@@ -2529,14 +2540,40 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 Effect.provideService(Crypto.Crypto, crypto),
               );
 
+        let tail = {
+          sequence: request.expectedTailSequence,
+          digest: request.expectedTailDigest,
+        };
+
         return yield* progress.commit(request.batch).pipe(
           Effect.provideService(CurrentRunWriter, {
             threadId: request.threadId,
-            tail: Effect.succeed({
-              sequence: request.expectedTailSequence,
-              digest: request.expectedTailDigest,
-            }),
-            append: (batch) => store.append(FencedAppendRequest.make({ ...request, batch })),
+            tail: Effect.sync(() => tail),
+            append: (batch) =>
+              store
+                .append(
+                  FencedAppendRequest.make({
+                    ...request,
+                    expectedTailSequence: tail.sequence,
+                    expectedTailDigest: tail.digest,
+                    batch,
+                  }),
+                )
+                .pipe(
+                  Effect.tapErrorTag("AppendConflict", (conflict) =>
+                    Effect.sync(() => {
+                      if (
+                        conflict.reason === "tail" &&
+                        conflict.actualTailSequence !== undefined &&
+                        conflict.actualTailDigest !== undefined
+                      )
+                        tail = {
+                          sequence: conflict.actualTailSequence,
+                          digest: conflict.actualTailDigest,
+                        };
+                    }),
+                  ),
+                ),
           }),
         );
       }),
@@ -2615,6 +2652,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                           sequence: conflict.actualTailSequence,
                           digest: conflict.actualTailDigest,
                         };
+
+                        if (
+                          prepared.records.some(({ payload }) => payload._tag === "RunContinuation")
+                        )
+                          return ctx.checkFence.pipe(Effect.andThen(Effect.fail(conflict)));
 
                         return Effect.succeed(undefined);
                       }),
@@ -3111,6 +3153,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const existing = yield* canonicalRunStartFromRecords(records, runId);
     let start: RecordEnvelope;
     let allowance = maxDurationMillis;
+    let committed = existing !== undefined;
 
     if (existing !== undefined && existing.payload._tag === "RunStarted") {
       allowance = existing.payload.maxDurationMillis;
@@ -3120,7 +3163,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ({ record: { payload } }) =>
           payload._tag !== "UserInputRecorded" &&
           payload._tag !== "RunContinuation" &&
-          payload._tag !== "RunContextRecorded" &&
           "runId" in payload &&
           payload.runId === runId,
       );
@@ -3134,19 +3176,39 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         recordId,
         RunStartedRecord.make({ runId, maxDurationMillis, policyAccountingVersion: 1 }),
       );
+    }
+
+    // The first model dispatch commits start and evaluated context in one existing boundary.
+    // If preparation fails first, terminal handling still publishes the start exactly once.
+    const commit = Effect.fnUntraced(function* (context?: RecordEnvelope) {
+      if (committed) {
+        if (context !== undefined)
+          yield* appendBatch(
+            ctx,
+            CanonicalBatch.make({
+              batchId: decodeBatchIdSync(context.recordId),
+              producerId: config.producerId,
+              records: [context],
+            }),
+          );
+
+        return;
+      }
       yield* hit("run:before-start-append");
       yield* appendBatch(
         ctx,
         CanonicalBatch.make({
           batchId: runStartedBatchId(runId),
           producerId: config.producerId,
-          records: [start],
+          records: [start, ...(context === undefined ? [] : [context])],
         }),
       );
+      committed = true;
       yield* hit("run:after-start-append");
-    }
+    });
 
     return {
+      commit,
       startedAt: start.createdAt,
       // Downtime is not execution. Reuse the original per-Attempt allowance without
       // moving the Run start or resetting journaled turn, Tool or cost accounting.
@@ -3158,6 +3220,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         : DateTime.addDuration(yield* DateTime.now, Duration.millis(allowance)),
     };
   });
+
+  type RunTiming = Effect.Success<ReturnType<typeof ensureRunStarted>>;
 
   /**
    * Cross-lane drive-forward after one child Submission settles (spec §12 step 10): the child's
@@ -4567,13 +4631,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     canonical: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     canonicalThrough: CanonicalSequence,
+    progressThrough: CanonicalSequence | undefined,
     continuation: RunContinuation | undefined,
-    priorContext: RunContextRecorded | undefined,
+    priorContext: RunJournalContext | undefined,
     journalMetadata: JournalMetadata | undefined,
     lineage: AttemptLineage,
     approvalDecisions: ReadonlyArray<ApprovalDecisionIntent>,
     currentContracts: Readonly<Record<string, Digest>>,
-    runTiming: { readonly startedAt: DateTime.Utc; readonly deadline: DateTime.Utc },
+    runTiming: RunTiming,
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
@@ -4583,21 +4648,65 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const boundaries: Array<JournalBoundary> = [];
 
       const cached = projectedJournal;
+      // Unrelated Thread traffic does not invalidate an already validated owner projection.
+      const projectionThrough = Math.max(progressThrough ?? 0, records.at(-1)?.sequence ?? 0);
+
+      const originalInput = records.find(
+        ({ record: { payload } }) =>
+          payload._tag === "UserInputRecorded" &&
+          payload.kind === "user" &&
+          payload.submissionId === submissionId,
+      );
+
+      if (originalInput === undefined)
+        return yield* RunJournalError.make({ message: "Run has no original context boundary" });
+      const historyEvidence = new Map<RecordId, CanonicalRecordEnvelope>();
+      let historyBytes = 0;
+      let historyOverflow = false;
+
+      const retainHistory = (entry: CanonicalRecordEnvelope) => {
+        if (
+          priorContext !== undefined ||
+          entry.sequence >= originalInput.sequence ||
+          historyEvidence.has(entry.record.recordId)
+        )
+          return;
+        const bytes = canonicalRecordBytes(entry.record);
+
+        if (
+          historyEvidence.size >= MAX_RUN_CONTEXT_RECORDS ||
+          historyBytes + bytes > MAX_RUN_CONTEXT_BYTES
+        ) {
+          historyOverflow = true;
+
+          return;
+        }
+        historyEvidence.set(entry.record.recordId, entry);
+        historyBytes += bytes;
+      };
 
       const journal =
         cached !== undefined &&
         cached.threadId === ctx.threadId &&
-        cached.through === canonicalThrough &&
+        cached.through === projectionThrough &&
         cached.runId === runId &&
-        cached.contextRecord === priorContext
-          ? (boundaries.push(...cached.boundaries), cached.journal)
+        cached.contextDigest === priorContext?.digest
+          ? (boundaries.push(...cached.boundaries),
+            cached.contextEvidence.forEach(retainHistory),
+            cached.journal)
           : yield* projectRunJournalStream(
               canonical,
               runId,
               (boundary) => boundaries.push(boundary),
               priorContext,
               journalMetadata,
+              retainHistory,
             );
+
+      if (historyOverflow)
+        return yield* RunJournalError.make({
+          message: "Original model history exceeds its bounded evidence references",
+        });
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.
       // The projected prompt owns its needed context.
@@ -4605,9 +4714,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       projectedJournal = {
         threadId: ctx.threadId,
-        through: canonicalThrough,
+        through: CanonicalSequence.make(projectionThrough),
         runId,
-        contextRecord: priorContext,
+        contextDigest: priorContext?.digest,
+        contextEvidence: [...historyEvidence.values()],
         journal,
         boundaries,
       };
@@ -5450,7 +5560,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               if (priorContext !== undefined) return;
               const recordId = decodeRecordIdSync(JSON.stringify(["run-context@1", runId]));
 
-              const prompt = yield* Schema.encodeEffect(Prompt.Prompt)(initialHistory).pipe(
+              const prompt = yield* Schema.encodeEffect(Prompt.Prompt)(
+                Prompt.fromMessages(initialHistory.content.slice(priorHistoryLength)),
+              ).pipe(
                 Effect.flatMap(decodePersisted),
                 Effect.mapError((cause) =>
                   RunJournalError.make({
@@ -5463,7 +5575,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               const payload = yield* RunContextRecorded.makeEffect({
                 version: 1,
                 runId,
-                prompt,
+                runScopedInput: prompt,
+                historyThrough: CanonicalSequence.make(originalInput.sequence - 1),
+                history: yield* Effect.forEach(
+                  [...historyEvidence.values()].sort(
+                    (left, right) => left.sequence - right.sequence,
+                  ),
+                  (entry) =>
+                    reference(entry.record).pipe(
+                      Effect.provideService(Crypto.Crypto, crypto),
+                      Effect.map((ref) => ({ ...ref, sequence: entry.sequence })),
+                    ),
+                ),
+                historyBytes,
                 priorHistoryLength,
                 boundaries: boundaries.filter(
                   (boundary) => boundary.promptLength <= priorHistoryLength,
@@ -5480,15 +5604,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
-              yield* appendBatch(
-                ctx,
-                CanonicalBatch.make({
-                  batchId: decodeBatchIdSync(recordId),
-                  producerId: config.producerId,
-                  records: [yield* makeEnvelope(recordId, payload)],
-                }),
-              );
+              yield* runTiming.commit(yield* makeEnvelope(recordId, payload));
+              knownIds.add(runStartedRecordId(runId));
               knownIds.add(recordId);
+              historyEvidence.clear();
+              projectedJournal = undefined;
             }),
           ),
         commitModelRestart: (restart) =>
@@ -7254,11 +7374,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ? {}
           : {
               retainedContext: Prompt.fromMessages(
-                (yield* Schema.decodeUnknownEffect(Prompt.Prompt)(priorContext.prompt).pipe(
-                  Effect.mapError((cause) =>
-                    RunJournalError.make({ message: "Saved original context is invalid", cause }),
-                  ),
-                )).content.slice(priorContext.priorHistoryLength),
+                priorContext.prompt.content.slice(priorContext.priorHistoryLength),
               ),
             }),
         ...(Schema.is(FrameworkMessage)(submission.messageAdmission)
@@ -7958,6 +8074,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       let expiredChildObligation = false;
 
       if ((yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(runTiming.deadline)) {
+        yield* runTiming.commit();
         yield* reconcileRetainedChildren(ctx, submission, session);
         expiredChildObligation = yield* completeJoinedReleases(submission);
       }
@@ -8171,6 +8288,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           tail.sequence,
           [submissionId],
           runIdForSubmission(submissionId),
+          currentRecords,
         );
 
         let canonical: Stream.Stream<
@@ -8206,6 +8324,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentRecords,
           canonical,
           tail.sequence,
+          view.progressThrough,
           view.progress,
           view.context,
           takeJournalMetadata(),
@@ -8282,6 +8401,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           )).approvalDecisions;
           continue;
         }
+        yield* runTiming.commit();
         if (outcome._tag === "aborted") {
           // Durable abort ended the Run while attached children may still be open:
           // request-abort-and-join before the aborted settlement (spec §13.1).

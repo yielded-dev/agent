@@ -1,14 +1,15 @@
-import { Context, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { QueueSequence } from "../core/Receipt.ts";
-import { canonicalJson, digestCanonicalBatchJson } from "./Digest.ts";
+import { digestCanonicalBatchJson } from "./Digest.ts";
+import { captureRecord, type ProgressAppendRecord } from "./internal/record-encoding.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import { ExportRecord } from "./RecordFormat.ts";
+import type { RecordJson } from "./Records.ts";
 import {
   BatchId,
   CanonicalBatch,
-  type CanonicalRecordPayload,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
@@ -16,9 +17,7 @@ import {
   PersistedJson,
   ProducerEpoch,
   ProducerId,
-  RecordEnvelope,
   RecordId,
-  RecordJson,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import {
@@ -189,67 +188,38 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   producerEpoch: ProducerEpoch,
 }) {}
 
-const encodeAppend = Schema.encodeSync(FencedAppendRequest);
-const validateRecordJson = Schema.decodeSync(RecordJson);
+const AppendHeader = Schema.Struct({
+  threadId: ThreadId,
+  expectedTailSequence: CanonicalSequence,
+  expectedTailDigest: Digest,
+  producerEpoch: ProducerEpoch,
+  batchId: BatchId,
+  producerId: ProducerId,
+});
+
+const validateHeader = Schema.decodeUnknownSync(AppendHeader);
+
+const validateRecordCount = Schema.decodeUnknownSync(
+  Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
+);
+
 const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
-
-/** Own only lifecycle graphs consumed after SQL INSERT suspension; keep Schema/Duration prototypes. */
-const capturePayload = (payload: CanonicalRecordPayload): CanonicalRecordPayload => {
-  const captured = { ...payload };
-
-  Object.setPrototypeOf(captured, Object.getPrototypeOf(payload));
-  switch (payload._tag) {
-    case "UserInputRecorded":
-    case "RunStarted":
-    case "AgentUpdateEmitted":
-    case "ToolApprovalRequested":
-    case "ToolApprovalDecided":
-    case "AbortRequested":
-    case "WorkerInputCompleted":
-    case "WorkerInputRequested":
-    case "WorkerStopRequested":
-    case "SubagentRequested":
-    case "SubagentStarted":
-    case "SubagentJoined":
-    case "SubmissionSettled":
-      break;
-    default:
-      return captured;
-  }
-
-  const pending: Array<{ readonly source: object; readonly target: object }> = [
-    { source: payload, target: captured },
-  ];
-
-  while (pending.length > 0) {
-    const next = pending.pop()!;
-
-    for (const [key, value] of Object.entries(next.source)) {
-      if (!Predicate.isObject(value)) continue;
-      const copy: object = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
-
-      Object.assign(copy, value);
-      Reflect.set(next.target, key, copy);
-      pending.push({ source: value, target: copy });
-    }
-  }
-
-  return captured;
-};
 
 /**
  * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
- * is shared by the digest, batch and record rows. Owned shallow metadata
- * keeps row identities and authority stable; lifecycle payloads are detached where storage
- * consumes them after suspension. Other nested typed values retain their readonly contract:
- * adapters persist the captured strings rather than reconstructing bytes from those values.
+ * is shared by the digest, batch and record rows. Privately owned facts and wire metadata
+ * keep payloads, identities and validation stable across suspension; adapters persist the
+ * captured strings rather than reconstructing bytes from caller-owned values.
  * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
  */
 export interface PreparedAppend extends FencedAppendRequest {
   readonly batchJson: string;
+  readonly progress: ReadonlyArray<ProgressAppendRecord>;
   readonly records: ReadonlyArray<{
     readonly recordId: RecordId;
     readonly recordJson: string;
+    readonly recordBytes: number;
+    readonly wire: RecordJson;
     readonly canonical: CanonicalBatch["records"][number];
   }>;
   readonly digest: () => ReturnType<typeof digestCanonicalBatchJson>;
@@ -264,35 +234,25 @@ export const PreparedAppend = {
 
       return Effect.try({
         try: () => {
-          const encoded = encodeAppend(input);
+          const header = validateHeader({
+            ...input,
+            batchId: input.batch.batchId,
+            producerId: input.batch.producerId,
+          });
 
-          const recordJson = encoded.batch.records.map((record) =>
-            canonicalJson(validateRecordJson(record)),
-          );
+          validateRecordCount(input.batch.records);
+          const encodings = input.batch.records.map(captureRecord);
+          const batchJson = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[${encodings.map(({ json }) => json).join(",")}]}`;
+          const first = encodings[0]!;
 
-          const batchJson = `{"batchId":${JSON.stringify(encoded.batch.batchId)},"producerId":${JSON.stringify(encoded.batch.producerId)},"records":[${recordJson.join(",")}]}`;
-
-          const captureRecord = (record: RecordEnvelope) =>
-            Object.freeze(
-              new RecordEnvelope(
-                {
-                  ...record,
-                  createdAt: DateTime.makeUnsafe(DateTime.toEpochMillis(record.createdAt)),
-                  payload: Object.freeze(capturePayload(record.payload)),
-                },
-                { disableChecks: true },
-              ),
-            );
-
-          // Encoding validated the typed graph. Retain its typed values without parsing and
-          // decoding our own wire representation or traversing every nested value to freeze it.
           const batch = Object.freeze(
             new CanonicalBatch(
               {
-                ...input.batch,
+                batchId: header.batchId,
+                producerId: header.producerId,
                 records: Object.freeze([
-                  captureRecord(input.batch.records[0]),
-                  ...input.batch.records.slice(1).map(captureRecord),
+                  first.canonical,
+                  ...encodings.slice(1).map(({ canonical }) => canonical),
                 ]),
               },
               { disableChecks: true },
@@ -301,29 +261,34 @@ export const PreparedAppend = {
 
           const request = new FencedAppendRequest(
             {
-              threadId: input.threadId,
-              expectedTailSequence: input.expectedTailSequence,
-              expectedTailDigest: input.expectedTailDigest,
-              producerEpoch: input.producerEpoch,
+              threadId: header.threadId,
+              expectedTailSequence: header.expectedTailSequence,
+              expectedTailDigest: header.expectedTailDigest,
+              producerEpoch: header.producerEpoch,
               batch,
             },
             { disableChecks: true },
           );
 
           const records = Object.freeze(
-            batch.records.map((canonical, index) =>
+            encodings.map(({ canonical, json, wire, bytes }) =>
               Object.freeze({
                 recordId: canonical.recordId,
-                recordJson: recordJson[index],
+                recordJson: json,
+                recordBytes: bytes,
+                wire,
                 canonical,
               }),
             ),
           );
 
+          const progress = Object.freeze(encodings.map(({ progress }) => progress));
+
           const captured = Object.freeze(
             Object.assign(request, {
               batchJson,
               records,
+              progress,
               digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
             }),
           );

@@ -1,5 +1,5 @@
 import type { Scope } from "effect";
-import { Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import { Cause, Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect";
 
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import type { CanonicalBatch, CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";
@@ -242,6 +242,10 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                   return Effect.fail(conflict);
                 tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
 
+                // Progress must be rebuilt from the winning revision, never resent verbatim.
+                if (batch.records.some(({ payload }) => payload._tag === "RunContinuation"))
+                  return Effect.fail(conflict);
+
                 return Effect.succeed(undefined);
               }),
             );
@@ -461,6 +465,13 @@ export const make = Effect.gen(function* () {
                               digest: conflict.actualTailDigest,
                             };
 
+                            if (
+                              batch.records.some(
+                                ({ payload }) => payload._tag === "RunContinuation",
+                              )
+                            )
+                              return writer.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
+
                             return Effect.succeed(undefined);
                           }),
                         );
@@ -471,10 +482,17 @@ export const make = Effect.gen(function* () {
                       return result;
                     }
                   }).pipe(
-                    Effect.onError(() =>
-                      Effect.sync(() => {
-                        closed = true;
-                      }),
+                    Effect.onError((cause) =>
+                      cause.reasons.every(
+                        (reason) =>
+                          Cause.isFailReason(reason) &&
+                          reason.error._tag === "AppendConflict" &&
+                          reason.error.reason === "tail",
+                      )
+                        ? Effect.void
+                        : Effect.sync(() => {
+                            closed = true;
+                          }),
                     ),
                   ),
                 ),

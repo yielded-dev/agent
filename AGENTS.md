@@ -90,6 +90,7 @@ concepts succinctly: what a feature does, how it fits, and how to use it.
    by the interpreter, but durable records remain explicit, versioned Schemas.
 7. The canonical log is append-only, including Run continuations and their execution evidence.
    Projections, lookup indexes, and cached recovery snapshots are disposable derivatives.
+   Continuations must be recomputable from their referenced facts and checked by `verify`.
 8. No code may claim exactly-once external side-effect execution.
 9. An unresolved ordinary tool call is never automatically replayed after ownership loss.
 10. Tool/model/subagent concurrency is bounded and deterministic at commit time. Tool batches use
@@ -161,13 +162,12 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- This refactor establishes `effect-agent/thread@2` in fresh layout-18 storage. Reject predecessor,
-  newer, or ambiguous formats and layouts without mutation; do not add converters, predecessor
-  decoders, compatibility APIs, or layout upgrades from the old architecture. Forward evolution
-  must preserve retained facts and accepted work, with any format-change mechanism scoped to a
-  concrete future change. Current-format transfer preserves immutable admission and accepted-command
-  facts, imports atomically into empty Threads under destination constraints, and rebuilds disposable
-  derivatives without importing execution authority. Canonical meaning and adapter layout remain separate.
+- Change record formats through a one-time export/convert/import cutover: history re-encodes,
+  live state converts. Preserve immutable admission and accepted-command facts; rebuild derivatives
+  and digests without importing execution authority. Import atomically into empty Threads under
+  destination constraints; reject unsupported or ambiguous data without mutation or lost work.
+  Keep adapter layout steps separate, immutable, ordered and atomic; reject newer layouts.
+  No payload rewrites, history shims or migration framework.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

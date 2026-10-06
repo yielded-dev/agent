@@ -1,5 +1,4 @@
 import { Context, Effect, Schema } from "effect";
-import { Prompt } from "effect/ai";
 
 import { SubmissionId, ThreadId, ToolCallId, type RunId } from "../core/Identifiers.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "./Digest.ts";
@@ -14,14 +13,8 @@ import {
   ProducerEpoch,
   RecordEnvelope,
   RecordJson,
-  type RunContinuation,
 } from "./Records.ts";
-import {
-  canonicalRecordBytes,
-  canonicalRunIds,
-  reference,
-  validateProgressAppend,
-} from "./RunContinuation.ts";
+import { verifyRunContinuations } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import { validateCanonicalSettlement, validateJoinedSettlement } from "./SettlementPublisher.ts";
 import {
@@ -249,140 +242,11 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
   if (index !== archive.records.length || tailDigest !== archive.tailDigest)
     return yield* invalid("The canonical batch chain does not match the exported tail", threadId);
 
-  // Validate canonical progress before acquiring any destination mutation authority. Indexes
-  // are rebuilt from these exact facts; an archive never imports a live claim or cache seed.
-  const latestProgress = new Map<RunId, RunContinuation>();
-  const byRecordId = new Map(records.map((entry) => [entry.record.recordId, entry]));
-  const digests = new Map<string, Digest>();
-  const factTotals = new Map<RunId, { count: number; bytes: number }>();
-  const initialFacts = new Map<RunId, Array<RecordEnvelope>>();
-
-  for (const batch of prepared) {
-    yield* validateProgressAppend(
-      batch.batch,
-      (runId) => Effect.succeed(latestProgress.get(runId)),
-      (next) => Effect.succeed(initialFacts.get(next.runId) ?? []),
-    ).pipe(
-      Effect.mapError(() => invalid("Canonical progress revision or frontier conflicts", threadId)),
-    );
-    for (const record of batch.batch.records) {
-      const cursor = record.payload;
-
-      if (cursor._tag !== "RunContinuation") {
-        for (const runId of canonicalRunIds(record)) {
-          const prior = factTotals.get(runId) ?? { count: 0, bytes: 0 };
-
-          factTotals.set(runId, {
-            count: prior.count + 1,
-            bytes: prior.bytes + canonicalRecordBytes(record),
-          });
-          if (!latestProgress.has(runId)) {
-            const initial = initialFacts.get(runId) ?? [];
-
-            initial.push(record);
-            initialFacts.set(runId, initial);
-          }
-        }
-        continue;
-      }
-      const totals = factTotals.get(cursor.runId);
-
-      if (totals?.count !== cursor.recordCount || totals.bytes !== cursor.recordBytes)
-        return yield* invalid("Continuation does not cover its exact owning facts", threadId);
-      const owner = byRecordId.get(record.recordId);
-
-      if (owner === undefined)
-        return yield* invalid("Continuation has no canonical position", threadId);
-
-      const resolve = Effect.fnUntraced(function* (ref: typeof cursor.originalInput) {
-        const entry = byRecordId.get(ref.recordId);
-
-        if (
-          entry === undefined ||
-          entry.sequence >= owner.sequence ||
-          !canonicalRunIds(entry.record).includes(cursor.runId)
-        )
-          return yield* invalid(
-            "Continuation references unavailable or foreign evidence",
-            threadId,
-          );
-        let digest = digests.get(ref.recordId);
-
-        if (digest === undefined) {
-          digest = (yield* reference(entry.record).pipe(
-            Effect.mapError(() => invalid("Cannot verify continuation evidence", threadId)),
-          )).digest;
-          digests.set(ref.recordId, digest);
-        }
-        if (digest !== ref.digest)
-          return yield* invalid("Continuation evidence digest mismatch", threadId);
-
-        return entry;
-      });
-
-      const original = yield* resolve(cursor.originalInput);
-
-      if (
-        original.record.payload._tag !== "UserInputRecorded" ||
-        original.record.payload.kind !== "user" ||
-        original.record.payload.submissionId !== cursor.submissionId ||
-        cursor.runId !== runIdForSubmission(cursor.submissionId)
-      )
-        return yield* invalid(
-          "Continuation does not preserve its original admitted input",
-          threadId,
-        );
-      const frontier = yield* resolve(cursor.lastFact);
-
-      if (frontier.batchId !== owner.batchId)
-        return yield* invalid("Continuation frontier was not atomically published", threadId);
-      if (cursor.savedContext !== undefined) {
-        const context = yield* resolve(cursor.savedContext);
-
-        if (
-          context.record.payload._tag !== "RunContextRecorded" ||
-          context.sequence <= original.sequence
-        )
-          return yield* invalid("Continuation saved context has invalid ownership", threadId);
-        const saved = context.record.payload;
-
-        const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(saved.prompt).pipe(
-          Effect.mapError(() => invalid("Invalid saved original model context", threadId)),
-        );
-
-        if (
-          saved.priorHistoryLength > prompt.content.length ||
-          saved.boundaries.some(
-            (boundary) =>
-              boundary.sequence >= original.sequence ||
-              boundary.promptLength > saved.priorHistoryLength,
-          )
-        )
-          return yield* invalid("Invalid original context boundary", threadId);
-      }
-      if (cursor.latestResponse !== undefined) {
-        const response = yield* resolve(cursor.latestResponse);
-
-        if (
-          cursor.savedContext === undefined ||
-          response.record.payload._tag !== "ModelResponseRecorded" ||
-          response.record.payload.turn !== cursor.accounting.committedTurns
-        )
-          return yield* invalid("Continuation has invalid declared operation state", threadId);
-      } else if (cursor.accounting.committedTurns !== 0)
-        return yield* invalid("Continuation usage has no exact response", threadId);
-      if (cursor.terminal !== undefined) {
-        const terminal = yield* resolve(cursor.terminal);
-
-        if (
-          !["RunCompleted", "RunFailed", "SubmissionSettled"].includes(terminal.record.payload._tag)
-        )
-          return yield* invalid("Continuation has invalid terminal state", threadId);
-      }
-      latestProgress.set(cursor.runId, cursor);
-      initialFacts.delete(cursor.runId);
-    }
-  }
+  yield* verifyRunContinuations(records).pipe(
+    Effect.mapError(() =>
+      invalid("Run continuation differs from its exact canonical facts", threadId),
+    ),
+  );
 
   // A fresh fence is not restored execution authority. Leave room for the next claim and
   // keep its interruption audit distinct from every generation already in the log.

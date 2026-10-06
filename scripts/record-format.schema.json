@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
     "properties": {
@@ -3144,8 +3145,39 @@
           "type": "string",
           "minLength": 1
         },
-        "prompt": {
+        "runScopedInput": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+        },
+        "historyThrough": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "recordId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "digest": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["recordId", "digest", "sequence"],
+            "additionalProperties": true
+          },
+          "maxItems": 4096
+        },
+        "historyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
         },
         "priorHistoryLength": {
           "type": "integer",
@@ -3188,7 +3220,17 @@
           "maxLength": 256
         }
       },
-      "required": ["_tag", "version", "runId", "prompt", "priorHistoryLength", "boundaries"],
+      "required": [
+        "_tag",
+        "version",
+        "runId",
+        "runScopedInput",
+        "historyThrough",
+        "history",
+        "historyBytes",
+        "priorHistoryLength",
+        "boundaries"
+      ],
       "additionalProperties": true
     },
     "RunContinuationEncoded": {
@@ -3218,12 +3260,12 @@
         "recordCount": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 16384
+          "maximum": 16388
         },
         "recordBytes": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 33554432
+          "maximum": 42205184
         },
         "turn": {
           "type": "integer",
@@ -3232,7 +3274,17 @@
         "turnBytes": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 4194304
+          "maximum": 12845056
+        },
+        "terminalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8650752
+        },
+        "terminalRecords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
         },
         "terminalUsageBytes": {
           "type": "integer",
@@ -3411,6 +3463,8 @@
         "recordBytes",
         "turn",
         "turnBytes",
+        "terminalBytes",
+        "terminalRecords",
         "terminalUsageBytes",
         "originalInput",
         "lastFact",

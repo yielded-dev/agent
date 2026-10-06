@@ -33,7 +33,7 @@ import {
   type CanonicalSequence,
   type DeploymentId,
   type ProducerId,
-  type RunContextRecorded,
+  type ContextBoundary,
 } from "./Records.ts";
 import { IdempotencyKey } from "./SubmissionLedger.ts";
 
@@ -580,6 +580,16 @@ export interface JournalBoundary {
   readonly terminalPriorRun?: true | undefined;
 }
 
+/** Resolved immutable context. Persisted context stores references instead of this Prompt. */
+export interface RunJournalContext {
+  readonly runId: RunId;
+  readonly prompt: Prompt.Prompt;
+  readonly priorHistoryLength: number;
+  readonly boundaries: ReadonlyArray<typeof ContextBoundary.Type>;
+  readonly contextWindowId?: string | undefined;
+  readonly digest: string;
+}
+
 /**
  * Reconstruct a fixed canonical prefix from a re-readable stream. The caller must keep the same
  * records visible on every traversal. The first collects compaction and settlement metadata;
@@ -594,14 +604,14 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   records: Stream.Stream<CanonicalRecordEnvelope, E, R>,
   ownerRunId: RunId | undefined,
   onBoundary?: (boundary: JournalBoundary) => void,
-  savedContext?: RunContextRecorded,
+  savedContext?: RunJournalContext,
   preparedMetadata?: JournalMetadata,
+  onEvidence?: (envelope: CanonicalRecordEnvelope) => void,
 ): Effect.fn.Return<RunJournalProjection, RunJournalError | E, R> {
   if (savedContext !== undefined && savedContext.runId !== ownerRunId)
     return yield* journalError("Saved original context belongs to another Run");
 
-  const initialContext =
-    savedContext === undefined ? undefined : yield* decodePromptMessages(savedContext.prompt);
+  const initialContext = savedContext?.prompt;
 
   if (
     initialContext !== undefined &&
@@ -842,6 +852,19 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       replacements = retainCompaction(replacements, { payload, sequence });
     } else clearings = retainCompaction(clearings, { payload, sequence });
   }
+
+  const contextCompactions = new Set(
+    [...replacements, ...clearings].map(({ sequence }) => sequence),
+  );
+
+  const contextCreatorStarts = new Set(
+    [...replacements, ...clearings].flatMap(({ payload }) => {
+      const sequence = firstSequenceByRun.get(payload.runId);
+
+      return sequence === undefined ? [] : [sequence];
+    }),
+  );
+
   let summaryEmitted = false;
 
   const retainedPrefix = replacements.some(
@@ -946,6 +969,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 
   const incompleteToolTurns = new Set<string>();
   const incompleteToolCalls = new Set<string>();
+  const incompleteContextRuns = new Set<RunId>();
   let pendingContextToolCallId: string | undefined;
   let ownerTerminated = false;
 
@@ -978,6 +1002,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     }
     if (declaredRecordIds.some((recordId) => !settledToolCallRecordIds.has(recordId))) {
       incompleteToolTurns.add(envelope.record.recordId);
+      incompleteContextRuns.add(payload.runId);
       for (const recordId of declaredRecordIds) incompleteToolCalls.add(recordId);
     }
     if (payload.runId !== ownerRunId) return;
@@ -1112,6 +1137,16 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     Effect.gen(function* () {
       const payload = envelope.record.payload;
 
+      if (contextCreatorStarts.has(envelope.sequence)) onEvidence?.(envelope);
+      if (
+        (payload._tag === "RunCompleted" ||
+          payload._tag === "RunFailed" ||
+          payload._tag === "SubmissionSettled") &&
+        payload.runId !== undefined &&
+        incompleteContextRuns.has(payload.runId)
+      )
+        onEvidence?.(envelope);
+
       if (
         ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
           payload.runId === ownerRunId) ||
@@ -1172,7 +1207,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       // The compaction record governs the fold (pre-scan) and contributes no
       // message of its own; records at or below the summarize bound render as
       // the one summary message emitted at the covered/kept transition.
-      if (payload._tag === "CompactionCreated") return;
+      if (payload._tag === "CompactionCreated") {
+        if (contextCompactions.has(envelope.sequence)) onEvidence?.(envelope);
+
+        return;
+      }
       if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
         // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
         if (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) {
@@ -1200,6 +1239,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       emitSummary();
       if (payload._tag === "ToolCallSettled") {
+        onEvidence?.(envelope);
         if (payload.runId !== ownerRunId) {
           const slot = historicalResults.get(envelope.record.recordId);
 
@@ -1263,6 +1303,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       state = yield* flushTools(state);
       if (payload._tag === "ModelCompleted" && payload.messages !== undefined) {
+        onEvidence?.(envelope);
         const messages = yield* decodePromptMessages(payload.messages);
 
         for (const message of messages.content) {
@@ -1273,6 +1314,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         return;
       }
       if (payload._tag !== "ModelResponseRecorded") return;
+      onEvidence?.(envelope);
       const messages = yield* decodePromptMessages(payload.messages);
       const forRun = payload.runId === ownerRunId;
 

@@ -16,15 +16,24 @@ import { SqliteStorageFailpoint } from "@yielded/agent-storage-sqlite/sqlite-sto
 import { ledgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
 import { threadStoreLayer, layer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
   CanonicalBatch,
   CanonicalRecord,
   CanonicalSequence,
   ProducerEpoch,
   RunCompleted,
+  RunStartedRecord,
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
+import {
+  CurrentRunWriter,
+  makeProgressWriter,
+  readContinuation,
+} from "@yielded/agent/run-continuation";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { makeRunWriter } from "@yielded/agent/run-storage";
 import {
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
@@ -41,8 +50,9 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   type AppendResult,
+  type ThreadReader,
 } from "@yielded/agent/thread-store";
-import type { PlatformError } from "effect";
+import type { PlatformError, Crypto } from "effect";
 import {
   DateTime,
   Cause,
@@ -52,6 +62,7 @@ import {
   FileSystem,
   Fiber,
   Layer,
+  Option,
   Ref,
   Schema,
   Stream,
@@ -613,7 +624,34 @@ describe("SqliteThreadStore", () => {
         Effect.gen(function* () {
           const active = yield* Ref.make<SqliteStorageFailpointLocation | undefined>(undefined);
 
-          const withFailpoints = <A, E>(effect: Effect.Effect<A, E, ThreadStore>) =>
+          // Requested replacement for retired checkpoint crash matrices: native facts,
+          // progress and lifecycle intent must reopen at one atomic prefix.
+          const nativeRunId = runIdForSubmission(submissionId);
+
+          const acceptedInput = canonicalRecord(
+            "reopen-accepted-input",
+            UserInputRecorded.make({
+              submissionId,
+              runId: nativeRunId,
+              kind: "user",
+              input: "Sapporo",
+            }),
+          );
+
+          const start = canonicalRecord(
+            "reopen-run-start",
+            RunStartedRecord.make({
+              runId: nativeRunId,
+              policyAccountingVersion: 1,
+              maxDurationMillis: 30_000,
+            }),
+          );
+
+          let firstBatch: CanonicalBatch | undefined;
+
+          const withFailpoints = <A, E>(
+            effect: Effect.Effect<A, E, ThreadStore | ThreadReader | Crypto.Crypto>,
+          ) =>
             Effect.provide(
               effect,
               layer({
@@ -627,25 +665,27 @@ describe("SqliteThreadStore", () => {
                         : Effect.void,
                     ),
                   ),
-              }),
+              }).pipe(
+                Layer.provideMerge(
+                  lifecyclePublicationLayer.pipe(Layer.provideMerge(NodeCrypto.layer)),
+                ),
+              ),
             );
 
           const select = (location: SqliteStorageFailpointLocation | undefined) =>
             Ref.set(active, location);
 
-          yield* withFailpoints(
+          const seeded = yield* withFailpoints(
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
               yield* store.materialize(
                 ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
               );
+
+              return yield* append(store, batch("reopen-accepted-input", [acceptedInput]));
             }),
           );
-
-          const firstBatch = batch("failpoint-append", [
-            inputRecord("failpoint-record", "Sapporo"),
-          ]);
 
           yield* Effect.forEach(
             [
@@ -661,7 +701,23 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
-                    yield* append(store, firstBatch);
+                    if (firstBatch !== undefined) {
+                      yield* append(store, firstBatch, seeded);
+
+                      return;
+                    }
+                    const writer = yield* makeRunWriter(threadId, epoch(1));
+                    const progress = yield* makeProgressWriter(threadId, start.deploymentId);
+
+                    yield* progress.commit(batch("failpoint-append", [start])).pipe(
+                      Effect.provideService(CurrentRunWriter, {
+                        ...writer,
+                        append: (prepared) =>
+                          Effect.sync(() => {
+                            firstBatch = prepared;
+                          }).pipe(Effect.andThen(writer.append(prepared))),
+                      }),
+                    );
                   }),
                 ).pipe(Effect.exit);
 
@@ -681,13 +737,26 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
+                    expect(
+                      Option.isNone(
+                        yield* readContinuation(threadId, nativeRunId, seeded.lastSequence),
+                      ),
+                    ).toBe(true);
+                    const pending = yield* store.lifecyclePublications!.pending(1, 1);
+
+                    expect(pending.flat().map(({ fact }) => fact._tag)).toEqual([
+                      "UserInputRecorded",
+                    ]);
+
                     return yield* store.export(ThreadExportRequest.make({ threadId }));
                   }),
                 );
 
-                expect(exported.records).toEqual([]);
-                expect(exported.tailSequence).toBe(0);
-                expect(exported.tailDigest).toBe(EMPTY_TAIL_DIGEST);
+                expect(exported.records.map(({ record }) => record.recordId)).toEqual([
+                  acceptedInput.recordId,
+                ]);
+                expect(exported.tailSequence).toBe(seeded.lastSequence);
+                expect(exported.tailDigest).toBe(seeded.tailDigest);
               }),
           );
 
@@ -698,7 +767,9 @@ describe("SqliteThreadStore", () => {
                 Effect.gen(function* () {
                   const store = yield* ThreadStore;
 
-                  yield* append(store, firstBatch);
+                  if (firstBatch === undefined)
+                    return yield* Effect.die("Start progress was not prepared");
+                  yield* append(store, firstBatch, seeded);
                 }),
               ).pipe(Effect.exit),
             ),
@@ -709,7 +780,28 @@ describe("SqliteThreadStore", () => {
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              return yield* append(store, firstBatch);
+              if (firstBatch === undefined)
+                return yield* Effect.die("Start progress was not prepared");
+              const replayed = yield* append(store, firstBatch, seeded);
+
+              const continuation = yield* readContinuation(
+                threadId,
+                nativeRunId,
+                replayed.lastSequence,
+              );
+
+              expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
+                revision: 1,
+                recordCount: 2,
+                lastFact: { recordId: start.recordId },
+              });
+              expect(
+                (yield* store.lifecyclePublications!.pending(1, 1))
+                  .flat()
+                  .map(({ fact }) => fact._tag),
+              ).toEqual(["UserInputRecorded", "RunStarted"]);
+
+              return replayed;
             }),
           );
 

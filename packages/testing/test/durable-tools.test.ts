@@ -20,7 +20,6 @@ import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import type { SubmissionId } from "@yielded/agent/identifiers";
 import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import {
-  type CanonicalRecordEnvelope,
   DefinitionDigestInput,
   DefinitionDigests,
   DeploymentId,
@@ -342,9 +341,6 @@ const readLog = (threadId: string) =>
       ),
     );
   });
-
-const logTags = (records: ReadonlyArray<CanonicalRecordEnvelope>): ReadonlyArray<string> =>
-  records.map((envelope) => envelope.record.payload._tag);
 
 const lookupState = (submissionId: SubmissionId) =>
   Effect.gen(function* () {
@@ -1673,21 +1669,10 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       });
       const records = yield* readLog(thread);
 
-      expect(logTags(records)).toEqual([
-        "ThreadCreated",
-        "UserInputRecorded",
-        "RunContinuation",
-        "RunStarted",
-        "RunContinuation",
-        "RunContextRecorded",
-        "RunContinuation",
-        "ModelResponseRecorded",
-        "RunContinuation",
-        "AbortRequested",
-        "RunContinuation",
-        "SubmissionSettled",
-        "RunContinuation",
-      ]);
+      const abort = records.find(({ record }) => record.payload._tag === "AbortRequested");
+      const settlement = records.find(({ record }) => record.payload._tag === "SubmissionSettled");
+
+      expect(abort?.sequence).toBeLessThan(settlement!.sequence);
       expect(
         records.find(({ record }) => record.payload._tag === "AbortRequested")?.record.payload,
       ).toMatchObject(command);

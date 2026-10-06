@@ -785,14 +785,29 @@ const makeJournal = (
           record_id: record.recordId,
           batch_id: request.batchId,
           record_json: record.recordJson,
+          ...record.readMetadata.columns,
         },
       }));
 
-      // Five bound columns per row; preserve the logical batch and every append barrier.
-      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 5))) {
+      // Captured scalar locators avoid parsing canonical JSON under the writer.
+      // Twelve bound columns per row stay within workerd's statement limit.
+      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 12))) {
         yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
           Effect.mapError(storageError("insert canonical records")),
         );
+
+        const memberships = group.flatMap(({ record, row }) =>
+          record.readMetadata.runIds.map((runId) => ({
+            thread_id: request.threadId,
+            run_id: runId,
+            sequence: row.sequence,
+          })),
+        );
+
+        for (const members of chunked(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
+          yield* sql`INSERT INTO effect_agent_record_runs ${sql.insert(members)}`.pipe(
+            Effect.mapError(storageError("index canonical Run membership")),
+          );
         for (const { row } of group) {
           recordCache.put(
             RecordRow.make({

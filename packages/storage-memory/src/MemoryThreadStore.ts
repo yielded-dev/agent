@@ -15,6 +15,7 @@ import {
 import {
   canonicalRunIds,
   isWorkHandoff,
+  prepareProgressAppend,
   validateProgressAppend,
 } from "@yielded/agent/run-continuation";
 import {
@@ -97,11 +98,12 @@ interface StoredBatch {
 }
 
 interface StoredThread {
-  readonly runRecords: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
-  readonly continuations: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
+  /** Append-only owner indexes; readers must constrain them to their captured canonical tail. */
+  readonly runRecords: Map<string, Array<CanonicalRecordEnvelope>>;
+  readonly continuations: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly handoffs: ReadonlyArray<CanonicalRecordEnvelope>;
   readonly peerCount: number;
-  readonly workerRecords: ReadonlyMap<string, ReadonlyArray<CanonicalRecordEnvelope>>;
+  readonly workerRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly byId: ReadonlyMap<string, CanonicalRecordEnvelope>;
   readonly runInputs: ReadonlyMap<string, CanonicalRecordEnvelope | null>;
   readonly producerEpoch: ProducerEpoch;
@@ -133,7 +135,31 @@ const upperSequence = (records: ReadonlyArray<CanonicalRecordEnvelope>, sequence
   return low;
 };
 
-const indexRecords = (
+const appendToIndex = (
+  index: Map<string, Array<CanonicalRecordEnvelope>>,
+  key: string,
+  entry: CanonicalRecordEnvelope,
+) => {
+  const records = index.get(key);
+
+  if (records === undefined) index.set(key, [entry]);
+  else records.push(entry);
+};
+
+/** Only call at successful synchronous publication, or on indexes not yet reachable by readers. */
+const commitIndex = (
+  index: Map<string, Array<CanonicalRecordEnvelope>>,
+  additions: ReadonlyMap<string, Array<CanonicalRecordEnvelope>>,
+) => {
+  for (const [key, entries] of additions) {
+    const records = index.get(key);
+
+    if (records === undefined) index.set(key, entries);
+    else for (const entry of entries) records.push(entry);
+  }
+};
+
+const prepareIndexes = (
   previous: Pick<
     StoredThread,
     | "peerCount"
@@ -147,20 +173,22 @@ const indexRecords = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ) => {
   let peerCount = previous.peerCount;
+  // Latest execution entries are replaced in this private map; owner histories only append.
   const workerRecords = new Map(previous.workerRecords);
+  const workerAppends = new Map<string, Array<CanonicalRecordEnvelope>>();
   const byId = new Map(previous.byId);
   const runInputs = new Map(previous.runInputs);
-  const runRecords = new Map(previous.runRecords);
-  const continuations = new Map(previous.continuations);
+  const runRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
+  const continuations = new Map<string, Array<CanonicalRecordEnvelope>>();
   const handoffs = [...previous.handoffs];
 
   for (const entry of records) {
     byId.set(entry.record.recordId, entry);
     const payload = entry.record.payload;
-    const membership = payload._tag === "RunContinuation" ? continuations : runRecords;
 
     for (const runId of canonicalRunIds(entry.record))
-      membership.set(runId, [...(membership.get(runId) ?? []), entry]);
+      if (payload._tag === "RunContinuation") appendToIndex(continuations, runId, entry);
+      else appendToIndex(runRecords, runId, entry);
     if (isWorkHandoff(entry.record)) handoffs.push(entry);
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
@@ -186,8 +214,7 @@ const indexRecords = (
             ? "worker"
             : undefined;
 
-    if (workerKey !== undefined)
-      workerRecords.set(workerKey, [...(workerRecords.get(workerKey) ?? []), entry]);
+    if (workerKey !== undefined) appendToIndex(workerAppends, workerKey, entry);
     if (
       payload._tag === "UserInputRecorded" &&
       payload.kind === "user" &&
@@ -196,7 +223,22 @@ const indexRecords = (
       runInputs.set(payload.runId, runInputs.has(payload.runId) ? null : entry);
   }
 
-  return { peerCount, workerRecords, byId, runInputs, runRecords, continuations, handoffs };
+  return {
+    indexes: {
+      peerCount,
+      workerRecords,
+      byId,
+      runInputs,
+      runRecords: previous.runRecords,
+      continuations: previous.continuations,
+      handoffs,
+    },
+    commit: () => {
+      commitIndex(previous.runRecords, runRecords);
+      commitIndex(previous.continuations, continuations);
+      commitIndex(workerRecords, workerAppends);
+    },
+  };
 };
 
 type AppendDecision =
@@ -440,7 +482,7 @@ const makeThreadStore = Effect.gen(function* () {
       !thread.batches.has(request.batch.batchId)
     )
       yield* validateProgressAppend(
-        request.batch,
+        prepareProgressAppend(request.batch.records),
         (runId) =>
           Effect.gen(function* () {
             const latest = thread.continuations.get(runId)?.at(-1);
@@ -593,10 +635,11 @@ const makeThreadStore = Effect.gen(function* () {
 
         tailDigests.set(lastSequence, digest);
         const threads = new Map(current.threads);
+        const indexes = prepareIndexes(thread, records);
 
         threads.set(request.threadId, {
           ...thread,
-          ...indexRecords(thread, records),
+          ...indexes.indexes,
           tailSequence: lastSequence,
           tailDigest: digest,
           records: [...thread.records, ...records],
@@ -605,7 +648,15 @@ const makeThreadStore = Effect.gen(function* () {
           tailDigests,
         });
 
-        return [{ _tag: "success", result, records }, { threads }];
+        const publication: readonly [AppendDecision, MemoryState] = [
+          { _tag: "success", result, records },
+          { threads },
+        ];
+
+        // All rejection paths and preparation precede mutation. Ref.modify publishes without a yield.
+        indexes.commit();
+
+        return publication;
       }).pipe(
         Effect.tap((decision) =>
           decision._tag === "success" && decision.records.length > 0
@@ -765,9 +816,14 @@ const makeThreadStore = Effect.gen(function* () {
               break;
           }
 
+          // Append-only owner histories may have grown since this Thread snapshot was captured.
           return Stream.fromIterable(
             records
-              .filter((entry) => entry.sequence > (request.page.afterSequence ?? 0))
+              .filter(
+                (entry) =>
+                  entry.sequence > (request.page.afterSequence ?? 0) &&
+                  entry.sequence <= thread.tailSequence,
+              )
               .sort((a, b) => a.sequence - b.sequence)
               .slice(0, request.page.limit),
           );
@@ -954,19 +1010,21 @@ const makeThreadStore = Effect.gen(function* () {
           }
           const threads = new Map(current.threads);
 
+          const indexes = prepareIndexes(
+            {
+              peerCount: 0,
+              workerRecords: new Map(),
+              byId: new Map(),
+              runInputs: new Map(),
+              runRecords: new Map(),
+              continuations: new Map(),
+              handoffs: [],
+            },
+            records,
+          );
+
           threads.set(threadId, {
-            ...indexRecords(
-              {
-                peerCount: 0,
-                workerRecords: new Map(),
-                byId: new Map(),
-                runInputs: new Map(),
-                runRecords: new Map(),
-                continuations: new Map(),
-                handoffs: [],
-              },
-              records,
-            ),
+            ...indexes.indexes,
             producerEpoch,
             records,
             batches,
@@ -986,6 +1044,7 @@ const makeThreadStore = Effect.gen(function* () {
           yield* Effect.uninterruptible(
             Effect.sync(() => {
               commitLedger?.();
+              indexes.commit();
               MutableRef.set(state.ref, { threads });
             }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
           );

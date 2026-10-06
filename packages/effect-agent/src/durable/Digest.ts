@@ -62,6 +62,9 @@ const digestText = Effect.fnUntraced(function* (
 export const digestJson = (value: Schema.Json): Effect.Effect<Digest, DigestError, Crypto.Crypto> =>
   Effect.suspend(() => digestText(canonicalJson(value)));
 
+/** Hash captured canonical JSON directly, sharing its encoding with accounting and storage. */
+export const digestCanonicalJson = (json: string) => digestText(json);
+
 /** Hash a privately captured, schema-encoded canonical batch without serializing it again. */
 export const digestCanonicalBatchJson = (previousTailDigest: Digest, batchJson: string) =>
   digestText(`{"batch":${batchJson},"previousTailDigest":${JSON.stringify(previousTailDigest)}}`);

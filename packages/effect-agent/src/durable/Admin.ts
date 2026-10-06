@@ -347,6 +347,8 @@ export const IntegrityCheckName = Schema.Literals([
   "sequence-contiguity",
   /** The tail digest chain recomputes from EMPTY_TAIL_DIGEST over every batch (DUR-006/DUR-007). */
   "digest-chain",
+  /** Continuations reproduce semantic progress, accounting and references from canonical facts. */
+  "continuation-evidence",
   /** Canonical `input:{sid}` records follow the admitted FIFO order (DUR-004). */
   "fifo-input-order",
   /** Canonical settlement records follow the admitted FIFO order (DUR-004); aborted
