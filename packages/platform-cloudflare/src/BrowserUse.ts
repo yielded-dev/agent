@@ -342,10 +342,12 @@ export const make = Effect.fnUntraced(function* <R>(
                   /Execution context was destroyed|Cannot find context with specified id/.test(
                     error.message,
                   );
+                // The first read of a fresh controller has no page URL yet; a lost document
+                // still retries, and the retry authorizes the page it then finds.
                 if (
                   read &&
-                  authorizedUrl !== undefined &&
-                  (selected.url() !== authorizedUrl || lostDocument)
+                  (lostDocument ||
+                    (authorizedUrl !== undefined && selected.url() !== authorizedUrl))
                 )
                   authorizationChanged = true;
                 throw error;
