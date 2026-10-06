@@ -1,4 +1,4 @@
-import type { ThreadExport } from "@yielded/agent/thread-store";
+import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { Schema } from "effect";
 
 import type { ResearchScoutActivity } from "../domain.ts";
@@ -7,7 +7,9 @@ import { ScoutRequest } from "./contracts.ts";
 import { UpdatingResearchScout } from "./scout.ts";
 
 /** Discover the newest task per source-owned worker without reading any child objects. */
-export const researchOverview = (records: ThreadExport["records"]): ResearchScoutActivity[] => {
+export const researchOverview = (
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+): ResearchScoutActivity[] => {
   const seen = new Set<string>();
   const scouts: ResearchScoutActivity[] = [];
 

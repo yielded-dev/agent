@@ -14,25 +14,12 @@ import {
 } from "@yielded/agent/durable-failpoint";
 import { DurableStep, DurableStepError } from "@yielded/agent/durable-step";
 import { IdGenerator } from "@yielded/agent/id-generator";
-import {
-  ThreadId,
-  RunId,
-  ToolCallId,
-  TurnId,
-  type AgentId,
-  type SubmissionId,
-} from "@yielded/agent/identifiers";
-import {
-  DefinitionDigests,
-  DeploymentId,
-  Digest,
-  ProducerId,
-  type BatchId,
-} from "@yielded/agent/records";
+import { ThreadId, RunId, ToolCallId, TurnId, type AgentId } from "@yielded/agent/identifiers";
+import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
-import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
+import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
@@ -45,7 +32,6 @@ import {
   SubmissionLookupById,
   UnknownResolutionCommand,
   DEFAULT_OWNERSHIP_LEASE_DURATION,
-  type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
 import {
   type CertificationCaseResult,
@@ -57,13 +43,7 @@ import {
   type CertificationScenario,
 } from "@yielded/agent/testing/certification";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
-import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
-import {
-  ThreadExportRequest,
-  ThreadStore,
-  ThreadReader,
-  LoadCheckpointRequest,
-} from "@yielded/agent/thread-store";
+import { ThreadStore, ThreadReader, ThreadStoreError } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import type { Crypto } from "effect";
@@ -99,8 +79,7 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  *   After the injected fault the runner asserts the state stays CLASSIFIABLE (recovery +
  *   the public unblocking operations `resolveUnknown`/`resolveApproval` are the only levers
  *   used) and that the re-drive CONVERGES to `verifyThreadInvariants` with `requireAllSettled`,
- *   including a fully discharged digest-chain check, because the runner captures per-batch producer
- *   identity at append time.
+ *   including the complete canonical digest chain from native paged verification.
  * - **Tier 3 — real loss lever**: recorded honestly. A durable adapter either supplies a
  *   `CertificationCrashLever` executed in this run, cites its committed real-loss evidence
  *   (process-kill / eviction suites), or the certificate says `not-exercised`. A non-durable
@@ -729,54 +708,16 @@ const MAX_REDRIVE_ROUNDS = 8;
  * invariant checker in convergence mode WITH the captured per-batch producer directory, so
  * the digest chain is fully recomputed instead of skipped.
  */
-const verifyLane = Effect.fnUntraced(function* (
-  lane: ThreadId,
-  batchProducers: ReadonlyMap<BatchId, ProducerId>,
-) {
+const verifyLane = Effect.fnUntraced(function* (lane: ThreadId) {
   const store = yield* ThreadStore;
-  const ledger = yield* SubmissionLedger;
-  const exported = yield* store.export(ThreadExportRequest.make({ threadId: lane }));
-  const rows = new Map<SubmissionId, SubmissionSnapshot>();
-  const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
-  const named = new Set<SubmissionId>();
 
-  for (const submission of nonterminal) {
-    if (submission.threadId === lane) named.add(submission.submissionId);
-  }
+  if (store.verification === undefined)
+    return yield* ThreadStoreError.make({
+      operation: "adapter certification",
+      message: "The adapter must provide bounded native Thread verification",
+    });
 
-  for (const envelope of exported.records) {
-    const payload = envelope.record.payload;
-
-    if (
-      payload._tag === "UserInputRecorded" ||
-      payload._tag === "SubmissionSettled" ||
-      payload._tag === "AbortRequested"
-    ) {
-      if (payload.submissionId !== undefined) named.add(payload.submissionId);
-    }
-  }
-  for (const submissionId of named) {
-    if (rows.has(submissionId)) continue;
-    const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
-
-    if (Option.isSome(found) && found.value.threadId === lane) {
-      rows.set(submissionId, found.value);
-    }
-  }
-
-  const checkpoint =
-    store.checkpoints === undefined
-      ? Option.none()
-      : yield* store.checkpoints.load(LoadCheckpointRequest.make({ threadId: lane }));
-
-  return yield* verifyThreadInvariants({
-    export: exported,
-    submissions: [...rows.values()],
-    batchProducers,
-    checkpoint: Option.getOrUndefined(checkpoint),
-    checkpointsSupported: store.checkpoints !== undefined,
-    requireAllSettled: true,
-  });
+  return yield* store.verification.verify({ threadId: lane, requireAllSettled: true });
 });
 
 const failureTagOf = <E>(cause: Cause.Cause<E>): string => {
@@ -804,7 +745,6 @@ type SweepOutcome = Pick<
 const runSweepCell = Effect.fnUntraced(function* (
   scenario: CertificationScenario,
   location: DurableRuntimeFailpointLocation | undefined,
-  batchProducers: ReadonlyMap<BatchId, ProducerId>,
   leaseAdvance: Duration.Duration,
   reached: Set<DurableRuntimeFailpointLocation>,
 ) {
@@ -953,7 +893,7 @@ const runSweepCell = Effect.fnUntraced(function* (
   const failedChecks: Array<string> = [];
 
   for (const lane of lanes) {
-    const verdict = yield* Effect.exit(verifyLane(lane, batchProducers));
+    const verdict = yield* Effect.exit(verifyLane(lane));
 
     if (Exit.isFailure(verdict)) {
       return failed(`lane ${lane} could not be verified: ${failureTagOf(verdict.cause)}`, wasFired);
@@ -1058,45 +998,13 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
 export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
   options: CertifyDurableAdaptersOptions<LedgerE, StoreE>,
 ): Effect.Effect<CertificationReport, LedgerE | StoreE, Crypto.Crypto> => {
-  const batchProducers = new Map<BatchId, ProducerId>();
-
-  // Interpose the candidate store with an append-time capture of each batch's producer
-  // identity — the one value the ThreadStore port deliberately does not export — so
-  // Tier 2's invariant verification recomputes the FULL digest chain instead of skipping it.
-  const capturingStore = Layer.effect(ThreadStore)(
-    Effect.gen(function* () {
-      const inner = yield* ThreadStore;
-
-      return ThreadStore.of({
-        ...inner,
-        append: (request) =>
-          Effect.sync(() => {
-            batchProducers.set(request.batch.batchId, request.batch.producerId);
-          }).pipe(Effect.andThen(inner.append(request))),
-      });
-    }),
-  ).pipe(Layer.provide(options.threadStore));
-
-  const capturingPublisher = Layer.effect(SettlementPublisher)(
-    Effect.gen(function* () {
-      const inner = yield* SettlementPublisher;
-
-      return SettlementPublisher.of({
-        publish: (request) =>
-          Effect.sync(() => {
-            batchProducers.set(request.append.batch.batchId, request.append.batch.producerId);
-          }).pipe(Effect.andThen(inner.publish(request))),
-      });
-    }),
-  ).pipe(Layer.provideMerge(options.submissionLedger));
-
   // RUN-036: certification uses the default-none Tool failure observer. Trusted application
   // reporting adds no durable transition and is verified separately from adapter certification.
   const environment = Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        capturingPublisher,
-        capturingStore,
+        options.submissionLedger,
+        options.threadStore,
         options.wakeScheduler ?? WakeScheduler.layerNoop,
         DurableRuntimeFailpointTestControl.layer,
         ToolReconciler.uncertain,
@@ -1131,13 +1039,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
     for (const scenario of CERTIFICATION_SCENARIOS) {
       const reached = new Set<DurableRuntimeFailpointLocation>();
 
-      const outcome = yield* runSweepCell(
-        scenario,
-        undefined,
-        batchProducers,
-        leaseAdvance,
-        reached,
-      );
+      const outcome = yield* runSweepCell(scenario, undefined, leaseAdvance, reached);
 
       discoveries.push({ scenario, outcome, reached });
     }
@@ -1166,10 +1068,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
           );
 
           if (location === undefined) break;
-          outcomes.set(
-            location,
-            yield* runSweepCell(scenario, location, batchProducers, leaseAdvance, reached),
-          );
+          outcomes.set(location, yield* runSweepCell(scenario, location, leaseAdvance, reached));
         }
       }
       for (const location of DurableRuntimeFailpointLocation.literals) {

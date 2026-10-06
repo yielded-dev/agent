@@ -1212,7 +1212,11 @@ but need not match the query. An unknown, removed, foreign, or non-evidence anch
 Each request captures a fresh tail and checks current authorization. New appends cannot push
 older matches out of a continued page, but pages do not share a retained snapshot or bypass
 retention. A scan, deadline, or index-work limit is an explicit failure, never an exhausted page.
-Search snippets remain at most 2,000 UTF-16 characters each; text reads use their existing bounds.
+`ThreadContextHistory` searches backwards from the captured tail or exact anchor in eight-record
+pages. `maxRecords` limits work per search, regardless of Thread age; finding a full page can stop
+early. Exact reads and window ownership use native locators across archived ranges. Storage
+verification separately checks global integrity. Search snippets remain at most 2,000 UTF-16
+characters each; text reads use their existing bounds.
 Every continuation is another Tool call charged to the Run's ordinary cumulative limits.
 
 Both the default compactor and `layerRollover` honor an explicit `new_context` request. Custom

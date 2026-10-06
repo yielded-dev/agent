@@ -1188,7 +1188,8 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
   readonly bufferLimits?: RunBufferLimits | undefined;
   /**
    * Incremental history observer. ThreadHistory.layer retains each complete update first.
-   * Invoked inline with the full Prompt whenever official history advances, including initial
+   * Invoked inline with the source Prompt and its retained compacted model context whenever
+   * official history advances, including initial
    * instructions/input before the first model call. It can write before the Run succeeds or its
    * resources close. Failure stops execution through HookError; defects and interruption propagate.
    * Earlier callback writes are caller-owned and are not rolled back if this or a later step fails.
@@ -1196,7 +1197,10 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
    * the durable coordinator uses it for live Prompt state while its journal owns durable commits.
    */
   readonly onHistory?:
-    | ((history: Prompt.Prompt) => Effect.Effect<void, HookError, HookRequirements>)
+    | ((
+        history: Prompt.Prompt,
+        modelContext: Prompt.Prompt,
+      ) => Effect.Effect<void, HookError, HookRequirements>)
     | undefined;
 }
 

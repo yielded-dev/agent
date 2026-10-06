@@ -17,7 +17,7 @@ import {
   SubagentReservationAmounts,
 } from "../core/SubagentContract.ts";
 import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import type { Digest } from "./Records.ts";
+import type { Digest, CanonicalRecordEnvelope } from "./Records.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -34,6 +34,7 @@ import {
   SubtreeBudgetReserved,
   PeerMessagePrepared,
 } from "./Records.ts";
+import { canonicalRecordBytes } from "./RunContinuation.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import {
   type AppendResult,
@@ -47,6 +48,7 @@ import {
   ThreadObservation,
   ThreadRead,
   ThreadStore,
+  ThreadStoreError,
   ThreadReader,
   getRecord,
   getRunInput,
@@ -82,6 +84,51 @@ export interface ThreadStoreConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<void, ThreadStoreConformanceFailure, ThreadStore>;
 }
+
+/** Inspect a small test fixture through its captured tail, up to 16,384 records and 32 MiB.
+ * Transfer tests use streamExport so every wire page and independent fact section is exercised. */
+export const readTestThread = Effect.fnUntraced(function* (
+  store: Pick<ThreadStore["Service"], "read" | "export">,
+  request: Pick<ThreadExportRequest, "threadId">,
+) {
+  const tail = yield* store.export(ThreadExportRequest.make({ threadId: request.threadId }));
+
+  const invalid = (message: string) =>
+    ThreadStoreError.make({ operation: "test fixture history", message });
+
+  if (tail.tailSequence > 16_384) return yield* invalid("Fixture exceeds 16,384 canonical records");
+  const records: Array<CanonicalRecordEnvelope> = [];
+  let bytes = 0;
+
+  while (records.length < tail.tailSequence) {
+    const page = yield* store
+      .read(
+        ThreadRead.make({
+          threadId: request.threadId,
+          afterSequence: CanonicalSequence.make(records.length),
+          limit: 8,
+        }),
+      )
+      .pipe(Stream.take(9), Stream.runCollect);
+
+    if (page.length === 0 || page.length > 8) return yield* invalid("Invalid fixture history page");
+    for (const entry of page) {
+      if (entry.sequence > tail.tailSequence) break;
+      if (entry.sequence !== records.length + 1 || entry.threadId !== request.threadId)
+        return yield* invalid("Fixture history is not contiguous");
+      bytes += canonicalRecordBytes(entry.record);
+      if (bytes > 32 * 1024 * 1024) return yield* invalid("Fixture exceeds 32 MiB");
+      records.push(entry);
+    }
+  }
+
+  return {
+    threadId: tail.threadId,
+    tailSequence: tail.tailSequence,
+    tailDigest: tail.tailDigest,
+    records,
+  };
+});
 
 const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeRecordId = Schema.decodeSync(RecordId);
@@ -831,6 +878,7 @@ const nativeWorkerAccounting = conformanceCase(
           threadId: workerThreadId,
         },
         source: { _tag: "programmatic" as const, agentId, threadId },
+        budgetScope: "worker-run" as const,
         targetDigests: {
           agent: EMPTY_TAIL_DIGEST,
           model: EMPTY_TAIL_DIGEST,
@@ -976,6 +1024,7 @@ const nativeWorkerAccounting = conformanceCase(
         threadId,
         batch("scoped-budgets", [
           budgetRow("selected", CONFORMANCE_SUBMISSION),
+          budgetRow("selected-second", CONFORMANCE_SUBMISSION),
           budgetRow("old-run", Schema.decodeSync(SubmissionId)("old-run")),
         ]),
         tail,
@@ -1007,21 +1056,21 @@ const nativeWorkerAccounting = conformanceCase(
 
       yield* expectFailure(
         "Worker accounting cannot return a partial authorization snapshot",
-        readWorkerState({ threadId, sourceSubmissionId: CONFORMANCE_SUBMISSION, limit: 3 }),
+        readWorkerState({ threadId, sourceSubmissionId: CONFORMANCE_SUBMISSION, limit: 1 }),
       );
 
       const accounting = yield* readWorkerState({
         threadId,
         sourceSubmissionId: CONFORMANCE_SUBMISSION,
-        limit: 4,
+        limit: 2,
       });
 
       yield* ensure(
-        accounting.records.length === 4 &&
+        accounting.records.length === 2 &&
           accounting.records
             .filter(({ record }) => record.payload._tag === "SubtreeBudgetReserved")
             .map(({ record }) => record.recordId)
-            .join() === "selected",
+            .join() === "selected,selected-second",
         "Worker state excludes conversation and another Run's accounting, retaining completed lifetime reservations",
       );
       yield* ensure(
@@ -1029,7 +1078,7 @@ const nativeWorkerAccounting = conformanceCase(
         "The accounting snapshot carries the full canonical CAS tail",
       );
       // Regression: https://github.com/yielded-dev/agent/blob/c721a292205e06185f0136c3ed05dcf53e29ca66/packages/effect-agent/src/durable/SqlThreadNativeReads.ts#L195-L214
-      yield* append(
+      tail = yield* append(
         threadId,
         batch("stop-worker", [
           envelope(
@@ -1046,15 +1095,21 @@ const nativeWorkerAccounting = conformanceCase(
         tail,
       );
 
-      const stopped = yield* readWorkerState({
-        threadId,
-        sourceSubmissionId: CONFORMANCE_SUBMISSION,
-        limit: 5,
-      });
+      const stopped = yield* Stream.runCollect(
+        store.read({
+          threadId,
+          selection: {
+            _tag: "WorkerStop",
+            workerThreadId,
+            throughSequence: tail.lastSequence,
+          },
+          page: { limit: 1 },
+        }),
+      );
 
       yield* ensure(
-        stopped.records.some(({ record }) => record.payload._tag === "WorkerStopRequested"),
-        "Native worker state retains explicit stop intent after assignment completion",
+        stopped.some(({ record }) => record.payload._tag === "WorkerStopRequested"),
+        "The exact worker stop selection retains intent after assignment completion",
       );
     }),
 );

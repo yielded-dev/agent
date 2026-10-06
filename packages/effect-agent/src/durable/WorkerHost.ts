@@ -119,12 +119,9 @@ export const WorkerConcurrencyResolver = Context.Reference<{
 
 /** Host ceilings apply across all declarations owned by one source Thread. */
 export const WorkerHostLimits = Schema.Struct({
-  maxWorkersPerSource: Positive.check(Schema.isLessThanOrEqualTo(100)),
   /** Active background workers across declarations; omission retains source Tool concurrency. */
   maxActiveWorkersPerSource: Schema.optionalKey(Positive.check(Schema.isLessThanOrEqualTo(100))),
-  maxInputsPerWorker: Positive.check(Schema.isLessThanOrEqualTo(1_000)),
   maxPendingInputsPerWorker: Positive.check(Schema.isLessThanOrEqualTo(100)),
-  maxUpdateInputsPerWorker: Schema.optionalKey(Positive.check(Schema.isLessThanOrEqualTo(1_000))),
   maxPendingUpdateInputsPerWorker: Schema.optionalKey(
     Positive.check(Schema.isLessThanOrEqualTo(100)),
   ),
@@ -141,8 +138,6 @@ export const WorkerHostConfig = Context.Reference<WorkerHostLimits>(
   "@effect-agent/thread/WorkerHostConfig",
   {
     defaultValue: () => ({
-      maxWorkersPerSource: 32,
-      maxInputsPerWorker: 64,
       maxPendingInputsPerWorker: 8,
       lifetimeMillis: 86_400_000,
     }),

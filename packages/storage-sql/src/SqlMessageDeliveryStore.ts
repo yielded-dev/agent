@@ -60,6 +60,8 @@ const encodeMetadata = Schema.encodeSync(
   Schema.fromJsonString(
     Schema.Struct({
       workerUpdate: Schema.Boolean,
+      peer: Schema.Boolean,
+      messageId: Schema.String,
       delegationId: Schema.NullOr(Schema.String),
       targetAgentId: Schema.NullOr(Schema.String),
       threadId: Schema.NullOr(Schema.String),
@@ -69,11 +71,16 @@ const encodeMetadata = Schema.encodeSync(
   ),
 );
 
-const deliveryMetadata = (record: MessageDeliveryRecord): string => {
+/** Shared importer and delivery writer use identical native selector metadata. */
+export const messageDeliveryMetadata = (record: MessageDeliveryRecord): string => {
   const origin = record.envelope.workerAdmission?.origin;
 
   return encodeMetadata({
     workerUpdate: isWorkerUpdateDelivery(record),
+    messageId: JSON.stringify(record.key.messageId),
+    peer:
+      record.envelope.messageAdmission !== undefined &&
+      "message" in record.envelope.messageAdmission,
     delegationId: origin === undefined ? null : JSON.stringify(origin.worker.delegationId),
     targetAgentId: origin === undefined ? null : JSON.stringify(origin.worker.targetAgentId),
     threadId: origin === undefined ? null : JSON.stringify(origin.worker.threadId),
@@ -102,7 +109,6 @@ const Row = Schema.Struct({
 });
 
 const Count = Schema.Struct({
-  retained: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
   pending: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
 });
 
@@ -376,7 +382,21 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
         const counts = yield* query(
           "count",
-          sql`SELECT COUNT(*) AS retained, COALESCE(SUM(CASE WHEN state IN ('pending', 'accepted', 'parked') THEN 1 ELSE 0 END), 0) AS pending FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.key.ownerThreadId} AND ${sql.onDialectOrElse({ orElse: () => sql`COALESCE(${sqliteJsonText(sql, "record_json", ["envelope", "messageAdmission", "_tag"])}, '') ${update ? sql`= 'WorkerUpdate'` : sql`<> 'WorkerUpdate'`}`, pg: () => sql`(read_metadata ->> 'workerUpdate') = ${String(update)}` })}`,
+          sql`SELECT COUNT(*) AS pending FROM (
+            SELECT 1 FROM ${relation("effect_agent_message_deliveries")}
+            ${sql.onDialectOrElse({
+              orElse: () => sql`INDEXED BY effect_agent_message_deliveries_capacity`,
+              pg: () => sql``,
+            })}
+            WHERE owner_thread_id = ${input.key.ownerThreadId}
+              AND state IN ('pending', 'accepted', 'parked')
+              AND ${sql.onDialectOrElse({
+                orElse: () =>
+                  sql`(COALESCE(${sqliteJsonText(sql, "record_json", ["envelope", "messageAdmission", "_tag"])}, '') = 'WorkerUpdate') = ${update ? 1 : 0}`,
+                pg: () => sql`(read_metadata ->> 'workerUpdate') = ${String(update)}`,
+              })}
+            LIMIT ${capacity.pending}
+          ) live_capacity`,
         );
 
         const count = (yield* decodeCountRows(counts).pipe(
@@ -384,11 +404,11 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
         ))[0];
 
         if (count === undefined) return yield* corrupt("count");
-        if (count.retained >= capacity.retained || count.pending >= capacity.pending)
+        if (count.pending >= capacity.pending)
           return yield* MessageDeliveryError.make({ reason: "capacity", operation: "insert" });
         yield* query(
           "insert",
-          sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${deliveryMetadata(input)}::jsonb` })})`,
+          sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(input)}::jsonb` })})`,
         );
         yield* work
           .transferDelivery(input.key.ownerThreadId, input.key.messageId)
@@ -446,7 +466,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
           const updated = yield* query(
             "change",
-            sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${deliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, record_json`,
+            sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${messageDeliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, record_json`,
           );
 
           const rows = yield* decodeRows(updated);

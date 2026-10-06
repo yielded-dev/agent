@@ -13,8 +13,12 @@ import {
   SqliteWriteContention,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-error";
 import { SqliteStorageFailpoint } from "@yielded/agent-storage-sqlite/sqlite-storage-failpoint";
-import { ledgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
-import { threadStoreLayer, layer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
+import { submissionLedgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
+import {
+  threadStoreLayer,
+  layer,
+  storageConfigLayer,
+} from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
@@ -51,6 +55,8 @@ import {
   SaveCheckpointRequest,
   type AppendResult,
   type ThreadReader,
+  streamExport,
+  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import type { PlatformError, Crypto } from "effect";
 import {
@@ -230,7 +236,15 @@ describe("SqliteThreadStore", () => {
           Effect.gen(function* () {
             yield* seedCheckpoint(historical).pipe(
               Effect.provide(
-                Layer.mergeAll(layer({ filename }), ledgerLayer({ filename }), NodeCrypto.layer),
+                Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
+                  Layer.provideMerge(
+                    Layer.mergeAll(
+                      storageConfigLayer({ filename }),
+                      SqliteStorageFailpoint.layer,
+                      NodeCrypto.layer,
+                    ),
+                  ),
+                ),
               ),
             );
             const before = yield* snapshotStore;
@@ -506,13 +520,16 @@ describe("SqliteThreadStore", () => {
         const current = yield* withStorage(
           filename,
           Effect.gen(function* () {
-            const store = yield* ThreadStore;
-
-            return yield* store.export(ThreadExportRequest.make({ threadId }));
+            return yield* streamExport({ threadId }).pipe(
+              Stream.provide(ThreadExportSource.layer()),
+              Stream.flatMap((page) => Stream.fromIterable(page.records)),
+              Stream.take(3),
+              Stream.runCollect,
+            );
           }),
         );
 
-        expect(current.records).toHaveLength(2);
+        expect(current).toHaveLength(2);
       }),
     ),
   );

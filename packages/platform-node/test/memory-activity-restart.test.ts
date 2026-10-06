@@ -12,6 +12,7 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { MemoryReader } from "@yielded/agent/memory-store";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import { memoryReaderLayer } from "@yielded/agent/sql-memory-store";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import {
   Duration,
@@ -105,9 +106,9 @@ const inspectActivity = (filename: string) =>
   );
 
 const exportThread = (filename: string, threadId: ThreadId) =>
-  Effect.flatMap(ThreadStore, (store) => store.export(ThreadExportRequest.make({ threadId }))).pipe(
-    Effect.provide(sqliteThreadStoreLayer({ filename })),
-  );
+  Effect.flatMap(ThreadStore, (store) =>
+    readTestThread(store, ThreadExportRequest.make({ threadId })),
+  ).pipe(Effect.provide(sqliteThreadStoreLayer({ filename })));
 
 const spawnWorker = Effect.fn("MemoryActivityTest.spawnWorker")(function* (
   filename: string,

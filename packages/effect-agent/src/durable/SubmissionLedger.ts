@@ -257,6 +257,21 @@ export class SubmissionSnapshot extends Schema.Class<SubmissionSnapshot>(
   messageAdmission: Schema.optionalKey(InputMessage),
 }) {}
 
+/** Resolve the exact selected input to its immutable host Run without enumerating joins. */
+export const FundingOwnerRequest = Schema.Struct({
+  threadId: ThreadId,
+  submissionId: SubmissionId,
+});
+
+export type FundingOwnerRequest = typeof FundingOwnerRequest.Type;
+
+export const FundingOwner = Schema.Struct({
+  selected: SubmissionSnapshot,
+  owner: SubmissionSnapshot,
+});
+
+export type FundingOwner = typeof FundingOwner.Type;
+
 /** Bounded native control facts. Canonical input/Run records remain ThreadStore-owned. */
 export const WorkerLedgerState = Schema.Struct({
   latest: Schema.NullOr(SubmissionSnapshot),
@@ -1163,6 +1178,10 @@ export class SubmissionLedger extends Context.Service<
     readonly lookup: (
       request: SubmissionLookup,
     ) => Effect.Effect<Option.Option<SubmissionSnapshot>, LedgerError>;
+    /** Absent adapters fail closed when funding a worker from an explicitly selected input. */
+    readonly resolveFundingOwner?: (
+      request: FundingOwnerRequest,
+    ) => Effect.Effect<FundingOwner, LedgerError>;
     readonly resolveAdmission: (
       request: SubmissionLookupByKey,
     ) => Effect.Effect<AdmissionResolution, LedgerError>;

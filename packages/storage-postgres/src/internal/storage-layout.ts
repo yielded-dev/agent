@@ -11,15 +11,151 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 20;
+export const CurrentPostgresStorageVersion = 21;
+
+/** Counter function body is frozen and checked on every layout inspection. */
+const transferFunctionBody = `
+DECLARE owner_id TEXT; fact JSONB; command_sequence BIGINT;
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
+  IF TG_OP = 'DELETE' THEN fact := to_jsonb(OLD); ELSE fact := to_jsonb(NEW); END IF;
+  IF TG_ARGV[0] IN ('submission', 'parent') THEN
+    SELECT thread_id INTO STRICT owner_id FROM __NAMESPACE__.effect_agent_submissions
+      WHERE submission_id = (fact ->> CASE WHEN TG_ARGV[0] = 'submission' THEN 'submission_id' ELSE 'parent_submission_id' END);
+  ELSE owner_id := fact ->> TG_ARGV[0]; END IF;
+  IF TG_TABLE_NAME = 'effect_agent_child_reservations' THEN
+    IF TG_OP = 'UPDATE' THEN
+      DELETE FROM __NAMESPACE__.effect_agent_live_child_reservations WHERE reservation_id=OLD.reservation_id;
+    END IF;
+    DELETE FROM __NAMESPACE__.effect_agent_live_child_reservations WHERE reservation_id=(fact ->> 'reservation_id');
+    IF TG_OP <> 'DELETE' AND (fact ->> 'status') <> 'released' THEN
+      INSERT INTO __NAMESPACE__.effect_agent_live_child_reservations (reservation_id, thread_id)
+        VALUES (fact ->> 'reservation_id', owner_id);
+    END IF;
+  END IF;
+  INSERT INTO __NAMESPACE__.effect_agent_transfer_state
+    (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count)
+    VALUES (owner_id, 1, CASE WHEN TG_ARGV[1]='admissions_count' THEN 1 ELSE 0 END,
+      CASE WHEN TG_ARGV[1]='aborts_count' THEN 1 ELSE 0 END,
+      CASE WHEN TG_ARGV[1]='approvals_count' THEN 1 ELSE 0 END,
+      CASE WHEN TG_ARGV[1]='resolutions_count' THEN 1 ELSE 0 END,
+      CASE WHEN TG_ARGV[1]='deliveries_count' THEN 1 ELSE 0 END)
+    ON CONFLICT(thread_id) DO UPDATE SET revision=effect_agent_transfer_state.revision+1,
+      admissions_count=effect_agent_transfer_state.admissions_count+EXCLUDED.admissions_count,
+      aborts_count=effect_agent_transfer_state.aborts_count+EXCLUDED.aborts_count,
+      approvals_count=effect_agent_transfer_state.approvals_count+EXCLUDED.approvals_count,
+      resolutions_count=effect_agent_transfer_state.resolutions_count+EXCLUDED.resolutions_count,
+      deliveries_count=effect_agent_transfer_state.deliveries_count+EXCLUDED.deliveries_count
+    RETURNING CASE TG_ARGV[1] WHEN 'aborts_count' THEN aborts_count WHEN 'approvals_count' THEN approvals_count
+      WHEN 'resolutions_count' THEN resolutions_count END INTO command_sequence;
+  IF command_sequence IS NOT NULL THEN
+    INSERT INTO __NAMESPACE__.effect_agent_transfer_commands (thread_id, command_kind, command_sequence, submission_id, tool_call_id, resolution_kind)
+      VALUES (owner_id, CASE TG_ARGV[1] WHEN 'aborts_count' THEN 'aborts' WHEN 'approvals_count' THEN 'approvals' ELSE 'resolutions' END,
+        command_sequence, fact ->> 'submission_id', COALESCE(fact ->> 'tool_call_id', ''), COALESCE(fact ->> 'resolution_kind', ''));
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+`;
+
+const transferTriggers = [
+  {
+    name: "effect_agent_transfer_submissions_insert",
+    table: "effect_agent_submissions",
+    event: "INSERT",
+    owner: "thread_id",
+    count: "admissions_count",
+  },
+  {
+    name: "effect_agent_transfer_abort_intents_insert",
+    table: "effect_agent_abort_intents",
+    event: "INSERT",
+    owner: "submission",
+    count: "aborts_count",
+  },
+  {
+    name: "effect_agent_transfer_approval_decisions_insert",
+    table: "effect_agent_approval_decisions",
+    event: "INSERT",
+    owner: "submission",
+    count: "approvals_count",
+  },
+  {
+    name: "effect_agent_transfer_unknown_resolutions_insert",
+    table: "effect_agent_unknown_resolutions",
+    event: "INSERT",
+    owner: "submission",
+    count: "resolutions_count",
+  },
+  {
+    name: "effect_agent_transfer_message_deliveries_insert",
+    table: "effect_agent_message_deliveries",
+    event: "INSERT",
+    owner: "owner_thread_id",
+    count: "deliveries_count",
+  },
+  {
+    name: "effect_agent_transfer_message_deliveries_update",
+    table: "effect_agent_message_deliveries",
+    event: "UPDATE",
+    owner: "owner_thread_id",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_child_reservations_insert",
+    table: "effect_agent_child_reservations",
+    event: "INSERT",
+    owner: "parent",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_child_reservations_update",
+    table: "effect_agent_child_reservations",
+    event: "UPDATE",
+    owner: "parent",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_child_reservations_delete",
+    table: "effect_agent_child_reservations",
+    event: "DELETE",
+    owner: "parent",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_worker_stops_insert",
+    table: "effect_agent_worker_stops",
+    event: "INSERT",
+    owner: "thread_id",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_worker_stops_update",
+    table: "effect_agent_worker_stops",
+    event: "UPDATE",
+    owner: "thread_id",
+    count: "",
+  },
+  {
+    name: "effect_agent_transfer_worker_stops_delete",
+    table: "effect_agent_worker_stops",
+    event: "DELETE",
+    owner: "thread_id",
+    count: "",
+  },
+] as const;
 
 /** Fresh layout only; inspection rejects every predecessor before DDL. */
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C" NOT NULL, record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_json TEXT COLLATE "C", CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C", record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__.effect_agent_tool_declarations (thread_id TEXT COLLATE "C" NOT NULL, settlement_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
+  "CREATE INDEX effect_agent_tool_declarations_sequence ON __NAMESPACE__.effect_agent_tool_declarations(thread_id, sequence)",
+  'CREATE TABLE __NAMESPACE__.effect_agent_record_refusals (thread_id TEXT COLLATE "C" NOT NULL, reservation_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
+  "CREATE INDEX effect_agent_record_refusals_sequence ON __NAMESPACE__.effect_agent_record_refusals(thread_id, sequence)",
   'CREATE INDEX effect_agent_canonical_records_batch ON __NAMESPACE__."effect_agent_canonical_records" (thread_id, batch_id, sequence)',
   'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, agent_digests_json TEXT COLLATE "C" NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
@@ -60,6 +196,52 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_continuation ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id, sequence) WHERE record_tag = 'RunContinuation'",
   'CREATE INDEX effect_agent_records_tag ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence)',
   'CREATE INDEX effect_agent_records_handoff ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
+  "CREATE INDEX effect_agent_records_run_identity ON __NAMESPACE__.effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
+  "CREATE INDEX effect_agent_records_application_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
+  "CREATE INDEX effect_agent_records_context ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
+  "CREATE INDEX effect_agent_records_prompt ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE record_tag IN ('UserInputRecorded', 'RunStarted', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled')",
+  "CREATE INDEX effect_agent_records_admitted_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
+  // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
+  "CREATE INDEX effect_agent_records_rollover ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'",
+  ...Array.from(
+    { length: 52 },
+    (_, i) =>
+      `CREATE INDEX effect_agent_records_rollover_bucket_${i + 1} ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (context_through >> ${i + 1}), sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'`,
+  ),
+  "CREATE INDEX effect_agent_records_worker_funding ON __NAMESPACE__.effect_agent_canonical_records(thread_id, source_submission_id, sequence, message_id) WHERE record_tag = 'WorkerInputRequested'",
+  "CREATE INDEX effect_agent_records_worker_completed ON __NAMESPACE__.effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 'WorkerInputCompleted'",
+  "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 'WorkerStopRequested'",
+  "CREATE INDEX effect_agent_message_deliveries_identity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'messageId'))",
+  "CREATE INDEX effect_agent_message_deliveries_peer ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND (read_metadata ->> 'peer') = 'true'",
+  'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, previous_tail_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
+  "CREATE UNIQUE INDEX effect_agent_journal_ranges_open ON __NAMESPACE__.effect_agent_journal_ranges(thread_id) WHERE state = 'open'",
+  'CREATE TABLE __NAMESPACE__.effect_agent_archive_batches (thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, range_first_sequence BIGINT NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__.effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_archive_records (thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, range_first_sequence BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
+  "CREATE UNIQUE INDEX effect_agent_canonical_batches_sequence ON __NAMESPACE__.effect_agent_canonical_batches(thread_id, first_sequence)",
+  "CREATE INDEX effect_agent_canonical_batches_last ON __NAMESPACE__.effect_agent_canonical_batches(thread_id, last_sequence)",
+  "CREATE INDEX effect_agent_submissions_active_worker ON __NAMESPACE__.effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND worker_admission_json IS NOT NULL",
+  "CREATE INDEX effect_agent_submissions_active_parent ON __NAMESPACE__.effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND parent_submission_id IS NOT NULL",
+  'CREATE TABLE __NAMESPACE__.effect_agent_live_child_reservations (reservation_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL)',
+  "CREATE INDEX effect_agent_live_child_reservations_thread ON __NAMESPACE__.effect_agent_live_child_reservations(thread_id, reservation_id)",
+  // Compact native positions keep accepted identities out of bounded export cursors.
+  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_commands (thread_id TEXT COLLATE "C" NOT NULL, command_kind TEXT COLLATE "C" NOT NULL, command_sequence BIGINT NOT NULL, submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, resolution_kind TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, command_kind, submission_id, tool_call_id, resolution_kind), CONSTRAINT effect_agent_transfer_commands_sequence_key UNIQUE (thread_id, command_kind, command_sequence), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__.effect_agent_submissions(submission_id) ON DELETE RESTRICT)',
+  // Persistent scalar FIFO derivatives; rebuild from canonical input/settlement boundaries.
+  'CREATE TABLE __NAMESPACE__.effect_agent_input_intervals (thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, settlement_sequence BIGINT, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
+  "CREATE INDEX effect_agent_input_intervals_open ON __NAMESPACE__.effect_agent_input_intervals(thread_id, sequence) WHERE settlement_sequence IS NULL",
+  'CREATE TABLE __NAMESPACE__.effect_agent_settlement_spans (thread_id TEXT COLLATE "C" NOT NULL, height BIGINT NOT NULL, slot BIGINT NOT NULL, settlement_sequence BIGINT NOT NULL, input_sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, height, slot, settlement_sequence, input_sequence), FOREIGN KEY (thread_id, input_sequence) REFERENCES __NAMESPACE__.effect_agent_input_intervals(thread_id, sequence) ON DELETE RESTRICT)',
+  "CREATE INDEX effect_agent_settlement_spans_input ON __NAMESPACE__.effect_agent_settlement_spans(thread_id, input_sequence)",
+  // Writer-local import indexes; rows are removed before publication.
+  'CREATE TABLE __NAMESPACE__.effect_agent_import_fifo (thread_id TEXT COLLATE "C" NOT NULL, submission_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, submission_id))',
+  "CREATE INDEX effect_agent_import_fifo_active ON __NAMESPACE__.effect_agent_import_fifo(thread_id, queue_sequence)",
+  'CREATE TABLE __NAMESPACE__.effect_agent_import_delivery_visits (thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, path_id TEXT COLLATE "C" NOT NULL, completed BIGINT NOT NULL, PRIMARY KEY (thread_id, message_id))',
+  "CREATE INDEX effect_agent_import_delivery_visits_path ON __NAMESPACE__.effect_agent_import_delivery_visits(thread_id, path_id)",
+  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_state (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, revision BIGINT NOT NULL, admissions_count BIGINT NOT NULL, aborts_count BIGINT NOT NULL, approvals_count BIGINT NOT NULL, resolutions_count BIGINT NOT NULL, deliveries_count BIGINT NOT NULL)',
+  `CREATE FUNCTION __NAMESPACE__.effect_agent_transfer_mutation() RETURNS trigger LANGUAGE plpgsql AS $transfer$${transferFunctionBody}$transfer$`,
+  "CREATE INDEX effect_agent_message_deliveries_capacity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'workerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
+  ...transferTriggers.map(
+    (trigger) =>
+      `CREATE TRIGGER ${trigger.name} AFTER ${trigger.event} ON __NAMESPACE__.${trigger.table} FOR EACH ROW EXECUTE FUNCTION __NAMESPACE__.effect_agent_transfer_mutation('${trigger.owner}', '${trigger.count}')`,
+  ),
 ] as const;
 
 type LayoutConstraint =
@@ -77,7 +259,7 @@ interface LayoutIndex {
   readonly columns: ReadonlyArray<string | null>;
   readonly unique?: boolean;
   readonly primary?: boolean;
-  readonly expressions?: ReadonlyArray<string>;
+  readonly expressions?: ReadonlyArray<string | LayoutExpression>;
   readonly predicate?: LayoutExpression;
 }
 
@@ -93,6 +275,75 @@ const layoutShape: Readonly<
     }
   >
 > = {
+  effect_agent_journal_ranges: {
+    columns: [
+      "thread_id:text:true",
+      "first_sequence:bigint:true",
+      "last_sequence:bigint:true",
+      "previous_tail_digest:text:true",
+      "tail_digest:text:true",
+      "record_count:bigint:true",
+      "batch_count:bigint:true",
+      "byte_count:bigint:true",
+      "state:text:true",
+      "locator:text:false",
+    ],
+    constraints: {
+      effect_agent_journal_ranges_pkey: ["p", ["thread_id", "first_sequence"]],
+      effect_agent_journal_ranges_thread_id_fkey: [
+        "f",
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
+      ],
+    },
+  },
+  effect_agent_archive_batches: {
+    columns: [
+      "thread_id:text:true",
+      "batch_id:text:true",
+      "range_first_sequence:bigint:true",
+      "batch_json:text:true",
+    ],
+    constraints: {
+      effect_agent_archive_batches_pkey: ["p", ["thread_id", "batch_id"]],
+      effect_agent_archive_batches_thread_id_batch_id_fkey: [
+        "f",
+        ["thread_id", "batch_id"],
+        "effect_agent_canonical_batches",
+        ["thread_id", "batch_id"],
+      ],
+      effect_agent_archive_batches_range_fkey: [
+        "f",
+        ["thread_id", "range_first_sequence"],
+        "effect_agent_journal_ranges",
+        ["thread_id", "first_sequence"],
+      ],
+    },
+  },
+  effect_agent_archive_records: {
+    columns: [
+      "thread_id:text:true",
+      "sequence:bigint:true",
+      "range_first_sequence:bigint:true",
+      "record_json:text:true",
+    ],
+    constraints: {
+      effect_agent_archive_records_pkey: ["p", ["thread_id", "sequence"]],
+      effect_agent_archive_records_thread_id_sequence_fkey: [
+        "f",
+        ["thread_id", "sequence"],
+        "effect_agent_canonical_records",
+        ["thread_id", "sequence"],
+      ],
+      effect_agent_archive_records_range_fkey: [
+        "f",
+        ["thread_id", "range_first_sequence"],
+        "effect_agent_journal_ranges",
+        ["thread_id", "first_sequence"],
+      ],
+    },
+  },
   effect_agent_abort_intents: {
     columns: [
       "submission_id:text:true",
@@ -157,10 +408,26 @@ const layoutShape: Readonly<
       "last_sequence:bigint:true",
       "batch_digest:text:true",
       "tail_digest:text:true",
-      "batch_json:text:true",
+      "batch_json:text:false",
     ],
     constraints: {
       effect_agent_canonical_batches_pkey: ["p", ["thread_id", "batch_id"]],
+      effect_agent_canonical_batches_span: [
+        "c",
+        ["first_sequence", "last_sequence"],
+        [
+          "and",
+          [
+            ["ge", ["column", "first_sequence"], ["integer", 1]],
+            ["ge", ["column", "last_sequence"], ["column", "first_sequence"]],
+            [
+              "lt",
+              ["subtract", ["column", "last_sequence"], ["column", "first_sequence"]],
+              ["integer", 256],
+            ],
+          ],
+        ],
+      ],
       effect_agent_canonical_batches_thread_id_fkey: [
         "f",
         ["thread_id"],
@@ -168,6 +435,34 @@ const layoutShape: Readonly<
         ["thread_id"],
       ],
     },
+  },
+  effect_agent_tool_declarations: {
+    columns: ["thread_id:text:true", "settlement_record_id:text:true", "sequence:bigint:true"],
+    constraints: {
+      effect_agent_tool_declarations_pkey: ["p", ["thread_id", "settlement_record_id", "sequence"]],
+      effect_agent_tool_declarations_thread_id_sequence_fkey: [
+        "f",
+        ["thread_id", "sequence"],
+        "effect_agent_canonical_records",
+        ["thread_id", "sequence"],
+      ],
+    },
+  },
+  effect_agent_record_refusals: {
+    columns: ["thread_id:text:true", "reservation_record_id:text:true", "sequence:bigint:true"],
+    constraints: {
+      effect_agent_record_refusals_pkey: ["p", ["thread_id", "reservation_record_id", "sequence"]],
+      effect_agent_record_refusals_thread_id_sequence_fkey: [
+        "f",
+        ["thread_id", "sequence"],
+        "effect_agent_canonical_records",
+        ["thread_id", "sequence"],
+      ],
+    },
+  },
+  effect_agent_live_child_reservations: {
+    columns: ["reservation_id:text:true", "thread_id:text:true"],
+    constraints: { effect_agent_live_child_reservations_pkey: ["p", ["reservation_id"]] },
   },
   effect_agent_record_runs: {
     columns: ["thread_id:text:true", "run_id:text:true", "sequence:bigint:true"],
@@ -187,13 +482,18 @@ const layoutShape: Readonly<
       "sequence:bigint:true",
       "record_id:text:true",
       "batch_id:text:true",
-      "record_json:text:true",
+      "record_json:text:false",
       "record_tag:text:true",
       "run_id:text:false",
       "tool_call_id:text:false",
       "input_kind:text:false",
       "source_submission_id:text:false",
       "message_id:text:false",
+      "submission_id:text:false",
+      "application_input:bigint:true",
+      "context_through:bigint:false",
+      "context_kind:text:false",
+      "worker_thread_id:text:false",
       "handoff:bigint:true",
     ],
     constraints: {
@@ -461,6 +761,90 @@ const layoutShape: Readonly<
       ],
     },
   },
+  effect_agent_transfer_commands: {
+    columns: [
+      "thread_id:text:true",
+      "command_kind:text:true",
+      "command_sequence:bigint:true",
+      "submission_id:text:true",
+      "tool_call_id:text:true",
+      "resolution_kind:text:true",
+    ],
+    constraints: {
+      effect_agent_transfer_commands_pkey: [
+        "p",
+        ["thread_id", "command_kind", "submission_id", "tool_call_id", "resolution_kind"],
+      ],
+      effect_agent_transfer_commands_sequence_key: [
+        "u",
+        ["thread_id", "command_kind", "command_sequence"],
+      ],
+      effect_agent_transfer_commands_submission_id_fkey: [
+        "f",
+        ["submission_id"],
+        "effect_agent_submissions",
+        ["submission_id"],
+      ],
+    },
+  },
+  effect_agent_input_intervals: {
+    columns: ["thread_id:text:true", "sequence:bigint:true", "settlement_sequence:bigint:false"],
+    constraints: {
+      effect_agent_input_intervals_pkey: ["p", ["thread_id", "sequence"]],
+      effect_agent_input_intervals_thread_id_sequence_fkey: [
+        "f",
+        ["thread_id", "sequence"],
+        "effect_agent_canonical_records",
+        ["thread_id", "sequence"],
+      ],
+    },
+  },
+  effect_agent_settlement_spans: {
+    columns: [
+      "thread_id:text:true",
+      "height:bigint:true",
+      "slot:bigint:true",
+      "settlement_sequence:bigint:true",
+      "input_sequence:bigint:true",
+    ],
+    constraints: {
+      effect_agent_settlement_spans_pkey: [
+        "p",
+        ["thread_id", "height", "slot", "settlement_sequence", "input_sequence"],
+      ],
+      effect_agent_settlement_spans_thread_id_input_sequence_fkey: [
+        "f",
+        ["thread_id", "input_sequence"],
+        "effect_agent_input_intervals",
+        ["thread_id", "sequence"],
+      ],
+    },
+  },
+  effect_agent_import_fifo: {
+    columns: ["thread_id:text:true", "submission_id:text:true", "queue_sequence:bigint:true"],
+    constraints: { effect_agent_import_fifo_pkey: ["p", ["thread_id", "submission_id"]] },
+  },
+  effect_agent_import_delivery_visits: {
+    columns: [
+      "thread_id:text:true",
+      "message_id:text:true",
+      "path_id:text:true",
+      "completed:bigint:true",
+    ],
+    constraints: { effect_agent_import_delivery_visits_pkey: ["p", ["thread_id", "message_id"]] },
+  },
+  effect_agent_transfer_state: {
+    columns: [
+      "thread_id:text:true",
+      "revision:bigint:true",
+      "admissions_count:bigint:true",
+      "aborts_count:bigint:true",
+      "approvals_count:bigint:true",
+      "resolutions_count:bigint:true",
+      "deliveries_count:bigint:true",
+    ],
+    constraints: { effect_agent_transfer_state_pkey: ["p", ["thread_id"]] },
+  },
   effect_agent_worker_stops: {
     columns: ["thread_id:text:true", "terminal:text:false"],
     constraints: { effect_agent_worker_stops_pkey: ["p", ["thread_id"]] },
@@ -468,6 +852,177 @@ const layoutShape: Readonly<
 };
 
 const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
+  effect_agent_journal_ranges_open: {
+    table: "effect_agent_journal_ranges",
+    columns: ["thread_id"],
+    unique: true,
+    predicate: ["eq", ["column", "state"], ["text", "open"]],
+  },
+  effect_agent_tool_declarations_sequence: {
+    table: "effect_agent_tool_declarations",
+    columns: ["thread_id", "sequence"],
+  },
+  effect_agent_record_refusals_sequence: {
+    table: "effect_agent_record_refusals",
+    columns: ["thread_id", "sequence"],
+  },
+  effect_agent_live_child_reservations_thread: {
+    table: "effect_agent_live_child_reservations",
+    columns: ["thread_id", "reservation_id"],
+  },
+  effect_agent_canonical_batches_last: {
+    table: "effect_agent_canonical_batches",
+    columns: ["thread_id", "last_sequence"],
+  },
+  effect_agent_submissions_active_worker: {
+    table: "effect_agent_submissions",
+    columns: ["thread_id", "submission_id"],
+    predicate: [
+      "and",
+      [
+        ["ne", ["column", "state"], ["text", "settled"]],
+        ["notNull", ["column", "worker_admission_json"]],
+      ],
+    ],
+  },
+  effect_agent_submissions_active_parent: {
+    table: "effect_agent_submissions",
+    columns: ["thread_id", "submission_id"],
+    predicate: [
+      "and",
+      [
+        ["ne", ["column", "state"], ["text", "settled"]],
+        ["notNull", ["column", "parent_submission_id"]],
+      ],
+    ],
+  },
+  effect_agent_canonical_batches_sequence: {
+    table: "effect_agent_canonical_batches",
+    columns: ["thread_id", "first_sequence"],
+    unique: true,
+  },
+
+  effect_agent_input_intervals_open: {
+    table: "effect_agent_input_intervals",
+    columns: ["thread_id", "sequence"],
+    predicate: ["null", ["column", "settlement_sequence"]],
+  },
+  effect_agent_settlement_spans_input: {
+    table: "effect_agent_settlement_spans",
+    columns: ["thread_id", "input_sequence"],
+  },
+  effect_agent_import_fifo_active: {
+    table: "effect_agent_import_fifo",
+    columns: ["thread_id", "queue_sequence"],
+  },
+  effect_agent_import_delivery_visits_path: {
+    table: "effect_agent_import_delivery_visits",
+    columns: ["thread_id", "path_id"],
+  },
+  effect_agent_records_run_identity: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "run_id"],
+    predicate: ["notNull", ["column", "run_id"]],
+  },
+  effect_agent_records_application_input: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "sequence"],
+    predicate: ["eq", ["column", "application_input"], ["integer", 1]],
+  },
+  effect_agent_records_context: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "context_through", "sequence"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "RunContextRecorded"]],
+  },
+  effect_agent_records_prompt: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "sequence"],
+    predicate: [
+      "in",
+      ["column", "record_tag"],
+      [
+        "UserInputRecorded",
+        "RunStarted",
+        "ModelCompleted",
+        "ModelResponseRecorded",
+        "ToolCallSettled",
+        "CompactionCreated",
+        "RunCompleted",
+        "RunFailed",
+        "SubmissionSettled",
+      ],
+    ],
+  },
+  effect_agent_records_admitted_input: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "sequence"],
+    predicate: [
+      "and",
+      [
+        ["eq", ["column", "record_tag"], ["text", "UserInputRecorded"]],
+        ["notNull", ["column", "submission_id"]],
+      ],
+    ],
+  },
+  ...Object.fromEntries(
+    Array.from({ length: 52 }, (_, i): [string, LayoutIndex] => [
+      `effect_agent_records_rollover_bucket_${i + 1}`,
+      {
+        table: "effect_agent_canonical_records",
+        columns: ["thread_id", null, "sequence"],
+        expressions: [["shift", ["column", "context_through"], ["integer", i + 1]]],
+        predicate: [
+          "and",
+          [
+            ["eq", ["column", "record_tag"], ["text", "CompactionCreated"]],
+            ["eq", ["column", "context_kind"], ["text", "rollover"]],
+          ],
+        ],
+      },
+    ]),
+  ),
+  effect_agent_records_rollover: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "context_through", "sequence"],
+    predicate: [
+      "and",
+      [
+        ["eq", ["column", "record_tag"], ["text", "CompactionCreated"]],
+        ["eq", ["column", "context_kind"], ["text", "rollover"]],
+      ],
+    ],
+  },
+  effect_agent_records_worker_funding: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "source_submission_id", "sequence", "message_id"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputRequested"]],
+  },
+  effect_agent_records_worker_completed: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "message_id", "sequence"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputCompleted"]],
+  },
+  effect_agent_records_worker_stop: {
+    table: "effect_agent_canonical_records",
+    columns: ["thread_id", "worker_thread_id", "sequence"],
+    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerStopRequested"]],
+  },
+  effect_agent_message_deliveries_identity: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", null],
+    expressions: ["messageId"],
+  },
+  effect_agent_message_deliveries_peer: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", "message_id"],
+    predicate: [
+      "and",
+      [
+        ["notIn", ["column", "state"], ["processed", "refused"]],
+        ["eq", ["json", "peer"], ["text", "true"]],
+      ],
+    ],
+  },
   effect_agent_records_continuation: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "run_id", "sequence"],
@@ -490,6 +1045,12 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     table: "effect_agent_message_deliveries",
     columns: ["deadline_at_millis", "owner_thread_id", "message_id"],
     predicate: ["notNull", ["column", "deadline_at_millis"]],
+  },
+  effect_agent_message_deliveries_capacity: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", null, "message_id"],
+    expressions: ["workerUpdate"],
+    predicate: ["in", ["column", "state"], ["pending", "accepted", "parked"]],
   },
   effect_agent_message_deliveries_pending: {
     table: "effect_agent_message_deliveries",
@@ -669,7 +1230,7 @@ const matchesIndex = (actual: (typeof IndexRows.Type)[number] | undefined, expec
   sameIndexColumns(actual.columns, expected.columns) &&
   matchesLayoutExpressions(
     actual.expressions,
-    (expected.expressions ?? []).map((key) => ["json", key]),
+    (expected.expressions ?? []).map((key) => (typeof key === "string" ? ["json", key] : key)),
   ) &&
   matchesLayoutExpressions(
     actual.predicate,
@@ -826,7 +1387,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
   );
 
   // Frozen keys use btree ASC NULLS LAST (indoption=0), default built-in opclasses,
-  // and the column collation, or the database default for JSON text expressions.
+  // and the column collation, database default for JSON text, or none for integer expressions.
   const indexes = yield* decode(
     IndexRows,
     yield* execute(sql<Record<string, unknown>>`
@@ -848,7 +1409,9 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
             JOIN pg_opclass op ON op.oid=v.opclass
             WHERE v.options<>0 OR NOT op.opcdefault OR op.opcnamespace<>'pg_catalog'::regnamespace
               OR op.opcintype<>ia.atttypid OR op.opcmethod<>ic.relam
-              OR v.collation_oid<>CASE WHEN v.attnum=0 THEN 'pg_catalog.default'::regcollation ELSE a.attcollation END
+              OR v.collation_oid<>CASE WHEN v.attnum=0 THEN
+                CASE WHEN ia.atttypid='pg_catalog.text'::regtype THEN 'pg_catalog.default'::regcollation::oid ELSE 0::oid END
+                ELSE a.attcollation END
           )) AS structure_ok
       FROM pg_index i JOIN pg_class ic ON ic.oid=i.indexrelid JOIN pg_class c ON c.oid=i.indrelid
       JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_am am ON am.oid=ic.relam
@@ -952,6 +1515,82 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
       return yield* incompatible(legacy.version, `Missing or incompatible layout index ${name}.`);
   }
 
+  const functions = yield* decode(
+    Schema.Array(
+      Schema.Struct({
+        source: Schema.String,
+        safe: Schema.Boolean,
+      }),
+    ),
+    yield* execute(sql`
+    SELECT p.prosrc AS source, (l.lanname='plpgsql' AND p.prorettype='pg_catalog.trigger'::regtype
+      AND p.pronargs=0 AND NOT p.prosecdef AND p.proconfig IS NULL AND p.prokind='f') AS safe
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_language l ON l.oid=p.prolang
+    WHERE n.nspname=${namespace} AND p.proname='effect_agent_transfer_mutation'`),
+    "pg_proc",
+  );
+
+  if (
+    functions.length !== 1 ||
+    !functions[0]?.safe ||
+    functions[0].source !== qualify(transferFunctionBody, namespace)
+  )
+    return yield* incompatible(
+      legacy.version,
+      "Missing or incompatible transfer trigger function.",
+    );
+
+  const triggers = yield* decode(
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.String,
+        table_name: Schema.String,
+        type: SqlInteger,
+        enabled: Schema.String,
+        function_name: Schema.String,
+        function_schema: Schema.String,
+        arguments: Schema.String,
+        safe: Schema.Boolean,
+      }),
+    ),
+    yield* execute(sql`
+    SELECT t.tgname AS name, c.relname AS table_name, t.tgtype::bigint AS type,
+      t.tgenabled::text AS enabled, p.proname AS function_name, pn.nspname AS function_schema,
+      encode(t.tgargs, 'hex') AS arguments,
+      (NOT t.tgisinternal AND t.tgconstraint=0 AND NOT t.tgdeferrable AND NOT t.tginitdeferred
+        AND t.tgqual IS NULL AND t.tgnargs=2 AND t.tgattr=''::int2vector) AS safe
+    FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+    JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
+    WHERE n.nspname=${namespace} AND starts_with(t.tgname, 'effect_agent_transfer_')`),
+    "pg_trigger",
+  );
+
+  for (const expected of transferTriggers) {
+    const actual = triggers.find((trigger) => trigger.name === expected.name);
+
+    const argumentsHex = Array.from(
+      new TextEncoder().encode(`${expected.owner}\0${expected.count}\0`),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+
+    if (
+      actual === undefined ||
+      !actual.safe ||
+      actual.table_name !== expected.table ||
+      actual.type !== (expected.event === "INSERT" ? 5 : expected.event === "UPDATE" ? 17 : 9) ||
+      actual.enabled !== "O" ||
+      actual.function_name !== "effect_agent_transfer_mutation" ||
+      actual.function_schema !== namespace ||
+      actual.arguments !== argumentsHex
+    )
+      return yield* incompatible(
+        legacy.version,
+        `Missing or incompatible transfer trigger ${expected.name}.`,
+      );
+  }
+  if (triggers.length !== transferTriggers.length)
+    return yield* incompatible(legacy.version, "Unexpected transfer triggers.");
+
   return header;
 });
 
@@ -984,10 +1623,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 20)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 21)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 20, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);

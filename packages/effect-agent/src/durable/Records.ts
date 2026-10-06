@@ -293,8 +293,9 @@ const PersistedPromptMessages = Schema.toEncoded(Prompt.Prompt);
 const isPersistedPromptMessages = Schema.is(PersistedPromptMessages);
 
 /**
- * Final model output. Immediate history may include the exact encoded Prompt suffix of the
- * successful Run; durable execution instead journals individual ModelResponseRecorded Turns.
+ * Final model output. Immediate history records the successful Run's source messages for
+ * recall and a full retained model-context snapshot for the next Run. Durable execution
+ * instead journals individual ModelResponseRecorded Turns and exact context references.
  */
 export class ModelCompleted extends Schema.TaggedClass<ModelCompleted>(
   "@effect-agent/thread/ModelCompleted",
@@ -304,10 +305,16 @@ export class ModelCompleted extends Schema.TaggedClass<ModelCompleted>(
     runId: RunId,
     output: PersistedJson,
     messages: Schema.optionalKey(PersistedJson),
+    history: Schema.optionalKey(PersistedJson),
   }).check(
     Schema.makeFilter(
-      (record) => record.messages === undefined || isPersistedPromptMessages(record.messages),
-      { title: "Retained Run messages are Schema-encoded Effect AI Prompt messages" },
+      (record) =>
+        (record.messages === undefined && record.history === undefined) ||
+        (record.messages !== undefined &&
+          record.history !== undefined &&
+          isPersistedPromptMessages(record.messages) &&
+          isPersistedPromptMessages(record.history)),
+      { title: "Retained source messages and model context are paired encoded Effect AI Prompts" },
     ),
   ),
 ) {}
@@ -926,8 +933,8 @@ export const WorkerOrigin = Schema.Struct({
   source: WorkerSource,
   /** A new assignment may continue this completed, immutable predecessor. */
   continuationOf: Schema.optionalKey(WorkerContinuation),
-  /** Omitted retains source-subtree funding; worker-run renews only for a new native Run. */
-  budgetScope: Schema.optionalKey(WorkerBudgetScope),
+  /** Frozen funding owner; worker-run renews only for a new native Run. */
+  budgetScope: WorkerBudgetScope,
   /** Frozen at worker creation; older origins remain reusable. */
   lifecycle: Schema.optionalKey(Schema.Literal("assignment")),
   targetDigests: DefinitionDigests,
@@ -1102,6 +1109,31 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
 export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
 export type EvidenceReference = typeof EvidenceReference.Type;
 
+/**
+ * Receipt-free factual closure. The receiver's irreversible inbox seal precedes its exact-key
+ * NotAdmitted observation; a refusal or an absent lookup alone cannot close reserved work.
+ * Invocation and allocation charges remain with the original funding Run.
+ */
+export class WorkerInputRefused extends Schema.TaggedClass<WorkerInputRefused>()(
+  "WorkerInputRefused",
+  Schema.Struct({
+    messageId: IdempotencyKey,
+    workerThreadId: ThreadId,
+    reservation: EvidenceReference,
+    stop: EvidenceReference,
+    deliveryVersion: Schema.Int.check(Schema.isGreaterThan(0)),
+    envelopeDigest: Digest,
+    receiver: Schema.Struct({
+      threadId: ThreadId,
+      principal: Principal,
+      idempotencyKey: IdempotencyKey,
+      inputDigest: Digest,
+      stopped: Schema.Literal(true),
+      resolution: Schema.Literal("NotAdmitted"),
+    }),
+  }).check(Schema.makeFilter((value) => value.receiver.threadId === value.workerThreadId)),
+) {}
+
 export const MAX_RUN_CONTINUATION_BYTES = 8_192;
 /** Incremental record JSON per Turn, including progress and the first Turn's initial context. */
 export const MAX_TURN_CANONICAL_BYTES = MAX_CANONICAL_RECORD_BYTES;
@@ -1226,8 +1258,8 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 2;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@2";
+export const CURRENT_RECORD_VERSION = 3;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
 
 /** Supported canonical facts. Unsupported control records must fail before execution. */
 export const KnownRecordPayload = Schema.Union([
@@ -1260,6 +1292,7 @@ export const KnownRecordPayload = Schema.Union([
   WorkHandoffCompleted,
   WorkerOriginRecorded,
   WorkerInputCompleted,
+  WorkerInputRefused,
   WorkerReportPrepared,
   AgentUpdateEmitted,
   WorkerReportRefused,

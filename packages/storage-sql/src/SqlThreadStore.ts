@@ -1,12 +1,19 @@
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { EMPTY_TAIL_DIGEST, utf8ByteLength } from "@yielded/agent/digest";
+import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
-import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
+import { ExportRecord } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
   ObservationOffset,
 } from "@yielded/agent/records";
+import {
+  ThreadArchive,
+  makeThreadImportProgress,
+  prepareImportPage,
+  finishThreadImport,
+} from "@yielded/agent/thread-import";
 import {
   AppendConflict,
   AppendResult,
@@ -19,6 +26,7 @@ import {
   ThreadStore,
   type ThreadCheckpoints,
   ThreadStoreError,
+  ThreadExport,
   ThreadTail,
   ThreadTailRequest,
   FenceRejected,
@@ -26,8 +34,10 @@ import {
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
+  canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
+import { SqlClient } from "effect/sql/SqlClient";
 
 import {
   type RawAppendRequest,
@@ -35,8 +45,10 @@ import {
   RawReadRequest,
   type SqlJournal,
 } from "./SqlJournal.ts";
+import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
+import { makeSqlThreadArchiveRange } from "./SqlThreadArchiveRange.ts";
 import { makeSqlThreadImport } from "./SqlThreadImport.ts";
 import { canonicalRecordMetadata, makeSelectedReads } from "./SqlThreadNativeReads.ts";
 
@@ -54,7 +66,10 @@ export interface SqlThreadStoreOptions<
 }
 
 /** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
-export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppendRequest) {
+export const prepareSqlAppend = Effect.fnUntraced(function* (
+  request: FencedAppendRequest,
+  offsetPrefix: string,
+) {
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
     ThreadStoreError.make({ operation, message: cause.message, cause });
 
@@ -62,7 +77,18 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
     Effect.mapError(invalid("validate canonical append")),
   );
 
+  const offsetBytes =
+    utf8ByteLength(JSON.stringify(offsetPrefix)) + 3 * utf8ByteLength(validated.threadId) + 25;
+
   const captured = yield* PreparedAppend.capture(validated);
+
+  if (
+    !canonicalBatchFitsTransfer(captured.threadId, captured.batch, captured.batchBytes, offsetBytes)
+  )
+    return yield* ThreadStoreError.make({
+      operation: "prepare canonical append",
+      message: "Canonical batch exceeds its bounded transfer representation",
+    });
 
   const records = captured.records.map((record) =>
     Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
@@ -77,6 +103,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (request: FencedAppe
     batchId: captured.batch.batchId,
     batchDigest: tailDigest,
     batchJson: captured.batchJson,
+    batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
     expectedTailDigest: captured.expectedTailDigest,
     producerEpoch: captured.producerEpoch,
@@ -101,9 +128,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const isCheckpointRejected = Schema.is(CheckpointRejected);
   const canonicalRecordJson = Schema.fromJsonString(ExportRecord);
   const decodeRecordJson = Schema.decodeEffect(canonicalRecordJson);
-
-  const encodeRecordJson = (record: typeof ExportRecord.Type) =>
-    Schema.encodeEffect(ExportRecord)(record).pipe(Effect.map(canonicalJson));
 
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
@@ -255,225 +279,9 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const groupByKey = <A>(
-    rows: ReadonlyArray<A>,
-    key: (row: A) => string,
-  ): ReadonlyMap<string, ReadonlyArray<A>> => {
-    const grouped = new Map<string, Array<A>>();
-
-    for (const row of rows) {
-      const existing = grouped.get(key(row));
-
-      if (existing === undefined) {
-        grouped.set(key(row), [row]);
-      } else {
-        existing.push(row);
-      }
-    }
-
-    return grouped;
-  };
-
-  /**
-   * Opt-in integrity audit (`verifyOnOpen`) of canonical payloads, their digest chains and generic
-   * projection checkpoints. Routine opens
-   * skip this scan: per-operation Schema decoding fails clearly on corrupt canonical rows.
-   */
-  const decodeStartupPayloads = Effect.fnUntraced(function* (
-    journal: SqlJournal<S, C, W, F>,
-    crypto: Crypto.Crypto,
-  ) {
-    const stored = yield* journal.scanStoredPayloads();
-
-    const batches = yield* Effect.forEach(stored.batches, (batch) =>
-      Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(batch.batch_json).pipe(
-        Effect.map((decoded) => ({ decoded, row: batch })),
-        Effect.mapError((error) =>
-          options.errors.corruption({
-            table: "effect_agent_canonical_batches",
-            rowKey: `${batch.thread_id}/${batch.batch_id}`,
-            message: error.message,
-          }),
-        ),
-      ),
-    );
-
-    const records = yield* Effect.forEach(stored.records, (record) =>
-      Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(record.record_json).pipe(
-        Effect.map((decoded) => ({ decoded, row: record })),
-        Effect.mapError((error) =>
-          options.errors.corruption({
-            table: "effect_agent_canonical_records",
-            rowKey: `${record.thread_id}/${record.sequence}`,
-            message: error.message,
-          }),
-        ),
-      ),
-    );
-
-    const checkpoints = yield* Effect.forEach(stored.checkpoints, (checkpoint) =>
-      Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpoint.checkpoint_json).pipe(
-        Effect.map((decoded) => ({ decoded, row: checkpoint })),
-        Effect.mapError((error) =>
-          options.errors.corruption({
-            table: "effect_agent_checkpoints",
-            rowKey: `${checkpoint.thread_id}/${checkpoint.through_sequence}`,
-            message: error.message,
-          }),
-        ),
-      ),
-    );
-
-    const batchesByThread = groupByKey(batches, ({ row }) => row.thread_id);
-    const recordsByThread = groupByKey(records, ({ row }) => row.thread_id);
-    const checkpointsByThread = groupByKey(checkpoints, ({ row }) => row.thread_id);
-    const materializedIds = new Set(stored.threads.map((thread) => thread.thread_id));
-
-    for (const thread of stored.threads) {
-      const threadBatches = batchesByThread.get(thread.thread_id) ?? [];
-      const threadRecords = recordsByThread.get(thread.thread_id) ?? [];
-      const threadCheckpoints = checkpointsByThread.get(thread.thread_id) ?? [];
-      const recordsByBatch = groupByKey(threadRecords, ({ row }) => row.batch_id);
-      let previousDigest = EMPTY_TAIL_DIGEST;
-      let expectedSequence = 1;
-      const tailDigests = new Map<number, string>([[0, EMPTY_TAIL_DIGEST]]);
-
-      for (const { decoded: canonicalBatch, row: batchRow } of threadBatches) {
-        const key = `${batchRow.thread_id}/${batchRow.batch_id}`;
-
-        if (
-          canonicalBatch.batchId !== batchRow.batch_id ||
-          batchRow.first_sequence !== expectedSequence ||
-          batchRow.last_sequence !== batchRow.first_sequence + canonicalBatch.records.length - 1
-        ) {
-          return yield* options.errors.corruption({
-            table: "effect_agent_canonical_batches",
-            rowKey: key,
-            message: "Canonical batch identity, sequence, or record count is inconsistent.",
-          });
-        }
-
-        const digest = yield* Schema.encodeEffect(ExportBatch)(canonicalBatch).pipe(
-          Effect.flatMap((encoded) =>
-            digestJson({ previousTailDigest: previousDigest, batch: encoded }),
-          ),
-          Effect.provideService(Crypto.Crypto, crypto),
-          Effect.mapError((error) =>
-            options.errors.corruption({
-              table: "effect_agent_canonical_batches",
-              rowKey: key,
-              message: error.message,
-            }),
-          ),
-        );
-
-        if (batchRow.batch_digest !== digest || batchRow.tail_digest !== digest) {
-          return yield* options.errors.corruption({
-            table: "effect_agent_canonical_batches",
-            rowKey: key,
-            message: "Canonical batch digest does not match its decoded content and prior tail.",
-          });
-        }
-
-        const batchRecords = recordsByBatch.get(batchRow.batch_id) ?? [];
-
-        if (batchRecords.length !== canonicalBatch.records.length) {
-          return yield* options.errors.corruption({
-            table: "effect_agent_canonical_records",
-            rowKey: key,
-            message: "Canonical batch and record-table counts differ.",
-          });
-        }
-        for (let index = 0; index < canonicalBatch.records.length; index++) {
-          const expectedRecord = canonicalBatch.records[index];
-          const storedRecord = batchRecords[index];
-
-          const expectedJson = yield* encodeRecordJson(expectedRecord).pipe(
-            Effect.mapError((error) =>
-              options.errors.corruption({
-                table: "effect_agent_canonical_batches",
-                rowKey: key,
-                message: error.message,
-              }),
-            ),
-          );
-
-          const storedJson = yield* encodeRecordJson(storedRecord.decoded).pipe(
-            Effect.mapError((error) =>
-              options.errors.corruption({
-                table: "effect_agent_canonical_records",
-                rowKey: `${key}/${storedRecord.row.sequence}`,
-                message: error.message,
-              }),
-            ),
-          );
-
-          if (
-            storedRecord.row.sequence !== batchRow.first_sequence + index ||
-            storedRecord.row.record_id !== expectedRecord.recordId ||
-            expectedJson !== storedJson
-          ) {
-            return yield* options.errors.corruption({
-              table: "effect_agent_canonical_records",
-              rowKey: `${key}/${storedRecord.row.sequence}`,
-              message: "Canonical record identity, sequence, or payload differs from its batch.",
-            });
-          }
-        }
-
-        previousDigest = digest;
-        expectedSequence = batchRow.last_sequence + 1;
-        tailDigests.set(batchRow.last_sequence, digest);
-      }
-
-      if (
-        threadRecords.length !== thread.tail_sequence ||
-        thread.tail_sequence !== expectedSequence - 1 ||
-        thread.tail_digest !== previousDigest
-      ) {
-        return yield* options.errors.corruption({
-          table: "effect_agent_threads",
-          rowKey: thread.thread_id,
-          message: "Thread tail does not match its canonical batch chain.",
-        });
-      }
-
-      for (const checkpoint of threadCheckpoints) {
-        if (
-          checkpoint.decoded.threadId !== thread.thread_id ||
-          checkpoint.decoded.throughSequence !== checkpoint.row.through_sequence ||
-          checkpoint.decoded.tailDigest !== checkpoint.row.tail_digest ||
-          tailDigests.get(checkpoint.row.through_sequence) !== checkpoint.row.tail_digest
-        ) {
-          return yield* options.errors.corruption({
-            table: "effect_agent_checkpoints",
-            rowKey: `${thread.thread_id}/${checkpoint.row.through_sequence}`,
-            message: "Checkpoint identity or digest is not bound to a canonical batch tail.",
-          });
-        }
-      }
-    }
-
-    if (
-      batches.some(({ row }) => !materializedIds.has(row.thread_id)) ||
-      records.some(({ row }) => !materializedIds.has(row.thread_id)) ||
-      checkpoints.some(({ row }) => !materializedIds.has(row.thread_id))
-    ) {
-      return yield* options.errors.corruption({
-        table: "effect_agent_threads",
-        rowKey: "startup_scan",
-        message: "Canonical rows exist without a materialized Thread.",
-      });
-    }
-  });
-
   const config = options;
   const failpoint = { hit: options.hitFailpoint };
   const crypto = yield* Crypto.Crypto;
-
-  if (config.verifyOnOpen) {
-    yield* decodeStartupPayloads(journal, crypto);
-  }
 
   const hitFailpoint = (
     location: SqlStorageFailpointLocation,
@@ -511,7 +319,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
     Effect.fn("SqlThreadStore.append")(function* (request: FencedAppendRequest) {
-      const rawRequest = yield* prepareSqlAppend(request).pipe(
+      const rawRequest = yield* prepareSqlAppend(request, options.offsetPrefix).pipe(
         Effect.provideService(Crypto.Crypto, crypto),
       );
 
@@ -605,10 +413,24 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const transfer = yield* makeSqlThreadImport<S | W | F>({
     namespace: options.namespace,
     offsetPrefix: options.offsetPrefix,
-    read: journal.withReadTransaction("export transaction"),
-    write: journal.withWriteTransaction("import transaction"),
+    read: (body) =>
+      journal
+        .withReadTransaction("export transaction")(body)
+        .pipe(
+          Effect.mapError((e) =>
+            journal.isTransactionFailure(e) ? storeError("export transaction", e) : e,
+          ),
+        ),
+    write: (body) =>
+      journal
+        .withWriteTransaction("import transaction")(body)
+        .pipe(
+          Effect.mapError((e) =>
+            journal.isTransactionFailure(e) ? storeError("import transaction", e) : e,
+          ),
+        ),
     afterThreadRead: options.hitFailpoint("export:after-thread-read"),
-    afterImport: (prepared) =>
+    afterPage: (prepared) =>
       Effect.forEach(
         prepared.records,
         (entry) => {
@@ -618,8 +440,8 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
             Schema.is(Schema.toType(LifecyclePublicationFact))(fact)
             ? journal.lifecycle
                 .retain({
-                  id: JSON.stringify([prepared.result.threadId, "record", entry.record.recordId]),
-                  ownerThreadId: prepared.result.threadId,
+                  id: JSON.stringify([prepared.archive.threadId, "record", entry.record.recordId]),
+                  ownerThreadId: prepared.archive.threadId,
                   canonicalSequence: entry.sequence,
                   createdAt: entry.record.createdAt,
                   fact,
@@ -632,6 +454,232 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
         { discard: true },
       ),
   });
+
+  // Opt-in offline audit holds one read snapshot and hydrates one bounded batch at a time.
+  // No database-wide arrays, lifetime directories or digest maps.
+  if (config.verifyOnOpen) {
+    const sql = yield* SqlClient;
+    const { table, execute } = yield* makeSqlQuery(options.namespace);
+
+    const audit = Effect.gen(function* () {
+      // The enclosing audit already owns its read snapshot. Public transfer and archive
+      // ports open their own transactions, so use private read-only views of this connection.
+      const transactions = {
+        read: <A, E, R>(body: Effect.Effect<A, E, R>) => body,
+        write: () => Effect.die("A startup audit cannot mutate storage"),
+      };
+
+      const snapshotTransfer = yield* makeSqlThreadImport({
+        namespace: options.namespace,
+        offsetPrefix: options.offsetPrefix,
+        ...transactions,
+      });
+
+      const snapshotArchives =
+        journal.archives === undefined
+          ? undefined
+          : yield* makeSqlThreadArchiveRange(transactions, options.namespace);
+
+      const query = <A extends object>(statement: ReturnType<typeof sql<A>>) =>
+        execute(statement).pipe(
+          Effect.mapError((e) =>
+            options.errors.corruption({
+              table: "effect_agent_threads",
+              rowKey: "startup_scan",
+              message: e.message,
+            }),
+          ),
+        );
+
+      const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown) =>
+        Schema.decodeUnknownEffect(schema)(value).pipe(
+          Effect.mapError((e) =>
+            options.errors.corruption({
+              table: "effect_agent_threads",
+              rowKey: "startup_scan",
+              message: e.message,
+            }),
+          ),
+        );
+
+      for (const name of [
+        "effect_agent_canonical_records",
+        "effect_agent_canonical_batches",
+        "effect_agent_checkpoints",
+      ])
+        if (
+          (yield* query(sql`SELECT thread_id FROM ${table(name)} orphan WHERE NOT EXISTS
+          (SELECT 1 FROM ${table("effect_agent_threads")} t WHERE t.thread_id=orphan.thread_id) LIMIT 1`))
+            .length > 0
+        )
+          return yield* options.errors.corruption({
+            table: name,
+            rowKey: "startup_scan",
+            message: "Canonical rows exist without their Thread",
+          });
+      let afterThread: string | undefined;
+
+      while (true) {
+        const threads = yield* decode(
+          Schema.Array(Schema.Struct({ thread_id: ThreadId })),
+          yield* query(
+            sql`SELECT thread_id FROM ${table("effect_agent_threads")} ${afterThread === undefined ? sql`` : sql`WHERE thread_id>${afterThread}`} ORDER BY thread_id LIMIT 1`,
+          ),
+        );
+
+        const thread = threads[0];
+
+        if (thread === undefined) break;
+        const state = makeThreadImportProgress();
+        let cursor: string | undefined;
+
+        do {
+          const page = yield* snapshotTransfer
+            .export({ threadId: thread.thread_id, ...(cursor === undefined ? {} : { cursor }) })
+            .pipe(
+              Effect.mapError((e) =>
+                options.errors.corruption({
+                  table: "effect_agent_threads",
+                  rowKey: thread.thread_id,
+                  message: e.message,
+                }),
+              ),
+            );
+
+          const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
+            Effect.flatMap((page) =>
+              prepareImportPage(state, page, { allowExternalObligations: true }),
+            ),
+            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.mapError((e) =>
+              options.errors.corruption({
+                table: "effect_agent_canonical_batches",
+                rowKey: thread.thread_id,
+                message: e.message,
+              }),
+            ),
+          );
+
+          for (const batch of prepared.batches) {
+            const stored = yield* decode(
+              Schema.Array(Schema.Struct({ batch_digest: Digest, tail_digest: Digest })),
+              yield* query(
+                sql`SELECT batch_digest, tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${batch.batch.batchId}`,
+              ),
+            );
+
+            if (
+              stored.length !== 1 ||
+              stored[0]?.batch_digest !== batch.tailDigest ||
+              stored[0]?.tail_digest !== batch.tailDigest
+            )
+              return yield* options.errors.corruption({
+                table: "effect_agent_canonical_batches",
+                rowKey: `${thread.thread_id}/${batch.batch.batchId}`,
+                message: "Stored batch digest differs from its exact wire chain",
+              });
+          }
+          cursor = page.cursor;
+        } while (cursor !== undefined);
+        yield* finishThreadImport(state).pipe(
+          Effect.mapError((e) =>
+            options.errors.corruption({
+              table: "effect_agent_threads",
+              rowKey: thread.thread_id,
+              message: e.message,
+            }),
+          ),
+        );
+        let afterCheckpoint = -1;
+
+        while (true) {
+          const checkpoints = yield* decode(
+            Schema.Array(
+              Schema.Struct({
+                through_sequence: SqlInteger,
+                tail_digest: Digest,
+                checkpoint_json: Schema.String,
+              }),
+            ),
+            yield* query(
+              sql`SELECT through_sequence, tail_digest, checkpoint_json FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${thread.thread_id}
+              AND through_sequence>${afterCheckpoint} ORDER BY through_sequence LIMIT 1`,
+            ),
+          );
+
+          const row = checkpoints[0];
+
+          if (row === undefined) break;
+
+          const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
+            row.checkpoint_json,
+          ).pipe(
+            Effect.mapError((e) =>
+              options.errors.corruption({
+                table: "effect_agent_checkpoints",
+                rowKey: `${thread.thread_id}/${row.through_sequence}`,
+                message: e.message,
+              }),
+            ),
+          );
+
+          const bound =
+            row.through_sequence === 0
+              ? [EMPTY_TAIL_DIGEST]
+              : yield* journal.getTailDigestAt(
+                  thread.thread_id,
+                  CanonicalSequence.make(row.through_sequence),
+                );
+
+          if (
+            checkpoint.threadId !== thread.thread_id ||
+            checkpoint.throughSequence !== row.through_sequence ||
+            checkpoint.tailDigest !== row.tail_digest ||
+            bound.length !== 1 ||
+            bound[0] !== row.tail_digest
+          )
+            return yield* options.errors.corruption({
+              table: "effect_agent_checkpoints",
+              rowKey: `${thread.thread_id}/${row.through_sequence}`,
+              message: "Checkpoint is not bound to a canonical batch tail",
+            });
+          afterCheckpoint = row.through_sequence;
+        }
+        if (snapshotArchives !== undefined) {
+          let afterSequence: CanonicalSequence | undefined;
+
+          do {
+            const page = yield* snapshotArchives.storage.page({
+              threadId: thread.thread_id,
+              limit: 32,
+              ...(afterSequence === undefined ? {} : { afterSequence }),
+            });
+
+            for (const range of page.ranges)
+              yield* snapshotArchives.storage.verify({
+                threadId: thread.thread_id,
+                firstSequence: range.firstSequence,
+              });
+            afterSequence = page.afterSequence;
+          } while (afterSequence !== undefined);
+        }
+        afterThread = thread.thread_id;
+      }
+    });
+
+    yield* journal.withReadTransaction("bounded startup audit")(
+      audit.pipe(
+        Effect.mapError((e) =>
+          options.errors.corruption({
+            table: "effect_agent_threads",
+            rowKey: "startup_scan",
+            message: e.message,
+          }),
+        ),
+      ),
+    );
+  }
 
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
     request: ThreadTailRequest,
@@ -757,13 +805,16 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   const store = ThreadStore.of({
     work: journal.work.storage,
+    archives: journal.archives,
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     countPeerMessages: selectedReads.countPeerMessages,
+    readWorkerCapacity: selectedReads.readWorkerCapacity,
     readIdentity: selectedReads.readIdentity,
     append: makeAppend(journal.append, true),
     export: transfer.export,
+    verification: transfer.verification,
     inspectTail,
     materialize,
     observe,

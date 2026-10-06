@@ -2,8 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { SettlementFailureDiagnostic } from "@yielded/agent/records";
-import { ThreadExport } from "@yielded/agent/thread-store";
+import { CanonicalRecordEnvelope, SettlementFailureDiagnostic } from "@yielded/agent/records";
 import { WorkerCompletion } from "@yielded/agent/worker";
 import { Effect, Schema } from "effect";
 import { build } from "esbuild";
@@ -200,7 +199,10 @@ it("does not treat the retained request on a worker update or completion as fres
 
   // Child settlement does not imply parent processing; wait for its report's parent settlement.
   const parent = await until(
-    async () => Schema.decodeUnknownSync(ThreadExport)(await fixture("journal", { thread })),
+    async () =>
+      Schema.decodeUnknownSync(Schema.Struct({ records: Schema.Array(CanonicalRecordEnvelope) }))(
+        await fixture("journal", { thread }),
+      ),
     ({ records }) =>
       records.some(({ record }) => {
         const input = record.payload;

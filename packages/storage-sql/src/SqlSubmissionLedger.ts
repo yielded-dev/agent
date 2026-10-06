@@ -81,6 +81,8 @@ import {
   SubmissionLookup,
   SubmissionLookupByKey,
   SubmissionSnapshot,
+  FundingOwnerRequest,
+  FundingOwner,
   SubmissionWorkItem,
   SubmissionState,
   settlementFailureFromRecord,
@@ -124,6 +126,7 @@ import {
   type SqlStorageFailpoint,
 } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
+import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 import { prepareSqlAppend } from "./SqlThreadStore.ts";
 type SubmissionId = SubmissionSnapshot["submissionId"];
 
@@ -393,6 +396,7 @@ export interface SqlSubmissionLedgerOptions<
   readonly errors: SqlStorageErrors<S, C>;
   readonly hitFailpoint: SqlStorageFailpoint<F>;
   readonly ownershipLeaseDuration: number;
+  readonly offsetPrefix: string;
   readonly sqlFailure: (operation: string) => (error: SqlError) => LedgerError;
 }
 
@@ -713,8 +717,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       submission.receipt_id,
     ).pipe(Effect.mapError(internalFailure(operation)));
 
-    const rows = yield* sql<{ readonly record_json: string }>`
-      SELECT record_json FROM ${relation("effect_agent_canonical_records")}
+    const rows = yield* sql<{ readonly record_json: string | null }>`
+      SELECT ${canonicalRecordJson(sql, options.namespace)} AS record_json FROM ${relation("effect_agent_canonical_records")}
       WHERE thread_id = ${submission.thread_id}
         AND record_id = ${submissionSettlementRecordId(submissionId)}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
@@ -726,6 +730,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         "effect_agent_canonical_records",
         submission.submission_id,
         "A canonical settlement identity returned multiple records.",
+      );
+
+    if (rows[0].record_json === null)
+      return yield* corruptionFailure(
+        operation,
+        "effect_agent_canonical_records",
+        submission.submission_id,
+        "Known canonical settlement has neither hot nor published archived wire.",
       );
 
     const record = yield* decodeRecordEnvelopeText(rows[0].record_json).pipe(
@@ -1372,6 +1384,78 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     yield* hitFailpoint("ledger:mark-ready:after", operation);
   });
 
+  const resolveFundingOwner: NonNullable<SubmissionLedger["Service"]["resolveFundingOwner"]> =
+    Effect.fnUntraced(
+      function* (input) {
+        const operation = "resolve funding owner";
+
+        const request = yield* Schema.decodeEffect(FundingOwnerRequest)(input).pipe(
+          Effect.mapError(internalFailure(operation)),
+        );
+
+        const selected = yield* requireSubmission(operation, request.submissionId);
+
+        if (selected.thread_id !== request.threadId)
+          return yield* LedgerError.make({
+            operation,
+            message: "Selected funding input belongs to another Thread.",
+          });
+        if (selected.state === "joining")
+          return yield* LedgerError.make({
+            operation,
+            message: "Selected funding input is still joining; retry after durable binding.",
+          });
+        const hostId = selected.joined_host_submission_id;
+
+        if (hostId === null && selected.state === "joined")
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_submissions",
+            selected.submission_id,
+            "Joined input has no stable host identity.",
+          );
+        if (hostId !== null && selected.state !== "joined" && selected.state !== "settled")
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_submissions",
+            selected.submission_id,
+            "Host linkage is inconsistent with selected input state.",
+          );
+        const owner = hostId === null ? selected : yield* requireSubmission(operation, hostId);
+
+        if (
+          owner.thread_id !== request.threadId ||
+          (hostId !== null &&
+            (owner.submission_id === selected.submission_id ||
+              owner.joined_host_submission_id !== null ||
+              owner.state === "joining" ||
+              owner.state === "joined" ||
+              owner.queue_sequence >= selected.queue_sequence))
+        )
+          return yield* corruptionFailure(
+            operation,
+            "effect_agent_submissions",
+            selected.submission_id,
+            "Funding host is not a stable earlier input in this Thread.",
+          );
+
+        return yield* Schema.decodeEffect(Schema.toType(FundingOwner))({
+          selected: yield* decodeSubmissionSnapshot(operation, selected),
+          owner: yield* decodeSubmissionSnapshot(operation, owner),
+        }).pipe(Effect.mapError(internalFailure(operation)));
+      },
+      (body) =>
+        journal
+          .withReadTransaction("resolve funding owner")(body)
+          .pipe(
+            Effect.mapError((error) =>
+              journal.isTransactionFailure(error)
+                ? internalFailure("resolve funding owner")(error)
+                : error,
+            ),
+          ),
+    );
+
   const lookup: SubmissionLedger["Service"]["lookup"] = Effect.fnUntraced(function* (
     request: SubmissionLookup,
   ) {
@@ -1840,7 +1924,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     const operation = "publish settlement";
     const { request, record, settlement } = yield* validatePublication(input);
 
-    const prepared = yield* prepareSqlAppend(request.append).pipe(
+    const prepared = yield* prepareSqlAppend(request.append, options.offsetPrefix).pipe(
       Effect.provideService(Crypto.Crypto, crypto),
     );
 
@@ -3017,14 +3101,23 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           if (existingIntent === undefined && kind === "factual") {
             const runId = runIdForSubmission(validated.submissionId);
 
-            const outcomes = yield* sql<{ readonly record_json: string }>`
-              SELECT record_json FROM ${relation("effect_agent_canonical_records")}
+            const outcomes = yield* sql<{ readonly record_json: string | null }>`
+              SELECT ${canonicalRecordJson(sql, options.namespace)} AS record_json
+              FROM ${relation("effect_agent_canonical_records")}
               WHERE thread_id = ${submission.thread_id}
                 AND record_tag = 'ToolCallSettled'
                 AND run_id = ${JSON.stringify(runId)}
                 AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
               LIMIT 2
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
+
+            if (outcomes[0]?.record_json === null)
+              return yield* corruptionFailure(
+                operation,
+                "effect_agent_canonical_records",
+                validated.toolCallId,
+                "Known canonical Tool result has neither hot nor published archived wire.",
+              );
 
             const result =
               outcomes[0] === undefined
@@ -3888,6 +3981,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     admit,
     markReady,
     lookup,
+    resolveFundingOwner,
     resolveAdmission,
     claim,
     renewOwnership: (request) => renewOwnershipKernel(request, ordinaryAuthority),

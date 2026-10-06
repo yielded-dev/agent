@@ -18,7 +18,7 @@ import { runIdForSubmission } from "./RunJournal.ts";
 import type { SubmissionWorkItem } from "./SubmissionLedger.ts";
 import { ThreadReader, ThreadStore, ThreadStoreError } from "./ThreadStore.ts";
 
-export const WORK_INDEX_VERSION = 1;
+export const WORK_INDEX_VERSION = 2;
 export const MAX_WORK_PAGE_ENTRIES = 128;
 export const MAX_WORK_ENTRY_BYTES = 8 * 1024;
 export const MAX_WORK_PAGE_BYTES = MAX_WORK_PAGE_ENTRIES * MAX_WORK_ENTRY_BYTES;
@@ -44,6 +44,7 @@ export const WorkOwner = Schema.Union([
     _tag: Schema.Literal("WorkerInput"),
     messageId: IdempotencyKey,
     workerThreadId: ThreadId,
+    update: Schema.Boolean,
   }),
   Schema.Struct({ _tag: Schema.Literal("Report"), runId: RunId }),
   Schema.Struct({ _tag: Schema.Literal("WorkerEffects"), submissionId: SubmissionId }),
@@ -465,7 +466,7 @@ export type WorkerReportingMode = "none" | "private" | "standard";
 
 export type WorkIndexChange =
   | { readonly _tag: "Put"; readonly entry: CanonicalWorkEntry }
-  | { readonly _tag: "Remove"; readonly id: string }
+  | { readonly _tag: "Remove"; readonly id: string; readonly stateRecordId?: RecordId }
   | { readonly _tag: "WorkerMode"; readonly mode: Exclude<WorkerReportingMode, "none"> };
 
 /**
@@ -492,6 +493,7 @@ export const workIndexChanges = Effect.fnUntraced(function* (
       "SubagentJoined",
       "WorkerInputRequested",
       "WorkerInputCompleted",
+      "WorkerInputRefused",
       "WorkerOriginRecorded",
       "SubmissionSettled",
       "WorkerReportPrepared",
@@ -581,7 +583,7 @@ export const workIndexChanges = Effect.fnUntraced(function* (
         : [remove("operation", payload.runId, payload.toolCallId)];
     case "SubagentRequested":
       return [
-        remove("reservation", payload.childThreadId),
+        remove("reservation", payload.reservationId),
         put(
           workId("child", payload.runId, payload.toolCallId),
           {
@@ -598,13 +600,14 @@ export const workIndexChanges = Effect.fnUntraced(function* (
       return [remove("child", payload.runId, payload.toolCallId), handoff("child-accounting")];
     case "WorkerInputRequested":
       return [
-        remove("reservation", payload.admission.origin.worker.threadId),
+        remove("reservation", payload.admission.messageId),
         put(
           workId("worker-input", payload.admission.messageId),
           {
             _tag: "WorkerInput",
             messageId: payload.admission.messageId,
             workerThreadId: payload.admission.origin.worker.threadId,
+            update: payload.admission.reportKind === "update",
           },
           "waiting",
           "worker",
@@ -617,6 +620,19 @@ export const workIndexChanges = Effect.fnUntraced(function* (
             remove("worker-effects", payload.submissionId),
           ]
         : [];
+    case "WorkerInputRefused":
+      return [
+        {
+          _tag: "Remove",
+          id: workId("worker-input", payload.messageId),
+          stateRecordId: payload.reservation.recordId,
+        },
+        {
+          _tag: "Remove",
+          id: workId("reservation", payload.messageId),
+          stateRecordId: payload.reservation.recordId,
+        },
+      ];
     case "WorkerOriginRecorded":
       return [
         {
@@ -658,7 +674,7 @@ export const workIndexChanges = Effect.fnUntraced(function* (
     case "SubtreeBudgetReserved":
       return [
         put(
-          workId("reservation", payload.childThreadId),
+          workId("reservation", payload.reservationId),
           {
             _tag: "Handoff",
             recordId: record.recordId,

@@ -252,9 +252,7 @@ export const EditorHostLive = Layer.mergeAll(
     },
   }),
   Layer.succeed(WorkerHostConfig, {
-    maxWorkersPerSource: 100,
     maxActiveWorkersPerSource: activeWorkerLimit,
-    maxInputsPerWorker: 256,
     maxPendingInputsPerWorker: 16,
     lifetimeMillis: 7 * 24 * 60 * 60 * 1000,
   }),

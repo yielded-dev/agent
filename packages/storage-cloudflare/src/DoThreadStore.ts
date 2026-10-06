@@ -5,8 +5,8 @@ import {
   makeSelectedReads,
   SelectedReadOwner,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
-import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
+import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { ExportRecord } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -52,6 +52,7 @@ import {
   Stream,
 } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
+import { isSqlError } from "effect/sql/SqlError";
 
 import {
   DEFAULT_MAX_STORED_VALUE_BYTES,
@@ -68,7 +69,7 @@ import {
   DoStorageError,
 } from "./DoStorageError.ts";
 import { DoStorageFailpoint, type DoStorageFailpointHandler } from "./DoStorageFailpoint.ts";
-import { prepareCanonicalAppend } from "./internal/canonical-append.ts";
+import { DO_OFFSET_PREFIX, prepareCanonicalAppend } from "./internal/canonical-append.ts";
 import {
   initializeDoJournal,
   RawCheckpoint,
@@ -112,7 +113,6 @@ export type DoStorageInitializationError =
   | DoStorageError;
 
 const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
-const DO_OFFSET_PREFIX = "effect-agent-do@1:";
 const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const isDigest = Schema.is(Digest);
 const isDoFenceRejected = Schema.is(DoFenceRejected);
@@ -308,217 +308,18 @@ const tailDigestAt = Effect.fnUntraced(function* (
   );
 });
 
-const groupByKey = <A>(
-  rows: ReadonlyArray<A>,
-  key: (row: A) => string,
-): ReadonlyMap<string, ReadonlyArray<A>> => {
-  const grouped = new Map<string, Array<A>>();
+/** Explicit startup audit: page owners and verify bounded ranges, never collect Thread payloads. */
+const decodeStartupPayloads = Effect.fnUntraced(function* (journal: DoJournal) {
+  let afterThreadId: string | undefined;
 
-  for (const row of rows) {
-    const existing = grouped.get(key(row));
+  while (true) {
+    const owners = yield* journal.archiveRanges.threadPage(afterThreadId);
 
-    if (existing === undefined) {
-      grouped.set(key(row), [row]);
-    } else {
-      existing.push(row);
+    for (const owner of owners) {
+      yield* journal.archiveRanges.verifyThread(owner.thread_id);
+      afterThreadId = owner.thread_id;
     }
-  }
-
-  return grouped;
-};
-
-/**
- * Opt-in integrity audit (`verifyOnOpen`) of canonical payloads, their digest chains and generic
- * projection checkpoints. Routine opens
- * skip this scan: per-operation Schema decoding fails clearly on corrupt canonical rows.
- */
-const decodeStartupPayloads = Effect.fnUntraced(function* (
-  journal: DoJournal,
-  crypto: Crypto.Crypto,
-) {
-  const stored = yield* journal.scanStoredPayloads();
-
-  const batches = yield* Effect.forEach(stored.batches, (batch) =>
-    Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(batch.batch_json).pipe(
-      Effect.map((decoded) => ({ decoded, row: batch })),
-      Effect.mapError((error) =>
-        DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_batches",
-          rowKey: `${batch.thread_id}/${batch.batch_id}`,
-          message: error.message,
-        }),
-      ),
-    ),
-  );
-
-  const records = yield* Effect.forEach(stored.records, (record) =>
-    Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(record.record_json).pipe(
-      Effect.map((decoded) => ({ decoded, row: record })),
-      Effect.mapError((error) =>
-        DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_records",
-          rowKey: `${record.thread_id}/${record.sequence}`,
-          message: error.message,
-        }),
-      ),
-    ),
-  );
-
-  const checkpoints = yield* Effect.forEach(stored.checkpoints, (checkpoint) =>
-    Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpoint.checkpoint_json).pipe(
-      Effect.map((decoded) => ({ decoded, row: checkpoint })),
-      Effect.mapError((error) =>
-        DoStorageCorruptionError.make({
-          table: "effect_agent_checkpoints",
-          rowKey: `${checkpoint.thread_id}/${checkpoint.through_sequence}`,
-          message: error.message,
-        }),
-      ),
-    ),
-  );
-
-  const batchesByThread = groupByKey(batches, ({ row }) => row.thread_id);
-  const recordsByThread = groupByKey(records, ({ row }) => row.thread_id);
-  const checkpointsByThread = groupByKey(checkpoints, ({ row }) => row.thread_id);
-  const materializedIds = new Set(stored.threads.map((thread) => thread.thread_id));
-
-  for (const thread of stored.threads) {
-    const threadBatches = batchesByThread.get(thread.thread_id) ?? [];
-    const threadRecords = recordsByThread.get(thread.thread_id) ?? [];
-    const threadCheckpoints = checkpointsByThread.get(thread.thread_id) ?? [];
-    const recordsByBatch = groupByKey(threadRecords, ({ row }) => row.batch_id);
-    let previousDigest = EMPTY_TAIL_DIGEST;
-    let expectedSequence = 1;
-    const tailDigests = new Map<number, string>([[0, EMPTY_TAIL_DIGEST]]);
-
-    for (const { decoded: canonicalBatch, row: batchRow } of threadBatches) {
-      const key = `${batchRow.thread_id}/${batchRow.batch_id}`;
-
-      if (
-        canonicalBatch.batchId !== batchRow.batch_id ||
-        batchRow.first_sequence !== expectedSequence ||
-        batchRow.last_sequence !== batchRow.first_sequence + canonicalBatch.records.length - 1
-      ) {
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_batches",
-          rowKey: key,
-          message: "Canonical batch identity, sequence, or record count is inconsistent.",
-        });
-      }
-
-      const digest = yield* Schema.encodeEffect(ExportBatch)(canonicalBatch).pipe(
-        Effect.flatMap((encoded) =>
-          digestJson({ previousTailDigest: previousDigest, batch: encoded }),
-        ),
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.mapError((error) =>
-          DoStorageCorruptionError.make({
-            table: "effect_agent_canonical_batches",
-            rowKey: key,
-            message: error.message,
-          }),
-        ),
-      );
-
-      if (batchRow.batch_digest !== digest || batchRow.tail_digest !== digest) {
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_batches",
-          rowKey: key,
-          message: "Canonical batch digest does not match its decoded content and prior tail.",
-        });
-      }
-
-      const batchRecords = recordsByBatch.get(batchRow.batch_id) ?? [];
-
-      if (batchRecords.length !== canonicalBatch.records.length) {
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_records",
-          rowKey: key,
-          message: "Canonical batch and record-table counts differ.",
-        });
-      }
-      for (let index = 0; index < canonicalBatch.records.length; index++) {
-        const expectedRecord = canonicalBatch.records[index];
-        const storedRecord = batchRecords[index];
-
-        const expectedJson = yield* Schema.encodeEffect(ExportRecord)(expectedRecord).pipe(
-          Effect.map(canonicalJson),
-          Effect.mapError((error) =>
-            DoStorageCorruptionError.make({
-              table: "effect_agent_canonical_batches",
-              rowKey: key,
-              message: error.message,
-            }),
-          ),
-        );
-
-        const storedJson = yield* Schema.encodeEffect(ExportRecord)(storedRecord.decoded).pipe(
-          Effect.map(canonicalJson),
-          Effect.mapError((error) =>
-            DoStorageCorruptionError.make({
-              table: "effect_agent_canonical_records",
-              rowKey: `${key}/${storedRecord.row.sequence}`,
-              message: error.message,
-            }),
-          ),
-        );
-
-        if (
-          storedRecord.row.sequence !== batchRow.first_sequence + index ||
-          storedRecord.row.record_id !== expectedRecord.recordId ||
-          expectedJson !== storedJson
-        ) {
-          return yield* DoStorageCorruptionError.make({
-            table: "effect_agent_canonical_records",
-            rowKey: `${key}/${storedRecord.row.sequence}`,
-            message: "Canonical record identity, sequence, or payload differs from its batch.",
-          });
-        }
-      }
-
-      previousDigest = digest;
-      expectedSequence = batchRow.last_sequence + 1;
-      tailDigests.set(batchRow.last_sequence, digest);
-    }
-
-    if (
-      threadRecords.length !== thread.tail_sequence ||
-      thread.tail_sequence !== expectedSequence - 1 ||
-      thread.tail_digest !== previousDigest
-    ) {
-      return yield* DoStorageCorruptionError.make({
-        table: "effect_agent_threads",
-        rowKey: thread.thread_id,
-        message: "Thread tail does not match its canonical batch chain.",
-      });
-    }
-
-    for (const checkpoint of threadCheckpoints) {
-      if (
-        checkpoint.decoded.threadId !== thread.thread_id ||
-        checkpoint.decoded.throughSequence !== checkpoint.row.through_sequence ||
-        checkpoint.decoded.tailDigest !== checkpoint.row.tail_digest ||
-        tailDigests.get(checkpoint.row.through_sequence) !== checkpoint.row.tail_digest
-      ) {
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_checkpoints",
-          rowKey: `${thread.thread_id}/${checkpoint.row.through_sequence}`,
-          message: "Checkpoint identity or digest is not bound to a canonical batch tail.",
-        });
-      }
-    }
-  }
-
-  if (
-    batches.some(({ row }) => !materializedIds.has(row.thread_id)) ||
-    records.some(({ row }) => !materializedIds.has(row.thread_id)) ||
-    checkpoints.some(({ row }) => !materializedIds.has(row.thread_id))
-  ) {
-    return yield* DoStorageCorruptionError.make({
-      table: "effect_agent_threads",
-      rowKey: "startup_scan",
-      message: "Canonical rows exist without a materialized Thread.",
-    });
+    if (owners.length < 32) break;
   }
 });
 
@@ -530,7 +331,15 @@ const makeServices = Effect.fnUntraced(function* () {
   const journal = yield* initializeDoJournal(sql, failpoint.hit, config.maxStoredValueBytes);
 
   if (config.verifyOnOpen) {
-    yield* decodeStartupPayloads(journal, crypto);
+    yield* decodeStartupPayloads(journal).pipe(
+      Effect.mapError((cause) =>
+        DoStorageCorruptionError.make({
+          table: "effect_agent_journal_ranges",
+          rowKey: "verification",
+          message: cause.message,
+        }),
+      ),
+    );
   }
 
   const hitFailpoint = (
@@ -727,12 +536,12 @@ const makeServices = Effect.fnUntraced(function* () {
     read: (body) =>
       journal.owner.transaction(body).pipe(
         Effect.provideService(SqlClientService.SqlClient, sql),
-        Effect.catchTag("SqlError", (cause) => storeError("export transaction", cause)),
+        Effect.catchIf(isSqlError, (cause) => storeError("export transaction", cause)),
       ),
     write: (body) =>
       journal.owner.transaction(body.pipe(Effect.tap(() => journal.state.invalidate))).pipe(
         Effect.provideService(SqlClientService.SqlClient, sql),
-        Effect.catchTag("SqlError", (cause) => storeError("import transaction", cause)),
+        Effect.catchIf(isSqlError, (cause) => storeError("import transaction", cause)),
       ),
   });
 
@@ -881,11 +690,14 @@ const makeServices = Effect.fnUntraced(function* () {
   );
 
   const threadStore = ThreadStore.of({
+    archives: journal.archives,
     work: journal.work.storage,
     ...(journal.lifecycle === undefined
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     readIdentity: selectedReads.readIdentity,
+    readWorkerCapacity: selectedReads.readWorkerCapacity,
+    verification: transfer.verification,
     countPeerMessages: selectedReads.countPeerMessages,
     append,
     export: transfer.export,

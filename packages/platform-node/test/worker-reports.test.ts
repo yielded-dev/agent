@@ -10,6 +10,7 @@ import { DefinitionDigestInput } from "@yielded/agent/records";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { WorkerCompletion, WorkerError } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
@@ -212,7 +213,8 @@ it.live.each(["worker:after-report-append"] as const)(
           failure: { _tag: "LedgerError", operation: "worker-completion" },
         });
 
-        const firstLog = yield* Context.get(first, ThreadStore).export(
+        const firstLog = yield* readTestThread(
+          Context.get(first, ThreadStore),
           ThreadExportRequest.make({ threadId: started.worker.threadId }),
         );
 
@@ -300,7 +302,8 @@ it.live.each(["worker:after-report-append"] as const)(
           }
         }).pipe(Effect.timeout("10 seconds"));
 
-        const childLog = yield* store.export(
+        const childLog = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: started.worker.threadId }),
         );
 
@@ -312,7 +315,8 @@ it.live.each(["worker:after-report-append"] as const)(
           record.payload._tag === "WorkerReportPrepared" ? [record.payload] : [],
         );
 
-        const sourceLog = yield* store.export(
+        const sourceLog = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: sourceThreadId }),
         );
 

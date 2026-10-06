@@ -2,12 +2,23 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
+import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
 import {
   SubmissionLedger,
   SubmissionLookupById,
   SubmissionLookupByKey,
+  submissionInputRecordId,
+  submissionSettlementRecordId,
+  type SubmissionWorkItem,
 } from "@yielded/agent/submission-ledger";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import {
+  ThreadStore,
+  ThreadReader,
+  ThreadRead,
+  ThreadTailRequest,
+  getRecord,
+} from "@yielded/agent/thread-store";
 import { FrameworkMessage } from "@yielded/agent/worker";
 import { Context, Effect, Option, Schema, Stream } from "effect";
 import { WorkerEnvironment } from "effect-cf";
@@ -52,10 +63,57 @@ const readThread = Effect.fn("readPlannerThread")(function* (id: string) {
 
   const store = yield* ThreadStore;
 
-  return yield* store.export(ThreadExportRequest.make({ threadId })).pipe(
+  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
     Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(undefined)),
     Effect.mapError(unavailable),
   );
+
+  if (tail === undefined) return;
+
+  const latest = yield* store
+    .read({
+      threadId,
+      selection: { _tag: "LatestApplicationInput", throughSequence: tail.tailSequence },
+      page: { limit: 1 },
+    })
+    .pipe(Stream.runHead, Effect.mapError(unavailable));
+
+  const records: Array<CanonicalRecordEnvelope> = Option.toArray(latest);
+  let bytes = records.reduce((total, entry) => total + canonicalRecordBytes(entry.record), 0);
+  let before = tail.tailSequence;
+
+  // Render a recent view. Exact receipt and Run queries do not depend on this window.
+  recent: while (records.length < 1024 && before > 0) {
+    const after = Math.max(0, before - 8);
+
+    const page = yield* store
+      .read(
+        ThreadRead.make({
+          threadId,
+          afterSequence: CanonicalSequence.make(after),
+          limit: before - after,
+        }),
+      )
+      .pipe(Stream.runCollect, Effect.mapError(unavailable));
+
+    if (page.length !== before - after) return yield* unavailable();
+    for (let n = page.length - 1; n >= 0; n--) {
+      const entry = page[n];
+
+      if (entry === undefined || entry.sequence !== after + n + 1 || entry.threadId !== threadId)
+        return yield* unavailable();
+      if (Option.isSome(latest) && entry.sequence === latest.value.sequence) continue;
+      const size = canonicalRecordBytes(entry.record);
+
+      if (bytes + size > 32 * 1024 * 1024 || records.length === 1024) break recent;
+      bytes += size;
+      records.push(entry);
+    }
+    before = CanonicalSequence.make(after);
+  }
+  records.sort((left, right) => left.sequence - right.sequence);
+
+  return { records };
 });
 
 export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMessageRequest) {
@@ -178,9 +236,17 @@ export const plannerSnapshot = Effect.fn("plannerSnapshot")(function* (
 
   const ledger = yield* SubmissionLedger;
 
-  const pending = yield* ledger.scanNonterminal.pipe(
+  const pending: Array<SubmissionWorkItem> = [];
+  let pendingCount = 0;
+
+  yield* ledger.scanNonterminal.pipe(
     Stream.filter((submission) => submission.threadId === conversationId),
-    Stream.runCollect,
+    Stream.runForEach((submission) =>
+      Effect.sync(() => {
+        pendingCount++;
+        if (pending.length < 100) pending.push(submission);
+      }),
+    ),
     Effect.mapError(unavailable),
   );
 
@@ -357,7 +423,11 @@ export const plannerSnapshot = Effect.fn("plannerSnapshot")(function* (
         .pipe(Effect.mapError(unavailable));
 
       if (Option.isNone(submission)) return yield* unavailable();
-      if (Schema.is(FrameworkMessage)(submission.value.messageAdmission)) return [];
+      if (
+        !["admitted", "ready"].includes(submission.value.state) ||
+        Schema.is(FrameworkMessage)(submission.value.messageAdmission)
+      )
+        return [];
       const input = Schema.decodeUnknownOption(PlannerInput)(submission.value.inputPayload);
 
       return Option.isSome(input) && !input.value.voice?.input
@@ -378,7 +448,7 @@ export const plannerSnapshot = Effect.fn("plannerSnapshot")(function* (
     trips,
     conversations: yield* repository.listConversations,
     activity: plannerActivity(source?.records ?? [], yield* readDiagnostics),
-    pending: pending.length,
+    pending: pendingCount,
     pendingSubmissionIds: pending.map((submission) => submission.submissionId),
     queuedMessages: queuedMessages.flat(),
     usage: {
@@ -415,75 +485,91 @@ export const voiceWork = Effect.fn("voiceWork")(function* (request: typeof Voice
       text: null,
     } satisfies VoiceWork;
   const submission = found.value;
-  const history = yield* readThread(request.conversationId);
-  const records = history?.records ?? [];
+  const store = yield* ThreadStore;
+  const reader = ThreadReader.fromStore(store);
 
-  const pending = yield* ledger.scanNonterminal.pipe(
-    Stream.filter(
-      (next) =>
-        next.threadId === submission.threadId && next.queueSequence > submission.queueSequence,
-    ),
-    Stream.mapEffect(
-      Effect.fn("pendingPlannerInput")(function* ({ submissionId }) {
-        const next = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+  const exact = (recordId: Parameters<typeof getRecord>[0]["recordId"]) =>
+    getRecord({ threadId: submission.threadId, recordId }).pipe(
+      Effect.provideService(ThreadReader, reader),
+      Effect.mapError(unavailable),
+      Effect.map((value) => (Option.isSome(value) ? value.value.record.payload : undefined)),
+    );
 
-        if (Option.isNone(next)) return yield* unavailable();
-
-        return next.value;
-      }),
-    ),
-    Stream.runCollect,
-    Effect.mapError(unavailable),
-  );
-
-  const inputIndex = records.findIndex(
-    ({ record }) =>
-      record.payload._tag === "UserInputRecorded" &&
-      record.payload.submissionId === submission.submissionId,
-  );
-
-  const superseded =
-    pending.some(
-      (next) =>
-        !Schema.is(FrameworkMessage)(next.messageAdmission) &&
-        Schema.is(PlannerInput)(next.inputPayload),
-    ) ||
-    (inputIndex >= 0 &&
-      records
-        .slice(inputIndex + 1)
-        .some(
-          ({ record }) =>
-            record.payload._tag === "UserInputRecorded" &&
-            !Schema.is(FrameworkMessage)(record.payload.messageAdmission) &&
-            Schema.is(PlannerInput)(record.payload.input),
-        ));
-
-  const settled = records.find(
-    ({ record }) =>
-      record.payload._tag === "SubmissionSettled" &&
-      record.payload.submissionId === submission.submissionId,
-  )?.record.payload;
-
-  const input = records.find(
-    ({ record }) =>
-      record.payload._tag === "UserInputRecorded" &&
-      record.payload.submissionId === submission.submissionId,
-  )?.record.payload;
+  const settled = yield* exact(submissionSettlementRecordId(submission.submissionId));
+  const input = yield* exact(submissionInputRecordId(submission.submissionId));
 
   const runId =
     (settled?._tag === "SubmissionSettled" ? settled.runId : undefined) ??
     (input?._tag === "UserInputRecorded" ? input.runId : undefined);
 
-  // Joined inputs settle with the host; only the host stores the validated result.
-  const host =
-    runId === undefined
-      ? undefined
-      : records.find(
-          ({ record }) =>
-            record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
-        )?.record.payload;
+  const tail = yield* store
+    .inspectTail(ThreadTailRequest.make({ threadId: submission.threadId }))
+    .pipe(
+      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(undefined)),
+      Effect.mapError(unavailable),
+    );
 
-  const result = host?._tag === "SubmissionSettled" ? host : settled;
+  const latest =
+    tail === undefined
+      ? Option.none()
+      : yield* store
+          .read({
+            threadId: submission.threadId,
+            selection: { _tag: "LatestApplicationInput", throughSequence: tail.tailSequence },
+            page: { limit: 1 },
+          })
+          .pipe(Stream.runHead, Effect.mapError(unavailable));
+
+  const latestInput = Option.isSome(latest) ? latest.value.record.payload : undefined;
+  let superseded = false;
+
+  if (
+    latestInput?._tag === "UserInputRecorded" &&
+    latestInput.submissionId !== undefined &&
+    Schema.is(PlannerInput)(latestInput.input)
+  ) {
+    const newer = yield* ledger
+      .lookup(SubmissionLookupById.make({ submissionId: latestInput.submissionId }))
+      .pipe(Effect.mapError(unavailable));
+
+    superseded = Option.isSome(newer) && newer.value.queueSequence > submission.queueSequence;
+  }
+  if (!superseded) {
+    const pending = yield* ledger.scanNonterminal.pipe(
+      Stream.filter(
+        (next) =>
+          next.threadId === submission.threadId && next.queueSequence > submission.queueSequence,
+      ),
+      Stream.mapEffect((next) =>
+        ledger.lookup(SubmissionLookupById.make({ submissionId: next.submissionId })),
+      ),
+      Stream.filter(
+        (next) =>
+          Option.isSome(next) &&
+          !Schema.is(FrameworkMessage)(next.value.messageAdmission) &&
+          Schema.is(PlannerInput)(next.value.inputPayload),
+      ),
+      Stream.runHead,
+      Effect.mapError(unavailable),
+    );
+
+    superseded = Option.isSome(pending);
+  }
+
+  // Joined inputs observe the exact host settlement rather than a recent transcript slice.
+  let result = settled;
+
+  if (runId !== undefined) {
+    if (ledger.resolveFundingOwner === undefined) return yield* unavailable();
+
+    const funding = yield* ledger
+      .resolveFundingOwner({ threadId: submission.threadId, submissionId: submission.submissionId })
+      .pipe(Effect.mapError(unavailable));
+
+    const host = yield* exact(submissionSettlementRecordId(funding.owner.submissionId));
+
+    if (host?._tag === "SubmissionSettled") result = host;
+  }
   const state = settled?._tag === "SubmissionSettled" ? settled.outcome : "pending";
 
   const answer =

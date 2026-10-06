@@ -95,6 +95,7 @@ import {
   type Claim,
 } from "@yielded/agent/submission-ledger";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
   ThreadMaterialization,
   ThreadExportRequest,
@@ -254,7 +255,11 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
       );
 
       expect(published.replayed).toBe(false);
-      const exported = yield* store.export(ThreadExportRequest.make({ threadId: thread(lane) }));
+
+      const exported = yield* readTestThread(
+        store,
+        ThreadExportRequest.make({ threadId: thread(lane) }),
+      );
 
       expect(
         exported.records.flatMap(({ record }) =>

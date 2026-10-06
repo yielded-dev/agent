@@ -16,6 +16,7 @@ import {
   CanonicalRecordEnvelope,
   RepairAnnotated,
 } from "@yielded/agent/records";
+import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
@@ -31,7 +32,14 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
 import { reencodeThread } from "@yielded/agent/thread-import";
-import { ThreadExportRequest, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
+import {
+  ThreadExportRequest,
+  ThreadStore,
+  ThreadTailRequest,
+  ThreadRead,
+  streamExport,
+  ThreadExportSource,
+} from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Effect, Exit, Layer, Option, Schema, Stream } from "effect";
@@ -43,6 +51,30 @@ import { MemoryThreadStoreLive } from "../src/MemoryThreadStore.ts";
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
+
+const fixtureHistory = Effect.fnUntraced(function* (
+  store: ThreadStore["Service"],
+  request: ThreadExportRequest,
+) {
+  const page = yield* store.export(request);
+
+  if (page.tailSequence > 1024) return yield* Effect.die("Fixture history exceeds 1024 records");
+  let bytes = 0;
+  const records: Array<CanonicalRecordEnvelope> = [];
+
+  yield* Stream.runForEach(
+    store.read(ThreadRead.make({ threadId: request.threadId, limit: 1024 })),
+    (entry) => {
+      bytes += canonicalRecordBytes(entry.record);
+      if (bytes > 32 * 1024 * 1024) return Effect.die("Fixture history exceeds 32 MiB");
+      records.push(entry);
+
+      return Effect.void;
+    },
+  );
+
+  return { ...page, records };
+});
 
 const base = Layer.mergeAll(
   MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
@@ -181,7 +213,7 @@ describe("retained Run recovery", () => {
 
       yield* process("retired request", false);
       yield* process("begin compacted conversation", true);
-      const original = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const original = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
       for (const input of ["first fresh request", "second fresh request"]) {
         yield* process(input, false);
@@ -204,12 +236,12 @@ describe("retained Run recovery", () => {
       yield* process("new window request", true);
       expect(JSON.stringify(requests.at(-1))).toContain("new window request");
       expect(JSON.stringify(requests.at(-1))).not.toContain("first fresh request");
-      const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const completed = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
       expect(completed.records.slice(0, original.records.length)).toEqual(original.records);
 
       yield* process("summarize completed windows", false, true);
-      const summarized = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const summarized = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
       const rollover = summarized.records.findLast(
         ({ record: { payload } }) =>
@@ -242,13 +274,15 @@ describe("retained Run recovery", () => {
       expect(JSON.stringify(requests.at(-1))).toContain("Completed conversation.");
       expect(JSON.stringify(requests.at(-1))).toContain("resume summarized window");
       expect(JSON.stringify(requests.at(-1))).not.toContain("Retained handoff.");
-      const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const archive = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
-      const imported = yield* reencodeThread(Effect.succeed(archive)).pipe(
-        Effect.provide(Layer.fresh(base)),
-      );
+      const imported = yield* reencodeThread(
+        streamExport({ threadId }).pipe(
+          Stream.provideService(ThreadExportSource, { export: store.export }),
+        ),
+      ).pipe(Effect.provide(Layer.fresh(base)));
 
-      expect(imported.recordCount).toBe(archive.records.length);
+      expect(imported.recordCount).toBe(archive.tailSequence);
     }).pipe(Effect.provide(base)),
   );
 
@@ -394,7 +428,7 @@ describe("retained Run recovery", () => {
       );
       expect(handlerCalls).toBe(2);
 
-      const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const before = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
       const captured = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
       const [olderProgress, laterProgress] = yield* Effect.forEach([older, later], (receipt) =>
@@ -460,7 +494,7 @@ describe("retained Run recovery", () => {
       expect(JSON.stringify(requests.at(-1))).toContain("older unresolved input");
       expect(JSON.stringify(requests.at(-1))).toContain("Keep original instructions.");
       expect(JSON.stringify(requests.at(-1))).not.toContain("later input");
-      const completed = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const completed = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
       expect(completed.records.slice(0, before.records.length)).toEqual(before.records);
       expect(
@@ -650,7 +684,8 @@ describe("retained Run recovery", () => {
 
       expect(snapshot.ownership).toBeUndefined();
 
-      const original = yield* store.export(
+      const original = yield* fixtureHistory(
+        store,
         ThreadExportRequest.make({ threadId: receipt.threadId }),
       );
 
@@ -701,7 +736,7 @@ describe("retained Run recovery", () => {
         expect(requests).toHaveLength(requestsBefore);
         expect(calls).toBe(callsBefore);
         expect(
-          yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId })),
+          yield* fixtureHistory(store, ThreadExportRequest.make({ threadId: receipt.threadId })),
         ).toEqual(original);
 
         return;
@@ -731,7 +766,11 @@ describe("retained Run recovery", () => {
         expect(callsBefore).toBe(2);
         expect(calls).toBe(3);
         expect(stepEffects).toBe(3);
-        const after = yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId }));
+
+        const after = yield* fixtureHistory(
+          store,
+          ThreadExportRequest.make({ threadId: receipt.threadId }),
+        );
 
         expect(after.records.slice(0, original.records.length)).toEqual(original.records);
         expect(
@@ -776,7 +815,8 @@ describe("retained Run recovery", () => {
         if (Option.isSome(outcome)) expect(outcome.value.usageSummary?.modelCalls).toBe(5);
       }
 
-      const completed = yield* store.export(
+      const completed = yield* fixtureHistory(
+        store,
         ThreadExportRequest.make({ threadId: receipt.threadId }),
       );
 

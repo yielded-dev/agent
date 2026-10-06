@@ -406,6 +406,9 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
       }
       const ordinal = previous?.ordinal ?? (current ?? 0) + 1;
 
+      if (!Number.isSafeInteger(ordinal) || ordinal < 1)
+        return yield* LifecyclePublicationError.make({ reason: "capacity" });
+
       const publication = yield* LifecyclePublication.makeEffect({
         ...input,
         id: input.id ?? JSON.stringify([input.ownerThreadId, "lifecycle", ordinal]),
@@ -414,7 +417,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
 
       const text = yield* encode(publication);
 
-      if (new TextEncoder().encode(text).byteLength > maxStoredValueBytes || ordinal > 1_000_000)
+      if (new TextEncoder().encode(text).byteLength > maxStoredValueBytes)
         return yield* LifecyclePublicationError.make({ reason: "capacity" });
       const digest = yield* fingerprint(text);
 

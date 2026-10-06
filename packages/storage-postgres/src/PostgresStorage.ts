@@ -127,6 +127,7 @@ const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
     errors: postgresStorageErrors,
     hitFailpoint,
     ownershipLeaseDuration: config.ownershipLeaseDuration,
+    offsetPrefix: "effect-agent-postgres@1:",
     sqlFailure: (operation) => (cause) => {
       const internal = classifyWriteFailure(operation)(cause);
 
@@ -232,7 +233,7 @@ export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
     }),
   );
 
-/** Message delivery over the application's SqlClient and Crypto, with optional retention limits. */
+/** Message delivery over the application's SqlClient and Crypto, with optional live capacity and payload limits. */
 export const messageDeliveryStoreLayer = (
   options: PostgresStorageOptions & {
     readonly limits?: MessageDeliveryStoreLimits | undefined;

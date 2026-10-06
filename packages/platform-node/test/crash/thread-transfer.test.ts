@@ -7,8 +7,8 @@ import * as SqliteThreadStore from "@yielded/agent-storage-sqlite/sqlite-thread-
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
-import { ThreadArchive, ThreadImport, ThreadImportRequest } from "@yielded/agent/thread-import";
-import { ThreadExport, ThreadExportRequest } from "@yielded/agent/thread-store";
+import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
+import { ThreadExport, ThreadExportRequest, streamExport } from "@yielded/agent/thread-store";
 import { Effect, FileSystem, Layer, Schema, Stream } from "effect";
 import { LanguageModel, Model, type Prompt } from "effect/ai";
 
@@ -51,6 +51,48 @@ const derivativeCounts = (db: DatabaseSync) =>
       .get(),
   );
 
+// This process-loss fixture is small; bound its comparison buffers independently of the
+// transfer API, which consumes an arbitrary number of pages without collecting them.
+const exportFixture = Effect.fnUntraced(function* (filename: string, request: ThreadExportRequest) {
+  let bytes = 0;
+
+  const pages = yield* streamExport(request).pipe(
+    Stream.provide(SqliteThreadStore.exportSourceLayer({ filename })),
+    Stream.take(65),
+    Stream.mapEffect((page) =>
+      Effect.gen(function* () {
+        const json = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(page);
+
+        bytes += new TextEncoder().encode(json).byteLength;
+        expect(bytes).toBeLessThanOrEqual(32 * 1024 * 1024);
+
+        return {
+          page,
+          archive: yield* Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(json),
+        };
+      }),
+    ),
+    Stream.runCollect,
+  );
+
+  expect(pages.length).toBeLessThanOrEqual(64);
+
+  return pages;
+});
+
+const comparablePage = Effect.fnUntraced(function* (page: ThreadExport) {
+  const {
+    snapshotId: _,
+    cursor: __,
+    snapshot,
+    ...facts
+  } = yield* Schema.encodeEffect(ThreadExport)(page);
+
+  const { revision: ___, ...counts } = snapshot;
+
+  return { ...facts, snapshot: counts };
+});
+
 // A real current-format worker loses its process after canonical compaction. Transfer must
 // discard execution authority while preserving original input, context, progress and admissions.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
@@ -81,39 +123,37 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 20 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 21 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
                 expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
               }),
             );
             const sourceBytes = yield* fs.readFile(site.db);
-            const exported = yield* SqliteThreadStore.exportThread({ filename: site.db }, request);
+            const pages = yield* exportFixture(site.db, request);
+            const exported = pages[0]?.page;
 
-            const archiveJson = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(
-              exported,
-            );
-
-            const archive = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(
-              archiveJson,
-            );
+            if (exported === undefined) return yield* Effect.die("Missing transfer fixture page");
+            const sourceRecords = pages.flatMap(({ page }) => page.records);
 
             expect(
-              exported.records.some(({ record }) => record.payload._tag === "RunContinuation"),
+              sourceRecords.some(({ record }) => record.payload._tag === "RunContinuation"),
             ).toBe(true);
 
             const imported = yield* Effect.gen(function* () {
               const importer = yield* ThreadImport;
 
-              return yield* importer.import(ThreadImportRequest.make({ archive }));
+              return yield* importer.import(
+                Stream.fromIterable(pages.map(({ archive }) => archive)),
+              );
             }).pipe(Effect.provide(SqliteThreadStore.layer({ filename: target })));
 
             expect(imported.tailSequence).toBe(exported.tailSequence);
             expect(imported.tailDigest).toBe(exported.tailDigest);
             expect(yield* fs.readFile(site.db)).toEqual(sourceBytes);
-            const restored = yield* SqliteThreadStore.exportThread({ filename: target }, request);
+            const restored = yield* exportFixture(target, request);
 
-            expect(yield* Schema.encodeEffect(ThreadExport)(restored)).toEqual(
-              yield* Schema.encodeEffect(ThreadExport)(exported),
+            expect(yield* Effect.forEach(restored, ({ page }) => comparablePage(page))).toEqual(
+              yield* Effect.forEach(pages, ({ page }) => comparablePage(page)),
             );
             yield* Effect.scoped(
               Effect.gen(function* () {
@@ -174,8 +214,8 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 const records = yield* readLog("checkpoint-crash");
                 const encode = Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope));
 
-                expect(yield* encode(records.slice(0, exported.records.length))).toEqual(
-                  yield* encode(exported.records),
+                expect(yield* encode(records.slice(0, sourceRecords.length))).toEqual(
+                  yield* encode(sourceRecords),
                 );
                 expect(
                   records.filter(({ record }) => record.payload._tag === "RunStarted"),

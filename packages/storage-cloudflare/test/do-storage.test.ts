@@ -572,7 +572,7 @@ describe("DoThreadStore", () => {
             Effect.sync(() => {
               if (record.sequence === 1) {
                 storage.sql.exec(
-                  "DELETE FROM effect_agent_canonical_records WHERE thread_id = ? AND sequence = 9",
+                  "UPDATE effect_agent_canonical_records SET record_json = NULL WHERE thread_id = ? AND sequence = 9",
                   threadId,
                 );
               }

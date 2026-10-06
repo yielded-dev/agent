@@ -304,47 +304,48 @@ const operations = <
       encodedGrant,
       ...(options.continuationOf === undefined ? {} : { continuationOf: options.continuationOf }),
       ...(options.budgetScope === undefined ? {} : { budgetScope: options.budgetScope }),
-      prepare: Effect.gen(function* () {
-        const encodedInput = yield* prepare(parameters, caller);
+      prepare: (budgetScope) =>
+        Effect.gen(function* () {
+          const encodedInput = yield* prepare(parameters, caller);
 
-        const effectiveTarget = yield* service.resolveTargetPolicy({
-          target: declaration.target,
-          encodedInput,
-          ...(options.continuationOf === undefined
-            ? {}
-            : { continuationOf: options.continuationOf }),
-        });
-
-        const resolvedTarget = Option.getOrUndefined(effectiveTarget);
-
-        const resolved = resolveSubagentPolicy(
-          declaration,
-          options.budgetScope === "worker-run"
-            ? (resolvedTarget ?? declaration.target.policy)
-            : caller.policy,
-          undefined,
-          options.budgetScope === "worker-run" ? "root-attached" : "conserved",
-          resolvedTarget,
-        );
-
-        return {
-          encodedInput,
-          policy: resolved.childPolicy,
-          budget: SubagentBudgetReservation.make({
-            caps: resolved.caps,
-            allocation: resolved.allocation,
-            ...(resolved.policy.descendantInvocations === undefined
+          const effectiveTarget = yield* service.resolveTargetPolicy({
+            target: declaration.target,
+            encodedInput,
+            ...(options.continuationOf === undefined
               ? {}
-              : { descendantInvocations: resolved.policy.descendantInvocations }),
-          }),
-          toolCallAllowance: resolveToolCallAllowance(
-            declaration.toolCallAllowance,
-            parameters,
-            resolved.policy,
-            resolved.childPolicy,
-          ),
-        };
-      }),
+              : { continuationOf: options.continuationOf }),
+          });
+
+          const resolvedTarget = Option.getOrUndefined(effectiveTarget);
+
+          const resolved = resolveSubagentPolicy(
+            declaration,
+            budgetScope === "worker-run"
+              ? (resolvedTarget ?? declaration.target.policy)
+              : caller.policy,
+            undefined,
+            budgetScope === "worker-run" ? "root-attached" : "conserved",
+            resolvedTarget,
+          );
+
+          return {
+            encodedInput,
+            policy: resolved.childPolicy,
+            budget: SubagentBudgetReservation.make({
+              caps: resolved.caps,
+              allocation: resolved.allocation,
+              ...(resolved.policy.descendantInvocations === undefined
+                ? {}
+                : { descendantInvocations: resolved.policy.descendantInvocations }),
+            }),
+            toolCallAllowance: resolveToolCallAllowance(
+              declaration.toolCallAllowance,
+              parameters,
+              resolved.policy,
+              resolved.childPolicy,
+            ),
+          };
+        }),
     });
 
     const validated = yield* Schema.decodeEffect(WorkerStarted)(started).pipe(

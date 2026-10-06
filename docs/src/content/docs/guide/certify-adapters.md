@@ -44,14 +44,15 @@ indexed after Run settlement; destination acknowledgement owns closure. An index
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-20 storage and `effect-agent/thread@2` archives.
+This unreleased format accepts only fresh layout-21 storage and `effect-agent/thread@3` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 
-The supplied adapters and `ThreadExport` support 131,072 canonical records per Thread. Keep each
+Thread age has no canonical record ceiling. Export and verification stream bounded pages. Keep each
 `ThreadRead` page at or below 1,024 records and each `CanonicalBatch` at or below 256. An export
-must preserve one captured snapshot while paging its payload reads; it returns the full record
-array and must not silently truncate history.
+must preserve one captured tail and independent fact revision across its bounded pages, including
+all immutable admissions, accepted commands, deliveries, and cross-range dependencies. Implement
+exact native locators and streaming verification; never silently treat one page as complete history.
 
 Implement `SubmissionLedger.readAbortIntent` as a strongly consistent read of one submission's
 abort intent. The runtime polls this method during execution, so its work must stay independent

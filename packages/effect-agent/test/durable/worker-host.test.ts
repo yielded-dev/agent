@@ -85,6 +85,10 @@ import { subagentLineageRecordId, workerOriginRecordId } from "../../src/durable
 import {
   AbortIntent,
   AdmissionPolicyError,
+  LedgerError,
+  AdmissionNotAdmitted,
+  AdmissionAdmitted,
+  FundingOwner,
   Principal,
   Settlement,
   SubmissionSnapshot,
@@ -96,11 +100,10 @@ import {
   AppendConflict,
   AppendResult,
   FenceRejected,
-  ThreadExport,
-  ThreadExportRecord,
   ThreadIdentity,
   ThreadNotMaterialized,
   ThreadTail,
+  ThreadWorkerCapacity,
   ThreadStore,
   ThreadReader,
   ThreadStoreError,
@@ -218,6 +221,9 @@ const harness = Effect.fn("workerHostHarness")(function* (
   const deliveries = new Map<string, MessageDeliveryRecord>();
   const submissions = new Map<SubmissionId, SubmissionSnapshot>();
   const settlements = new Map<SubmissionId, Settlement>();
+  const stopped = new Set<ThreadId>();
+  const fundingOwners = new Map<SubmissionId, SubmissionId>();
+  let rejectAdmission = false;
   let failpoint: DurableRuntimeFailpointLocation | undefined;
   let denied: "read" | "send" | "report" | "control" | undefined;
 
@@ -260,7 +266,60 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
   let runtime: Effect.Success<ReturnType<typeof makeWorkerRuntime>>;
 
+  const liveInputs = (threadId: ThreadId) => {
+    const all = logs.get(threadId) ?? [];
+
+    return all.filter((entry) => {
+      const request = entry.record.payload;
+
+      return (
+        request._tag === "WorkerInputRequested" &&
+        !all.some(
+          ({ record: { payload } }) =>
+            (payload._tag === "WorkerInputCompleted" &&
+              payload.effectsResolved === true &&
+              payload.messageId === request.admission.messageId) ||
+            (payload._tag === "WorkerInputRefused" &&
+              payload.reservation.recordId === entry.record.recordId),
+        )
+      );
+    });
+  };
+
   const fixtureStore = ThreadStore.of({
+    readWorkerCapacity: (request) =>
+      Effect.suspend(() => {
+        const all = logs.get(request.threadId) ?? [];
+
+        if (all.length !== request.expectedTailSequence)
+          return ThreadStoreError.make({ operation: "worker capacity", message: "Tail changed" });
+
+        const rows = liveInputs(request.threadId).flatMap(({ record: { payload } }) =>
+          payload._tag === "WorkerInputRequested" ? [payload.admission] : [],
+        );
+
+        return Effect.succeed(
+          ThreadWorkerCapacity.make({
+            threadId: request.threadId,
+            tailSequence: request.expectedTailSequence,
+            tailDigest: digest,
+            producerEpoch: epochs.get(request.threadId)!,
+            activeWorkers: Math.min(
+              new Set(rows.map((row) => row.origin.worker.threadId)).size,
+              request.activeLimit + 1,
+            ),
+            workerActive: rows.some((row) => row.origin.worker.threadId === request.workerThreadId),
+            pendingInputs: Math.min(
+              rows.filter(
+                (row) =>
+                  row.origin.worker.threadId === request.workerThreadId &&
+                  (row.reportKind === "update") === request.update,
+              ).length,
+              request.pendingLimit + 1,
+            ),
+          }),
+        );
+      }),
     work: {
       threads: () => Effect.die("Worker fixture does not enumerate global owners"),
       rebuild: () => Effect.die("Worker fixture has no disposable persisted index"),
@@ -306,6 +365,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           if (entry !== undefined && !selected.includes(entry)) selected.push(entry);
 
         const snapshot = ThreadIdentity.make({
+          admissions: [...submissions.values()].filter((row) => row.threadId === threadId).length,
           threadId,
           tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
           tailDigest: digest,
@@ -344,19 +404,45 @@ const harness = Effect.fn("workerHostHarness")(function* (
               payload.runId === selection.runId,
           );
         } else if (selection?._tag === "WorkerState") {
-          records = all.filter(({ record: { payload } }) =>
-            payload._tag === "SubtreeBudgetReserved"
-              ? payload.sourceSubmissionId === selection.sourceSubmissionId
-              : payload._tag === "SubagentJoined"
-                ? payload.runId === `run:${selection.sourceSubmissionId}`
-                : [
-                    "ThreadCreated",
-                    "WorkerOriginRecorded",
-                    "SubagentLineageRecorded",
-                    "WorkerInputRequested",
-                    "WorkerInputCompleted",
-                  ].includes(payload._tag),
+          const reservations = all.flatMap(({ record: { payload } }) =>
+            payload._tag === "SubtreeBudgetReserved" &&
+            selection.sourceSubmissionId !== undefined &&
+            payload.sourceSubmissionId === selection.sourceSubmissionId
+              ? [payload.reservationId]
+              : [],
           );
+
+          records = all.filter(
+            ({ record: { payload } }) =>
+              ["ThreadCreated", "WorkerOriginRecorded", "SubagentLineageRecorded"].includes(
+                payload._tag,
+              ) ||
+              (payload._tag === "SubtreeBudgetReserved" &&
+                reservations.includes(payload.reservationId)) ||
+              (payload._tag === "SubagentJoined" &&
+                selection.sourceSubmissionId !== undefined &&
+                payload.runId === `run:${selection.sourceSubmissionId}`) ||
+              (payload._tag === "WorkerInputRequested" &&
+                reservations.includes(payload.admission.messageId)) ||
+              ((payload._tag === "WorkerInputCompleted" || payload._tag === "WorkerInputRefused") &&
+                reservations.includes(payload.messageId)),
+          );
+        } else if (selection?._tag === "LiveWorkerInputs") {
+          records = liveInputs(request.threadId).filter(
+            ({ record: { payload } }) =>
+              payload._tag === "WorkerInputRequested" &&
+              (selection.workerThreadId === undefined ||
+                payload.admission.origin.worker.threadId === selection.workerThreadId),
+          );
+        } else if (selection?._tag === "WorkerStop") {
+          records = all
+            .filter(
+              ({ sequence, record: { payload } }) =>
+                sequence <= selection.throughSequence &&
+                payload._tag === "WorkerStopRequested" &&
+                payload.command.worker.threadId === selection.workerThreadId,
+            )
+            .slice(-1);
         } else if (selection?._tag === "RunContinuation") {
           records = all
             .filter(
@@ -400,28 +486,10 @@ const harness = Effect.fn("workerHostHarness")(function* (
             }),
         );
       }).pipe(Stream.onStart(Effect.suspend(() => options.beforeRead?.(request) ?? Effect.void))),
-    export: ({ threadId }) =>
-      Effect.gen(function* () {
-        const records = logs.get(threadId);
-
-        if (records === undefined) return yield* ThreadNotMaterialized.make({ threadId });
-
-        const exported = yield* Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope))(
-          records,
-        ).pipe(
-          Effect.flatMap(Schema.decodeEffect(Schema.Array(ThreadExportRecord))),
-          Effect.mapError((cause) =>
-            ThreadStoreError.make({ operation: "export", message: "Invalid fixture log", cause }),
-          ),
-        );
-
-        return ThreadExport.make({
-          format: "effect-agent/thread@1",
-          threadId,
-          records: exported,
-          tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-          tailDigest: digest,
-        });
+    export: () =>
+      ThreadStoreError.make({
+        operation: "export",
+        message: "Worker fixture does not export Threads",
       }),
     inspectTail: ({ threadId }) =>
       Effect.suspend(() => {
@@ -532,13 +600,12 @@ const harness = Effect.fn("workerHostHarness")(function* (
     ),
     Effect.provideService(WorkerBudgetAuthorizer, {
       authorize: () =>
-        options.independentBudget === true
+        options.independentBudget !== false
           ? Effect.void
           : WorkerError.make({ operation: "start", reason: "denied" }),
     }),
     Effect.provideService(WorkerHostConfig, {
-      maxWorkersPerSource: 2,
-      maxInputsPerWorker: 3,
+      maxActiveWorkersPerSource: 2,
       maxPendingInputsPerWorker: 2,
       lifetimeMillis: 60_000,
       ...options.limits,
@@ -628,7 +695,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           return {
             latest: rows.at(-1) ?? null,
             active: rows.find((row) => row.state !== "settled") ?? null,
-            stopped: false,
+            stopped: stopped.has(threadId),
           };
         }),
       lookup: (request) =>
@@ -649,7 +716,39 @@ const harness = Effect.fn("workerHostHarness")(function* (
       scanNonterminal: Stream.die("Worker fixture only implements ledger lookup"),
       admit: () => Effect.die("Worker fixture only implements ledger lookup"),
       markReady: () => Effect.die("Worker fixture only implements ledger lookup"),
-      resolveAdmission: () => Effect.die("Worker fixture only implements ledger lookup"),
+      resolveFundingOwner: ({ threadId, submissionId }) =>
+        Effect.suspend(() => {
+          const selected = submissions.get(submissionId);
+          const owner = submissions.get(fundingOwners.get(submissionId) ?? submissionId);
+
+          return selected === undefined ||
+            owner === undefined ||
+            selected.threadId !== threadId ||
+            owner.threadId !== threadId
+            ? Effect.fail(
+                LedgerError.make({ operation: "funding owner", message: "Missing exact owner" }),
+              )
+            : Effect.succeed(FundingOwner.make({ selected, owner }));
+        }),
+      stopWorker: ({ threadId }) =>
+        Effect.sync(() => {
+          stopped.add(threadId);
+
+          return 0;
+        }),
+      resolveAdmission: ({ threadId, principal, idempotencyKey }) =>
+        Effect.sync(() => {
+          const found = [...submissions.values()].find(
+            (row) =>
+              row.threadId === threadId &&
+              row.principal === principal &&
+              row.idempotencyKey === idempotencyKey,
+          );
+
+          return found === undefined
+            ? AdmissionNotAdmitted.make()
+            : AdmissionAdmitted.make({ submission: found });
+        }),
       claim: () => Effect.die("Worker fixture only implements ledger lookup"),
       renewOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
       releaseOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
@@ -715,6 +814,11 @@ const harness = Effect.fn("workerHostHarness")(function* (
               submissionId: existing.submissionId,
               receiptId: existing.receiptId,
               queueSequence: existing.queueSequence,
+            });
+          if (rejectAdmission || stopped.has(envelope.threadId))
+            return yield* AdmissionPolicyError.make({
+              reason: "refused",
+              code: "receiver-refused",
             });
           if (!logs.has(envelope.threadId))
             push(
@@ -925,6 +1029,10 @@ const harness = Effect.fn("workerHostHarness")(function* (
     appendAttempts,
     rejectedAppends,
     submissions,
+    fundingOwners,
+    rejectAdmission: (value: boolean) => {
+      rejectAdmission = value;
+    },
     settle,
     push,
     deny: (value: typeof denied) => {
@@ -961,11 +1069,12 @@ layer(NodeCrypto.layer)((it) => {
 
         const started = yield* h.host.start({
           ...command,
-          prepare: Effect.gen(function* () {
-            yield* h.host.resolveTargetPolicy({ target, encodedInput: command.encodedInput });
+          prepare: () =>
+            Effect.gen(function* () {
+              yield* h.host.resolveTargetPolicy({ target, encodedInput: command.encodedInput });
 
-            return { encodedInput: command.encodedInput, policy, budget: command.budget };
-          }),
+              return { encodedInput: command.encodedInput, policy, budget: command.budget };
+            }),
         });
 
         expect(started.delivery.status).toBe("parked");
@@ -1298,7 +1407,7 @@ layer(NodeCrypto.layer)((it) => {
 
         const h = yield* harness({
           independentBudget: true,
-          limits: { maxWorkersPerSource: 10, maxInputsPerWorker: 10, maxPendingInputsPerWorker: 3 },
+          limits: { maxActiveWorkersPerSource: 2, maxPendingInputsPerWorker: 3 },
         }).pipe(
           Effect.provideService(WorkerConcurrencyResolver, {
             resolve: (request) =>
@@ -1367,7 +1476,95 @@ layer(NodeCrypto.layer)((it) => {
           status: "refused",
           reason: "worker-capacity",
         });
+        for (const saved of [...h.submissions.values()].filter((row) => row.state !== "settled")) {
+          yield* h.settle(
+            Receipt.make({
+              threadId: saved.threadId,
+              submissionId: saved.submissionId,
+              receiptId: saved.receiptId,
+              queueSequence: saved.queueSequence,
+            }),
+          );
+        }
+        for (let index = 0; index < 12; index++) {
+          const next = yield* start(`sequential-${index}`);
+
+          expect(next.delivery.receipt).not.toBeNull();
+          yield* h.settle(next.delivery.receipt!);
+        }
+        for (let index = 0; index < 12; index++) {
+          const next = yield* follow(`sequential-input-${index}`);
+
+          expect(next.receipt).not.toBeNull();
+          yield* h.settle(next.receipt!);
+        }
+        expect((yield* start("slot-a")).worker).toEqual(raced[0].worker);
+        expect(yield* follow("active-steering")).toEqual(steering);
       }),
+  );
+
+  it.effect("closes only stopped, never-admitted reserved input and replays its refusal", () =>
+    Effect.gen(function* () {
+      const h = yield* harness();
+
+      h.rejectAdmission(true);
+      const command = request("unadmitted");
+      const start = yield* h.host.start(command);
+
+      expect(start.delivery.status).toBe("refused");
+
+      const input = h.logs
+        .get(sourceId)!
+        .find(({ record: { payload } }) => payload._tag === "WorkerInputRequested");
+
+      if (input?.record.payload._tag !== "WorkerInputRequested")
+        return yield* Effect.die("Missing reservation");
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("delivery-owned");
+      yield* h.host.stop({
+        worker: start.worker,
+        target,
+        idempotencyKey: IdempotencyKey.make("stop-unadmitted"),
+      });
+      expect(h.logs.has(start.worker.threadId)).toBe(false);
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("repaired");
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("repaired");
+      expect(
+        h.logs
+          .get(sourceId)!
+          .filter(({ record: { payload } }) => payload._tag === "WorkerInputRefused"),
+      ).toHaveLength(1);
+      expect(yield* h.host.start(command)).toEqual(start);
+      expect(h.submissions.size).toBe(0);
+
+      const pending = yield* harness();
+
+      pending.fail("worker:before-source-append");
+      const retained = yield* pending.host.start(request("retained-before-reservation"));
+
+      expect(retained.delivery.receipt).toBeNull();
+      expect(
+        pending.logs
+          .get(sourceId)!
+          .some(({ record }) => record.payload._tag === "WorkerInputRequested"),
+      ).toBe(false);
+      pending.fail(undefined);
+      yield* pending.host.stop({
+        worker: retained.worker,
+        target,
+        idempotencyKey: IdempotencyKey.make("stop-retained"),
+      });
+
+      const stop = pending.logs
+        .get(sourceId)!
+        .find(({ record }) => record.payload._tag === "WorkerStopRequested")!;
+
+      if (stop.record.payload._tag !== "WorkerStopRequested")
+        return yield* Effect.die("Missing retained stop");
+      expect(
+        yield* pending.runtime.repairStop(sourceId, stop.record.recordId, stop.record.payload),
+      ).toBe(true);
+      expect(pending.logs.has(retained.worker.threadId)).toBe(false);
+    }),
   );
 
   // Regression: https://github.com/yielded-dev/agent/commit/43882d187248665eaf7fd46950b3bc617edcb73d
@@ -1742,8 +1939,6 @@ layer(NodeCrypto.layer)((it) => {
 
       const h = yield* harness({
         limits: {
-          maxInputsPerWorker: 2,
-          maxUpdateInputsPerWorker: 1,
           maxPendingUpdateInputsPerWorker: 1,
         },
         targetReports: [
@@ -1790,6 +1985,19 @@ layer(NodeCrypto.layer)((it) => {
         toolResultBounds: ToolResultBounds.make({ maxBytes: 256 }),
       });
 
+      const fundingOwner = builder.delivery.receipt!.submissionId;
+      const joinedId = SubmissionId.make("joined-builder-input");
+
+      h.submissions.set(
+        joinedId,
+        SubmissionSnapshot.make({
+          ...h.submissions.get(fundingOwner)!,
+          submissionId: joinedId,
+          state: "joined",
+        }),
+      );
+      h.fundingOwners.set(joinedId, fundingOwner);
+
       const nested = h.runtime.facet(
         {
           source: {
@@ -1804,7 +2012,7 @@ layer(NodeCrypto.layer)((it) => {
           grant,
         },
         principal,
-        builder.delivery.receipt!.submissionId,
+        joinedId,
       );
 
       const scout = yield* nested.start({
@@ -1832,6 +2040,16 @@ layer(NodeCrypto.layer)((it) => {
           }),
         },
       });
+
+      expect(
+        h.submissions.get(scout.delivery.receipt!.submissionId)?.workerAdmission
+          ?.sourceSubmissionId,
+      ).toBe(fundingOwner);
+      expect(
+        h.logs
+          .get(builder.worker.threadId)!
+          .find(({ record }) => record.payload._tag === "SubtreeBudgetReserved")?.record.payload,
+      ).toMatchObject({ sourceSubmissionId: fundingOwner });
 
       {
         const submission = h.submissions.get(scout.delivery.receipt!.submissionId)!;

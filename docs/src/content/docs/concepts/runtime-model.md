@@ -88,6 +88,11 @@ flowchart LR
   Native work pages include terminal side obligations and never grant execution authority.
   Missing inventories fail explicitly; rebuild them in separate resumable maintenance passes.
   Canonical row caches share an isolate-wide bound; never allocate that budget per Object.
+- Keep one Thread-wide canonical order and producer fence as complete batches rotate into
+  bounded archive ranges. Publish and verify archive contents and their locator before removing
+  hot payloads. Rotation preserves exact references, live charges, and original retry outcomes;
+  it is independent of model compaction, Run settlement, and execution ownership. Retained
+  storage may grow under host quotas without a lifetime message, Run, or record limit.
 
 ## Cloudflare wake rules
 

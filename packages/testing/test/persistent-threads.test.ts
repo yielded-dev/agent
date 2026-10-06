@@ -12,6 +12,7 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { ProducerEpoch } from "@yielded/agent/records";
 import { type RunEvent } from "@yielded/agent/run-event";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { replayThread } from "@yielded/agent/thread-projection";
 import {
@@ -113,7 +114,7 @@ const sqliteLayer = (options: Parameters<typeof sqliteStore>[0]) =>
 const loadHistory = (id: ThreadId) => Effect.flatMap(ThreadHistory, (history) => history.load(id));
 
 const exported = Effect.flatMap(ThreadStore, (store) =>
-  store.export(ThreadExportRequest.make({ threadId })),
+  readTestThread(store, ThreadExportRequest.make({ threadId })),
 );
 
 const withDatabase = <A, E, R>(use: (filename: string) => Effect.Effect<A, E, R>) =>

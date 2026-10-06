@@ -80,8 +80,34 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
         }),
       ),
     read: (request) => {
-      if ("selection" in request)
-        return Stream.die("History fixture does not implement selected reads");
+      if ("selection" in request) {
+        const selected = request.selection;
+
+        state.pages.push(request.page.limit);
+
+        const records =
+          selected._tag === "RecordId"
+            ? state.records.filter(({ record }) => record.recordId === selected.recordId)
+            : selected._tag === "ContextWindowBoundary"
+              ? state.records
+                  .filter(
+                    (entry) =>
+                      entry.sequence <= selected.throughSequence &&
+                      entry.record.payload._tag === "CompactionCreated" &&
+                      entry.record.payload.kind === "rollover" &&
+                      entry.record.payload.coversThrough < selected.atSequence,
+                  )
+                  .slice(-1)
+              : undefined;
+
+        return records === undefined
+          ? Stream.die("History fixture does not implement this selected read")
+          : Stream.fromIterable(
+              records
+                .filter((entry) => entry.sequence > (request.page.afterSequence ?? 0))
+                .slice(0, request.page.limit),
+            );
+      }
       state.pages.push(request.limit);
 
       return Stream.fromIterable(

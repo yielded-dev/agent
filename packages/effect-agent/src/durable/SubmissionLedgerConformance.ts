@@ -637,6 +637,7 @@ const workerMetadata = (base: AdmissionRequest) =>
     parameters: { prompt: "original projection parameters" },
     createdAtMillis: 1,
     origin: {
+      budgetScope: "worker-run",
       worker: {
         schemaVersion: 1,
         threadId: base.threadId,

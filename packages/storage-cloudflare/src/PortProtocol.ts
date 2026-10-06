@@ -1,3 +1,4 @@
+import { IntegrityReport } from "@yielded/agent/admin";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -34,7 +35,17 @@ import {
   SubmissionLookup,
   SubmissionLookupByKey,
   SubmissionSnapshot,
+  FundingOwnerRequest,
+  FundingOwner,
 } from "@yielded/agent/submission-ledger";
+import {
+  ThreadArchiveRange,
+  ThreadArchiveRangePage,
+  ThreadArchiveRangeRead,
+  ThreadArchiveRangeRequest,
+  ThreadArchiveRangeSeal,
+  ThreadArchiveRangePublish,
+} from "@yielded/agent/thread-archive-range";
 import {
   AppendConflict,
   AppendResult,
@@ -43,6 +54,9 @@ import {
   ThreadExportRequest,
   ThreadIdentity,
   ThreadIdentityRequest,
+  ThreadWorkerCapacityRequest,
+  ThreadWorkerCapacity,
+  ThreadVerificationRequest,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadReadRequest,
@@ -146,6 +160,11 @@ export class LedgerLookupCall extends Schema.TaggedClass<LedgerLookupCall>(
   request: SubmissionLookup,
 }) {}
 
+export class LedgerFundingOwnerCall extends Schema.TaggedClass<LedgerFundingOwnerCall>()(
+  "LedgerFundingOwner",
+  { request: FundingOwnerRequest },
+) {}
+
 /** Routed `SubmissionLedger.resolveAdmission` — the SUB-031 tri-state authority call. */
 export class LedgerResolveAdmissionCall extends Schema.TaggedClass<LedgerResolveAdmissionCall>(
   "@effect-agent/storage-cloudflare/LedgerResolveAdmissionCall",
@@ -233,6 +252,16 @@ export class StoreReadIdentityCall extends Schema.TaggedClass<StoreReadIdentityC
   request: ThreadIdentityRequest,
 }) {}
 
+export class StoreWorkerCapacityCall extends Schema.TaggedClass<StoreWorkerCapacityCall>()(
+  "StoreWorkerCapacity",
+  { request: ThreadWorkerCapacityRequest },
+) {}
+
+export class StoreVerificationCall extends Schema.TaggedClass<StoreVerificationCall>()(
+  "StoreVerification",
+  { request: ThreadVerificationRequest },
+) {}
+
 /** Routed `ThreadStore.export` against the owning Object. */
 export class StoreExportCall extends Schema.TaggedClass<StoreExportCall>(
   "@effect-agent/storage-cloudflare/StoreExportCall",
@@ -265,6 +294,24 @@ export class MessageDeliveryCompleteCall extends Schema.TaggedClass<MessageDeliv
   { key: MessageDeliveryKey, completion: MessageDeliveryCompletion },
 ) {}
 
+export class StoreRangePageCall extends Schema.TaggedClass<StoreRangePageCall>()("StoreRangePage", {
+  request: ThreadArchiveRangeRead,
+}) {}
+
+export class StoreRangeSealCall extends Schema.TaggedClass<StoreRangeSealCall>()("StoreRangeSeal", {
+  request: ThreadArchiveRangeSeal,
+}) {}
+
+export class StoreRangeArchiveCall extends Schema.TaggedClass<StoreRangeArchiveCall>()(
+  "StoreRangeArchive",
+  { request: ThreadArchiveRangePublish },
+) {}
+
+export class StoreRangeVerifyCall extends Schema.TaggedClass<StoreRangeVerifyCall>()(
+  "StoreRangeVerify",
+  { request: ThreadArchiveRangeRequest },
+) {}
+
 /** Every request that may cross a Durable Object boundary — the CLOSED route-capable subset. */
 export const PortRequest = Schema.Union([
   SettlementPublishCall,
@@ -274,16 +321,23 @@ export const PortRequest = Schema.Union([
   LedgerAdmitCall,
   LedgerMarkReadyCall,
   LedgerLookupCall,
+  LedgerFundingOwnerCall,
   LedgerResolveAdmissionCall,
   LedgerRequestAbortCall,
   LedgerStopWorkerCall,
   LedgerInspectWorkerCall,
   LedgerRecordChildSettledCall,
+  StoreRangePageCall,
+  StoreRangeSealCall,
+  StoreRangeArchiveCall,
+  StoreRangeVerifyCall,
   StoreMaterializeCall,
   StoreAppendCall,
   StoreReadPageCall,
   StoreInspectTailCall,
   StoreReadIdentityCall,
+  StoreWorkerCapacityCall,
+  StoreVerificationCall,
   StoreExportCall,
   StoreCountPeerMessagesCall,
   StoreWorkPageCall,
@@ -378,6 +432,21 @@ export class StoreReadIdentityResult extends Schema.TaggedClass<StoreReadIdentit
   ),
 }) {}
 
+export class LedgerFundingOwnerResult extends Schema.TaggedClass<LedgerFundingOwnerResult>()(
+  "LedgerFundingOwnerResult",
+  { funding: FundingOwner },
+) {}
+
+export class StoreWorkerCapacityResult extends Schema.TaggedClass<StoreWorkerCapacityResult>()(
+  "StoreWorkerCapacityResult",
+  { capacity: ThreadWorkerCapacity },
+) {}
+
+export class StoreVerificationResult extends Schema.TaggedClass<StoreVerificationResult>()(
+  "StoreVerificationResult",
+  { report: IntegrityReport },
+) {}
+
 export class StoreExportResult extends Schema.TaggedClass<StoreExportResult>(
   "@effect-agent/storage-cloudflare/StoreExportResult",
 )("StoreExportResult", {
@@ -409,6 +478,26 @@ export class MessageDeliveryCompleteResult extends Schema.TaggedClass<MessageDel
   { record: MessageDeliveryRecord },
 ) {}
 
+export class StoreRangePageResult extends Schema.TaggedClass<StoreRangePageResult>()(
+  "StoreRangePageResult",
+  { page: ThreadArchiveRangePage },
+) {}
+
+export class StoreRangeSealResult extends Schema.TaggedClass<StoreRangeSealResult>()(
+  "StoreRangeSealResult",
+  { range: Schema.Option(ThreadArchiveRange) },
+) {}
+
+export class StoreRangeArchiveResult extends Schema.TaggedClass<StoreRangeArchiveResult>()(
+  "StoreRangeArchiveResult",
+  { range: ThreadArchiveRange },
+) {}
+
+export class StoreRangeVerifyResult extends Schema.TaggedClass<StoreRangeVerifyResult>()(
+  "StoreRangeVerifyResult",
+  { range: ThreadArchiveRange },
+) {}
+
 /** Every successful routed result. Callers narrow by the tag their request implies. */
 export const PortResult = Schema.Union([
   SettlementPublishResult,
@@ -418,16 +507,23 @@ export const PortResult = Schema.Union([
   LedgerAdmitResult,
   LedgerMarkReadyResult,
   LedgerLookupResult,
+  LedgerFundingOwnerResult,
   LedgerResolveAdmissionResult,
   LedgerRequestAbortResult,
   LedgerStopWorkerResult,
   LedgerInspectWorkerResult,
   LedgerRecordChildSettledResult,
+  StoreRangePageResult,
+  StoreRangeSealResult,
+  StoreRangeArchiveResult,
+  StoreRangeVerifyResult,
   StoreMaterializeResult,
   StoreAppendResult,
   StoreReadPageResult,
   StoreInspectTailResult,
   StoreReadIdentityResult,
+  StoreWorkerCapacityResult,
+  StoreVerificationResult,
   StoreExportResult,
   StoreCountPeerMessagesResult,
   StoreWorkPageResult,

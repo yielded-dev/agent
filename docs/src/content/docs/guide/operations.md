@@ -17,8 +17,7 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
 
 - `explain(submissionId)` and `explainThread(threadId)` return the recovery decision,
   operator meaning, and expected disposition. They write nothing.
-- `verify(threadId)` runs read-only integrity checks, including the exported batch digest chain.
-  Older exports without batch identities report that check as `skipped`.
+- `verify(threadId)` runs read-only integrity checks, including the canonical batch digest chain.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
   decision. Repairs with a claim annotate their attempt using that claim's epoch; state-only wakes
   and marker repairs do not append canonical audit records. Retry refuses settled work and requests
@@ -72,11 +71,11 @@ Use the existing `submissionInputRecordId` / `submissionSettlementRecordId` expo
 - `workerReportRecordId(destinationIdempotencyKey)` and `peerMessageRecordId(messageId)`;
 - `agentUpdateRecordId(threadId, runId, updateId)`, an Effect requiring `Crypto`.
 
-Worker start and follow-up admission use first-record/exact identity reads and an indexed
-snapshot of existing worker reservation/accounting families, with the full canonical tail
-for the existing CAS. Lifetime limits still count completed reservations. Peer admission uses
-an indexed lifetime count and exact message/accepted-input records; replies use the original
-envelope's delivery principal.
+Worker admission resolves its origin and selected funding Run by exact identity. Capacity comes
+from live inputs and unresolved effects across the whole Thread; completed reservations do not
+consume lifetime capacity. A terminal Run does not release an unresolved effect's charge.
+Peer admission checks live message capacity and retained message identities; replies use the
+original envelope's delivery principal.
 
 `MessageDelivery.readPending({ ownerThreadId, limit })` reads current retained deliveries
 through the existing owner-scoped `list` with `pendingOnly: true`, separately from canonical operations. It includes accepted,
@@ -91,8 +90,8 @@ reports without reconstructing transport validation. These reads grant no execut
 Aborting a submission retains its unknown outcomes. Execution decisions such as `AbortSubmission`
 and `SafeToRetry` do not establish whether an effect happened. Later supplier reconciliation,
 `CompletedWithResult`, or `NeverHappened` can close that original effect while preserving the
-terminal settlement. Record-format changes require export and import into an empty Thread; see
-[adopting these contracts](#adopting-these-contracts).
+terminal settlement. Same-format transfer imports into an empty Thread; see
+[adopting these contracts](#adopting-these-contracts) for the supported baseline.
 
 <a id="obligation-monitoring"></a>
 
@@ -477,52 +476,59 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 
 ### Adopting these contracts
 
-Table layout and record meaning have independent versions. The unreleased execution protocol
-uses fresh layout-20 stores and `effect-agent/thread@2` records on SQLite, PostgreSQL, and
-Cloudflare. Opening predecessor or ambiguous stores fails before DDL or payload mutation. Keep
-them with their matching release; this protocol has no historical decoder, layout upgrade,
-archive converter, or mixed-format runtime.
+Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
+layout-21 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and Cloudflare. Opening
+predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
+release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 
-For a same-format backup restore, quiesce the source, retain a backup, export each Thread, and
-import into an empty destination Thread. `ThreadStore.export` supplies the archive and the local
-`ThreadImport` service installs it. `reencodeThread(source)` composes these operations through its
-Effect environment. Check the imported tail before resuming accepted work under current compatible
-Bindings. This format stays unreleased until the parent issue's remaining long-history storage
-and transfer work is complete.
-
-For SQLite, the repository admin CLI uses the same operations:
+Quiesce the source and retain a backup before transferring it. `streamExport({ threadId })`
+yields bounded pages through `ThreadExportSource`; provide its Layer from the source `ThreadStore`
+separately from the destination import Layer. `ThreadImport.import(pages)` consumes an archive
+Stream within one destination transaction; `reencodeThread(source)` composes export pages with that import. Check the restored tail
+before resuming accepted work under compatible Bindings. SQLite's admin CLI saves pages as NDJSON:
 
 ```sh
-vp run admin:durable export --database source.sqlite --thread THREAD --output thread.json
-vp run admin:durable import --database destination.sqlite --input thread.json
-# Or transfer directly between quiesced databases:
+vp run admin:durable export --database source.sqlite --thread THREAD --output thread.ndjson
+vp run admin:durable import --database destination.sqlite --input thread.ndjson
 vp run admin:durable reencode --database source.sqlite --thread THREAD --target destination.sqlite
 ```
 
-Archives retain batch identities, immutable admission facts, and accepted operator commands.
-Import validates the complete digest chain and every canonical admission reference before writing.
-Same-format imports preserve the tail digest. Receipts, principals, keys, input, queue sequence,
-and admission time survive, including admitted inputs that have not reached the log. Import
-preserves opaque admission fences and groups and applies the destination ledger's admission
-policy and active-group constraints. Provide that policy when acquiring the destination storage;
-policy conflicts and unavailable policy checks have distinct, actionable import errors.
-SQL imports reject identities that exceed the destination row schemas and values that exceed its
-byte limit, including queued inputs and accepted commands, before acquiring the writer.
+Every page binds the canonical tail and a revision of independent admissions, accepted commands,
+and delivery facts. Changes during export require a new export. Import preserves exact record wire,
+batch producers, digest anchors, queue order, admission time, Receipts, principals, keys, and opaque
+admission fences and groups. Destination admission policy and active-group constraints still apply.
+Truncated pages, missing cross-range evidence, contradictory identities, or unavailable policy
+checks fail without publishing staged work. Keep the source when validation fails.
 
-Execution ownership is never transferred. Ledger state is rebuilt from the log, projections
-replay, canonical continuation indexes rebuild, and application checkpoints start empty. Unresolved ordinary tool effects in an unfinished
-Run remain Unknown; settled submissions do not acquire new pending work.
+Import rebuilds ledger state and native indexes from facts. Claims, leases, execution ownership,
+application checkpoints, and recovery caches start empty. Unresolved ordinary tools remain Unknown;
+settlement does not close surviving effects or deliveries. Closed historical workers and children
+can transfer; live obligations owned by another store must finish through their owning workflow
+before a single-Thread import. Retained deliveries transfer without their operational lease.
 
-Single-Thread archives mark retained child, worker or message-delivery obligations owned by other
-stores; transfer those through their owning workflow before importing. Exports are bounded at
-131,072 records and read SQL history in pages. `ThreadExportRecord` requires the original record
-wire alongside its typed view. Custom exporters decode stored envelopes through this codec;
-copy archive records through it to preserve additive fields. Normalizing a record through the
-ordinary record schema discards that wire, so archive encoding rejects the copy.
-Earlier archives lacking batch producer identities must be exported again from the original store.
-Keep the source when validation fails. Import never replaces a nonempty Thread or an existing
-Submission, Receipt, or Thread/principal/idempotency key in the destination ledger. Reusing a
-principal/idempotency key in another Thread is valid.
+| Storage operation      | Bound                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| Atomic canonical batch | 256 records, 16 MiB encoded batch                                                    |
+| Physical range         | Complete batches; 1,024 records and 32 MiB including batch and record payload copies |
+| Export/import page     | 256 records or independent facts, 32 MiB encoded page                                |
+| Archive range listing  | 32 range descriptors                                                                 |
+
+These are working-set bounds, independent of Thread age. The host owns total storage, archive
+maintenance, live input/delivery capacity, and per-Run/model limits. A long import holds its
+transaction until validation completes. Memory storage retains all facts in volatile process
+memory and needs an explicit host memory allowance.
+
+Use `ThreadStore.archives` for storage-owner maintenance: seal the current complete-batch range,
+then archive its `firstSequence` under the current producer epoch. SQL adapters copy and verify
+bounded contents, publish a stable locator, and only then remove hot payload copies in the same
+transaction. Interruption leaves a reachable copy. Ranges share the Thread's fence and continuous
+sequence; they do not reset grants, Run budgets, or live obligations. Exact old-record reads and
+batch retries follow the native identity locator, without traversing intervening ranges.
+
+`ThreadExportRecord` carries original record wire beside its typed view. Custom exporters must
+preserve that wire through the codec; reconstructing an envelope through the ordinary record
+Schema discards additive fields. Import never replaces a nonempty Thread or an existing Submission,
+Receipt, or scoped Thread/principal/key. The same principal/key in another Thread remains valid.
 
 Cloudflare's separate Schedule and Subscription stores use their current fresh layouts and reject
 predecessor schemas without mutation. Their retained input and destination ownership remain
@@ -586,8 +592,8 @@ Automatic retry has finite attempt and deadline bounds. `refused` and `parked` r
 an explicit driver `retry` renews a parked obligation's deadline without changing its envelope.
 Generic host-prepared inputs without native source provenance remain dormant until the host
 supplies an exact `Complete` acknowledgement or explicitly retries the retained Receipt once.
-Completed rows retain
-deduplication evidence and count toward the retention limit; capacity exhaustion fails explicitly.
+Completed rows retain exact deduplication evidence and do not consume pending-delivery capacity.
+The host owns total storage quotas.
 
 These are trusted host ports. Authenticate the sender, authorize routing and encode the
 destination input before preparing an envelope. Possession of a message key or Receipt is not

@@ -9,4 +9,4 @@
 "@yielded/agent-platform-cloudflare": patch
 ---
 
-Discover unfinished Thread work through `@yielded/agent/thread-work`, recover bounded pages, and explicitly rebuild disposable indexes. **BEHAVIOR CHANGE:** follow `runRecovery().cursor` to finish a scan and use fresh layout-20 stores; factual effect closure remains available after execution decisions and Run settlement and must agree with any committed tool result.
+Discover unfinished Thread work through `@yielded/agent/thread-work`, recover bounded pages, and explicitly rebuild disposable indexes. **BEHAVIOR CHANGE:** follow `runRecovery().cursor` to finish a scan and use fresh layout-21 stores; factual effect closure remains available after execution decisions and Run settlement and must agree with any committed tool result.

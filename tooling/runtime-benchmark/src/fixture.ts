@@ -44,13 +44,7 @@ import {
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
-import {
-  FencedAppendRequest,
-  ThreadExportRequest,
-  ThreadMaterialization,
-  ThreadStore,
-  ThreadTailRequest,
-} from "@yielded/agent/thread-store";
+import * as ThreadStorage from "@yielded/agent/thread-store";
 import {
   Cause,
   Clock,
@@ -187,10 +181,13 @@ const retainedOutput = (index: number) => ({ answer: `retained-${index}` });
 
 /** Match PersistentHistory's input/model/completion triples with native prompt suffixes. */
 const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number) {
-  const store = yield* ThreadStore;
+  const store = yield* ThreadStorage.ThreadStore;
 
   yield* store.materialize(
-    ThreadMaterialization.make({ threadId, producerEpoch: Schema.decodeSync(ProducerEpoch)(0) }),
+    ThreadStorage.ThreadMaterialization.make({
+      threadId,
+      producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
+    }),
   );
   for (let start = 0; start < count; start += 256) {
     const records: Array<RecordEnvelope> = [];
@@ -240,10 +237,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
       records: [first, ...rest],
     });
 
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+    const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
     yield* store.append(
-      FencedAppendRequest.make({
+      ThreadStorage.FencedAppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.tailSequence,
@@ -299,13 +296,16 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
       payload,
     });
 
-    const store = yield* ThreadStore;
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
+    const store = yield* ThreadStorage.ThreadStore;
+
+    const tail = yield* store.inspectTail(
+      ThreadStorage.ThreadTailRequest.make({ threadId: seedThread }),
+    );
 
     yield* publishSeedSettlement(
       admitted.submissionId,
       claim.value.ownershipToken,
-      FencedAppendRequest.make({
+      ThreadStorage.FencedAppendRequest.make({
         threadId: seedThread,
         producerEpoch: claim.value.producerEpoch,
         expectedTailSequence: tail.tailSequence,
@@ -694,24 +694,33 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
 
         yield* markFinish;
         yield* check(settlement.outcome === "completed", "Durable submission did not complete");
-        const store = yield* ThreadStore;
-        const log = yield* store.export(ThreadExportRequest.make({ threadId }));
+        let completed = 0;
+        let retained = 0;
 
-        const completed = log.records.filter(
-          ({ record }) =>
-            record.payload._tag === "RunCompleted" &&
-            record.payload.runId === runIdForSubmission(receipt.submissionId),
+        yield* ThreadStorage.streamExport(
+          ThreadStorage.ThreadExportRequest.make({ threadId }),
+        ).pipe(
+          Stream.provide(ThreadStorage.ThreadExportSource.layer()),
+          Stream.runForEach((page) =>
+            Effect.gen(function* () {
+              for (const { record } of page.records) {
+                if (record.recordId.startsWith("retained-")) retained++;
+                if (
+                  record.payload._tag === "RunCompleted" &&
+                  record.payload.runId === runIdForSubmission(receipt.submissionId)
+                ) {
+                  completed++;
+                  yield* verify(record.payload.output);
+                }
+              }
+            }),
+          ),
         );
-
-        yield* check(completed.length === 1, "Expected one canonical RunCompleted");
+        yield* check(completed === 1, "Expected one canonical RunCompleted");
         yield* check(
-          log.records.filter(({ record }) => record.recordId.startsWith("retained-")).length ===
-            (workload.kind === "ledger" ? 0 : workload.records),
+          retained === (workload.kind === "ledger" ? 0 : workload.records),
           "Retained canonical archive changed during the measured submission",
         );
-        for (const envelope of completed)
-          if (envelope.record.payload._tag === "RunCompleted")
-            yield* verify(envelope.record.payload.output);
         yield* inspectScript;
       });
 
@@ -727,17 +736,26 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             compactionCommitted: compactionCommitMs !== null,
             compactionCommitMs,
           });
-          const store = yield* ThreadStore;
+          const store = yield* ThreadStorage.ThreadStore;
 
-          const archive = yield* store.export(ThreadExportRequest.make({ threadId }));
+          const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
-          const continuation = archive.records.findLast(
-            ({ record }) => record.payload._tag === "RunContinuation",
-          );
+          const continuation = yield* store
+            .read({
+              threadId,
+              selection: {
+                _tag: "RunContinuation",
+                runId: runIdForSubmission(receipt.submissionId),
+                throughSequence: tail.tailSequence,
+              },
+              page: { limit: 1 },
+            })
+            .pipe(Stream.runHead);
 
           yield* check(
-            continuation?.record.payload._tag === "RunContinuation" &&
-              continuation.record.payload.runId === runIdForSubmission(receipt.submissionId),
+            Option.isSome(continuation) &&
+              continuation.value.record.payload._tag === "RunContinuation" &&
+              continuation.value.record.payload.runId === runIdForSubmission(receipt.submissionId),
             "Recovery fixture has no owning canonical progress",
           );
           yield* inspectScript;

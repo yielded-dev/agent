@@ -9,18 +9,26 @@ import {
   ContextHistoryRead,
   ContextHistorySearch,
 } from "../engine/ContextHistory.ts";
-import { CanonicalRecordEnvelope, CanonicalSequence } from "./Records.ts";
-import type { ContextHistoryBoundary } from "./ThreadContextHistoryProjection.ts";
-import {
+import { CanonicalRecordEnvelope, CanonicalSequence, RecordId } from "./Records.ts";
+import type {
+  ContextHistoryBoundary,
   ContextHistoryEvidence,
+} from "./ThreadContextHistoryProjection.ts";
+import {
   project,
   normalizeQuery,
   matchText,
   windowIdFor,
 } from "./ThreadContextHistoryProjection.ts";
-import { ThreadRead, ThreadStore, ThreadTail, ThreadTailRequest } from "./ThreadStore.ts";
+import {
+  SelectedThreadRead,
+  ThreadRead,
+  ThreadStore,
+  ThreadTail,
+  ThreadTailRequest,
+} from "./ThreadStore.ts";
 
-/** Bounds each lookup; a larger archive needs an explicitly configured or indexed adapter. */
+/** Per-search work and deadline bounds; exact archived reads are independent of Thread age. */
 export const ThreadContextHistoryOptions = Schema.Struct({
   maxRecords: Schema.optionalKey(
     Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
@@ -42,11 +50,13 @@ const invalid = (message: string) => ContextHistoryError.make({ reason: "invalid
 
 /**
  * Provides bounded lexical search and paged reads over retained canonical transcript evidence.
- * Each operation captures one tail and scans at most `maxRecords` (default 16,384), in pages of
- * 64, with a `timeoutMillis` deadline (default 10 seconds). An oversized history fails explicitly
- * instead of returning an incomplete search. No index, mutable archive, or background work is created.
- * Search resolves `beforeRecordId` against eligible canonical evidence in that same scan and
- * returns only older matches. It still verifies the entire captured tail and its boundaries.
+ * Each operation captures one tail. Search examines at most `maxRecords` (default 16,384),
+ * newest first in pages of 8, plus one bounded tail page and exact anchor/window lookups. A
+ * `timeoutMillis` deadline defaults to 10 seconds. Exhausting the search budget before finding
+ * a complete result page fails explicitly. No mutable archive or background work is created.
+ * An exact `beforeRecordId` lookup starts the search immediately before that retained evidence;
+ * unrelated newer history does not consume its scan budget. Storage verification owns global
+ * integrity; search validates the canonical pages and native window locators it reads.
  *
  * Rollover coverage boundaries assign subsequent records to the new window, including later Runs.
  * Before the first rollover, each Run uses its initial `context:<runId>:0` identity. Pruning and
@@ -70,58 +80,143 @@ export const layer = (
       const timeoutMillis = decoded.timeoutMillis ?? 10_000;
       const store = yield* ThreadStore;
 
-      const scan = Effect.fnUntraced(function* (
-        threadId: ThreadId,
-        visit: (record: CanonicalRecordEnvelope) => Effect.Effect<void, ContextHistoryError>,
-      ) {
-        const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
+      const captureTail = (threadId: ThreadId) =>
+        store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
           Effect.mapError(unavailable),
           Effect.flatMap((value) =>
             Schema.decodeEffect(Schema.toType(ThreadTail))(value).pipe(
               Effect.mapError(unavailable),
             ),
           ),
+          Effect.filterOrFail((tail) => tail.threadId === threadId, unavailable),
         );
 
-        if (tail.threadId !== threadId) return yield* unavailable();
-        if (tail.tailSequence > maxRecords)
+      const lookup = Effect.fnUntraced(function* (
+        threadId: ThreadId,
+        recordId: string,
+        through: CanonicalSequence,
+      ) {
+        const records = yield* store
+          .read(
+            SelectedThreadRead.make({
+              threadId,
+              selection: {
+                _tag: "RecordId",
+                recordId: yield* Schema.decodeEffect(RecordId)(recordId).pipe(
+                  Effect.mapError(() => invalid("Invalid retained record identity")),
+                ),
+              },
+              page: { limit: 2 },
+            }),
+          )
+          .pipe(Stream.take(3), Stream.runCollect, Effect.mapError(unavailable));
+
+        if (records.length > 1) return yield* unavailable();
+        const entry = records[0];
+
+        if (
+          entry !== undefined &&
+          (entry.threadId !== threadId || entry.record.recordId !== recordId)
+        )
+          return yield* unavailable();
+
+        const selected =
+          entry === undefined || entry.sequence > through
+            ? undefined
+            : (yield* project(entry)).evidence;
+
+        if (selected === undefined)
           return yield* ContextHistoryError.make({
-            reason: "limit",
-            message: `Context history exceeds the configured ${maxRecords} record scan limit`,
+            reason: "not-found",
+            message: "Retained context record was not found in this Thread",
           });
+
+        return selected;
+      });
+
+      const windowId = Effect.fnUntraced(function* (
+        threadId: ThreadId,
+        selected: ContextHistoryEvidence,
+        through: CanonicalSequence,
+      ) {
+        const records = yield* store
+          .read(
+            SelectedThreadRead.make({
+              threadId,
+              selection: {
+                _tag: "ContextWindowBoundary",
+                atSequence: selected.sequence,
+                throughSequence: through,
+              },
+              page: { limit: 2 },
+            }),
+          )
+          .pipe(Stream.take(3), Stream.runCollect, Effect.mapError(unavailable));
+
+        if (records.length > 1) return yield* unavailable();
         const boundaries: Array<ContextHistoryBoundary> = [];
-        let cursor = Schema.decodeSync(CanonicalSequence)(0);
 
-        while (cursor < tail.tailSequence) {
-          const limit = Math.min(64, tail.tailSequence - cursor);
+        for (const entry of records) {
+          if (entry.threadId !== threadId || entry.sequence > through) return yield* unavailable();
+          const boundary = (yield* project(entry)).boundary;
 
-          const page = yield* store
-            .read(ThreadRead.make({ threadId, afterSequence: cursor, limit }))
-            .pipe(Stream.take(limit + 1), Stream.runCollect, Effect.mapError(unavailable));
-
-          if (page.length !== limit) return yield* unavailable();
-          for (const raw of page) {
-            const record = yield* Schema.decodeEffect(Schema.toType(CanonicalRecordEnvelope))(
-              raw,
-            ).pipe(Effect.mapError(unavailable));
-
-            if (record.threadId !== threadId || record.sequence !== cursor + 1)
-              return yield* unavailable();
-            if (record.record.payload._tag === "CompactionCreated") {
-              const { boundary } = yield* project(record);
-
-              if (boundary !== undefined) {
-                if (boundary.coversThrough < (boundaries.at(-1)?.coversThrough ?? 0))
-                  return yield* unavailable();
-                boundaries.push(boundary);
-              }
-            }
-            yield* visit(record);
-            cursor = record.sequence;
-          }
+          if (boundary === undefined || boundary.coversThrough >= selected.sequence)
+            return yield* unavailable();
+          boundaries.push(boundary);
         }
 
-        return boundaries;
+        return windowIdFor(selected, boundaries);
+      });
+
+      const page = Effect.fnUntraced(function* (
+        threadId: ThreadId,
+        after: number,
+        through: number,
+      ) {
+        const limit = through - after;
+
+        if (limit === 0)
+          return {
+            after,
+            through,
+            projected: [],
+            firstCoverage: undefined,
+            lastCoverage: undefined,
+          };
+
+        const records = yield* store
+          .read(ThreadRead.make({ threadId, afterSequence: CanonicalSequence.make(after), limit }))
+          .pipe(Stream.take(limit + 1), Stream.runCollect, Effect.mapError(unavailable));
+
+        if (records.length !== limit) return yield* unavailable();
+
+        const projected: Array<{
+          readonly sequence: number;
+          readonly evidence: ContextHistoryEvidence | undefined;
+        }> = [];
+
+        let firstCoverage: number | undefined;
+        let lastCoverage: number | undefined;
+
+        for (let index = 0; index < records.length; index++) {
+          const record = yield* Schema.decodeEffect(Schema.toType(CanonicalRecordEnvelope))(
+            records[index],
+          ).pipe(Effect.mapError(unavailable));
+
+          if (record.threadId !== threadId || record.sequence !== after + index + 1)
+            return yield* unavailable();
+          const value = yield* project(record);
+
+          if (value.boundary !== undefined) {
+            if (lastCoverage !== undefined && value.boundary.coversThrough < lastCoverage)
+              return yield* unavailable();
+            firstCoverage ??= value.boundary.coversThrough;
+            lastCoverage = value.boundary.coversThrough;
+          }
+          projected.push({ sequence: record.sequence, evidence: value.evidence });
+        }
+
+        return { after, through, projected, firstCoverage, lastCoverage };
       });
 
       const search = Effect.fnUntraced(
@@ -131,40 +226,72 @@ export const layer = (
           ).pipe(Effect.mapError(() => invalid("Invalid context history search")));
 
           const query = yield* normalizeQuery(request.query);
-          const matches: Array<ContextHistoryEvidence> = [];
-          let anchorFound = false;
+          const tail = yield* captureTail(request.threadId);
 
-          const boundaries = yield* scan(
+          const head = yield* page(
             request.threadId,
-            Effect.fnUntraced(function* (record) {
-              const item = (yield* project(record)).evidence;
-
-              if (item === undefined) return;
-              if (item.recordId === request.beforeRecordId) anchorFound = true;
-              // The scan is ascending: retain older candidates until the exclusive anchor.
-              // Continue scanning to verify the captured tail and all window boundaries.
-              if (anchorFound) return;
-              const text = matchText(item.text, query);
-
-              if (text === undefined) return;
-              matches.push(ContextHistoryEvidence.make({ ...item, text }));
-              if (matches.length > request.limit) matches.shift();
-            }),
+            Math.max(0, tail.tailSequence - 8),
+            tail.tailSequence,
           );
 
-          if (request.beforeRecordId !== undefined && !anchorFound)
+          const anchor =
+            request.beforeRecordId === undefined
+              ? undefined
+              : yield* lookup(request.threadId, request.beforeRecordId, tail.tailSequence);
+
+          let cursor = anchor === undefined ? tail.tailSequence : anchor.sequence - 1;
+          let examined = 0;
+          let laterCoverage = head.firstCoverage;
+          const matches: Array<ContextHistoryHit> = [];
+
+          while (cursor > 0 && examined < maxRecords && matches.length < request.limit) {
+            const limit = Math.min(8, cursor, maxRecords - examined);
+            const after = cursor - limit;
+
+            const block =
+              after >= head.after && cursor <= head.through
+                ? {
+                    ...head,
+                    projected: head.projected.filter(
+                      (item) => item.sequence > after && item.sequence <= cursor,
+                    ),
+                  }
+                : yield* page(request.threadId, after, cursor);
+
+            if (after < head.after) {
+              if (
+                cursor <= head.after &&
+                laterCoverage !== undefined &&
+                block.lastCoverage !== undefined &&
+                block.lastCoverage > laterCoverage
+              )
+                return yield* unavailable();
+              laterCoverage = block.firstCoverage ?? laterCoverage;
+            }
+            for (const { evidence } of block.projected.toReversed()) {
+              examined++;
+              if (evidence === undefined) continue;
+              const text = matchText(evidence.text, query);
+
+              if (text === undefined) continue;
+              matches.push(
+                ContextHistoryHit.make({
+                  recordId: evidence.recordId,
+                  windowId: yield* windowId(request.threadId, evidence, tail.tailSequence),
+                  text,
+                }),
+              );
+              if (matches.length === request.limit) break;
+            }
+            cursor = after;
+          }
+          if (cursor > 0 && matches.length < request.limit)
             return yield* ContextHistoryError.make({
-              reason: "not-found",
-              message: "Retained context record was not found in this Thread",
+              reason: "limit",
+              message: `Context history search exceeded its ${maxRecords} record scan budget`,
             });
 
-          return matches.reverse().map((item) =>
-            ContextHistoryHit.make({
-              recordId: item.recordId,
-              windowId: windowIdFor(item, boundaries),
-              text: item.text,
-            }),
-          );
+          return matches;
         },
         Effect.timeoutOrElse({
           duration: timeoutMillis,
@@ -184,28 +311,17 @@ export const layer = (
             Effect.mapError(() => invalid("Invalid context history read")),
           );
 
-          let selected: ContextHistoryEvidence | undefined;
+          const tail = yield* captureTail(request.threadId);
+          const selected = yield* lookup(request.threadId, request.recordId, tail.tailSequence);
+          const selectedWindowId = yield* windowId(request.threadId, selected, tail.tailSequence);
 
-          const boundaries = yield* scan(
-            request.threadId,
-            Effect.fnUntraced(function* (record) {
-              if (record.record.recordId === request.recordId)
-                selected = (yield* project(record)).evidence;
-            }),
-          );
-
-          if (selected === undefined)
-            return yield* ContextHistoryError.make({
-              reason: "not-found",
-              message: "Retained context record was not found in this Thread",
-            });
           if (request.offset > selected.text.length)
             return yield* invalid("Context history offset is beyond the retained record");
           const end = Math.min(selected.text.length, request.offset + request.maxChars);
 
           return ContextHistoryPage.make({
             recordId: selected.recordId,
-            windowId: windowIdFor(selected, boundaries),
+            windowId: selectedWindowId,
             text: selected.text.slice(request.offset, end),
             nextOffset: end < selected.text.length ? end : null,
           });

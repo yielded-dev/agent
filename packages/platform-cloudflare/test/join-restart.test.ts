@@ -8,6 +8,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { Receipt } from "@yielded/agent/receipt";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Clock, Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect";
@@ -338,7 +339,8 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
         });
         expect(yield* runtime.submissionStatus(admitted.joined)).toMatchObject({ _tag: "settled" });
 
-        const records = (yield* store.export(
+        const records = (yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: admitted.receipt.threadId }),
         )).records;
 

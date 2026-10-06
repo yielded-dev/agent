@@ -32,7 +32,8 @@
     "./sql-subscription-store": "./src/SqlSubscriptionStore.ts",
     "./sql-lifecycle-publication": "./src/SqlLifecyclePublication.ts",
     "./sql-storage-progress": "./src/SqlStorageProgress.ts",
-    "./sql-thread-import": "./src/SqlThreadImport.ts"
+    "./sql-thread-import": "./src/SqlThreadImport.ts",
+    "./sql-thread-archive-range": "./src/SqlThreadArchiveRange.ts"
   },
   "publishConfig": {
     "access": "public"

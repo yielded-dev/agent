@@ -16,11 +16,14 @@ import {
   ThreadArchive,
   ThreadImport,
   ThreadImportRejected,
-  ThreadImportRequest,
   ThreadImportResult,
 } from "@yielded/agent/thread-import";
-import { ThreadExport, ThreadExportRequest } from "@yielded/agent/thread-store";
-import { Console, Effect, FileSystem, Option, Schema } from "effect";
+import {
+  ThreadExport,
+  MAX_THREAD_EXPORT_PAGE_BYTES,
+  streamExport,
+} from "@yielded/agent/thread-store";
+import { Console, Effect, FileSystem, Option, Schema, Stream } from "effect";
 import { Command as CliCommand, Flag } from "effect/cli";
 
 /**
@@ -322,6 +325,61 @@ const obligationsCommand = CliCommand.make(
   ),
 );
 
+/** Each source page pins the same canonical tail and independent fact revision. */
+const sourcePages = (filename: string, threadId: ThreadId) =>
+  streamExport({ threadId }).pipe(
+    Stream.provide(SqliteThreadStore.exportSourceLayer({ filename })),
+  );
+
+/** NDJSON framing bounds an unfinished line before decoding its Schema. */
+const archivePages = (input: string) =>
+  Stream.unwrap(Effect.map(FileSystem.FileSystem, (fs) => fs.stream(input))).pipe(
+    Stream.decodeText(),
+    Stream.concat(Stream.succeed("\n")),
+    Stream.mapAccumEffect(
+      () => "",
+      (pending, chunk) =>
+        Effect.gen(function* () {
+          const parts = chunk.split("\n");
+          const first = parts.shift() ?? "";
+
+          if (
+            new TextEncoder().encode(pending).byteLength +
+              new TextEncoder().encode(first).byteLength >
+            MAX_THREAD_EXPORT_PAGE_BYTES
+          )
+            return yield* ThreadImportRejected.make({
+              reason: "invalid-archive",
+              message: "Archive page exceeds its byte bound",
+            });
+          const combined = pending + first;
+
+          if (parts.length === 0) return [combined, []] as const;
+          const remainder = parts.pop() ?? "";
+          const lines = [combined, ...parts];
+
+          for (const line of [...lines, remainder])
+            if (new TextEncoder().encode(line).byteLength > MAX_THREAD_EXPORT_PAGE_BYTES)
+              return yield* ThreadImportRejected.make({
+                reason: "invalid-archive",
+                message: "Archive page exceeds its byte bound",
+              });
+
+          return [remainder, lines.filter((line) => line.length > 0)] as const;
+        }),
+    ),
+    Stream.mapEffect((line) =>
+      Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(line).pipe(
+        Effect.mapError(() =>
+          ThreadImportRejected.make({
+            reason: "invalid-archive",
+            message: "Invalid current-format archive page",
+          }),
+        ),
+      ),
+    ),
+  );
+
 const exportCommand = CliCommand.make(
   "export",
   {
@@ -336,15 +394,27 @@ const exportCommand = CliCommand.make(
       const fs = yield* FileSystem.FileSystem;
       const threadId = yield* decodeThreadId(thread);
 
-      const exported = yield* SqliteThreadStore.exportThread(
-        { filename },
-        ThreadExportRequest.make({ threadId }),
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const file = yield* fs.open(output, { flag: "wx" });
+          let complete = false;
+          let records = 0;
+
+          yield* Effect.addFinalizer(() =>
+            complete ? Effect.void : fs.remove(output).pipe(Effect.ignore),
+          );
+          yield* Stream.runForEach(sourcePages(filename, threadId), (page) =>
+            Effect.gen(function* () {
+              const text = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(page);
+
+              yield* file.writeAll(new TextEncoder().encode(`${text}\n`));
+              records += page.records.length;
+            }),
+          );
+          complete = true;
+          yield* Console.log(`Exported ${records} records to ${output}`);
+        }),
       );
-
-      const text = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(exported);
-
-      yield* fs.writeFileString(output, text, { flag: "wx" });
-      yield* Console.log(`Exported ${exported.records.length} records to ${output}`);
     }),
 ).pipe(
   CliCommand.withDescription(
@@ -362,14 +432,9 @@ const importCommand = CliCommand.make(
   ({ input }) =>
     Effect.gen(function* () {
       const { database: filename } = yield* admin;
-      const fs = yield* FileSystem.FileSystem;
-
-      const archive = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(
-        yield* fs.readFileString(input),
-      );
 
       const result = yield* Effect.flatMap(ThreadImport, (target) =>
-        target.import(ThreadImportRequest.make({ archive })),
+        target.import(archivePages(input)),
       ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
 
       yield* Console.log(
@@ -415,13 +480,7 @@ const reencodeCommand = CliCommand.make(
         }
       }
 
-      // Close the read-only source before opening the destination, including when paths alias.
-      const exported = yield* SqliteThreadStore.exportThread(
-        { filename: source },
-        ThreadExportRequest.make({ threadId }),
-      );
-
-      const result = yield* reencodeThread(Effect.succeed(exported)).pipe(
+      const result = yield* reencodeThread(sourcePages(source, threadId)).pipe(
         Effect.provide(SqliteThreadStore.layer({ filename })),
       );
 

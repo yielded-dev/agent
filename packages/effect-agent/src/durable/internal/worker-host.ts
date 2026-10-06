@@ -27,6 +27,7 @@ import {
   WorkerError,
   WorkerHistoryEntry,
   type WorkerContext,
+  type WorkerBudgetScope,
   WorkerRef,
   WorkerStop,
 } from "../../core/Worker.ts";
@@ -75,15 +76,17 @@ import {
   WorkerOrigin,
   WorkerContinuation,
   WorkerInputCompleted,
+  WorkerInputRefused,
   WorkerReportPrepared,
   WorkerReportRefused,
   WorkerReportingIntent,
   SubtreeBudgetReserved,
   PersistedJson,
   MAX_RUN_EVIDENCE_BYTES,
+  MAX_RUN_EVIDENCE_RECORDS,
   MAX_RUN_TERMINAL_BYTES,
 } from "../Records.ts";
-import { canonicalRecordBytes, readRunEvidenceSnapshot } from "../RunContinuation.ts";
+import { canonicalRecordBytes, readRunEvidenceSnapshot, reference } from "../RunContinuation.ts";
 import {
   workerInputRecordId,
   agentUpdateRecordId,
@@ -106,6 +109,8 @@ import {
   type Principal,
   type Settlement,
   SubmissionLookupById,
+  SubmissionLookupByKey,
+  FundingOwnerRequest,
   submissionSettlementRecordId,
   type SubmissionSnapshot,
 } from "../SubmissionLedger.ts";
@@ -120,7 +125,7 @@ import {
   readWorkerState as readNativeWorkerState,
   FencedAppendRequest,
   type ThreadIdentity,
-  MAX_THREAD_EXPORT_RECORDS,
+  type ThreadWorkerCapacity,
   ThreadRead,
   type ThreadTail,
   ThreadTailRequest,
@@ -373,6 +378,34 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       Effect.mapError(storageFailure(operation)),
     );
 
+  const readStop = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    workerThreadId: ThreadId,
+    throughSequence: CanonicalSequence,
+  ) {
+    const page = yield* Stream.runCollect(
+      deps.store.read({
+        threadId,
+        selection: { _tag: "WorkerStop", workerThreadId, throughSequence },
+        page: { limit: 1 },
+      }),
+    ).pipe(Effect.mapError(storageFailure("stop")));
+
+    const entry = page[0];
+
+    if (
+      page.length > 1 ||
+      (entry !== undefined &&
+        (entry.threadId !== threadId ||
+          entry.sequence > throughSequence ||
+          entry.record.payload._tag !== "WorkerStopRequested" ||
+          entry.record.payload.command.worker.threadId !== workerThreadId))
+    )
+      return yield* failure("stop", "corrupt");
+
+    return entry;
+  });
+
   /** One worker Receipt and its exact joined host, without the unrelated Thread transcript. */
   const readSubmission = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {
     const threadId = submission.threadId;
@@ -461,19 +494,13 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       deps.ledger.inspectWorker === undefined
     )
       return yield* failure("start", "worker-mismatch");
-    const sourceState = yield* readWorkerState(source.threadId, "start");
+    const sourceState = yield* readIdentity(source.threadId, "start");
 
-    if (
-      sourceState.records.some(
-        ({ record }) =>
-          record.payload._tag === "WorkerStopRequested" &&
-          record.payload.command.worker.threadId === selected.threadId,
-      )
-    )
+    if (yield* readStop(source.threadId, selected.threadId, sourceState.tailSequence))
       return yield* failure("start", "denied");
 
-    const first = sourceState.records.find(
-      ({ record }) => record.recordId === firstWorkerInputRecordId(selected),
+    const first = Option.getOrUndefined(
+      yield* exactRecord(source.threadId, firstWorkerInputRecordId(selected), "start"),
     )?.record.payload;
 
     const origin = first?._tag === "WorkerInputRequested" ? first.admission.origin : undefined;
@@ -615,12 +642,12 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
   const readWorkerState = (
     threadId: ThreadId,
     operation: WorkerError["operation"],
-    sourceSubmissionId?: SubmissionId,
+    sourceSubmissionId: SubmissionId,
   ) =>
     readNativeWorkerState({
       threadId,
-      limit: MAX_THREAD_EXPORT_RECORDS,
-      ...(sourceSubmissionId === undefined ? {} : { sourceSubmissionId }),
+      limit: MAX_RUN_EVIDENCE_RECORDS,
+      sourceSubmissionId,
     }).pipe(
       Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
       Effect.mapError(storageFailure(operation)),
@@ -637,6 +664,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         | WorkerStopRequested
         | WorkHandoffCompleted
         | WorkerInputRequested
+        | WorkerInputRefused
         | WorkerInputCompleted
         | WorkerReportPrepared
         | WorkerReportRefused
@@ -644,7 +672,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       current: Pick<ThreadIdentity, "tailSequence" | "tailDigest" | "records"> &
         Partial<Pick<ThreadTail, "producerEpoch">>,
       phase: "source" | "completion" | "subtree" | "report" | "stop",
-      acknowledgements: ReadonlyArray<WorkerInputCompleted> = [],
     ) {
       const operation = "start";
       let producerEpoch = current.producerEpoch;
@@ -685,18 +712,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                   deploymentId: deps.deploymentId,
                   payload,
                 }),
-                ...acknowledgements.map((completion) =>
-                  RecordEnvelope.make({
-                    recordId: Schema.decodeSync(RecordId)(
-                      `worker-effects-resolved:${completion.messageId}`,
-                    ),
-                    family: "thread",
-                    schemaVersion: 1,
-                    createdAt: DateTime.makeUnsafe(completion.completedAtMillis),
-                    deploymentId: deps.deploymentId,
-                    payload: completion,
-                  }),
-                ),
               ],
             }),
           }),
@@ -713,86 +728,15 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     Effect.mapError(storageFailure("start")),
   );
 
-  const requests = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
-    records.flatMap(({ record }) =>
-      record.payload._tag === "WorkerInputRequested" ? [record.payload] : [],
-    );
-
   const completedMessageIds = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
     new Set<string>(
       records.flatMap(({ record }) =>
-        record.payload._tag === "WorkerInputCompleted" && record.payload.effectsResolved
+        (record.payload._tag === "WorkerInputCompleted" && record.payload.effectsResolved) ||
+        record.payload._tag === "WorkerInputRefused"
           ? [record.payload.messageId]
           : [],
       ),
     );
-
-  // Read exact child receipts only under capacity pressure. Collect in source order so
-  // parallel foreign reads cannot change the canonical acknowledgement batch order.
-  const completedInputs = Effect.fnUntraced(function* (
-    rows: ReadonlyArray<WorkerInputRequested>,
-    sourceRecords: ReadonlyArray<CanonicalRecordEnvelope>,
-  ) {
-    const completed = completedMessageIds(sourceRecords);
-
-    const receipts = yield* Effect.forEach(
-      rows.filter(({ admission }) => !completed.has(admission.messageId)),
-      Effect.fnUntraced(function* ({ admission }) {
-        const preparationId = workerInputRecordId(admission.messageId);
-
-        const closure = Option.getOrUndefined(
-          yield* exactRecord(
-            admission.origin.source.threadId,
-            RecordId.make(`work-handoff-completed:${preparationId}`),
-            "start",
-          ),
-        )?.record.payload;
-
-        if (closure !== undefined) {
-          if (
-            closure._tag !== "WorkHandoffCompleted" ||
-            closure.preparationId !== preparationId ||
-            closure.ownerId !== workId("worker-input", admission.messageId)
-          )
-            return yield* failure("start", "corrupt");
-
-          return { messageId: admission.messageId, acknowledgement: undefined };
-        }
-
-        const receipt = Option.getOrUndefined(
-          yield* getRecord({
-            threadId: admission.origin.worker.threadId,
-            recordId: Schema.decodeSync(RecordId)(`worker-effects-resolved:${admission.messageId}`),
-          }).pipe(
-            Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
-            // An unmaterialized reservation still consumes capacity.
-            Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())),
-            Effect.mapError(storageFailure("start")),
-          ),
-        )?.record.payload;
-
-        if (receipt === undefined) return;
-        if (
-          receipt._tag !== "WorkerInputCompleted" ||
-          !receipt.effectsResolved ||
-          receipt.messageId !== admission.messageId ||
-          receipt.workerThreadId !== admission.origin.worker.threadId
-        )
-          return yield* failure("start", "corrupt");
-
-        return { messageId: admission.messageId, acknowledgement: receipt };
-      }),
-      { concurrency: 8 },
-    );
-
-    const acknowledgements = receipts.flatMap((receipt) =>
-      receipt?.acknowledgement === undefined ? [] : [receipt.acknowledgement],
-    );
-
-    for (const receipt of receipts) if (receipt !== undefined) completed.add(receipt.messageId);
-
-    return { completed, acknowledgements };
-  });
 
   const reportIntent = Effect.fnUntraced(function* (
     source: ResolvedBinding,
@@ -848,8 +792,27 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     submissionId?: SubmissionId,
     reservations = false,
   ) {
-    const current = yield* reservations
-      ? readWorkerState(threadId, "start", submissionId)
+    let ownerSubmission: SubmissionSnapshot | undefined;
+
+    if (submissionId !== undefined) {
+      if (deps.ledger.resolveFundingOwner === undefined)
+        return yield* failure("start", "unavailable");
+
+      const funding = yield* deps.ledger
+        .resolveFundingOwner(FundingOwnerRequest.make({ threadId, submissionId }))
+        .pipe(Effect.mapError(storageFailure("start")));
+
+      if (
+        funding.selected.submissionId !== submissionId ||
+        funding.selected.threadId !== threadId ||
+        funding.owner.threadId !== threadId
+      )
+        return yield* failure("start", "denied");
+      ownerSubmission = funding.owner;
+    }
+
+    const current = yield* reservations && ownerSubmission !== undefined
+      ? readWorkerState(threadId, "start", ownerSubmission.submissionId)
       : readIdentity(threadId, "start");
 
     const created = current.records[0]?.record.payload;
@@ -870,31 +833,20 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     const nested =
       worker?._tag === "WorkerOriginRecorded" || attached?._tag === "SubagentLineageRecorded";
 
-    let ownerSubmission: SubmissionSnapshot | undefined;
-
-    if (nested && submissionId === undefined) return yield* failure("start", "denied");
-    if (submissionId !== undefined) {
-      const submission = yield* deps.ledger
-        .lookup(SubmissionLookupById.make({ submissionId }))
-        .pipe(Effect.mapError(storageFailure("start")));
-
-      if (
-        Option.isNone(submission) ||
-        submission.value.threadId !== threadId ||
-        (nested && submission.value.agentId !== created.agentId)
-      )
+    if (nested && ownerSubmission === undefined) return yield* failure("start", "denied");
+    if (ownerSubmission !== undefined) {
+      if (nested && ownerSubmission.agentId !== created.agentId)
         return yield* failure("start", "denied");
-      ownerSubmission = submission.value;
       if (
         worker?._tag === "WorkerOriginRecorded" &&
-        (submission.value.workerAdmission === undefined ||
-          !sameOrigin(submission.value.workerAdmission.origin, worker.origin))
+        (ownerSubmission.workerAdmission === undefined ||
+          !sameOrigin(ownerSubmission.workerAdmission.origin, worker.origin))
       )
         return yield* failure("start", "denied");
       if (
         attached?._tag === "SubagentLineageRecorded" &&
-        (submission.value.parentLinkage?.parentSubmissionId !== attached.parentSubmissionId ||
-          submission.value.parentLinkage.parentToolCallId !== attached.parentLink.parentToolCallId)
+        (ownerSubmission.parentLinkage?.parentSubmissionId !== attached.parentSubmissionId ||
+          ownerSubmission.parentLinkage.parentToolCallId !== attached.parentLink.parentToolCallId)
       )
         return yield* failure("start", "denied");
     }
@@ -995,14 +947,28 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     sourceThreadId: ThreadId,
     requested: SubtreeBudgetReserved,
   ): Effect.fn.Return<void, WorkerError> {
-    const payload = yield* decode(SubtreeBudgetReserved, requested, "start");
+    const decoded = yield* decode(SubtreeBudgetReserved, requested, "start");
+
+    if (decoded.sourceSubmissionId === undefined) return yield* failure("start", "denied");
+    const funding = yield* sourceAuthority(sourceThreadId, decoded.sourceSubmissionId);
+
+    if (funding.submission === undefined) return yield* failure("start", "denied");
+
+    const payload = SubtreeBudgetReserved.make({
+      ...decoded,
+      sourceSubmissionId: funding.submission.submissionId,
+    });
+
     const recordId = `subtree:${payload.reservationId}`;
+
+    let repairs = 64;
 
     for (let attempt = 0; attempt < 16; attempt++) {
       const source = yield* sourceAuthority(sourceThreadId, payload.sourceSubmissionId, true);
 
-      const previous = source.current.records.find(({ record }) => record.recordId === recordId)
-        ?.record.payload;
+      const previous = Option.getOrUndefined(
+        yield* exactRecord(sourceThreadId, RecordId.make(recordId), "start"),
+      )?.record.payload;
 
       if (previous !== undefined) {
         if (
@@ -1013,6 +979,16 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
         return;
       }
+      if (
+        Option.isSome(
+          yield* exactRecord(
+            sourceThreadId,
+            RecordId.make(`worker-input-refused:${payload.reservationId}`),
+            "start",
+          ),
+        )
+      )
+        return yield* failure("start", "denied");
       if (payload.depth !== source.depth + 1 || payload.depth > payload.grant.maxDepth)
         return yield* failure("start", "denied");
       const inherited = source.grant;
@@ -1167,25 +1143,125 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
       const localCompletions = completedMessageIds(source.current.records);
 
-      const completedWorkers = hasSlot(localCompletions, true)
-        ? { completed: localCompletions, acknowledgements: [] }
-        : yield* completedInputs(requests(source.current.records), source.current.records);
+      if (!hasSlot(localCompletions, true)) {
+        let changed = false;
 
-      if (!hasSlot(completedWorkers.completed)) return yield* failure("start", "capacity");
-      if (
-        yield* append(
-          sourceThreadId,
-          recordId,
-          payload,
-          source.current,
-          "subtree",
-          completedWorkers.acknowledgements,
-        )
-      )
-        return;
+        for (const entry of source.current.records) {
+          const reserved = entry.record.payload;
+
+          if (repairs === 0) break;
+          if (
+            reserved._tag !== "SubtreeBudgetReserved" ||
+            reserved.lifetime !== "background" ||
+            localCompletions.has(reserved.reservationId)
+          )
+            continue;
+          repairs--;
+
+          const input = Option.getOrUndefined(
+            yield* exactRecord(
+              sourceThreadId,
+              workerInputRecordId(IdempotencyKey.make(reserved.reservationId)),
+              "start",
+            ),
+          );
+
+          if (
+            input?.record.payload._tag === "WorkerInputRequested"
+              ? (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired"
+              : yield* repairReservation(sourceThreadId, entry)
+          )
+            changed = true;
+        }
+        if (changed) continue;
+        if (!hasSlot(localCompletions))
+          return yield* WorkerError.make({
+            operation: "start",
+            reason: "capacity",
+            retryable: true,
+          });
+      }
+      if (yield* append(sourceThreadId, recordId, payload, source.current, "subtree")) return;
     }
 
     return yield* failure("start", "storage");
+  });
+
+  const repairCapacityPage = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    tail: ThreadWorkerCapacity,
+    pressure: { remaining: number; after: CanonicalSequence; worker?: ThreadId },
+    worker?: ThreadId,
+  ) {
+    if (pressure.worker !== worker) {
+      pressure.worker = worker;
+      pressure.after = CanonicalSequence.make(0);
+    }
+    if (pressure.remaining === 0) return { changed: false, incumbent: false, more: false };
+
+    const selected = yield* Stream.runCollect(
+      deps.store.read({
+        threadId,
+        selection: {
+          _tag: "LiveWorkerInputs",
+          throughSequence: tail.tailSequence,
+          ...(worker === undefined ? {} : { workerThreadId: worker }),
+        },
+        page: { afterSequence: pressure.after, limit: Math.min(64, pressure.remaining) },
+      }),
+    ).pipe(
+      Effect.map(Option.some),
+      Effect.catchTag("ThreadStoreError", (cause) =>
+        deps.store
+          .inspectTail(ThreadTailRequest.make({ threadId }))
+          .pipe(
+            Effect.flatMap((current) =>
+              current.tailSequence !== tail.tailSequence || current.tailDigest !== tail.tailDigest
+                ? Effect.succeed(Option.none<ReadonlyArray<CanonicalRecordEnvelope>>())
+                : Effect.fail(cause),
+            ),
+          ),
+      ),
+      Effect.mapError(storageFailure("start")),
+    );
+
+    if (Option.isNone(selected)) return { changed: true, incumbent: false, more: false };
+    const entries = selected.value;
+
+    const requests: Array<WorkerInputRequested> = [];
+
+    for (const entry of entries) {
+      if (
+        entry.threadId !== threadId ||
+        entry.sequence <= pressure.after ||
+        entry.sequence > tail.tailSequence ||
+        entry.record.payload._tag !== "WorkerInputRequested" ||
+        (worker !== undefined && entry.record.payload.admission.origin.worker.threadId !== worker)
+      )
+        return yield* failure("start", "corrupt");
+      pressure.after = entry.sequence;
+      pressure.remaining--;
+      requests.push(entry.record.payload);
+    }
+
+    // Foreign reads stay concurrent under pressure; canonical acknowledgements retain source order.
+    const completions = yield* Effect.forEach(
+      requests,
+      Effect.fnUntraced(function* (request) {
+        return { request, completion: yield* readInputCompletion(request.admission) };
+      }),
+      { concurrency: 8 },
+    );
+
+    let changed = false;
+    let incumbent = false;
+
+    for (const { request, completion } of completions) {
+      if ((yield* repairInput(threadId, request, completion)) === "repaired") changed = true;
+      else if (worker !== undefined) incumbent = true;
+    }
+
+    return { changed, incumbent, more: entries.length > 0 && pressure.remaining > 0 };
   });
 
   const reservation = Effect.fnUntraced(function* (
@@ -1201,27 +1277,43 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     yield* verifyContinuation(origin);
     const id = workerInputRecordId(admission.messageId);
 
+    const pressure: { remaining: number; after: CanonicalSequence; worker?: ThreadId } = {
+      remaining: 64,
+      after: CanonicalSequence.make(0),
+    };
+
     for (let attempt = 0; attempt < 16; attempt++) {
-      const source = yield* sourceAuthority(
-        origin.source.threadId,
-        admission.sourceSubmissionId,
-        true,
-      );
+      const source = yield* sourceAuthority(origin.source.threadId, admission.sourceSubmissionId);
 
       const current = source.current;
 
       if (
         origin.continuationOf !== undefined &&
-        current.records.some(
-          ({ record }) =>
-            record.payload._tag === "WorkerStopRequested" &&
-            record.payload.command.worker.threadId === origin.continuationOf?.worker.threadId,
+        (yield* readStop(
+          origin.source.threadId,
+          origin.continuationOf.worker.threadId,
+          current.tailSequence,
+        ))
+      )
+        return yield* failure("start", "denied");
+
+      const retained = Option.getOrUndefined(
+        yield* exactRecord(origin.source.threadId, id, "start"),
+      );
+
+      if (retained !== undefined && retained.sequence > current.tailSequence) continue;
+      const existing = retained?.record.payload;
+
+      if (
+        Option.isSome(
+          yield* exactRecord(
+            origin.source.threadId,
+            RecordId.make(`worker-input-refused:${admission.messageId}`),
+            "start",
+          ),
         )
       )
         return yield* failure("start", "denied");
-      const rows = requests(current.records);
-      const existing = current.records.find(({ record }) => record.recordId === id)?.record.payload;
-
       if (existing !== undefined) {
         if (
           existing._tag !== "WorkerInputRequested" ||
@@ -1234,15 +1326,22 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
       if (first?._tag !== "ThreadCreated") return yield* failure("start", "denied");
 
-      const own = rows.filter(
-        (row) => row.admission.origin.worker.threadId === origin.worker.threadId,
+      const firstRequest = Option.getOrUndefined(
+        yield* exactRecord(
+          origin.source.threadId,
+          workerInputRecordId(origin.firstMessageId),
+          "start",
+        ),
       );
 
-      const origins = new Map(
-        rows.map((row) => [row.admission.origin.worker.threadId, row.admission.origin]),
-      );
+      if (firstRequest !== undefined && firstRequest.sequence > current.tailSequence) continue;
+      if (firstRequest !== undefined && firstRequest.record.payload._tag !== "WorkerInputRequested")
+        return yield* failure("start", "corrupt");
 
-      const prior = origins.get(origin.worker.threadId);
+      const prior =
+        firstRequest?.record.payload._tag === "WorkerInputRequested"
+          ? firstRequest.record.payload.admission.origin
+          : undefined;
 
       if (
         prior === undefined &&
@@ -1317,14 +1416,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
       if (now >= origin.expiresAtMillis) return yield* failure("start", "capacity");
       if (
-        (prior === undefined && origins.size >= deps.limits.maxWorkersPerSource) ||
-        own.filter((row) => row.admission.reportKind === admission.reportKind).length >=
-          (admission.reportKind === "update"
-            ? (deps.limits.maxUpdateInputsPerWorker ?? 256)
-            : deps.limits.maxInputsPerWorker)
-      )
-        return yield* failure("start", "capacity");
-      if (
         prior === undefined &&
         !sameReporting(
           yield* reportIntent(sourceBinding, targetBinding, origin.worker.delegationId, source),
@@ -1333,45 +1424,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       )
         return yield* failure("start", "denied");
       if (independent && source.depth !== 0) return yield* failure("start", "denied");
-      const ceilings = sourceCaps(source.policy);
-
-      const conservedRows = rows.filter((row) => row.admission.origin.budgetScope !== "worker-run");
-
-      const chargedRows =
-        source.depth === 0
-          ? conservedRows
-          : conservedRows.filter(
-              (row) => row.admission.sourceSubmissionId === admission.sourceSubmissionId,
-            );
-
-      // Independent origins do not belong to this pool. Preserve the retained conserved
-      // origins' cap identity check separately from the current input's charge selection.
-      if (
-        !independent &&
-        conservedRows.some((row) => !sameCaps(row.admission.origin.budget.caps, caps))
-      )
-        return yield* failure("start", "capacity");
-      if (
-        !independent &&
-        chargedRows.reduce(
-          (sum, row) => sum + 1 + (row.admission.origin.budget.descendantInvocations ?? 0),
-          1 + (origin.budget.descendantInvocations ?? 0),
-        ) > Math.min(caps.maxTotalChildInvocations ?? Infinity, source.policy.maxToolCalls)
-      )
-        return yield* failure("start", "capacity");
-      // Worker-owned Run usage is already durable in the destination's Run journal. Each
-      // Receipt may join an existing Run, so admitting input must never mint an allowance.
-      for (const [amount, cap] of independent ? [] : amountCaps) {
-        const limit = Math.min(caps[cap] ?? Infinity, ceilings[cap] ?? Infinity);
-
-        if (
-          chargedRows.reduce(
-            (sum, row) => sum + row.admission.origin.budget.allocation[amount],
-            origin.budget.allocation[amount],
-          ) > limit
-        )
-          return yield* failure("start", "capacity");
-      }
+      if (!independent && admission.sourceSubmissionId === undefined)
+        return yield* failure("start", "denied");
 
       // Resolve inside the source CAS loop: independently delivered starts must compete
       // against one canonical prefix. A conflict repeats both authority and capacity reads.
@@ -1396,41 +1450,75 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           : Math.min(caps.maxConcurrentChildren ?? Infinity, source.policy.toolConcurrency),
       );
 
-      const hasCapacity = (completed: ReadonlySet<string>, conservative = false) => {
-        const pendingRows = rows.filter((row) => !completed.has(row.admission.messageId));
+      if (deps.store.readWorkerCapacity === undefined)
+        return yield* failure("start", "unavailable");
 
-        const activeWorkers = new Set(
-          pendingRows.map((row) => row.admission.origin.worker.threadId),
+      const pendingLimit =
+        admission.reportKind === "update"
+          ? (deps.limits.maxPendingUpdateInputsPerWorker ?? 32)
+          : deps.limits.maxPendingInputsPerWorker;
+
+      const capacity = yield* deps.store
+        .readWorkerCapacity({
+          threadId: origin.source.threadId,
+          workerThreadId: origin.worker.threadId,
+          expectedTailSequence: current.tailSequence,
+          expectedTailDigest: current.tailDigest,
+          update: admission.reportKind === "update",
+          activeLimit,
+          pendingLimit,
+        })
+        .pipe(
+          Effect.map(Option.some),
+          Effect.catchTag("ThreadStoreError", (cause) =>
+            deps.store
+              .inspectTail(ThreadTailRequest.make({ threadId: origin.source.threadId }))
+              .pipe(
+                Effect.flatMap((tail) =>
+                  tail.tailSequence !== current.tailSequence ||
+                  tail.tailDigest !== current.tailDigest
+                    ? Effect.succeed(Option.none<ThreadWorkerCapacity>())
+                    : Effect.fail(cause),
+                ),
+              ),
+          ),
+          Effect.mapError(storageFailure("start")),
         );
 
-        const pendingOwn = pendingRows.filter(
-          (row) =>
-            row.admission.origin.worker.threadId === origin.worker.threadId &&
-            row.admission.reportKind === admission.reportKind,
-        ).length;
+      if (Option.isNone(capacity)) continue;
+      const live = capacity.value;
 
-        return (
-          pendingOwn <
-            (admission.reportKind === "update"
-              ? (deps.limits.maxPendingUpdateInputsPerWorker ?? 32)
-              : deps.limits.maxPendingInputsPerWorker) &&
-          (activeWorkers.has(origin.worker.threadId)
-            ? !conservative || activeWorkers.size <= activeLimit
-            : activeWorkers.size < activeLimit)
+      if (
+        live.threadId !== origin.source.threadId ||
+        live.tailSequence !== current.tailSequence ||
+        live.tailDigest !== current.tailDigest
+      )
+        return yield* failure("start", "corrupt");
+      const pending = live.pendingInputs < pendingLimit;
+
+      const slot = live.workerActive
+        ? live.activeWorkers <= activeLimit
+        : live.activeWorkers < activeLimit;
+
+      if (!pending || !slot) {
+        const repaired = yield* repairCapacityPage(
+          origin.source.threadId,
+          live,
+          pressure,
+          !pending || live.workerActive ? origin.worker.threadId : undefined,
         );
-      };
 
-      // Unresolved inputs bound pending work from above. An apparently active destination
-      // could already be idle: after a limit reduction, prove activity before exempting its
-      // follow-up from acquiring a new slot.
-      const localCompletions = completedMessageIds(current.records);
+        if (repaired.changed) continue;
+        if (!(pending && live.workerActive && repaired.incumbent)) {
+          if (repaired.more) continue;
 
-      const completed = hasCapacity(localCompletions, true)
-        ? { completed: localCompletions, acknowledgements: [] }
-        : yield* completedInputs(rows, current.records);
-
-      if (!hasCapacity(completed.completed))
-        return yield* WorkerError.make({ operation: "start", reason: "capacity", retryable: true });
+          return yield* WorkerError.make({
+            operation: "start",
+            reason: "capacity",
+            retryable: true,
+          });
+        }
+      }
       if (!independent)
         yield* reserveSubtree(
           origin.source.threadId,
@@ -1457,7 +1545,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           WorkerInputRequested.make({ admission, inputDigest }),
           current,
           "source",
-          completed.acknowledgements,
         )
       )
         return;
@@ -2050,13 +2137,235 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     return yield* failure("inspect", "storage");
   });
 
-  /** Close a conclusive refusal or copy the exact child-owned factual acknowledgement. */
+  /** Open refused inboxes remain owed until an operator stops them; funding charges never refund. */
+  const repairReservation = Effect.fnUntraced(function* (
+    sourceThreadId: ThreadId,
+    reservation: CanonicalRecordEnvelope,
+  ): Effect.fn.Return<boolean, WorkerError> {
+    const fact = reservation.record.payload;
+
+    if (
+      reservation.threadId !== sourceThreadId ||
+      (fact._tag !== "WorkerInputRequested" &&
+        (fact._tag !== "SubtreeBudgetReserved" || fact.lifetime !== "background"))
+    )
+      return yield* failure("inspect", "corrupt");
+    if (fact._tag === "SubtreeBudgetReserved") {
+      const input = Option.getOrUndefined(
+        yield* exactRecord(
+          sourceThreadId,
+          workerInputRecordId(IdempotencyKey.make(fact.reservationId)),
+          "inspect",
+        ),
+      );
+
+      if (input !== undefined) {
+        if (input.record.payload._tag !== "WorkerInputRequested")
+          return yield* failure("inspect", "corrupt");
+
+        return (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired";
+      }
+    }
+
+    const messageId =
+      fact._tag === "WorkerInputRequested"
+        ? fact.admission.messageId
+        : IdempotencyKey.make(fact.reservationId);
+
+    const workerThreadId =
+      fact._tag === "WorkerInputRequested"
+        ? fact.admission.origin.worker.threadId
+        : fact.childThreadId;
+
+    const id = RecordId.make(`worker-input-refused:${messageId}`);
+
+    if (Option.isNone(deps.deliveries) || deps.ledger.inspectWorker === undefined)
+      return yield* failure("inspect", "unavailable");
+
+    const delivery = yield* deps.deliveries.value
+      .get({ ownerThreadId: sourceThreadId, messageId })
+      .pipe(Effect.mapError(storageFailure("inspect")));
+
+    if (delivery === null) return false;
+    const admission = delivery.envelope.workerAdmission;
+
+    if (
+      admission === undefined ||
+      delivery.envelope.threadId !== workerThreadId ||
+      admission.messageId !== messageId ||
+      delivery.envelope.admissionKey !== messageId ||
+      admission.origin.source.threadId !== sourceThreadId ||
+      admission.origin.worker.threadId !== workerThreadId ||
+      (fact._tag === "WorkerInputRequested"
+        ? !sameAdmission(admission, fact.admission) ||
+          delivery.envelope.inputDigest !== fact.inputDigest
+        : !Schema.toEquivalence(SubtreeBudgetReserved)(
+            fact,
+            SubtreeBudgetReserved.make({
+              reservationId: fact.reservationId,
+              executionRunId: admission.executionRunId,
+              ...(admission.sourceSubmissionId === undefined
+                ? {}
+                : { sourceSubmissionId: admission.sourceSubmissionId }),
+              childThreadId: workerThreadId,
+              lifetime: "background",
+              depth: admission.origin.depth,
+              policy: admission.origin.policy,
+              grant: admission.origin.grant,
+              budget: admission.origin.budget,
+            }),
+          ))
+    )
+      return yield* failure("inspect", "corrupt");
+    if (delivery.status !== "refused" || delivery.receipt !== null) return false;
+
+    const ref = yield* withCrypto(reference(reservation.record)).pipe(
+      Effect.mapError(storageFailure("inspect")),
+    );
+
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const existing = Option.getOrUndefined(yield* exactRecord(sourceThreadId, id, "inspect"))
+        ?.record.payload;
+
+      if (existing !== undefined) {
+        if (
+          existing._tag !== "WorkerInputRefused" ||
+          existing.messageId !== messageId ||
+          existing.workerThreadId !== workerThreadId ||
+          existing.reservation.recordId !== ref.recordId ||
+          existing.reservation.digest !== ref.digest ||
+          existing.receiver.threadId !== workerThreadId ||
+          existing.receiver.principal !== delivery.envelope.deliveryPrincipal ||
+          existing.receiver.idempotencyKey !== delivery.envelope.admissionKey ||
+          existing.receiver.inputDigest !== delivery.envelope.inputDigest ||
+          existing.envelopeDigest !== delivery.envelopeDigest ||
+          existing.deliveryVersion !== delivery.version
+        )
+          return yield* failure("inspect", "corrupt");
+
+        const stop = Option.getOrUndefined(
+          yield* exactRecord(sourceThreadId, existing.stop.recordId, "inspect"),
+        );
+
+        if (
+          stop?.record.payload._tag !== "WorkerStopRequested" ||
+          !Schema.toEquivalence(WorkerRef)(
+            stop.record.payload.command.worker,
+            admission.origin.worker,
+          ) ||
+          (yield* withCrypto(reference(stop.record)).pipe(
+            Effect.mapError(storageFailure("inspect")),
+          )).digest !== existing.stop.digest
+        )
+          return yield* failure("inspect", "corrupt");
+
+        return true;
+      }
+
+      const tail = yield* deps.store
+        .inspectTail(ThreadTailRequest.make({ threadId: sourceThreadId }))
+        .pipe(Effect.mapError(storageFailure("inspect")));
+
+      // A source reservation can advance to an input while this repair yields. Close its
+      // current exact owner, with the tail below fencing any later transition.
+      if (fact._tag === "SubtreeBudgetReserved") {
+        const input = Option.getOrUndefined(
+          yield* exactRecord(sourceThreadId, workerInputRecordId(messageId), "inspect"),
+        );
+
+        if (input !== undefined) {
+          if (input.sequence > tail.tailSequence) continue;
+          if (input.record.payload._tag !== "WorkerInputRequested")
+            return yield* failure("inspect", "corrupt");
+
+          return (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired";
+        }
+      }
+
+      const stop = yield* readStop(sourceThreadId, workerThreadId, tail.tailSequence);
+
+      if (stop === undefined) return false;
+      if (
+        stop.record.payload._tag !== "WorkerStopRequested" ||
+        !Schema.toEquivalence(WorkerRef)(
+          stop.record.payload.command.worker,
+          admission.origin.worker,
+        )
+      )
+        return yield* failure("inspect", "corrupt");
+
+      const receiver = yield* deps.ledger
+        .inspectWorker(workerThreadId)
+        .pipe(Effect.mapError(storageFailure("inspect")));
+
+      if (!receiver.stopped) return false;
+
+      const key = SubmissionLookupByKey.make({
+        threadId: workerThreadId,
+        principal: delivery.envelope.deliveryPrincipal,
+        idempotencyKey: delivery.envelope.admissionKey,
+      });
+
+      const resolution = yield* deps.ledger
+        .resolveAdmission(key)
+        .pipe(Effect.mapError(storageFailure("inspect")));
+
+      if (resolution._tag !== "NotAdmitted") return false;
+
+      const payload = WorkerInputRefused.make({
+        messageId,
+        workerThreadId,
+        reservation: ref,
+        stop: yield* withCrypto(reference(stop.record)).pipe(
+          Effect.mapError(storageFailure("inspect")),
+        ),
+        deliveryVersion: delivery.version,
+        envelopeDigest: delivery.envelopeDigest,
+        receiver: {
+          ...key,
+          inputDigest: delivery.envelope.inputDigest,
+          stopped: true,
+          resolution: "NotAdmitted",
+        },
+      });
+
+      if (yield* append(sourceThreadId, id, payload, { ...tail, records: [] }, "completion"))
+        return true;
+    }
+
+    return yield* failure("inspect", "storage");
+  });
+
+  const readInputCompletion = (admission: WorkerAdmission) =>
+    getRecord({
+      threadId: admission.origin.worker.threadId,
+      recordId: RecordId.make(`worker-effects-resolved:${admission.messageId}`),
+    }).pipe(
+      Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
+      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())),
+      Effect.mapError(storageFailure("inspect")),
+    );
+
+  /** Copy an exact factual child acknowledgement into source accounting, even after its Run ends. */
   const repairInput = Effect.fnUntraced(function* (
     sourceThreadId: ThreadId,
-    preparationId: RecordId,
     request: WorkerInputRequested,
+    completion?: Option.Option<CanonicalRecordEnvelope>,
   ): Effect.fn.Return<"repaired" | "delivery-owned" | "awaiting-effects", WorkerError> {
     const admission = request.admission;
+
+    const reserved = Option.getOrUndefined(
+      yield* exactRecord(sourceThreadId, workerInputRecordId(admission.messageId), "inspect"),
+    );
+
+    if (
+      reserved === undefined ||
+      reserved.record.payload._tag !== "WorkerInputRequested" ||
+      !sameAdmission(reserved.record.payload.admission, admission) ||
+      reserved.record.payload.inputDigest !== request.inputDigest
+    )
+      return yield* failure("inspect", "corrupt");
+    if (yield* repairReservation(sourceThreadId, reserved)) return "repaired";
     const id = RecordId.make(`worker-effects-resolved:${admission.messageId}`);
 
     if (Option.isNone(deps.deliveries)) return yield* failure("inspect", "unavailable");
@@ -2067,7 +2376,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
     if (delivery === null) return yield* failure("inspect", "unavailable");
     if (
-      preparationId !== workerInputRecordId(admission.messageId) ||
       delivery.key.ownerThreadId !== sourceThreadId ||
       delivery.key.messageId !== admission.messageId ||
       delivery.envelope.threadId !== admission.origin.worker.threadId ||
@@ -2076,32 +2384,13 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       !sameAdmission(delivery.envelope.workerAdmission, admission)
     )
       return yield* failure("inspect", "corrupt");
-    // The original delivery owns unfinished admission and destination execution. Its terminal
-    // transition makes acknowledgement inspection due; pending/parked inputs need no child RPC.
-    if (delivery.status !== "processed" && delivery.status !== "refused") return "delivery-owned";
+    // A parked delivery may already have a factual effects-resolved acknowledgement.
+    // Settlement alone cannot release capacity; the exact child fact below can.
+    // The delivery driver owns settlement polling. Normal maintenance waits for its local
+    // observation; capacity pressure supplies an exact foreign read without polling live Runs.
+    if (completion === undefined && delivery.settlement === null) return "delivery-owned";
 
-    // Refusal is committed only before destination admission. The source can close its own
-    // reservation without inventing a destination Receipt, result, or effect acknowledgement.
-    if (delivery.status === "refused") {
-      if (delivery.receipt !== null || delivery.refusal === null)
-        return yield* failure("inspect", "corrupt");
-      yield* completeHandoff(
-        sourceThreadId,
-        preparationId,
-        workId("worker-input", admission.messageId),
-        "inspect",
-      );
-
-      return "repaired";
-    }
-
-    const child = Option.getOrUndefined(
-      yield* getRecord({ threadId: admission.origin.worker.threadId, recordId: id }).pipe(
-        Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
-        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())),
-        Effect.mapError(storageFailure("inspect")),
-      ),
-    );
+    const child = Option.getOrUndefined(completion ?? (yield* readInputCompletion(admission)));
 
     // Only the child storage owner publishes factual acknowledgements. Its native WorkerEffects
     // obligation survives settlement and operation closure; source recovery copies that evidence.
@@ -2204,14 +2493,37 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
   ) {
     if (deps.ledger.stopWorker === undefined) return yield* failure("stop", "unavailable");
 
-    const original = Option.getOrUndefined(
+    const first = Option.getOrUndefined(
       yield* exactRecord(sourceThreadId, firstWorkerInputRecordId(request.command.worker), "stop"),
     )?.record.payload;
 
+    const retained =
+      first === undefined && Option.isSome(deps.deliveries)
+        ? yield* deps.deliveries.value
+            .get({
+              ownerThreadId: sourceThreadId,
+              messageId: IdempotencyKey.make(request.command.worker.threadId),
+            })
+            .pipe(Effect.mapError(storageFailure("stop")))
+        : null;
+
+    const origin =
+      first?._tag === "WorkerInputRequested"
+        ? first.admission.origin
+        : retained?.envelope.workerAdmission?.origin;
+
     if (
-      original?._tag !== "WorkerInputRequested" ||
-      original.admission.origin.source.threadId !== sourceThreadId ||
-      !Schema.toEquivalence(WorkerRef)(original.admission.origin.worker, request.command.worker)
+      origin === undefined ||
+      origin.source.threadId !== sourceThreadId ||
+      origin.firstMessageId !== IdempotencyKey.make(request.command.worker.threadId) ||
+      !Schema.toEquivalence(WorkerRef)(origin.worker, request.command.worker) ||
+      (retained !== null &&
+        (retained.key.ownerThreadId !== sourceThreadId ||
+          retained.key.messageId !== origin.firstMessageId ||
+          retained.envelope.workerAdmission?.messageId !== origin.firstMessageId ||
+          retained.envelope.agentId !== origin.worker.targetAgentId ||
+          retained.envelope.threadId !== origin.worker.threadId ||
+          retained.envelope.admissionKey !== origin.firstMessageId))
     )
       return yield* failure("stop", "worker-mismatch");
 
@@ -2493,6 +2805,11 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
         if (now >= origin.expiresAtMillis) return yield* failure(operation, "capacity");
 
+        const funding =
+          sourceSubmissionId === undefined
+            ? undefined
+            : yield* sourceAuthority(context.source.threadId, sourceSubmissionId);
+
         const envelope: PreparedInput = {
           schemaVersion: 1,
           threadId: origin.worker.threadId,
@@ -2511,7 +2828,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             parameters,
             createdAtMillis: now,
             deliveryPrincipal: principal,
-            ...(sourceSubmissionId === undefined ? {} : { sourceSubmissionId }),
+            ...(funding?.submission === undefined
+              ? {}
+              : { sourceSubmissionId: funding.submission.submissionId }),
           },
         };
 
@@ -2823,6 +3142,15 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       start: Effect.fnUntraced(function* <E = never, R = never>(
         command: StartWorkerRequest | DeferredStartWorkerRequest<E, R>,
       ): Effect.fn.Return<WorkerStarted, WorkerError | E, R> {
+        const effectiveScope: WorkerBudgetScope =
+          command.budgetScope ??
+          (context.source._tag === "programmatic" && sourceSubmissionId === undefined
+            ? "worker-run"
+            : "source-subtree");
+
+        if (effectiveScope === "source-subtree" && sourceSubmissionId === undefined)
+          return yield* failure("start", "denied");
+
         const previous =
           command.continuationOf === undefined
             ? undefined
@@ -2914,7 +3242,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               origin.worker.targetAgentId !== command.target.id ||
               !sameJson(metadata.parameters, parameters) ||
               !Schema.toEquivalence(SubagentGrant)(origin.grant, grant) ||
-              origin.budgetScope !== command.budgetScope ||
+              origin.budgetScope !== effectiveScope ||
               origin.depth !== context.depth + 1 ||
               (!("prepare" in command) &&
                 (!samePolicy(origin.policy, command.policy) ||
@@ -2949,9 +3277,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           const request =
             "prepare" in command
               ? {
-                  ...(yield* command.prepare.pipe(
-                    Effect.provideService(CurrentStartPreparation, startAdmission),
-                  )),
+                  ...(yield* command
+                    .prepare(effectiveScope)
+                    .pipe(Effect.provideService(CurrentStartPreparation, startAdmission))),
                   ...command,
                 }
               : command;
@@ -3027,7 +3355,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               targetDigests: resolved.digests,
               policy: request.policy,
               budget: request.budget,
-              ...(request.budgetScope === undefined ? {} : { budgetScope: request.budgetScope }),
+              budgetScope: effectiveScope,
               grant,
               depth: context.depth + 1,
               firstMessageId: messageId,
@@ -3594,6 +3922,18 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           ? attached
           : undefined;
 
+    if (
+      selected?.submission !== undefined &&
+      selected.submission.submissionId !== request.sourceSubmissionId
+    )
+      yield* deps.authorizer.authorize({
+        sourceThreadId,
+        sourceSubmissionId: selected.submission.submissionId,
+        principal,
+        operation: "context",
+        access: "context",
+      });
+
     return facet(
       {
         source: {
@@ -3612,7 +3952,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         ...(retained?.grant === undefined ? {} : { grant: retained.grant }),
       },
       principal,
-      request.sourceSubmissionId,
+      selected?.submission?.submissionId,
     );
   });
 
@@ -3625,6 +3965,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     ensureOrigin,
     completeInput,
     repairInput,
+    repairReservation,
     repairStop,
     reserveSubtree,
   };

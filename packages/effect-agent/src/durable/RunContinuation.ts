@@ -21,6 +21,7 @@ import {
 } from "./internal/record-ownership.ts";
 export { terminalUsageCharge } from "./internal/record-ownership.ts";
 import { projectRunContext } from "./internal/run-context.ts";
+import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import {
   type CanonicalRecordEnvelope,
   type ContinuationAccounting,
@@ -29,6 +30,7 @@ import {
   CanonicalSequence,
   EvidenceReference,
   MAX_RUN_CONTINUATION_BYTES,
+  MAX_RUN_CONTEXT_BYTES,
   MAX_RUN_EVIDENCE_BYTES,
   MAX_RUN_TERMINAL_BYTES,
   MAX_RUN_EVIDENCE_RECORDS,
@@ -818,6 +820,7 @@ const advanceFacts = Effect.fnUntraced(function* (
 export const verifyRunContinuations = Effect.fnUntraced(function* (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ) {
+  const { record: resolveRecord } = yield* ThreadImportReader;
   const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
   const states = new Map<RunId, ProgressState>();
   const preparations = new Map<RunId, Array<RecordEnvelope>>();
@@ -882,7 +885,9 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
       if (initialBytes > MAX_RUN_RECOVERY_SUFFIX_BYTES)
         return yield* failure("Run preparation exceeds its byte bound");
       for (const entry of facts) {
-        if (entry.record.payload._tag !== "RunContextRecorded") continue;
+        const savedContext = entry.record.payload;
+
+        if (savedContext._tag !== "RunContextRecorded") continue;
 
         const originalEntry = byId.get(
           previous?.continuation.originalInput.recordId ?? original!.recordId,
@@ -890,19 +895,26 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
 
         if (originalEntry === undefined || entry.sequence <= originalEntry.sequence)
           return yield* failure("Context has no exact original input boundary");
+        let contextBytes = 0;
+
         yield* projectRunContext(
-          entry.record.payload,
+          savedContext,
           originalEntry,
           (yield* reference(entry.record)).digest,
-          yield* Effect.forEach(entry.record.payload.history, (ref) =>
+          yield* Effect.forEach(savedContext.history, (ref) =>
             Effect.gen(function* () {
-              const evidence = byId.get(ref.recordId);
+              const evidence = yield* resolveRecord(ref.recordId);
 
               if (
                 evidence === undefined ||
+                evidence.threadId !== entry.threadId ||
+                evidence.sequence !== ref.sequence ||
                 (yield* reference(evidence.record)).digest !== ref.digest
               )
                 return yield* failure("Context references missing or corrupt immutable evidence");
+              contextBytes += canonicalRecordBytes(evidence.record);
+              if (contextBytes > MAX_RUN_CONTEXT_BYTES || contextBytes > savedContext.historyBytes)
+                return yield* failure("Context references exceed their byte bound");
 
               return evidence;
             }),

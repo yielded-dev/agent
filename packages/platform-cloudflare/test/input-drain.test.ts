@@ -8,6 +8,7 @@ import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { LedgerError, SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Effect, Layer, Schema, Stream } from "effect";
@@ -147,7 +148,8 @@ it("preserves a returned Tool result across an input-drain failure without repla
         expect(failure).toMatchObject({ _tag: "LedgerError", operation: "claimJoining" });
         expect(drainFailures).toBe(1);
 
-        const before = yield* store.export(
+        const before = yield* readTestThread(
+          store,
           ThreadExportRequest.make({ threadId: receipt.threadId }),
         );
 
@@ -166,7 +168,11 @@ it("preserves a returned Tool result across an input-drain failure without repla
         expect(yield* runtime.submissionStatus(receipt)).toMatchObject({ _tag: "settled" });
         expect(yield* runtime.submissionStatus(follower)).toMatchObject({ _tag: "settled" });
         expect(toolCalls).toBe(1);
-        const after = yield* store.export(ThreadExportRequest.make({ threadId: receipt.threadId }));
+
+        const after = yield* readTestThread(
+          store,
+          ThreadExportRequest.make({ threadId: receipt.threadId }),
+        );
 
         expect(
           after.records.filter(({ record }) => record.payload._tag === "ToolCallUnknown"),

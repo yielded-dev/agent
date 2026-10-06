@@ -5,6 +5,8 @@ export default defineConfig({
     entry: [
       "src/index.ts",
       "src/durable/ThreadImport.ts",
+      "src/durable/ThreadArchiveRange.ts",
+      "src/durable/ThreadTransfer.ts",
       "src/durable/RecordFormat.ts",
       "src/core/Agent.ts",
       "src/core/AgentError.ts",

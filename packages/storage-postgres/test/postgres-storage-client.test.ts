@@ -38,7 +38,7 @@ it.effect(
 
         yield* open;
         expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
-          { version: 20n },
+          { version: 21n },
         ]);
         expect(yield* sql`SELECT * FROM effect_agent_threads`).toEqual(retained);
         yield* open;
@@ -50,7 +50,7 @@ it.effect(
 
         expect(rejected).toBeInstanceOf(PostgresStorageCompatibilityError);
         expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
-          { version: 20n },
+          { version: 21n },
         ]);
         expect(
           yield* sql`SELECT to_regclass('public.effect_agent_schema') IS NOT NULL AS header`,

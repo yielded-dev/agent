@@ -1,3 +1,4 @@
+import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import {
   type ToolCallId,
   AttemptId,
@@ -10,6 +11,8 @@ import {
 import { InputMessage } from "@yielded/agent/messaging";
 import {
   PersistedJson,
+  MAX_RUN_EVIDENCE_RECORDS,
+  MAX_RUN_EVIDENCE_BYTES,
   WorkerAdmission,
   ProducerEpoch,
   type DefinitionDigests,
@@ -28,6 +31,8 @@ import {
   validateJoinedSettlement,
 } from "@yielded/agent/settlement-publisher";
 import {
+  FundingOwnerRequest,
+  FundingOwner,
   type ParentLinkage,
   AbortCommand,
   WorkerStopCommand,
@@ -107,7 +112,13 @@ import {
   type SuspensionOutcome,
   type SuspensionReason,
 } from "@yielded/agent/submission-ledger";
-import { RebuiltSubmission, ThreadImportRejected } from "@yielded/agent/thread-import";
+import {
+  rebuildImportedSubmission,
+  verifyImportedSettlementOrder,
+  invalidThreadArchive,
+  RebuiltSubmission,
+  ThreadImportRejected,
+} from "@yielded/agent/thread-import";
 import { ThreadAdmission, ThreadStoreError } from "@yielded/agent/thread-store";
 import { admissionWork } from "@yielded/agent/thread-work";
 import {
@@ -129,8 +140,6 @@ import {
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
-
-const MAX_SUBMISSIONS = 65_536;
 
 /**
  * Lifecycle ordering used to advance-but-never-regress the operational state marker: a reclaimed
@@ -246,16 +255,73 @@ interface StoredChildReservation {
   readonly releasedAtMillis: number | undefined;
 }
 
+interface ThreadDirectory {
+  readonly ordered: Array<SubmissionId>;
+  readonly commands: {
+    readonly aborts: Array<CommandLocator>;
+    readonly approvals: Array<CommandLocator>;
+    readonly resolutions: Array<CommandLocator>;
+  };
+  revision: number;
+  aborts: number;
+  approvals: number;
+  resolutions: number;
+  children: number;
+  workers: number;
+  reservations: number;
+}
+interface CommandLocator {
+  readonly key: string;
+  readonly submissionId: SubmissionId;
+  readonly toolCallId?: ToolCallId;
+  readonly resolutionKey?: string;
+}
+
+const commandPosition = (entries: ReadonlyArray<CommandLocator>, key: string) => {
+  let low = 0;
+  let high = entries.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+
+    if (entries[middle].key < key) low = middle + 1;
+    else high = middle;
+  }
+
+  return low;
+};
+
+const retainCommand = (
+  entries: Array<CommandLocator>,
+  submissionId: SubmissionId,
+  toolCallId?: ToolCallId,
+  resolutionKey?: string,
+) => {
+  // Acceptance order is native, stable and append-only; publishing a command never shifts history.
+  const key = String(entries.length + 1).padStart(16, "0");
+
+  entries.push({
+    key,
+    submissionId,
+    ...(toolCallId === undefined ? {} : { toolCallId }),
+    ...(resolutionKey === undefined ? {} : { resolutionKey }),
+  });
+};
+
 interface LedgerState {
-  readonly submissions: ReadonlyMap<SubmissionId, StoredSubmission>;
-  readonly admissionIndex: ReadonlyMap<string, SubmissionId>;
-  readonly lanes: ReadonlyMap<ThreadId, LaneState>;
-  readonly childReservations: ReadonlyMap<ChildReservationId, StoredChildReservation>;
+  readonly byThread: Map<ThreadId, ThreadDirectory>;
+  readonly receipts: Map<ReceiptId, SubmissionId>;
+  readonly joinsByHost: Map<SubmissionId, Set<SubmissionId>>;
+  readonly childrenByParent: Map<SubmissionId, Set<ChildReservationId>>;
+  readonly submissions: Map<SubmissionId, StoredSubmission>;
+  readonly admissionIndex: Map<string, SubmissionId>;
+  readonly lanes: Map<ThreadId, LaneState>;
+  readonly childReservations: Map<ChildReservationId, StoredChildReservation>;
   /** Imported numeric suffixes may exceed Number.MAX_SAFE_INTEGER. */
   readonly mintCounter: bigint;
-  readonly latestByThread: ReadonlyMap<ThreadId, SubmissionId>;
-  readonly activeByThread: ReadonlyMap<ThreadId, ReadonlySet<SubmissionId>>;
-  readonly stoppedWorkers: ReadonlyMap<ThreadId, WorkerLedgerState["terminal"]>;
+  readonly latestByThread: Map<ThreadId, SubmissionId>;
+  readonly activeByThread: Map<ThreadId, Set<SubmissionId>>;
+  readonly stoppedWorkers: Map<ThreadId, WorkerLedgerState["terminal"]>;
 }
 
 type Decision<A, E> =
@@ -350,6 +416,90 @@ const toReservationSnapshot = (row: StoredChildReservation): ChildBudgetReservat
     ...(row.releasedAtMillis === undefined ? {} : { releasedAt: utc(row.releasedAtMillis) }),
   });
 
+const fromRebuilt = (rebuilt: RebuiltSubmission): StoredSubmission => {
+  const admission = rebuilt.admission;
+  const threadId = admission.threadId;
+  const canonicalSettlement = rebuilt.settlement?.payload;
+
+  const settlement =
+    canonicalSettlement?._tag === "SubmissionSettled" ? canonicalSettlement : undefined;
+
+  return {
+    row: {
+      submissionId: admission.submissionId,
+      threadId,
+      queueSequence: admission.queueSequence,
+      principal: admission.principal,
+      idempotencyKey: admission.idempotencyKey,
+      agentId: admission.agentId,
+      agentDigests: admission.agentDigests,
+      deploymentId: admission.deploymentId,
+      inputPayload: admission.inputPayload,
+      inputDigest: admission.inputDigest,
+      receiptId: admission.receiptId,
+      state: rebuilt.state,
+      settledOutcome: settlement?.outcome,
+      createdAtMillis: DateTime.toEpochMillis(admission.createdAt),
+      readyAtMillis:
+        rebuilt.state === "ready" ? DateTime.toEpochMillis(admission.createdAt) : undefined,
+      parentLinkage: admission.parentLinkage,
+      ...(admission.workerAdmission === undefined
+        ? {}
+        : {
+            workerAdmissionJson: Schema.encodeSync(Schema.fromJsonString(WorkerAdmission))(
+              admission.workerAdmission,
+            ),
+          }),
+      ...(admission.messageAdmission === undefined
+        ? {}
+        : {
+            messageAdmissionJson: Schema.encodeSync(Schema.fromJsonString(InputMessage))(
+              admission.messageAdmission,
+            ),
+          }),
+      ...(admission.admissionGroup === undefined
+        ? {}
+        : { admissionGroup: admission.admissionGroup }),
+      ...(admission.admissionFence === undefined
+        ? {}
+        : { admissionFence: admission.admissionFence }),
+    },
+    ownership: undefined,
+    inputApplied: rebuilt.inputApplied,
+    finalization:
+      settlement === undefined || rebuilt.settlement === undefined
+        ? undefined
+        : {
+            settlementId: settlement.settlementId,
+            recordId: rebuilt.settlement.recordId,
+            finalizedAtMillis: DateTime.toEpochMillis(rebuilt.settlement.createdAt),
+          },
+    abortIntent: rebuilt.abort,
+    joinedHostSubmissionId: rebuilt.joinedHostSubmissionId,
+    suspension:
+      rebuilt.suspension === undefined
+        ? undefined
+        : {
+            reason: rebuilt.suspension.reason,
+            suspendedAtMillis: DateTime.toEpochMillis(rebuilt.suspension.suspendedAt),
+          },
+    unknownMark:
+      rebuilt.unknownToolCallIds.length === 0
+        ? undefined
+        : {
+            reason: "Unresolved Tool execution recovered from the canonical log",
+            toolCallIds: rebuilt.unknownToolCallIds,
+          },
+    approvalDecisions: new Map(rebuilt.approvals.map((intent) => [intent.toolCallId, intent])),
+    unknownResolutions: new Map(
+      rebuilt.resolutions.map((intent) => [
+        JSON.stringify([intent.toolCallId, unknownResolutionKind(intent.resolution)]),
+        { intent },
+      ]),
+    ),
+  };
+};
+
 /** Linkage equality: both absent, or both present naming the same parent Tool Call. */
 const sameParentLinkage = (
   left: ParentLinkage | undefined,
@@ -381,33 +531,143 @@ const ownsLane = (
   stored.ownership.producerEpoch === laneEpoch(state, stored.row.threadId);
 
 const withSubmission = (state: LedgerState, stored: StoredSubmission): LedgerState => {
-  const active = new Set(state.activeByThread.get(stored.row.threadId));
+  const row = stored.row;
+  const previous = state.submissions.get(row.submissionId);
+  let directory = state.byThread.get(row.threadId);
 
-  if (stored.row.state === "settled") active.delete(stored.row.submissionId);
-  else active.add(stored.row.submissionId);
+  if (directory === undefined) {
+    directory = {
+      ordered: [],
+      commands: { aborts: [], approvals: [], resolutions: [] },
+      revision: 0,
+      aborts: 0,
+      approvals: 0,
+      resolutions: 0,
+      children: 0,
+      workers: 0,
+      reservations: 0,
+    };
+    state.byThread.set(row.threadId, directory);
+  }
+  if (previous === undefined) {
+    let low = 0;
+    let high = directory.ordered.length;
 
-  return {
-    ...state,
-    submissions: new Map(state.submissions).set(stored.row.submissionId, stored),
-    activeByThread: new Map(state.activeByThread).set(stored.row.threadId, active),
-  };
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      const candidate = state.submissions.get(directory.ordered[middle]);
+
+      if (candidate !== undefined && candidate.row.queueSequence < row.queueSequence)
+        low = middle + 1;
+      else high = middle;
+    }
+    directory.ordered.splice(low, 0, row.submissionId);
+    state.receipts.set(row.receiptId, row.submissionId);
+    state.admissionIndex.set(
+      admissionKey(row.threadId, row.principal, row.idempotencyKey),
+      row.submissionId,
+    );
+    const latest = state.latestByThread.get(row.threadId);
+
+    if (
+      latest === undefined ||
+      (state.submissions.get(latest)?.row.queueSequence ?? -1) < row.queueSequence
+    )
+      state.latestByThread.set(row.threadId, row.submissionId);
+  }
+  directory.revision++;
+  directory.children +=
+    Number(row.state !== "settled" && row.parentLinkage !== undefined) -
+    Number(
+      previous !== undefined &&
+        previous.row.state !== "settled" &&
+        previous.row.parentLinkage !== undefined,
+    );
+  directory.workers +=
+    Number(row.state !== "settled" && row.workerAdmissionJson !== undefined) -
+    Number(
+      previous !== undefined &&
+        previous.row.state !== "settled" &&
+        previous.row.workerAdmissionJson !== undefined,
+    );
+  directory.aborts +=
+    Number(stored.abortIntent !== undefined) - Number(previous?.abortIntent !== undefined);
+  directory.approvals += stored.approvalDecisions.size - (previous?.approvalDecisions.size ?? 0);
+  directory.resolutions +=
+    stored.unknownResolutions.size - (previous?.unknownResolutions.size ?? 0);
+  if (stored.abortIntent !== undefined && previous?.abortIntent === undefined)
+    retainCommand(directory.commands.aborts, row.submissionId);
+  if (stored.approvalDecisions !== previous?.approvalDecisions)
+    for (const id of stored.approvalDecisions.keys())
+      if (!previous?.approvalDecisions.has(id))
+        retainCommand(directory.commands.approvals, row.submissionId, id);
+  if (stored.unknownResolutions !== previous?.unknownResolutions)
+    for (const [id, value] of stored.unknownResolutions)
+      if (!previous?.unknownResolutions.has(id))
+        retainCommand(
+          directory.commands.resolutions,
+          row.submissionId,
+          value.intent.toolCallId,
+          id,
+        );
+  if (
+    previous?.joinedHostSubmissionId !== undefined &&
+    previous.joinedHostSubmissionId !== stored.joinedHostSubmissionId
+  )
+    state.joinsByHost.get(previous.joinedHostSubmissionId)?.delete(row.submissionId);
+  if (stored.joinedHostSubmissionId !== undefined) {
+    let joins = state.joinsByHost.get(stored.joinedHostSubmissionId);
+
+    if (joins === undefined)
+      state.joinsByHost.set(stored.joinedHostSubmissionId, (joins = new Set()));
+    joins.add(row.submissionId);
+  }
+  let active = state.activeByThread.get(row.threadId);
+
+  if (active === undefined) state.activeByThread.set(row.threadId, (active = new Set()));
+  if (row.state === "settled") active.delete(row.submissionId);
+  else active.add(row.submissionId);
+  state.submissions.set(row.submissionId, stored);
+
+  return state;
 };
 
 const withChildReservation = (
   state: LedgerState,
   reservation: StoredChildReservation,
-): LedgerState => ({
-  ...state,
-  childReservations: new Map(state.childReservations).set(reservation.reservationId, reservation),
-});
+): LedgerState => {
+  const previous = state.childReservations.get(reservation.reservationId);
+
+  state.childReservations.set(reservation.reservationId, reservation);
+  let children = state.childrenByParent.get(reservation.parentSubmissionId);
+
+  if (children === undefined)
+    state.childrenByParent.set(reservation.parentSubmissionId, (children = new Set()));
+  children.add(reservation.reservationId);
+  const parent = state.submissions.get(reservation.parentSubmissionId);
+
+  if (parent !== undefined) {
+    const directory = state.byThread.get(parent.row.threadId);
+
+    if (directory !== undefined) {
+      directory.revision++;
+      directory.reservations +=
+        Number(reservation.status !== "released") -
+        Number(previous !== undefined && previous.status !== "released");
+    }
+  }
+
+  return state;
+};
 
 const findHead = (state: LedgerState, threadId: ThreadId): StoredSubmission | undefined => {
   let head: StoredSubmission | undefined;
 
-  for (const stored of state.submissions.values()) {
+  for (const id of state.activeByThread.get(threadId) ?? []) {
+    const stored = state.submissions.get(id);
+
     if (
-      stored.row.threadId !== threadId ||
-      stored.row.state === "settled" ||
+      stored === undefined ||
       (stored.row.state === "unknown" && stored.abortIntent === undefined)
     )
       continue;
@@ -416,6 +676,25 @@ const findHead = (state: LedgerState, threadId: ThreadId): StoredSubmission | un
 
   return head;
 };
+
+function* threadRows(state: LedgerState, threadId: ThreadId, after = -1) {
+  const ordered = state.byThread.get(threadId)?.ordered ?? [];
+  let low = 0;
+  let high = ordered.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+
+    if ((state.submissions.get(ordered[middle])?.row.queueSequence ?? -1) <= after)
+      low = middle + 1;
+    else high = middle;
+  }
+  for (let index = low; index < ordered.length; index++) {
+    const stored = state.submissions.get(ordered[index]);
+
+    if (stored !== undefined) yield stored;
+  }
+}
 
 /**
  * Reference in-memory SubmissionLedger. It implements the full port contract — atomic idempotent
@@ -456,6 +735,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     const journal = yield* MemoryThreadStoreKernel;
 
     const state = yield* Ref.make<LedgerState>({
+      byThread: new Map(),
+      receipts: new Map(),
+      joinsByHost: new Map(),
+      childrenByParent: new Map(),
       submissions: new Map(),
       admissionIndex: new Map(),
       lanes: new Map(),
@@ -557,6 +840,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               Effect.mapError(() => ledgerError("admit", "Invalid message admission metadata")),
             );
 
+      yield* journal
+        .checkThreadCapacity(request.threadId)
+        .pipe(Effect.mapError((cause) => ledgerError("admit", cause.message, cause)));
       const nowMillis = yield* Clock.currentTimeMillis;
       const services = yield* Effect.context<never>();
 
@@ -645,9 +931,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             ];
 
           // A Thread's first admission fixes its worker origin before canonical materialization.
-          const first = [...current.submissions.values()].find(
-            ({ row }) => row.threadId === request.threadId,
-          );
+          const first = threadRows(current, request.threadId).next().value;
 
           if (first !== undefined) {
             const previous =
@@ -682,25 +966,14 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           }
           if (
             request.admissionGroup !== undefined &&
-            [...current.submissions.values()].some(
-              ({ row }) =>
-                row.threadId === request.threadId &&
-                row.admissionGroup === request.admissionGroup &&
-                row.state !== "settled",
+            Array.from(current.activeByThread.get(request.threadId) ?? []).some(
+              (id) => current.submissions.get(id)?.row.admissionGroup === request.admissionGroup,
             )
           )
             return [
               failure(AdmissionPolicyError.make({ reason: "occupied", code: "admission-group" })),
               current,
             ];
-          if (current.submissions.size >= MAX_SUBMISSIONS) {
-            return [
-              failure(
-                ledgerError("admit", `In-memory submission limit ${MAX_SUBMISSIONS} exceeded`),
-              ),
-              current,
-            ];
-          }
 
           const lane = current.lanes.get(request.threadId) ?? {
             nextQueueSequence: 1,
@@ -736,7 +1009,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               : { admissionFence: request.admissionFence }),
           };
 
-          const submissions = new Map(current.submissions).set(row.submissionId, {
+          const stored: StoredSubmission = {
             row,
             ownership: undefined,
             inputApplied: undefined,
@@ -747,12 +1020,12 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             unknownMark: undefined,
             approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
             unknownResolutions: new Map<string, StoredUnknownResolution>(),
-          });
+          };
 
           journal.initializeWork(request.threadId);
-          const admissionIndex = new Map(current.admissionIndex).set(key, row.submissionId);
+          const admissionIndex = current.admissionIndex;
 
-          const lanes = new Map(current.lanes).set(request.threadId, {
+          const lanes = current.lanes.set(request.threadId, {
             nextQueueSequence: lane.nextQueueSequence + 1,
             producerEpoch: lane.producerEpoch,
           });
@@ -768,22 +1041,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               }),
             ),
             {
-              ...current,
-              submissions,
+              ...withSubmission(current, stored),
               admissionIndex,
               lanes,
               mintCounter,
-              latestByThread: new Map(current.latestByThread).set(
-                request.threadId,
-                row.submissionId,
-              ),
-              activeByThread: new Map(current.activeByThread).set(
-                request.threadId,
-                new Set([
-                  ...(current.activeByThread.get(request.threadId) ?? []),
-                  row.submissionId,
-                ]),
-              ),
             },
           ];
         },
@@ -896,7 +1157,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           const decision = yield* Ref.modify(
             state,
             (current): readonly [Decision<Option.Option<Claim>, LedgerError>, LedgerState] => {
-              for (const stored of current.submissions.values()) {
+              for (const id of current.activeByThread.get(request.threadId) ?? []) {
+                const stored = current.submissions.get(id);
+
+                if (stored === undefined) continue;
                 if (
                   stored.row.threadId === request.threadId &&
                   stored.ownership !== undefined &&
@@ -913,11 +1177,13 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 if (current.lanes.get(request.threadId)?.producerEpoch !== handoff.producerEpoch)
                   return [success(Option.none()), current];
 
-                const candidates = [...current.submissions.values()]
+                const candidates = Array.from(
+                  current.activeByThread.get(request.threadId) ?? [],
+                  (id) => current.submissions.get(id),
+                )
                   .filter(
-                    (entry) =>
-                      entry.row.threadId === request.threadId &&
-                      entry.row.state !== "settled" &&
+                    (entry): entry is StoredSubmission =>
+                      entry !== undefined &&
                       !(entry.row.state === "unknown" && entry.abortIntent === undefined),
                   )
                   .sort((a, b) => a.row.queueSequence - b.row.queueSequence);
@@ -969,7 +1235,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
               const next = withSubmission(current, { ...head, row, ownership });
 
-              const lanes = new Map(next.lanes).set(request.threadId, {
+              const lanes = next.lanes.set(request.threadId, {
                 nextQueueSequence: lane.nextQueueSequence,
                 producerEpoch: lane.producerEpoch + 1,
               });
@@ -1363,7 +1629,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               !pendingNewer &&
               !current.stoppedWorkers.has(stored.row.threadId)
             ) {
-              const submissions = new Map(current.submissions);
+              const submissions = current.submissions;
 
               for (const id of current.activeByThread.get(stored.row.threadId) ?? []) {
                 const other = submissions.get(id);
@@ -1377,7 +1643,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   ) &&
                   other.abortIntent === undefined
                 ) {
-                  submissions.set(id, {
+                  withSubmission(current, {
                     ...other,
                     abortIntent: AbortIntent.make({
                       submissionId: id,
@@ -1391,7 +1657,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               sealed = {
                 ...current,
                 submissions,
-                stoppedWorkers: new Map(current.stoppedWorkers).set(stored.row.threadId, terminal),
+                stoppedWorkers: current.stoppedWorkers.set(stored.row.threadId, terminal),
               };
             }
 
@@ -1456,7 +1722,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       const now = yield* Clock.currentTimeMillis;
 
       return yield* Ref.modify(state, (current) => {
-        const submissions = new Map(current.submissions);
+        const submissions = current.submissions;
         let owned = 0;
 
         for (const id of current.activeByThread.get(request.threadId) ?? []) {
@@ -1465,7 +1731,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           if (stored === undefined) continue;
           if (stored.ownership !== undefined) owned++;
           if (stored.abortIntent === undefined)
-            submissions.set(id, {
+            withSubmission(current, {
               ...stored,
               abortIntent: AbortIntent.make({
                 submissionId: id,
@@ -1483,7 +1749,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             submissions,
             stoppedWorkers: current.stoppedWorkers.has(request.threadId)
               ? current.stoppedWorkers
-              : new Map(current.stoppedWorkers).set(request.threadId, undefined),
+              : current.stoppedWorkers.set(request.threadId, undefined),
           },
         ] as const;
       });
@@ -1583,8 +1849,12 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         const request = yield* validate(ClaimJoiningRequest, "claimJoining", unvalidated);
         const published = new Map<SubmissionId, Settlement["outcome"]>();
 
-        for (const stored of (yield* Ref.get(state)).submissions.values()) {
-          if (stored.row.threadId !== request.threadId || stored.row.state !== "ready") continue;
+        const before = yield* Ref.get(state);
+
+        for (const id of before.activeByThread.get(request.threadId) ?? []) {
+          const stored = before.submissions.get(id);
+
+          if (stored === undefined || stored.row.state !== "ready") continue;
           const canonical = yield* canonicalSettlement(stored.row);
 
           if (canonical !== undefined)
@@ -1626,16 +1896,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               return [failure(ownershipLost(current, host)), current];
             }
 
-            const later = [...current.submissions.values()]
-              .filter(
-                (stored) =>
-                  stored.row.threadId === request.threadId &&
-                  stored.row.queueSequence > host.row.queueSequence,
-              )
-              .sort((left, right) => left.row.queueSequence - right.row.queueSequence);
+            const later = threadRows(current, request.threadId, host.row.queueSequence);
 
             const claims: Array<JoiningClaim> = [];
-            const submissions = new Map(current.submissions);
+            const submissions = current.submissions;
 
             for (const stored of later) {
               if (claims.length >= request.maxCount) break;
@@ -1660,7 +1924,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
               if (terminal === "aborted") continue;
               if (terminal !== undefined) break;
-              submissions.set(stored.row.submissionId, {
+              withSubmission(current, {
                 ...stored,
                 row: { ...stored.row, state: "joining" },
                 joinedHostSubmissionId: request.hostSubmissionId,
@@ -2474,7 +2738,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            for (const reservation of current.childReservations.values()) {
+            for (const id of current.childrenByParent.get(request.parentSubmissionId) ?? []) {
+              const reservation = current.childReservations.get(id);
+
+              if (reservation === undefined) continue;
               if (
                 reservation.parentSubmissionId === request.parentSubmissionId &&
                 reservation.parentToolCallId === request.parentToolCallId
@@ -2789,34 +3056,37 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       },
     );
 
-    const scanNonterminal: SubmissionLedger["Service"]["scanNonterminal"] = Stream.unwrap(
-      Ref.get(state).pipe(
-        Effect.map((current) => {
-          const snapshots = [...current.submissions.values()]
-            .filter((stored) => stored.row.state !== "settled")
-            .sort((left, right) =>
-              left.row.threadId < right.row.threadId
-                ? -1
-                : left.row.threadId > right.row.threadId
-                  ? 1
-                  : left.row.queueSequence - right.row.queueSequence,
-            )
-            .map(({ row }) =>
-              SubmissionWorkItem.make({
-                submissionId: row.submissionId,
-                threadId: row.threadId,
-                queueSequence: row.queueSequence,
-                principal: row.principal,
-                idempotencyKey: row.idempotencyKey,
-                deploymentId: row.deploymentId,
-                receiptId: row.receiptId,
-                state: row.state,
-              }),
-            );
+    const scanNonterminal: SubmissionLedger["Service"]["scanNonterminal"] = Stream.paginate<
+      string | undefined,
+      SubmissionWorkItem,
+      never
+    >(undefined, (after) =>
+      Effect.sync(() => {
+        const current = MutableRef.get(state.ref);
 
-          return Stream.fromIterable(snapshots);
-        }),
-      ),
+        const candidates = boundedWorkSelection<StoredSubmission>(
+          8,
+          (stored) =>
+            `${stored.row.threadId}\u0000${String(stored.row.queueSequence).padStart(16, "0")}`,
+          after,
+        );
+
+        for (const ids of current.activeByThread.values())
+          for (const id of ids) {
+            const stored = current.submissions.get(id);
+
+            if (stored !== undefined) candidates.add(stored);
+          }
+        const items = candidates.values.map(({ row }) => SubmissionWorkItem.make(row));
+        const last = candidates.values.at(-1)?.row;
+
+        return [
+          items,
+          last === undefined
+            ? Option.none<string | undefined>()
+            : Option.some(`${last.threadId}\u0000${String(last.queueSequence).padStart(16, "0")}`),
+        ] as const;
+      }),
     );
 
     const readAbortIntent: SubmissionLedger["Service"]["readAbortIntent"] = Effect.fnUntraced(
@@ -2853,8 +3123,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           );
         }
 
-        const joins = [...current.submissions.values()]
-          .filter((candidate) => candidate.joinedHostSubmissionId === request.submissionId)
+        const joins = Array.from(current.joinsByHost.get(request.submissionId) ?? [], (id) =>
+          current.submissions.get(id),
+        )
+          .filter((candidate): candidate is StoredSubmission => candidate !== undefined)
           .sort((left, right) => left.row.queueSequence - right.row.queueSequence)
           .map((candidate) =>
             JoinSnapshot.make({
@@ -2873,8 +3145,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         // Parent-side subagent view: this Submission's child budget reservations in parent Tool
         // Call order, plus each attached child's current lane state (a disposable derived view;
         // the canonical records stay the recovery truth, DUR-015).
-        const childReservations = [...current.childReservations.values()]
-          .filter((reservation) => reservation.parentSubmissionId === request.submissionId)
+        const childReservations = Array.from(
+          current.childrenByParent.get(request.submissionId) ?? [],
+          (id) => current.childReservations.get(id),
+        )
+          .filter((reservation): reservation is StoredChildReservation => reservation !== undefined)
           .sort((left, right) =>
             left.parentToolCallId < right.parentToolCallId
               ? -1
@@ -2942,6 +3217,45 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
     const ledger = SubmissionLedger.of({
       capabilities,
+      resolveFundingOwner: Effect.fnUntraced(function* (unvalidated) {
+        const request = yield* validate(FundingOwnerRequest, "funding owner", unvalidated);
+        const current = MutableRef.get(state.ref);
+        const selected = current.submissions.get(request.submissionId);
+
+        if (selected === undefined || selected.row.threadId !== request.threadId)
+          return yield* ledgerError(
+            "funding owner",
+            "Selected admission belongs to another Thread or is missing",
+          );
+        if (
+          selected.row.state === "joining" ||
+          (selected.joinedHostSubmissionId !== undefined && selected.inputApplied === undefined)
+        )
+          return yield* ledgerError(
+            "funding owner",
+            "Joining funding owner is not yet frozen by exact applied input evidence",
+          );
+
+        const owner =
+          selected.joinedHostSubmissionId === undefined
+            ? selected
+            : current.submissions.get(selected.joinedHostSubmissionId);
+
+        if (
+          owner === undefined ||
+          owner.row.threadId !== request.threadId ||
+          (owner !== selected && owner.row.queueSequence >= selected.row.queueSequence)
+        )
+          return yield* ledgerError(
+            "funding owner",
+            "Exact joined funding owner is missing or inconsistent",
+          );
+
+        return FundingOwner.make({
+          selected: toSnapshot(selected.row),
+          owner: toSnapshot(owner.row),
+        });
+      }),
       admit: (request) => journal.withMutation(admit(request)),
       markReady: (request) => journal.withMutation(markReady(request)),
       lookup,
@@ -2972,309 +3286,430 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       readAbortIntent,
     });
 
-    yield* journal.registerLedgerTransfer({
-      export: Effect.fnUntraced(function* (threadId) {
-        const current = yield* Ref.get(state);
+    const toAdmission = (row: SubmissionRow) => ThreadAdmission.make(toSnapshot(row));
 
-        const stored = [...current.submissions.values()]
-          .filter((entry) => entry.row.threadId === threadId)
-          .sort((left, right) => left.row.queueSequence - right.row.queueSequence);
+    const cleanCommand = <A extends { readonly canonicalRecordId?: RecordEnvelope["recordId"] }>(
+      value: A,
+    ) => {
+      const { canonicalRecordId: _, ...fact } = value;
 
-        const ids = new Set(stored.map((entry) => entry.row.submissionId));
+      return fact;
+    };
 
-        const hasChildren = [...current.childReservations.values()].some(
-          (reservation) =>
-            ids.has(reservation.parentSubmissionId) ||
-            (reservation.childSubmissionId !== undefined && ids.has(reservation.childSubmissionId)),
-        );
+    const commands = (stored: StoredSubmission | undefined) => {
+      return {
+        aborts: stored?.abortIntent === undefined ? [] : [cleanCommand(stored.abortIntent)],
+        approvals: Array.from(stored?.approvalDecisions.values() ?? [], cleanCommand),
+        resolutions: Array.from(stored?.unknownResolutions.values() ?? [], ({ intent }) =>
+          cleanCommand(intent),
+        ),
+      };
+    };
 
-        const externalObligations = [
-          ...(current.stoppedWorkers.has(threadId) ? ["worker" as const] : []),
-          ...(hasChildren ? ["child" as const] : []),
-        ];
+    const readCommands = Effect.fnUntraced(function* (stored: StoredSubmission | undefined) {
+      if (
+        (stored?.approvalDecisions.size ?? 0) > MAX_RUN_EVIDENCE_RECORDS ||
+        (stored?.unknownResolutions.size ?? 0) > MAX_RUN_EVIDENCE_RECORDS
+      )
+        return yield* ThreadStoreError.make({
+          operation: "read commands",
+          message: "Accepted commands exceed Run record bounds",
+        });
+      let bytes = 0;
 
-        return {
-          ...(externalObligations.length === 0 ? {} : { externalObligations }),
-          // Include every admission, including unreferenced queued work. Import validates binding.
-          admissions: stored.map(({ row }) =>
-            ThreadAdmission.make({
-              threadId: row.threadId,
-              submissionId: row.submissionId,
-              receiptId: row.receiptId,
-              queueSequence: row.queueSequence,
-              principal: row.principal,
-              idempotencyKey: row.idempotencyKey,
-              agentId: row.agentId,
-              agentDigests: row.agentDigests,
-              deploymentId: row.deploymentId,
-              inputPayload: row.inputPayload,
-              inputDigest: row.inputDigest,
-              createdAt: utc(row.createdAtMillis),
-              ...(row.parentLinkage === undefined ? {} : { parentLinkage: row.parentLinkage }),
-              ...(row.admissionGroup === undefined ? {} : { admissionGroup: row.admissionGroup }),
-              ...(row.admissionFence === undefined ? {} : { admissionFence: row.admissionFence }),
-              ...(row.workerAdmissionJson === undefined
-                ? {}
-                : {
-                    workerAdmission: Schema.decodeSync(Schema.fromJsonString(WorkerAdmission))(
-                      row.workerAdmissionJson,
-                    ),
-                  }),
-              ...(row.messageAdmissionJson === undefined
-                ? {}
-                : {
-                    messageAdmission: Schema.decodeSync(Schema.fromJsonString(InputMessage))(
-                      row.messageAdmissionJson,
-                    ),
-                  }),
+      const add = <A, I>(schema: Schema.Codec<A, I>, value: A) =>
+        Schema.encodeEffect(Schema.toCodecJson(schema))(value).pipe(
+          Effect.mapError(() =>
+            ThreadStoreError.make({
+              operation: "read commands",
+              message: "Invalid accepted command wire",
             }),
           ),
-          commands: {
-            aborts: stored.flatMap(({ abortIntent }) => {
-              if (abortIntent === undefined) return [];
-              const { canonicalRecordId: _, ...fact } = abortIntent;
+          Effect.flatMap((wire) => {
+            bytes += utf8ByteLength(canonicalJson(wire));
 
-              return [fact];
-            }),
-            approvals: stored.flatMap(({ approvalDecisions }) =>
-              [...approvalDecisions.values()].map((intent) => {
-                const { canonicalRecordId: _, ...fact } = intent;
+            return bytes > MAX_RUN_EVIDENCE_BYTES
+              ? Effect.fail(
+                  ThreadStoreError.make({
+                    operation: "read commands",
+                    message: "Accepted commands exceed Run byte bounds",
+                  }),
+                )
+              : Effect.void;
+          }),
+        );
 
-                return fact;
-              }),
-            ),
-            resolutions: stored.flatMap(({ unknownResolutions }) =>
-              [...unknownResolutions.values()].map(({ intent }) => {
-                const { canonicalRecordId: _, ...fact } = intent;
+      if (stored?.abortIntent !== undefined) yield* add(AbortIntent, stored.abortIntent);
+      for (const value of stored?.approvalDecisions.values() ?? [])
+        yield* add(ApprovalDecisionIntent, value);
+      for (const { intent } of stored?.unknownResolutions.values() ?? [])
+        yield* add(UnknownResolutionIntent, intent);
 
-                return fact;
-              }),
-            ),
-          },
-        };
-      }),
-      prepareImport: Effect.fnUntraced(function* (prepared, producerEpoch) {
+      return commands(stored);
+    });
+
+    const lookupAdmission = (threadId: ThreadId, submissionId: SubmissionId) =>
+      Effect.sync(() => {
+        const stored = MutableRef.get(state.ref).submissions.get(submissionId);
+
+        return stored?.row.threadId === threadId ? toAdmission(stored.row) : undefined;
+      });
+
+    yield* journal.registerLedgerTransfer({
+      admission: lookupAdmission,
+      commands: (id) => readCommands(MutableRef.get(state.ref).submissions.get(id)),
+      snapshot: (threadId) =>
+        Effect.sync(() => {
+          const current = MutableRef.get(state.ref);
+          const directory = current.byThread.get(threadId);
+          const live = new Set<"child" | "worker">();
+
+          if (
+            current.stoppedWorkers.has(threadId) &&
+            (current.activeByThread.get(threadId)?.size ?? 0) > 0
+          )
+            live.add("worker");
+          if ((directory?.children ?? 0) + (directory?.reservations ?? 0) > 0) live.add("child");
+          if ((directory?.workers ?? 0) > 0) live.add("worker");
+
+          return {
+            revision: directory?.revision ?? 0,
+            admissions: directory?.ordered.length ?? 0,
+            aborts: directory?.aborts ?? 0,
+            approvals: directory?.approvals ?? 0,
+            resolutions: directory?.resolutions ?? 0,
+            ...(current.stoppedWorkers.has(threadId)
+              ? {
+                  workerSeal:
+                    current.stoppedWorkers.get(threadId) === undefined
+                      ? {}
+                      : { terminal: current.stoppedWorkers.get(threadId) },
+                }
+              : {}),
+            ...(live.size === 0 ? {} : { externalObligations: [...live] }),
+          };
+        }),
+      facts: (threadId, section, after) =>
+        Effect.sync(() => {
+          const current = MutableRef.get(state.ref);
+
+          const facts = {
+            admissions: new Array<ThreadAdmission>(),
+            commands: commands(undefined),
+            deliveries: [],
+          };
+
+          let next = after ?? "";
+
+          if (section === "admissions") {
+            const stored = threadRows(
+              current,
+              threadId,
+              after === undefined ? -1 : Number(after),
+            ).next().value;
+
+            if (stored !== undefined) {
+              facts.admissions.push(toAdmission(stored.row));
+              next = String(stored.row.queueSequence);
+            }
+          } else {
+            const entries = current.byThread.get(threadId)?.commands[section] ?? [];
+            const at = after === undefined ? 0 : commandPosition(entries, after);
+            const choice = entries[at + Number(after !== undefined && entries[at]?.key === after)];
+
+            if (choice !== undefined) {
+              next = choice.key;
+              const stored = current.submissions.get(choice.submissionId);
+
+              if (section === "aborts" && stored?.abortIntent !== undefined)
+                facts.commands.aborts.push(cleanCommand(stored.abortIntent));
+              else if (section === "approvals" && choice.toolCallId !== undefined) {
+                const value = stored?.approvalDecisions.get(choice.toolCallId);
+
+                if (value !== undefined) facts.commands.approvals.push(cleanCommand(value));
+              } else if (section === "resolutions" && choice.resolutionKey !== undefined) {
+                const value = stored?.unknownResolutions.get(choice.resolutionKey);
+
+                if (value !== undefined)
+                  facts.commands.resolutions.push(cleanCommand(value.intent));
+              }
+            }
+          }
+
+          return { facts, after: next };
+        }),
+      submissions: (threadId) =>
+        Stream.paginate(-1, (after) =>
+          Effect.sync(() => {
+            const stored = threadRows(MutableRef.get(state.ref), threadId, after).next().value;
+
+            return [
+              stored === undefined ? [] : [toSnapshot(stored.row)],
+              stored === undefined ? Option.none<number>() : Option.some(stored.row.queueSequence),
+            ] as const;
+          }),
+        ),
+      startImport: Effect.fnUntraced(function* (threadId) {
         const current = yield* Ref.get(state);
-        const threadId = prepared.result.threadId;
 
         if (
           current.lanes.has(threadId) ||
-          current.stoppedWorkers.has(threadId) ||
-          [...current.submissions.values()].some(({ row }) => row.threadId === threadId)
+          current.byThread.has(threadId) ||
+          current.stoppedWorkers.has(threadId)
         )
           return yield* ThreadImportRejected.make({
             threadId,
             reason: "target-not-empty",
-            message:
-              "The destination ledger already contains Thread data; import into a fresh destination store",
+            message: "Destination ledger contains Thread data",
           });
-        if (current.submissions.size + prepared.submissions.length > MAX_SUBMISSIONS)
-          return yield* ThreadImportRejected.make({
-            threadId,
-            reason: "unsupported-capacity",
-            message: `In-memory Submission limit ${MAX_SUBMISSIONS} exceeded; use an adapter with sufficient capacity`,
-          });
-        const submissions = new Map(current.submissions);
-        const admissionIndex = new Map(current.admissionIndex);
-        const lanes = new Map(current.lanes);
-        const latestByThread = new Map(current.latestByThread);
-        const activeByThread = new Map(current.activeByThread);
-        const active = new Set<SubmissionId>();
-        const receipts = new Set([...current.submissions.values()].map(({ row }) => row.receiptId));
-        let mintCounter = current.mintCounter;
-        let lastQueue = 0;
+
+        const staged: LedgerState = {
+          submissions: new Map(),
+          admissionIndex: new Map(),
+          lanes: new Map(),
+          childReservations: new Map(),
+          mintCounter: current.mintCounter,
+          stoppedWorkers: new Map(),
+          latestByThread: new Map(),
+          activeByThread: new Map(),
+          byThread: new Map(),
+          receipts: new Map(),
+          joinsByHost: new Map(),
+          childrenByParent: new Map(),
+        };
 
         const retainMint = (id: string | undefined) => {
           const match =
             id === undefined ? null : /^(?:submission|receipt|attempt)-memory-(\d+)$/.exec(id);
 
-          if (match !== null) {
-            const retained = BigInt(match[1]);
+          if (match !== null && BigInt(match[1]) > staged.mintCounter) return BigInt(match[1]);
 
-            if (retained > mintCounter) mintCounter = retained;
-          }
+          return staged.mintCounter;
         };
 
-        const codec = Schema.fromJsonString(RebuiltSubmission);
-        const services = yield* Effect.context<never>();
+        let mintCounter = current.mintCounter;
+        const commandBytes = new Map<SubmissionId, number>();
 
-        const activeGroups = new Set<string>();
-
-        for (const unvalidated of prepared.submissions) {
-          // Own the immutable facts, so caller-owned JSON cannot mutate the installed ledger.
-          const rebuilt = yield* Schema.encodeEffect(codec)(unvalidated).pipe(
-            Effect.flatMap(Schema.decodeEffect(codec)),
-            Effect.mapError(() =>
-              ThreadImportRejected.make({
-                threadId,
-                reason: "invalid-archive",
-                message: "Invalid rebuilt Submission",
-              }),
-            ),
+        const retainCommandBytes = Effect.fnUntraced(function* <A, I>(
+          schema: Schema.Codec<A, I>,
+          value: A,
+          id: SubmissionId,
+        ) {
+          const wire = yield* Schema.encodeEffect(Schema.toCodecJson(schema))(value).pipe(
+            Effect.mapError(() => invalidThreadArchive("Invalid accepted command wire", threadId)),
           );
 
-          const admission = rebuilt.admission;
-          const key = admissionKey(threadId, admission.principal, admission.idempotencyKey);
+          const bytes = (commandBytes.get(id) ?? 0) + utf8ByteLength(canonicalJson(wire));
 
-          if (
-            submissions.has(admission.submissionId) ||
-            receipts.has(admission.receiptId) ||
-            admissionIndex.has(key)
-          )
-            return yield* ThreadImportRejected.make({
+          if (bytes > MAX_RUN_EVIDENCE_BYTES)
+            return yield* invalidThreadArchive(
+              "Accepted commands exceed Run byte bounds",
               threadId,
-              reason: "destination-conflict",
-              message:
-                "The destination ledger retains a Submission, Receipt, or Thread/principal/idempotency key from this archive; reconcile that admission or import into a fresh ledger",
-            });
-          if (rebuilt.state !== "settled") {
-            // Match normal memory admission: the policy must finish in this critical section.
-            const checked = Effect.runSyncExitWith(services)(admissionFence.check(admission));
+            );
+          commandBytes.set(id, bytes);
+        });
 
-            if (Exit.isFailure(checked)) {
-              for (const reason of checked.cause.reasons) {
-                if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect)) {
-                  yield* Fiber.interrupt(reason.defect.fiber);
+        const reader = {
+          admission: (id: SubmissionId) =>
+            Effect.sync(() => {
+              const stored = staged.submissions.get(id);
+
+              return stored === undefined ? undefined : toAdmission(stored.row);
+            }),
+          runOwner: (runId: import("@yielded/agent/identifiers").RunId) =>
+            Effect.sync(() => {
+              if (!runId.startsWith("run:")) return undefined;
+              const id = Schema.decodeSync(SubmissionId)(runId.slice(4));
+              const stored = staged.submissions.get(id);
+
+              return stored === undefined ? undefined : toAdmission(stored.row);
+            }),
+          commands: (id: SubmissionId) => readCommands(staged.submissions.get(id)),
+        };
+
+        return {
+          reader,
+          stage: Effect.fnUntraced(function* (page) {
+            for (const a of page.archive.admissions) {
+              const key = admissionKey(threadId, a.principal, a.idempotencyKey);
+
+              if (
+                current.submissions.has(a.submissionId) ||
+                staged.submissions.has(a.submissionId) ||
+                current.receipts.has(a.receiptId) ||
+                staged.receipts.has(a.receiptId) ||
+                current.admissionIndex.has(key) ||
+                staged.admissionIndex.has(key)
+              )
+                return yield* ThreadImportRejected.make({
+                  threadId,
+                  reason: "destination-conflict",
+                  message: "Admission, receipt, or immutable admission key already exists",
+                });
+              const previous = threadRows(staged, threadId, a.queueSequence - 1).next().value;
+
+              if (previous?.row.queueSequence === a.queueSequence)
+                return yield* invalidThreadArchive("Duplicate admission queue position", threadId);
+              withSubmission(
+                staged,
+                fromRebuilt(
+                  RebuiltSubmission.make({
+                    admission: a,
+                    state: "admitted",
+                    unknownToolCallIds: [],
+                    approvals: [],
+                    resolutions: [],
+                  }),
+                ),
+              );
+              mintCounter =
+                retainMint(a.submissionId) > mintCounter ? retainMint(a.submissionId) : mintCounter;
+              mintCounter =
+                retainMint(a.receiptId) > mintCounter ? retainMint(a.receiptId) : mintCounter;
+            }
+            for (const fact of page.archive.commands.aborts) {
+              const stored = staged.submissions.get(fact.submissionId);
+
+              if (stored === undefined || stored.abortIntent !== undefined)
+                return yield* invalidThreadArchive(
+                  "Missing admission or duplicate abort",
+                  threadId,
+                );
+              const intent = AbortIntent.make(fact);
+
+              yield* retainCommandBytes(AbortIntent, intent, fact.submissionId);
+              withSubmission(staged, { ...stored, abortIntent: intent });
+            }
+            for (const fact of page.archive.commands.approvals) {
+              const stored = staged.submissions.get(fact.submissionId);
+
+              if (stored === undefined || stored.approvalDecisions.has(fact.toolCallId))
+                return yield* invalidThreadArchive(
+                  "Missing admission or duplicate approval",
+                  threadId,
+                );
+              if (stored.approvalDecisions.size >= MAX_RUN_EVIDENCE_RECORDS)
+                return yield* invalidThreadArchive(
+                  "Accepted approvals exceed Run record bounds",
+                  threadId,
+                );
+              const intent = ApprovalDecisionIntent.make(fact);
+
+              yield* retainCommandBytes(ApprovalDecisionIntent, intent, fact.submissionId);
+
+              const approvals = new Map(stored.approvalDecisions).set(fact.toolCallId, intent);
+
+              withSubmission(staged, { ...stored, approvalDecisions: approvals });
+            }
+            for (const fact of page.archive.commands.resolutions) {
+              const stored = staged.submissions.get(fact.submissionId);
+              const key = JSON.stringify([fact.toolCallId, unknownResolutionKind(fact.resolution)]);
+
+              if (stored === undefined || stored.unknownResolutions.has(key))
+                return yield* invalidThreadArchive(
+                  "Missing admission or duplicate resolution",
+                  threadId,
+                );
+              if (stored.unknownResolutions.size >= MAX_RUN_EVIDENCE_RECORDS)
+                return yield* invalidThreadArchive(
+                  "Accepted resolutions exceed Run record bounds",
+                  threadId,
+                );
+              const intent = UnknownResolutionIntent.make(fact);
+
+              yield* retainCommandBytes(UnknownResolutionIntent, intent, fact.submissionId);
+
+              const resolutions = new Map(stored.unknownResolutions).set(key, { intent });
+
+              withSubmission(staged, { ...stored, unknownResolutions: resolutions });
+            }
+            for (const { record } of page.records) {
+              if (record.payload._tag === "ModelResponseInterrupted") {
+                const value = retainMint(record.payload.attemptId);
+
+                if (value > mintCounter) mintCounter = value;
+              }
+              const attempt = settlementFailureFromRecord(record)?.context?.attemptId;
+              const value = retainMint(attempt);
+
+              if (value > mintCounter) mintCounter = value;
+            }
+          }),
+          prepareCommit: Effect.fnUntraced(function* (producerEpoch, workerSeal) {
+            const services = yield* Effect.context<never>();
+            const activeGroups = new Set<string>();
+            let lastQueue = 0;
+            let terminalEvidence = workerSeal?.terminal === undefined;
+
+            for (const stored of threadRows(staged, threadId)) {
+              const a = toAdmission(stored.row);
+              const rebuilt = yield* rebuildImportedSubmission(a);
+
+              yield* verifyImportedSettlementOrder(a);
+
+              if (
+                rebuilt.settlement !== undefined &&
+                workerTerminalFromRecord(toSnapshot(stored.row), rebuilt.settlement) ===
+                  workerSeal?.terminal
+              )
+                terminalEvidence = true;
+              if (rebuilt.state !== "settled") {
+                if (
+                  workerSeal !== undefined ||
+                  a.parentLinkage !== undefined ||
+                  a.workerAdmission !== undefined
+                )
+                  return yield* ThreadImportRejected.make({
+                    threadId,
+                    reason: "unsupported-obligations",
+                    message: "Live foreign child or worker admission cannot be restored",
+                  });
+                const checked = Effect.runSyncExitWith(services)(admissionFence.check(a));
+
+                if (Exit.isFailure(checked)) {
+                  for (const reason of checked.cause.reasons)
+                    if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect))
+                      yield* Fiber.interrupt(reason.defect.fiber);
 
                   return yield* ThreadImportRejected.make({
                     threadId,
                     reason: "admission-policy-unavailable",
-                    message:
-                      "Install a synchronous memory admission policy before retrying the unchanged archive",
+                    message: "Destination admission policy rejected restore",
                   });
                 }
+                if (a.admissionGroup !== undefined) {
+                  if (activeGroups.has(a.admissionGroup))
+                    return yield* ThreadImportRejected.make({
+                      threadId,
+                      reason: "admission-policy-conflict",
+                      message: "Active admission group conflict",
+                    });
+                  activeGroups.add(a.admissionGroup);
+                }
               }
-
-              return yield* Effect.failCause(checked.cause).pipe(
-                Effect.mapError((error) =>
-                  ThreadImportRejected.make({
-                    threadId,
-                    reason:
-                      error.reason === "occupied"
-                        ? "admission-policy-conflict"
-                        : "admission-policy-unavailable",
-                    message: `Destination admission policy ${error.code} ${error.reason}; resolve the destination policy or occupied admission, then retry with the unchanged archive`,
-                  }),
-                ),
+              withSubmission(staged, fromRebuilt(rebuilt));
+              lastQueue = Math.max(lastQueue, a.queueSequence);
+            }
+            if (!terminalEvidence)
+              return yield* invalidThreadArchive(
+                "Worker seal terminal has no exact completed input evidence",
+                threadId,
               );
-            }
-            if (admission.admissionGroup !== undefined) {
-              if (activeGroups.has(admission.admissionGroup))
-                return yield* ThreadImportRejected.make({
-                  threadId,
-                  reason: "admission-policy-conflict",
-                  message:
-                    "An active destination admission occupies this admission group; settle or reconcile the occupying admission before retrying",
-                });
-              activeGroups.add(admission.admissionGroup);
-            }
-          }
-          const canonicalSettlement = rebuilt.settlement?.payload;
+            if (!Number.isSafeInteger(lastQueue + 1))
+              return yield* ThreadImportRejected.make({
+                threadId,
+                reason: "unsupported-capacity",
+                message: "Admission queue sequence is exhausted",
+              });
 
-          const settlement =
-            canonicalSettlement?._tag === "SubmissionSettled" ? canonicalSettlement : undefined;
-
-          const stored: StoredSubmission = {
-            row: {
-              submissionId: admission.submissionId,
-              threadId,
-              queueSequence: admission.queueSequence,
-              principal: admission.principal,
-              idempotencyKey: admission.idempotencyKey,
-              agentId: admission.agentId,
-              agentDigests: admission.agentDigests,
-              deploymentId: admission.deploymentId,
-              inputPayload: admission.inputPayload,
-              inputDigest: admission.inputDigest,
-              receiptId: admission.receiptId,
-              state: rebuilt.state,
-              settledOutcome: settlement?.outcome,
-              createdAtMillis: DateTime.toEpochMillis(admission.createdAt),
-              readyAtMillis:
-                rebuilt.state === "ready" ? DateTime.toEpochMillis(admission.createdAt) : undefined,
-              parentLinkage: undefined,
-              ...(admission.admissionGroup === undefined
-                ? {}
-                : { admissionGroup: admission.admissionGroup }),
-              ...(admission.admissionFence === undefined
-                ? {}
-                : { admissionFence: admission.admissionFence }),
-            },
-            ownership: undefined,
-            inputApplied: rebuilt.inputApplied,
-            finalization:
-              settlement === undefined || rebuilt.settlement === undefined
-                ? undefined
-                : {
-                    settlementId: settlement.settlementId,
-                    recordId: rebuilt.settlement.recordId,
-                    finalizedAtMillis: DateTime.toEpochMillis(rebuilt.settlement.createdAt),
-                  },
-            abortIntent: rebuilt.abort,
-            joinedHostSubmissionId: rebuilt.joinedHostSubmissionId,
-            suspension:
-              rebuilt.suspension === undefined
-                ? undefined
-                : {
-                    reason: rebuilt.suspension.reason,
-                    suspendedAtMillis: DateTime.toEpochMillis(rebuilt.suspension.suspendedAt),
-                  },
-            unknownMark:
-              rebuilt.state !== "unknown" || rebuilt.unknownToolCallIds.length === 0
-                ? undefined
-                : {
-                    reason: "Unresolved Tool execution recovered from the canonical log",
-                    toolCallIds: rebuilt.unknownToolCallIds,
-                  },
-            approvalDecisions: new Map(
-              rebuilt.approvals.map((intent) => [intent.toolCallId, intent]),
-            ),
-            unknownResolutions: new Map(
-              rebuilt.resolutions.map((intent) => [
-                JSON.stringify([intent.toolCallId, unknownResolutionKind(intent.resolution)]),
-                { intent },
-              ]),
-            ),
-          };
-
-          submissions.set(admission.submissionId, stored);
-          receipts.add(admission.receiptId);
-          admissionIndex.set(key, admission.submissionId);
-          if (rebuilt.state !== "settled") active.add(admission.submissionId);
-          if (admission.queueSequence > lastQueue) {
-            lastQueue = admission.queueSequence;
-            latestByThread.set(threadId, admission.submissionId);
-          }
-          retainMint(admission.submissionId);
-          retainMint(admission.receiptId);
-        }
-        for (const { record } of prepared.records) {
-          if (record.payload._tag === "ModelResponseInterrupted")
-            retainMint(record.payload.attemptId);
-          retainMint(settlementFailureFromRecord(record)?.context?.attemptId);
-        }
-        if (!Number.isSafeInteger(lastQueue + 1))
-          return yield* ThreadImportRejected.make({
-            threadId,
-            reason: "unsupported-capacity",
-            message:
-              "The imported queue position exhausts in-memory sequence capacity; retain the source and use a destination with sufficient queue capacity",
-          });
-        lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
-        activeByThread.set(threadId, active);
-
-        const next: LedgerState = {
-          ...current,
-          submissions,
-          admissionIndex,
-          lanes,
-          mintCounter,
-          latestByThread,
-          activeByThread,
-        };
-
-        return () => {
-          MutableRef.set(state.ref, next);
+            return () => {
+              for (const stored of staged.submissions.values()) withSubmission(current, stored);
+              current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
+              if (workerSeal !== undefined)
+                current.stoppedWorkers.set(threadId, workerSeal.terminal);
+              MutableRef.set(state.ref, { ...current, mintCounter });
+            };
+          }),
         };
       }),
     });

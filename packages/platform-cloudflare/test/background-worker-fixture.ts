@@ -483,9 +483,7 @@ export const backgroundWorkerAuthority = Layer.mergeAll(
       }),
   }),
   Layer.succeed(WorkerHostConfig)({
-    maxWorkersPerSource: 32,
     maxActiveWorkersPerSource: 2,
-    maxInputsPerWorker: 64,
     maxPendingInputsPerWorker: 8,
     lifetimeMillis: 86_400_000,
   }),
@@ -501,7 +499,9 @@ export const backgroundWorkerAuthority = Layer.mergeAll(
           (request.worker.targetAgentId === independentPersona.id &&
             request.worker.delegationId === independentBudgetWorkers.delegationId) ||
           (request.worker.targetAgentId === backgroundTarget.id &&
-            request.worker.delegationId === backgroundWorkers.delegationId);
+            request.worker.delegationId === backgroundWorkers.delegationId) ||
+          (request.worker.targetAgentId === backgroundReportingWorkers.target.id &&
+            request.worker.delegationId === backgroundReportingWorkers.delegationId);
 
         if (
           request.principal !== TEST_PRINCIPAL ||

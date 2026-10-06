@@ -1,8 +1,19 @@
+import {
+  CanonicalSequence,
+  MAX_RUN_EVIDENCE_RECORDS,
+  RUN_TERMINAL_RESERVE_RECORDS,
+  MAX_RUN_RECOVERY_SUFFIX_RECORDS,
+} from "@yielded/agent/records";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
+import {
+  getRunInput,
+  ThreadReader,
+  ThreadStore,
+  ThreadTailRequest,
+} from "@yielded/agent/thread-store";
 import { FrameworkMessage } from "@yielded/agent/worker";
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { PlannerError, PlannerInput } from "../domain.ts";
 import { PlannerAttempt, ProgressStore } from "../server/progress.ts";
@@ -112,20 +123,64 @@ export const ResearchAuthorizationLive = Layer.effect(
             "Report the completed research. A new user request is required to start or steer another research pass.",
         };
 
-        return store.export(ThreadExportRequest.make({ threadId: request.threadId })).pipe(
-          Effect.map((history) =>
-            history.records.some(
-              ({ record }) =>
-                record.payload._tag === "UserInputRecorded" &&
-                record.payload.runId === request.runId &&
-                !Schema.is(FrameworkMessage)(record.payload.messageAdmission) &&
-                Schema.is(PlannerInput)(record.payload.input),
-            )
-              ? { _tag: "allowed" as const }
-              : denied,
-          ),
-          Effect.orElseSucceed(() => denied),
-        );
+        return Effect.gen(function* () {
+          const input = yield* getRunInput({
+            threadId: request.threadId,
+            runId: request.runId,
+          }).pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(store)));
+
+          if (
+            Option.isNone(input) ||
+            input.value.record.payload._tag !== "UserInputRecorded" ||
+            input.value.record.payload.submissionId === undefined
+          )
+            return denied;
+          const submissionId = input.value.record.payload.submissionId;
+
+          const tail = yield* store.inspectTail(
+            ThreadTailRequest.make({ threadId: request.threadId }),
+          );
+
+          let after = CanonicalSequence.make(0);
+          let count = 0;
+
+          const maximum =
+            2 * (MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS) +
+            MAX_RUN_RECOVERY_SUFFIX_RECORDS;
+
+          while (count < maximum) {
+            const page = yield* store
+              .read({
+                threadId: request.threadId,
+                selection: {
+                  _tag: "RunEvidence",
+                  runId: request.runId,
+                  submissionId,
+                  throughSequence: tail.tailSequence,
+                },
+                page: { limit: 8, afterSequence: after },
+              })
+              .pipe(Stream.runCollect);
+
+            for (const entry of page) {
+              if (entry.sequence <= after) return denied;
+              after = entry.sequence;
+              count++;
+              const payload = entry.record.payload;
+
+              if (
+                payload._tag === "UserInputRecorded" &&
+                payload.runId === request.runId &&
+                !Schema.is(FrameworkMessage)(payload.messageAdmission) &&
+                Schema.is(PlannerInput)(payload.input)
+              )
+                return { _tag: "allowed" as const };
+            }
+            if (page.length < 8) return denied;
+          }
+
+          return denied;
+        }).pipe(Effect.orElseSucceed(() => denied));
       },
     });
   }),

@@ -45,7 +45,12 @@ export class ThreadHistoryError extends Schema.TaggedError<ThreadHistoryError>()
 export interface ThreadHistoryRun {
   readonly prompt: Prompt.Prompt;
   readonly stageInput: (input: unknown) => Effect.Effect<void, ThreadHistoryError>;
-  readonly stageHistory: (history: Prompt.Prompt) => Effect.Effect<void, ThreadHistoryError>;
+  readonly stageHistory: (history: {
+    /** Exact source messages; compaction changes only the model view. */
+    readonly source: Prompt.Prompt;
+    /** Retained context after native compaction, excluding transient recall. */
+    readonly modelContext: Prompt.Prompt;
+  }) => Effect.Effect<void, ThreadHistoryError>;
   readonly commit: (completed: RunCompleted) => Effect.Effect<void, ThreadHistoryError>;
 }
 
@@ -110,9 +115,9 @@ export class ThreadHistory extends Context.Service<
           return {
             prompt: toPrompt(snapshot),
             stageInput: () => Effect.void,
-            stageHistory: (history: Prompt.Prompt) =>
+            stageHistory: ({ source }) =>
               threads
-                .recordHistory(threadId, runId, history)
+                .recordHistory(threadId, runId, source)
                 .pipe(Effect.asVoid, Effect.mapError(historyError)),
             commit: () =>
               threads.snapshot(threadId).pipe(Effect.asVoid, Effect.mapError(historyError)),

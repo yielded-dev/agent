@@ -9,6 +9,7 @@ import { childThreadIdFor } from "@yielded/agent/run-journal";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import {
   Context,
@@ -180,7 +181,8 @@ for (const boundary of ["ThreadCreated", "SubagentLineageRecorded"] as const) {
           yield* Deferred.succeed(resumeAppend, undefined);
           expect(yield* Fiber.join(establishing)).toEqual([]);
 
-          const established = yield* store.export(
+          const established = yield* readTestThread(
+            store,
             ThreadExportRequest.make({ threadId: childThreadId }),
           );
 
@@ -201,7 +203,8 @@ for (const boundary of ["ThreadCreated", "SubagentLineageRecorded"] as const) {
           expect(yield* Ref.get(childCalls)).toBe(1);
           expect(yield* Ref.get(parentCalls)).toBe(2);
 
-          const completed = yield* store.export(
+          const completed = yield* readTestThread(
+            store,
             ThreadExportRequest.make({ threadId: receipt.threadId }),
           );
 
