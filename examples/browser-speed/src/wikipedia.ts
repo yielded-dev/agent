@@ -225,12 +225,14 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         .measure(
           "cleanup",
           "Release navigation guard",
-          browser.native(() => client.send("Fetch.disable").then(() => client.detach())),
+          browser.native(() => client.send("Fetch.disable")),
         )
         .pipe(
           // A fenced/dead browser may reject cleanup commands. Keep that span and the original
           // failure; the owner must confirm browser closure before retrying or releasing ownership.
           Effect.catch(() => Effect.void),
+          // The CDP session is the lab's own: detaching it ends the guard even behind a fence.
+          Effect.ensuring(Effect.promise(() => client.detach().catch(() => {}))),
         ),
   );
 

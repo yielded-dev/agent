@@ -163,6 +163,9 @@ it.live(
       );
 
       const page = yield* Effect.promise(() => connection.newPage());
+
+      // The fixture serves Wikipedia itself; the production guard only pauses documents over CDP.
+      yield* Effect.promise(() => page.setRequestInterception(true));
       const unused = () => Effect.die("Unused browser service");
 
       const session: BrowserSession = {
@@ -199,7 +202,7 @@ it.live(
       let lookupFailure: "unavailable" | "missing" | "malformed" | undefined;
       const requested: Array<string> = [];
 
-      // A lower-priority fixture response preserves the production guard's ability to abort forbidden requests.
+      // Production's CDP guard pauses documents first, so it can still abort forbidden requests.
       page.on("request", (request) => {
         if (request.isInterceptResolutionHandled()) return;
         const url = new URL(request.url());
