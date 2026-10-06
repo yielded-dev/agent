@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 
 import { ThreadId, SettlementId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
-import { SettlementOutcome, DeclaredToolCall } from "./Records.ts";
+import { ApprovalDecision, SettlementOutcome, DeclaredToolCall } from "./Records.ts";
 import {
   ChildReservationId,
   submissionSettlementId,
@@ -30,6 +30,13 @@ export class DeclaredPendingBatchEvidence extends Schema.Class<DeclaredPendingBa
 )({
   turn: DeclaredToolCall.fields.turn,
   callCount: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** Required approvals in declaration order, including their canonical decisions. */
+  approvals: Schema.Array(
+    Schema.Struct({
+      toolCallId: ToolCallId,
+      decision: Schema.optionalKey(ApprovalDecision),
+    }),
+  ),
 }) {}
 
 /** One canonical `ToolApprovalRequested` without a canonical `ToolApprovalDecided`. */
@@ -789,6 +796,31 @@ const classifyDelegationAbort = (
   return undefined;
 };
 
+/** The first undecided request the engine can reach before a declaration-ordered denial. */
+export const pendingApprovalForRecovery = (
+  snapshot: RecoverySnapshot,
+  evidence: RecoveryEvidence,
+): PendingApprovalEvidence | undefined => {
+  const decisions = new Map(
+    snapshot.approvalDecisions.map((intent) => [intent.toolCallId, intent.decision]),
+  );
+
+  const batch = evidence.declaredPendingBatch;
+
+  if (batch === undefined)
+    return evidence.approvalsPending.find((pending) => !decisions.has(pending.toolCallId));
+
+  for (const approval of batch.approvals) {
+    const decision = approval.decision ?? decisions.get(approval.toolCallId);
+
+    if (decision === "denied") return undefined;
+    if (decision === undefined)
+      return PendingApprovalEvidence.make({ toolCallId: approval.toolCallId, turn: batch.turn });
+  }
+
+  return undefined;
+};
+
 /**
  * Pure recovery classifier (durability §14, DUR-013): a finite persisted snapshot plus canonical
  * evidence deterministically selects exactly one decision. Precedence, most-settled first
@@ -825,7 +857,8 @@ const classifyDelegationAbort = (
  *    when every listed child is provably settled (replay the idempotent wake), else
  *    AwaitChildSettlement (SUB-030); `ApprovalPending` keeps the P5 behavior — undecided
  *    canonical approval requests → AwaitApprovalDecision (repairing a lost suspend transition
- *    from history), every request decided → ResumeSuspended.
+ *    from history), or ResumeSuspended when approval preflight can proceed. A retained denial
+ *    ends preflight without waiting for later declarations.
  * 8. the S2 establishment/join rows for a live parent (spec §13, most-repairing first):
  *    ApplyJoinAccounting → CompleteChildAdmission → RepairSubagentStartLink →
  *    AwaitChildAdmissionResolution → ResumePendingToolBatch (idempotent handler re-entry) →
@@ -917,11 +950,7 @@ export const classifyRecovery = (
       ? ApplyUnknownResolutions.make({ submissionId })
       : AwaitUnknownResolution.make({ submissionId });
   }
-  const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
-
-  const undecidedApprovals = evidence.approvalsPending.filter(
-    (pending) => !decided.has(pending.toolCallId),
-  );
+  const awaitsApproval = pendingApprovalForRecovery(snapshot, evidence) !== undefined;
 
   if (state === "suspended") {
     const reason = snapshot.suspension?.reason;
@@ -938,11 +967,11 @@ export const classifyRecovery = (
         : AwaitChildSettlement.make({ submissionId });
     }
 
-    return undecidedApprovals.length === 0
-      ? ResumeSuspended.make({ submissionId })
-      : AwaitApprovalDecision.make({ submissionId });
+    return awaitsApproval
+      ? AwaitApprovalDecision.make({ submissionId })
+      : ResumeSuspended.make({ submissionId });
   }
-  if (undecidedApprovals.length > 0) {
+  if (awaitsApproval) {
     return AwaitApprovalDecision.make({ submissionId });
   }
   const delegationDecision = classifyDelegationRepairs(submissionId, delegationViews);

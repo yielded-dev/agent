@@ -11,6 +11,7 @@ import {
   MAX_RUN_EVIDENCE_RECORDS,
   RecordId,
   type CanonicalRecordEnvelope,
+  type ModelResponseRecorded,
 } from "./Records.ts";
 import { canonicalRecordBytes, reference, resolveEvidence } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
@@ -326,16 +327,19 @@ export const resolveWorkEvidence = Effect.fnUntraced(function* (
   return yield* resolveEvidence(threadId, entry.stateReference);
 });
 
-/** Direct operation pages never hydrate another Run or recursively expand earlier continuations. */
+/** Own-call facts plus the original batch's shared approval proof, without another Run's history. */
 export const operationEvidence = (
   threadId: ThreadId,
   owner: Extract<WorkOwner, { _tag: "Operation" }>,
   originRecordId: RecordId,
   throughSequence: CanonicalSequence,
+  declaration: ModelResponseRecorded,
 ): Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError, ThreadReader> =>
   Stream.unwrap(
     Effect.map(ThreadReader, (reader) =>
       Stream.suspend(() => {
+        const approvalToolCallIds = declaration.toolOperations.map((call) => call.toolCallId);
+        const approvalIds = new Set(approvalToolCallIds);
         let afterSequence = CanonicalSequence.make(0);
         let records = 0;
         let bytes = 0;
@@ -351,6 +355,7 @@ export const operationEvidence = (
                   runId: owner.runId,
                   toolCallId: owner.toolCallId,
                   originRecordId,
+                  approvalToolCallIds,
                   throughSequence,
                 },
                 page: { limit: 8, afterSequence },
@@ -382,11 +387,17 @@ export const operationEvidence = (
                 (entry.record.recordId === originRecordId
                   ? payload._tag !== "ModelResponseRecorded" ||
                     payload.runId !== owner.runId ||
+                    payload.turn !== declaration.turn ||
+                    payload.toolOperations.length !== approvalIds.size ||
+                    payload.toolOperations.some((call) => !approvalIds.has(call.toolCallId)) ||
                     !payload.toolOperations.some((call) => call.toolCallId === owner.toolCallId)
                   : !("runId" in payload) ||
                     payload.runId !== owner.runId ||
                     !("toolCallId" in payload) ||
-                    payload.toolCallId !== owner.toolCallId)
+                    (payload._tag === "ToolApprovalRequested" ||
+                    payload._tag === "ToolApprovalDecided"
+                      ? payload.turn !== declaration.turn || !approvalIds.has(payload.toolCallId)
+                      : payload.toolCallId !== owner.toolCallId))
               )
                 return yield* ThreadStoreError.make({
                   operation: "operation evidence",

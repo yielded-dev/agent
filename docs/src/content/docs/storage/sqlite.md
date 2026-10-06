@@ -69,7 +69,7 @@ provides the separate accepted-work ledger. Point it at the same database file a
 `SqliteThreadStore.layer(options)` so ownership claims fence the same thread log.
 
 SQLite tracks layout separately from record meaning. This unreleased protocol opens only fresh
-layout-19 stores with `effect-agent/thread@2` records. Predecessor or ambiguous stores are rejected
+layout-20 stores with `effect-agent/thread@2` records. Predecessor or ambiguous stores are rejected
 before mutation. Same-format export/import installs into an empty destination Thread; no older
 layout upgrade or archive converter is provided. See the
 [operator procedure](/guide/operations/#adopting-these-contracts).

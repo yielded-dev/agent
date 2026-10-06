@@ -13,6 +13,7 @@ import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
+  MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
   PersistedJson,
   ProducerEpoch,
@@ -340,14 +341,21 @@ export const ThreadSelection = Schema.Union([
     submissionId: SubmissionId,
     throughSequence: CanonicalSequence,
   }),
-  /** Exact declaration plus this operation's results, approvals, Steps, and resolution facts. */
+  /** Exact declaration, this call's facts, and shared approval proof from its original batch. */
   Schema.Struct({
     _tag: Schema.Literal("OperationEvidence"),
     runId: RunId,
     toolCallId: ToolCallId,
     originRecordId: RecordId,
+    approvalToolCallIds: Schema.Array(ToolCallId).check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(MAX_RUN_TOOL_CALL_IDENTITIES),
+      Schema.makeFilter((ids) => new Set(ids).size === ids.length),
+    ),
     throughSequence: CanonicalSequence,
-  }),
+  }).check(
+    Schema.makeFilter((selection) => selection.approvalToolCallIds.includes(selection.toolCallId)),
+  ),
   Schema.Struct({
     _tag: Schema.Literal("LastAgentUpdate"),
     throughSequence: CanonicalSequence,

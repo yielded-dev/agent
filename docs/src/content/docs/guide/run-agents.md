@@ -347,6 +347,10 @@ Hook errors join the run error channel, and their services join `R`. `onHistory`
 Writes completed before a later failure or interruption remain caller-owned. Persistent history
 rejects competing history and input queue hooks before model or tool execution.
 
+Approval predicates, parameter decoding, and `approval.request` share the run's duration deadline.
+Hooks that retain canonical approval facts use `prepareBatch` for requests and `commit` for the
+prepared decision; these storage commits finish outside the preparation timer before execution.
+
 Pass [prompt preparation](/guide/context-management/#prompt-preparation-order) as `context` and
 [tool authorization](/guide/tools/#authorize-tool-calls) as `toolAuthorization` when needed.
 Ephemeral runs read these options; providing the durable service layers alone does not install

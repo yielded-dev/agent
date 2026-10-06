@@ -548,6 +548,23 @@ export class ApprovalPendingSuspension extends Schema.TaggedClass<ApprovalPendin
   toolCallIds: Schema.NonEmptyArray(ToolCallId),
 }) {}
 
+/** A denial ends the batch; otherwise every retained approval must be decided to wake it. */
+export const approvalDecisionsCover = (
+  toolCallIds: ReadonlyArray<ToolCallId>,
+  decisionFor: (toolCallId: ToolCallId) => ApprovalDecision | undefined,
+): boolean => {
+  let allDecided = true;
+
+  for (const toolCallId of toolCallIds) {
+    const decision = decisionFor(toolCallId);
+
+    if (decision === "denied") return true;
+    if (decision === undefined) allDecided = false;
+  }
+
+  return allDecided;
+};
+
 /** One attached child a `waitingForChild` parent is durably waiting on (spec §12 step 10). */
 export class WaitingChild extends Schema.Class<WaitingChild>("@effect-agent/thread/WaitingChild")({
   toolCallId: ToolCallId,
@@ -776,7 +793,7 @@ export class ResolutionAbortSubmission extends Schema.TaggedClass<ResolutionAbor
   "@effect-agent/thread/ResolutionAbortSubmission",
 )("AbortSubmission", {}) {}
 
-/** How an authorized resolver closed one Unknown Outcome (DUR-017). */
+/** An authorized execution decision or factual closure for one Unknown Outcome (DUR-017). */
 export const UnknownResolution = Schema.Union([
   ResolutionCompletedWithResult,
   ResolutionNeverHappened,
@@ -785,6 +802,16 @@ export const UnknownResolution = Schema.Union([
 ]);
 
 export type UnknownResolution = typeof UnknownResolution.Type;
+
+/** Execution permission never establishes whether the original external effect happened. */
+export const UnknownResolutionKind = Schema.Literals(["execution", "factual"]);
+
+export type UnknownResolutionKind = typeof UnknownResolutionKind.Type;
+
+export const unknownResolutionKind = (resolution: UnknownResolution): UnknownResolutionKind =>
+  resolution._tag === "CompletedWithResult" || resolution._tag === "NeverHappened"
+    ? "factual"
+    : "execution";
 
 /**
  * A durable Unknown-Outcome resolution command (DUR-017, `abort`-shaped). Possession of the
@@ -803,9 +830,11 @@ export class UnknownResolutionCommand extends Schema.Class<UnknownResolutionComm
 }) {}
 
 /**
- * The recorded resolution intent, idempotent per `(submissionId, toolCallId)`. The canonical
- * `ToolCallResolved` (+ `ToolCallSettled` for `CompletedWithResult`) is appended by the recovery
- * pass or the next owning Attempt; `canonicalRecordId` is present once it is.
+ * The recorded resolution intent, idempotent per `(submissionId, toolCallId, kind)`. An
+ * execution decision remains immutable when later supplier truth closes the original effect;
+ * divergent decisions or divergent factual outcomes conflict within their respective kind.
+ * The canonical `ToolCallResolved` (+ `ToolCallSettled` for `CompletedWithResult`) is appended
+ * by the recovery pass or the next owning Attempt; `canonicalRecordId` is present once it is.
  */
 export class UnknownResolutionIntent extends Schema.Class<UnknownResolutionIntent>(
   "@effect-agent/thread/UnknownResolutionIntent",
@@ -1051,15 +1080,17 @@ export type SubmissionLedgerFailure =
  * - `suspend` — `input-applied`/`running` → `suspended`; ends the ownership period WITHOUT
  *   settling (the obligation stays owed, the lane consumes no worker permit). Returns
  *   `resume-immediately` when the reason is already fully covered: for `ApprovalPending`,
- *   recorded decisions cover every pending call; for `WaitingForChild`, every listed child is
- *   already provably settled. Adapters must guarantee that a child settlement reported before
+ *   a recorded denial ends the batch or decisions cover every pending call; for
+ *   `WaitingForChild`, every listed child is already provably settled. Adapters must guarantee
+ *   that a child settlement reported before
  *   the suspend transaction commits is observed by that suspend (single-store adapters derive
  *   this from the child's own row; cross-store adapters record a durable notification marker).
  *   Fails with `SettlementConflict` once settled.
  * - `recordApprovalDecision` — durable, idempotent per `(submissionId, toolCallId)`: repeating
  *   the same decision replays the intent; a divergent re-decision fails with `ApprovalConflict`.
  *   Transitions `suspended(ApprovalPending) → input-applied` once every pending call of the
- *   suspension reason is decided, waking the lane. Fails with `SettlementConflict` once settled.
+ *   suspension reason is decided or one is denied, waking the lane. Fails with
+ *   `SettlementConflict` once settled.
  * - `recordChildSettled` — idempotent cross-lane wake (spec §12 step 10): transitions
  *   `suspended(WaitingForChild) → input-applied` exactly when EVERY listed child is settled,
  *   answering `woken`; `still-waiting` while any listed child is unsettled; `not-waiting` when
@@ -1093,10 +1124,11 @@ export type SubmissionLedgerFailure =
  *   `unknown`, parking the Submission while its accepted settlement obligation stays visible.
  *   Existing ownership must release or expire before another claim (DUR-009/DUR-017).
  *   Fails with `SettlementConflict` once settled.
- * - `recordUnknownResolution` — durable, idempotent per `(submissionId, toolCallId)`; a
- *   divergent re-resolution fails with `UnknownResolutionConflict`. Transitions
- *   `unknown → input-applied` once no open call remains, waking the lane. Fails with
- *   `SettlementConflict` once settled.
+ * - `recordUnknownResolution` — durable, idempotent per `(submissionId, toolCallId, kind)`;
+ *   divergent decisions or factual outcomes fail with `UnknownResolutionConflict`. Later
+ *   factual closure preserves the original execution decision. New execution permission after
+ *   factual closure conflicts. Transitions `unknown → input-applied` once every open call is
+ *   covered, waking the lane. Settled lanes accept only factual closure and never reopen.
  * - `scanNonterminal` — streams control-only entries for every Submission whose state is not
  *   `settled`, ordered by (threadId, queueSequence); recovery's admission-independent worklist
  *   (DUR-014). It must not decode execution payloads. SQL or control-identity corruption fails

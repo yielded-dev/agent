@@ -432,6 +432,18 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
               break;
             case "OperationEvidence": {
+              // Scalar locators store JSON-escaped identifiers; escape each key before the array.
+              const encodedApprovalIds = JSON.stringify(
+                selection.approvalToolCallIds.map(canonicalIdentifier),
+              );
+
+              const approvalCalls = sql.onDialectOrElse({
+                pg: () => sql`SELECT value AS tool_call_id
+                  FROM jsonb_array_elements_text(${encodedApprovalIds}::jsonb) AS approval_ids(value)`,
+                orElse: () =>
+                  sql`SELECT value AS tool_call_id FROM json_each(${encodedApprovalIds})`,
+              });
+
               const tags = [
                 "ToolCallSettled",
                 "ToolCallUnknown",
@@ -456,7 +468,12 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   SELECT thread_id, sequence, record_id, batch_id, record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
                   WHERE thread_id=${request.threadId} AND record_tag=${tag}
-                    AND run_id=${canonicalIdentifier(selection.runId)} AND tool_call_id=${canonicalIdentifier(selection.toolCallId)}
+                    AND run_id=${canonicalIdentifier(selection.runId)}
+                    AND ${
+                      tag === "ToolApprovalRequested" || tag === "ToolApprovalDecided"
+                        ? sql`tool_call_id IN (SELECT tool_call_id FROM approval_calls)`
+                        : sql`tool_call_id=${canonicalIdentifier(selection.toolCallId)}`
+                    }
                     AND sequence>${after} AND sequence<=${selection.throughSequence}
                   ORDER BY sequence LIMIT ${request.page.limit}
                 ) AS operation_branch`,
@@ -466,9 +483,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 true,
               );
 
-              rows = yield* sql`${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(
-                execute,
-              );
+              rows = yield* sql`WITH approval_calls AS (${approvalCalls})
+                ${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
               break;
             }
             case "RecordId":
@@ -600,7 +616,11 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                       ? !payload.toolOperations.some(
                           (call) => call.toolCallId === selection.toolCallId,
                         )
-                      : !("toolCallId" in payload) || payload.toolCallId !== selection.toolCallId)
+                      : !("toolCallId" in payload) ||
+                        (payload._tag === "ToolApprovalRequested" ||
+                        payload._tag === "ToolApprovalDecided"
+                          ? !selection.approvalToolCallIds.includes(payload.toolCallId)
+                          : payload.toolCallId !== selection.toolCallId))
                   )
                     return yield* failure("invalid operation evidence membership");
                 }

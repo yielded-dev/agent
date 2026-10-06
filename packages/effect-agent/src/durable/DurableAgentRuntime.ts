@@ -234,6 +234,7 @@ import {
   OpenDelegationCallEvidence,
   OpenToolCallEvidence,
   PendingApprovalEvidence,
+  pendingApprovalForRecovery,
   RecoveryDecision,
   RecoveryEvidence,
   type DelegationAdmissionEvidence,
@@ -360,6 +361,7 @@ import {
   SubmissionLookupByKey,
   SuspendRequest,
   UnknownResolutionCommand,
+  unknownResolutionKind,
   WaitingChild,
   WaitingForChildSuspension,
   submissionAbortBatchId,
@@ -1420,6 +1422,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
     Effect.provideService(effect, Crypto.Crypto, crypto);
 
+  const resolutionIntentsFor = (snapshot: RecoverySnapshot) => {
+    const intents = new Map<ToolCallId, UnknownResolutionIntent>();
+
+    for (const intent of snapshot.unknownResolutions) {
+      if (!intents.has(intent.toolCallId) || unknownResolutionKind(intent.resolution) === "factual")
+        intents.set(intent.toolCallId, intent);
+    }
+
+    return intents;
+  };
+
   const contractsFor = (definition: Agent.AnyDefinition) => {
     const registered = registeredBindings.filter(
       (binding) => binding.agentId === definition.id && Object.is(binding.definition, definition),
@@ -1996,7 +2009,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const declarationIds = new Set<string>();
     const responseTurns = new Set<number>();
     const requested: Array<PendingApprovalEvidence> = [];
-    const decidedIds = new Set<string>();
+    const canonicalApprovals = new Map<ToolCallId, ApprovalDecision>();
 
     let lastResponse:
       | {
@@ -2044,7 +2057,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           break;
         }
         case "ToolApprovalDecided": {
-          if (payload.runId === runId) decidedIds.add(payload.toolCallId);
+          if (payload.runId === runId) canonicalApprovals.set(payload.toolCallId, payload.decision);
           break;
         }
         case "SubagentLineageRecorded": {
@@ -2223,19 +2236,39 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     let declaredPendingBatch: DeclaredPendingBatchEvidence | undefined;
+    const requestedIds = new Set(requested.map((approval) => approval.toolCallId));
 
     if (lastResponse !== undefined) {
-      const pending = operationStates.filter(
-        (state) => state.turn === lastResponse.turn && !state.settled,
-      );
+      const turn = lastResponse.turn;
+
+      const pending = operationStates.filter((state) => state.turn === turn && !state.settled);
 
       if (pending.length > 0)
         declaredPendingBatch = DeclaredPendingBatchEvidence.make({
-          turn: lastResponse.turn,
+          turn,
           callCount: pending.length,
+          approvals: operationStates
+            .filter(
+              (state) =>
+                state.turn === turn &&
+                !state.settled &&
+                !state.resolved &&
+                requestedIds.has(state.operation.toolCallId),
+            )
+            .map((state) => {
+              const decision = canonicalApprovals.get(state.operation.toolCallId);
+
+              return {
+                toolCallId: state.operation.toolCallId,
+                ...(decision === undefined ? {} : { decision }),
+              };
+            }),
         });
     }
-    const approvalsPending = requested.filter((pending) => !decidedIds.has(pending.toolCallId));
+
+    const approvalsPending = requested.filter(
+      (pending) => !canonicalApprovals.has(pending.toolCallId),
+    );
 
     return RecoveryEvidence.make({
       threadMaterialized: materialized,
@@ -2986,9 +3019,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
     }
 
-    const intents = new Map(
-      snapshot.unknownResolutions.map((intent) => [intent.toolCallId, intent]),
-    );
+    const intents = resolutionIntentsFor(snapshot);
 
     const review: OpenCallReview = { uncertain: [], unproven: [], retryable: [], recovered: 0 };
     let recovered = 0;
@@ -6622,72 +6653,110 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
 
       /**
-       * Durable approval hook (plan §2.6). Resolution order per declared call: (1) a canonical
-       * `ToolApprovalDecided` record — the deterministic decision authority across Attempts;
-       * (2) a durable `resolveApproval` intent, appended canonically before it is honored;
-       * (3) the optional policy-auto delegate, whose immediate decision becomes canonical
-       * (request + decision, one atomic batch) before it is honored; (4) otherwise the canonical
-       * `ToolApprovalRequested` record is appended and the call reports unresolved — with the
-       * request canonical, "waiting for explicit approval" is a safe durable boundary
-       * (durability §8), the engine raises `AgentApprovalPending`, and the Attempt suspends
-       * without settling. A denied decision fails the Run through the engine's
-       * `AgentApprovalDenied` path with the denial already canonical.
+       * Retain every required request before any decision can remove initial-dispatch proof.
+       * Policy preparation shares the engine deadline; canonical acceptance is a separate,
+       * fenced commit. Canonical decisions and accepted resolver intents keep their audit.
        */
       const approval: RunApprovalHook<CoordinatorHalt | AgentPersistenceCapacityError, never> = {
+        prepareBatch: (requests) =>
+          recordHalt(
+            Effect.gen(function* () {
+              if (requests.length === 0) return;
+              yield* flushDeferredResponse;
+              const turnInfo = currentToolTurn;
+
+              if (turnInfo === undefined)
+                return yield* RunJournalError.make({
+                  message: "Approval preparation preceded its canonical response",
+                });
+              for (const request of requests) {
+                if (
+                  request.threadId !== submission.threadId ||
+                  request.runId !== runId ||
+                  request.turnId !== turnInfo.turnId ||
+                  declaredNamesByCallId.get(request.toolCallId) !== request.toolName
+                )
+                  return yield* RunJournalError.make({
+                    message: "Approval preparation does not match its original declaration",
+                  });
+                yield* appendApprovalRecords(
+                  turnInfo,
+                  request.toolCallId,
+                  request.toolName,
+                  undefined,
+                );
+              }
+            }),
+          ),
         request: (request) =>
+          recordHalt(
+            Effect.gen(function* () {
+              const canonical = canonicalApprovalDecisions.get(request.toolCallId);
+
+              if (canonical !== undefined)
+                return canonical === "approved"
+                  ? { _tag: "approved" as const }
+                  : { _tag: "denied" as const };
+              const intent = approvalIntents.get(request.toolCallId);
+
+              if (intent !== undefined)
+                return intent.decision === "approved"
+                  ? { _tag: "approved" as const, reason: intent.reason }
+                  : { _tag: "denied" as const, reason: intent.reason };
+
+              return approvalResolver === undefined
+                ? { _tag: "unresolved" as const }
+                : yield* approvalResolver.request(request);
+            }),
+          ),
+        commit: (request, decision) =>
           recordHalt(
             Effect.gen(function* () {
               const turnInfo = currentToolTurn;
 
-              if (turnInfo === undefined) {
+              if (
+                turnInfo === undefined ||
+                request.threadId !== submission.threadId ||
+                request.runId !== runId ||
+                request.turnId !== turnInfo.turnId ||
+                declaredNamesByCallId.get(request.toolCallId) !== request.toolName
+              )
                 return yield* RunJournalError.make({
-                  message: `Tool Call ${request.toolCallId} requested approval before any canonical response commit`,
+                  message: "Approval acceptance does not match its original declaration",
                 });
-              }
-              const toolCallId = request.toolCallId;
-              const canonical = canonicalApprovalDecisions.get(toolCallId);
+              const canonical = canonicalApprovalDecisions.get(request.toolCallId);
 
               if (canonical !== undefined) {
-                return canonical === "approved"
-                  ? { _tag: "approved" as const }
-                  : { _tag: "denied" as const };
-              }
-              const intent = approvalIntents.get(toolCallId);
-
-              if (intent !== undefined) {
-                yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, {
-                  decision: intent.decision,
-                  resolver: intent.resolver,
-                  reason: intent.reason,
-                });
-
-                return intent.decision === "approved"
-                  ? { _tag: "approved" as const, reason: intent.reason }
-                  : { _tag: "denied" as const, reason: intent.reason };
-              }
-              if (approvalResolver !== undefined) {
-                const delegated = yield* approvalResolver.request(request);
-
-                if (delegated._tag !== "unresolved") {
-                  yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, {
-                    decision: delegated._tag,
-                    resolver: APPROVAL_POLICY_RESOLVER,
-                    reason: boundedApprovalReason(
-                      delegated.reason,
-                      "The configured approval policy decided immediately",
-                    ),
+                if (decision._tag !== canonical)
+                  return yield* RunJournalError.make({
+                    message: "Approval preparation disagrees with its canonical decision",
                   });
 
-                  return delegated;
-                }
+                return;
               }
-              yield* appendApprovalRecords(turnInfo, toolCallId, request.toolName, undefined);
+              const intent = approvalIntents.get(request.toolCallId);
 
-              return {
-                _tag: "unresolved" as const,
-                reason:
-                  "The approval request is canonical and awaits a durable resolveApproval decision",
-              };
+              if (intent !== undefined && decision._tag !== intent.decision)
+                return yield* RunJournalError.make({
+                  message: "Approval preparation disagrees with its accepted intent",
+                });
+              yield* appendApprovalRecords(
+                turnInfo,
+                request.toolCallId,
+                request.toolName,
+                intent !== undefined
+                  ? { decision: intent.decision, resolver: intent.resolver, reason: intent.reason }
+                  : decision._tag === "unresolved"
+                    ? undefined
+                    : {
+                        decision: decision._tag,
+                        resolver: APPROVAL_POLICY_RESOLVER,
+                        reason: boundedApprovalReason(
+                          decision.reason,
+                          "The configured approval policy decided immediately",
+                        ),
+                      },
+              );
             }),
           ),
       };
@@ -9263,15 +9332,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     snapshot: RecoverySnapshot,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
-    if (!snapshot.unknownResolutions.some((intent) => intent.resolution._tag === "SafeToRetry"))
-      return false;
+    const intents = [...resolutionIntentsFor(snapshot).values()];
+
+    if (!intents.some((intent) => intent.resolution._tag === "SafeToRetry")) return false;
     const submission = snapshot.submission;
     const current = yield* currentOperationsFor(submission);
     const operations = operationsFor(records, runIdForSubmission(submission.submissionId));
 
     const declared = yield* declaredCallsFor(records, runIdForSubmission(submission.submissionId));
 
-    for (const intent of snapshot.unknownResolutions) {
+    for (const intent of intents) {
       if (intent.resolution._tag !== "SafeToRetry") continue;
       const original = declared.get(intent.toolCallId);
 
@@ -9302,7 +9372,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     if (yield* hasUnsupportedRetry(snapshot, records)) return "unknown";
     const submission = snapshot.submission;
 
-    for (const intent of snapshot.unknownResolutions) {
+    for (const intent of resolutionIntentsFor(snapshot).values()) {
       yield* ledger
         .recordUnknownResolution(
           UnknownResolutionCommand.make({
@@ -9347,13 +9417,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const submission = snapshot.submission;
 
     if (submission.state === "suspended") return "deferred";
-    const decided = new Set(snapshot.approvalDecisions.map((decision) => decision.toolCallId));
-
-    const undecided = evidence.approvalsPending.filter(
-      (pending) => !decided.has(pending.toolCallId),
-    );
-
-    const first = undecided[0];
+    const first = pendingApprovalForRecovery(snapshot, evidence);
 
     if (first === undefined) return "deferred";
     const claimed = yield* claimFor(submission, decision);
@@ -9366,10 +9430,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         submissionId: submission.submissionId,
         ownershipToken: claim.ownershipToken,
         reason: ApprovalPendingSuspension.make({
-          toolCallIds: [
-            first.toolCallId,
-            ...undecided.slice(1).map((pending) => pending.toolCallId),
-          ],
+          toolCallIds: [first.toolCallId],
         }),
       }),
     );
@@ -10165,7 +10226,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
     const records = yield* Stream.runCollect(
-      operationEvidence(threadId, owner, entry.originRecordId, tail.tailSequence),
+      operationEvidence(threadId, owner, entry.originRecordId, tail.tailSequence, declaration),
     ).pipe(Effect.provideService(ThreadReader, reader));
 
     if (
@@ -10207,7 +10268,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     const intent = snapshot.unknownResolutions.find(
-      (intent) => intent.toolCallId === selected.declared.toolCallId,
+      (intent) =>
+        intent.toolCallId === selected.declared.toolCallId &&
+        unknownResolutionKind(intent.resolution) === "factual",
     );
 
     const factual = intent?.resolution;
@@ -10461,15 +10524,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       )
         return yield* invalid();
 
-      const repaired = yield* workerRuntime.repairInput(threadId, payload).pipe(
-        Effect.mapError((cause) =>
-          ThreadStoreError.make({
-            operation: "recover worker input",
-            message: "Worker effect evidence remains owed",
-            cause,
-          }),
-        ),
-      );
+      const repaired = yield* workerRuntime
+        .repairInput(threadId, evidence.record.recordId, payload)
+        .pipe(
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({
+              operation: "recover worker input",
+              message: "Worker effect evidence remains owed",
+              cause,
+            }),
+          ),
+        );
 
       return report(repaired ? "repaired" : "deferred");
     }
@@ -11384,7 +11449,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         );
 
         // Identical intent retries remain valid after the factual closure commits.
-        if (snapshot.unknownResolutions.some((intent) => intent.toolCallId === command.toolCallId))
+        if (
+          snapshot.unknownResolutions.some(
+            (intent) =>
+              intent.toolCallId === command.toolCallId &&
+              unknownResolutionKind(intent.resolution) === "factual",
+          )
+        )
           return;
 
         const tail = yield* store.inspectTail(

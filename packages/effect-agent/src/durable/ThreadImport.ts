@@ -25,6 +25,7 @@ import {
   SubmissionState,
   SuspensionSnapshot,
   UnknownResolutionIntent,
+  unknownResolutionKind,
   submissionInputRecordId,
 } from "./SubmissionLedger.ts";
 import type { ThreadStoreError } from "./ThreadStore.ts";
@@ -394,6 +395,7 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
       const key = JSON.stringify([
         intent.submissionId,
         "toolCallId" in intent ? intent.toolCallId : "abort",
+        ...("resolution" in intent ? [unknownResolutionKind(intent.resolution)] : []),
       ]);
 
       if (!byId.has(intent.submissionId) || seen.has(key))
@@ -544,7 +546,10 @@ export const prepareThreadImport = Effect.fnUntraced(function* (input: ThreadImp
 
       const resolved = (toolRecords.get(command.toolCallId) ?? []).filter(
         ({ record: { payload } }) =>
-          payload._tag === "ToolCallResolved" && payload.toolCallId === command.toolCallId,
+          payload._tag === "ToolCallResolved" &&
+          payload.toolCallId === command.toolCallId &&
+          (payload.resolution === "safe-retry" ? "execution" : "factual") ===
+            unknownResolutionKind(command.resolution),
       );
 
       const expected =

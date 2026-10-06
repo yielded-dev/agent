@@ -1949,6 +1949,10 @@ export class ThreadMaintenance extends Context.Service<
           ids.push(row.submissionId);
           submissionsByThread.set(row.threadId, ids);
         }
+        // Canonical obligations survive their last Submission. Reload their retained backoff
+        // before selecting recovery, including after eviction or a newer host mutation.
+        for (const threadId of workOwners.threadIds)
+          if (!submissionsByThread.has(threadId)) submissionsByThread.set(threadId, []);
 
         yield* runTransaction("read Thread recovery deadlines", async () => {
           for (const [threadId, ids] of submissionsByThread) {
@@ -2201,6 +2205,7 @@ export class ThreadMaintenance extends Context.Service<
 
         const autonomous =
           recovery.discoveryPending ||
+          recoveryFaults.size > 0 ||
           recovery.retryAtMillis !== undefined ||
           remaining.some((snapshot) => {
             if (snapshot.state === "unknown" && waiting(snapshot)) return false;

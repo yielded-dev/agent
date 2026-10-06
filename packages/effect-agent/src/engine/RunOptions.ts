@@ -201,11 +201,23 @@ export interface RunApprovalRequest {
   readonly parameters: unknown;
 }
 
-/** Dependency-neutral approval decision hook. */
+/** Approval policy preparation is deadline-bounded; canonical acceptance stays host-owned. */
 export interface RunApprovalHook<Error = never, Requirements = never> {
+  /** Retain the whole batch's required requests before any decision can release dispatch proof. */
+  readonly prepareBatch?:
+    | ((requests: ReadonlyArray<RunApprovalRequest>) => Effect.Effect<void, Error, Requirements>)
+    | undefined;
+  /** Prepare a decision without publishing canonical facts; this shares the Run duration deadline. */
   readonly request: (
     request: RunApprovalRequest,
   ) => Effect.Effect<RunApprovalDecision, Error, Requirements>;
+  /** Accept the prepared decision canonically before the engine honors it, outside preparation timers. */
+  readonly commit?:
+    | ((
+        request: RunApprovalRequest,
+        decision: RunApprovalDecision,
+      ) => Effect.Effect<void, Error, Requirements>)
+    | undefined;
 }
 
 /** Input passed to ordered context transformation and compaction adapters. */

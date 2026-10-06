@@ -44,6 +44,7 @@ import {
   ApprovalConflict,
   ApprovalDecisionCommand,
   ApprovalDecisionIntent,
+  approvalDecisionsCover,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildAttachmentSnapshot,
@@ -95,6 +96,7 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
+  unknownResolutionKind,
   type ChildReservationId,
   type ChildReservationStatus,
   type ChildSettledOutcome,
@@ -209,7 +211,7 @@ interface StoredSubmission {
   readonly suspension: StoredSuspension | undefined;
   readonly unknownMark: StoredUnknownMark | undefined;
   readonly approvalDecisions: ReadonlyMap<ToolCallId, ApprovalDecisionIntent>;
-  readonly unknownResolutions: ReadonlyMap<ToolCallId, StoredUnknownResolution>;
+  readonly unknownResolutions: ReadonlyMap<string, StoredUnknownResolution>;
 }
 
 /**
@@ -743,7 +745,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             suspension: undefined,
             unknownMark: undefined,
             approvalDecisions: new Map<ToolCallId, ApprovalDecisionIntent>(),
-            unknownResolutions: new Map<ToolCallId, StoredUnknownResolution>(),
+            unknownResolutions: new Map<string, StoredUnknownResolution>(),
           });
 
           journal.initializeWork(request.threadId);
@@ -1930,8 +1932,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             // resumes the caller immediately WITHOUT releasing the lane (plan §2.6, spec §12).
             const alreadyCovered =
               request.reason._tag === "ApprovalPending"
-                ? request.reason.toolCallIds.every((toolCallId) =>
-                    stored.approvalDecisions.has(toolCallId),
+                ? approvalDecisionsCover(
+                    request.reason.toolCallIds,
+                    (toolCallId) => stored.approvalDecisions.get(toolCallId)?.decision,
                   )
                 : request.reason.children.every((child) =>
                     announcedChildren.has(child.childSubmissionId),
@@ -2046,15 +2049,16 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               intent,
             );
 
-            // Once every pending call of an ApprovalPending suspension is decided, the lane
-            // wakes: suspended → input-applied (plan §2.6). A WaitingForChild suspension wakes
+            // A denial or decisions for every pending call wake an ApprovalPending lane:
+            // suspended → input-applied. A WaitingForChild suspension wakes
             // only through recordChildSettled.
             const wakes =
               stored.row.state === "suspended" &&
               stored.suspension !== undefined &&
               stored.suspension.reason._tag === "ApprovalPending" &&
-              stored.suspension.reason.toolCallIds.every((toolCallId) =>
-                approvalDecisions.has(toolCallId),
+              approvalDecisionsCover(
+                stored.suspension.reason.toolCallIds,
+                (toolCallId) => approvalDecisions.get(toolCallId)?.decision,
               );
 
             return [
@@ -2215,11 +2219,16 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   current,
                 ];
             }
-            const existing = stored.unknownResolutions.get(command.toolCallId);
+            const kind = unknownResolutionKind(command.resolution);
+            const key = JSON.stringify([command.toolCallId, kind]);
+            const existing = stored.unknownResolutions.get(key);
 
             if (
-              existing !== undefined &&
-              !equivalentUnknownResolution(existing.intent.resolution, command.resolution)
+              (existing !== undefined &&
+                !equivalentUnknownResolution(existing.intent.resolution, command.resolution)) ||
+              (existing === undefined &&
+                kind === "execution" &&
+                stored.unknownResolutions.has(JSON.stringify([command.toolCallId, "factual"])))
             ) {
               return [
                 failure(
@@ -2246,7 +2255,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const unknownResolutions =
               existing !== undefined
                 ? stored.unknownResolutions
-                : new Map(stored.unknownResolutions).set(command.toolCallId, {
+                : new Map(stored.unknownResolutions).set(key, {
                     intent,
                   });
 
@@ -2256,8 +2265,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const wakes =
               stored.row.state === "unknown" &&
               stored.unknownMark !== undefined &&
-              stored.unknownMark.toolCallIds.every((toolCallId) =>
-                unknownResolutions.has(toolCallId),
+              stored.unknownMark.toolCallIds.every(
+                (toolCallId) =>
+                  unknownResolutions.has(JSON.stringify([toolCallId, "execution"])) ||
+                  unknownResolutions.has(JSON.stringify([toolCallId, "factual"])),
               );
 
             return [
@@ -3179,7 +3190,10 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               rebuilt.approvals.map((intent) => [intent.toolCallId, intent]),
             ),
             unknownResolutions: new Map(
-              rebuilt.resolutions.map((intent) => [intent.toolCallId, { intent }]),
+              rebuilt.resolutions.map((intent) => [
+                JSON.stringify([intent.toolCallId, unknownResolutionKind(intent.resolution)]),
+                { intent },
+              ]),
             ),
           };
 

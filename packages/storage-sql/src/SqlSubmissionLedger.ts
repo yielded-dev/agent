@@ -40,6 +40,7 @@ import {
   ApprovalConflict,
   ApprovalDecisionCommand,
   ApprovalDecisionIntent,
+  approvalDecisionsCover,
   AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildAttachmentSnapshot,
@@ -90,6 +91,8 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
+  UnknownResolutionKind,
+  unknownResolutionKind,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   type ChildSettledOutcome,
@@ -194,6 +197,7 @@ class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDec
 class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")({
   submission_id: BoundedIdentifier,
   tool_call_id: BoundedIdentifier,
+  resolution_kind: UnknownResolutionKind,
   author: BoundedIdentifier,
   reason: BoundedStoredText,
   resolution_json: BoundedStoredText,
@@ -907,13 +911,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         SELECT
           submission_id,
           tool_call_id,
+          resolution_kind,
           author,
           reason,
           resolution_json,
           resolved_at
         FROM ${relation("effect_agent_unknown_resolutions")}
         WHERE submission_id = ${submissionId}
-        ORDER BY tool_call_id ASC
+        ORDER BY tool_call_id ASC, resolution_kind ASC
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
     return yield* decodeUnknownResolutionRows(
@@ -2680,9 +2685,13 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         // file) resumes the caller immediately WITHOUT releasing the lane (plan §2.6, §12).
         if (validated.reason._tag === "ApprovalPending") {
           const decisions = yield* readApprovalDecisions(operation, validated.submissionId);
-          const decided = new Set(decisions.map((row) => row.tool_call_id));
+          const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-          if (validated.reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) {
+          if (
+            approvalDecisionsCover(validated.reason.toolCallIds, (toolCallId) =>
+              decided.get(toolCallId),
+            )
+          ) {
             return RESUME_IMMEDIATELY;
           }
         } else {
@@ -2736,7 +2745,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   });
 
   /**
-   * Once every pending call of a recorded ApprovalPending suspension has a decision intent,
+   * Once one pending call is denied or every pending call has a decision intent,
    * the lane wakes: suspended → input-applied, suspension cleared (plan §2.6). A
    * WaitingForChild suspension wakes only through recordChildSettled. Runs inside the caller's
    * write transaction.
@@ -2762,9 +2771,10 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
 
     if (reason._tag !== "ApprovalPending") return;
     const decisions = yield* readApprovalDecisions(operation, submission.submission_id);
-    const decided = new Set(decisions.map((row) => row.tool_call_id));
+    const decided = new Map(decisions.map((row) => [row.tool_call_id, row.decision]));
 
-    if (!reason.toolCallIds.every((toolCallId) => decided.has(toolCallId))) return;
+    if (!approvalDecisionsCover(reason.toolCallIds, (toolCallId) => decided.get(toolCallId)))
+      return;
     yield* sql`
         UPDATE ${relation("effect_agent_submissions")}
         SET
@@ -2976,7 +2986,11 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               });
           }
           const resolutions = yield* readUnknownResolutions(operation, validated.submissionId);
-          const existing = resolutions.find((row) => row.tool_call_id === validated.toolCallId);
+          const kind = unknownResolutionKind(validated.resolution);
+
+          const existing = resolutions.find(
+            (row) => row.tool_call_id === validated.toolCallId && row.resolution_kind === kind,
+          );
 
           const existingIntent =
             existing === undefined
@@ -2984,8 +2998,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               : yield* unknownResolutionIntentFromRow(operation, existing);
 
           if (
-            existingIntent !== undefined &&
-            !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)
+            (existingIntent !== undefined &&
+              !equivalentUnknownResolution(existingIntent.resolution, validated.resolution)) ||
+            (existing === undefined &&
+              kind === "execution" &&
+              resolutions.some(
+                (row) =>
+                  row.tool_call_id === validated.toolCallId && row.resolution_kind === "factual",
+              ))
           ) {
             return yield* UnknownResolutionConflict.make({
               submissionId: validated.submissionId,
@@ -3005,6 +3025,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             INSERT INTO ${relation("effect_agent_unknown_resolutions")} (
               submission_id,
               tool_call_id,
+              resolution_kind,
               author,
               reason,
               resolution_json,
@@ -3012,6 +3033,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             ) VALUES (
               ${validated.submissionId},
               ${validated.toolCallId},
+              ${kind},
               ${validated.author},
               ${validated.reason},
               ${resolutionJson},

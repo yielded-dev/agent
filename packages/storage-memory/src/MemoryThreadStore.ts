@@ -333,8 +333,15 @@ const prepareIndexes = (
       (payload._tag === "AgentUpdateEmitted" && payload.delivery !== undefined)
     )
       deliveryPredecessors.push(entry);
-    if ("runId" in payload && payload.runId !== undefined && "toolCallId" in payload)
+    if ("runId" in payload && payload.runId !== undefined && "toolCallId" in payload) {
       appendToIndex(operationAppends, JSON.stringify([payload.runId, payload.toolCallId]), entry);
+      if (payload._tag === "ToolApprovalRequested" || payload._tag === "ToolApprovalDecided")
+        appendToIndex(
+          operationAppends,
+          JSON.stringify([payload.runId, payload.toolCallId, "approval"]),
+          entry,
+        );
+    }
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
@@ -1232,16 +1239,38 @@ const makeThreadStore = Effect.gen(function* () {
               const origin = thread.byId.get(selection.originRecordId);
               const after = request.page.afterSequence ?? 0;
 
+              const selectPage = (entries: ReadonlyArray<CanonicalRecordEnvelope>) => {
+                const start = upperSequence(entries, after);
+
+                return entries.slice(
+                  start,
+                  Math.min(
+                    upperSequence(entries, selection.throughSequence),
+                    start + request.page.limit,
+                  ),
+                );
+              };
+
+              let facts = selectPage(candidates);
+
+              // Approval-only keys exclude siblings' Steps/results before applying page limits.
+              for (const toolCallId of selection.approvalToolCallIds) {
+                if (toolCallId === selection.toolCallId) continue;
+
+                const approvals =
+                  thread.operationRecords.get(
+                    JSON.stringify([selection.runId, toolCallId, "approval"]),
+                  ) ?? [];
+
+                facts = [...facts, ...selectPage(approvals)]
+                  .sort((left, right) => left.sequence - right.sequence)
+                  .slice(0, request.page.limit);
+              }
+
               records = [
                 ...new Map(
                   [
-                    ...candidates.slice(
-                      upperSequence(candidates, after),
-                      Math.min(
-                        upperSequence(candidates, selection.throughSequence),
-                        upperSequence(candidates, after) + request.page.limit,
-                      ),
-                    ),
+                    ...facts,
                     ...(origin !== undefined &&
                     origin.sequence > after &&
                     origin.sequence <= selection.throughSequence

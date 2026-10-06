@@ -5,17 +5,29 @@ import {
   storageConfigLayer,
   threadStoreLayer,
 } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import { digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime, type RecoveryFailure } from "@yielded/agent/durable-agent-runtime";
 import {
   DurableRuntimeFailpoint,
   DurableRuntimeFailpointError,
   type DurableRuntimeFailpointHandler,
 } from "@yielded/agent/durable-failpoint";
+import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import {
   type OperationAuthorizerService,
   operationAuthorizerLayer,
   possessionOperationAuthorizer,
 } from "@yielded/agent/operation-authorizer";
+import {
+  BatchId,
+  CanonicalBatch,
+  DeploymentId,
+  PeerMessagePrepared,
+  PersistedJson,
+  ProducerId,
+  RecordEnvelope,
+  RecordId,
+} from "@yielded/agent/records";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
@@ -27,10 +39,29 @@ import {
   SubmissionLookupByKey,
   submissionAbortRecordId,
 } from "@yielded/agent/submission-ledger";
-import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
+import { PreparedInput } from "@yielded/agent/subscription";
+import {
+  FencedAppendRequest,
+  ThreadRead,
+  ThreadStore,
+  ThreadTailRequest,
+} from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Fiber, Layer, Logger, Option, Stream } from "effect";
+import type { Crypto } from "effect";
+import {
+  Cause,
+  Clock,
+  DateTime,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Logger,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
 import { DurableObject } from "effect-cf";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vite-plus/test";
@@ -47,6 +78,7 @@ import { CloudflareDurableRuntimeConfig } from "../src/CloudflareConfig.ts";
 import type { submit as admitToThread } from "../src/ThreadObject.ts";
 import {
   bookDefinition,
+  decodeIdempotencyKey,
   decodeThreadId,
   lostBookReplies,
   maintenanceClocks,
@@ -548,6 +580,153 @@ it(
 );
 
 describe("recovery faults independent of execution history", () => {
+  // Regression: https://github.com/yielded-dev/agent/commit/01f16e998e6c0dbedcf29fd5e518e5bf59c154f1
+  // A real Object and retained retry deadline expose terminal-only alarm loss and early retry.
+  it("retries a terminal handoff fault by its retained alarm and parks only after repair", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const owner = `terminal-recovery-${crypto.randomUUID()}`;
+        const threadId = decodeThreadId(owner);
+        const messageId = decodeIdempotencyKey("terminal-handoff");
+
+        const run = <A, E>(
+          body: Effect.Effect<
+            A,
+            E,
+            | DurableAgentRuntime
+            | ThreadMaintenance
+            | ThreadStore
+            | MessageDeliveryStore
+            | Crypto.Crypto
+          >,
+        ) =>
+          Effect.promise(() =>
+            runInDurableObject(stubFor(owner), (instance) =>
+              instance[DurableObject.RunSymbol](body),
+            ),
+          );
+
+        yield* TestClock.setTime(Date.now() + 86_400_000);
+        maintenanceClocks.set(owner, yield* Clock.Clock);
+        yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(owner)));
+        const receipt = yield* run(submit(owner, "original"));
+
+        yield* run(pass);
+        expect(
+          yield* run(DurableAgentRuntime.use((runtime) => runtime.submissionStatus(receipt))),
+        ).toMatchObject({ _tag: "settled" });
+
+        const now = yield* Clock.currentTimeMillis;
+        const options = submitOptions(owner, messageId);
+        const input = { question: "frozen before handoff", ref: owner };
+
+        const appended = yield* run(
+          ThreadMaintenance.use((maintenance) =>
+            maintenance.withMutation(
+              Effect.gen(function* () {
+                const store = yield* ThreadStore;
+                const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+                return yield* store.append(
+                  FencedAppendRequest.make({
+                    threadId,
+                    producerEpoch: tail.producerEpoch,
+                    expectedTailSequence: tail.tailSequence,
+                    expectedTailDigest: tail.tailDigest,
+                    batch: CanonicalBatch.make({
+                      batchId: BatchId.make(messageId),
+                      producerId: ProducerId.make("terminal-fault-fixture"),
+                      records: [
+                        RecordEnvelope.make({
+                          recordId: RecordId.make(messageId),
+                          family: "thread",
+                          schemaVersion: 1,
+                          createdAt: DateTime.makeUnsafe(now),
+                          deploymentId: DeploymentId.make("terminal-fault-fixture"),
+                          payload: PeerMessagePrepared.make({
+                            messageId,
+                            source: {
+                              _tag: "programmatic",
+                              threadId,
+                              agentId: plannerDefinition.id,
+                            },
+                            sourcePrincipal: options.principal,
+                            operation: "send",
+                            deadlineAtMillis: now + 1_000,
+                            encodedEnvelope: yield* Schema.encodeEffect(PreparedInput)({
+                              schemaVersion: 1,
+                              threadId,
+                              deliveryPrincipal: options.principal,
+                              agentId: plannerDefinition.id,
+                              definitions: options.definitions,
+                              input,
+                              inputDigest: yield* digestJson(input),
+                              admissionKey: messageId,
+                              authorization: { policyId: "fixture", decisionId: messageId },
+                            }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(PersistedJson))),
+                          }),
+                        }),
+                      ],
+                    }),
+                  }),
+                );
+              }),
+            ),
+          ),
+        );
+
+        const original = yield* corruptHistory(owner, owner, appended.lastSequence);
+
+        yield* run(pass);
+        const fault = yield* retainedFault(owner, owner);
+
+        expect(fault).toMatchObject({ _tag: "Some", value: { attempts: 1 } });
+        if (Option.isNone(fault)) throw new Error("Expected retained terminal fault");
+        const deadline = yield* Effect.promise(() => scheduledAlarm(owner));
+
+        expect(deadline).not.toBeNull();
+        expect(deadline).toBeGreaterThanOrEqual(fault.value.retryAt);
+
+        yield* Effect.promise(() => evictDurableObject(stubFor(owner)));
+        yield* TestClock.setTime(fault.value.retryAt - 1);
+        // A fresh host mutation can wake the owner early but cannot bypass a terminal fault's retry.
+        yield* run(ThreadMaintenance.use((maintenance) => maintenance.withMutation(Effect.void)));
+        yield* Effect.promise(() => runDurableObjectAlarm(stubFor(owner)));
+        expect(yield* retainedFault(owner, owner)).toEqual(fault);
+        const retryAlarm = yield* Effect.promise(() => scheduledAlarm(owner));
+
+        expect(retryAlarm).not.toBeNull();
+        if (retryAlarm === null) throw new Error("Expected retained retry alarm");
+        expect(retryAlarm).toBeGreaterThanOrEqual(fault.value.retryAt);
+
+        // Restore only the selected evidence: no wake or source-generation mutation enables retry.
+        yield* storage(owner, (state) => {
+          state.storage.sql.exec(
+            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+            original,
+            owner,
+            appended.lastSequence,
+          );
+
+          return Effect.runPromise(invalidate(state.storage));
+        });
+        yield* TestClock.setTime(retryAlarm);
+        yield* Effect.promise(() => runDurableObjectAlarm(stubFor(owner)));
+        expect(yield* retainedFault(owner, owner)).toEqual(Option.none());
+
+        const delivery = yield* run(
+          MessageDeliveryStore.use((store) => store.get({ ownerThreadId: threadId, messageId })),
+        );
+
+        // The expired retained delivery is a stable external wait, not another native retry loop.
+        expect(delivery).toMatchObject({ status: "parked", parkReason: "deadline" });
+        expect(yield* Effect.promise(() => scheduledAlarm(owner))).toBeNull();
+        expect(
+          yield* run(DurableAgentRuntime.use((runtime) => runtime.submissionStatus(receipt))),
+        ).toMatchObject({ _tag: "settled" });
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    ));
+
   // Regression: https://github.com/yielded-dev/agent/commit/ab5030d
   // Real SQLite plus controlled interruption distinguishes a committed transition from
   // a wake hint and proves delivery without rereading corrupt execution history.

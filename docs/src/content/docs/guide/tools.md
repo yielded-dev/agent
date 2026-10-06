@@ -421,10 +421,11 @@ Effect AI's `needsApproval` marks a tool for approval. Yielded Agent turns its n
 request into a typed Effect service with stable run identity, normalized resource targets, a
 bounded preview, expiration, audit, and a deny or unresolved decision.
 
-Approval occurs after parameter decoding and before the handler starts. The model cannot approve
-a tool call. Function-based approval predicates receive detached history, and approval decisions
-receive independent decoded arguments. Supplied history must use JSON values for tool arguments
-and results; native file URLs and byte arrays retain their types.
+Approval occurs after parameter decoding and before any handler in the batch starts. The model
+cannot approve a tool call. Durable batches retain every required request before honoring
+decisions; a denial blocks the whole batch. Function-based predicates receive native readonly
+Effect AI history, including opaque tool values; leave that history unchanged. Approval decisions
+receive independent decoded arguments.
 
 ## Authorize tool calls
 

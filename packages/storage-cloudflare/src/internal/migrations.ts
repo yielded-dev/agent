@@ -11,7 +11,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 19;
+export const CurrentDoStorageVersion = 20;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -29,7 +29,7 @@ const layoutStatements = [
   "CREATE TABLE effect_agent_attempts ( attempt_id TEXT PRIMARY KEY NOT NULL, submission_id TEXT NOT NULL, thread_id TEXT NOT NULL, owner_producer_id TEXT NOT NULL, producer_epoch INTEGER NOT NULL, claimed_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
   "CREATE TABLE effect_agent_abort_intents ( submission_id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, requested_at TEXT NOT NULL, canonical_record_id TEXT, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
   "CREATE TABLE effect_agent_approval_decisions ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, decision TEXT NOT NULL, resolver TEXT NOT NULL, reason TEXT NOT NULL, decided_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
-  "CREATE TABLE effect_agent_unknown_resolutions ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, resolution_json TEXT NOT NULL, resolved_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_unknown_resolutions ( submission_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, resolution_kind TEXT NOT NULL, author TEXT NOT NULL, reason TEXT NOT NULL, resolution_json TEXT NOT NULL, resolved_at TEXT NOT NULL, PRIMARY KEY (submission_id, tool_call_id, resolution_kind), FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
   "CREATE TABLE effect_agent_child_reservations ( reservation_id TEXT PRIMARY KEY NOT NULL, parent_submission_id TEXT NOT NULL, parent_tool_call_id TEXT NOT NULL, child_submission_id TEXT, status TEXT NOT NULL, allocation_json TEXT NOT NULL, allocation_digest TEXT NOT NULL, accounting_json TEXT, reserved_at TEXT NOT NULL, release_began_at TEXT, released_at TEXT, UNIQUE (parent_submission_id, parent_tool_call_id), FOREIGN KEY (parent_submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )",
   "CREATE TABLE effect_agent_child_settlements ( parent_submission_id TEXT NOT NULL, child_submission_id TEXT NOT NULL, child_outcome TEXT, recorded_at TEXT NOT NULL, PRIMARY KEY (parent_submission_id, child_submission_id) )",
   'CREATE INDEX effect_agent_records_call ON "effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id)',
@@ -87,7 +87,7 @@ const storageError = (cause: SqlError) =>
   DoStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: 19,
+  version: 20,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -162,8 +162,8 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
           ),
         );
         yield* sql.unsafe(headerStatement).withoutTransform;
-        yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 19, ${CURRENT_RECORD_FORMAT})`;
-        yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES ('storage_version', '19')`;
+        yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 20, ${CURRENT_RECORD_FORMAT})`;
+        yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES ('storage_version', '20')`;
 
         return yield* readDoStorageHeader();
       }),

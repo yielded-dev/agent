@@ -738,6 +738,27 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     const receipts = yield* Effect.forEach(
       rows.filter(({ admission }) => !completed.has(admission.messageId)),
       Effect.fnUntraced(function* ({ admission }) {
+        const preparationId = workerInputRecordId(admission.messageId);
+
+        const closure = Option.getOrUndefined(
+          yield* exactRecord(
+            admission.origin.source.threadId,
+            RecordId.make(`work-handoff-completed:${preparationId}`),
+            "start",
+          ),
+        )?.record.payload;
+
+        if (closure !== undefined) {
+          if (
+            closure._tag !== "WorkHandoffCompleted" ||
+            closure.preparationId !== preparationId ||
+            closure.ownerId !== workId("worker-input", admission.messageId)
+          )
+            return yield* failure("start", "corrupt");
+
+          return { messageId: admission.messageId, acknowledgement: undefined };
+        }
+
         const receipt = Option.getOrUndefined(
           yield* getRecord({
             threadId: admission.origin.worker.threadId,
@@ -759,14 +780,16 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         )
           return yield* failure("start", "corrupt");
 
-        return receipt;
+        return { messageId: admission.messageId, acknowledgement: receipt };
       }),
       { concurrency: 8 },
     );
 
-    const acknowledgements = receipts.filter((receipt) => receipt !== undefined);
+    const acknowledgements = receipts.flatMap((receipt) =>
+      receipt?.acknowledgement === undefined ? [] : [receipt.acknowledgement],
+    );
 
-    for (const receipt of acknowledgements) completed.add(receipt.messageId);
+    for (const receipt of receipts) if (receipt !== undefined) completed.add(receipt.messageId);
 
     return { completed, acknowledgements };
   });
@@ -2027,9 +2050,10 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     return yield* failure("inspect", "storage");
   });
 
-  /** Copy an exact factual child acknowledgement into source accounting, even after its Run ends. */
+  /** Close a conclusive refusal or copy the exact child-owned factual acknowledgement. */
   const repairInput = Effect.fnUntraced(function* (
     sourceThreadId: ThreadId,
+    preparationId: RecordId,
     request: WorkerInputRequested,
   ) {
     const admission = request.admission;
@@ -2043,6 +2067,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
     if (delivery === null) return yield* failure("inspect", "unavailable");
     if (
+      preparationId !== workerInputRecordId(admission.messageId) ||
+      delivery.key.ownerThreadId !== sourceThreadId ||
+      delivery.key.messageId !== admission.messageId ||
       delivery.envelope.threadId !== admission.origin.worker.threadId ||
       delivery.envelope.inputDigest !== request.inputDigest ||
       delivery.envelope.workerAdmission === undefined ||
@@ -2052,6 +2079,21 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     // The original delivery owns unfinished admission and destination execution. Its terminal
     // transition makes acknowledgement inspection due; pending/parked inputs need no child RPC.
     if (delivery.status !== "processed" && delivery.status !== "refused") return false;
+
+    // Refusal is committed only before destination admission. The source can close its own
+    // reservation without inventing a destination Receipt, result, or effect acknowledgement.
+    if (delivery.status === "refused") {
+      if (delivery.receipt !== null || delivery.refusal === null)
+        return yield* failure("inspect", "corrupt");
+      yield* completeHandoff(
+        sourceThreadId,
+        preparationId,
+        workId("worker-input", admission.messageId),
+        "inspect",
+      );
+
+      return true;
+    }
 
     const child = Option.getOrUndefined(
       yield* getRecord({ threadId: admission.origin.worker.threadId, recordId: id }).pipe(
@@ -2112,40 +2154,46 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     return yield* failure("inspect", "storage");
   });
 
-  const completeStop = Effect.fnUntraced(function* (threadId: ThreadId, preparationId: RecordId) {
+  const completeHandoff = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    preparationId: RecordId,
+    ownerId: string,
+    operation: "inspect" | "stop",
+  ) {
     const id = RecordId.make(`work-handoff-completed:${preparationId}`);
 
     for (let attempt = 0; attempt < 16; attempt++) {
-      const prior = Option.getOrUndefined(yield* exactRecord(threadId, id, "stop"))?.record.payload;
+      const prior = Option.getOrUndefined(yield* exactRecord(threadId, id, operation))?.record
+        .payload;
 
       if (prior !== undefined) {
         if (
           prior._tag !== "WorkHandoffCompleted" ||
           prior.preparationId !== preparationId ||
-          prior.ownerId !== workId("handoff", preparationId)
+          prior.ownerId !== ownerId
         )
-          return yield* failure("stop", "corrupt");
+          return yield* failure(operation, "corrupt");
 
         return;
       }
 
       const tail = yield* deps.store
         .inspectTail(ThreadTailRequest.make({ threadId }))
-        .pipe(Effect.mapError(storageFailure("stop")));
+        .pipe(Effect.mapError(storageFailure(operation)));
 
       if (
         yield* append(
           threadId,
           id,
-          WorkHandoffCompleted.make({ preparationId, ownerId: workId("handoff", preparationId) }),
+          WorkHandoffCompleted.make({ preparationId, ownerId }),
           { ...tail, records: [] },
-          "stop",
+          operation === "stop" ? "stop" : "completion",
         )
       )
         return;
     }
 
-    return yield* failure("stop", "storage");
+    return yield* failure(operation, "storage");
   });
 
   /** A retained command preserves its original principal and input owner; discovery grants neither. */
@@ -2185,7 +2233,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       .pipe(Effect.mapError(storageFailure("stop")));
 
     if (owned !== 0) return false;
-    yield* completeStop(sourceThreadId, preparationId);
+    yield* completeHandoff(sourceThreadId, preparationId, workId("handoff", preparationId), "stop");
 
     return true;
   });
@@ -3362,7 +3410,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
           yield* hit("worker:after-stop-seal", "stop");
           if (owned === 0) {
-            yield* completeStop(context.source.threadId, id);
+            yield* completeHandoff(context.source.threadId, id, workId("handoff", id), "stop");
 
             return command;
           }
