@@ -90,7 +90,8 @@ concepts succinctly: what a feature does, how it fits, and how to use it.
    by the interpreter, but durable records remain explicit, versioned Schemas.
 7. The canonical log is append-only, including Run continuations and their execution evidence.
    Projections, lookup indexes, and cached recovery snapshots are disposable derivatives.
-   Continuations must be recomputable from their referenced facts and checked by `verify`.
+   Continuations must be deterministically recomputable from their referenced facts, and `verify`
+   must recompute and compare them, failing closed on any mismatch as corruption.
 8. No code may claim exactly-once external side-effect execution.
 9. An unresolved ordinary tool call is never automatically replayed after ownership loss.
 10. Tool/model/subagent concurrency is bounded and deterministic at commit time. Tool batches use
@@ -162,14 +163,10 @@ packages.
   re-propose them.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
-- Start the unreleased durable protocol in fresh layout-21 stores with
-  `effect-agent/thread@3` records. Reject predecessor formats and layouts before mutation; this
-  release includes no historical decoder, converter, layout upgrade, or migration path.
-  Same-format streaming transfers preserve immutable admission and accepted-command facts,
-  rebuild derivatives and digests, and import atomically into empty Threads under destination
-  constraints without importing execution authority. Reject unsupported or ambiguous recovery
-  views without mutation or lost obligations. Scope future format changes to a concrete need;
-  do not add speculative compatibility paths.
+- Change canonical history through export → re-encode → import, never through in-place payload
+  rewrites. Live state, including Run continuations and operation state, carries explicit versions
+  with narrow conversions. Storage-layout steps remain adapter-owned, ordered, and atomic.
+  Refuse formats and layouts newer than the running code before mutation.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
   root-cause, review and test stories, and implementation mechanics in the pull request.

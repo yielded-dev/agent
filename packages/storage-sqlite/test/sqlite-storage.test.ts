@@ -195,6 +195,114 @@ const withTemporaryDatabase = <A, E>(
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe("SqliteThreadStore", () => {
+  // #792 retired recovery-checkpoint writes. Layout 21 persists progress in the same
+  // append as its facts; run-continuation.test.ts covers process loss at compaction,
+  // while these restored rows cover rollback and acknowledgement loss at that append.
+  for (const [location, mode] of [
+    ["append:before", "failure"],
+    ["append:after", "interrupt"],
+  ] as const) {
+    it.effect(`reopens safely after ${mode} at ${location}`, () =>
+      withTemporaryDatabase((filename) =>
+        Effect.gen(function* () {
+          const nativeRunId = runIdForSubmission(submissionId);
+
+          const input = canonicalRecord(
+            "crash-reopen-input",
+            UserInputRecorded.make({
+              submissionId,
+              runId: nativeRunId,
+              kind: "user",
+              input: "Kyoto",
+            }),
+          );
+
+          const start = canonicalRecord(
+            "crash-reopen-start",
+            RunStartedRecord.make({
+              runId: nativeRunId,
+              policyAccountingVersion: 1,
+              maxDurationMillis: 30_000,
+            }),
+          );
+
+          let prepared: CanonicalBatch | undefined;
+          let reached = false;
+
+          const failed = yield* Effect.gen(function* () {
+            const store = yield* ThreadStore;
+
+            yield* store.materialize(
+              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
+            );
+            const writer = yield* makeRunWriter(threadId, epoch(1));
+            const progress = yield* makeProgressWriter(threadId, start.deploymentId);
+
+            yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
+              Effect.provideService(CurrentRunWriter, {
+                ...writer,
+                append: (compiled) => {
+                  prepared = compiled;
+
+                  return writer.append(compiled);
+                },
+              }),
+            );
+          }).pipe(
+            Effect.provide(
+              layer({
+                filename,
+                failpoint: (point) => {
+                  if (point !== location) return Effect.void;
+                  reached = true;
+
+                  return mode === "failure"
+                    ? Effect.fail(SqliteStorageFailpointError.make({ location }))
+                    : Effect.interrupt;
+                },
+              }).pipe(Layer.provideMerge(NodeCrypto.layer)),
+            ),
+            Effect.exit,
+          );
+
+          expect(reached).toBe(true);
+          expect(Exit.isFailure(failed)).toBe(true);
+          const compiled = prepared;
+
+          if (compiled === undefined) return yield* Effect.die("Progress append was not prepared");
+          yield* Effect.gen(function* () {
+            const store = yield* ThreadStore;
+            const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+            const committed = location === "append:after";
+
+            expect(before.records).toHaveLength(committed ? 3 : 0);
+            expect(
+              Option.isSome(yield* readContinuation(threadId, nativeRunId, before.tailSequence)),
+            ).toBe(committed);
+            expect((yield* append(store, compiled)).replayed).toBe(committed);
+            const after = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+            expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
+              "UserInputRecorded",
+              "RunStarted",
+              "RunContinuation",
+            ]);
+            expect(
+              Option.getOrUndefined(
+                yield* readContinuation(threadId, nativeRunId, after.tailSequence),
+              )?.continuation,
+            ).toMatchObject({
+              revision: 1,
+              recordCount: 2,
+              lastFact: { recordId: start.recordId },
+            });
+            expect((yield* append(store, compiled)).replayed).toBe(true);
+          }).pipe(Effect.provide(layer({ filename }).pipe(Layer.provideMerge(NodeCrypto.layer))));
+        }),
+      ),
+    );
+  }
+
   it.effect("rejects canonical records beyond the captured export tail", () =>
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
