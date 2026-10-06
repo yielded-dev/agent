@@ -328,7 +328,16 @@ export const make = Effect.fnUntraced(function* <R>(
                 throw new Error("Tab changed during authorization");
               attach(selected);
 
-              return action(selected, (name) => span.attribute("browser.native.stage", name));
+              try {
+                return await action(selected, (name) =>
+                  span.attribute("browser.native.stage", name),
+                );
+              } catch (error) {
+                // A read that loses its document to a navigation retries with fresh authorization.
+                if (read && authorizedUrl !== undefined && selected.url() !== authorizedUrl)
+                  authorizationChanged = true;
+                throw error;
+              }
             },
             timeoutMillis === undefined ? undefined : { timeoutMillis },
           )
