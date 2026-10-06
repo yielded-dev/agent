@@ -19,6 +19,7 @@ import { InteractiveBrowserTargetUrl } from "@yielded/agent/interactive-browser"
 import { Deferred, Effect, Fiber, Layer, Schema, Semaphore } from "effect";
 import {
   ElementHandle,
+  TimeoutError,
   type Frame,
   type Page,
   type Dialog,
@@ -251,6 +252,7 @@ export const make = Effect.fnUntraced(function* <R>(
 
       for (let attempt = 0; ; attempt++) {
         let authorizationChanged = false;
+        let lostDocument = false;
 
         const result = yield* session
           .run(
@@ -334,7 +336,17 @@ export const make = Effect.fnUntraced(function* <R>(
                 );
               } catch (error) {
                 // A read that loses its document to a navigation retries with fresh authorization.
-                if (read && authorizedUrl !== undefined && selected.url() !== authorizedUrl)
+                // The context can be destroyed before the page reports its new URL.
+                lostDocument =
+                  error instanceof Error &&
+                  /Execution context was destroyed|Cannot find context with specified id/.test(
+                    error.message,
+                  );
+                if (
+                  read &&
+                  authorizedUrl !== undefined &&
+                  (selected.url() !== authorizedUrl || lostDocument)
+                )
                   authorizationChanged = true;
                 throw error;
               }
@@ -355,7 +367,8 @@ export const make = Effect.fnUntraced(function* <R>(
           return yield* result.failure;
 
         span.attribute("browser.read.authorization_retries", attempt + 1);
-        yield* Effect.sleep("20 millis");
+        // A destroyed context means the next document has not committed yet; give it time.
+        yield* Effect.sleep(lostDocument ? "250 millis" : "20 millis");
       }
     }).pipe(
       Effect.mapError((error) => {
@@ -517,16 +530,21 @@ export const make = Effect.fnUntraced(function* <R>(
         let result = Schema.decodeUnknownSync(Observation)(await read());
 
         // Native click acknowledgement can precede document parsing. Settle this
-        // explicit readiness condition before returning an empty loading document.
+        // explicit readiness condition before returning an empty loading document. A document
+        // still parsing after 2 s is observed as it stands, reporting readyState "loading".
         if (result.readyState === "loading") {
           const ready = await frame
             .isolatedRealm()
             .waitForFunction(() => document.readyState !== "loading", {
               timeout: 2_000,
               polling: "raf",
+            })
+            .catch((error: unknown) => {
+              if (error instanceof TimeoutError) return undefined;
+              throw error;
             });
 
-          await ready.dispose();
+          await ready?.dispose();
           result = Schema.decodeUnknownSync(Observation)(await read());
         }
         readyState = result.readyState;
@@ -686,8 +704,14 @@ export const make = Effect.fnUntraced(function* <R>(
     yield* charge();
     const command: Command = { kind: "act", action: value };
 
-    // Preparation has its own 2 s budget. It never waits for a missing selector;
-    // an actually pending CDP request is terminated by BrowserSession, not abandoned.
+    // Preparation has its own budget: 2 s, or 8 s inside a frame, where each frame level adds
+    // owner checks and a newly mounted frame first creates its isolated world. It never waits
+    // for a missing selector; an actually pending CDP request is terminated by BrowserSession,
+    // not abandoned.
+    const inFrame = ![...tabs.values()].some(
+      (tab) => frameIds.get(tab.mainFrame()) === target.frame,
+    );
+
     let dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]> = "not-dispatched";
     let refusal: string | undefined;
 
@@ -731,7 +755,7 @@ export const make = Effect.fnUntraced(function* <R>(
           await handle.dispose();
         }
       },
-      2_000,
+      inFrame ? 8_000 : 2_000,
       "prepare",
     ).pipe(
       Effect.mapError(

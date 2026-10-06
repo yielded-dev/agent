@@ -935,7 +935,12 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
     let space = observation === undefined ? yield* observe : yield* toSpace(observation);
 
     for (let step = 1; step <= maxSteps; step++) {
-      const { operation, targetIndex } = yield* decide(space);
+      // A page with no controls or text is still rendering: wait instead of asking for a
+      // decision, under the same ten-second WAIT cap.
+      const { operation, targetIndex } =
+        space.page.controls.length === 0 && space.page.text.trim() === ""
+          ? { operation: "WAIT" as const, targetIndex: undefined }
+          : yield* decide(space);
 
       // Recheck page-wide decisions after model latency; an animation may have finished.
       // Element inputs keep their observed refs and native target guards.
