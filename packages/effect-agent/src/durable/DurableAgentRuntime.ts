@@ -802,7 +802,10 @@ export class WorkRecoveryReport extends Schema.Class<WorkRecoveryReport>("WorkRe
   workId: Schema.NonEmptyString.check(Schema.isMaxLength(4096)),
   disposition: Schema.Literals(["repaired", "deferred", "none", "unknown"]),
   submission: Schema.optionalKey(RecoveryReport),
-  /** An owning transport transition still needs a timed check; external Unknown waits omit it. */
+  /**
+   * An owning transport transition still needs a timed check; external Unknown waits omit it.
+   * Derived fractional durations round up to the next millisecond.
+   */
   retryAtMillis: Schema.optionalKey(Schema.Natural),
 }) {}
 
@@ -10450,7 +10453,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         workId: entry.id,
         disposition,
         ...(submission === undefined ? {} : { submission }),
-        ...(retryAtMillis === undefined ? {} : { retryAtMillis }),
+        ...(retryAtMillis === undefined ? {} : { retryAtMillis: Math.ceil(retryAtMillis) }),
       });
 
     const invalid = () =>
