@@ -91,6 +91,20 @@
         "wrangler": "catalog:",
       },
     },
+    "examples/durable-bench": {
+      "name": "@yielded/agent-example-durable-bench",
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "@types/node": "catalog:",
+        "@yielded/agent": "workspace:*",
+        "@yielded/agent-platform-cloudflare": "workspace:*",
+        "effect": "catalog:",
+        "effect-cf": "catalog:",
+        "esbuild": "catalog:",
+        "miniflare": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/travel-planner": {
       "name": "@yielded/agent-example-travel-planner",
       "dependencies": {
@@ -1756,6 +1770,8 @@
     "@yielded/agent-example-cloudflare-memory": ["@yielded/agent-example-cloudflare-memory@workspace:tooling/cloudflare-memory"],
 
     "@yielded/agent-example-context-continuity-eval": ["@yielded/agent-example-context-continuity-eval@workspace:tooling/context-continuity-eval"],
+
+    "@yielded/agent-example-durable-bench": ["@yielded/agent-example-durable-bench@workspace:examples/durable-bench"],
 
     "@yielded/agent-example-pr-review-eval": ["@yielded/agent-example-pr-review-eval@workspace:tooling/pr-review-eval"],
 

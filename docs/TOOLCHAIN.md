@@ -580,6 +580,10 @@ observe and must accompany claims about the exact candidate and configuration it
 
 ## CI and hooks
 
+Opening, reopening, updating, marking ready, or retargeting a PR runs CI. Title and
+description edits create only a skipped run; they do not cancel active CI or replace
+its required `ready` result.
+
 Every PR runs CI and reports the required `ready` result. CI selects work from the complete PR
 diff, including both paths of a rename:
 
@@ -703,6 +707,8 @@ previous main revision, and have exactly the PR head's tree. Squash and two-pare
 supported; changed bases, merge resolutions and other topologies select ordinary CI. The proof
 rechecks ordinary source CI and the latest successful version-PR CI attempt, including its actual
 build, package checks and `ready` command. It never chains source approval through another fast path.
+Completed metadata skips do not supersede build or paid-gate evidence. A later failed,
+cancelled, or unfinished attempt still prevents reuse.
 
 Each build uploads one `release-build-<run>-<attempt>` artifact containing package `dist` files and
 the Action bundle, bound to its Git tree, commit and parents. Consumers check the authenticated

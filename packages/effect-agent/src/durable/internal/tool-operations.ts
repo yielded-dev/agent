@@ -117,17 +117,18 @@ export const toolOperationStates = (
   });
 };
 
-/** Unclosed effects, including explicit Unknown evidence even if other facts claim dispatch was blocked. */
+/** Explicit Unknown evidence stays unresolved even if other facts claim dispatch was blocked. */
+export const isUnresolvedToolOperation = (state: ToolOperationState): boolean =>
+  !state.settled &&
+  !state.resolved &&
+  (state.unknown ||
+    (!state.dispatchBlocked &&
+      (state.operation.executionClass !== "readonly" ||
+        state.operation.executionKind !== "ordinary")));
+
+/** Unclosed effects derived from canonical declaration and closure facts. */
 export const unresolvedToolOperations = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   runId?: RunId,
 ): ReadonlyArray<ToolOperationState> =>
-  toolOperationStates(records, runId).filter(
-    (state) =>
-      !state.settled &&
-      !state.resolved &&
-      (state.unknown ||
-        (!state.dispatchBlocked &&
-          (state.operation.executionClass !== "readonly" ||
-            state.operation.executionKind !== "ordinary"))),
-  );
+  toolOperationStates(records, runId).filter(isUnresolvedToolOperation);
