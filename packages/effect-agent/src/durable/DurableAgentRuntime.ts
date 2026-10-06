@@ -1660,6 +1660,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return yield* invalid("Run continuation has no exact original admitted input");
       const frontier = yield* resolve(cursor.lastFact);
 
+      // An intact frontier does not prove that every earlier locator entry is present.
+      if (
+        own.reduce((count, entry) => count + (entry.sequence <= frontier.sequence ? 1 : 0), 0) !==
+        cursor.recordCount
+      )
+        return yield* invalid(
+          "Run continuation has incomplete canonical evidence; rebuild its locator explicitly",
+        );
+
       if (
         frontier.batchId !== envelope.batchId ||
         frontier.sequence >= envelope.sequence ||

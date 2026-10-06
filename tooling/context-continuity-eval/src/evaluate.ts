@@ -412,10 +412,10 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
       yield* fs.writeFileString(`${checkpointPath}.tmp`, json);
       yield* fs.rename(`${checkpointPath}.tmp`, checkpointPath);
-      yield* fs.writeFileString(
-        path.join(options.outputDirectory, `barrier-${phase.index}.json`),
-        json,
-      );
+      const barrierPath = path.join(options.outputDirectory, `barrier-${phase.index}.json`);
+
+      yield* fs.writeFileString(`${barrierPath}.tmp`, json);
+      yield* fs.rename(`${barrierPath}.tmp`, barrierPath);
 
       // No scope closes and no failure is returned. Only the supervisor's SIGKILL ends this attempt.
       return yield* Effect.never;
