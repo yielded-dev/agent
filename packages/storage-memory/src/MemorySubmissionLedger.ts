@@ -143,6 +143,7 @@ import {
   MutableRef,
   Option,
   Ref,
+  Result,
   Schema,
   Stream,
 } from "effect";
@@ -869,7 +870,14 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         .checkThreadCapacity(request.threadId)
         .pipe(Effect.mapError((cause) => ledgerError("admit", cause.message, cause)));
       const nowMillis = yield* Clock.currentTimeMillis;
-      const identity = yield* mintIdentity("admit");
+      const retained = yield* Ref.get(state);
+
+      const identity = retained.admissionIndex.has(
+        admissionKey(request.threadId, request.principal, request.idempotencyKey),
+      )
+        ? Result.fail(ledgerError("admit", "Retained admission disappeared"))
+        : yield* Effect.result(mintIdentity("admit"));
+
       const services = yield* Effect.context<never>();
 
       const decision = yield* Ref.modify(
@@ -1001,6 +1009,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               current,
             ];
 
+          // A concurrent matching acceptance still wins over a failed fresh allocation.
+          if (Result.isFailure(identity)) return [failure(identity.failure), current];
+
           const lane = current.lanes.get(request.threadId) ?? {
             nextQueueSequence: 1,
             producerEpoch: 0,
@@ -1015,7 +1026,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             ];
 
           // Native work scans compare Submission identities lexically.
-          const orderedIdentity = `${String(freshAdmissionSequence).padStart(16, "0")}-${identity}`;
+          const orderedIdentity = `${String(freshAdmissionSequence).padStart(16, "0")}-${identity.success}`;
           const submissionId = decodeSubmissionId(`submission-memory-${orderedIdentity}`);
           const receiptId = decodeReceiptId(`receipt-memory-${orderedIdentity}`);
 

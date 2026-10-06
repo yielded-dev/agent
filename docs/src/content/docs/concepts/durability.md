@@ -182,6 +182,8 @@ pages per Thread. It returns Submission `reports`, content-free `workReports`, o
 fault per failed Thread, and a resumable `cursor`. Follow that cursor to finish the scan. Selected
 evidence is released between owners. Blocked Threads cannot be claimed until recovery succeeds.
 Pass `{ threadId }` to recover one Thread independently, preserving that selection when resuming.
+Scoped continuations stay compact and bound to that Thread. Global continuations retain one
+routing identity, so their size grows with the supported Thread identity.
 The host owns durable fault visibility and retry scheduling outside the execution log. The
 default cooperative recovery bound is 30 seconds per Thread (`recoveryTimeout`). Interruption
 and global SQL/control-identity scan failures still fail the sweep. A recovery fault never settles accepted work,

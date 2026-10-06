@@ -5,4 +5,4 @@
 "@yielded/agent-storage-cloudflare": patch
 ---
 
-Keep work-discovery cursors compact and bound fresh Memory identities independently of imported facts. Reject fresh admissions that cannot fit within a complete 32 MiB transfer page before retaining any work.
+Keep work and recovery continuations representable for accepted Thread identities and reject oversized fresh admissions before retaining work. Bound fresh Memory identities independently of imported facts and preserve exact receipt replays when UUID generation is unavailable.
