@@ -2225,13 +2225,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     });
   });
 
-  /** Validate all original declarations before any reconciliation callback can observe them. */
+  /** Check all declaration identities; validate full owning responses and isolate selected calls. */
   const declaredCallsFor = Effect.fnUntraced(function* (
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     runId: RunId,
+    selectedIds: ReadonlySet<string>,
   ) {
     const calls = new Map<string, DeclaredToolCall>();
     const turns = new Set<number>();
+    const identities = new Set<string>();
 
     for (const { record } of records) {
       const response = record.payload;
@@ -2247,6 +2249,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
       turns.add(response.turn);
 
+      for (const operation of response.toolOperations) {
+        if (identities.has(operation.toolCallId))
+          return yield* RunJournalError.make({
+            message: "Operation evidence differs from the original declaration",
+          });
+        identities.add(operation.toolCallId);
+      }
+      if (!response.toolOperations.some((operation) => selectedIds.has(operation.toolCallId)))
+        continue;
+
       const messagesDigest = yield* withCrypto(digestJson(response.messages)).pipe(
         Effect.mapError((cause) =>
           RunJournalError.make({ message: "Cannot verify original Tool response", cause }),
@@ -2258,7 +2270,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           message: "Original Tool response has an invalid digest",
         });
       const declared = yield* declaredToolCalls(response.messages);
-      const identities = new Set<string>();
 
       for (const operation of response.toolOperations) {
         const matches = declared.application.filter(
@@ -2267,16 +2278,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         const call = matches[0];
 
-        if (
-          call === undefined ||
-          matches.length !== 1 ||
-          identities.has(operation.toolCallId) ||
-          calls.has(operation.toolCallId)
-        )
+        if (call === undefined || matches.length !== 1)
           return yield* RunJournalError.make({
             message: "Operation evidence differs from the original declaration",
           });
-        identities.add(operation.toolCallId);
+        if (!selectedIds.has(operation.toolCallId)) continue;
 
         const parameters = yield* decodePersisted(call.params).pipe(
           Effect.map(copyJson),
@@ -2303,7 +2309,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           }),
         );
       }
-      if (identities.size !== declared.application.length)
+      if (response.toolOperations.length !== declared.application.length)
         return yield* RunJournalError.make({
           message: "Declared Tool batch has incomplete operation evidence",
         });
@@ -2943,7 +2949,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     yield* pendingToolBatchFor(records, runId);
     const operations = operationsFor(records, runId);
-    const declaredByCallId = yield* declaredCallsFor(records, runId);
+
+    const declaredByCallId = yield* declaredCallsFor(
+      records,
+      runId,
+      new Set(openCalls.map((call) => call.toolCallId)),
+    );
 
     for (const call of openCalls) {
       const declared = declaredByCallId.get(call.toolCallId);
@@ -9283,17 +9294,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     snapshot: RecoverySnapshot,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
   ) {
-    const intents = [...resolutionIntentsFor(snapshot).values()];
+    const intents = [...resolutionIntentsFor(snapshot).values()].filter(
+      (intent) => intent.resolution._tag === "SafeToRetry",
+    );
 
-    if (!intents.some((intent) => intent.resolution._tag === "SafeToRetry")) return false;
+    if (intents.length === 0) return false;
     const submission = snapshot.submission;
     const current = yield* currentOperationsFor(submission);
     const operations = operationsFor(records, runIdForSubmission(submission.submissionId));
 
-    const declared = yield* declaredCallsFor(records, runIdForSubmission(submission.submissionId));
+    const declared = yield* declaredCallsFor(
+      records,
+      runIdForSubmission(submission.submissionId),
+      new Set(intents.map((intent) => intent.toolCallId)),
+    );
 
     for (const intent of intents) {
-      if (intent.resolution._tag !== "SafeToRetry") continue;
       const original = declared.get(intent.toolCallId);
 
       if (
@@ -10188,7 +10204,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         operation: "recover operation",
         message: "Selected operation evidence is incomplete",
       });
-    const declared = (yield* declaredCallsFor(records, owner.runId)).get(owner.toolCallId);
+
+    const declared = (yield* declaredCallsFor(
+      records,
+      owner.runId,
+      new Set([owner.toolCallId]),
+    )).get(owner.toolCallId);
 
     if (declared === undefined)
       return yield* RunJournalError.make({
@@ -11449,7 +11470,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           (state) => state.operation.toolCallId === command.toolCallId,
         );
 
-        const declared = yield* declaredCallsFor(records, runId);
+        const declared = yield* declaredCallsFor(records, runId, new Set([command.toolCallId]));
 
         if (
           state === undefined ||
@@ -11627,13 +11648,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }),
       );
     }
-    const declared = yield* declaredCallsFor(read.records, runId);
 
     const pendingIds = new Set(
       toolOperationStates(read.records, runId)
         .filter((state) => !state.settled && !state.resolved)
         .map((state) => state.operation.toolCallId),
     );
+
+    const declared = yield* declaredCallsFor(read.records, runId, pendingIds);
 
     const row = snapshot.submission;
 
@@ -11655,7 +11677,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         inputRecorded: evidence.inputRecorded,
         abortRecorded: evidence.abortRecorded,
         openToolCalls: evidence.openToolCalls,
-        pendingOperations: [...declared.values()].filter((call) => pendingIds.has(call.toolCallId)),
+        pendingOperations: [...declared.values()],
         openDelegationCalls: evidence.openDelegationCalls,
         approvalsPending: evidence.approvalsPending,
         unknownCalls,
