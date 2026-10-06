@@ -303,6 +303,26 @@ the chosen operation and target), `BrowserUse.jevWait`, and the model's own span
 Wikipedia routing and Kitesurf connection setup remain example-owned. The lab's Browser Sessions
 adapter does not use `InteractiveBrowser`'s separate guarded-action implementation.
 
+### Keep native browser runs fast
+
+Each native operation is a round trip to the remote browser, and each navigation also pays for
+the new page's parse and layout. These measurements come from the browser speed lab racing across
+long Wikipedia articles in Browser Run:
+
+- **Pause only navigations.** Puppeteer's `setRequestInterception(true)` holds every stylesheet,
+  script and image for a round trip and disables the cache. To restrict where a page may go, enable
+  CDP `Fetch` with a `resourceType: "Document"` pattern instead. In the lab, a long article
+  became interactive in 1.0 s instead of 1.4 s.
+- **Skip observations you will not read.** When the host reads the next page itself,
+  `act(actions, { observe: false })` saved about 1.1 s per click on a long article.
+- **Check a condition once before polling.** `page.waitForFunction` sets up polling in each new
+  document. A single `page.evaluate` of the same condition is one round trip; in the lab, checking
+  first cut the arrival wait from about 0.5 s to under 0.1 s. The check can fail while a navigation
+  commits, so fall back to the wait.
+
+Large pages still cost parse and layout time that no option removes: one to two seconds for the
+longest Wikipedia articles.
+
 ## Capture one rendered page from Node
 
 This complete composition captures rendered Markdown through the Node-safe REST adapter. The
