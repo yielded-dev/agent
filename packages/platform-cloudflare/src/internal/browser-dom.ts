@@ -666,9 +666,23 @@ export const checkDom = pageFunction(
       if (!(root instanceof Document || root instanceof ShadowRoot)) continue;
       for (const modal of root.querySelectorAll(modalSelector)) {
         if (
-          modal instanceof HTMLElement &&
-          modal.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
-          !ancestors.has(modal)
+          !(modal instanceof HTMLElement) ||
+          ancestors.has(modal) ||
+          !modal.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+        )
+          continue;
+        const box = modal.getBoundingClientRect();
+
+        // An ARIA modal without an on-screen box, such as a collapsed cart drawer, covers
+        // nothing; the hit test below still refuses anything an open overlay obstructs.
+        if (
+          modal.matches("dialog:modal") ||
+          (box.width > 0 &&
+            box.height > 0 &&
+            box.right > 0 &&
+            box.bottom > 0 &&
+            box.left < innerWidth &&
+            box.top < innerHeight)
         )
           return false;
       }
