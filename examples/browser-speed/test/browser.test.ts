@@ -1,3 +1,5 @@
+import { createServer, type Server } from "node:http";
+
 import { assert, it } from "@effect/vitest";
 import {
   BrowserSessionError,
@@ -88,6 +90,119 @@ it.live("refuses a replaced observed target and recovers with fresh native input
       yield* browser.native((page) => page.$eval("#count", (node) => node.textContent)),
       "1",
       "Exactly one trusted native input",
+    );
+  }).pipe(Effect.scoped),
+);
+
+// Payment and address fields live in cross-origin frames that Chrome runs out of process.
+// Guarded input must reach them exactly once, like main-frame controls.
+it.live("fills and clicks inside a cross-origin frame", (test) =>
+  Effect.gen(function* () {
+    const executable = yield* Config.option(Config.String("BROWSER_TEST_EXECUTABLE"));
+
+    if (Option.isNone(executable)) return test.skip();
+
+    const serve = (host: string, body: string) =>
+      Effect.acquireRelease(
+        Effect.promise(
+          () =>
+            new Promise<Server>((resolve) => {
+              const server = createServer((_, response) => {
+                response.writeHead(200, { "content-type": "text/html" });
+                response.end(body);
+              }).listen(0, host, () => resolve(server));
+            }),
+        ),
+        (server) => Effect.promise(() => new Promise((resolve) => server.close(resolve))),
+      );
+
+    const child = yield* serve(
+      "localhost",
+      `<label>First name <input id="first"></label><button id="go">Go</button><output id="out"></output><script>
+      document.querySelector('#go').addEventListener('click', e => { document.querySelector('#out').textContent += (e.isTrusted ? '' : 'untrusted:') + document.querySelector('#first').value + ';'; });
+      </script>`,
+    );
+
+    const childPort = (child.address() as { port: number }).port;
+
+    const parent = yield* serve(
+      "127.0.0.1",
+      // Stripe's frames carry an identity transform and sit below the fold.
+      `<p style="margin-bottom:1400px">Checkout</p><iframe title="Secure address input frame" src="http://localhost:${childPort}/" style="width:400px;height:200px;transform:translateZ(0)"></iframe>`,
+    );
+
+    const parentPort = (parent.address() as { port: number }).port;
+
+    const chrome = yield* Effect.acquireRelease(
+      Effect.promise(() => puppeteer.launch({ executablePath: executable.value, headless: true })),
+      (browser) => Effect.promise(() => browser.close()),
+    );
+
+    const connection = yield* Effect.acquireRelease(
+      Effect.promise(() => browserPuppeteer.connect({ browserWSEndpoint: chrome.wsEndpoint() })),
+      (browser) => Effect.promise(() => browser.disconnect()),
+    );
+
+    const page = yield* Effect.promise(() => connection.newPage());
+
+    const session: Pick<BrowserSession, "run"> = {
+      run: (authorize, action) =>
+        authorize.pipe(
+          Effect.andThen(
+            Effect.tryPromise({
+              try: () => action(page),
+              catch: () =>
+                new BrowserSessionError({
+                  reason: "provider",
+                  dispatch: "possibly-dispatched",
+                  cleanup: "not-requested",
+                }),
+            }),
+          ),
+        ),
+    };
+
+    const trace = yield* makeTrace(request("create"), "no-model");
+
+    const browser = yield* makeBrowser(session, false, () => {}).pipe(
+      Effect.provideService(Trace, trace),
+    );
+
+    yield* browser.native(async (page) => {
+      await page.goto(`http://127.0.0.1:${parentPort}/`, { waitUntil: "load" });
+      await page.waitForFrame((frame) => frame.url().startsWith(`http://localhost:${childPort}`));
+    });
+    const initial = yield* browser.observe();
+    const frame = initial.frames?.find((value) => value.url.startsWith("http://localhost:"));
+
+    assert.isDefined(frame, "The cross-origin frame must be listed");
+    const inside = yield* browser.inspect({ frame: frame!.ref });
+
+    const first = inside.controls.find(
+      (control) => control.name === "First name" && control.editable,
+    );
+
+    assert.isDefined(first, "Inspection must reach the frame's controls");
+    const filled = yield* browser.act([{ kind: "fill", ref: first!.ref, value: "Test" }]);
+
+    assert.strictEqual(filled.completed, 1, filled.error ?? "fill was refused");
+
+    const go = (yield* browser.inspect({ frame: frame!.ref })).controls.find(
+      (control) => control.name === "Go",
+    );
+
+    const clicked = yield* browser.act([{ kind: "click", ref: go!.ref }]);
+
+    assert.strictEqual(clicked.completed, 1, clicked.error ?? "click was refused");
+    assert.strictEqual(
+      yield* browser.native((page) =>
+        page
+          .frames()
+          .find((value) => value.url().startsWith(`http://localhost:${childPort}`))!
+          .$eval("#out", (node) => node.textContent),
+      ),
+      "Test;",
+      "Exactly one trusted click after the fill",
     );
   }).pipe(Effect.scoped),
 );

@@ -710,7 +710,7 @@ export const checkDom = pageFunction(
 
 /** Translate a checked child point and refuse input through hidden/covered frame owners. */
 export const checkFrameDom = pageFunction(
-  (node: Element, point: { x: number; y: number }, scroll: boolean) => {
+  async (node: Element, point: { x: number; y: number }, scroll: boolean) => {
     if (
       !(node instanceof HTMLElement) ||
       !node.isConnected ||
@@ -718,16 +718,44 @@ export const checkFrameDom = pageFunction(
       !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
     )
       return false;
-    if (scroll) node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    if (scroll) {
+      node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      // Input into an out-of-process frame is routed by the compositor's last frame, not by
+      // live layout. Let a frame with the new scroll position render before input follows.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
     const style = getComputedStyle(node);
 
-    // A transformed coordinate space needs a native geometry adapter; never guess.
+    // The bounding rect already includes translations. Anything that scales, rotates, skews or
+    // projects the frame needs a native geometry adapter; never guess.
     let ancestor: Element | null = node;
 
     while (ancestor !== null) {
       const current = getComputedStyle(ancestor);
 
-      if (current.transform !== "none" || (current.zoom !== "1" && current.zoom !== "normal"))
+      const matrix = new DOMMatrixReadOnly(
+        current.transform === "none" ? undefined : current.transform,
+      );
+
+      if (
+        !(
+          matrix.m11 === 1 &&
+          matrix.m12 === 0 &&
+          matrix.m13 === 0 &&
+          matrix.m14 === 0 &&
+          matrix.m21 === 0 &&
+          matrix.m22 === 1 &&
+          matrix.m23 === 0 &&
+          matrix.m24 === 0 &&
+          matrix.m31 === 0 &&
+          matrix.m32 === 0 &&
+          matrix.m33 === 1 &&
+          matrix.m34 === 0 &&
+          matrix.m44 === 1
+        ) ||
+        current.perspective !== "none" ||
+        (current.zoom !== "1" && current.zoom !== "normal")
+      )
         return false;
       ancestor = ancestor.parentElement;
     }
