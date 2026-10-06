@@ -346,6 +346,9 @@ export const executeTask = Effect.fnUntraced(function* (
         `${prompt}\n\nJev drove this browser first and stopped: ${result.message} Its last steps: ${steps}. Continue from the current page; check the cart and fix anything Jev got wrong.\n\nCurrent browser observation:\n${encodeObservation(observation)}`,
         next.actionsLayer,
       );
+      trace.update({
+        message: `Jev took ${result.steps.length} steps and stopped (${result.stop}): ${result.message} Model: ${trace.snapshot().message}`,
+      });
     }
   } else if (input.mode === "scripted") {
     trace.update({ message: "Running browser sequence…" });
