@@ -1,0 +1,11 @@
+{
+  "name": "durable-bench-third-party",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/chord": "1.0.4",
+    "@earendil-works/pi-ai": "1.0.4",
+    "@earendil-works/pi-durable": "1.0.4",
+    "tardie": "0.44.0"
+  }
+}
