@@ -18,6 +18,7 @@ import {
   canonicalRecordBytes,
   isWorkHandoff,
   prepareProgressAppend,
+  ProgressAppendReader,
   validateProgressAppend,
 } from "@yielded/agent/run-continuation";
 import {
@@ -904,20 +905,21 @@ const makeThreadStore = Effect.gen(function* () {
       thread.tailDigest === request.expectedTailDigest &&
       !thread.batches.has(request.batch.batchId)
     )
-      yield* validateProgressAppend(
-        prepareProgressAppend(request.batch.records),
-        (runId) =>
-          Effect.gen(function* () {
-            const latest = thread.continuations.get(runId)?.at(-1);
+      yield* validateProgressAppend(prepareProgressAppend(request.batch.records)).pipe(
+        Effect.provideService(ProgressAppendReader, {
+          previous: (runId) =>
+            Effect.gen(function* () {
+              const latest = thread.continuations.get(runId)?.at(-1);
 
-            if (latest === undefined) return undefined;
-            if (latest.record.payload._tag !== "RunContinuation")
-              return yield* storeError("append", "Invalid newest Run continuation");
+              if (latest === undefined) return undefined;
+              if (latest.record.payload._tag !== "RunContinuation")
+                return yield* storeError("append", "Invalid newest Run continuation");
 
-            return latest.record.payload;
-          }),
-        (next) =>
-          Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
+              return latest.record.payload;
+            }),
+          initial: (next) =>
+            Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
+        }),
       );
 
     const currentWork = (yield* Ref.get(workState)).get(request.threadId);
