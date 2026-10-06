@@ -16,8 +16,9 @@ import type { JoinedToHost } from "../core/Receipt.ts";
 import { IdempotencyKey, QueueSequence, Principal } from "../core/Receipt.ts";
 import { RunUsageSummary } from "../core/Usage.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
-import type { RecordEnvelope } from "./Records.ts";
+import { canonicalJson } from "./Digest.ts";
 import {
+  type RecordEnvelope,
   AbortRequested,
   ApprovalDecision,
   BatchId,
@@ -33,6 +34,7 @@ import {
   SettlementOutcome,
   ToolApprovalDecided,
   ToolCallResolved,
+  type ToolCallSettled,
   ToolCallUnknown,
   WorkerAdmission,
 } from "./Records.ts";
@@ -828,6 +830,15 @@ export const unknownResolutionKind = (resolution: UnknownResolution): UnknownRes
     ? "factual"
     : "execution";
 
+/** A new factual intent cannot replace an already committed Tool result. */
+export const unknownResolutionMatchesResult = (
+  resolution: UnknownResolution,
+  result: ToolCallSettled,
+): boolean =>
+  resolution._tag === "CompletedWithResult" &&
+  resolution.isFailure === result.isFailure &&
+  canonicalJson(resolution.result) === canonicalJson(result.result);
+
 /**
  * A durable Unknown-Outcome resolution command (DUR-017, `abort`-shaped). Possession of the
  * runtime service plus the mandatory `author`/`reason` audit fields is the Phase 5 authorization
@@ -848,6 +859,7 @@ export class UnknownResolutionCommand extends Schema.Class<UnknownResolutionComm
  * The recorded resolution intent, idempotent per `(submissionId, toolCallId, kind)`. An
  * execution decision remains immutable when later supplier truth closes the original effect;
  * divergent decisions or divergent factual outcomes conflict within their respective kind.
+ * New factual outcomes also have to agree with any already committed Tool result.
  * The canonical `ToolCallResolved` (+ `ToolCallSettled` for `CompletedWithResult`) is appended
  * by the recovery pass or the next owning Attempt; `canonicalRecordId` is present once it is.
  */
@@ -984,8 +996,8 @@ export class ApprovalConflict extends Schema.TaggedError<ApprovalConflict>()("Ap
 }) {}
 
 /**
- * A divergent unknown-outcome re-resolution for an already-resolved `(submissionId, toolCallId)`
- * pair (DUR-017). Repeating the SAME resolution replays the recorded intent instead.
+ * A resolution contradicts an accepted intent of the same kind or an already committed Tool
+ * result (DUR-017). Repeating the SAME accepted resolution replays the recorded intent instead.
  */
 export class UnknownResolutionConflict extends Schema.TaggedError<UnknownResolutionConflict>()(
   "UnknownResolutionConflict",
@@ -1142,7 +1154,9 @@ export type SubmissionLedgerFailure =
  * - `recordUnknownResolution` — durable, idempotent per `(submissionId, toolCallId, kind)`;
  *   divergent decisions or factual outcomes fail with `UnknownResolutionConflict`. Later
  *   factual closure preserves the original execution decision. New execution permission after
- *   factual closure conflicts. Transitions `unknown → input-applied` once every open call is
+ *   factual closure conflicts. Before retaining a new factual intent, adapters check the
+ *   canonical Tool result under the journal's write boundary, even on a nonterminal Run.
+ *   Transitions `unknown → input-applied` once every open call is
  *   covered, waking the lane. Settled lanes accept only factual closure and never reopen.
  * - `scanNonterminal` — streams control-only entries for every Submission whose state is not
  *   `settled`, ordered by (threadId, queueSequence); recovery's admission-independent worklist

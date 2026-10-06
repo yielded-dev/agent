@@ -160,7 +160,7 @@ remains unfinished. A settled or stopped worker retains its source capacity unti
 effects are factually resolved. Authorized `CompletedWithResult` and `NeverHappened` resolutions
 can record that truth after settlement; they preserve the original receipt and outcome.
 The destination owns acknowledgement publication until factual effects are recorded; the source
-copies that acknowledgement to release its input capacity.
+retains a retry deadline and copies that acknowledgement to release its input capacity.
 
 `runtime.discoverWork({ threadId, limit, cursor })` returns identities, owning state references,
 and scheduling metadata. It reads no execution payloads and grants no ownership or authority.
@@ -292,7 +292,8 @@ an approval after possible execution cannot restore it. Parameter rejection prov
 of its individual call. Approved calls without results remain uncertain.
 
 Recovery uses the original recorded arguments and operation contract. `CompletedWithResult`
-injects a confirmed result; `NeverStarted` proves nonexecution. `SafeToRetry` permits another
+injects a confirmed result and must agree with any already committed tool result; `NeverStarted`
+proves nonexecution. `SafeToRetry` permits another
 attempt under compatible original semantics, but cannot authorize changed code or erase uncertainty.
 Readonly and idempotent calls retain their declared replay behavior. Unsupported effects stay unknown.
 

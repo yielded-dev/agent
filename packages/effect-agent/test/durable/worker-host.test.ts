@@ -1519,15 +1519,15 @@ layer(NodeCrypto.layer)((it) => {
 
       if (input?.record.payload._tag !== "WorkerInputRequested")
         return yield* Effect.die("Missing reservation");
-      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe(false);
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("delivery-owned");
       yield* h.host.stop({
         worker: start.worker,
         target,
         idempotencyKey: IdempotencyKey.make("stop-unadmitted"),
       });
       expect(h.logs.has(start.worker.threadId)).toBe(false);
-      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe(true);
-      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe(true);
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("repaired");
+      expect(yield* h.runtime.repairInput(sourceId, input.record.payload)).toBe("repaired");
       expect(
         h.logs
           .get(sourceId)!

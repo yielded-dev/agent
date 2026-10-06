@@ -5,12 +5,19 @@ import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { MessageAdmission, type MessageStatus } from "@yielded/agent/messaging";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
+import {
+  ResolutionAbortSubmission,
+  ResolutionCompletedWithResult,
+  UnknownResolutionCommand,
+} from "@yielded/agent/submission-ledger";
 import { WorkerCompletion, WorkerUpdate } from "@yielded/agent/worker";
-import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Effect, Schema } from "effect";
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { Clock, Effect, Schema } from "effect";
 import { DurableObject } from "effect-cf";
+import { TestClock } from "effect/testing";
 import { expect, it } from "vite-plus/test";
 
+import { ThreadMaintenance } from "../src/Alarm.ts";
 import { CloudflareThreadClient } from "../src/CloudflareThreadClient.ts";
 import {
   backgroundSource,
@@ -43,8 +50,16 @@ import {
   submitOptions,
   armRuntimeEviction,
   armedEvictionsRemaining,
+  maintenanceClocks,
 } from "./fixtures.ts";
-import { allSettled, drainAlarmsUntil, runClient, stubFor, readCanonical } from "./harness.ts";
+import {
+  allSettled,
+  drainAlarmsUntil,
+  runClient,
+  stubFor,
+  readCanonical,
+  scheduledAlarm,
+} from "./harness.ts";
 import {
   armWorkerInputContention,
   workerInputContentions,
@@ -701,6 +716,200 @@ it("drains private worker progress through rebuilt runtime maintenance into an i
     droppedMessageWakes.delete(started.worker.threadId);
   }
 });
+
+// Regression: https://github.com/yielded-dev/agent/commit/01f16e998e6c0dbedcf29fd5e518e5bf59c154f1
+// A successful deferral has no retained fault; only the source's physical alarm can recover a
+// later factual acknowledgement when remote wake hints are lost, including after eviction.
+it("retains an alarm for a settled worker's factual acknowledgement with dropped wakes", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const source = `background-cf-report-${crypto.randomUUID()}`;
+      const sourceThreadId = decodeThreadId(source);
+
+      const run = <A, E>(
+        thread: string,
+        body: Effect.Effect<A, E, DurableAgentRuntime | ThreadMaintenance | MessageDeliveryStore>,
+      ) =>
+        Effect.promise(() =>
+          runInDurableObject(stubFor(thread), (instance) =>
+            instance[DurableObject.RunSymbol](body),
+          ),
+        );
+
+      const discover = DurableAgentRuntime.use((runtime) =>
+        Effect.gen(function* () {
+          let page = yield* runtime.discoverWork({ threadId: sourceThreadId, limit: 32 });
+          const entries = [...page.entries];
+
+          while (page.cursor !== undefined) {
+            page = yield* runtime.discoverWork({
+              threadId: sourceThreadId,
+              limit: 32,
+              cursor: page.cursor,
+            });
+            entries.push(...page.entries);
+          }
+
+          return entries;
+        }),
+      );
+
+      yield* TestClock.setTime(Date.now() + 86_400_000);
+      maintenanceClocks.set(source, yield* Clock.Clock);
+      droppedMessageWakes.add(source);
+      backgroundWakeDropPrefixes.add("worker:");
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          maintenanceClocks.delete(source);
+          droppedMessageWakes.delete(source);
+          backgroundWakeDropPrefixes.delete("worker:");
+          backgroundReportGates.delete(source);
+        }),
+      );
+
+      yield* Effect.promise(() =>
+        runClient(
+          CloudflareThreadClient.use((client) =>
+            client.submit(
+              { definition: backgroundSource },
+              { question: "initialize" },
+              submitOptions(source, "source"),
+            ),
+          ),
+        ),
+      );
+      yield* run(
+        source,
+        ThreadMaintenance.use((maintenance) => maintenance.pass),
+      );
+      expect(yield* Effect.promise(allSettled(source))).toBe(true);
+
+      const started = yield* Effect.promise(() =>
+        withOwner(source, (host) =>
+          Subagent.start(
+            backgroundReportingWorkers,
+            { question: source },
+            { idempotencyKey: decodeIdempotencyKey("factual-acknowledgement") },
+          ).pipe(Effect.provideService(SubagentHost, host)),
+        ),
+      );
+
+      armRuntimeEviction(started.worker.threadId, "tools:after-dispatch-fence");
+      backgroundReportGates.add(source);
+      yield* Effect.promise(() =>
+        drainAlarmsUntil(started.worker.threadId, async () =>
+          (await readCanonical(started.worker.threadId)).some(
+            ({ record }) => record.payload._tag === "ToolCallUnknown",
+          ),
+        ),
+      );
+      expect(armedEvictionsRemaining(started.worker.threadId)).toBe(0);
+
+      const accepted = yield* Effect.promise(() =>
+        withOwner(source, (host) =>
+          Subagent.inspect(
+            backgroundReportingWorkers,
+            started.worker,
+            started.delivery.message,
+          ).pipe(Effect.provideService(SubagentHost, host)),
+        ),
+      );
+
+      if (accepted.receipt === null) throw new Error("Expected the original worker Receipt");
+
+      const command = {
+        submissionId: accepted.receipt.submissionId,
+        toolCallId: UnknownResolutionCommand.fields.toolCallId.make("checkpoint"),
+        author: "fixture-operator",
+        reason: "Stop the Run while the original checkpoint remains uncertain",
+      };
+
+      yield* run(
+        started.worker.threadId,
+        DurableAgentRuntime.use((runtime) =>
+          runtime.resolveUnknown(
+            UnknownResolutionCommand.make({
+              ...command,
+              resolution: ResolutionAbortSubmission.make(),
+            }),
+          ),
+        ),
+      );
+      yield* Effect.promise(() =>
+        drainAlarmsUntil(started.worker.threadId, allSettled(started.worker.threadId)),
+      );
+
+      const delivery = yield* run(
+        source,
+        MessageDeliveryStore.use((store) =>
+          store.get({
+            ownerThreadId: sourceThreadId,
+            messageId: started.delivery.message.messageId,
+          }),
+        ),
+      );
+
+      expect(delivery).toMatchObject({ status: "processed" });
+      const before = yield* Effect.promise(() => scheduledAlarm(source));
+
+      if (before === null) throw new Error("Expected the source's enrolled maintenance alarm");
+      yield* TestClock.setTime(before);
+      yield* Effect.promise(() => runDurableObjectAlarm(stubFor(source)));
+
+      const inventory = yield* run(source, discover);
+
+      expect(inventory.some((entry) => entry.owner._tag === "WorkerInput")).toBe(true);
+      expect(yield* Effect.promise(allSettled(source))).toBe(true);
+      expect(
+        yield* Effect.promise(() =>
+          runInDurableObject(stubFor(source), (_instance, state) =>
+            state.storage.list({ prefix: "effect-agent:thread-recovery-fault:v1:" }),
+          ),
+        ).pipe(Effect.map((faults) => faults.size)),
+      ).toBe(0);
+      expect(yield* Effect.promise(() => scheduledAlarm(source))).not.toBeNull();
+
+      yield* Effect.promise(() => evictDurableObject(stubFor(source)));
+      yield* run(
+        started.worker.threadId,
+        DurableAgentRuntime.use((runtime) =>
+          runtime.resolveUnknown(
+            UnknownResolutionCommand.make({
+              ...command,
+              reason: "The original checkpoint is now factually confirmed",
+              resolution: ResolutionCompletedWithResult.make({ result: "ready", isFailure: false }),
+            }),
+          ),
+        ),
+      );
+      const acknowledgement = `worker-effects-resolved:${started.delivery.message.messageId}`;
+
+      yield* Effect.promise(() =>
+        drainAlarmsUntil(started.worker.threadId, async () =>
+          (await readCanonical(started.worker.threadId)).some(
+            ({ record }) => record.recordId === acknowledgement,
+          ),
+        ),
+      );
+      for (let retry = 0; retry < 3; retry++) {
+        const deadline = yield* Effect.promise(() => scheduledAlarm(source));
+
+        if (deadline === null) break;
+        yield* TestClock.setTime(deadline);
+        yield* Effect.promise(() => runDurableObjectAlarm(stubFor(source)));
+      }
+      const child = yield* Effect.promise(() => readCanonical(started.worker.threadId));
+      const parent = yield* Effect.promise(() => readCanonical(source));
+
+      expect(
+        parent.find(({ record }) => record.recordId === acknowledgement)?.record.payload,
+      ).toEqual(child.find(({ record }) => record.recordId === acknowledgement)?.record.payload);
+      expect(
+        (yield* run(source, discover)).some((entry) => entry.owner._tag === "WorkerInput"),
+      ).toBe(false);
+      expect(yield* Effect.promise(() => scheduledAlarm(source))).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+  ));
 
 it("delivers one frozen standard report after child eviction and source eviction with all wake hints dropped", async () => {
   const source = `background-cf-report-${crypto.randomUUID()}`;

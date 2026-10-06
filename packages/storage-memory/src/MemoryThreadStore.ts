@@ -642,6 +642,12 @@ const prepareIndexes = (
           JSON.stringify([payload.runId, payload.toolCallId, "approval"]),
           entry,
         );
+      if (payload._tag === "ToolCallSettled")
+        appendToIndex(
+          operationAppends,
+          JSON.stringify([payload.runId, payload.toolCallId, "settled"]),
+          entry,
+        );
     }
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
@@ -2870,6 +2876,18 @@ const makeThreadStore = Effect.gen(function* () {
       record: (threadId, recordId) =>
         Ref.get(state).pipe(
           Effect.map((current) => current.threads.get(threadId)?.byId.get(recordId)?.record),
+        ),
+      toolCallResults: (threadId, runId, toolCallId) =>
+        Ref.get(state).pipe(
+          Effect.map((current) =>
+            (
+              current.threads
+                .get(threadId)
+                ?.operationRecords.get(JSON.stringify([runId, toolCallId, "settled"])) ?? []
+            )
+              .slice(0, 2)
+              .map((entry) => entry.record),
+          ),
         ),
       tail: (threadId) => inspectTail(ThreadTailRequest.make({ threadId })),
     }),

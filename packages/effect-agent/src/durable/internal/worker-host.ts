@@ -1168,7 +1168,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
           if (
             input?.record.payload._tag === "WorkerInputRequested"
-              ? yield* repairInput(sourceThreadId, input.record.payload)
+              ? (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired"
               : yield* repairReservation(sourceThreadId, entry)
           )
             changed = true;
@@ -1257,7 +1257,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     let incumbent = false;
 
     for (const { request, completion } of completions) {
-      if (yield* repairInput(threadId, request, completion)) changed = true;
+      if ((yield* repairInput(threadId, request, completion)) === "repaired") changed = true;
       else if (worker !== undefined) incumbent = true;
     }
 
@@ -2163,7 +2163,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         if (input.record.payload._tag !== "WorkerInputRequested")
           return yield* failure("inspect", "corrupt");
 
-        return yield* repairInput(sourceThreadId, input.record.payload);
+        return (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired";
       }
     }
 
@@ -2278,7 +2278,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           if (input.record.payload._tag !== "WorkerInputRequested")
             return yield* failure("inspect", "corrupt");
 
-          return yield* repairInput(sourceThreadId, input.record.payload);
+          return (yield* repairInput(sourceThreadId, input.record.payload)) === "repaired";
         }
       }
 
@@ -2351,7 +2351,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     sourceThreadId: ThreadId,
     request: WorkerInputRequested,
     completion?: Option.Option<CanonicalRecordEnvelope>,
-  ): Effect.fn.Return<boolean, WorkerError> {
+  ): Effect.fn.Return<"repaired" | "delivery-owned" | "awaiting-effects", WorkerError> {
     const admission = request.admission;
 
     const reserved = Option.getOrUndefined(
@@ -2365,7 +2365,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       reserved.record.payload.inputDigest !== request.inputDigest
     )
       return yield* failure("inspect", "corrupt");
-    if (yield* repairReservation(sourceThreadId, reserved)) return true;
+    if (yield* repairReservation(sourceThreadId, reserved)) return "repaired";
     const id = RecordId.make(`worker-effects-resolved:${admission.messageId}`);
 
     if (Option.isNone(deps.deliveries)) return yield* failure("inspect", "unavailable");
@@ -2388,13 +2388,13 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     // Settlement alone cannot release capacity; the exact child fact below can.
     // The delivery driver owns settlement polling. Normal maintenance waits for its local
     // observation; capacity pressure supplies an exact foreign read without polling live Runs.
-    if (completion === undefined && delivery.settlement === null) return false;
+    if (completion === undefined && delivery.settlement === null) return "delivery-owned";
 
     const child = Option.getOrUndefined(completion ?? (yield* readInputCompletion(admission)));
 
     // Only the child storage owner publishes factual acknowledgements. Its native WorkerEffects
     // obligation survives settlement and operation closure; source recovery copies that evidence.
-    if (child === undefined) return false;
+    if (child === undefined) return "awaiting-effects";
     const payload = child.record.payload;
 
     if (
@@ -2429,7 +2429,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         )
           return yield* failure("inspect", "corrupt");
 
-        return true;
+        return "repaired";
       }
 
       const tail = yield* deps.store
@@ -2437,7 +2437,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         .pipe(Effect.mapError(storageFailure("inspect")));
 
       if (yield* append(sourceThreadId, id, payload, { ...tail, records: [] }, "completion"))
-        return true;
+        return "repaired";
     }
 
     return yield* failure("inspect", "storage");
