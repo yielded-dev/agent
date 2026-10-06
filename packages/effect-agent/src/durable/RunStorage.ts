@@ -287,8 +287,9 @@ export const make = Effect.gen(function* () {
         let closed = false;
         let released = false;
         const gate = yield* Semaphore.make(1);
-        // A waiting append or settlement must not prevent the lease from being renewed.
-        const renewalGate = yield* Semaphore.make(1);
+        // Serialize token use with rotation acknowledgements without blocking renewal
+        // on canonical writes, which use the producer epoch.
+        const ownershipGate = yield* Semaphore.make(1);
 
         const ownership = yield* bindRunOwnership(
           request.threadId,
@@ -303,7 +304,7 @@ export const make = Effect.gen(function* () {
             // allows the Scope finalizer to retry the release with the latest token.
             closed = true;
             // Finish any token rotation before releasing its returned authority.
-            yield* renewalGate.withPermits(1)(ownership.release);
+            yield* ownershipGate.withPermits(1)(ownership.release);
             released = true;
           }).pipe(Effect.uninterruptible),
         );
@@ -344,7 +345,7 @@ export const make = Effect.gen(function* () {
             );
             const writer = yield* makeRunWriter(request.threadId, claimed.producerEpoch);
 
-            const renew = renewalGate.withPermits(1)(
+            const renew = ownershipGate.withPermits(1)(
               Effect.gen(function* () {
                 if (closed)
                   return yield* OwnershipLost.make({
@@ -365,7 +366,7 @@ export const make = Effect.gen(function* () {
               }).pipe(Effect.uninterruptible),
             );
 
-            const owned = <A, E>(effect: Effect.Effect<A, E>) =>
+            const command = <A, E>(effect: Effect.Effect<A, E>) =>
               gate.withPermits(1)(
                 Effect.suspend((): Effect.Effect<A, E | LedgerError> =>
                   closed
@@ -378,6 +379,9 @@ export const make = Effect.gen(function* () {
                     : effect,
                 ),
               );
+
+            const owned = <A, E>(effect: Effect.Effect<A, E>) =>
+              command(ownershipGate.withPermits(1)(effect));
 
             const canonical = <A, E>(effect: Effect.Effect<A, E>) =>
               gate.withPermits(1)(
@@ -435,24 +439,28 @@ export const make = Effect.gen(function* () {
                   ),
                 ),
               publishSettlement: (batch) =>
-                owned<SettlementPublicationResult, SettlementPublicationFailure>(
+                command<SettlementPublicationResult, SettlementPublicationFailure>(
                   Effect.gen(function* () {
                     let tail = yield* writer.tail;
 
                     for (let retries = 0; ; retries++) {
-                      const result = yield* publisher
-                        .publish(
-                          SettlementPublication.make({
-                            submissionId: claimed.submissionId,
-                            authority: { _tag: "Owned", ownershipToken: token },
-                            append: FencedAppendRequest.make({
-                              threadId: request.threadId,
-                              producerEpoch: claimed.producerEpoch,
-                              expectedTailSequence: tail.sequence,
-                              expectedTailDigest: tail.digest,
-                              batch,
-                            }),
-                          }),
+                      const result = yield* ownershipGate
+                        .withPermits(1)(
+                          Effect.suspend(() =>
+                            publisher.publish(
+                              SettlementPublication.make({
+                                submissionId: claimed.submissionId,
+                                authority: { _tag: "Owned", ownershipToken: token },
+                                append: FencedAppendRequest.make({
+                                  threadId: request.threadId,
+                                  producerEpoch: claimed.producerEpoch,
+                                  expectedTailSequence: tail.sequence,
+                                  expectedTailDigest: tail.digest,
+                                  batch,
+                                }),
+                              }),
+                            ),
+                          ),
                         )
                         .pipe(
                           Effect.catchTag("AppendConflict", (conflict) => {
@@ -479,7 +487,11 @@ export const make = Effect.gen(function* () {
                           }),
                         );
 
-                      if (result === undefined) continue;
+                      if (result === undefined) {
+                        // Let a queued renewal finish before the next attempt captures its token.
+                        yield* Effect.yieldNow;
+                        continue;
+                      }
                       yield* writer.refresh;
 
                       return result;
