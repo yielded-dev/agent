@@ -3,8 +3,8 @@ import { Effect, Schema, Stream } from "effect";
 import type { RunId, ThreadId } from "../core/Identifiers.ts";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
 import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import { CanonicalSequence } from "./Records.ts";
-import { verifyRunContinuations } from "./RunContinuation.ts";
+import { CanonicalSequence, type CanonicalRecordEnvelope, type RecordId } from "./Records.ts";
+import { canonicalRunIds, reference, verifyRunContinuations } from "./RunContinuation.ts";
 import {
   submissionInputRecordId,
   submissionSettlementRecordId,
@@ -22,7 +22,7 @@ import {
   ThreadImportRejected,
   ThreadImportReader,
 } from "./ThreadImport.ts";
-import { ThreadExport, type ThreadCheckpoint, type ThreadStoreError } from "./ThreadStore.ts";
+import { ThreadExport, ThreadStoreError, type ThreadCheckpoint } from "./ThreadStore.ts";
 
 /** All reads share the export snapshot. No lifetime identity sets or materialization. */
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
@@ -48,6 +48,40 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   };
 
   const progress = makeThreadImportProgress();
+
+  // Canonical pages, not the disposable Run directory, determine what must be recomputed.
+  // Retain only one bounded selection; interleaved Runs may require another explicit read.
+  let verifiedRun:
+    | { readonly runId: RunId; readonly records: ReadonlyMap<RecordId, CanonicalRecordEnvelope> }
+    | undefined;
+
+  const readVerifiedRun = Effect.fnUntraced(function* (runId: RunId) {
+    if (verifiedRun?.runId === runId) return verifiedRun.records;
+    verifiedRun = undefined;
+    const records = yield* reader.runRecords(runId);
+    let after = 0;
+
+    for (const entry of records) {
+      if (
+        entry.threadId !== input.threadId ||
+        entry.sequence <= after ||
+        entry.sequence > (progress.manifest?.tailSequence ?? 0) ||
+        !canonicalRunIds(entry.record).includes(runId)
+      )
+        return yield* ThreadStoreError.make({
+          operation: "verify Run continuation",
+          message: "Run evidence has foreign ownership or invalid canonical ordering",
+        });
+      after = entry.sequence;
+    }
+    yield* verifyRunContinuations(records);
+    const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
+
+    verifiedRun = { runId, records: byId };
+
+    return byId;
+  });
+
   let lastInputQueue = -1;
   let checkpointDigest = input.checkpoint?.throughSequence === 0 ? EMPTY_TAIL_DIGEST : undefined;
 
@@ -81,6 +115,27 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         if (batch.lastSequence === input.checkpoint?.throughSequence)
           checkpointDigest = batch.tailDigest;
       for (const entry of prepared.records) {
+        yield* Effect.gen(function* () {
+          for (const runId of canonicalRunIds(entry.record)) {
+            const selected = (yield* readVerifiedRun(runId)).get(entry.record.recordId);
+
+            if (
+              selected === undefined ||
+              selected.sequence !== entry.sequence ||
+              selected.batchId !== entry.batchId ||
+              (yield* reference(selected.record)).digest !== (yield* reference(entry.record)).digest
+            )
+              fail(
+                "continuation-evidence",
+                `Canonical record ${entry.record.recordId} is missing or differs from recomputed Run evidence`,
+              );
+          }
+        }).pipe(
+          Effect.match({
+            onSuccess: () => undefined,
+            onFailure: (e) => fail("continuation-evidence", e.message),
+          }),
+        );
         yield* verifyImportedReferences(entry).pipe(
           Effect.match({
             onSuccess: () => undefined,
@@ -132,15 +187,14 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     }),
   );
   yield* Stream.runForEach(input.runs, (runId) =>
-    Effect.gen(function* () {
-      yield* verifyRunContinuations(yield* reader.runRecords(runId)).pipe(
-        Effect.match({
-          onSuccess: () => undefined,
-          onFailure: (e) => fail("continuation-evidence", e.message),
-        }),
-      );
-    }),
+    readVerifiedRun(runId).pipe(
+      Effect.match({
+        onSuccess: () => undefined,
+        onFailure: (e) => fail("continuation-evidence", e.message),
+      }),
+    ),
   );
+  verifiedRun = undefined;
   let submissionCount = 0;
   const workerSeal = progress.manifest?.workerSeal;
   let sealTerminalEvidence = workerSeal?.terminal === undefined;

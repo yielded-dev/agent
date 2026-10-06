@@ -17,7 +17,8 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
 
 - `explain(submissionId)` and `explainThread(threadId)` return the recovery decision,
   operator meaning, and expected disposition. They write nothing.
-- `verify(threadId)` runs read-only integrity checks, including the canonical batch digest chain.
+- `verify(threadId)` checks the canonical batch digest chain and recomputes Run continuations from
+  their referenced facts. Missing or mismatched progress fails integrity verification.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
   decision. Repairs with a claim annotate their attempt using that claim's epoch; state-only wakes
   and marker repairs do not append canonical audit records. Retry refuses settled work and requests

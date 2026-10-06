@@ -2,6 +2,7 @@ import { BrowserCrypto } from "@effect/platform-browser";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   DoStorageCompatibilityError,
+  DoStorageFailpointError,
   DoValueBoundExceeded,
 } from "@yielded/agent-storage-cloudflare/do-storage-error";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
@@ -257,6 +258,121 @@ const batch = (
   });
 
 describe("DoThreadStore", () => {
+  // #792 retired recovery-checkpoint writes. Layout 21 appends progress with its
+  // facts; the Node run-continuation.test.ts compaction rows cannot prove DO reopen.
+  // The retirement case above separately covers actual Object/cache destruction.
+  for (const [location, mode] of [
+    ["append:before", "failure"],
+    ["append:after", "interrupt"],
+  ] as const) {
+    it(`reopens safely after ${mode} at ${location}`, async () => {
+      const name = `crash-reopen-${mode}-${crypto.randomUUID()}`;
+      const threadId = thread(name);
+      const submissionId = id(SubmissionId, "crash-reopen-submission");
+      const runId = runIdForSubmission(submissionId);
+
+      const input = CanonicalRecord.make({
+        ...inputRecord("crash-reopen-input", "Kyoto"),
+        payload: UserInputRecorded.make({ submissionId, runId, kind: "user", input: "Kyoto" }),
+      });
+
+      const start = CanonicalRecord.make({
+        ...input,
+        recordId: id(CanonicalRecord.fields.recordId, "crash-reopen-start"),
+        payload: RunStartedRecord.make({
+          runId,
+          policyAccountingVersion: 1,
+          maxDurationMillis: 30_000,
+        }),
+      });
+
+      let prepared: CanonicalBatch | undefined;
+      let reached = false;
+
+      const failed = await withThreadStorage(name, (storage) =>
+        Effect.gen(function* () {
+          const store = yield* ThreadStore;
+
+          yield* store.materialize(
+            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
+          );
+          const writer = yield* makeRunWriter(threadId, epoch(1));
+          const progress = yield* makeProgressWriter(threadId, start.deploymentId);
+
+          yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
+            Effect.provideService(CurrentRunWriter, {
+              ...writer,
+              append: (compiled) => {
+                prepared = compiled;
+
+                return writer.append(compiled);
+              },
+            }),
+          );
+        }).pipe(
+          Effect.provide(
+            layer({
+              storage,
+              failpoint: (point) => {
+                if (point !== location) return Effect.void;
+                reached = true;
+
+                return mode === "failure"
+                  ? Effect.fail(DoStorageFailpointError.make({ location }))
+                  : Effect.interrupt;
+              },
+            }).pipe(Layer.provideMerge(BrowserCrypto.layer)),
+          ),
+          Effect.exit,
+        ),
+      );
+
+      expect(reached).toBe(true);
+      expect(Exit.isFailure(failed)).toBe(true);
+      const compiled = prepared;
+
+      if (compiled === undefined) throw new Error("Progress append was not prepared");
+      await withThreadStorage(name, (storage) =>
+        Effect.gen(function* () {
+          const store = yield* ThreadStore;
+          const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+          const committed = location === "append:after";
+
+          expect(before.records).toHaveLength(committed ? 3 : 0);
+          expect(Option.isSome(yield* readContinuation(threadId, runId, before.tailSequence))).toBe(
+            committed,
+          );
+
+          const request = FencedAppendRequest.make({
+            threadId,
+            producerEpoch: epoch(1),
+            expectedTailSequence: sequence(0),
+            expectedTailDigest: EMPTY_TAIL_DIGEST,
+            batch: compiled,
+          });
+
+          expect((yield* store.append(request)).replayed).toBe(committed);
+          const after = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+          expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
+            "UserInputRecorded",
+            "RunStarted",
+            "RunContinuation",
+          ]);
+          expect(
+            Option.getOrUndefined(yield* readContinuation(threadId, runId, after.tailSequence))
+              ?.continuation,
+          ).toMatchObject({
+            revision: 1,
+            recordCount: 2,
+            lastFact: { recordId: start.recordId },
+          });
+          expect((yield* store.append(request)).replayed).toBe(true);
+        }).pipe(Effect.provide(layer({ storage }).pipe(Layer.provideMerge(BrowserCrypto.layer)))),
+      );
+    });
+  }
+
   for (const decoder of ["CanonicalRecord"]) {
     it(`retains content-free ${decoder} diagnostics through the ThreadStore boundary`, () =>
       withThreadStorage(`decode-diagnostic:${decoder}`, (storage) =>
