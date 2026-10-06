@@ -287,6 +287,8 @@ export const make = Effect.gen(function* () {
         let closed = false;
         let released = false;
         const gate = yield* Semaphore.make(1);
+        // A waiting append or settlement must not prevent the lease from being renewed.
+        const renewalGate = yield* Semaphore.make(1);
 
         const ownership = yield* bindRunOwnership(
           request.threadId,
@@ -300,7 +302,8 @@ export const make = Effect.gen(function* () {
             // Stop writes before releasing database authority; a failed acknowledgement still
             // allows the Scope finalizer to retry the release with the latest token.
             closed = true;
-            yield* ownership.release;
+            // Finish any token rotation before releasing its returned authority.
+            yield* renewalGate.withPermits(1)(ownership.release);
             released = true;
           }).pipe(Effect.uninterruptible),
         );
@@ -341,7 +344,7 @@ export const make = Effect.gen(function* () {
             );
             const writer = yield* makeRunWriter(request.threadId, claimed.producerEpoch);
 
-            const renew = gate.withPermits(1)(
+            const renew = renewalGate.withPermits(1)(
               Effect.gen(function* () {
                 if (closed)
                   return yield* OwnershipLost.make({
