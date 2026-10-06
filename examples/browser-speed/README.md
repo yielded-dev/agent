@@ -61,11 +61,11 @@ test card. **Check out on any store** does the same for a store link and item yo
 ever pays:
 
 - A guard keeps every page navigation on the store's site: its host without `www.`, and its
-  subdomains. Payment and captcha frames still load. Checkouts hosted elsewhere, such as Shop Pay
-  on `shop.app`, are blocked.
-- Host authorization refuses order and payment buttons, account creation and marketing opt-ins.
-  Once a card field is filled it refuses every further click and key press, so payment is never
-  submitted.
+  subdomains. Payment and captcha frames still load. The one exception is `shop.app/checkout/`,
+  where Shopify sends every checkout before returning it to the store.
+- Host authorization refuses order and payment buttons, account creation and marketing opt-ins,
+  and types the test email only on checkout pages, never into signup popups. Once a card field is
+  filled it refuses every further click and key press, so payment is never submitted.
 - On Hedge Coffee the host then reads the checkout itself. The run passes only with exactly one
   bag, quantity 1, completed email and delivery steps, the payment step active, and the test card
   entered. Any-store runs are not verified; the report says whether the host saw the card entered.
@@ -76,7 +76,8 @@ Store tasks need a model agent: Jev reads the main document only, so it cannot r
 and card fields inside payment-provider frames. Choosing a store task selects GPT-6 Sol at low
 reasoning, which found those frames. A Hedge run takes about 30 actions and 0.7 to 1 million input
 tokens. Hedge uses whole-page observations; any store uses viewport observations and scrolling,
-because whole catalog pages outgrow the agent's context.
+because whole catalog pages outgrow the agent's context. Any-store runs filled checkout on
+Sightglass and Verve; Onyx's signup popup has no control the agent can close.
 
 ## Run a standalone browser journey
 

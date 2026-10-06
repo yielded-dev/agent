@@ -24,9 +24,14 @@ export const openStore = Effect.fnUntraced(function* (url: string, product?: str
 
   const onSite = (address: string) => {
     try {
-      const { host } = new URL(address);
+      const { host, pathname } = new URL(address);
 
-      return host === site || host.endsWith(`.${site}`);
+      // Shopify routes every checkout through Shop Pay's checkout pages on shop.app first.
+      return (
+        host === site ||
+        host.endsWith(`.${site}`) ||
+        (host === "shop.app" && pathname.startsWith("/checkout/"))
+      );
     } catch {
       return false;
     }

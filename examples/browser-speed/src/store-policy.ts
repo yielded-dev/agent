@@ -35,14 +35,24 @@ const purchase =
 
 const marketing = /subscribe|newsletter|mailing list|marketing|email me|text me/i;
 const account = /create (an )?account|sign up|register|save my information/i;
+const email = /e-?mail/i;
 const cardField = /card ?number|expir|security code|\bcvc\b|\bcvv\b/i;
+
+const onCheckout = (url: string | undefined) => {
+  try {
+    return new URL(url ?? "").pathname.toLowerCase().includes("checkout");
+  } catch {
+    return false;
+  }
+};
 
 const refuse = (message: string) =>
   Effect.fail(new BrowserUseError({ code: "invalid", message, dispatch: "not-dispatched" }));
 
 /**
- * Host authorization for real stores: no purchase buttons, no marketing opt-ins, no accounts, and
- * once a card field is filled no further clicks or key presses, so payment is never submitted.
+ * Host authorization for real stores: no purchase buttons, no marketing opt-ins, no accounts, the
+ * test email only on checkout pages (never in signup popups), and once a card field is filled no
+ * further clicks or key presses, so payment is never submitted.
  */
 export const makeCheckoutPolicy = () => {
   let cardEntered = false;
@@ -66,6 +76,10 @@ export const makeCheckoutPolicy = () => {
       );
     if (purchase.test(name))
       return refuse("The lab never places an order. No input was dispatched; finish the run.");
+    if (kind === "fill" && email.test(name) && !onCheckout(context.pageUrl))
+      return refuse(
+        "The lab enters the test email only on checkout pages, never in signup forms. No input was dispatched; close the popup instead.",
+      );
     if (account.test(name))
       return refuse(
         "The lab checks out as a guest and never creates an account. No input was dispatched.",

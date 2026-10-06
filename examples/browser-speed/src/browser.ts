@@ -163,6 +163,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
       Layer.succeed(BrowserUse.BrowserControl, {
         ...controller.control,
         scroll: (request) => trace.measure("action", "Scroll", controller.control.scroll(request)),
+        press: (request) => trace.measure("action", "Press", controller.control.press(request)),
       }),
     ),
     inspect: controller.control.inspect,
