@@ -23,9 +23,10 @@ Shared sign-in uses `https://auth.yielded.dev` as its OpenID issuer. Register cl
 `https://agent.yielded.dev/travel/auth/yielded/callback`. Set `AUTH_YIELDED_ISSUER`
 to that issuer and `AUTH_YIELDED_CLIENT_SECRET` to its separate client secret.
 The central GitHub app's callback stays at Auth. Direct GitHub sign-in remains
-under **Use an existing Agent account**, with its own OAuth app and callback
-`https://agent.yielded.dev/travel/auth/github/callback`; do not replace that
-callback with Auth's. Set `AUTH_ORIGIN` to `https://agent.yielded.dev` and retain
+under **Use an existing Agent account**, with callback
+`https://agent.yielded.dev/travel/auth/github/callback`. If it shares a GitHub OAuth
+app with Auth, register both exact callback entries and retain those needed by
+other consumers; see [GitHub's callback rules](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls). Set `AUTH_ORIGIN` to `https://agent.yielded.dev` and retain
 `auth@effect-agent.com` as the email sender.
 This stack owns only `agent.yielded.dev/travel*` on `yielded.dev`; the existing DNS
 record and the browser lab's root and `/browser-use*` routes stay externally managed.
