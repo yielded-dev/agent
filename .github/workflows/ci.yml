@@ -10,9 +10,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    # Retargeting a PR changes its diff without changing the head commit.
-    # The jobs below ignore title and description edits.
-    types: [opened, reopened, synchronize, ready_for_review, edited]
+    # Even an all-skipped edited run can supersede the real required checks.
+    # Ignore metadata edits at the trigger, rather than skipping their jobs.
+    types: [opened, reopened, synchronize, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -20,8 +20,7 @@ permissions:
 
 concurrency:
   # Let main finish publishing a baseline while newer PR runs supersede old ones.
-  # Metadata edits must not cancel a run that is validating the PR.
-  group: ci-${{ github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base) && github.ref || github.run_id }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -31,7 +30,6 @@ env:
 jobs:
   changes:
     name: Select required checks
-    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -483,10 +481,9 @@ jobs:
   # Fan-in for branch protection: the required status check is named `ready`.
   # It runs even after a PR gate fails, and never posts a main-push ready check.
   ready:
-    # A skipped metadata edit must not replace the required check's real result.
-    name: ${{ github.event.action == 'edited' && !github.event.changes.base && 'PR metadata edit' || 'ready' }}
+    name: ready
     needs: [changes, release-proof, checks, test, build, docs, release-gates]
-    if: ${{ always() && (github.event.action != 'edited' || github.event.changes.base) && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
