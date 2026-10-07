@@ -82,7 +82,10 @@ provider, returned flow ID and return target for callback completion. Effect Ato
 owns this workflow, registration and query invalidation; React dispatches and renders.
 **Continue with Yielded** reuses the current Auth account automatically, then
 verifies issuer, audience, nonce, PKCE and the signed identity before establishing
-an Agent session. Without an Auth session, Auth starts GitHub sign-in automatically. **Use another
+an Agent session. Agent requests `max_age=240` so authentication stays within its
+five-minute evidence policy, including time to complete the callback. Auth starts
+GitHub sign-in automatically when its session is absent or older than that limit;
+the original `auth_time` is preserved. **Use another
 Yielded account** explicitly requests account selection; new permissions require
 consent. Cancelling returns to login with a retry action. Auth
 and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.

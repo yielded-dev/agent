@@ -10,6 +10,7 @@ import * as Sessions from "@yielded/auth/Sessions";
 import { Effect, Layer, Redacted, Schema } from "effect";
 
 import { LoginApi, Registration } from "./contract";
+import { requirement } from "./schema";
 
 export const AuthConfiguration = Schema.Struct({
   AUTH_ORIGIN: Schema.String.check(
@@ -148,6 +149,8 @@ export const makeAuth = (config: AuthConfiguration) => {
                   clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
                   redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
                   scopes: ["openid", "profile"],
+                  // Refresh old issuer sessions before returning; leave a minute for completion.
+                  maxAgeSeconds: Math.floor(requirement.maximumAgeMillis / 1000) - 60,
                 },
               ],
             }),
