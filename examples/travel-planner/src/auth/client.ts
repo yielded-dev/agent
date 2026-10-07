@@ -104,9 +104,11 @@ const PendingOAuth = Schema.fromJsonString(
 const startOAuth = Effect.fn("Login.startOAuth")(function* ({
   provider,
   returnTarget,
+  selectAccount = false,
 }: {
   readonly provider: Provider;
   readonly returnTarget: ReturnTarget;
+  readonly selectAccount?: boolean;
 }) {
   const registry = yield* AtomRegistry.AtomRegistry;
 
@@ -123,12 +125,18 @@ const startOAuth = Effect.fn("Login.startOAuth")(function* ({
       Schema.encodeSync(PendingOAuth)({ flowId: started.flowId, returnTarget, provider }),
     ),
   );
-  yield* browser(() => location.assign(Redacted.value(started.authorizationUrl)));
+  yield* browser(() => {
+    const url = new URL(Redacted.value(started.authorizationUrl));
+
+    if (provider === "yielded" && selectAccount) url.searchParams.set("prompt", "select_account");
+    location.assign(url.href);
+  });
 });
 
 export const oauthLogin = Atom.fn<{
   readonly provider: Provider;
   readonly returnTarget: ReturnTarget;
+  readonly selectAccount?: boolean;
 }>()((input, get) => {
   get.set(activeProvider, input.provider);
 

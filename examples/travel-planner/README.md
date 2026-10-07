@@ -80,9 +80,11 @@ a 30-second request and response-body deadline; timed-out mutations are not retr
 Provider sign-in creates flow IDs on the server; the browser retains only the
 provider, returned flow ID and return target for callback completion. Effect Atom
 owns this workflow, registration and query invalidation; React dispatches and renders.
-**Continue with Yielded** asks the user to confirm the shared account at Auth, then
+**Continue with Yielded** reuses the current Auth account automatically, then
 verifies issuer, audience, nonce, PKCE and the signed identity before establishing
-an Agent session. Cancelling consent returns to login with a retry action. Auth
+an Agent session. Without an Auth session, Auth starts GitHub sign-in automatically. **Use another
+Yielded account** explicitly requests account selection; new permissions require
+consent. Cancelling returns to login with a retry action. Auth
 and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
 The browser lab already consumes this Agent session, so the same login covers it;
 Sync and docs are not connected by this change.

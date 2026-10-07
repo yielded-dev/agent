@@ -2799,6 +2799,10 @@
   color: var(--yl-text-muted);
   font-size: 13.5px;
 }
+.login-switch {
+  width: 100%;
+  margin: 8px 0 14px;
+}
 .login-quiet:not(:disabled):hover {
   color: var(--yl-text);
   text-decoration: underline;

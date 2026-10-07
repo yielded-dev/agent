@@ -78,9 +78,13 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             >
               Continue with Yielded →
             </button>
-            <p className="login-note">
-              Continue at auth.yielded.dev to choose your Yielded account.
-            </p>
+            <button
+              className="login-quiet login-switch"
+              disabled={busy}
+              onClick={() => startOAuth({ provider: "yielded", returnTarget, selectAccount: true })}
+            >
+              Use another Yielded account
+            </button>
             <details>
               <summary>Use an existing Agent account</summary>
               <button
@@ -235,7 +239,7 @@ export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
           </h1>
           <p>
             {step === "yielded"
-              ? "Taking you to auth.yielded.dev to choose your account."
+              ? "Using your Yielded account, or taking you to GitHub to sign in."
               : step === "github"
                 ? "Taking you to GitHub to continue."
                 : step === "callback"

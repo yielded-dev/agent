@@ -148,7 +148,6 @@ export const makeAuth = (config: AuthConfiguration) => {
                   clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
                   redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
                   scopes: ["openid", "profile"],
-                  authorizationParameters: { prompt: "select_account" },
                 },
               ],
             }),
