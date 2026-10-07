@@ -3,6 +3,9 @@ import { adopt } from "alchemy/AdoptPolicy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Config, Effect, Layer } from "effect";
 
+import { legacyDocsRedirectRules } from "./docs/legacy-redirect.ts";
+import { docsWorkerFirstPaths } from "./docs/worker.ts";
+
 // Deploys run against the account-wide Cloudflare state store so CI runs
 // share one state history; ALCHEMY_LOCAL_STATE=true keeps dry runs and local
 // experiments out of it. Alchemy's `state` option requires an infallible
@@ -41,9 +44,14 @@ const stack = Effect.gen(function* () {
     routes: [{ pattern: "yielded.dev/agent*", zoneName: "yielded.dev" }],
     workersDev: false,
     dev: { command: "vp run docs:dev" },
-    // Astro emits directory indexes and 404.html. Existing extensionless
-    // links redirect to the same page with a trailing slash.
-    assets: docsAssets,
+    // Astro emits directory indexes and 404.html. HTML handling keeps the
+    // /agent prefix. The Worker permanently redirects the site root onto
+    // /agent/ and serves the not-found document with status 404.
+    main: "./docs/worker.ts",
+    assets: {
+      ...docsAssets,
+      runWorkerFirst: [...docsWorkerFirstPaths],
+    },
     // The dist and cache directories are gitignored, so hashing docs/**
     // rebuilds exactly when a source page or the site config changes;
     // package.json is included because it owns the docs:build script.
@@ -57,22 +65,7 @@ const stack = Effect.gen(function* () {
   yield* Cloudflare.Ruleset.Ruleset("LegacyDocsRedirect", {
     zone: legacyZone,
     phase: "http_request_dynamic_redirect",
-    rules: [
-      {
-        action: "redirect",
-        expression: 'http.host in {"effect-agent.com" "www.effect-agent.com"}',
-        description: "Move agent documentation to yielded.dev/agent",
-        actionParameters: {
-          fromValue: {
-            statusCode: 301,
-            preserveQueryString: true,
-            targetUrl: {
-              expression: 'concat("https://yielded.dev/agent", http.request.uri.path)',
-            },
-          },
-        },
-      },
-    ],
+    rules: legacyDocsRedirectRules,
   });
 
   return { url: "https://yielded.dev/agent/" };
