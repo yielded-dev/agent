@@ -272,24 +272,21 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
 });
 
 /** Comparison-only adaptation: retain historical export semantics without changing adapters. */
-const exportArchive = (module: {
-  readonly streamExport?: typeof ThreadStorage.streamExport;
-  readonly ThreadExportSource?: typeof ThreadStorage.ThreadExportSource;
-}): Stream.Stream<
+const exportArchive = (): Stream.Stream<
   ThreadStorage.ThreadExport,
   ThreadStorage.ThreadStoreError | ThreadStorage.ThreadNotMaterialized | BenchmarkError,
-  ThreadStorage.ThreadStore
+  ThreadStorage.ThreadStore | ThreadStorage.ThreadExportSource
 > => {
   const request = ThreadStorage.ThreadExportRequest.make({ threadId });
 
-  if (module.streamExport === undefined)
+  if (ThreadStorage.streamExport === undefined)
     return Stream.unwrap(
       Effect.map(ThreadStorage.ThreadStore, (store) => Stream.fromEffect(store.export(request))),
     );
-  if (module.ThreadExportSource === undefined)
+  if (ThreadStorage.ThreadExportSource === undefined)
     return Stream.fail(BenchmarkError.make({ message: "Streaming export has no source Layer" }));
 
-  return module.streamExport(request).pipe(Stream.provide(module.ThreadExportSource.layer()));
+  return ThreadStorage.streamExport(request);
 };
 
 /** Ledger growth includes its authoritative canonical settlement records on a separate Thread. */
@@ -697,6 +694,10 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             }),
         }).pipe(Layer.provide(ContextCompactor.layerRollover));
 
+      const completionHost = (ThreadStorage.ThreadExportSource?.layer() ?? Layer.empty).pipe(
+        Layer.provideMerge(host(false)),
+      );
+
       // Setup and seeding never enter the reported warm-operation interval.
       const seeds = yield* SeedTemplates;
 
@@ -738,7 +739,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         let completed = 0;
         let retained = 0;
 
-        yield* exportArchive(ThreadStorage).pipe(
+        yield* exportArchive().pipe(
           Stream.runForEach((page) =>
             Effect.gen(function* () {
               for (const { record } of page.records) {
@@ -812,7 +813,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         yield* markStart;
         yield* finish.pipe(
           Effect.provide(
-            Layer.mergeAll(host(false), model([script(finalParts(answer, 1))]), handlers),
+            Layer.mergeAll(completionHost, model([script(finalParts(answer, 1))]), handlers),
           ),
           Effect.scoped,
         );
@@ -825,7 +826,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         yield* markStart;
         yield* finish.pipe(
           Effect.provide(
-            Layer.mergeAll(host(false), model([script(finalParts(answer, 1))]), handlers),
+            Layer.mergeAll(completionHost, model([script(finalParts(answer, 1))]), handlers),
           ),
           Effect.scoped,
         );
