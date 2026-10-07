@@ -391,6 +391,11 @@ const makeJournal = (
         ),
     }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
 
+    yield* Effect.acquireRelease(
+      Effect.sync(() => state.invalidators.add(work.invalidate)),
+      () => Effect.sync(() => state.invalidators.delete(work.invalidate)),
+    );
+
     const workFailure = (cause: unknown) =>
       DoStorageError.make({
         operation: "publish Thread work",

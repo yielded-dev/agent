@@ -175,6 +175,13 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   const crypto = yield* Crypto.Crypto;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const recordJson = canonicalRecordJson(sql, options.namespace);
+  let tablesPresent = false;
+
+  // Schema presence belongs to this storage session. Owners invalidate it with their other
+  // disposable views after out-of-band maintenance; rebuilds and failed queries do so below.
+  const invalidate = () => {
+    tablesPresent = false;
+  };
 
   const admissionIndex = sql.onDialectOrElse({
     pg: () => sql``,
@@ -189,7 +196,13 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   });
 
   const query = <A extends object>(statement: ReturnType<typeof sql<A>>) =>
-    execute(statement).pipe(Effect.mapError((cause) => failure("query work index", cause)));
+    execute(statement).pipe(
+      Effect.mapError((cause) => {
+        invalidate();
+
+        return failure("query work index", cause);
+      }),
+    );
 
   // Do not materialize an oversized damaged derivative in the application process.
   const boundedEntryJson = sql`CASE WHEN ${sql.onDialectOrElse({
@@ -221,6 +234,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
   // Probe before referencing missing relations: a failed statement aborts PostgreSQL transactions.
   const present = Effect.fnUntraced(function* () {
+    if (tablesPresent) return true;
+
     const rows = yield* query(
       sql.onDialectOrElse({
         pg: () => sql`SELECT COUNT(*) AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -231,7 +246,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       }),
     );
 
-    return (yield* decode(CountRow, rows))[0].count === 2;
+    // Another storage writer can recreate missing derivatives; only retain successful probes.
+    tablesPresent = (yield* decode(CountRow, rows))[0].count === 2;
+
+    return tablesPresent;
   });
 
   const header = Effect.fnUntraced(function* (threadId: ThreadId) {
@@ -657,6 +675,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
       return yield* write(
         Effect.gen(function* () {
+          invalidate();
           yield* createSqlThreadWorkTables(options.namespace).pipe(
             Effect.provideService(SqlClient.SqlClient, sql),
           );
@@ -752,9 +771,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             processedBytes,
           });
         }),
-      );
+      ).pipe(Effect.ensuring(Effect.sync(invalidate)));
     }),
   };
 
-  return { storage, initialize, apply, transferDelivery };
+  return { storage, initialize, apply, transferDelivery, invalidate };
 });
