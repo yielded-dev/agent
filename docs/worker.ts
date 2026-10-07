@@ -35,7 +35,9 @@ interface DocsAssets {
 
 const permanentDirectoryRedirect = (requestUrl: URL): Response => {
   const target = new URL(requestUrl);
+
   target.pathname = AGENT_DIRECTORY;
+
   return Response.redirect(target, 308);
 };
 
@@ -49,8 +51,11 @@ export default {
       // `/agent/404` is the HTML-handling URL that serves `404.html` with a body.
       // ASSETS.fetch does not re-enter this Worker.
       const pageUrl = new URL(request.url);
+
       pageUrl.pathname = "/agent/404";
+
       const page = await env.ASSETS.fetch(new Request(pageUrl, request));
+
       return new Response(page.body, {
         status: 404,
         statusText: "Not Found",

@@ -48,5 +48,6 @@ export const legacyDocsRedirectRules = [
 export const legacyDocsTarget = (path: string): string => {
   if (path.endsWith(".html")) return origin + path.replace(new RegExp(htmlSuffix), "/");
   if (!path.endsWith("/") && !new RegExp(fileExtension).test(path)) return `${origin}${path}/`;
+
   return origin + path;
 };
