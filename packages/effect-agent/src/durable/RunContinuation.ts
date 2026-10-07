@@ -1619,7 +1619,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         yield* prepare(owned, after);
 
-        const response = batch.records.find(
+        const response = owned.records.find(
           (record) => record.payload._tag === "ModelResponseRecorded",
         );
 
@@ -1641,11 +1641,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         });
 
         const bytes =
-          batch.records.reduce((total, record) => total + canonicalRecordBytes(record), 0) +
+          owned.records.reduce((total, record) => total + canonicalRecordBytes(record), 0) +
           MAX_RUN_CONTINUATION_BYTES +
           pending.bytes;
 
-        const records = batch.records.length + pending.records;
+        const records = owned.records.length + pending.records;
 
         yield* checkCapacity(progress, new Set(), { turn: response.payload.turn, bytes, records });
         reservations.set(response.recordId, {
@@ -1654,6 +1654,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           bytes,
           records,
         });
+
+        return owned;
       }),
     );
 

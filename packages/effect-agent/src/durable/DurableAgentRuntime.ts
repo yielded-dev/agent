@@ -6128,10 +6128,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     operation: "reserve readonly dispatch",
                     message: "Dispatch has no scoped progress writer",
                   });
-                yield* progress
+
+                const batch = yield* progress
                   .defer(candidate.batch)
                   .pipe(Effect.provideService(CurrentRunWriter, ctx));
-                deferredResponse = candidate;
+
+                deferredResponse = { ...candidate, batch };
 
                 return "deferred" as const;
               }
