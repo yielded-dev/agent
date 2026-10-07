@@ -24,6 +24,14 @@ export class ExportedRecord extends RecordEnvelope.extend<ExportedRecord>(
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
 const sameRecord = Schema.toEquivalence(RecordEnvelope);
 
+// Both codecs validate RecordJson before this getter; decode the supported view once.
+const decodeView = SchemaGetter.transformEffect((value: RecordJson) =>
+  decodeRecord(value).pipe(
+    Effect.map((record) => new ExportedRecord({ ...record, wire: value }, { disableChecks: true })),
+    Effect.mapError((error) => error.issue),
+  ),
+);
+
 /** Decode at the archive boundary, retaining unknown additive fields for a lossless backup. */
 export const decodeExportRecord = Effect.fnUntraced(function* (format: string, input: RecordJson) {
   if (format !== CURRENT_RECORD_FORMAT)
@@ -41,12 +49,7 @@ export const decodeExportRecord = Effect.fnUntraced(function* (format: string, i
  */
 export const ExportRecord = RecordJson.pipe(
   Schema.decodeTo(Schema.toType(ExportedRecord), {
-    decode: SchemaGetter.transformEffect((value) =>
-      decodeRecord(value).pipe(
-        Effect.map((record) => ExportedRecord.make({ ...record, wire: value })),
-        Effect.mapError((error) => error.issue),
-      ),
-    ),
+    decode: decodeView,
     encode: SchemaGetter.transformEffect((record) =>
       decodeRecord(record.wire).pipe(
         Effect.mapError((error) => error.issue),
@@ -68,9 +71,7 @@ export const ExportRecord = RecordJson.pipe(
 /** Canonical read transport preserves exact evidence while exposing the supported typed view. */
 export const ReadRecord = RecordJson.pipe(
   Schema.decodeTo(Schema.toType(RecordEnvelope), {
-    decode: SchemaGetter.transformEffect((value) =>
-      Schema.decodeEffect(ExportRecord)(value).pipe(Effect.mapError((error) => error.issue)),
-    ),
+    decode: decodeView,
     encode: SchemaGetter.transformEffect((record) =>
       (record instanceof ExportedRecord
         ? Schema.encodeEffect(ExportRecord)(record)
@@ -85,7 +86,9 @@ export const ReadEnvelope = Schema.Struct({
   record: ReadRecord,
 }).pipe(
   Schema.decodeTo(Schema.toType(CanonicalRecordEnvelope), {
-    decode: SchemaGetter.transform((fields) => CanonicalRecordEnvelope.make(fields)),
+    decode: SchemaGetter.transform(
+      (fields) => new CanonicalRecordEnvelope(fields, { disableChecks: true }),
+    ),
     encode: SchemaGetter.transform((envelope) => envelope),
   }),
 );

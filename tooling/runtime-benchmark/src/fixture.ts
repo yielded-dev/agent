@@ -179,7 +179,7 @@ const retainedRuns = (records: number) => Math.max(0, Math.floor((records - 1) /
 const retainedInput = (index: number) => `retained input ${index}`;
 const retainedOutput = (index: number) => ({ answer: `retained-${index}` });
 
-/** Match PersistentHistory's input/model/completion triples with native prompt suffixes. */
+/** Completed input/model/completion triples; the final context retains every seeded exchange. */
 const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number) {
   const store = yield* ThreadStorage.ThreadStore;
 
@@ -212,7 +212,27 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
           ),
         );
 
-        payload = ModelCompleted.make({ runId, output: retainedOutput(index), messages });
+        // Current history is a complete model-context snapshot. Keep earlier snapshots small;
+        // the final one supplies the same entire prompt asserted on both compared revisions.
+        // Historical Schemas do not declare history and retain only their original suffixes.
+        const history =
+          "history" in ModelCompleted.fields && index === retainedRuns(count) - 1
+            ? yield* Schema.decodeUnknownEffect(PersistedJson)(
+                yield* Schema.encodeEffect(Prompt.Prompt)(
+                  Prompt.make(
+                    Array.from({ length: retainedRuns(count) }, (_, prior) => [
+                      { role: "user" as const, content: JSON.stringify(retainedInput(prior)) },
+                      {
+                        role: "assistant" as const,
+                        content: JSON.stringify(retainedOutput(prior)),
+                      },
+                    ]).flat(),
+                  ),
+                ),
+              )
+            : messages;
+
+        payload = ModelCompleted.make({ runId, output: retainedOutput(index), messages, history });
       } else payload = RunCompleted.make({ runId, output: retainedOutput(index) });
       records.push(
         RecordEnvelope.make({
@@ -250,6 +270,27 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
     );
   }
 });
+
+/** Comparison-only adaptation: retain historical export semantics without changing adapters. */
+const exportArchive = (module: {
+  readonly streamExport?: typeof ThreadStorage.streamExport;
+  readonly ThreadExportSource?: typeof ThreadStorage.ThreadExportSource;
+}): Stream.Stream<
+  ThreadStorage.ThreadExport,
+  ThreadStorage.ThreadStoreError | ThreadStorage.ThreadNotMaterialized | BenchmarkError,
+  ThreadStorage.ThreadStore
+> => {
+  const request = ThreadStorage.ThreadExportRequest.make({ threadId });
+
+  if (module.streamExport === undefined)
+    return Stream.unwrap(
+      Effect.map(ThreadStorage.ThreadStore, (store) => Stream.fromEffect(store.export(request))),
+    );
+  if (module.ThreadExportSource === undefined)
+    return Stream.fail(BenchmarkError.make({ message: "Streaming export has no source Layer" }));
+
+  return module.streamExport(request).pipe(Stream.provide(module.ThreadExportSource.layer()));
+};
 
 /** Ledger growth includes its authoritative canonical settlement records on a separate Thread. */
 const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
@@ -697,10 +738,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         let completed = 0;
         let retained = 0;
 
-        yield* ThreadStorage.streamExport(
-          ThreadStorage.ThreadExportRequest.make({ threadId }),
-        ).pipe(
-          Stream.provide(ThreadStorage.ThreadExportSource.layer()),
+        yield* exportArchive(ThreadStorage).pipe(
           Stream.runForEach((page) =>
             Effect.gen(function* () {
               for (const { record } of page.records) {

@@ -30,7 +30,7 @@ import {
   ThreadTail,
   ThreadTailRequest,
   FenceRejected,
-  FencedAppendRequest,
+  type FencedAppendRequest,
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
@@ -73,14 +73,10 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
     ThreadStoreError.make({ operation, message: cause.message, cause });
 
-  const validated = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
-    Effect.mapError(invalid("validate canonical append")),
-  );
+  const captured = yield* PreparedAppend.capture(request);
 
   const offsetBytes =
-    utf8ByteLength(JSON.stringify(offsetPrefix)) + 3 * utf8ByteLength(validated.threadId) + 25;
-
-  const captured = yield* PreparedAppend.capture(validated);
+    utf8ByteLength(JSON.stringify(offsetPrefix)) + 3 * utf8ByteLength(captured.threadId) + 25;
 
   if (
     !canonicalBatchFitsTransfer(captured.threadId, captured.batch, captured.batchBytes, offsetBytes)
@@ -223,13 +219,10 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       Effect.mapErrorEager((error) => schemaStoreError("decode batch identity", error)),
     );
 
-    return CanonicalRecordEnvelope.make({
-      threadId,
-      batchId,
-      sequence,
-      offset,
-      record,
-    });
+    return new CanonicalRecordEnvelope(
+      { threadId, batchId, sequence, offset, record },
+      { disableChecks: true },
+    );
   });
 
   const decodeCheckpoint = (

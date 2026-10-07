@@ -34,7 +34,7 @@ import {
   ThreadTail,
   ThreadTailRequest,
   FenceRejected,
-  FencedAppendRequest,
+  type FencedAppendRequest,
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
@@ -250,13 +250,10 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
     row.batch_id,
   ).pipe(Effect.mapError((error) => schemaStoreError("decode batch identity", error)));
 
-  const envelope = CanonicalRecordEnvelope.make({
-    threadId,
-    batchId,
-    sequence: row.sequence,
-    offset,
-    record,
-  });
+  const envelope = new CanonicalRecordEnvelope(
+    { threadId, batchId, sequence: row.sequence, offset, record },
+    { disableChecks: true },
+  );
 
   envelopes.set(row, envelope);
 
@@ -379,11 +376,7 @@ const makeServices = Effect.fnUntraced(function* () {
 
   const append: ThreadStore["Service"]["append"] = Effect.fnUntraced(
     function* (request: FencedAppendRequest) {
-      const checked = yield* Schema.decodeEffect(Schema.toType(FencedAppendRequest))(request).pipe(
-        Effect.mapError((error) => schemaStoreError("validate canonical append", error)),
-      );
-
-      const validated = yield* PreparedAppend.capture(checked);
+      const validated = yield* PreparedAppend.capture(request);
       const observed = yield* requireThread(journal, validated.threadId);
 
       const { raw: rawRequest } = yield* prepareCanonicalAppend(validated).pipe(

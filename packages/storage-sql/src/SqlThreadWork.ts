@@ -141,11 +141,18 @@ const Header = Schema.Struct({
   actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
 });
 
+const decodeHeader = Schema.decodeUnknownEffect(Schema.Array(Header));
+
 const workerReportingMode = (reporting: typeof Header.Type.reporting): WorkerReportingMode =>
   reporting === 1 ? "standard" : reporting === 2 ? "private" : "none";
 
 const Count = Schema.Struct({ count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) });
+const CountRow = Schema.Tuple([Count]);
 const EntryRow = Schema.Struct({ id: Schema.String, entry_json: Schema.NullOr(Schema.String) });
+const EntryRows = Schema.Array(EntryRow);
+const WorkEntryJson = Schema.fromJsonString(CanonicalWorkEntry);
+const decodeWorkEntry = Schema.decodeEffect(WorkEntryJson);
+const encodeWorkEntry = Schema.encodeEffect(WorkEntryJson);
 const Tail = Schema.Struct({ tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)) });
 
 const RebuildRow = Schema.Struct({
@@ -224,7 +231,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       }),
     );
 
-    return (yield* decode(Schema.Tuple([Count]), rows))[0].count === 2;
+    return (yield* decode(CountRow, rows))[0].count === 2;
   });
 
   const header = Effect.fnUntraced(function* (threadId: ThreadId) {
@@ -234,9 +241,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}) AS actual_count
       FROM ${table("effect_agent_work_index")} WHERE thread_id=${threadId}`);
 
-    const decoded = yield* Schema.decodeUnknownEffect(Schema.Array(Header))(rows).pipe(
-      Effect.orElseSucceed(() => undefined),
-    );
+    const decoded = yield* decodeHeader(rows).pipe(Effect.orElseSucceed(() => undefined));
 
     const value = decoded?.length === 1 ? decoded[0] : undefined;
 
@@ -278,9 +283,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     )
       return yield* failure("work entry byte bound");
 
-    const entry = yield* Schema.decodeEffect(Schema.fromJsonString(CanonicalWorkEntry))(
-      row.entry_json,
-    ).pipe(Effect.mapError((cause) => failure("decode canonical work", cause)));
+    const entry = yield* decodeWorkEntry(row.entry_json).pipe(
+      Effect.mapError((cause) => failure("decode canonical work", cause)),
+    );
 
     if (entry.id !== row.id) return yield* failure("canonical work identity");
 
@@ -289,7 +294,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
   const getEntry = Effect.fnUntraced(function* (threadId: ThreadId, id: string) {
     const rows = yield* decode(
-      Schema.Array(EntryRow),
+      EntryRows,
       yield* query(
         sql`SELECT id, ${boundedEntryJson} FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${id}`,
       ),
@@ -330,13 +335,17 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     record: CanonicalRecord,
     workerMode: WorkerReportingMode,
   ) {
-    const envelope = CanonicalRecordEnvelope.make({
-      threadId,
-      sequence,
-      record,
-      batchId: BatchId.make("work-index"),
-      offset: ObservationOffset.make(`work-index:${sequence}`),
-    });
+    // Append facts are privately captured; rebuild facts have crossed the persisted Schema.
+    const envelope = new CanonicalRecordEnvelope(
+      {
+        threadId,
+        sequence,
+        record,
+        batchId: BatchId.make("work-index"),
+        offset: ObservationOffset.make(`work-index:${sequence}`),
+      },
+      { disableChecks: true },
+    );
 
     const changes = yield* workIndexChanges(envelope, workerMode).pipe(
       Effect.provideService(Crypto.Crypto, crypto),
@@ -376,9 +385,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       }
       const entry = advanceWorkEntry(yield* getEntry(threadId, change.entry.id), change.entry);
 
-      const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalWorkEntry))(
-        entry,
-      ).pipe(Effect.mapError((cause) => failure("encode work entry", cause)));
+      const encoded = yield* encodeWorkEntry(entry).pipe(
+        Effect.mapError((cause) => failure("encode work entry", cause)),
+      );
 
       if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES)
         return yield* failure("work entry byte bound");
@@ -403,7 +412,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     const reporting = workerMode === "standard" ? 1 : workerMode === "private" ? 2 : 0;
 
     yield* decode(
-      Schema.Tuple([Count]),
+      CountRow,
       yield* query(sql`INSERT INTO ${table("effect_agent_work_index")} (thread_id, version, state, through_sequence, reporting, entry_count)
         VALUES (${threadId}, ${WORK_INDEX_VERSION}, ${state}, ${through}, ${reporting},
           (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}))
