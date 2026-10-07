@@ -3,9 +3,6 @@ import { adopt } from "alchemy/AdoptPolicy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Config, Effect, Layer } from "effect";
 
-import { legacyDocsRedirectRules } from "./docs/legacy-redirect.ts";
-import { docsWorkerFirstPaths } from "./docs/worker.ts";
-
 // Deploys run against the account-wide Cloudflare state store so CI runs
 // share one state history; ALCHEMY_LOCAL_STATE=true keeps dry runs and local
 // experiments out of it. Alchemy's `state` option requires an infallible
@@ -40,17 +37,22 @@ const stack = Effect.gen(function* () {
     name: "effect-agent-docs",
     command: "vp run docs:build",
     outdir: "docs/dist",
-    domain: "effect-agent.com",
+    domain: {
+      name: "effect-agent.com",
+      aliases: ["www.effect-agent.com"],
+      zoneName: "effect-agent.com",
+    },
     routes: [{ pattern: "yielded.dev/agent*", zoneName: "yielded.dev" }],
     workersDev: false,
     dev: { command: "vp run docs:dev" },
     // Astro emits directory indexes and 404.html. HTML handling keeps the
-    // /agent prefix. The Worker permanently redirects the site root onto
-    // /agent/ and serves the not-found document with status 404.
+    // /agent prefix. The Worker runs first so it can 301 the legacy hosts,
+    // permanently redirect the site root onto /agent/, and serve the
+    // not-found document with status 404.
     main: "./docs/worker.ts",
     assets: {
       ...docsAssets,
-      runWorkerFirst: [...docsWorkerFirstPaths],
+      runWorkerFirst: true,
     },
     // The dist and cache directories are gitignored, so hashing docs/**
     // rebuilds exactly when a source page or the site config changes;
@@ -58,15 +60,12 @@ const stack = Effect.gen(function* () {
     memo: { include: ["docs/**", "package.json"], lockfile: true },
   });
 
-  const legacyZone = yield* Cloudflare.Zone.Zone("LegacyDocsZone", {
+  // Adopted so this stack does not create or delete the zone. The dynamic
+  // redirect entrypoint is gone: regex_replace is not entitled here, and a
+  // zone rule would run before the Worker. The Worker issues the legacy 301.
+  yield* Cloudflare.Zone.Zone("LegacyDocsZone", {
     name: "effect-agent.com",
   }).pipe(adopt());
-
-  yield* Cloudflare.Ruleset.Ruleset("LegacyDocsRedirect", {
-    zone: legacyZone,
-    phase: "http_request_dynamic_redirect",
-    rules: legacyDocsRedirectRules,
-  });
 
   return { url: "https://yielded.dev/agent/" };
 });

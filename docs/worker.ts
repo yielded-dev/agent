@@ -1,3 +1,5 @@
+import { legacyDocsHosts, legacyDocsTarget } from "./legacy-redirect.ts";
+
 // Docs assets are stored under /agent/, and Cloudflare's HTML handling redirects
 // with that prefix already attached. This Worker does not strip it.
 //
@@ -9,6 +11,9 @@
 // `/agent/404` is a real `404.html` asset, so the asset layer would serve it
 // with status 200. These paths are forced to 404. Unknown paths stay on
 // `not_found_handling: 404-page`.
+//
+// effect-agent.com cannot use regex_replace in a zone redirect rule, so this
+// Worker also 301s that host and www to the canonical trailing-slash URL.
 
 const AGENT_DIRECTORY = "/agent/";
 
@@ -21,8 +26,6 @@ export const docsNotFoundPaths = [
   "/agent/404/index",
   "/agent/404/index.html",
 ] as const;
-
-export const docsWorkerFirstPaths = [...docsDirectoryRedirects, ...docsNotFoundPaths];
 
 const directoryRedirects = new Set<string>(docsDirectoryRedirects);
 const notFoundPaths = new Set<string>(docsNotFoundPaths);
@@ -41,9 +44,19 @@ const permanentDirectoryRedirect = (requestUrl: URL): Response => {
   return Response.redirect(target, 308);
 };
 
+const legacyRedirect = (url: URL): Response => {
+  const target = new URL(legacyDocsTarget(url.pathname));
+
+  target.search = url.search;
+
+  return Response.redirect(target, 301);
+};
+
 export default {
   async fetch(request: Request, env: DocsAssets): Promise<Response> {
     const url = new URL(request.url);
+
+    if (legacyDocsHosts.has(url.hostname)) return legacyRedirect(url);
 
     if (directoryRedirects.has(url.pathname)) return permanentDirectoryRedirect(url);
 

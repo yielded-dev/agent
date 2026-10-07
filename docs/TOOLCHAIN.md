@@ -231,8 +231,9 @@ retain a cached preview after a deployment.
 `vp run docs:deploy --yes` keeps the existing `effect-agent` production stack and
 `effect-agent-docs` Worker, serving the docs at `yielded.dev/agent/`. The Worker
 route is `yielded.dev/agent*` and the assets base is `/agent/`. Asset lookup
-keeps that prefix; the Worker does not remove it. `effect-agent.com` and
-`www.effect-agent.com` each 301 once to the canonical trailing-slash URL
+keeps that prefix; the Worker does not remove it. `effect-agent.com` and `www.effect-agent.com` are attached to that Worker.
+The zone is not entitled to `regex_replace` in a dynamic redirect, so the
+Worker 301s each legacy path once to the canonical trailing-slash URL
 (`/guide/agents` and `/guide/agents.html` both land on `/agent/guide/agents/`),
 preserving query strings. Files with another extension keep their path.
 `/agent`, `/agent/index.html`, and `/agent/index` respond with 308 to `/agent/`.
