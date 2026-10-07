@@ -1420,37 +1420,56 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       );
 
       let record = captureRecord(
-        RecordEnvelope.make({
-          recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
-          family: "thread",
-          schemaVersion: 1,
-          createdAt: last.createdAt,
-          deploymentId: last.deploymentId,
-          payload: continuation,
-        }),
+        new RecordEnvelope(
+          {
+            recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
+            family: "thread",
+            schemaVersion: 1,
+            createdAt: last.createdAt,
+            deploymentId: last.deploymentId,
+            payload: continuation,
+          },
+          { disableChecks: true },
+        ),
       ).canonical;
 
-      // Charging this record changes only the digits of one scalar. Converge before append;
-      // exceeding the budget publishes neither the execution facts nor their progress.
-      for (let attempts = 0; ; attempts++) {
-        const cursorBytes = canonicalRecordBytes(record);
-        const turnBytes = turnBase + cursorBytes;
-        const terminalBytes = next.terminalBytes + (next.closing ? cursorBytes : 0);
+      // Only these two natural-number fields change. Converge their encoded widths before
+      // capturing the final record, rather than encoding and copying the whole cursor each time.
+      const initialCursorBytes = canonicalRecordBytes(record);
 
-        if (turnBytes === continuation.turnBytes && terminalBytes === continuation.terminalBytes)
-          break;
+      const initialWidth =
+        String(continuation.turnBytes).length + String(continuation.terminalBytes).length;
+
+      let turnBytes = continuation.turnBytes;
+      let terminalBytes = continuation.terminalBytes;
+
+      for (let attempts = 0; ; attempts++) {
+        const cursorBytes =
+          initialCursorBytes +
+          String(turnBytes).length +
+          String(terminalBytes).length -
+          initialWidth;
+
+        const nextTurnBytes = turnBase + cursorBytes;
+        const nextTerminalBytes = next.terminalBytes + (next.closing ? cursorBytes : 0);
+
+        if (nextTurnBytes === turnBytes && nextTerminalBytes === terminalBytes) break;
         if (attempts >= 4) return yield* failure("Continuation byte accounting did not converge");
-        continuation = yield* RunContinuation.makeEffect({
-          ...continuation,
-          turnBytes,
-          terminalBytes,
-        }).pipe(
-          Effect.mapError(() =>
-            capacityFailure("Turn exceeds its incremental canonical byte budget"),
-          ),
-        );
-        record = captureRecord(RecordEnvelope.make({ ...record, payload: continuation })).canonical;
+        turnBytes = nextTurnBytes;
+        terminalBytes = nextTerminalBytes;
       }
+      continuation = yield* RunContinuation.makeEffect({
+        ...continuation,
+        turnBytes,
+        terminalBytes,
+      }).pipe(
+        Effect.mapError(() =>
+          capacityFailure("Turn exceeds its incremental canonical byte budget"),
+        ),
+      );
+      record = captureRecord(
+        new RecordEnvelope({ ...record, payload: continuation }, { disableChecks: true }),
+      ).canonical;
 
       if (canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES)
         return yield* capacityFailure(

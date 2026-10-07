@@ -384,10 +384,15 @@ export const PreparedAppend = {
           });
 
           validateRecordCount(input.batch.records);
-          const encodings = input.batch.records.map(captureRecord);
-          const batchJson = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[${encodings.map(({ json }) => json).join(",")}]}`;
+          // Visit sparse slots too: capture owns each record's validation boundary.
+          const encodings = Array.from(input.batch.records, captureRecord);
+          const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
+          const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
 
-          const batchBytes = new TextEncoder().encode(batchJson).byteLength;
+          const batchBytes = encodings.reduce(
+            (total, record) => total + record.bytes,
+            utf8ByteLength(prefix) + encodings.length + 1,
+          );
 
           if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
             throw ThreadStoreError.make({

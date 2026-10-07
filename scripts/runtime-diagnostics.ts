@@ -12,7 +12,7 @@ import {
   selectCaseNames,
   summary,
 } from "../tooling/runtime-benchmark/src/contracts.ts";
-import { diagnosticCases } from "../tooling/runtime-benchmark/src/diagnostic-cases.ts";
+import { diagnosticCasesFor } from "../tooling/runtime-benchmark/src/diagnostic-cases.ts";
 import {
   completeDiagnosticBatch,
   DIAGNOSTIC_SIZES,
@@ -170,10 +170,14 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
   const root = path.resolve(options.root);
   const output = path.resolve(options.output);
 
+  const available = diagnosticCasesFor((options.cases?.length ?? 0) > 0);
+
   const cases = yield* selectCaseNames(
-    diagnosticCases.map(({ name }) => name),
+    available.map(({ name }) => name),
     options.cases,
   );
+
+  const largeStore = cases.includes("long-thread-store-size");
 
   yield* fs.makeDirectory(output, { recursive: true });
   yield* check(
@@ -201,7 +205,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
       execution: "unbundled published ESM",
       timingGate: options.cpuProfile ? "profiling only" : "informational elapsed wall time",
     },
-    cases: diagnosticCases.filter(({ name }) => cases.includes(name)),
+    cases: available.filter(({ name }) => cases.includes(name)),
     revisions: [],
     batches: [],
     activeBatch: null,
@@ -245,6 +249,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
             "diagnostic-policy.ts",
             "diagnostic-capabilities.ts",
             "diagnostic-ledger.ts",
+            "diagnostic-aging.ts",
             "diagnostic-writer.ts",
             "diagnostic-fairness.ts",
           ].map((file) => path.join(source, file)),
@@ -305,7 +310,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
             cases,
             warmups: DIAGNOSTIC_SIZES.warmups,
             samples: DIAGNOSTIC_SIZES.samples,
-            timeoutMs: 120_000,
+            timeoutMs: largeStore ? 600_000 : 120_000,
           };
 
           report.activeBatch = { cohort, role };
@@ -338,7 +343,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
                     )(workerOptions),
                   },
                   path.join(output, `${name}.log`),
-                ).pipe(Effect.timeout("5 minutes")),
+                ).pipe(Effect.timeout(largeStore ? "12 minutes" : "5 minutes")),
               ).pipe(Effect.exit);
 
               const subprocessMs = Exit.isSuccess(child)
@@ -416,7 +421,7 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
     );
     report.phase = "complete";
   }).pipe(
-    Effect.timeout("19 minutes"),
+    Effect.timeout(largeStore ? "49 minutes" : "19 minutes"),
     Effect.onExit((exit) => {
       if (Exit.isFailure(exit)) report.failure = Cause.pretty(exit.cause).slice(0, 8_192);
 
@@ -464,7 +469,7 @@ export const command = Command.make(
   },
   Effect.fn(function* ({ base, output, requireClean, cases, listCases, cpuProfile }) {
     const selected = yield* selectCaseNames(
-      diagnosticCases.map(({ name }) => name),
+      diagnosticCasesFor(listCases || cases.length > 0).map(({ name }) => name),
       cases,
     );
 

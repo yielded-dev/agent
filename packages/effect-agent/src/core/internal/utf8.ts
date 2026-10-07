@@ -7,8 +7,12 @@ export const codePointUtf8Length = (codePoint: number): number => {
   return 4;
 };
 
+// No Unicode flag: astral characters and lone surrogates both require the exact path.
+const nonAscii = /[\u0080-\uFFFF]/;
+
 /** Count encoded bytes without allocating an encoded copy of the text. */
 export const utf8ByteLength = (value: string): number => {
+  if (!nonAscii.test(value)) return value.length;
   let bytes = 0;
   let index = 0;
 

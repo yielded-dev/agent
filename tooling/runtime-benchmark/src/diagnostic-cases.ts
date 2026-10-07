@@ -101,3 +101,25 @@ export const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
   ...ledgerCases,
   ...fairnessCases,
 ];
+
+/** Opt-in lifetime proof; ordinary diagnostics retain their existing matrix. */
+export const agingCases: ReadonlyArray<DiagnosticCase> = [
+  {
+    name: "long-thread-aging-256-131328",
+    family: "ledger",
+    parameters: { initialFacts: 256, finalFacts: 131_328 },
+  },
+  {
+    name: "long-thread-store-size",
+    family: "ledger",
+    parameters: {
+      storeSize: 1,
+      selectedThreadRecords: 100_000,
+      minimumBackground: 100,
+      maximumBackground: 1_000_000,
+    },
+  },
+];
+
+export const diagnosticCasesFor = (includeSelectable = false): ReadonlyArray<DiagnosticCase> =>
+  includeSelectable ? [...diagnosticCases, ...agingCases] : diagnosticCases;

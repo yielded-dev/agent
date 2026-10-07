@@ -5,8 +5,9 @@ import { Cause, Clock, Config, Context, Effect, Exit, FileSystem, Layer, Schema 
 
 import { BenchmarkError, check, selectCaseNames } from "./contracts.js";
 import { runCapabilityCase } from "./diagnostic-capabilities.js";
-import { diagnosticCases } from "./diagnostic-cases.js";
+import { diagnosticCasesFor } from "./diagnostic-cases.js";
 import {
+  AgingSeeds,
   completeDiagnosticBatch,
   DIAGNOSTIC_VERSION,
   DiagnosticCase,
@@ -27,7 +28,44 @@ import { BenchmarkIdsLive } from "./ids.js";
 
 export { diagnosticCases } from "./diagnostic-cases.js";
 
+const agingModule = Effect.tryPromise({
+  try: () => import("./diagnostic-aging.js"),
+  catch: (cause) =>
+    BenchmarkError.make({ message: "Cannot load the selected aging fixture", cause }),
+});
+
+/** Each seed owns one uncertain mutation; samples copy only the closed, unresolved databases. */
+const agingSeedsLayer = Layer.effect(
+  AgingSeeds,
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "diagnostic-aging-seeds-" });
+
+    const storeDirectory = yield* fs.makeTempDirectoryScoped({
+      prefix: "diagnostic-store-size-seeds-",
+    });
+
+    const age = yield* Effect.cached(
+      agingModule.pipe(Effect.flatMap(({ prepareSeeds }) => prepareSeeds(directory, false))),
+    );
+
+    const size = yield* Effect.cached(
+      agingModule.pipe(Effect.flatMap(({ prepareSeeds }) => prepareSeeds(storeDirectory, true))),
+    );
+
+    return { get: (storeSize: boolean) => (storeSize ? size : age) };
+  }),
+);
+
 const runDiagnosticCase = Effect.fn("diagnostic.runCase")(function* (workload: DiagnosticCase) {
+  if (
+    workload.name === "long-thread-aging-256-131328" ||
+    workload.name === "long-thread-store-size"
+  ) {
+    const { runAgingCase } = yield* agingModule;
+
+    return yield* runAgingCase(workload.parameters.storeSize === 1);
+  }
   if (workload.family === "policy") return yield* runPolicyCase(workload);
   if (workload.family === "ledger") return yield* runLedgerCase(workload);
   if (workload.family === "fairness") return yield* runFairnessCase(workload);
@@ -46,13 +84,14 @@ export const runDiagnosticWorker = Effect.fn("diagnostic.runWorker")(function* (
   options: DiagnosticWorkerOptions,
 ) {
   const runner = yield* DiagnosticRunner;
+  const available = diagnosticCasesFor((options.cases?.length ?? 0) > 0);
 
   const cases = yield* selectCaseNames(
-    diagnosticCases.map(({ name }) => name),
+    available.map(({ name }) => name),
     options.cases,
   );
 
-  const workloads = diagnosticCases.filter(({ name }) => cases.includes(name));
+  const workloads = available.filter(({ name }) => cases.includes(name));
   const samples: Array<DiagnosticSample> = [];
   let active: DiagnosticActive | null = null;
   let failure: string | null = null;
@@ -83,10 +122,10 @@ export const runDiagnosticWorker = Effect.fn("diagnostic.runWorker")(function* (
   yield* Effect.gen(function* () {
     yield* persist;
     yield* Schema.decodeEffect(Schema.Array(DiagnosticCase).check(Schema.isMaxLength(64)))(
-      diagnosticCases,
+      available,
     );
     yield* check(
-      new Set(diagnosticCases.map(({ name }) => name)).size === diagnosticCases.length,
+      new Set(available.map(({ name }) => name)).size === available.length,
       "Diagnostic case names must be unique",
     );
 
@@ -185,7 +224,7 @@ export const runDiagnosticWorker = Effect.fn("diagnostic.runWorker")(function* (
       return persist;
     }),
   );
-});
+}, Effect.provide(agingSeedsLayer));
 
 if (import.meta.main)
   NodeRuntime.runMain(

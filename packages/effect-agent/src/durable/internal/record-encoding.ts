@@ -2,14 +2,18 @@ import { DateTime, Predicate, Schema } from "effect";
 
 import type { RunId } from "../../core/Identifiers.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
-import { canonicalJson } from "../Digest.ts";
 import { ExportedRecord } from "../RecordFormat.ts";
 import {
   type CanonicalRecordPayload,
+  MAX_CANONICAL_RECORD_BYTES,
+  MAX_PERSISTED_JSON_COLLECTION_LENGTH,
+  MAX_PERSISTED_JSON_DEPTH,
+  MAX_PERSISTED_JSON_NODES,
   RecordEnvelope,
-  RecordJson,
+  type RecordJson,
   type RunContinuation,
 } from "../Records.ts";
+import { canonicalJson } from "./canonical-json.ts";
 import {
   executionRunIds,
   isPreContinuationFact,
@@ -18,7 +22,14 @@ import {
 } from "./record-ownership.ts";
 
 const encodeRecord = Schema.encodeSync(RecordEnvelope);
-const validateJson = Schema.decodeSync(RecordJson);
+
+const recordLimits = {
+  depth: MAX_PERSISTED_JSON_DEPTH + 4,
+  nodes: MAX_PERSISTED_JSON_NODES * 4,
+  collectionLength: MAX_PERSISTED_JSON_COLLECTION_LENGTH,
+  // UTF-16 units give a lower bound while serializing; capture checks the exact UTF-8 width.
+  textUnits: MAX_CANONICAL_RECORD_BYTES,
+};
 
 export interface RecordEncoding {
   readonly canonical: RecordEnvelope;
@@ -122,10 +133,14 @@ export const captureRecord = (input: RecordEnvelope): RecordEncoding => {
   const existing = captured.get(input);
 
   if (existing !== undefined) return existing;
-  const encoded = validateJson(encodeRecord(input));
+  const encoded = encodeRecord(input);
   const owned = capturePayload(input.payload);
   const wire = ownWire(encoded, owned.copies);
-  const json = canonicalJson(wire);
+  const json = canonicalJson(wire, recordLimits);
+  const bytes = utf8ByteLength(json);
+
+  if (bytes > MAX_CANONICAL_RECORD_BYTES)
+    throw new RangeError("Canonical JSON exceeds its byte bound");
   const createdAt = DateTime.makeUnsafe(DateTime.toEpochMillis(input.createdAt));
 
   // DateTime fills this cache lazily; populate it before freezing our private copy.
@@ -142,8 +157,6 @@ export const captureRecord = (input: RecordEnvelope): RecordEncoding => {
       { disableChecks: true },
     ),
   );
-
-  const bytes = utf8ByteLength(json);
 
   const encoding = Object.freeze({
     canonical,

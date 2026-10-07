@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 
-export const FIXTURE_VERSION = "runtime-v5";
+export const FIXTURE_VERSION = "runtime-v6";
 
 export class BenchmarkError extends Schema.TaggedError<BenchmarkError>()("BenchmarkError", {
   message: Schema.String,

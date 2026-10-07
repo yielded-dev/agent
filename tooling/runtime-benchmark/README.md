@@ -162,7 +162,12 @@ or paid execution is configured here.
 
 Retained-history seeds contain ThreadCreated followed by complete input/model/completion triples
 matching the immediate PersistentHistory format, with shared Run identities and schema-encoded
-user/assistant message suffixes. At most two RepairAnnotated records pad the requested exact
+user/assistant message suffixes. Revisions with paired source/model history fields receive valid
+paired Prompts, with the final seed model-context snapshot containing all retained exchanges.
+Earlier fixture snapshots contain only their own exchange, avoiding quadratic seed growth.
+Verification uses the compared revision's streaming export or historical materialized export;
+both retain the same full-archive and exact-completion assertions.
+At most two RepairAnnotated records pad the requested exact
 record count. These are adapter fixtures of completed retained Runs, with no outstanding seed
 Submissions. The provider callback must receive every seeded question and answer before fresh
 inference; Run resume must receive the handoff without retired history. The separate
@@ -174,7 +179,7 @@ SQLite uses the production Node assembly and its default scheduling, lease, and 
 configuration; recovery cases additionally install the documented host rollover preparation.
 Database teardown and evidence reads are outside the warm-operation interval.
 
-Fixture `runtime-v5` builds worker-local seed templates through those same public adapter
+Fixture `runtime-v6` builds worker-local seed templates through those same public adapter
 operations, once per history/ledger size and revision. It closes the full seed runtime and rejects
 any remaining WAL or SHM sidecar before copying the database to each sample's fresh directory.
 Copies share no mutable database state. Fresh submission and Run recovery can reuse the
@@ -224,7 +229,7 @@ own installation. Reports identify exact commits, dirty state, lockfile hashes, 
 hashes, fixture hash/version, runtime, operating system, CPU, memory, sample counts, median,
 interquartile range, and process failures. The artifact includes the exact transpiled fixture.
 
-The `runtime-v5` artifact identifies Base and Head, the selected cases, and ordinary comparison,
+The `runtime-v6` artifact identifies Base and Head, the selected cases, and ordinary comparison,
 resident timing, or profiling mode. Resident timing uses mode `steady-state` and measurement
 `resident-operation-v1`, identifying the new per-operation timing boundary while retaining the
 existing workload inputs and correctness checks. Profile results retain their existing capture
@@ -265,7 +270,7 @@ now run alongside default retention, rather than switching retention on and off.
 
 ## Manual diagnostics
 
-`vp run perf:diagnose` runs the separate `runtime-diagnostic-v2` fixture against clean, built
+`vp run perf:diagnose` runs the separate `runtime-diagnostic-v3` fixture against clean, built
 base/head checkouts. Install each checkout's own lockfile and build its public packages as above.
 Run this command from the candidate checkout, with no concurrent builds, tests, or measurements:
 
@@ -275,6 +280,61 @@ vp run perf:diagnose --base-dir /tmp/effect-agent-base --require-clean --out-dir
 
 The manual workflow's `diagnostic` choice runs the same command. Both benchmark fixtures are
 manual; neither introduces scheduled or pull-request timing runs.
+
+### Long-Thread aging
+
+Select `long-thread-aging-256-131328` explicitly; it does not expand the default diagnostic matrix:
+
+```sh
+vp run perf:diagnose --base-dir /tmp/effect-agent-base --case long-thread-aging-256-131328 --out-dir /tmp/aging-001
+```
+
+Both compared revisions must support native layout-21 archives and selected Run recovery.
+The aging module is loaded only for these opt-in cases, so ordinary diagnostics can still compare
+revisions predating these APIs.
+
+Each worker executes one uncertain mutation, interrupts its owner, archives the original Run's
+input/context, and settles a later Run. It removes disposable checkpoints, appends 256 unrelated
+`RepairAnnotated` facts, and closes the SQLite database before copying it. The same unfinished Run
+then ages to 131,328 unrelated facts in the source database. Each sample resumes fresh copies of
+both closed snapshots under a changed binding, preserving identical original Run and Receipt IDs.
+Seed construction happens once per worker; resumed databases are never reused.
+
+The case fails unless both ages have identical selected-request and returned-record counts for
+every request, the original mutation count remains one, and the changed handler stays unused.
+Recovery must consume the factual result and retain the original input, instructions, context,
+and Receipt after a newer Run has settled. Whole-Thread reads, exports, observation, padding
+hydration, and pages exceeding 256 records or 32 MiB fail the case. The existing diagnostic JSON
+retains per-age counters, each request's selection kind/record count/byte count, and the original
+Receipt ID. Source fixtures, revision/build identities, failures, and incomplete samples use the
+ordinary diagnostic artifacts.
+
+`age256.resume` and `age131328.resume` time factual-resolution acceptance through Run settlement
+on an acquired SQLite runtime. Seed creation, database copies, runtime acquisition/disposal,
+and independent canonical verification are excluded; `totalMs` is the sum of the two resume
+intervals. Selected-read counters cover the runtime's `ThreadStore` boundary, including runtime
+construction; adapter-native ledger SQL and explicit setup/verification reads are outside that
+guard. Payload bytes describe canonical records, not process heap. The case preserves layout 21,
+`effect-agent/thread@3`, and archive formats.
+
+Select `long-thread-store-size` for the same factual-resolution and resumption operation with
+the selected Thread fixed at exactly 100,000 canonical records and a separate Thread containing
+100, 10,000, or 1,000,000 background records:
+
+```sh
+vp run perf:diagnose --base-dir /tmp/effect-agent-base --case long-thread-store-size --out-dir /tmp/store-size-001
+```
+
+Total store counts are 100,100, 110,000, and 1,100,000; background growth never changes the selected
+Thread's seed tail or digest. Each worker seeds once through public appends, then samples fresh
+closed database copies. Size order reverses between samples. The `store100.resume`,
+`store10000.resume`, and `store1000000.resume` metrics use the same timer as the aging case, with
+the same identity, mutation, selected-read and canonical-data assertions. Compare their individual
+medians for flatness; `totalMs` sums the three operations. Large-store seeding allows a ten-minute
+attempt and twelve-minute worker deadline; this preparation remains outside the operation timer.
+
+### Diagnostic cohorts
+
 Diagnostics run base/head followed by head/base, with two warmups and five measured samples per
 cohort: ten measured samples per case and revision. They use the same production-package staging,
 published manifests, own-lockfile dependencies, built-artifact identities, and identical unbundled

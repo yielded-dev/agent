@@ -2,8 +2,9 @@ import type { Effect } from "effect";
 import { Context, Schema } from "effect";
 
 import type { BenchmarkError } from "./contracts.js";
+import type { prepareSeeds } from "./diagnostic-aging.js";
 
-export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v2";
+export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v3";
 export const MAX_DIAGNOSTIC_MARKS = 512;
 export const DIAGNOSTIC_SIZES = { cohorts: 2, warmups: 2, samples: 5 } as const;
 
@@ -47,6 +48,12 @@ export class DiagnosticProgress extends Context.Service<
   }
 >()("runtime-benchmark/DiagnosticProgress") {}
 
+/** The worker owns the seed lifetime; loading the current-only fixture remains lazy. */
+export class AgingSeeds extends Context.Service<
+  AgingSeeds,
+  { readonly get: (storeSize: boolean) => ReturnType<typeof prepareSeeds> }
+>()("runtime-benchmark/AgingSeeds") {}
+
 export const DiagnosticWorkerOptions = Schema.Struct({
   output: Schema.String,
   mode: Schema.optionalKey(Schema.Literals(["comparison", "cpu-profile"])),
@@ -55,7 +62,7 @@ export const DiagnosticWorkerOptions = Schema.Struct({
   ),
   warmups: Schema.Natural.check(Schema.isLessThanOrEqualTo(2)),
   samples: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
-  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 120_000 })),
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 600_000 })),
 });
 
 export type DiagnosticWorkerOptions = typeof DiagnosticWorkerOptions.Type;

@@ -181,6 +181,28 @@ const failure = (operation: string, cause?: unknown) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
+const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(ExportRecord));
+const decodeRecordWire = Schema.decodeEffect(Schema.fromJsonString(RecordJson));
+const decodeIdentityRequest = Schema.decodeEffect(Schema.toType(ThreadIdentityRequest));
+
+const decodeIdentityFacts = Schema.decodeUnknownEffect(
+  Schema.Tuple([
+    Schema.Struct({ admissions_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) }),
+  ]),
+);
+
+const decodeReadyWork = Schema.decodeUnknownEffect(
+  Schema.Tuple([
+    Schema.Struct({
+      version: SqlInteger,
+      state: Schema.Literal("ready"),
+      through_sequence: SqlInteger,
+      entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+      actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+    }),
+  ]),
+);
+
 /** Keep every compound below workerd's limit while retaining one bounded indexed statement. */
 const boundedCandidates = (
   sql: SqlClient.SqlClient,
@@ -231,9 +253,7 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
 
             if (row === undefined) return undefined;
 
-            const record = yield* Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(
-              row.record_json,
-            );
+            const record = yield* decodeRecordJson(row.record_json);
 
             if (
               record.recordId !== row.record_id ||
@@ -250,20 +270,21 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
             const selected = yield* makeSelectedReads(
               (row) =>
                 Effect.gen(function* () {
-                  const wire = yield* Schema.decodeEffect(Schema.fromJsonString(RecordJson))(
-                    row.record_json,
-                  );
+                  const wire = yield* decodeRecordWire(row.record_json);
 
                   const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, wire);
 
-                  return yield* CanonicalRecordEnvelope.makeEffect({
-                    threadId: row.thread_id,
-                    sequence: row.sequence,
-                    batchId: row.batch_id,
-                    // This private selection consumes only records, never an observation cursor.
-                    offset: ObservationOffset.make(`progress-validation:${row.sequence}`),
-                    record,
-                  });
+                  return new CanonicalRecordEnvelope(
+                    {
+                      threadId: row.thread_id,
+                      sequence: row.sequence,
+                      batchId: row.batch_id,
+                      // This private selection consumes only records, never an observation cursor.
+                      offset: ObservationOffset.make(`progress-validation:${row.sequence}`),
+                      record,
+                    },
+                    { disableChecks: true },
+                  );
                 }).pipe(Effect.mapError((cause) => failure("decode initial preparation", cause))),
               namespace,
             ).pipe(
@@ -402,17 +423,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
       (SELECT COUNT(*) FROM ${relation("effect_agent_work_entries")} WHERE thread_id=${threadId}) AS actual_count
       FROM ${relation("effect_agent_work_index")} WHERE thread_id=${threadId}`.pipe(execute);
 
-    const [header] = yield* Schema.decodeUnknownEffect(
-      Schema.Tuple([
-        Schema.Struct({
-          version: SqlInteger,
-          state: Schema.Literal("ready"),
-          through_sequence: SqlInteger,
-          entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-          actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-        }),
-      ]),
-    )(rows);
+    const [header] = yield* decodeReadyWork(rows);
 
     if (
       header.version !== WORK_INDEX_VERSION ||
@@ -1017,19 +1028,13 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
   const readIdentity: ThreadStore["Service"]["readIdentity"] = Effect.fnUntraced(
     function* (request) {
-      yield* Schema.decodeEffect(Schema.toType(ThreadIdentityRequest))(request);
+      yield* decodeIdentityRequest(request);
 
       return yield* snapshot(
         Effect.gen(function* () {
           const tail = yield* requireThread(request.threadId);
 
-          const [facts] = yield* Schema.decodeUnknownEffect(
-            Schema.Tuple([
-              Schema.Struct({
-                admissions_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-              }),
-            ]),
-          )(
+          const [facts] = yield* decodeIdentityFacts(
             yield* sql`SELECT admissions_count FROM ${relation("effect_agent_transfer_state")} WHERE thread_id=${request.threadId}`.pipe(
               execute,
             ),
