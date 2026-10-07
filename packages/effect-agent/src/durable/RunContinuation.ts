@@ -116,6 +116,11 @@ const validateBatchCount = Schema.decodeSync(
   Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
+const ContinuationBytes = Schema.Struct({
+  turnBytes: RunContinuation.fields.turnBytes,
+  terminalBytes: RunContinuation.fields.terminalBytes,
+});
+
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
 const captureFacts = (batch: CanonicalBatch) =>
   Effect.try({
@@ -1443,14 +1448,20 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         turnBytes = nextTurnBytes;
         terminalBytes = nextTerminalBytes;
       }
-      continuation = yield* RunContinuation.makeEffect({
-        ...continuation,
+
+      const checkedBytes = yield* ContinuationBytes.makeEffect({
         turnBytes,
         terminalBytes,
       }).pipe(
         Effect.mapError(() =>
           capacityFailure("Turn exceeds its incremental canonical byte budget"),
         ),
+      );
+
+      // Every other field was checked above; byte accounting changes only these counters.
+      continuation = new RunContinuation(
+        { ...continuation, ...checkedBytes },
+        { disableChecks: true },
       );
 
       const record = captureRecord(
