@@ -192,8 +192,9 @@ Hosts can supply up to eight prior `ReviewFollowUp` values, each up to 32,000 ch
 reviewer reassesses every blocker against current source and applicable contracts before returning
 its exact ID and evidence that every blocker is fixed, refuted, or obsolete. Unchanged code can
 refute an incorrect premise; a revised PR description alone cannot. Acceptance of a still-valid
-risk belongs to the host's authorized maintainer. Unknown or duplicate resolution IDs fail
-verification. Incomplete, exhausted, pending-path, or excluded-path results return no resolutions.
+risk belongs to the host's authorized maintainer. `submit_review` refuses unknown or duplicate
+resolution IDs so the reviewer can correct them within the original run budget. Incomplete,
+exhausted, pending-path, or excluded-path results return no resolutions.
 History selection, credentials, dismissal authorization, and publication belong to the host.
 
 Hosts can also supply attributed `discussion` evidence, including rebuttals and dismissal reasons.

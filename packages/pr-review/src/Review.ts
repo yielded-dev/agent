@@ -835,7 +835,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
       });
 
       const completionLayer = reviewCompletion.toLayer({
-        submit_review: Effect.fnUntraced(function* () {
+        submit_review: Effect.fnUntraced(function* ({ resolutions }) {
           const pending = pendingRanges();
           const next = pending[0];
 
@@ -843,6 +843,8 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
             return yield* ReviewVerificationError.make({
               message: `Review is not finished: ${pending.length} paths still have unread diff ranges. Continue with read_diff({"offset":${next.offset}}), assess the remaining changes, and record established findings. Use new_context alone if the context is crowded, then review_status to recover saved findings and unread offsets.`,
             });
+
+          yield* validatedResolutions(request, resolutions ?? []);
 
           return null;
         }),
@@ -1058,14 +1060,9 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         research.delegations > 0 ||
         findings.length > 0;
 
-      const submitted = yield* Effect.fromResult(result).pipe(
-        Effect.tap(({ output }) => validatedResolutions(request, output.resolutions ?? [])),
-        Effect.result,
-      );
+      if (Result.isFailure(result) && !preserveAttempt) return yield* result.failure;
 
-      if (Result.isFailure(submitted) && !preserveAttempt) return yield* submitted.failure;
-
-      const failure = Result.isFailure(submitted) ? submitted.failure : undefined;
+      const failure = Result.isFailure(result) ? result.failure : undefined;
 
       if (failure !== undefined)
         yield* Effect.logWarning("Review stopped before completion", {
@@ -1094,7 +1091,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         research.interrupted > 0 ||
         research.incomplete > 0 ||
         (yield* Ref.get(overflowed)) ||
-        Result.isFailure(submitted) ||
+        Result.isFailure(result) ||
         (Result.isSuccess(result) && result.success.output.blockedOn !== undefined);
 
       const policyLimit = failure?._tag === "AgentPolicyError" ? failure.limit : undefined;
