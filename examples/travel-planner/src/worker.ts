@@ -164,7 +164,11 @@ export const handleRequest = (verify = authenticate) =>
     request = new Request(url, request);
 
     // Auth routes own their Origin/CSRF and body-size checks. Callback GET only renders.
-    if (url.pathname === "/login" || url.pathname === "/auth/github/callback") {
+    if (
+      url.pathname === "/login" ||
+      url.pathname === "/auth/github/callback" ||
+      url.pathname === "/auth/yielded/callback"
+    ) {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
       const pageUrl = new URL(pageRequest.url);
 
@@ -181,7 +185,7 @@ export const handleRequest = (verify = authenticate) =>
 
       const page = new Response(response.body, { status: response.status, headers });
 
-      return url.pathname === "/auth/github/callback"
+      return url.pathname === "/auth/github/callback" || url.pathname === "/auth/yielded/callback"
         ? new HTMLRewriter()
             .on("head", {
               element: (head) => {

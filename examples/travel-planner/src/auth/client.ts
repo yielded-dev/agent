@@ -92,15 +92,26 @@ export const loginTarget = Atom.family((callback: boolean) =>
   ).pipe(Atom.setIdleTTL(0)),
 );
 
-const PendingGithub = Schema.fromJsonString(
-  Schema.Struct({ flowId: Schema.NonEmptyString, returnTarget: ReturnTarget }),
+const Provider = Schema.Literals(["yielded", "github"]);
+
+type Provider = typeof Provider.Type;
+const activeProvider = Atom.make<Provider>("yielded");
+
+const PendingOAuth = Schema.fromJsonString(
+  Schema.Struct({ flowId: Schema.NonEmptyString, returnTarget: ReturnTarget, provider: Provider }),
 );
 
-const startGithub = Effect.fn("Login.startGithub")(function* (returnTarget: ReturnTarget) {
+const startOAuth = Effect.fn("Login.startOAuth")(function* ({
+  provider,
+  returnTarget,
+}: {
+  readonly provider: Provider;
+  readonly returnTarget: ReturnTarget;
+}) {
   const registry = yield* AtomRegistry.AtomRegistry;
 
   registry.set(auth.signIn, {
-    provider: "github",
+    provider,
     returnTarget,
   });
 
@@ -108,16 +119,21 @@ const startGithub = Effect.fn("Login.startGithub")(function* (returnTarget: Retu
 
   yield* browser(() =>
     sessionStorage.setItem(
-      "elsewhere:github",
-      Schema.encodeSync(PendingGithub)({ flowId: started.flowId, returnTarget }),
+      "yielded:oauth",
+      Schema.encodeSync(PendingOAuth)({ flowId: started.flowId, returnTarget, provider }),
     ),
   );
   yield* browser(() => location.assign(Redacted.value(started.authorizationUrl)));
 });
 
-export const githubLogin = Atom.fn<ReturnTarget>()((returnTarget, get) =>
-  startGithub(returnTarget).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
-).pipe(Atom.setIdleTTL(0));
+export const oauthLogin = Atom.fn<{
+  readonly provider: Provider;
+  readonly returnTarget: ReturnTarget;
+}>()((input, get) => {
+  get.set(activeProvider, input.provider);
+
+  return startOAuth(input).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry));
+}).pipe(Atom.setIdleTTL(0));
 
 // The Worker captures callback credentials in memory before loading page resources.
 // Only public flow correlation survives navigation.
@@ -132,15 +148,18 @@ export const callbackInput = Effect.gen(function* () {
     const query = window.__elsewhereCallback;
 
     delete window.__elsewhereCallback;
-    const pending = sessionStorage.getItem("elsewhere:github");
+    const pending = sessionStorage.getItem("yielded:oauth");
 
-    sessionStorage.removeItem("elsewhere:github");
+    sessionStorage.removeItem("yielded:oauth");
 
     return { query, pending };
   });
 
   if (!captured.query || !captured.pending) return yield* new BrowserFlowUnavailable();
-  const pending = yield* Schema.decodeEffect(PendingGithub)(captured.pending);
+  const pending = yield* Schema.decodeEffect(PendingOAuth)(captured.pending);
+
+  if (location.pathname !== `/travel/auth/${pending.provider}/callback`)
+    return yield* new BrowserFlowUnavailable();
   const query = new URLSearchParams(captured.query);
 
   for (const key of ["state", "code", "error", "iss"])
@@ -155,8 +174,7 @@ export const callbackInput = Effect.gen(function* () {
 
   return {
     ...pending,
-    provider: "github",
-    callbackId: "github",
+    callbackId: pending.provider,
     response:
       code === null
         ? {
@@ -171,7 +189,7 @@ export const callbackInput = Effect.gen(function* () {
 
 // Public login workflows compose named mutations in the host registry. Those mutations
 // retain their own success or rejection while Auth replaces the private account registry.
-export const completeGithub = Atom.fn<void>()((_, get) =>
+export const completeOAuth = Atom.fn<void>()((_, get) =>
   Effect.gen(function* () {
     const { returnTarget, ...input } = yield* callbackInput;
 
@@ -183,12 +201,14 @@ export const completeGithub = Atom.fn<void>()((_, get) =>
         flowId: input.flowId,
         commandId: yield* id(),
         reference: result.reference,
-        registration: { displayName: "GitHub traveler" },
+        registration: {
+          displayName: input.provider === "yielded" ? "Yielded member" : "GitHub traveler",
+        },
       });
 
       if (registered._tag !== "RegistrationAccepted") return yield* new BrowserFlowUnavailable();
       // Accepted registration creates an account, not a session. Start a NEW authorized flow.
-      yield* startGithub(returnTarget);
+      yield* startOAuth({ provider: input.provider, returnTarget });
     }
 
     return result;
@@ -200,7 +220,7 @@ const callbackStarted = Atom.make(false).pipe(Atom.keepAlive);
 export const consumeCallback = Atom.fnSync<void>()((_, get) => {
   if (get(callbackStarted)) return;
   get.set(callbackStarted, true);
-  get.set(completeGithub, undefined);
+  get.set(completeOAuth, undefined);
 });
 
 export type EmailPending = {
@@ -316,7 +336,7 @@ export const verifyEmailCode = Atom.fn<{
   }).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
 ).pipe(Atom.setIdleTTL(0));
 
-export type LoginLoadingStep = "session" | "github" | "callback";
+export type LoginLoadingStep = "session" | "github" | "yielded" | "callback";
 
 type LoginView =
   | {
@@ -329,7 +349,7 @@ type LoginView =
       readonly pending: EmailPending | undefined;
       readonly registered: boolean;
       readonly busy: boolean;
-      readonly error: "github" | "email" | "session" | undefined;
+      readonly error: "provider" | "email" | "session" | undefined;
       readonly cancelled: boolean;
     };
 
@@ -343,8 +363,8 @@ const failed = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
 export const loginView = Atom.family((callback: boolean) =>
   Atom.make((get): LoginView => {
     const session = get(auth.session);
-    const github = get(githubLogin);
-    const completed = get(completeGithub);
+    const started = get(oauthLogin);
+    const completed = get(completeOAuth);
     const requested = get(requestEmailCode);
     const verified = get(verifyEmailCode);
 
@@ -354,7 +374,8 @@ export const loginView = Atom.family((callback: boolean) =>
         returnTarget: get(loginTarget(callback)),
       };
 
-    if (github.waiting || AsyncResult.isSuccess(github)) return { _tag: "Loading", step: "github" };
+    if (started.waiting || AsyncResult.isSuccess(started))
+      return { _tag: "Loading", step: get(activeProvider) };
     if (
       callback &&
       (completed._tag === "Initial" ||
@@ -385,8 +406,8 @@ export const loginView = Atom.family((callback: boolean) =>
       busy,
       error: busy
         ? undefined
-        : failed(github) || (callback && failed(completed))
-          ? "github"
+        : failed(started) || (callback && failed(completed))
+          ? "provider"
           : failed(requested) || failed(verified)
             ? "email"
             : failed(session)

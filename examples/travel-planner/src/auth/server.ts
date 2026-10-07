@@ -1,4 +1,5 @@
 import * as OAuthCrypto from "@yielded/auth-crypto/OAuth";
+import * as OpenIdClient from "@yielded/auth-openid-client";
 import * as GitHub from "@yielded/auth-openid-client/GitHub";
 import * as Auth from "@yielded/auth/Auth";
 import * as Email from "@yielded/auth/Email";
@@ -6,7 +7,7 @@ import * as AuthHttp from "@yielded/auth/Http";
 import * as OAuth from "@yielded/auth/OAuth";
 import { ProofKeys } from "@yielded/auth/Proofs";
 import * as Sessions from "@yielded/auth/Sessions";
-import { Layer, Redacted, Schema } from "effect";
+import { Effect, Layer, Redacted, Schema } from "effect";
 
 import { LoginApi, Registration } from "./contract";
 
@@ -27,6 +28,19 @@ export const AuthConfiguration = Schema.Struct({
   AUTH_TRANSACTION_KEY: Schema.NonEmptyString,
   AUTH_GITHUB_CLIENT_ID: Schema.NonEmptyString,
   AUTH_GITHUB_CLIENT_SECRET: Schema.NonEmptyString,
+  AUTH_YIELDED_ISSUER: Schema.String.check(
+    Schema.makeFilter((value) => {
+      try {
+        const url = new URL(value);
+
+        return url.protocol === "https:" && url.origin === value;
+      } catch {
+        return false;
+      }
+    }),
+  ),
+  AUTH_YIELDED_CLIENT_SECRET: Schema.NonEmptyString,
+  AUTH_YIELDED_ACCOUNT_LINKS: Schema.optionalKey(Schema.String),
   AUTH_EMAIL_FROM: Schema.NonEmptyString,
 });
 
@@ -66,7 +80,8 @@ export const makeAuth = (config: AuthConfiguration) => {
     strategies: {
       email: Email.makeCode(email),
       emailRegistration: Email.makeRegistration({ ...email, registration: Registration }),
-      github: OAuth.makeRegistration({
+      oauth: OAuth.makeRegistration({
+        // Keep the durable namespace while adding another provider to this strategy.
         namespace: "travel-planner/github",
         registration: Registration,
         policy: {
@@ -83,7 +98,7 @@ export const makeAuth = (config: AuthConfiguration) => {
         },
       }),
     },
-    defaultStrategy: "github",
+    defaultStrategy: "oauth",
   });
 
   const http = AuthHttp.make(AppAuth, {
@@ -104,14 +119,61 @@ export const makeAuth = (config: AuthConfiguration) => {
     Email.EmailReturnTargets.exactRoutes(["/travel/", "/browser-use/"]),
   );
 
-  const github = GitHub.layer({
-    configurationGeneration: 2,
-    clientId: config.AUTH_GITHUB_CLIENT_ID,
-    clientSecret: Redacted.make(config.AUTH_GITHUB_CLIENT_SECRET),
-    redirectUri: `${config.AUTH_ORIGIN}/travel/auth/github/callback`,
-  });
+  // This adapter discovers OIDC metadata at construction. Build it only for
+  // Yielded operations so an issuer outage cannot disable other sign-in methods.
+  const providers = Layer.effect(
+    OAuth.OAuthProtocol,
+    Effect.gen(function* () {
+      const github = yield* OAuth.OAuthProtocol.pipe(
+        Effect.provide(
+          GitHub.layer({
+            configurationGeneration: 2,
+            clientId: config.AUTH_GITHUB_CLIENT_ID,
+            clientSecret: Redacted.make(config.AUTH_GITHUB_CLIENT_SECRET),
+            redirectUri: `${config.AUTH_ORIGIN}/travel/auth/github/callback`,
+          }),
+        ),
+      );
 
-  return { AppAuth, http, security, github };
+      const yielded = yield* Effect.cached(
+        OAuth.OAuthProtocol.pipe(
+          Effect.provide(
+            OpenIdClient.layer({
+              providers: [
+                {
+                  protocol: "oidc",
+                  provider: "yielded",
+                  issuer: config.AUTH_YIELDED_ISSUER,
+                  clientId: "yielded-agent",
+                  clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
+                  redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
+                  scopes: ["openid", "profile"],
+                  authorizationParameters: { prompt: "select_account" },
+                },
+              ],
+            }),
+          ),
+          Effect.mapError(() => OAuth.OAuthUnavailable.make({})),
+        ),
+      );
+
+      const select = (provider: string) =>
+        provider === "yielded" ? yielded : Effect.succeed(github);
+
+      return OAuth.OAuthProtocol.of({
+        prepareAuthorization: (input) =>
+          Effect.flatMap(select(input.provider), (protocol) =>
+            protocol.prepareAuthorization(input),
+          ),
+        exchangeVerifiedIdentity: (input) =>
+          Effect.flatMap(select(input.configuration.provider), (protocol) =>
+            protocol.exchangeVerifiedIdentity(input),
+          ),
+      });
+    }),
+  );
+
+  return { AppAuth, http, security, providers };
 };
 
 export type AppAuth = ReturnType<typeof makeAuth>["AppAuth"];

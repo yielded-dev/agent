@@ -307,7 +307,7 @@ function PlannerContent({ signOut }: { readonly signOut: () => void }) {
           <div className="account">
             <span className="account-email">{session.displayName}</span>
             <div className="account-actions">
-              <button onClick={signOut}>Sign out</button>
+              <button onClick={signOut}>Sign out of Agent</button>
             </div>
           </div>
         ) : (

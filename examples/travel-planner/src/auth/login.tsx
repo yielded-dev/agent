@@ -13,7 +13,7 @@ import {
   loginTarget,
   leaveLogin,
   consumeCallback,
-  githubLogin,
+  oauthLogin,
   loginView,
   requestEmailCode,
   verifyEmailCode,
@@ -37,7 +37,7 @@ const destinations = {
 export function Login({ callback = false }: { readonly callback?: boolean }) {
   const view = useAtomValue(loginView(callback));
   const returnTarget = useAtomValue(loginTarget(callback));
-  const startGithub = useAtomSet(githubLogin);
+  const startOAuth = useAtomSet(oauthLogin);
   const consume = useAtomSet(consumeCallback);
   const leave = useAtomSet(leaveLogin);
   const requestCode = useAtomSet(requestEmailCode);
@@ -74,10 +74,23 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             <button
               className="login-primary"
               disabled={busy}
-              onClick={() => startGithub(returnTarget)}
+              onClick={() => startOAuth({ provider: "yielded", returnTarget })}
             >
-              <GithubMark /> Continue with GitHub
+              Continue with Yielded →
             </button>
+            <p className="login-note">
+              Continue at auth.yielded.dev to choose your Yielded account.
+            </p>
+            <details>
+              <summary>Use an existing Agent account</summary>
+              <button
+                className="login-secondary"
+                disabled={busy}
+                onClick={() => startOAuth({ provider: "github", returnTarget })}
+              >
+                <GithubMark /> Continue with GitHub
+              </button>
+            </details>
             <div className="login-divider">
               <span>or use email</span>
             </div>
@@ -179,8 +192,8 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
         )}
         {view.error && (
           <p className="login-alert" role="alert">
-            {view.error === "github"
-              ? "We couldn’t finish signing in with GitHub. Please start a new attempt."
+            {view.error === "provider"
+              ? "We couldn’t finish the provider sign-in. Please start a new attempt."
               : view.error === "email"
                 ? "We couldn’t complete that step. Check your code or request a new one."
                 : "We couldn’t check your sign-in. Please try again."}
@@ -188,11 +201,12 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
         )}
         {view.cancelled && (
           <p className="login-notice" role="status">
-            GitHub sign-in was cancelled. You can start again when you’re ready.
+            Sign-in was cancelled. You can start again when you’re ready.
           </p>
         )}
         <p className="login-note">
-          Email and GitHub create separate accounts. Use the same method when you return.
+          Existing email and GitHub accounts stay separate until explicitly connected. Matching
+          email addresses never joins accounts.
         </p>
       </section>
     </LoginShell>
@@ -211,18 +225,22 @@ export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
             </picture>
           </div>
           <h1 id="login-loading-title">
-            {step === "github"
-              ? "Connecting to GitHub"
-              : step === "callback"
-                ? "Signing you in"
-                : "Getting things ready"}
+            {step === "yielded"
+              ? "Connecting to Yielded"
+              : step === "github"
+                ? "Connecting to GitHub"
+                : step === "callback"
+                  ? "Signing you in"
+                  : "Getting things ready"}
           </h1>
           <p>
-            {step === "github"
-              ? "Taking you to GitHub to continue."
-              : step === "callback"
-                ? "Finishing up. You’ll be on your way in a moment."
-                : "One moment while we check your sign-in."}
+            {step === "yielded"
+              ? "Taking you to auth.yielded.dev to choose your account."
+              : step === "github"
+                ? "Taking you to GitHub to continue."
+                : step === "callback"
+                  ? "Finishing up. You’ll be on your way in a moment."
+                  : "One moment while we check your sign-in."}
           </p>
         </div>
       </section>
@@ -254,7 +272,8 @@ function LoginShell({
       </header>
       <main className="login-main">{children}</main>
       <footer className="login-foot">
-        One account for agent.yielded.dev: the travel planner and the browser lab.
+        Your Agent session covers the travel planner and browser lab. Signing out of Agent leaves
+        your Yielded Auth session active.
       </footer>
     </div>
   );

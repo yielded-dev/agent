@@ -66,7 +66,7 @@ export const persistenceLayer = (AppAuth: AppAuth) =>
           resolve: ({ subjectId }) =>
             claims(subjectId).pipe(Effect.mapError(() => EmailUnavailable.make({}))),
         }),
-        Layer.succeed(AppAuth.strategies.github.SessionClaims, {
+        Layer.succeed(AppAuth.strategies.oauth.SessionClaims, {
           resolve: ({ subjectId, identity }) =>
             claims(subjectId).pipe(
               Effect.map((local) => ({
@@ -79,7 +79,7 @@ export const persistenceLayer = (AppAuth: AppAuth) =>
         Layer.succeed(OAuthSignInPersistence, oauth.oauthSignInPersistence),
         Layer.succeed(OAuthRegistrationIntents, intents.oauthRegistrationIntents),
         Layer.succeed(
-          AppAuth.strategies.github.registration.RegistrationAuthority,
+          AppAuth.strategies.oauth.registration.RegistrationAuthority,
           registration.registrationAuthority,
         ),
         Layer.succeed(

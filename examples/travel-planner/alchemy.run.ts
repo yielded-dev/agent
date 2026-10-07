@@ -74,6 +74,14 @@ export default Alchemy.Stack(
         AUTH_ORIGIN: Config.NonEmptyString("AUTH_ORIGIN"),
         AUTH_EMAIL_FROM: Config.NonEmptyString("AUTH_EMAIL_FROM"),
         AUTH_GITHUB_CLIENT_ID: Config.NonEmptyString("AUTH_GITHUB_CLIENT_ID"),
+        AUTH_YIELDED_ISSUER: Config.NonEmptyString("AUTH_YIELDED_ISSUER"),
+        AUTH_YIELDED_ACCOUNT_LINKS: Config.String("AUTH_YIELDED_ACCOUNT_LINKS").pipe(
+          Config.withDefault("[]"),
+        ),
+        AUTH_YIELDED_CLIENT_SECRET: Config.schema(
+          Schema.Redacted(Schema.NonEmptyString),
+          "AUTH_YIELDED_CLIENT_SECRET",
+        ),
         AUTH_GITHUB_CLIENT_SECRET: Config.schema(
           Schema.Redacted(Schema.NonEmptyString),
           "AUTH_GITHUB_CLIENT_SECRET",

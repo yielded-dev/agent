@@ -19,6 +19,8 @@ export const fixtureAuthConfig = {
   AUTH_TRANSACTION_KEY: key,
   AUTH_GITHUB_CLIENT_ID: "fixture-github",
   AUTH_GITHUB_CLIENT_SECRET: "fixture-github-secret",
+  AUTH_YIELDED_ISSUER: "https://auth.yielded.dev",
+  AUTH_YIELDED_CLIENT_SECRET: "local-preview",
   AUTH_EMAIL_FROM: "signin@example.invalid",
 };
 
