@@ -580,9 +580,10 @@ observe and must accompany claims about the exact candidate and configuration it
 
 ## CI and hooks
 
-Opening, reopening, updating, marking ready, or retargeting a PR runs CI. Title and
-description edits create only a skipped run; they do not cancel active CI or replace
-its required `ready` result.
+Opening, reopening, pushing commits, or marking a PR ready runs CI. Title and
+description edits do not create runs, so they cannot supersede the required `ready`
+check. After changing a PR's base branch, close and reopen it to validate the new
+diff. A newer commit run supersedes older work on the same PR.
 
 Every PR runs CI and reports the required `ready` result. CI selects work from the complete PR
 diff, including both paths of a rename:
