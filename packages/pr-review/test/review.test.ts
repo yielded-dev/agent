@@ -208,6 +208,40 @@ describe("review deadline visibility", () => {
 });
 
 describe("review output boundary", () => {
+  // Regression in 38bc3406: completion acknowledged invalid resolution IDs before rejecting them.
+  it.effect("allows invalid resolution IDs to be corrected before completion", () =>
+    Effect.gen(function* () {
+      let calls = 0;
+
+      const outcome = yield* makeReviewer({
+        model: scriptedModel((prompt) => {
+          calls += 1;
+
+          if (calls === 1)
+            return toolResponse([{ name: "record_finding", params: submittedFinding(blocker, 1) }]);
+          if (calls === 2)
+            return response({ resolutions: [{ ...resolution, id: "unknown-review" }] });
+
+          expect(completionResult(prompt)).toMatchObject({
+            isFailure: true,
+            result: { _tag: "ReviewVerificationError" },
+          });
+
+          return response({ resolutions: calls === 3 ? [resolution, resolution] : [resolution] });
+        }),
+      })
+        .review(ReviewRequest.make({ ...request, followUps: [followUp] }))
+        .pipe(Effect.provideService(ReviewRepository, emptyRepository));
+
+      expect(outcome.incomplete).toBeUndefined();
+      expect(outcome.report.findings).toEqual([blocker]);
+      expect(outcome.resolutions).toEqual([resolution]);
+      expect(calls).toBe(4);
+      expect(outcome.turns).toBe(4);
+      expect(outcome.usage).toMatchObject({ inputTokens: 40, outputTokens: 16 });
+    }),
+  );
+
   it.effect(
     "concurrent research retains the same findings regardless of child completion order",
     () =>
