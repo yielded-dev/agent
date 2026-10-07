@@ -1,4 +1,4 @@
-import { Context, Crypto, Effect, Option, Schema, Semaphore, Stream } from "effect";
+import { Context, Crypto, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
@@ -1403,23 +1403,24 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         ),
       );
 
-      let record = captureRecord(
-        new RecordEnvelope(
-          {
-            recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
-            family: "thread",
-            schemaVersion: 1,
-            createdAt: last.createdAt,
-            deploymentId: last.deploymentId,
-            payload: continuation,
-          },
-          { disableChecks: true },
-        ),
-      ).canonical;
+      const header = {
+        recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
+        family: "thread" as const,
+        schemaVersion: 1 as const,
+        createdAt: last.createdAt,
+        deploymentId: last.deploymentId,
+      };
 
-      // Only these two natural-number fields change. Converge their encoded widths before
-      // capturing the final record, rather than encoding and copying the whole cursor each time.
-      const initialCursorBytes = canonicalRecordBytes(record);
+      // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
+      // Key order does not change byte width. Measure without capturing a provisional record,
+      // then compare against the final Schema encoding before accepting its accounting.
+      const provisional = {
+        ...header,
+        createdAt: DateTime.formatIso(header.createdAt),
+        payload: continuation,
+      } satisfies typeof RecordEnvelope.Encoded;
+
+      const initialCursorBytes = utf8ByteLength(JSON.stringify(provisional));
 
       const initialWidth =
         String(continuation.turnBytes).length + String(continuation.terminalBytes).length;
@@ -1451,10 +1452,13 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           capacityFailure("Turn exceeds its incremental canonical byte budget"),
         ),
       );
-      record = captureRecord(
-        new RecordEnvelope({ ...record, payload: continuation }, { disableChecks: true }),
+
+      const record = captureRecord(
+        new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
       ).canonical;
 
+      if (canonicalRecordBytes(record) !== turnBytes - turnBase)
+        return yield* failure("Continuation byte accounting differs from its Schema encoding");
       if (canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES)
         return yield* capacityFailure(
           "Encoded continuation exceeds 8192 bytes including its envelope",
