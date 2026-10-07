@@ -230,9 +230,14 @@ retain a cached preview after a deployment.
 
 `vp run docs:deploy --yes` keeps the existing `effect-agent` production stack and
 `effect-agent-docs` Worker, serving the docs at `yielded.dev/agent/`. The Worker
-route is `yielded.dev/agent*` and the assets base is `/agent/`. The legacy domain
-`effect-agent.com` remains attached and redirects each path to its equivalent
-under `/agent`, preserving query strings. Retain the domain and redirects.
+route is `yielded.dev/agent*` and the assets base is `/agent/`. Asset lookup
+keeps that prefix; the Worker does not remove it. `effect-agent.com` and
+`www.effect-agent.com` each 301 once to the canonical trailing-slash URL
+(`/guide/agents` and `/guide/agents.html` both land on `/agent/guide/agents/`),
+preserving query strings. Files with another extension keep their path.
+`/agent`, `/agent/index.html`, and `/agent/index` respond with 308 to `/agent/`.
+`/agent/404` (and its slash and `.html` forms) is served with status 404, as are
+unknown paths. Retain the domain and redirects.
 
 ## Releasing to npm
 
