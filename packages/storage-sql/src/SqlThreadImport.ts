@@ -84,7 +84,7 @@ import {
 } from "@yielded/agent/thread-transfer";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { AssignmentTerminal } from "@yielded/agent/worker";
-import { Clock, Crypto, DateTime, Effect, Layer, Schema, Stream, Struct, Option } from "effect";
+import { Clock, Crypto, DateTime, Effect, Schema, Stream, Struct, Option } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -745,7 +745,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     id: ThreadId,
     tailSequence: CanonicalSequence,
     mode: "import" | "verify",
-  ): Layer.Layer<ThreadImportReader> => {
+  ): ReturnType<typeof ThreadImportReader.layer> => {
     const readRecord = (recordId: RecordId) =>
       rows(id, sql`r.record_id=${recordId} AND r.sequence<=${tailSequence}`, 1).pipe(
         Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : envelope(r[0]))),
@@ -760,7 +760,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       2 * (MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS) +
       MAX_RUN_RECOVERY_SUFFIX_RECORDS;
 
-    return Layer.succeed(ThreadImportReader, {
+    return ThreadImportReader.layer({
       read: (input) =>
         Stream.unwrap(
           Effect.gen(function* () {

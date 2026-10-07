@@ -1,11 +1,10 @@
-import { type Crypto, Effect, Option, Schema, Stream } from "effect";
+import { type Crypto, Effect, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { digestJson } from "../Digest.ts";
 import {
   CanonicalSequence,
   type CanonicalRecordEnvelope,
-  type RecordId,
   type RunContextRecorded,
 } from "../Records.ts";
 import {
@@ -14,8 +13,8 @@ import {
   type RunJournalContext,
   type JournalBoundary,
 } from "../RunJournal.ts";
-import { getRecord, ThreadReader, type ThreadReadRequest } from "../ThreadStore.ts";
 import { reference } from "./evidence.ts";
+import { RunContextReader } from "./run-context-reader.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
@@ -107,22 +106,22 @@ export const projectRunContext = Effect.fnUntraced(function* (
 });
 
 /** Cold recovery and explicit verify use full reads; fresh admission uses the narrow history port. */
-export const readRunContext = Effect.fnUntraced(function* <E, R>(
+export const readRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
   digest: string,
-  read: (request: ThreadReadRequest) => Stream.Stream<CanonicalRecordEnvelope, E, R>,
-  record: (recordId: RecordId) => Effect.Effect<CanonicalRecordEnvelope | undefined, E, R>,
 ) {
   yield* validateContextBoundary(context, original);
+  const reader = yield* RunContextReader;
   const records: Array<CanonicalRecordEnvelope> = [];
 
   for (const ref of context.retained) {
-    const entry = yield* record(ref.recordId);
+    const entry = yield* reader.record(ref.recordId);
 
     if (
       entry === undefined ||
       entry.threadId !== original.threadId ||
+      entry.record.recordId !== ref.recordId ||
       entry.sequence !== ref.sequence ||
       (yield* reference(entry.record)).digest !== ref.digest
     )
@@ -133,11 +132,13 @@ export const readRunContext = Effect.fnUntraced(function* <E, R>(
   let after = CanonicalSequence.make(context.historyFrom - 1);
 
   while (after < context.historyThrough) {
-    const page = yield* read({
-      threadId: original.threadId,
-      selection: { _tag: "PromptEvidence", throughSequence: context.historyThrough },
-      page: { afterSequence: after, limit: 8 },
-    }).pipe(Stream.take(9), Stream.runCollect);
+    const page = yield* reader
+      .read({
+        threadId: original.threadId,
+        selection: { _tag: "PromptEvidence", throughSequence: context.historyThrough },
+        page: { afterSequence: after, limit: 8 },
+      })
+      .pipe(Stream.take(9), Stream.runCollect);
 
     if (page.length > 8) return yield* invalid("Saved context page exceeds its record bound");
     for (const entry of page) {
@@ -154,17 +155,4 @@ export const readRunContext = Effect.fnUntraced(function* <E, R>(
   }
 
   return yield* projectRunContext(context, original, digest, records);
-});
-
-/** Resolve the immutable original context without execution authority. */
-export const rebuildRunContext = Effect.fnUntraced(function* (
-  context: RunContextRecorded,
-  original: CanonicalRecordEnvelope,
-  digest: string,
-) {
-  const reader = yield* ThreadReader;
-
-  return yield* readRunContext(context, original, digest, reader.read, (recordId) =>
-    getRecord({ threadId: original.threadId, recordId }).pipe(Effect.map(Option.getOrUndefined)),
-  );
 });

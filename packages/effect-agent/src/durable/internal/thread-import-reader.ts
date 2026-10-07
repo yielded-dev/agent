@@ -1,4 +1,4 @@
-import { Context, type Effect, type Stream } from "effect";
+import { Context, type Effect, Layer, type Stream } from "effect";
 
 import type { AgentId, RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
 import type { IdempotencyKey } from "../../core/Receipt.ts";
@@ -10,6 +10,7 @@ import type {
   ThreadReadRequest,
   ThreadStoreError,
 } from "../ThreadStore.ts";
+import { RunContextReader } from "./run-context-reader.ts";
 
 export interface ThreadSettlementPredecessorRequest {
   readonly submissionId: SubmissionId;
@@ -47,7 +48,14 @@ export class ThreadImportReader extends Context.Service<
       request: ThreadSettlementPredecessorRequest,
     ) => Stream.Stream<Pick<ThreadAdmission, "submissionId">, ThreadStoreError>;
   }
->()("@effect-agent/thread/ThreadImportReader") {}
+>()("@effect-agent/thread/ThreadImportReader") {
+  /** Bind context reconstruction to this same captured transaction. */
+  static layer(reader: ThreadImportReader["Service"]) {
+    return Layer.succeedContext(
+      Context.make(ThreadImportReader, reader).pipe(Context.add(RunContextReader, reader)),
+    );
+  }
+}
 
 /** Delivery evidence reads: the importing Thread uses staged facts; foreign Threads use retained facts. */
 export class ThreadDeliveryImportReader extends Context.Service<

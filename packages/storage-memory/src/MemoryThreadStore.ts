@@ -2430,7 +2430,7 @@ const makeThreadStore = Effect.gen(function* () {
 
               return result;
             }).pipe(
-              Effect.provideService(ThreadImportReader, reader),
+              Effect.provide(ThreadImportReader.layer(reader)),
               Effect.provideService(ThreadDeliveryImportReader, {
                 admission: (threadId, sid) =>
                   threadId === id
@@ -2872,7 +2872,7 @@ const makeThreadStore = Effect.gen(function* () {
               ? {}
               : { requireAllSettled: request.requireAllSettled }),
           }).pipe(
-            Effect.provideService(ThreadImportReader, reader),
+            Effect.provide(ThreadImportReader.layer(reader)),
             Effect.provideService(Crypto.Crypto, crypto),
           );
         }),

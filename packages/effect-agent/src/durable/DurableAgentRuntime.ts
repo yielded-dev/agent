@@ -164,7 +164,8 @@ import {
   type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
-import { digestRunHistory, rebuildRunContext } from "./internal/run-context.ts";
+import { RunContextReader } from "./internal/run-context-reader.ts";
+import { digestRunHistory, readRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -1738,7 +1739,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ) {
           saved = cachedContext.value;
         } else {
-          saved = yield* rebuildRunContext(initial, input, cursor.savedContext.digest).pipe(
+          saved = yield* readRunContext(initial, input, cursor.savedContext.digest).pipe(
+            Effect.provide(RunContextReader.layer(threadId)),
             Effect.provideService(ThreadReader, reader),
             Effect.provideService(Crypto.Crypto, crypto),
             Effect.mapError(() =>
@@ -4869,7 +4871,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               (boundary) => boundaries.push(boundary),
               priorContext,
               journalMetadata,
-              retainHistory,
+              priorContext === undefined ? retainHistory : undefined,
             );
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.

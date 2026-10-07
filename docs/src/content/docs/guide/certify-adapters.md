@@ -29,7 +29,8 @@ than decoding full records and discarding fields. This read-only projection trus
 validation and is never execution or integrity evidence. Bound raw hydration before decoding;
 internal chunks must not shorten a page before its requested limit or captured range end.
 Full `read` and snapshot-bound `ThreadImportReader.read` must preserve the canonical values used by
-recovery and verification.
+recovery and verification. Provide snapshot readers with `ThreadImportReader.layer(...)` so context
+reconstruction uses that same transaction.
 
 `ThreadStore.checkpoints` is optional storage for application projections. An adapter offering it
 must run the generic checkpoint conformance suite. Retained-history execution does not use it.

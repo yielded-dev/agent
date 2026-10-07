@@ -794,7 +794,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     );
   }
 
-  const boundIsValid = (payload: CompactionCreated, ownSequence: number): boolean => {
+  const boundIsValid = (
+    payload: CompactionCreated,
+    ownSequence: number,
+    evidence?: Set<number>,
+  ): boolean => {
     const { runId, coversThrough } = payload;
 
     if (coversThrough <= 0 || coversThrough >= ownSequence) return false;
@@ -812,29 +816,44 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       )
     )
       return false;
-    if (
-      payload.kind !== "summarize" &&
-      incompleteResponseSequences.some(
-        (response) =>
-          response.sequence <= coversThrough &&
-          response.lastSettlementSequence >= ownSequence &&
-          isInRunView(
+    if (payload.kind !== "summarize") {
+      for (const response of incompleteResponseSequences) {
+        if (
+          response.sequence > coversThrough ||
+          response.lastSettlementSequence < ownSequence ||
+          !isInRunView(
             response.sequence,
             { _tag: "ModelResponseRecorded", runId: response.runId },
             runId,
-          ) &&
-          !isTerminalPriorRun(response.runId, runId, ownSequence),
-      )
-    )
-      return false;
+          )
+        )
+          continue;
+        if (evidence !== undefined) {
+          evidence.add(response.sequence);
+          const terminal = terminalSequenceByRun.get(response.runId);
+
+          const lastResponse = responseSequencesByRun
+            .get(response.runId)
+            ?.findLast((sequence) => sequence < ownSequence);
+
+          if (terminal !== undefined) evidence.add(terminal);
+          if (lastResponse !== undefined) evidence.add(lastResponse);
+        }
+        if (!isTerminalPriorRun(response.runId, runId, ownSequence)) return false;
+      }
+    }
     for (const span of settledSpans) {
       if (
         span.from <= coversThrough &&
         coversThrough < span.to &&
         span.to < ownSequence &&
         isInRunView(span.from, { _tag: "ModelResponseRecorded", runId: span.runId }, runId)
-      )
+      ) {
+        evidence?.add(span.from);
+        evidence?.add(span.to);
+
         return false;
+      }
     }
 
     return true;
@@ -903,15 +922,31 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     ),
   );
 
-  const contextCreatorStarts = new Set(
-    [...contextViews, ...compactions.filter(({ sequence }) => sequence >= historyFrom)].flatMap(
-      ({ payload }) => {
-        const sequence = firstSequenceByRun.get(payload.runId);
-
-        return sequence === undefined ? [] : [sequence];
-      },
-    ),
+  const contextValidationViews = compactions.filter(
+    ({ sequence }) => sequence >= historyFrom || contextCompactions.has(sequence),
   );
+
+  const contextEvidence = new Set(
+    contextValidationViews.flatMap(({ payload }) => {
+      const sequence = firstSequenceByRun.get(payload.runId);
+
+      return sequence === undefined ? [] : [sequence];
+    }),
+  );
+
+  // Reread compactions must keep the facts that accepted or rejected their original bounds.
+  if (onEvidence !== undefined)
+    for (const { payload, sequence } of contextValidationViews)
+      boundIsValid(payload, sequence, contextEvidence);
+
+  const retainEvidence = (envelope: A): void => {
+    if (onEvidence === undefined) return;
+    onEvidence(envelope);
+    if (envelope.sequence < historyFrom && envelope.record.payload._tag === "ModelResponseRecorded")
+      // A retained declaration must preserve its already-settled siblings for later coverage checks.
+      for (const span of spansByDeclaration.get(envelope.sequence) ?? [])
+        if (span.to < historyFrom) contextEvidence.add(span.to);
+  };
 
   let summaryEmitted = false;
 
@@ -1214,7 +1249,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     Effect.gen(function* () {
       const payload = envelope.record.payload;
 
-      if (contextCreatorStarts.has(envelope.sequence)) onEvidence?.(envelope);
+      if (contextEvidence.has(envelope.sequence)) retainEvidence(envelope);
       if (
         (payload._tag === "RunCompleted" ||
           payload._tag === "RunFailed" ||
@@ -1222,7 +1257,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         payload.runId !== undefined &&
         incompleteContextRuns.has(payload.runId)
       )
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
 
       if (
         ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
@@ -1285,7 +1320,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       // message of its own; records at or below the summarize bound render as
       // the one summary message emitted at the covered/kept transition.
       if (payload._tag === "CompactionCreated") {
-        if (contextCompactions.has(envelope.sequence)) onEvidence?.(envelope);
+        if (contextCompactions.has(envelope.sequence)) retainEvidence(envelope);
 
         return;
       }
@@ -1299,7 +1334,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
 
           if (late.length > 0) {
             // Even a rollover-hidden late result needs its exact declaration to stay hidden.
-            onEvidence?.(envelope);
+            retainEvidence(envelope);
             if (latestWindow !== undefined && isCovered(envelope, latestWindow.payload)) return;
             const messages = yield* decodePromptMessages(payload.messages);
 
@@ -1343,7 +1378,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
           isInRunView(declarationFact.sequence, declarationFact.record.payload, compaction.runId);
 
         if (latestWindow !== undefined && declarationCovered(latestWindow.payload)) return;
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
         if (payload.runId !== ownerRunId) {
           const slot = historicalResults.get(envelope.record.recordId);
 
@@ -1445,7 +1480,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       }
       state = yield* flushTools(state);
       if (payload._tag === "ModelCompleted" && payload.history !== undefined) {
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
         const messages = yield* decodePromptMessages(payload.history);
 
         state.all.length = 0;
@@ -1467,7 +1502,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         return;
       }
       if (payload._tag !== "ModelResponseRecorded") return;
-      onEvidence?.(envelope);
+      retainEvidence(envelope);
       const messages = yield* decodePromptMessages(payload.messages);
       const forRun = payload.runId === ownerRunId;
 
