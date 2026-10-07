@@ -3291,11 +3291,16 @@
         "runScopedInput": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
         },
+        "historyFrom": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 0
+        },
         "historyThrough": {
           "type": "integer",
           "minimum": 0
         },
-        "history": {
+        "retained": {
           "type": "array",
           "items": {
             "type": "object",
@@ -3317,45 +3322,12 @@
           },
           "maxItems": 4096
         },
-        "historyBytes": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 33554432
+        "historyDigest": {
+          "type": "string"
         },
         "priorHistoryLength": {
           "type": "integer",
           "minimum": 0
-        },
-        "boundaries": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "sequence": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "tag": {
-                "type": "string",
-                "enum": ["ModelCompleted", "ModelResponseRecorded", "ToolCallSettled"]
-              },
-              "promptLength": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "incomplete": {
-                "type": "boolean",
-                "enum": [true]
-              },
-              "terminalPriorRun": {
-                "type": "boolean",
-                "enum": [true]
-              }
-            },
-            "required": ["sequence", "tag", "promptLength"],
-            "additionalProperties": true
-          },
-          "maxItems": 4096
         },
         "contextWindowId": {
           "type": "string",
@@ -3368,11 +3340,11 @@
         "version",
         "runId",
         "runScopedInput",
+        "historyFrom",
         "historyThrough",
-        "history",
-        "historyBytes",
-        "priorHistoryLength",
-        "boundaries"
+        "retained",
+        "historyDigest",
+        "priorHistoryLength"
       ],
       "additionalProperties": true
     },

@@ -21,6 +21,7 @@ import {
   makeJournalMetadata,
   toolCallSettledRecordId,
   type JournalMetadata,
+  type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
 import {
   type CompactionCreated,
@@ -34,10 +35,9 @@ import {
   RunCompleted,
   ToolCallSettled,
   type CanonicalRecordEnvelope,
-  type CanonicalSequence,
+  CanonicalSequence,
   type DeploymentId,
   type ProducerId,
-  type ContextBoundary,
 } from "./Records.ts";
 import { IdempotencyKey } from "./SubmissionLedger.ts";
 
@@ -332,8 +332,9 @@ const decodePersistedPrompt = (
 // while repeated projections of an advancing tail reuse their validated Prompt values.
 const decodedMessages = new WeakMap<object, Prompt.Prompt>();
 
-const decodePromptMessages = (messages: PersistedJson) =>
+const decodePromptMessages = (messages: PersistedJson | Prompt.Prompt) =>
   Effect.suspend(() => {
+    if (Prompt.isPrompt(messages)) return Effect.succeed(messages);
     if (!Predicate.isObject(messages)) return decodePersistedPrompt(messages);
     const cached = decodedMessages.get(messages);
 
@@ -349,7 +350,7 @@ const decodePromptMessages = (messages: PersistedJson) =>
   });
 
 interface PendingSettledTool {
-  readonly record: ToolCallSettled;
+  readonly record: Pick<ToolCallSettled, "toolCallId" | "toolName" | "result" | "isFailure">;
   /** RUN-026: a `clear-tool-results` compaction covers this record's sequence. */
   readonly cleared: boolean;
 }
@@ -415,6 +416,8 @@ export interface RunJournalProjection {
   readonly prompt: Prompt.Prompt;
   /** Prior-Run history with model-only unknown results closing incomplete application calls. */
   readonly historyBefore: Prompt.Prompt;
+  /** Inclusive range after effective summarize/rollover coverage; earlier used facts stay retained. */
+  readonly historyFrom: CanonicalSequence;
   /** Number of canonical Turns already committed for the projected Run. */
   readonly committedTurns: number;
   /** Summed per-call usage of the projected Run's committed responses; zeros for records predating usage capture. */
@@ -574,7 +577,11 @@ const PROMPT_TRANSPARENT_TAGS: ReadonlySet<string> = new Set([
 /** @internal Lightweight canonical boundaries collected without retaining record payloads. */
 export interface JournalBoundary {
   readonly sequence: CanonicalSequence;
-  readonly tag: typeof ContextBoundary.Type.tag;
+  readonly tag:
+    | "ModelCompleted"
+    | "ModelResponseRecorded"
+    | "ToolCallSettled"
+    | "CompactionCreated";
   readonly promptLength: number;
   /** A declaration without all settled results requires terminal-prior-Run proof for coverage. */
   readonly incomplete?: true | undefined;
@@ -582,12 +589,13 @@ export interface JournalBoundary {
   readonly terminalPriorRun?: true | undefined;
 }
 
-/** Resolved immutable context. Persisted context stores references instead of this Prompt. */
+/** Resolved immutable context. Persistence keeps a canonical range and digest, not this Prompt. */
 export interface RunJournalContext {
   readonly runId: RunId;
   readonly prompt: Prompt.Prompt;
   readonly priorHistoryLength: number;
-  readonly boundaries: ReadonlyArray<typeof ContextBoundary.Type>;
+  readonly historyFrom: CanonicalSequence;
+  readonly boundaries: ReadonlyArray<JournalBoundary>;
   readonly contextWindowId?: string | undefined;
   readonly digest: string;
 }
@@ -602,13 +610,17 @@ export interface RunJournalContext {
  * it skips only the metadata scan, never covered-Tool validation or the canonical fold.
  * @internal
  */
-export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
-  records: Stream.Stream<CanonicalRecordEnvelope, E, R>,
+export const projectRunJournalStream = Effect.fnUntraced(function* <
+  E,
+  R,
+  A extends JournalRecordEnvelope,
+>(
+  records: Stream.Stream<A, E, R>,
   ownerRunId: RunId | undefined,
   onBoundary?: (boundary: JournalBoundary) => void,
   savedContext?: RunJournalContext,
   preparedMetadata?: JournalMetadata,
-  onEvidence?: (envelope: CanonicalRecordEnvelope) => void,
+  onEvidence?: (envelope: A) => void,
 ): Effect.fn.Return<RunJournalProjection, RunJournalError | E, R> {
   if (savedContext !== undefined && savedContext.runId !== ownerRunId)
     return yield* journalError("Saved original context belongs to another Run");
@@ -695,7 +707,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     ),
   );
 
-  const isCovered = (envelope: CanonicalRecordEnvelope, compaction: CompactionCreated): boolean =>
+  const isCovered = (envelope: JournalRecordEnvelope, compaction: CompactionCreated): boolean =>
     envelope.sequence <= compaction.coversThrough &&
     isInRunView(envelope.sequence, envelope.record.payload, compaction.runId);
 
@@ -782,7 +794,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     );
   }
 
-  const boundIsValid = (payload: CompactionCreated, ownSequence: number): boolean => {
+  const boundIsValid = (
+    payload: CompactionCreated,
+    ownSequence: number,
+    evidence?: Set<number>,
+  ): boolean => {
     const { runId, coversThrough } = payload;
 
     if (coversThrough <= 0 || coversThrough >= ownSequence) return false;
@@ -800,29 +816,44 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       )
     )
       return false;
-    if (
-      payload.kind !== "summarize" &&
-      incompleteResponseSequences.some(
-        (response) =>
-          response.sequence <= coversThrough &&
-          response.lastSettlementSequence >= ownSequence &&
-          isInRunView(
+    if (payload.kind !== "summarize") {
+      for (const response of incompleteResponseSequences) {
+        if (
+          response.sequence > coversThrough ||
+          response.lastSettlementSequence < ownSequence ||
+          !isInRunView(
             response.sequence,
             { _tag: "ModelResponseRecorded", runId: response.runId },
             runId,
-          ) &&
-          !isTerminalPriorRun(response.runId, runId, ownSequence),
-      )
-    )
-      return false;
+          )
+        )
+          continue;
+        if (evidence !== undefined) {
+          evidence.add(response.sequence);
+          const terminal = terminalSequenceByRun.get(response.runId);
+
+          const lastResponse = responseSequencesByRun
+            .get(response.runId)
+            ?.findLast((sequence) => sequence < ownSequence);
+
+          if (terminal !== undefined) evidence.add(terminal);
+          if (lastResponse !== undefined) evidence.add(lastResponse);
+        }
+        if (!isTerminalPriorRun(response.runId, runId, ownSequence)) return false;
+      }
+    }
     for (const span of settledSpans) {
       if (
         span.from <= coversThrough &&
         coversThrough < span.to &&
         span.to < ownSequence &&
         isInRunView(span.from, { _tag: "ModelResponseRecorded", runId: span.runId }, runId)
-      )
+      ) {
+        evidence?.add(span.from);
+        evidence?.add(span.to);
+
         return false;
+      }
     }
 
     return true;
@@ -884,13 +915,38 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 
   const contextCompactions = new Set(contextViews.map(({ sequence }) => sequence));
 
-  const contextCreatorStarts = new Set(
-    contextViews.flatMap(({ payload }) => {
+  const historyFrom = CanonicalSequence.make(
+    replacements.reduce(
+      (from, { payload }) => Math.max(from, payload.coversThrough + 1),
+      savedContext?.historyFrom ?? 1,
+    ),
+  );
+
+  const contextValidationViews = compactions.filter(
+    ({ sequence }) => sequence >= historyFrom || contextCompactions.has(sequence),
+  );
+
+  const contextEvidence = new Set(
+    contextValidationViews.flatMap(({ payload }) => {
       const sequence = firstSequenceByRun.get(payload.runId);
 
       return sequence === undefined ? [] : [sequence];
     }),
   );
+
+  // Reread compactions must keep the facts that accepted or rejected their original bounds.
+  if (onEvidence !== undefined)
+    for (const { payload, sequence } of contextValidationViews)
+      boundIsValid(payload, sequence, contextEvidence);
+
+  const retainEvidence = (envelope: A): void => {
+    if (onEvidence === undefined) return;
+    onEvidence(envelope);
+    if (envelope.sequence < historyFrom && envelope.record.payload._tag === "ModelResponseRecorded")
+      // A retained declaration must preserve its already-settled siblings for later coverage checks.
+      for (const span of spansByDeclaration.get(envelope.sequence) ?? [])
+        if (span.to < historyFrom) contextEvidence.add(span.to);
+  };
 
   let summaryEmitted = false;
 
@@ -927,6 +983,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       state.all.push(message);
       if (replacement.kind !== "rollover" || replacement.runId !== ownerRunId)
         state.before.push(message);
+      // Marker coverage comes from its compaction, even when covered facts leave the saved range.
+      onBoundary?.({
+        sequence: replacement.coversThrough,
+        tag: "CompactionCreated",
+        promptLength: state.all.length,
+      });
     }
   };
 
@@ -1021,8 +1083,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
   };
 
   const accountResponse = Effect.fnUntraced(function* (
-    envelope: CanonicalRecordEnvelope,
-    payload: ModelResponseRecorded,
+    envelope: JournalRecordEnvelope,
+    payload: Extract<
+      JournalRecordEnvelope["record"]["payload"],
+      { readonly _tag: "ModelResponseRecorded" }
+    >,
     messages: Prompt.Prompt,
   ) {
     const record = envelope.record;
@@ -1048,6 +1113,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       for (const recordId of actualResultIds) incompleteToolCalls.add(recordId);
     }
     if (payload.runId !== ownerRunId) return;
+    if (!("toolOperations" in payload))
+      return yield* journalError("Owning Run execution requires full canonical evidence");
     if (payload.turn === 1 && payload.runScopedPrefixLength !== undefined) {
       protectedContext = Prompt.fromMessages(
         messages.content.slice(0, payload.runScopedPrefixLength),
@@ -1182,17 +1249,15 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     Effect.gen(function* () {
       const payload = envelope.record.payload;
 
-      if (contextCreatorStarts.has(envelope.sequence)) onEvidence?.(envelope);
+      if (contextEvidence.has(envelope.sequence)) retainEvidence(envelope);
       if (
         (payload._tag === "RunCompleted" ||
           payload._tag === "RunFailed" ||
           payload._tag === "SubmissionSettled") &&
         payload.runId !== undefined &&
-        (incompleteContextRuns.has(payload.runId) ||
-          (responseSequencesByRun.has(payload.runId) &&
-            terminalSequenceByRun.get(payload.runId) === envelope.sequence))
+        incompleteContextRuns.has(payload.runId)
       )
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
 
       if (
         ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
@@ -1255,26 +1320,22 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       // message of its own; records at or below the summarize bound render as
       // the one summary message emitted at the covered/kept transition.
       if (payload._tag === "CompactionCreated") {
-        if (contextCompactions.has(envelope.sequence)) onEvidence?.(envelope);
+        if (contextCompactions.has(envelope.sequence)) retainEvidence(envelope);
 
         return;
       }
       if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
-        if (
-          payload._tag === "ModelResponseRecorded" &&
-          payload.runId !== ownerRunId &&
-          !(latestWindow !== undefined && isCovered(envelope, latestWindow.payload))
-        ) {
+        if (payload._tag === "ModelResponseRecorded" && payload.runId !== ownerRunId) {
           const late = (spansByDeclaration.get(envelope.sequence) ?? []).filter((span) =>
             replacements.some(
-              (view) =>
-                view.payload.kind === "summarize" &&
-                isCovered(envelope, view.payload) &&
-                span.to > view.sequence,
+              (view) => isCovered(envelope, view.payload) && span.to > view.sequence,
             ),
           );
 
           if (late.length > 0) {
+            // Even a rollover-hidden late result needs its exact declaration to stay hidden.
+            retainEvidence(envelope);
+            if (latestWindow !== undefined && isCovered(envelope, latestWindow.payload)) return;
             const messages = yield* decodePromptMessages(payload.messages);
 
             for (const message of messages.content) {
@@ -1291,7 +1352,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
                 if (late.some((span) => span.recordId === id)) retiredLateCalls.set(id, call);
               }
             }
-            onEvidence?.(envelope);
           }
         }
         // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
@@ -1300,24 +1360,6 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
 
           yield* accountResponse(envelope, payload, messages);
           state = { ...state, committedTurns: Math.max(state.committedTurns, payload.turn) };
-        }
-        if (
-          payload._tag === "ModelCompleted" ||
-          (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) ||
-          payload._tag === "ToolCallSettled"
-        ) {
-          onBoundary?.({
-            sequence: envelope.sequence,
-            tag: payload._tag,
-            promptLength: Math.max(replacementLength, state.all.length),
-            ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
-              ? { terminalPriorRun: true }
-              : {}),
-            ...(incompleteToolTurns.has(envelope.record.recordId) ||
-            incompleteToolCalls.has(envelope.record.recordId)
-              ? { incomplete: true }
-              : {}),
-          });
         }
 
         return;
@@ -1336,7 +1378,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
           isInRunView(declarationFact.sequence, declarationFact.record.payload, compaction.runId);
 
         if (latestWindow !== undefined && declarationCovered(latestWindow.payload)) return;
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
         if (payload.runId !== ownerRunId) {
           const slot = historicalResults.get(envelope.record.recordId);
 
@@ -1438,7 +1480,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
       }
       state = yield* flushTools(state);
       if (payload._tag === "ModelCompleted" && payload.history !== undefined) {
-        onEvidence?.(envelope);
+        retainEvidence(envelope);
         const messages = yield* decodePromptMessages(payload.history);
 
         state.all.length = 0;
@@ -1460,7 +1502,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
         return;
       }
       if (payload._tag !== "ModelResponseRecorded") return;
-      onEvidence?.(envelope);
+      retainEvidence(envelope);
       const messages = yield* decodePromptMessages(payload.messages);
       const forRun = payload.runId === ownerRunId;
 
@@ -1559,6 +1601,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <E, R>(
     policyUsage: validatedPolicyUsage,
     prompt: Prompt.fromMessages(state.all),
     historyBefore: Prompt.fromMessages(state.before),
+    historyFrom,
     committedTurns: state.committedTurns,
     usage: unobservedModelCalls === 0 ? usage : { ...usage, unobservedModelCalls },
     ...(latestWindowId === undefined ? {} : { contextWindowId: latestWindowId }),

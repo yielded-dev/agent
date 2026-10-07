@@ -1,5 +1,6 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Command, Flag } from "effect/cli";
 
 import {
   CURRENT_RECORD_FORMAT,
@@ -15,7 +16,7 @@ class RecordCompatibilityError extends Schema.TaggedError<RecordCompatibilityErr
   },
 ) {}
 
-// Build-only wire contract. Refresh it with the approved schema at a record-format cutover.
+// Build-only wire contract; refresh requires an approved format change.
 const Baseline = Schema.Struct({
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   schema: Schema.Json,
@@ -68,8 +69,10 @@ const changes = (before: unknown, after: unknown, path: string): ReadonlyArray<s
   return [path];
 };
 
-/** JSON Schema cannot prove behavioral meaning; semantic review must still bump the format. */
-export const verifyRecordFormat = Effect.fnUntraced(function* () {
+/** JSON Schema cannot prove behavioral meaning; changing a released format requires a version bump. */
+export const verifyRecordFormat = Effect.fnUntraced(function* (options?: {
+  readonly refresh?: boolean;
+}) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = yield* path.fromFileUrl(new URL("./record-format.schema.json", import.meta.url));
@@ -91,15 +94,22 @@ export const verifyRecordFormat = Effect.fnUntraced(function* () {
         "Record format must name the current version and cannot precede its schema baseline.",
     });
   }
-  if (CURRENT_RECORD_VERSION > baseline.version) {
-    return yield* RecordCompatibilityError.make({
-      message: `Stale record schema baseline: scripts/record-format.schema.json is at version ${baseline.version}, but CURRENT_RECORD_VERSION is ${CURRENT_RECORD_VERSION}. Regenerate the checked-in baseline from the approved schema for current record version ${CURRENT_RECORD_VERSION} for the explicitly approved fresh-store format boundary, then rerun vp run check:record-format.`,
-    });
-  }
 
   const current = Schema.toJsonSchemaDocument(
     Schema.Struct({ ...RecordEnvelope.fields, payload: KnownRecordPayload }),
   );
+
+  if (options?.refresh) {
+    return yield* fs.writeFileString(
+      file,
+      `${JSON.stringify({ version: CURRENT_RECORD_VERSION, ...current }, null, 2)}\n`,
+    );
+  }
+  if (CURRENT_RECORD_VERSION > baseline.version) {
+    return yield* RecordCompatibilityError.make({
+      message: `Stale record schema baseline: scripts/record-format.schema.json is at version ${baseline.version}, but CURRENT_RECORD_VERSION is ${CURRENT_RECORD_VERSION}. Run vp run check:record-format --refresh after approving the fresh-store format boundary.`,
+    });
+  }
 
   const incompatible = [
     ...changes(baseline.schema, current.schema, "record"),
@@ -115,11 +125,29 @@ export const verifyRecordFormat = Effect.fnUntraced(function* () {
   }
 });
 
+const command = Command.make(
+  "check-record-format",
+  {
+    refresh: Flag.Boolean("refresh").pipe(
+      Flag.withDescription("Refresh the baseline after an approved record-format change"),
+      Flag.withDefault(false),
+    ),
+  },
+  ({ refresh }) =>
+    verifyRecordFormat({ refresh }).pipe(
+      Effect.tap(() =>
+        Console.log(
+          refresh ? "Record format baseline refreshed" : "Record format compatibility verified",
+        ),
+      ),
+      Effect.tapError((error) => Console.error(error.message)),
+    ),
+).pipe(Command.withDescription("Check the canonical record wire contract"));
+
 if (import.meta.main)
   NodeRuntime.runMain(
-    verifyRecordFormat().pipe(
-      Effect.tap(() => Console.log("Record format compatibility verified")),
-      Effect.tapError((error) => Console.error(error.message)),
+    command.pipe(
+      Command.run({ version: String(CURRENT_RECORD_VERSION) }),
       Effect.provide(NodeServices.layer),
     ),
     { disableErrorReporting: true },

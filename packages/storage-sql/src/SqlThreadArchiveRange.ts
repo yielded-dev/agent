@@ -24,6 +24,7 @@ import {
   ThreadNotMaterialized,
   ThreadStoreError,
   ThreadCheckpoint,
+  type ThreadExportBatch,
 } from "@yielded/agent/thread-store";
 import { Crypto, Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -61,22 +62,68 @@ export const canonicalRecordJson = (
   ))`;
 };
 
-export const canonicalBatchJson = (
+/** Exact canonical metadata; records remain the only hot payload copy. */
+export const canonicalBatchHeaderJson = (batch: typeof ThreadExportBatch.Type): string =>
+  canonicalJson({ batchId: batch.batchId, producerId: batch.producerId });
+
+const textBytes = (sql: SqlClient.SqlClient, text: ReturnType<typeof sql.literal>) =>
+  sql.onDialectOrElse({
+    pg: () => sql`octet_length(${text})`,
+    orElse: () => sql`length(CAST(${text} AS BLOB))`,
+  });
+
+const canonicalBatchValue = (
   sql: SqlClient.SqlClient,
-  namespace?: string,
-  alias?: string,
+  namespace: string | undefined,
+  alias: string | undefined,
+  sizeOnly: boolean,
 ) => {
   const table = (name: string) => sql(namespace === undefined ? name : `${namespace}.${name}`);
   const owner = sql(alias ?? "effect_agent_canonical_batches");
+  const header = sql`${owner}.batch_header_json`;
+  const recordBytes = textBytes(sql, sql`batch_records.record_json`);
 
-  return sql`COALESCE(${owner}.batch_json, (
-    SELECT a.batch_json FROM ${table("effect_agent_archive_batches")} a
-    WHERE a.thread_id=${owner}.thread_id AND a.batch_id=${owner}.batch_id
-      AND (SELECT r.state='archived' AND r.locator IS NOT NULL
-        FROM ${table("effect_agent_journal_ranges")} r
-        WHERE r.thread_id=a.thread_id AND r.first_sequence=a.range_first_sequence)
-  ))`;
+  const contents = sql.onDialectOrElse({
+    pg: () => sql`string_agg(batch_records.record_json, ',' ORDER BY batch_records.sequence)`,
+    orElse: () => sql`group_concat(batch_records.record_json, ',')`,
+  });
+
+  // Preserve wire escaping and order. The records member adds 13 bytes plus n-1 commas.
+  const hot = sql`(SELECT CASE WHEN COUNT(*)=${owner}.last_sequence-${owner}.first_sequence+1
+      AND COUNT(batch_records.record_json)=COUNT(*) THEN ${
+        sizeOnly
+          ? sql`${textBytes(sql, header)} + 12 + COUNT(*) + SUM(${recordBytes})`
+          : sql`substr(${header}, 1, length(${header}) - 1) || ',"records":[' || ${contents} || ']}'`
+      }
+      END FROM (SELECT sequence, record_json FROM ${table("effect_agent_canonical_records")}
+        WHERE thread_id=${owner}.thread_id AND batch_id=${owner}.batch_id
+          AND sequence BETWEEN ${owner}.first_sequence AND ${owner}.last_sequence
+        ORDER BY sequence) batch_records)`;
+
+  const archived = sizeOnly ? textBytes(sql, sql`a.batch_json`) : sql`a.batch_json`;
+
+  // A missing hot batch copy is not an archive locator. Placement belongs to the range.
+  return sql`(SELECT CASE
+    WHEN placement.state IN ('open', 'sealed') AND placement.locator IS NULL THEN ${hot}
+    WHEN placement.state='archived' AND placement.locator IS NOT NULL THEN (
+      SELECT ${archived} FROM ${table("effect_agent_archive_batches")} a
+      WHERE a.thread_id=${owner}.thread_id AND a.batch_id=${owner}.batch_id
+        AND a.range_first_sequence=placement.first_sequence
+    ) END FROM ${table("effect_agent_journal_ranges")} placement
+    WHERE placement.thread_id=${owner}.thread_id AND placement.first_sequence=(
+      SELECT first_sequence FROM ${table("effect_agent_journal_ranges")}
+      WHERE thread_id=${owner}.thread_id AND first_sequence<=${owner}.first_sequence
+      ORDER BY first_sequence DESC LIMIT 1
+    ) AND ${owner}.last_sequence<=placement.last_sequence)`;
 };
+
+/** Byte-identical to PreparedAppend and canonical import serialization. */
+export const canonicalBatchJson = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) =>
+  canonicalBatchValue(sql, namespace, alias, false);
+
+/** Inspect sizes without allocating a reconstructed batch payload. */
+export const canonicalBatchBytes = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) =>
+  canonicalBatchValue(sql, namespace, alias, true);
 
 const RangeRow = Schema.Struct({
   thread_id: ThreadArchiveRange.fields.threadId,
@@ -279,14 +326,11 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     if (row.state === "archived" && row.locator === null)
       return yield* failure("archive locator missing");
     // Plan scalar sizes before fetching any payloads, so corrupt contents cannot allocate an unbounded range.
-    const batchText = archive ? sql.literal("a.batch_json") : sql.literal("c.batch_json");
+    const batchText = archive ? sql`a.batch_json` : canonicalBatchJson(sql, namespace, "c");
     const recordText = archive ? sql.literal("a.record_json") : sql.literal("c.record_json");
 
-    const size = (text: ReturnType<typeof sql.literal>) =>
-      sql.onDialectOrElse({
-        pg: () => sql`octet_length(${text})`,
-        orElse: () => sql`length(CAST(${text} AS BLOB))`,
-      });
+    const size = (text: ReturnType<typeof sql.literal>) => textBytes(sql, text);
+    const batchSize = archive ? size(batchText) : canonicalBatchBytes(sql, namespace, "c");
 
     const BatchPlan = Schema.Struct({
       batch_id: Schema.String,
@@ -295,6 +339,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       batch_digest: Digest,
       tail_digest: Digest,
       byte_count: SqlInteger,
+      header_byte_count: SqlInteger,
     });
 
     const RecordPlan = Schema.Struct({
@@ -314,7 +359,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     const batches = yield* Schema.decodeUnknownEffect(Schema.Array(BatchPlan))(
       yield* query(sql`
-      SELECT c.batch_id, c.first_sequence, c.last_sequence, c.batch_digest, c.tail_digest, ${size(batchText)} AS byte_count
+      SELECT c.batch_id, c.first_sequence, c.last_sequence, c.batch_digest, c.tail_digest, ${batchSize} AS byte_count, ${size(sql`c.batch_header_json`)} AS header_byte_count
       FROM ${table("effect_agent_canonical_batches")} c ${batchJoin}
       WHERE c.thread_id=${row.thread_id} AND c.first_sequence>=${row.first_sequence} AND c.first_sequence<=${row.last_sequence}
       ORDER BY c.first_sequence LIMIT ${MAX_ARCHIVE_RANGE_RECORDS + 1}`),
@@ -331,7 +376,11 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       batches.length !== row.batch_count ||
       records.length !== row.record_count ||
       batches.some(
-        (batch) => batch.byte_count < 1 || batch.byte_count > MAX_CANONICAL_BATCH_BYTES,
+        (batch) =>
+          batch.byte_count < 1 ||
+          batch.byte_count > MAX_CANONICAL_BATCH_BYTES ||
+          batch.header_byte_count < 1 ||
+          batch.header_byte_count > MAX_CANONICAL_BATCH_BYTES,
       ) ||
       records.some(
         (record) => record.byte_count < 1 || record.byte_count > MAX_CANONICAL_BATCH_BYTES,
@@ -347,10 +396,15 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     for (const batch of batches) {
       const [payload] = yield* Schema.decodeUnknownEffect(
-        Schema.Tuple([Schema.Struct({ batch_json: Schema.String })]),
+        Schema.Tuple([
+          Schema.Struct({
+            batch_json: Schema.String,
+            batch_header_json: Schema.String,
+          }),
+        ]),
       )(
         yield* query(sql`
-        SELECT ${batchText} AS batch_json FROM ${table("effect_agent_canonical_batches")} c ${batchJoin}
+        SELECT ${batchText} AS batch_json, c.batch_header_json FROM ${table("effect_agent_canonical_batches")} c ${batchJoin}
         WHERE c.thread_id=${row.thread_id} AND c.batch_id=${batch.batch_id}`),
       ).pipe(Effect.mapError((cause) => failure("archive batch content", cause)));
 
@@ -363,6 +417,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
       if (
         decoded.batchId !== batch.batch_id ||
+        canonicalBatchHeaderJson(decoded) !== payload.batch_header_json ||
         batch.last_sequence !== sequence + decoded.records.length - 1
       )
         return yield* failure("archive batch identity");
@@ -478,8 +533,8 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           if (row.state === "archived") return yield* verifyInTransaction(row);
           yield* verifyInTransaction(row);
           yield* query(sql`INSERT INTO ${table("effect_agent_archive_batches")} (thread_id, batch_id, range_first_sequence, batch_json)
-        SELECT thread_id, batch_id, ${row.first_sequence}, batch_json FROM ${table("effect_agent_canonical_batches")}
-        WHERE thread_id=${row.thread_id} AND first_sequence>=${row.first_sequence} AND last_sequence<=${row.last_sequence}`);
+        SELECT c.thread_id, c.batch_id, ${row.first_sequence}, ${canonicalBatchJson(sql, namespace, "c")} FROM ${table("effect_agent_canonical_batches")} c
+        WHERE c.thread_id=${row.thread_id} AND c.first_sequence>=${row.first_sequence} AND c.last_sequence<=${row.last_sequence}`);
           yield* query(sql`INSERT INTO ${table("effect_agent_archive_records")} (thread_id, sequence, range_first_sequence, record_json)
         SELECT thread_id, sequence, ${row.first_sequence}, record_json FROM ${table("effect_agent_canonical_records")}
         WHERE thread_id=${row.thread_id} AND sequence>=${row.first_sequence} AND sequence<=${row.last_sequence}`);
@@ -499,8 +554,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         WHERE thread_id=${row.thread_id} AND first_sequence=${row.first_sequence}`);
           yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET record_json=NULL
         WHERE thread_id=${row.thread_id} AND sequence>=${row.first_sequence} AND sequence<=${row.last_sequence}`);
-          yield* query(sql`UPDATE ${table("effect_agent_canonical_batches")} SET batch_json=NULL
-        WHERE thread_id=${row.thread_id} AND first_sequence>=${row.first_sequence} AND last_sequence<=${row.last_sequence}`);
 
           return yield* descriptor({ ...row, state: "archived", locator });
         }),
@@ -558,8 +611,8 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_batches")} b
             JOIN ${table("effect_agent_journal_ranges")} r
               ON r.thread_id=b.thread_id AND r.first_sequence=c.range_first_sequence
-            WHERE b.thread_id=c.thread_id AND b.batch_id=c.batch_id AND b.batch_json IS NULL
-              AND r.state='archived' AND b.first_sequence>=r.first_sequence
+            WHERE b.thread_id=c.thread_id AND b.batch_id=c.batch_id
+              AND r.state='archived' AND r.locator IS NOT NULL AND b.first_sequence>=r.first_sequence
               AND b.last_sequence<=r.last_sequence)`,
         ],
         ["effect_agent_checkpoints", sql`FALSE`],

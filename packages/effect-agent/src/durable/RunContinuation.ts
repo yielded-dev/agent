@@ -20,8 +20,7 @@ import {
   isTerminalBudgetFact,
 } from "./internal/record-ownership.ts";
 export { terminalUsageCharge } from "./internal/record-ownership.ts";
-import { projectRunContext } from "./internal/run-context.ts";
-import { ThreadImportReader } from "./internal/thread-import-reader.ts";
+import { readRunContext, validateContextBoundary } from "./internal/run-context.ts";
 import {
   type CanonicalRecordEnvelope,
   type ContinuationAccounting,
@@ -30,7 +29,6 @@ import {
   CanonicalSequence,
   EvidenceReference,
   MAX_RUN_CONTINUATION_BYTES,
-  MAX_RUN_CONTEXT_BYTES,
   MAX_RUN_EVIDENCE_BYTES,
   MAX_RUN_TERMINAL_BYTES,
   MAX_RUN_EVIDENCE_RECORDS,
@@ -816,11 +814,13 @@ const advanceFacts = Effect.fnUntraced(function* (
 /**
  * Offline integrity guardrail. Every continuation is reproducible from its immutable facts;
  * this scan is explicit verification, never normal recovery or an execution authority.
+ * Import skips range projection after checking original boundaries and retained references;
+ * cold recovery must compare the saved Prompt digest before using that context.
  */
 export const verifyRunContinuations = Effect.fnUntraced(function* (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
+  options?: { readonly verifyContext?: boolean },
 ) {
-  const { record: resolveRecord } = yield* ThreadImportReader;
   const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
   const states = new Map<RunId, ProgressState>();
   const preparations = new Map<RunId, Array<RecordEnvelope>>();
@@ -895,33 +895,17 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
 
         if (originalEntry === undefined || entry.sequence <= originalEntry.sequence)
           return yield* failure("Context has no exact original input boundary");
-        let contextBytes = 0;
-
-        yield* projectRunContext(
-          savedContext,
-          originalEntry,
-          (yield* reference(entry.record)).digest,
-          yield* Effect.forEach(savedContext.history, (ref) =>
-            Effect.gen(function* () {
-              const evidence = yield* resolveRecord(ref.recordId);
-
-              if (
-                evidence === undefined ||
-                evidence.threadId !== entry.threadId ||
-                evidence.sequence !== ref.sequence ||
-                (yield* reference(evidence.record)).digest !== ref.digest
-              )
-                return yield* failure("Context references missing or corrupt immutable evidence");
-              contextBytes += canonicalRecordBytes(evidence.record);
-              if (contextBytes > MAX_RUN_CONTEXT_BYTES || contextBytes > savedContext.historyBytes)
-                return yield* failure("Context references exceed their byte bound");
-
-              return evidence;
-            }),
-          ),
-        ).pipe(
-          Effect.mapError((cause) => failure("Context differs from its referenced facts", cause)),
+        yield* validateContextBoundary(savedContext, originalEntry).pipe(
+          Effect.mapError((cause) => failure("Context has an invalid admission boundary", cause)),
         );
+        if (options?.verifyContext !== false)
+          yield* readRunContext(
+            savedContext,
+            originalEntry,
+            (yield* reference(entry.record)).digest,
+          ).pipe(
+            Effect.mapError((cause) => failure("Context differs from its original history", cause)),
+          );
       }
 
       const next = yield* advanceFacts(

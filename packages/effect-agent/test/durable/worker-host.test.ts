@@ -287,6 +287,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
   };
 
   const fixtureStore = ThreadStore.of({
+    readPrompt: () => Stream.die("Worker control requires full canonical evidence"),
     readWorkerCapacity: (request) =>
       Effect.suspend(() => {
         const all = logs.get(request.threadId) ?? [];

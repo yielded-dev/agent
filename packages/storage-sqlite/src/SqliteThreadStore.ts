@@ -64,9 +64,8 @@ export interface SqliteStorageOptions {
    */
   readonly ownershipLeaseDuration?: number | undefined;
   /**
-   * Re-verify every stored payload and digest chain while opening the store. Defaults to
-   * off: per-operation Schema decoding and the digest chain already fail clearly on corrupt
-   * rows without scanning the whole database on every open.
+   * Audit every stored payload and digest chain on open. Defaults to false. Full reads validate
+   * canonical records; readPrompt trusts write-time validation of the omitted fields.
    */
   readonly verifyOnOpen?: boolean | undefined;
   readonly failpoint?: SqliteStorageFailpointHandler | undefined;

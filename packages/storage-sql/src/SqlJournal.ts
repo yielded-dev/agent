@@ -94,6 +94,7 @@ export interface RawAppendRequest {
   readonly batchDigest: Digest;
   readonly batchId: PreparedAppend["batch"]["batchId"];
   readonly batchJson: string;
+  readonly batchHeaderJson: string;
   readonly batchBytes: number;
   readonly threadId: PreparedAppend["threadId"];
   readonly expectedTailDigest: Digest;
@@ -518,7 +519,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           last_sequence,
           batch_digest,
           tail_digest,
-          batch_json
+          batch_header_json
         ) VALUES (
           ${request.threadId},
           ${request.batchId},
@@ -526,7 +527,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           ${lastSequence},
           ${request.batchDigest},
           ${request.tailDigest},
-          ${request.batchJson}
+          ${request.batchHeaderJson}
         )
       `.pipe(execute, Effect.mapError(storageError("insert canonical batch")));
     yield* failpoint("append:after-batch-insert");

@@ -1,3 +1,4 @@
+import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
@@ -16,7 +17,7 @@ export const CurrentDoStorageVersion = 21;
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
   "CREATE TABLE effect_agent_threads ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )",
-  "CREATE TABLE effect_agent_canonical_batches ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_json TEXT, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT )",
+  "CREATE TABLE effect_agent_canonical_batches ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_header_json TEXT NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT )",
   "CREATE TABLE effect_agent_canonical_records ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT, record_tag TEXT NOT NULL, run_id TEXT, tool_call_id TEXT, input_kind TEXT, source_submission_id TEXT, message_id TEXT, submission_id TEXT, application_input INTEGER NOT NULL, context_through INTEGER, context_kind TEXT, worker_thread_id TEXT, handoff INTEGER NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT )",
   'CREATE TABLE "effect_agent_record_runs" ( thread_id TEXT NOT NULL, run_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES "effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   "CREATE TABLE effect_agent_tool_declarations (thread_id TEXT NOT NULL, settlement_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
@@ -55,7 +56,7 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_run_identity ON effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
   "CREATE INDEX effect_agent_records_application_input ON effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
   "CREATE INDEX effect_agent_records_context ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
-  "CREATE INDEX effect_agent_records_prompt ON effect_agent_canonical_records(thread_id, sequence) WHERE record_tag IN ('UserInputRecorded', 'RunStarted', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled')",
+  `CREATE INDEX effect_agent_records_prompt ON effect_agent_canonical_records(thread_id, sequence) WHERE ${SQL_PROMPT_PREDICATE}`,
   "CREATE INDEX effect_agent_records_admitted_input ON effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
   // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
   "CREATE INDEX effect_agent_records_rollover ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'",

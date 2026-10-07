@@ -605,7 +605,7 @@ interface RunContext {
       }
     | undefined;
   windowId: string;
-  windowTokens: number;
+  windowTokens: number | (() => number);
   windowContextTokenLimit: number | undefined;
   pendingContextToolCallId: string | undefined;
   /** One allowance shared by threshold compaction and the same Turn's overflow retry. */
@@ -6373,31 +6373,36 @@ const makeTurn = <
                 }
                 context.toolExposure = snapshot;
 
-                // Prepared and transient context can change at every Turn. A
-                // final full-prompt check closes the per-call boundary for grace
-                // finalization and any future path that bypasses research
-                // compaction admission. Runs without either hook keep their
-                // provider-reported incremental estimate.
+                // Unbounded calls need no admission estimate. Context Tools still obtain the
+                // same live estimate on demand, without charging every outgoing request for it.
+                const trackContext =
+                  contextTokenLimit === undefined && policy.tokenBudget === undefined
+                    ? Effect.sync(() => {
+                        context.windowTokens = () => compactor.estimate(providerPrompt.content);
+                      })
+                    : estimateCallTokens(providerPrompt.content).pipe(
+                        Effect.map((tokens) => tokens + toolSchemaTokens),
+                        Effect.tap((estimatedTokens) =>
+                          contextTokenLimit !== undefined &&
+                          (options.context !== undefined ||
+                            options.transientContext !== undefined) &&
+                          estimatedTokens > contextTokenLimit
+                            ? ContextBudgetError.make({
+                                message: `Prepared context could not fit the next model prompt inside the ${contextTokenLimit} token context target`,
+                                estimatedTokens,
+                                targetTokens: contextTokenLimit,
+                                completionReserveTokens: policy.completionReserveTokens,
+                              })
+                            : Effect.void,
+                        ),
+                        Effect.tap((tokens) =>
+                          Effect.sync(() => {
+                            context.windowTokens = tokens;
+                          }),
+                        ),
+                      );
 
-                return yield* estimateCallTokens(providerPrompt.content).pipe(
-                  Effect.map((tokens) => tokens + toolSchemaTokens),
-                  Effect.tap((estimatedTokens) =>
-                    contextTokenLimit !== undefined &&
-                    (options.context !== undefined || options.transientContext !== undefined) &&
-                    estimatedTokens > contextTokenLimit
-                      ? ContextBudgetError.make({
-                          message: `Prepared context could not fit the next model prompt inside the ${contextTokenLimit} token context target`,
-                          estimatedTokens,
-                          targetTokens: contextTokenLimit,
-                          completionReserveTokens: policy.completionReserveTokens,
-                        })
-                      : Effect.void,
-                  ),
-                  Effect.tap((tokens) =>
-                    Effect.sync(() => {
-                      context.windowTokens = tokens;
-                    }),
-                  ),
+                return yield* trackContext.pipe(
                   Effect.as(
                     guardBudgetStream(
                       LanguageModel.streamText({
@@ -7383,7 +7388,16 @@ const makeTurn = <
         ),
       );
 
-      return modelServices === undefined ? events : Effect.provideContext(events, modelServices);
+      return (
+        modelServices === undefined ? events : Effect.provideContext(events, modelServices)
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (typeof context.windowTokens === "function")
+              context.windowTokens = context.lastInputTokens;
+          }),
+        ),
+      );
     }),
   );
 
@@ -9006,6 +9020,15 @@ function executeWithCompletion<
           ).pipe(
             Context.add(ContextWindow, {
               status: Effect.sync(() => {
+                if (typeof context.windowTokens === "function") {
+                  const estimate = context.windowTokens();
+
+                  context.windowTokens =
+                    Number.isSafeInteger(estimate) && estimate >= 0
+                      ? estimate
+                      : context.lastInputTokens;
+                }
+
                 const estimatedTokens = Math.min(
                   Number.MAX_SAFE_INTEGER,
                   context.windowTokens + context.lastOutputTokens,

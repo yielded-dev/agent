@@ -937,6 +937,130 @@ describe("engine compaction records and projection (RUN-026)", () => {
           }),
       );
 
+    // Regression: https://github.com/yielded-dev/agent/commit/afcdd64bbdd23c9985902a0192d8e2ed3a48c295
+    // Saved ranges must retain the facts that keep compaction validation stable.
+    const inputAt = (sequence: number, runId: typeof RUN_ID) =>
+      envelopeAt(
+        sequence,
+        auditRecord(`range-input-${sequence}`, {
+          _tag: "UserInputRecorded",
+          runId,
+          kind: "user",
+          input: `Input ${sequence}`,
+        }),
+      );
+
+    const projectSavedRange = Effect.fnUntraced(function* (
+      history: ReadonlyArray<CanonicalRecordEnvelope>,
+    ) {
+      const owner = runIdForSubmission(SubmissionId.make("saved-range-owner"));
+      const records = [...history, inputAt(history.length + 1, owner)];
+      const evidence = new Set<number>();
+
+      const fresh = yield* projectRunJournalStream(
+        Stream.fromIterable(records),
+        owner,
+        undefined,
+        undefined,
+        undefined,
+        (entry) => evidence.add(entry.sequence),
+      );
+
+      const recovered = yield* projectRunJournal(
+        records.filter(
+          (entry) => entry.sequence >= fresh.historyFrom || evidence.has(entry.sequence),
+        ),
+        owner,
+      );
+
+      return { fresh, recovered };
+    });
+
+    it.effect("preserves ignored rollovers across saved-range reconstruction", () =>
+      Effect.gen(function* () {
+        const declaration = yield* turnResponseBatch(turnInput(toolTurnAppended));
+
+        const { fresh, recovered } = yield* projectSavedRange([
+          inputAt(1, RUN_ID),
+          envelopeAt(2, declaration.records[0]!),
+          inputAt(3, LATER_RUN_ID),
+          envelopeAt(
+            4,
+            auditRecord(
+              "ignored-rollover",
+              compactionPayload({
+                kind: "rollover",
+                runId: LATER_RUN_ID,
+                coversThrough: 2,
+                summary: undefined,
+                handoff: "This incomplete batch cannot be rolled over.",
+              }),
+            ),
+          ),
+          inputAt(5, RUN_NONE_ID),
+          envelopeAt(
+            6,
+            auditRecord(
+              "covering-summary",
+              compactionPayload({
+                runId: RUN_NONE_ID,
+                coversThrough: 2,
+                summary: "The trip still has an unresolved booking.",
+              }),
+            ),
+          ),
+        ]);
+
+        expect(fresh.contextWindowId).toBeUndefined();
+        expect(promptText(fresh.prompt)).toContain("The trip still has an unresolved booking.");
+        expect(recovered.contextWindowId).toBeUndefined();
+        expect(recovered.prompt).toEqual(fresh.prompt);
+      }),
+    );
+
+    it.effect("preserves complete Tool coverage across saved-range reconstruction", () =>
+      Effect.gen(function* () {
+        const batch = yield* turnCanonicalBatch(turnInput(toolTurnAppended));
+
+        const { fresh, recovered } = yield* projectSavedRange([
+          inputAt(1, RUN_ID),
+          envelopeAt(2, batch.records[0]!),
+          envelopeAt(3, batch.records[1]!),
+          inputAt(4, LATER_RUN_ID),
+          envelopeAt(
+            5,
+            auditRecord(
+              "partial-summary",
+              compactionPayload({
+                runId: LATER_RUN_ID,
+                coversThrough: 3,
+                summary: "The first booking completed; the second is pending.",
+              }),
+            ),
+          ),
+          envelopeAt(6, batch.records[2]!),
+          inputAt(7, RUN_NONE_ID),
+          envelopeAt(
+            8,
+            auditRecord(
+              "completed-clearing",
+              compactionPayload({
+                kind: "clear-tool-results",
+                runId: RUN_NONE_ID,
+                coversThrough: 6,
+                summary: undefined,
+              }),
+            ),
+          ),
+        ]);
+
+        expect(fresh.contextWindowId).toBeUndefined();
+        expect(toolResults(fresh.prompt)).toEqual([CLEARED_TOOL_RESULT]);
+        expect(toolResults(recovered.prompt)).toEqual([CLEARED_TOOL_RESULT]);
+        expect(recovered.prompt).toEqual(fresh.prompt);
+      }),
+    );
+
     it.effect.each(["before", "after", "current", "response-after-terminal"] as const)(
       "compacts invisible incomplete prior batches only after their canonical termination: %s",
       (position) =>

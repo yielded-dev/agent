@@ -66,6 +66,7 @@ import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import type { ThreadExportRequest, ThreadCommands } from "@yielded/agent/thread-store";
 import {
   ThreadAdmission,
+  ThreadReadRequest,
   ThreadExportBatch,
   ThreadExportRecord,
   ThreadNotMaterialized,
@@ -83,7 +84,7 @@ import {
 } from "@yielded/agent/thread-transfer";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { AssignmentTerminal } from "@yielded/agent/worker";
-import { Clock, Crypto, DateTime, Effect, Layer, Schema, Stream, Struct, Option } from "effect";
+import { Clock, Crypto, DateTime, Effect, Schema, Stream, Struct, Option } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -99,10 +100,16 @@ import { messageDeliveryMetadata } from "./SqlMessageDeliveryStore.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import {
   canonicalBatchJson,
+  canonicalBatchBytes,
+  canonicalBatchHeaderJson,
   canonicalRecordJson,
   makeSqlThreadArchiveRange,
 } from "./SqlThreadArchiveRange.ts";
-import { canonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
+import {
+  canonicalRecordMetadata,
+  makeSelectedReads,
+  SelectedReadOwner,
+} from "./SqlThreadNativeReads.ts";
 import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
@@ -234,8 +241,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     options.namespace === undefined ? {} : { namespace: options.namespace },
   );
 
+  // Import and verification already own the snapshot used by physical range checks.
   const ranges = yield* makeSqlThreadArchiveRange(
-    { read: options.read, write: options.write },
+    { read: (body) => body, write: options.write },
     options.namespace,
   );
 
@@ -275,6 +283,19 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       record,
     });
   });
+
+  const snapshotReads = yield* makeSelectedReads(envelope, options.namespace).pipe(
+    Effect.provideService(SelectedReadOwner, {
+      snapshot: (body) => body,
+      tail: (threadId) =>
+        query(
+          sql`SELECT thread_id, tail_sequence, tail_digest, producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+        ).pipe(
+          Effect.flatMap((value) => decode(Schema.Array(Header), value)),
+          Effect.map((headers) => headers[0]),
+        ),
+    }),
+  );
 
   const admissionRows = (threadId: ThreadId, predicate: Fragment, limit: number) =>
     query(
@@ -540,10 +561,12 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       };
     }),
     batch: Effect.fnUntraced(function* (threadId: ThreadId, fromSequence: number) {
-      // Inspect stored byte lengths before hydrating either batch or its duplicate record wires.
-      const batchLength = sql.onDialectOrElse({
-        pg: () => sql`octet_length(${batchJson})`,
-        orElse: () => sql`length(CAST(${batchJson} AS BLOB))`,
+      // Inspect original string sizes before reconstructing or hydrating canonical batches.
+      const batchLength = canonicalBatchBytes(sql, options.namespace, "b");
+
+      const headerLength = sql.onDialectOrElse({
+        pg: () => sql`octet_length(b.batch_header_json)`,
+        orElse: () => sql`length(CAST(b.batch_header_json AS BLOB))`,
       });
 
       const recordLength = sql.onDialectOrElse({
@@ -551,30 +574,36 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         orElse: () => sql`length(CAST(${recordJson} AS BLOB))`,
       });
 
-      const sizes = yield* query(sql`SELECT b.last_sequence, ${batchLength} AS batch_bytes,
+      const sizes =
+        yield* query(sql`SELECT b.last_sequence, ${batchLength} AS batch_bytes, ${headerLength} AS header_bytes,
         (SELECT SUM(${recordLength}) FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=b.thread_id AND r.sequence BETWEEN b.first_sequence AND b.last_sequence) AS record_bytes
         FROM ${table("effect_agent_canonical_batches")} b WHERE b.thread_id=${threadId} AND b.first_sequence=${fromSequence} LIMIT 2`).pipe(
-        Effect.flatMap((r) =>
-          decode(
-            Schema.Array(
-              Schema.Struct({
-                last_sequence: SqlInteger,
-                batch_bytes: Schema.NullOr(SqlInteger),
-                record_bytes: Schema.NullOr(SqlInteger),
-              }),
+          Effect.flatMap((r) =>
+            decode(
+              Schema.Array(
+                Schema.Struct({
+                  last_sequence: SqlInteger,
+                  batch_bytes: Schema.NullOr(SqlInteger),
+                  header_bytes: SqlInteger,
+                  record_bytes: Schema.NullOr(SqlInteger),
+                }),
+              ),
+              r,
             ),
-            r,
           ),
-        ),
-      );
+        );
+
+      const size = sizes[0];
 
       if (
         sizes.length !== 1 ||
-        sizes[0]!.batch_bytes === null ||
-        sizes[0]!.record_bytes === null ||
-        sizes[0]!.batch_bytes > 16 * 1024 * 1024 ||
-        sizes[0]!.record_bytes > 16 * 1024 * 1024 ||
-        sizes[0]!.last_sequence - fromSequence >= 256
+        size === undefined ||
+        size.batch_bytes === null ||
+        size.record_bytes === null ||
+        size.batch_bytes > 16 * 1024 * 1024 ||
+        size.header_bytes > 16 * 1024 * 1024 ||
+        size.record_bytes > 16 * 1024 * 1024 ||
+        size.last_sequence - fromSequence >= 256
       )
         return yield* failure(
           "export batch",
@@ -582,10 +611,18 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         );
 
       const stored =
-        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.batch_digest, b.tail_digest, ${batchJson} AS batch_json
+        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.batch_digest, b.tail_digest, b.batch_header_json, ${batchJson} AS batch_json
         FROM ${table("effect_agent_canonical_batches")} b WHERE b.thread_id=${threadId} AND b.first_sequence=${fromSequence} LIMIT 2`).pipe(
           Effect.flatMap((r) =>
-            decode(Schema.Array(Schema.Struct(Struct.omit(BatchRow.fields, ["thread_id"]))), r),
+            decode(
+              Schema.Array(
+                Schema.Struct({
+                  ...Struct.omit(BatchRow.fields, ["thread_id"]),
+                  batch_header_json: Schema.String,
+                }),
+              ),
+              r,
+            ),
           ),
         );
 
@@ -610,6 +647,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
       if (
         batch.batchId !== row.batch_id ||
+        canonicalBatchHeaderJson(batch) !== row.batch_header_json ||
         batch.records.length !== selected.length ||
         selected.length !== row.last_sequence - row.first_sequence + 1
       )
@@ -707,7 +745,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     id: ThreadId,
     tailSequence: CanonicalSequence,
     mode: "import" | "verify",
-  ): Layer.Layer<ThreadImportReader> => {
+  ): ReturnType<typeof ThreadImportReader.layer> => {
     const readRecord = (recordId: RecordId) =>
       rows(id, sql`r.record_id=${recordId} AND r.sequence<=${tailSequence}`, 1).pipe(
         Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : envelope(r[0]))),
@@ -722,7 +760,47 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       2 * (MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS) +
       MAX_RUN_RECOVERY_SUFFIX_RECORDS;
 
-    return Layer.succeed(ThreadImportReader, {
+    return ThreadImportReader.layer({
+      read: (input) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const request = yield* decode(Schema.toType(ThreadReadRequest), input);
+
+            if (request.threadId !== id)
+              return yield* failure("read snapshot", "Thread differs from the captured snapshot");
+            if ("selection" in request) {
+              const selection = request.selection;
+
+              if (
+                ("throughSequence" in selection && selection.throughSequence > tailSequence) ||
+                ("expectedTailSequence" in selection &&
+                  selection.expectedTailSequence !== tailSequence)
+              )
+                return yield* failure("read snapshot", "Selection escaped the captured tail");
+
+              return Stream.fromIterable(
+                yield* snapshotReads
+                  .read(request)
+                  .pipe(
+                    Effect.catchTag("ThreadNotMaterialized", (cause) =>
+                      failure("read snapshot", cause),
+                    ),
+                  ),
+              );
+            }
+
+            return Stream.fromIterable(
+              yield* Effect.forEach(
+                yield* rows(
+                  id,
+                  sql`r.sequence>${request.afterSequence ?? 0} AND r.sequence<=${tailSequence}`,
+                  request.limit,
+                ),
+                envelope,
+              ),
+            );
+          }),
+        ),
       delivery: (messageId) =>
         query(
           sql`SELECT record_json FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=${id} AND message_id=${messageId} LIMIT 1`,
@@ -1083,8 +1161,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     ...batch.batch.records.map((r) => r.recordId),
                   ]);
                   yield* checkValues([batch.batchJson, ...batch.recordJson]);
-                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_json)
-          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batch.batchJson})`);
+                  const batchHeaderJson = canonicalBatchHeaderJson(batch.batch);
+
+                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_header_json)
+          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batchHeaderJson})`);
                   const captured = [];
 
                   for (const [index, record] of batch.batch.records.entries()) {
@@ -1136,6 +1216,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       threadId,
                       batchId: batch.batch.batchId,
                       batchJson: batch.batchJson,
+                      batchHeaderJson,
                       batchBytes: utf8ByteLength(batch.batchJson),
                       batchDigest: batch.tailDigest,
                       expectedTailSequence: CanonicalSequence.make(batch.firstSequence - 1),
@@ -1397,9 +1478,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 if (next === undefined) break;
                 const runId = yield* json(RunId, next.run_id);
 
-                yield* verifyRunContinuations(yield* reader.runRecords(runId)).pipe(
-                  Effect.mapError((e) => invalidThreadArchive(e.message, id)),
-                );
+                yield* verifyRunContinuations(yield* reader.runRecords(runId), {
+                  verifyContext: false,
+                }).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
                 afterRun = next.run_id;
               }
               let afterQueue = -1;
@@ -1844,6 +1925,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       Effect.gen(function* () {
         const first = yield* exportPage({ threadId: request.threadId });
         const id = first.threadId;
+
+        yield* ranges.verifyThread(id);
 
         const LedgerRow = Schema.Struct({
           ...AdmissionRow.fields,

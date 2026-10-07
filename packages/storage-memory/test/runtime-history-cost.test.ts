@@ -187,12 +187,19 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
           return Stream.fromEffect(Effect.interrupt);
         }
 
-        if (
-          raceAppend &&
-          !raced &&
-          "selection" in request &&
-          request.selection._tag === "PromptEvidence"
-        ) {
+        return store.read(request);
+      }).pipe(
+        Stream.ensuring(
+          Effect.sync(() => {
+            closedPages++;
+          }),
+        ),
+      ),
+    readPrompt: (request) =>
+      Stream.suspend(() => {
+        openedPages++;
+        requests.push(request);
+        if (raceAppend && !raced) {
           raced = true;
 
           return Stream.unwrap(
@@ -248,12 +255,12 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                 )
                 .pipe(Effect.orDie);
 
-              return store.read(request);
+              return store.readPrompt(request);
             }),
           );
         }
 
-        return store.read(request);
+        return store.readPrompt(request);
       }).pipe(
         Stream.ensuring(
           Effect.sync(() => {

@@ -650,7 +650,7 @@ const makeJournal = (
           message: "Canonical identifiers exceed the Durable Object storage bounds.",
         });
       }
-      // The platform's ~2 MB per-value limit, enforced typed BEFORE any write (plan §1.2).
+      // Archives store the full batch as one value, so their ceiling also bounds hot appends.
       yield* checkValueBound("append canonical batch", request.batchJson);
       yield* checkValueBound("append canonical batch", request.batchDigest);
       yield* checkValueBound("append canonical batch", request.tailDigest);
@@ -828,7 +828,7 @@ const makeJournal = (
             last_sequence,
             batch_digest,
             tail_digest,
-            batch_json
+            batch_header_json
           ) VALUES (
             ${request.threadId},
             ${request.batchId},
@@ -836,7 +836,7 @@ const makeJournal = (
             ${lastSequence},
             ${request.batchDigest},
             ${request.tailDigest},
-            ${request.batchJson}
+            ${request.batchHeaderJson}
           )
         `.pipe(Effect.mapError(storageError("insert canonical batch")));
       yield* failpoint("append:after-batch-insert");

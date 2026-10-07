@@ -21,7 +21,10 @@ part of the number. Compaction is off: the agent has no `contextTokenLimit`.
 
 These are local Miniflare numbers. They are not Cloudflare CPU billing.
 
-Yielded Agent bounds the model context it saves for replay at 4,096 records or 32 MiB. Compaction stays off here, so a history past that bound is rejected. pi-durable and tardie use a 1e9-token window with compaction disabled, and still accept the 3,500-turn size.
+Yielded Agent saves a canonical history range and a Prompt digest, without a per-record manifest
+or a lifetime saved-context record limit. Cold recovery rebuilds that original range and verifies
+the digest. Compaction stays off here, so reading and projecting the live Prompt still grows with
+conversation length. pi-durable and tardie use a 1e9-token window with compaction disabled.
 
 ## Setup
 

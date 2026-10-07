@@ -48,7 +48,7 @@ import {
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
-import { makeSqlThreadArchiveRange } from "./SqlThreadArchiveRange.ts";
+import { canonicalBatchHeaderJson, makeSqlThreadArchiveRange } from "./SqlThreadArchiveRange.ts";
 import { makeSqlThreadImport } from "./SqlThreadImport.ts";
 import { canonicalRecordMetadata, makeSelectedReads } from "./SqlThreadNativeReads.ts";
 
@@ -99,6 +99,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     batchId: captured.batch.batchId,
     batchDigest: tailDigest,
     batchJson: captured.batchJson,
+    batchHeaderJson: canonicalBatchHeaderJson(captured.batch),
     batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
     expectedTailDigest: captured.expectedTailDigest,
@@ -812,6 +813,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     materialize,
     observe,
     read,
+    readPrompt: (request) => Stream.fromIterableEffect(selectedReads.readPrompt(request)),
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
   });
 

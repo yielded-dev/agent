@@ -550,11 +550,11 @@ Manual workflow results appear in the run summary and downloadable artifact.
 
 Latency reports are informational until repeated CI runs establish variance and useful absolute
 and relative thresholds. Deterministic call, concurrency, ownership, tracing, and history-work
-budgets remain correctness gates. The fresh-submission history guard permits two linear scans plus
-fixed work for histories without compaction. Compacted and checkpoint-seeded views keep their
-canonical validation. Eligible sequential Runs after compaction can reuse certified Thread
-context, but fallback and new compaction still traverse canonical history. Measure fresh-Run
-settlement as well as provider entry to include checkpoint refresh work.
+budgets remain correctness gates. Fresh submissions read history-relevant fields and project the
+selected range once, without revalidating immutable prior Runs. Cold recovery and explicit
+verification still reconstruct saved context from canonical facts and compare its digest.
+Uncompacted history remains linear in conversation length. Measure fresh-Run settlement as well
+as provider entry to include canonical publication work.
 Fairness, lock contention, optional
 memory/MCP publication, and large settled-ledger indexing require their own controlled evidence
 before changing those paths.

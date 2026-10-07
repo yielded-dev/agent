@@ -1,3 +1,4 @@
+import { canonicalBatchHeaderJson } from "@yielded/agent-storage-sql/sql-thread-archive-range";
 import { canonicalRecordMetadata } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { utf8ByteLength } from "@yielded/agent/digest";
 import type { FencedAppendRequest } from "@yielded/agent/thread-store";
@@ -48,6 +49,7 @@ export const prepareCanonicalAppend = Effect.fnUntraced(function* (input: Fenced
     batchDigest: tailDigest,
     tailDigest,
     batchJson: request.batchJson,
+    batchHeaderJson: canonicalBatchHeaderJson(request.batch),
     batchBytes: request.batchBytes,
     records,
     progress: request.progress,

@@ -316,6 +316,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         ),
       ),
     read: (request) => bindStream(rawStore.read(request)),
+    readPrompt: (request) => bindStream(rawStore.readPrompt(request)),
     observe: (request) => bindStream(rawStore.observe(request)),
     export: (request) => bind(rawStore.export(request)),
     inspectTail: (request) => bind(rawStore.inspectTail(request)),

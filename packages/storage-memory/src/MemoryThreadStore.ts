@@ -6,7 +6,7 @@ import {
 } from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId as importSubmissionId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
-import { ExportBatch } from "@yielded/agent/record-format";
+import { ExportBatch, ExportedRecord } from "@yielded/agent/record-format";
 import {
   ProducerEpoch,
   CURRENT_RECORD_FORMAT,
@@ -24,6 +24,8 @@ import {
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
+  PromptRecord,
+  type PromptRecordEnvelope,
 } from "@yielded/agent/records";
 import {
   canonicalRunIds,
@@ -83,6 +85,7 @@ import {
   ThreadNotMaterialized,
   ThreadObservation,
   ThreadReadRequest,
+  ThreadPromptRead,
   ThreadStore,
   ThreadReader,
   type ThreadCheckpoints,
@@ -1632,11 +1635,11 @@ const makeThreadStore = Effect.gen(function* () {
       }),
     );
 
-  const read: ThreadStore["Service"]["read"] = (unvalidated) =>
+  const readFromThread = (threadId: ThreadId, thread: StoredThread, request: ThreadReadRequest) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const request = yield* validate(ThreadReadRequest, "read", unvalidated);
-        const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
+        if (request.threadId !== threadId)
+          return yield* storeError("read snapshot", "Thread differs from the captured snapshot");
 
         if (!("selection" in request))
           return Stream.paginate(
@@ -1870,6 +1873,51 @@ const makeThreadStore = Effect.gen(function* () {
       }),
     );
 
+  const read: ThreadStore["Service"]["read"] = (input) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const request = yield* validate(ThreadReadRequest, "read", input);
+        const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
+
+        return readFromThread(request.threadId, thread, request);
+      }),
+    );
+
+  const decodePromptRecord = Schema.decodeUnknownEffect(PromptRecord);
+
+  const readPrompt: ThreadStore["Service"]["readPrompt"] = (input) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const request = yield* validate(ThreadPromptRead, "readPrompt", input);
+        const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
+
+        if (request.throughSequence > thread.tailSequence)
+          return yield* storeError("readPrompt", "Captured sequence is ahead of canonical tail");
+        const start = upperSequence(thread.promptEvidence, request.afterSequence ?? 0);
+        const records: Array<PromptRecordEnvelope> = [];
+
+        for (
+          let at = start;
+          at < Math.min(thread.promptEvidence.length, start + request.limit);
+          at++
+        ) {
+          const entry = thread.promptEvidence[at];
+
+          if (entry.sequence > request.throughSequence) break;
+
+          const record = yield* decodePromptRecord(
+            entry.record instanceof ExportedRecord ? entry.record.wire : entry.record,
+          ).pipe(
+            Effect.mapError((cause) => storeError("readPrompt", "Invalid prompt record", cause)),
+          );
+
+          records.push({ threadId: request.threadId, sequence: entry.sequence, record });
+        }
+
+        return Stream.fromIterable(records);
+      }),
+    );
+
   const observe: ThreadStore["Service"]["observe"] = (unvalidated) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -2055,8 +2103,15 @@ const makeThreadStore = Effect.gen(function* () {
     });
 
   const exactRecordReader = (
+    threadId: ThreadId,
     thread: StoredThread,
-  ): Pick<ThreadImportReader["Service"], "record" | "runRecords" | "hasAgent"> => ({
+  ): Pick<ThreadImportReader["Service"], "read" | "record" | "runRecords" | "hasAgent"> => ({
+    read: (input) =>
+      Stream.unwrap(
+        validate(ThreadReadRequest, "read snapshot", input).pipe(
+          Effect.map((request) => readFromThread(threadId, thread, request)),
+        ),
+      ),
     record: (id) => Effect.succeed(thread.byId.get(id)),
     runRecords: (id) => exactRunRecords(thread, id),
     hasAgent: (id) =>
@@ -2261,7 +2316,7 @@ const makeThreadStore = Effect.gen(function* () {
             };
 
             const reader: ThreadImportReader["Service"] = {
-              ...exactRecordReader(restoredThread),
+              ...exactRecordReader(id, restoredThread),
               ...(stagedLedger?.reader ?? fallback),
               delivery: stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
               settlementPredecessors: (request) =>
@@ -2287,11 +2342,13 @@ const makeThreadStore = Effect.gen(function* () {
               for (const runId of restoredThread.runRecords.keys())
                 yield* verifyRunContinuations(
                   yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
+                  { verifyContext: false },
                 ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
               for (const runId of restoredThread.continuations.keys())
                 if (!restoredThread.runRecords.has(runId))
                   yield* verifyRunContinuations(
                     yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
+                    { verifyContext: false },
                   ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
               let lastInputQueue = -1;
 
@@ -2373,7 +2430,7 @@ const makeThreadStore = Effect.gen(function* () {
 
               return result;
             }).pipe(
-              Effect.provideService(ThreadImportReader, reader),
+              Effect.provide(ThreadImportReader.layer(reader)),
               Effect.provideService(ThreadDeliveryImportReader, {
                 admission: (threadId, sid) =>
                   threadId === id
@@ -2751,7 +2808,7 @@ const makeThreadStore = Effect.gen(function* () {
           const id = request.threadId;
 
           const reader: ThreadImportReader["Service"] = {
-            ...exactRecordReader(thread),
+            ...exactRecordReader(id, thread),
             admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
             runOwner: (runId) =>
               runId.startsWith("run:")
@@ -2815,7 +2872,7 @@ const makeThreadStore = Effect.gen(function* () {
               ? {}
               : { requireAllSettled: request.requireAllSettled }),
           }).pipe(
-            Effect.provideService(ThreadImportReader, reader),
+            Effect.provide(ThreadImportReader.layer(reader)),
             Effect.provideService(Crypto.Crypto, crypto),
           );
         }),
@@ -2832,6 +2889,7 @@ const makeThreadStore = Effect.gen(function* () {
     materialize: (request) => withMutation(materialize(request)),
     append,
     read,
+    readPrompt,
     observe,
     export: (request) => withMutation(exportThread(request)),
     inspectTail,

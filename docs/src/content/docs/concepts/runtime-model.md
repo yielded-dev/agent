@@ -82,9 +82,11 @@ flowchart LR
   representative turn when changing storage; fewer queries must not weaken fencing or receipts.
 - Keep synchronous work bounded so single-threaded Objects can receive input. Reuse codecs and
   committed views. Unfinished Runs read their exact canonical continuation and bounded selected
-  evidence, independently of unrelated Thread history. Missing or corrupt progress fails typed
-  and leaves accepted work owed; it cannot silently fall back to a full-Thread scan. First context
-  assembly, explicit index reconstruction, and exports have separate history costs and bounds.
+  evidence, independently of unrelated Thread history. Original context reconstruction reads its
+  fixed saved range and verifies the projected Prompt digest; uncompacted history remains linear.
+  Missing or corrupt progress fails typed and leaves accepted work owed; it cannot silently fall
+  back to a full-Thread scan. First context assembly, explicit index reconstruction, and exports
+  have separate history costs and bounds.
   Native work pages include terminal side obligations and never grant execution authority.
   Missing inventories fail explicitly; rebuild them in separate resumable maintenance passes.
   Canonical row caches share an isolate-wide bound; never allocate that budget per Object.
