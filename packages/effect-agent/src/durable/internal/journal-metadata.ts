@@ -1,22 +1,24 @@
-import { Schema } from "effect";
+import { Brand } from "effect";
 
 import { type RunId, type ToolCallId } from "../../core/Identifiers.ts";
 import {
+  type RecordId,
   type CanonicalRecordEnvelope,
   type PromptRecordEnvelope,
   type CompactionCreated,
   type ToolCallSettled,
-  RecordId,
 } from "../Records.ts";
 
-const decodeRecordId = Schema.decodeSync(RecordId);
+// These constructors produce nonempty strings from fixed prefixes or validated nonempty IDs.
+// Keep the canonical Schemas as the validation boundary for incoming and persisted values.
+const makeRecordId = Brand.nominal<RecordId>();
 
 /** Deterministic canonical record identity of one Turn's Tool result. */
 export const toolCallSettledRecordId = (
   runId: RunId,
   turn: number,
   toolCallId: ToolCallId,
-): RecordId => decodeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
+): RecordId => makeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
 
 export type JournalRecordEnvelope = CanonicalRecordEnvelope | PromptRecordEnvelope;
 
