@@ -172,6 +172,7 @@ describe("MemoryThreadStore", () => {
             materialize: store.materialize,
             append: store.append,
             read: store.read,
+            readPrompt: store.readPrompt,
             observe: store.observe,
             export: store.export,
             inspectTail: store.inspectTail,

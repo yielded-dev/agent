@@ -56,7 +56,7 @@ export const ContextRolloverTool = Context.Reference<boolean>(
   { defaultValue: () => false },
 );
 
-/** Best available live-context estimate, independent of cumulative Run budgets. */
+/** Best available live-context estimate; unbounded calls compute it only when requested. */
 export class ContextWindowStatus extends Schema.Class<ContextWindowStatus>("ContextWindowStatus")({
   threadId: ThreadId,
   runId: RunId,

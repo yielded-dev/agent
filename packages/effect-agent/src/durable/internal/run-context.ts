@@ -1,9 +1,11 @@
-import { Effect, Schema, Stream } from "effect";
+import { type Crypto, Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
+import { digestJson } from "../Digest.ts";
 import {
-  MAX_RUN_CONTEXT_BYTES,
+  CanonicalSequence,
   type CanonicalRecordEnvelope,
+  type RecordId,
   type RunContextRecorded,
 } from "../Records.ts";
 import {
@@ -12,88 +14,80 @@ import {
   type RunJournalContext,
   type JournalBoundary,
 } from "../RunJournal.ts";
-import { resolveEvidence } from "./evidence.ts";
-import { recordEncoding } from "./record-encoding.ts";
+import { getRecord, ThreadReader, type ThreadReadRequest } from "../ThreadStore.ts";
+import { reference } from "./evidence.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
+const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 
-/** Project integrity-checked immutable facts, including offline archive verification. */
+export const digestRunHistory = (prompt: Prompt.Prompt) =>
+  encodePrompt(prompt).pipe(
+    Effect.flatMap(digestJson),
+    Effect.mapError((cause) =>
+      RunJournalError.make({ message: "Original model history integrity is unavailable", cause }),
+    ),
+  );
+
+export const validateContextBoundary = (
+  context: RunContextRecorded,
+  original: CanonicalRecordEnvelope,
+): Effect.Effect<void, RunJournalError> =>
+  original.record.payload._tag !== "UserInputRecorded" ||
+  original.record.payload.kind !== "user" ||
+  original.record.payload.runId !== context.runId ||
+  context.historyThrough + 1 !== original.sequence ||
+  context.historyFrom < 1 ||
+  context.historyFrom > original.sequence ||
+  context.retained.some(
+    (ref, index) =>
+      ref.sequence <= (context.retained[index - 1]?.sequence ?? 0) ||
+      ref.sequence >= context.historyFrom,
+  )
+    ? Effect.fail(invalid("Saved context has an invalid original admission boundary"))
+    : Effect.void;
+
+/** Rebuild the prior Prompt and its disposable boundary mapping from full canonical facts. */
 export const projectRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
   digest: string,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-): Effect.fn.Return<RunJournalContext, RunJournalError> {
-  if (
-    original.record.payload._tag !== "UserInputRecorded" ||
-    original.record.payload.runId !== context.runId ||
-    context.historyThrough + 1 !== original.sequence ||
-    records.length !== context.history.length ||
-    context.boundaries.some(
-      (boundary) =>
-        boundary.sequence > context.historyThrough ||
-        boundary.promptLength > context.priorHistoryLength,
-    )
-  )
-    return yield* invalid("Saved context has an invalid original admission boundary");
-
+): Effect.fn.Return<RunJournalContext, RunJournalError, Crypto.Crypto> {
+  yield* validateContextBoundary(context, original);
   let through = 0;
-  let bytes = 0;
+  const retained = new Map(context.retained.map((ref) => [ref.sequence, ref.recordId]));
 
-  for (const [index, ref] of context.history.entries()) {
-    const entry = records[index];
-
+  for (const entry of records) {
     if (
-      entry === undefined ||
       entry.threadId !== original.threadId ||
-      entry.record.recordId !== ref.recordId ||
-      entry.sequence !== ref.sequence ||
       entry.sequence <= through ||
-      entry.sequence > context.historyThrough
+      entry.sequence > context.historyThrough ||
+      (entry.sequence < context.historyFrom &&
+        retained.get(entry.sequence) !== entry.record.recordId)
     )
-      return yield* invalid("Saved context references an invalid canonical history prefix");
+      return yield* invalid("Saved context has invalid canonical range evidence");
     through = entry.sequence;
-    bytes += recordEncoding(entry.record).bytes;
-    if (bytes > MAX_RUN_CONTEXT_BYTES)
-      return yield* invalid("Saved context exceeds its referenced byte bound");
+    retained.delete(entry.sequence);
   }
-  if (bytes !== context.historyBytes)
-    return yield* invalid("Saved context byte accounting differs from its facts");
+  if (retained.size !== 0) return yield* invalid("Saved context is missing retained evidence");
 
-  const referenced = new Set(records.map((entry) => entry.sequence));
   const boundaries: Array<JournalBoundary> = [];
 
   const history = yield* projectRunJournalStream(
     Stream.fromIterable([...records, original]),
     context.runId,
-    (boundary) => {
-      if (referenced.has(boundary.sequence) && boundary.promptLength <= context.priorHistoryLength)
-        boundaries.push(boundary);
-    },
+    (boundary) => boundaries.push(boundary),
   );
 
-  if (
-    context.boundaries.length !== boundaries.length ||
-    context.boundaries.some((saved, index) => {
-      const actual = boundaries[index];
-
-      return (
-        actual === undefined ||
-        saved.sequence !== actual.sequence ||
-        saved.tag !== actual.tag ||
-        saved.promptLength !== actual.promptLength ||
-        saved.incomplete !== actual.incomplete ||
-        saved.terminalPriorRun !== actual.terminalPriorRun
-      );
-    })
-  )
-    return yield* invalid("Saved context boundaries differ from their canonical facts");
+  const historyDigest = yield* digestRunHistory(history.prompt);
 
   if (
+    historyDigest !== context.historyDigest ||
+    history.historyFrom !== context.historyFrom ||
     history.prompt.content.length !== context.priorHistoryLength ||
     history.contextWindowId !== context.contextWindowId
   )
-    return yield* invalid("Saved context differs from its referenced model history");
+    return yield* invalid("Saved context differs from its original model history");
 
   const prefix = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(context.runScopedInput).pipe(
     Effect.mapError(() => invalid("Saved Run instructions and input are malformed")),
@@ -103,29 +97,74 @@ export const projectRunContext = Effect.fnUntraced(function* (
     runId: context.runId,
     prompt: Prompt.fromMessages([...history.prompt.content, ...prefix.content]),
     priorHistoryLength: context.priorHistoryLength,
-    boundaries: context.boundaries,
+    historyFrom: context.historyFrom,
+    boundaries: boundaries.filter(
+      (boundary) => boundary.promptLength <= context.priorHistoryLength,
+    ),
     digest,
     ...(context.contextWindowId === undefined ? {} : { contextWindowId: context.contextWindowId }),
   };
 });
 
-/** Read the original model history through ThreadReader and Crypto, never execution authority. */
+/** Cold recovery and explicit verify use full reads; fresh admission uses the narrow history port. */
+export const readRunContext = Effect.fnUntraced(function* <E, R>(
+  context: RunContextRecorded,
+  original: CanonicalRecordEnvelope,
+  digest: string,
+  read: (request: ThreadReadRequest) => Stream.Stream<CanonicalRecordEnvelope, E, R>,
+  record: (recordId: RecordId) => Effect.Effect<CanonicalRecordEnvelope | undefined, E, R>,
+) {
+  yield* validateContextBoundary(context, original);
+  const records: Array<CanonicalRecordEnvelope> = [];
+
+  for (const ref of context.retained) {
+    const entry = yield* record(ref.recordId);
+
+    if (
+      entry === undefined ||
+      entry.threadId !== original.threadId ||
+      entry.sequence !== ref.sequence ||
+      (yield* reference(entry.record)).digest !== ref.digest
+    )
+      return yield* invalid("Saved context has missing or corrupt retained evidence");
+    records.push(entry);
+  }
+
+  let after = CanonicalSequence.make(context.historyFrom - 1);
+
+  while (after < context.historyThrough) {
+    const page = yield* read({
+      threadId: original.threadId,
+      selection: { _tag: "PromptEvidence", throughSequence: context.historyThrough },
+      page: { afterSequence: after, limit: 8 },
+    }).pipe(Stream.take(9), Stream.runCollect);
+
+    if (page.length > 8) return yield* invalid("Saved context page exceeds its record bound");
+    for (const entry of page) {
+      if (
+        entry.threadId !== original.threadId ||
+        entry.sequence <= after ||
+        entry.sequence > context.historyThrough
+      )
+        return yield* invalid("Saved context range has invalid canonical ordering");
+      after = entry.sequence;
+      records.push(entry);
+    }
+    if (page.length < 8) break;
+  }
+
+  return yield* projectRunContext(context, original, digest, records);
+});
+
+/** Resolve the immutable original context without execution authority. */
 export const rebuildRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
   digest: string,
 ) {
-  const records: Array<CanonicalRecordEnvelope> = [];
-  let bytes = 0;
+  const reader = yield* ThreadReader;
 
-  for (const ref of context.history) {
-    const entry = yield* resolveEvidence(original.threadId, ref);
-
-    bytes += recordEncoding(entry.record).bytes;
-    if (bytes > MAX_RUN_CONTEXT_BYTES)
-      return yield* invalid("Saved context exceeds its referenced byte bound");
-    records.push(entry);
-  }
-
-  return yield* projectRunContext(context, original, digest, records);
+  return yield* readRunContext(context, original, digest, reader.read, (recordId) =>
+    getRecord({ threadId: original.threadId, recordId }).pipe(Effect.map(Option.getOrUndefined)),
+  );
 });

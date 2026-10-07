@@ -100,6 +100,8 @@ import {
   StoreMaterializeResult,
   StoreReadPageCall,
   StoreReadPageResult,
+  StoreReadPromptCall,
+  StoreReadPromptResult,
   StoreWorkPageCall,
   StoreWorkPageResult,
   StoreWorkRebuildCall,
@@ -319,7 +321,7 @@ const crossThreadStoreError = (operation: string, target: string): ThreadStoreEr
     operation,
     message:
       `${operation} addressed to foreign Thread ${target} is not route-capable; the ` +
-      "closed cross-Object subset is materialize, append, read (paged), inspectTail, and " +
+      "closed cross-Object subset is materialize, append, read and readPrompt (paged), inspectTail, and " +
       "export. Observation and checkpoints are lane-local by construction and must execute " +
       "inside the owning Thread's Durable Object.",
   });
@@ -1192,6 +1194,19 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
             ).pipe(Effect.map((reply) => Stream.fromIterable(reply.records))),
           ),
 
+    readPrompt: (request) =>
+      options.ownsThread(request.threadId)
+        ? local.readPrompt(request)
+        : Stream.unwrap(
+            foreignStoreCall(
+              "thread read prompt",
+              request.threadId,
+              StoreReadPromptCall.make({ request }),
+              StoreReadPromptResult,
+              ThreadNotMaterialized,
+            ).pipe(Effect.map((reply) => Stream.fromIterable(reply.records))),
+          ),
+
     inspectTail: (request) =>
       options.ownsThread(request.threadId)
         ? local.inspectTail(request)
@@ -1728,6 +1743,16 @@ export const executePortRequest = Effect.fnUntraced(function* (
         store.read(request.request).pipe(
           Stream.runCollect,
           Effect.map((records) => StoreReadPageResult.make({ records: [...records] })),
+        ),
+      );
+    }
+    case "StoreReadPrompt": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store.readPrompt(request.request).pipe(
+          Stream.runCollect,
+          Effect.map((records) => StoreReadPromptResult.make({ records })),
         ),
       );
     }

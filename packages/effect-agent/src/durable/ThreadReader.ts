@@ -8,6 +8,7 @@ export {
   ThreadWorkerStateRequest,
   ThreadRead,
   ThreadReadRequest,
+  ThreadPromptRead,
   ThreadObservation,
   ThreadExportRequest,
   ThreadExport,

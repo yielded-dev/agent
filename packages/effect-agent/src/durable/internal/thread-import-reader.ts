@@ -4,7 +4,12 @@ import type { AgentId, RunId, SubmissionId, ThreadId } from "../../core/Identifi
 import type { IdempotencyKey } from "../../core/Receipt.ts";
 import type { MessageDeliveryRecord } from "../MessageDelivery.ts";
 import type { CanonicalRecordEnvelope, RecordEnvelope, RecordId } from "../Records.ts";
-import type { ThreadAdmission, ThreadCommands, ThreadStoreError } from "../ThreadStore.ts";
+import type {
+  ThreadAdmission,
+  ThreadCommands,
+  ThreadReadRequest,
+  ThreadStoreError,
+} from "../ThreadStore.ts";
 
 export interface ThreadSettlementPredecessorRequest {
   readonly submissionId: SubmissionId;
@@ -17,6 +22,10 @@ export interface ThreadSettlementPredecessorRequest {
 export class ThreadImportReader extends Context.Service<
   ThreadImportReader,
   {
+    /** Full canonical history in this same snapshot, including archived facts. */
+    readonly read: (
+      request: ThreadReadRequest,
+    ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError>;
     readonly delivery: (
       messageId: IdempotencyKey,
     ) => Effect.Effect<MessageDeliveryRecord | undefined, ThreadStoreError>;

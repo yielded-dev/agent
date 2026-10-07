@@ -15,8 +15,8 @@ import { transferRecordDependencies } from "./internal/transfer-dependencies.ts"
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { ExportRecord } from "./RecordFormat.ts";
-import type { RecordJson } from "./Records.ts";
 import {
+  type RecordJson,
   BatchId,
   CanonicalBatch,
   CanonicalRecordEnvelope,
@@ -25,6 +25,7 @@ import {
   MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
   PersistedJson,
+  type PromptRecordEnvelope,
   ProducerEpoch,
   ProducerId,
   RecordId,
@@ -61,18 +62,7 @@ export const makeTransferFactCheck = <A, I>(schema: Schema.Codec<A, I>) => {
   };
 };
 
-/** Only model input and the facts needed to validate its ownership and compaction. */
-export const PROMPT_EVIDENCE_TAGS = [
-  "UserInputRecorded",
-  "RunStarted",
-  "ModelCompleted",
-  "ModelResponseRecorded",
-  "ToolCallSettled",
-  "CompactionCreated",
-  "RunCompleted",
-  "RunFailed",
-  "SubmissionSettled",
-] as const;
+export { PROMPT_EVIDENCE_TAGS } from "./Records.ts";
 
 /** Captures every fact owner, including facts that do not advance the canonical tail. */
 export const ThreadExportSnapshot = Schema.Struct({
@@ -480,6 +470,14 @@ export class ThreadRead extends Schema.Class<ThreadRead>("@effect-agent/thread/T
   afterSequence: Schema.optionalKey(CanonicalSequence),
   limit: Schema.Natural.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
+
+/** Sparse ordered history page at a fixed tail; no record-count limit on the whole range. */
+export const ThreadPromptRead = Schema.Struct({
+  ...ThreadRead.fields,
+  throughSequence: CanonicalSequence,
+});
+
+export type ThreadPromptRead = typeof ThreadPromptRead.Type;
 
 /** Closed native selections; mutable metadata is read at this exact canonical tail. */
 export const ThreadSelection = Schema.Union([
@@ -952,6 +950,12 @@ export class ThreadStore extends Context.Service<
     readonly read: (
       request: ThreadReadRequest,
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
+    /** Decode only PromptRecord fields of PROMPT_EVIDENCE_TAGS, including archived ranges.
+     * Bound raw hydration without shortening a page before its limit or captured range end.
+     * The immutable source was validated on write; use read for integrity or execution evidence. */
+    readonly readPrompt: (
+      request: ThreadPromptRead,
+    ) => Stream.Stream<PromptRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
     readonly observe: (
       request: ThreadObservation,
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
@@ -984,6 +988,7 @@ export class ThreadReader extends Context.Service<
   Pick<
     ThreadStore["Service"],
     | "read"
+    | "readPrompt"
     | "observe"
     | "export"
     | "inspectTail"
@@ -995,6 +1000,7 @@ export class ThreadReader extends Context.Service<
   static fromStore(store: ThreadStore["Service"]): ThreadReader["Service"] {
     return {
       read: store.read,
+      readPrompt: store.readPrompt,
       observe: store.observe,
       export: store.export,
       inspectTail: store.inspectTail,

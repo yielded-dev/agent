@@ -23,6 +23,14 @@ records, exports history, and inspects the tail. Appends must be atomic, digest-
 batch ID, checked against the expected tail, and fenced by producer epoch. Reads decode stored
 values through schemas.
 
+Implement `readPrompt` as sparse, ascending pages through a captured canonical sequence, including
+archived facts. Select `Records.PROMPT_EVIDENCE_TAGS` and decode with `Records.PromptRecord`, rather
+than decoding full records and discarding fields. This read-only projection trusts write-time
+validation and is never execution or integrity evidence. Bound raw hydration before decoding;
+internal chunks must not shorten a page before its requested limit or captured range end.
+Full `read` and snapshot-bound `ThreadImportReader.read` must preserve the canonical values used by
+recovery and verification.
+
 `ThreadStore.checkpoints` is optional storage for application projections. An adapter offering it
 must run the generic checkpoint conformance suite. Retained-history execution does not use it.
 

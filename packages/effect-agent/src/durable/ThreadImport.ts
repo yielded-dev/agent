@@ -4,6 +4,7 @@ import { InputMessage } from "../capabilities/Messaging.ts";
 import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { WorkerRef } from "../core/Worker.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { validateContextBoundary } from "./internal/run-context.ts";
 import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
@@ -179,11 +180,28 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
       );
   }
 
+  if (payload._tag === "RunContextRecorded") {
+    const owner = yield* reader.runOwner(payload.runId);
+
+    const original =
+      owner === undefined ? undefined : yield* resolve(submissionInputRecordId(owner.submissionId));
+
+    if (
+      original === undefined ||
+      original.threadId !== entry.threadId ||
+      original.sequence >= entry.sequence
+    )
+      return yield* invalid("Saved context has no original admitted input", entry.threadId);
+    yield* validateContextBoundary(payload, original).pipe(
+      Effect.mapError((error) => invalid(error.message, entry.threadId)),
+    );
+  }
+
   const references =
     payload._tag === "WorkerInputRefused"
       ? [payload.reservation, payload.stop]
       : payload._tag === "RunContextRecorded"
-        ? payload.history
+        ? payload.retained
         : payload._tag === "RunContinuation"
           ? [
               payload.originalInput,

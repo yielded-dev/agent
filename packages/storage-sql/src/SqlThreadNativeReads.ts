@@ -1,7 +1,8 @@
 import { decodeExportRecord, ExportRecord } from "@yielded/agent/record-format";
-import type { CanonicalRecord } from "@yielded/agent/records";
 import {
+  type CanonicalRecord,
   CURRENT_RECORD_FORMAT,
+  MAX_CANONICAL_RECORD_BYTES,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
@@ -11,6 +12,8 @@ import {
   CanonicalSequence,
   Digest,
   ProducerEpoch,
+  PromptRecord,
+  type PromptRecordEnvelope,
   RecordId,
 } from "@yielded/agent/records";
 import {
@@ -34,6 +37,7 @@ import {
 import type { PreparedAppend, ThreadStore } from "@yielded/agent/thread-store";
 import {
   SelectedThreadRead,
+  ThreadPromptRead,
   ThreadPeerCountRequest,
   ThreadWorkerCapacityRequest,
   ThreadWorkerCapacity,
@@ -52,6 +56,9 @@ import type { Fragment } from "effect/sql/Statement";
 import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
+
+/** Closed library tags must match SQLite partial-index predicates at prepare time. */
+export const SQL_PROMPT_PREDICATE = `record_tag IN (${PROMPT_EVIDENCE_TAGS.map((tag) => `'${tag}'`).join(", ")})`;
 
 const canonicalColumns = {
   tag: "record_tag",
@@ -342,6 +349,22 @@ const Row = Schema.Struct({
   record_json: Schema.String,
 });
 
+const MAX_PROMPT_PAGE_JSON_BYTES = 4 * 1024 * 1024;
+
+const PromptReadPlanRow = Schema.Struct({
+  sequence: Row.fields.sequence,
+  record_json_bytes: SqlInteger.pipe(
+    Schema.decodeTo(
+      Schema.Natural.check(
+        Schema.isGreaterThan(0),
+        Schema.isLessThanOrEqualTo(MAX_CANONICAL_RECORD_BYTES),
+      ),
+    ),
+  ),
+});
+
+type PromptReadPage = [typeof PromptReadPlanRow.Type, ...Array<typeof PromptReadPlanRow.Type>];
+
 /** Exclusive-owner snapshot and header reuse for indexed canonical reads. */
 export interface SelectedReadOwner {
   readonly snapshot: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
@@ -371,6 +394,24 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
   const recordJson = canonicalRecordJson(sql, namespace);
   const membershipJson = canonicalRecordJson(sql, namespace, "canonical");
   const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+
+  const decodePromptPlan = Schema.decodeUnknownEffect(Schema.Array(PromptReadPlanRow));
+
+  const promptRecordBytes = sql.onDialectOrElse({
+    pg: () => sql`octet_length(${recordJson})`,
+    orElse: () => sql`length(CAST(${recordJson} AS BLOB))`,
+  });
+
+  const decodePromptRows = Schema.decodeUnknownEffect(
+    Schema.Array(
+      Schema.Struct({
+        thread_id: Row.fields.thread_id,
+        sequence: Row.fields.sequence,
+        record_id: Row.fields.record_id,
+        record_json: Schema.fromJsonString(PromptRecord),
+      }),
+    ),
+  );
 
   const decodeTailRows = Schema.decodeUnknownEffect(
     Schema.Array(
@@ -473,7 +514,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               rows =
                 yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
-                WHERE thread_id=${request.threadId} AND ${sql.literal("record_tag IN ('UserInputRecorded', 'RunStarted', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled')")}
+                WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_PROMPT_PREDICATE)}
                   AND sequence>${after} AND sequence<=${selection.throughSequence}
                 ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
               break;
@@ -1026,6 +1067,89 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     ),
   );
 
+  const readPrompt = Effect.fnUntraced(
+    function* (input: ThreadPromptRead) {
+      const request = yield* Schema.decodeEffect(ThreadPromptRead)(input);
+
+      return yield* snapshot(
+        Effect.gen(function* () {
+          const tail = yield* requireThread(request.threadId);
+
+          if (request.throughSequence > tail.tail_sequence)
+            return yield* failure("prompt read is ahead of canonical tail");
+
+          // Bound raw hydration before the narrow decoder discards large non-prompt fields.
+          const plan = yield* decodePromptPlan(
+            yield* sql`SELECT sequence, ${promptRecordBytes} AS record_json_bytes
+            FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
+            WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_PROMPT_PREDICATE)}
+              AND sequence>${request.afterSequence ?? 0} AND sequence<=${request.throughSequence}
+            ORDER BY sequence LIMIT ${request.limit}`.pipe(execute),
+          );
+
+          if (plan.length > request.limit) return yield* failure("prompt read membership");
+          const pages: Array<PromptReadPage> = [];
+          let page: PromptReadPage | undefined;
+          let pageBytes = 0;
+          let previousSequence = request.afterSequence ?? 0;
+
+          for (const row of plan) {
+            if (row.sequence <= previousSequence || row.sequence > request.throughSequence)
+              return yield* failure("prompt read ordering");
+            previousSequence = row.sequence;
+            if (
+              page === undefined ||
+              pageBytes + row.record_json_bytes > MAX_PROMPT_PAGE_JSON_BYTES
+            ) {
+              page = [row];
+              pages.push(page);
+              pageBytes = row.record_json_bytes;
+            } else {
+              page.push(row);
+              pageBytes += row.record_json_bytes;
+            }
+          }
+
+          const records: Array<PromptRecordEnvelope> = [];
+
+          for (const page of pages) {
+            const rows = yield* decodePromptRows(
+              yield* sql`SELECT thread_id, sequence, record_id, ${recordJson} AS record_json
+              FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
+              WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_PROMPT_PREDICATE)}
+                AND sequence>=${page[0].sequence} AND sequence<=${page[page.length - 1].sequence}
+              ORDER BY sequence`.pipe(execute),
+            );
+
+            if (
+              rows.length !== page.length ||
+              rows.some(
+                (row, index) =>
+                  row.sequence !== page[index].sequence ||
+                  row.record_json.recordId !== row.record_id ||
+                  row.thread_id !== request.threadId,
+              )
+            )
+              return yield* failure("prompt read membership or identity");
+            for (const row of rows)
+              records.push({
+                threadId: row.thread_id,
+                sequence: row.sequence,
+                record: row.record_json,
+              });
+          }
+
+          return records;
+        }),
+      );
+    },
+    Effect.mapError((cause) =>
+      cause._tag === "ThreadNotMaterialized" || cause._tag === "ThreadStoreError"
+        ? cause
+        : failure("readPrompt", cause),
+    ),
+  );
+
   const readIdentity: ThreadStore["Service"]["readIdentity"] = Effect.fnUntraced(
     function* (request) {
       yield* decodeIdentityRequest(request);
@@ -1182,5 +1306,5 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
       ),
     );
 
-  return { read, countPeerMessages, readIdentity, readWorkerCapacity };
+  return { read, readPrompt, countPeerMessages, readIdentity, readWorkerCapacity };
 });

@@ -14,7 +14,7 @@ export const transferRecordDependencies = (
     if (payload._tag === "WorkHandoffCompleted" && !local.has(payload.preparationId))
       dependencies.add(payload.preparationId);
     if (payload._tag === "RunContextRecorded")
-      for (const ref of payload.history)
+      for (const ref of payload.retained)
         if (!local.has(ref.recordId)) dependencies.add(ref.recordId);
     if (payload._tag === "RunContinuation")
       for (const ref of [

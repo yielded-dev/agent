@@ -132,6 +132,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
   });
 
   const threads = ThreadStore.of({
+    readPrompt: () => Stream.die("Ingestion requires full canonical evidence"),
     readIdentity: () => Effect.die("Ingestion must not read worker identity"),
     materialize: () => Effect.die("Ingestion must not materialize Threads"),
     append: () => Effect.die("Ingestion must not append canonical records"),

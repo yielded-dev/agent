@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Option, Schema, Struct } from "effect";
 import { Prompt } from "effect/ai";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
@@ -1148,19 +1148,6 @@ export const MAX_RUN_RECOVERY_SUFFIX_RECORDS = 64;
 export const MAX_RUN_RECOVERY_SUFFIX_BYTES = 2 * 1024 * 1024;
 export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
 
-/** Saved model context has its own canonical owner; execution progress only references it. */
-export const ContextBoundary = Schema.Struct({
-  sequence: CanonicalSequence,
-  tag: Schema.Literals(["ModelCompleted", "ModelResponseRecorded", "ToolCallSettled"]),
-  promptLength: Schema.Natural,
-  incomplete: Schema.optionalKey(Schema.Literal(true)),
-  terminalPriorRun: Schema.optionalKey(Schema.Literal(true)),
-});
-
-/** Referenced context is bounded separately from this Run's execution facts. */
-export const MAX_RUN_CONTEXT_RECORDS = 4_096;
-export const MAX_RUN_CONTEXT_BYTES = 32 * 1024 * 1024;
-
 export const ContextEvidenceReference = Schema.Struct({
   ...EvidenceReference.fields,
   sequence: CanonicalSequence,
@@ -1168,21 +1155,33 @@ export const ContextEvidenceReference = Schema.Struct({
 
 export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()(
   "RunContextRecorded",
-  {
+  Schema.Struct({
     version: Schema.Literal(1),
     runId: RunId,
     /** Only evaluated instructions and this Run's input; prior history remains in its facts. */
     runScopedInput: PersistedJson,
-    /** Fixed prior-history boundary, before the original accepted input. */
+    /** Inclusive range; historyThrough + 1 denotes an empty range. */
+    historyFrom: CanonicalSequence.check(Schema.isGreaterThan(0)),
+    /** Fixed prior-history boundary, immediately before the original accepted input. */
     historyThrough: CanonicalSequence,
-    history: Schema.Array(ContextEvidenceReference).check(
-      Schema.isMaxLength(MAX_RUN_CONTEXT_RECORDS),
-    ),
-    historyBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_CONTEXT_BYTES)),
+    /** Facts below historyFrom still needed after summarize or rollover coverage. */
+    retained: Schema.Array(ContextEvidenceReference).check(Schema.isMaxLength(4_096)),
+    /** Pins the projected prior Prompt, not a second copy or a per-record manifest. */
+    historyDigest: Digest,
     priorHistoryLength: Schema.Natural,
-    boundaries: Schema.Array(ContextBoundary).check(Schema.isMaxLength(4_096)),
     contextWindowId: Schema.optionalKey(BoundedName),
-  },
+  }).check(
+    Schema.makeFilter(
+      (context) =>
+        context.historyFrom <= context.historyThrough + 1 &&
+        context.retained.every(
+          (ref, index) =>
+            ref.sequence > (context.retained[index - 1]?.sequence ?? 0) &&
+            ref.sequence < context.historyFrom,
+        ),
+      { title: "Saved context retains an ordered prefix below its original history range" },
+    ),
+  ),
 ) {}
 
 /** Accumulated charges; replacement Attempts never replenish or charge these again. */
@@ -1348,5 +1347,54 @@ export class CanonicalRecordEnvelope extends Schema.Class<CanonicalRecordEnvelop
   offset: ObservationOffset,
   record: RecordEnvelope,
 }) {}
+
+/** Read-only history of validated facts. Original inputs establish Run view boundaries. */
+export const PromptRecordPayload = Schema.TaggedUnion({
+  UserInputRecorded: {
+    runId: UserInputRecorded.fields.runId,
+    kind: UserInputRecorded.fields.kind,
+    submissionId: UserInputRecorded.fields.submissionId,
+  },
+  ModelCompleted: {
+    runId: RunId,
+    history: Schema.optionalKey(Prompt.Prompt),
+  },
+  ModelResponseRecorded: {
+    runId: RunId,
+    turn: TurnNumber,
+    messages: Prompt.Prompt,
+    runScopedPrefixLength: ModelResponseRecorded.fields.runScopedPrefixLength,
+  },
+  ToolCallSettled: {
+    runId: RunId,
+    toolCallId: ToolCallId,
+    toolName: BoundedName,
+    result: Schema.Json,
+    isFailure: Schema.Boolean,
+  },
+  CompactionCreated: CompactionCreated.fields,
+  RunCompleted: { runId: RunId },
+  RunFailed: { runId: RunId },
+  SubmissionSettled: {
+    runId: Schema.optionalKey(RunId),
+    submissionId: SubmissionId,
+  },
+});
+
+/** Native selections and the projection decoder share this single list of supported facts. */
+export const PROMPT_EVIDENCE_TAGS: ReadonlyArray<keyof typeof PromptRecordPayload.cases> =
+  Struct.keys(PromptRecordPayload.cases);
+
+export const PromptRecord = Schema.Struct({ recordId: RecordId, payload: PromptRecordPayload });
+export type PromptRecord = typeof PromptRecord.Type;
+
+/** Not integrity evidence: omitted canonical wire must be read through the full record port. */
+export const PromptRecordEnvelope = Schema.Struct({
+  threadId: ThreadId,
+  sequence: CanonicalSequence,
+  record: PromptRecord,
+});
+
+export type PromptRecordEnvelope = typeof PromptRecordEnvelope.Type;
 
 export const CURRENT_CANONICAL_SCHEMA_VERSION = 1 as const;

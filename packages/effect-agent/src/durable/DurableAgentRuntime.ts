@@ -158,9 +158,13 @@ import {
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import { initialContext } from "./internal/initial-context.ts";
-import { type makeJournalMetadata, type JournalMetadata } from "./internal/journal-metadata.ts";
+import {
+  makeJournalMetadata,
+  type JournalMetadata,
+  type JournalRecordEnvelope,
+} from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
-import { rebuildRunContext } from "./internal/run-context.ts";
+import { digestRunHistory, rebuildRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -200,8 +204,6 @@ import {
   MAX_RUN_TOOL_CALL_IDENTITIES,
   MAX_PERSISTED_JSON_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
-  MAX_RUN_CONTEXT_BYTES,
-  MAX_RUN_CONTEXT_RECORDS,
   RunDurationExhausted,
   SettlementFailureDiagnostic,
   SubagentJoined,
@@ -1384,7 +1386,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         readonly through: CanonicalSequence;
         readonly runId: RunId;
         readonly contextDigest: string | undefined;
-        readonly contextEvidence: ReadonlyArray<CanonicalRecordEnvelope>;
+        readonly contextEvidence: ReadonlyArray<JournalRecordEnvelope>;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
       }
@@ -2499,10 +2501,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
    * history through the engine's batch-resume continuation.
    */
   const withoutPendingBatch = (
-    records: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
+    records: Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     pending: PendingToolBatch,
     runId: ReturnType<typeof runIdForSubmission>,
-  ): Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized> =>
+  ): Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized> =>
     records.pipe(
       Stream.filter((envelope) => {
         if (envelope.record.recordId === pending.responseRecordId) return false;
@@ -4814,7 +4816,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     submission: SubmissionSnapshot,
     session: RunStorageSession,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
-    canonical: Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
+    canonical: Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
     canonicalThrough: CanonicalSequence,
     progressThrough: CanonicalSequence | undefined,
     continuation: RunContinuation | undefined,
@@ -4845,29 +4847,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       if (originalInput === undefined)
         return yield* RunJournalError.make({ message: "Run has no original context boundary" });
-      const historyEvidence = new Map<RecordId, CanonicalRecordEnvelope>();
-      let historyBytes = 0;
-      let historyOverflow = false;
+      const historyEvidence = new Map<RecordId, JournalRecordEnvelope>();
 
-      const retainHistory = (entry: CanonicalRecordEnvelope) => {
-        if (
-          priorContext !== undefined ||
-          entry.sequence >= originalInput.sequence ||
-          historyEvidence.has(entry.record.recordId)
-        )
-          return;
-        const bytes = canonicalRecordBytes(entry.record);
-
-        if (
-          historyEvidence.size >= MAX_RUN_CONTEXT_RECORDS ||
-          historyBytes + bytes > MAX_RUN_CONTEXT_BYTES
-        ) {
-          historyOverflow = true;
-
-          return;
-        }
-        historyEvidence.set(entry.record.recordId, entry);
-        historyBytes += bytes;
+      const retainHistory = (entry: JournalRecordEnvelope) => {
+        if (priorContext === undefined && entry.sequence < originalInput.sequence)
+          historyEvidence.set(entry.record.recordId, entry);
       };
 
       const journal =
@@ -4887,11 +4871,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               journalMetadata,
               retainHistory,
             );
-
-      if (historyOverflow)
-        return yield* RunJournalError.make({
-          message: "Original model history exceeds its bounded evidence references",
-        });
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.
       // The projected prompt owns its needed context.
@@ -5684,11 +5663,24 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const resumeContext = {
         prepare: ({ source }: { readonly source: Prompt.Prompt }) =>
           Effect.sync(() => {
+            // A compaction can commit before the first response owns this Run's input messages.
+            const prefix =
+              journal.committedTurns === 0 && priorContext !== undefined
+                ? priorContext.prompt.content.slice(priorContext.priorHistoryLength)
+                : [];
+
+            const priorRunPrefixLength =
+              journal.committedTurns === 0
+                ? resumeProjection.prompt.content.length
+                : resumeProjection.historyBefore.content.length;
+
             const view = instructionView(
-              resumeProjection.prompt.content,
+              prefix.length === 0
+                ? resumeProjection.prompt.content
+                : [...resumeProjection.prompt.content, ...prefix],
               initialInstructions,
               true,
-              resumeProjection.historyBefore.content.length,
+              priorRunPrefixLength,
             );
 
             return {
@@ -5696,28 +5688,27 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ...view.messages,
                 ...source.content.slice(initialHistoryLength),
               ]),
-              priorRunPrefixLength: view.prefixLength(
-                resumeProjection.historyBefore.content.length,
-              ),
+              priorRunPrefixLength: view.prefixLength(priorRunPrefixLength),
             };
           }),
       } satisfies RunContextHook<never, never>;
 
       const externalContext = runContextPreparation.hook;
+      const needsContextReplay = priorContext !== undefined || journal.committedTurns > 0;
 
       const preparedContext: RunContextHook<RunContextPreparationError, never> | undefined =
         externalContext === undefined
-          ? journal.committedTurns === 0
-            ? undefined
-            : resumeContext
+          ? needsContextReplay
+            ? resumeContext
+            : undefined
           : {
               prepare: (request) =>
-                (journal.committedTurns === 0
-                  ? Effect.succeed({
+                (needsContextReplay
+                  ? resumeContext.prepare(request)
+                  : Effect.succeed({
                       prompt: request.source,
                       priorRunPrefixLength: journal.historyBefore.content.length,
                     })
-                  : resumeContext.prepare(request)
                 ).pipe(
                   Effect.flatMap(({ prompt, priorRunPrefixLength }) =>
                     externalContext.prepare({
@@ -5726,6 +5717,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                       priorRunPrefixLength,
                     }),
                   ),
+                  Effect.map((prepared) => {
+                    if (
+                      prepared.rollover === undefined ||
+                      !knownIds.has(compactionRecordId(runId, request.turn, "rollover"))
+                    )
+                      return prepared;
+                    // The committed rollover, not a reevaluated hook, owns this Turn's reset.
+                    const { rollover: _, ...retained } = prepared;
+
+                    return retained;
+                  }),
                 ),
             };
 
@@ -5757,32 +5759,44 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
-              const historySequences = new Set(
-                [...historyEvidence.values()].map((entry) => entry.sequence),
+              const historyDigest = yield* withCrypto(
+                digestRunHistory(
+                  Prompt.fromMessages(initialHistory.content.slice(0, priorHistoryLength)),
+                ),
+              );
+
+              const retained = yield* Effect.forEach(
+                [...historyEvidence.values()]
+                  .filter((entry) => entry.sequence < journal.historyFrom)
+                  .sort((left, right) => left.sequence - right.sequence),
+                (entry) =>
+                  Effect.gen(function* () {
+                    const full = yield* getRecord({
+                      threadId: ctx.threadId,
+                      recordId: entry.record.recordId,
+                    });
+
+                    if (Option.isNone(full) || full.value.sequence !== entry.sequence)
+                      return yield* RunJournalError.make({
+                        message: "Retained history has no exact canonical fact",
+                      });
+
+                    return {
+                      ...(yield* withCrypto(reference(full.value.record))),
+                      sequence: entry.sequence,
+                    };
+                  }).pipe(Effect.provideService(ThreadReader, reader)),
               );
 
               const payload = yield* RunContextRecorded.makeEffect({
                 version: 1,
                 runId,
                 runScopedInput: prompt,
+                historyFrom: journal.historyFrom,
                 historyThrough: CanonicalSequence.make(originalInput.sequence - 1),
-                history: yield* Effect.forEach(
-                  [...historyEvidence.values()].sort(
-                    (left, right) => left.sequence - right.sequence,
-                  ),
-                  (entry) =>
-                    reference(entry.record).pipe(
-                      Effect.provideService(Crypto.Crypto, crypto),
-                      Effect.map((ref) => ({ ...ref, sequence: entry.sequence })),
-                    ),
-                ),
-                historyBytes,
+                retained,
+                historyDigest,
                 priorHistoryLength,
-                boundaries: boundaries.filter(
-                  (boundary) =>
-                    boundary.promptLength <= priorHistoryLength &&
-                    historySequences.has(boundary.sequence),
-                ),
                 ...(journal.contextWindowId === undefined
                   ? {}
                   : { contextWindowId: journal.contextWindowId }),
@@ -8177,9 +8191,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const takeJournalMetadata = (): JournalMetadata | undefined => {
         const metadata = journalMetadata?.snapshot();
 
-        // Reuse the validated prefix once, then release compaction payloads before model
-        // waits. An immediate resume falls back to a fresh canonical metadata scan.
-        if (metadata !== undefined && metadata.compactions.length > 0) journalMetadata = undefined;
+        // Release admission metadata before model or Tool waits; it is not a warm context cache.
+        journalMetadata = undefined;
 
         return metadata;
       };
@@ -8532,7 +8545,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         );
 
         let canonical: Stream.Stream<
-          CanonicalRecordEnvelope,
+          JournalRecordEnvelope,
           ThreadStoreError | ThreadNotMaterialized
         > = view.canonical;
 
@@ -8556,10 +8569,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             Effect.provideService(Crypto.Crypto, crypto),
           );
 
-          canonical = Stream.concat(
-            Stream.fromIterable(history),
-            view.canonical.pipe(Stream.filter((entry) => entry.sequence > original.sequence)),
-          );
+          const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
+
+          journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
+          for (const entry of history) journalMetadata.add(entry);
+          for (const entry of suffix) journalMetadata.add(entry);
+          canonical = Stream.fromIterable<JournalRecordEnvelope>([...history, ...suffix]);
         }
 
         const outcome = yield* runModel(

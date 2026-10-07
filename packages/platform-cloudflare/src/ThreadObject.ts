@@ -206,6 +206,7 @@ const isMutatingPortRequest = (request: PortRequest): boolean => {
     case "LedgerResolveAdmission":
     case "LedgerFundingOwner":
     case "StoreReadPage":
+    case "StoreReadPrompt":
     case "StoreWorkPage":
     case "StoreInspectTail":
     case "StoreReadIdentity":
@@ -395,6 +396,7 @@ const requirePortThread = (request: PortRequest) => {
     case "StoreMaterialize":
     case "StoreAppend":
     case "StoreReadPage":
+    case "StoreReadPrompt":
     case "StoreInspectTail":
     case "StoreReadIdentity":
     case "StoreCountPeerMessages":

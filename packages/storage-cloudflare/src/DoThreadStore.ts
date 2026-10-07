@@ -100,10 +100,9 @@ export interface DoStorageOptions {
    */
   readonly maxStoredValueBytes?: number | undefined;
   /**
-   * Re-verify Thread journal payloads, ownership, and digest chains in bounded pages while
-   * opening the store, including orphan rows and rows outside declared ranges. Defaults to
-   * off: per-operation Schema decoding and the digest chain already fail clearly on corrupt
-   * rows without scanning the whole database on every open.
+   * Audit journal payloads, ownership, and digest chains in bounded pages on open, including
+   * orphan rows and rows outside declared ranges. Defaults to false. Full reads validate
+   * canonical records; readPrompt trusts write-time validation of the omitted fields.
    */
   readonly verifyOnOpen?: boolean | undefined;
   readonly failpoint?: DoStorageFailpointHandler | undefined;
@@ -701,6 +700,7 @@ const makeServices = Effect.fnUntraced(function* () {
     materialize,
     observe,
     read,
+    readPrompt: (request) => Stream.fromIterableEffect(selectedReads.readPrompt(request)),
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
   });
 

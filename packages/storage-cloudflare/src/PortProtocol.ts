@@ -11,6 +11,7 @@ import {
   MessageDeliveryPage,
 } from "@yielded/agent/message-delivery";
 import { ReadEnvelope } from "@yielded/agent/record-format";
+import { PromptRecordEnvelope } from "@yielded/agent/records";
 import {
   SettlementPublication,
   SettlementPublicationResult,
@@ -60,6 +61,7 @@ import {
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadReadRequest,
+  ThreadPromptRead,
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
@@ -93,8 +95,8 @@ import { Schema, SchemaGetter } from "effect";
  * - ledger: `admit`, `markReady`, `lookup`, `resolveAdmission`, `requestAbort`,
  *   `recordChildSettled`;
  * - publisher: `publish`;
- * - store: `materialize`, `append`, `read` (one page), `readIdentity`, `inspectTail`, `export`,
- *   `countPeerMessages`, `work.page`, `work.rebuild`.
+ * - store: `materialize`, `append`, `read` and `readPrompt` (one page), `readIdentity`,
+ *   `inspectTail`, `export`, `countPeerMessages`, `work.page`, `work.rebuild`.
  *
  * Every other port operation is lane-local and has no envelope. Foreign operations
  * fail fast and typed instead of widening the distributed surface.
@@ -238,6 +240,11 @@ export class StoreReadPageCall extends Schema.TaggedClass<StoreReadPageCall>(
   request: ThreadReadRequest,
 }) {}
 
+export class StoreReadPromptCall extends Schema.TaggedClass<StoreReadPromptCall>()(
+  "StoreReadPrompt",
+  { request: ThreadPromptRead },
+) {}
+
 /** Routed `ThreadStore.inspectTail` against the owning Object. */
 export class StoreInspectTailCall extends Schema.TaggedClass<StoreInspectTailCall>(
   "@effect-agent/storage-cloudflare/StoreInspectTailCall",
@@ -334,6 +341,7 @@ export const PortRequest = Schema.Union([
   StoreMaterializeCall,
   StoreAppendCall,
   StoreReadPageCall,
+  StoreReadPromptCall,
   StoreInspectTailCall,
   StoreReadIdentityCall,
   StoreWorkerCapacityCall,
@@ -411,6 +419,13 @@ export class StoreReadPageResult extends Schema.TaggedClass<StoreReadPageResult>
 )("StoreReadPageResult", {
   records: Schema.Array(ReadEnvelope).check(Schema.isMaxLength(1_024)),
 }) {}
+
+export class StoreReadPromptResult extends Schema.TaggedClass<StoreReadPromptResult>()(
+  "StoreReadPromptResult",
+  {
+    records: Schema.Array(PromptRecordEnvelope).check(Schema.isMaxLength(1_024)),
+  },
+) {}
 
 export class StoreInspectTailResult extends Schema.TaggedClass<StoreInspectTailResult>(
   "@effect-agent/storage-cloudflare/StoreInspectTailResult",
@@ -520,6 +535,7 @@ export const PortResult = Schema.Union([
   StoreMaterializeResult,
   StoreAppendResult,
   StoreReadPageResult,
+  StoreReadPromptResult,
   StoreInspectTailResult,
   StoreReadIdentityResult,
   StoreWorkerCapacityResult,

@@ -95,9 +95,10 @@ facts. Results, Durable Steps, approval decisions, and original operation contra
 canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats
 recorded results. An unresolved ordinary mutating call still requires reconciliation.
 
-`RunContextRecorded` preserves evaluated instructions and this Run's input, plus digest-checked
-references to prior model history at the original admission boundary. It shares the start
-transaction and copies no prior Prompt payloads. Compaction changes the model view independently.
+`RunContextRecorded` preserves evaluated instructions and this Run's input, plus a canonical
+history range and the digest of its projected prior Prompt. It retains exact references only to
+earlier facts still needed after compaction. It shares the start transaction without copying prior
+Prompt payloads or a per-record history manifest. Compaction changes the model view independently.
 A compatible current Binding supplies execution services, while saved instructions, user intent, and the Run's
 own continuation remain unchanged by another Run's later traffic. New Runs evaluate current
 instructions. Input-dependent Bindings must still decode the original admitted value. A current
@@ -110,17 +111,18 @@ Preparations before the first continuation and a post-continuation suffix each h
 64 records and 2 MiB. The continuation record is limited to 8 KiB; incremental record JSON is
 capped at 4 MiB per Turn, including continuations and the first Turn's initial context and retained
 preparations. Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
-4 MiB limit to include its envelope. Duplicate SQL batch JSON and indexes are separate costs.
+4 MiB limit to include its envelope. Indexes have separate storage costs.
 Dispatch reserves bounded Tool outcomes and a full valid Step result before a new Step body
 starts. Concurrent Steps share that capacity. Every dispatch retains room for a bounded failure
 settlement and usage metadata; insufficient capacity refuses execution or fails the Run.
 Abort, failure, and settlement consume their reserved room and can commit after ordinary capacity
 is exhausted. Terminal evidence has a separate hard allowance of four facts and 8.25 MiB;
 successful output still requires its dispatch capacity. Reservations are conservative and can
-refuse work before the byte limit itself is reached. Original context references are bounded at
-4,096 records and 32 MiB of referenced wire after valid compaction removes covered history;
-evaluated Run input uses the individual persisted JSON limit. Active Attempts retain a validated
-prefix and read only new facts. Cold recovery resolves the immutable context references.
+refuse work before the byte limit itself is reached. The original history range has no lifetime
+record limit; at most 4,096 earlier exceptional facts can be retained outside that range.
+Evaluated Run input uses the individual persisted JSON limit. Active Attempts retain a validated
+prefix and read only new execution facts. Cold recovery rereads the original range and retained
+facts, regenerates compaction boundaries, and refuses a Prompt digest mismatch.
 
 Worker lineage and subtree funding remain immutable provenance. Each worker input records its own
 execution owner: a Tool handoff charges its emitting Run, while host follow-ups and receiving
@@ -129,12 +131,17 @@ framework reports have no source Run charge. Later inputs never enlarge a settle
 Exact evidence reads and same-format archives retain additive fields and the original wire values.
 Reading a typed view never changes the content pinned by an evidence digest.
 
-Initial context assembly for a new Run reads a flat saved prefix and the evidence since that
-prefix's original admission, bounded separately at 20,480 records and 64 MiB including exact
-dependencies. Later compaction never rewrites an older Run's original context. Work discovery
-uses native owner indexes; explicit index reconstruction reads canonical history in bounded
-passes. Archive partitioning and streamed transfer have separate working-set bounds, without
-a lifetime Thread record limit.
+New Runs read only history-relevant fields of the selected range and project them once. They
+trust immutable history validated at write, archive, and import boundaries; they do not reverify
+every earlier Run's original context. Late Tool results outside the selected declarations still
+require their full original evidence. Import checks saved admission boundaries and retained
+references without reprojecting each range; cold recovery and explicit `verify` recompute the
+saved Prompt before trusting it.
+
+Without compaction, history reads and the live Prompt remain linear in conversation length.
+Configure context limits for the model and host. Later compaction never rewrites an older Run's
+original context. Work discovery uses native owner indexes; explicit index reconstruction,
+archive partitioning, and streamed transfer have separate working-set bounds.
 Generic `ThreadStore.checkpoints` remain optional application projections and never govern execution.
 
 <a id="operational-obligation"></a>

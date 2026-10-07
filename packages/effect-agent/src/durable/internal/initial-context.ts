@@ -2,141 +2,120 @@ import { Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { digestJson } from "../Digest.ts";
-import {
-  CanonicalSequence,
-  MAX_RUN_CONTEXT_BYTES,
-  MAX_RUN_CONTEXT_RECORDS,
-  MAX_RUN_EVIDENCE_BYTES,
-  MAX_RUN_EVIDENCE_RECORDS,
-  type CanonicalRecordEnvelope,
-} from "../Records.ts";
+import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";
 import { RunJournalError, toolCallSettledRecordId } from "../RunJournal.ts";
 import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
-import {
-  getRecord,
-  getRunInput,
-  PROMPT_EVIDENCE_TAGS,
-  ThreadReader,
-  type ThreadSelection,
-} from "../ThreadStore.ts";
-import { reference, resolveEvidence } from "./evidence.ts";
-import { recordEncoding } from "./record-encoding.ts";
-import { projectRunContext } from "./run-context.ts";
+import { getRecord, getRunInput, PROMPT_EVIDENCE_TAGS, ThreadReader } from "../ThreadStore.ts";
+import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
 const promptTag = new Set<string>(PROMPT_EVIDENCE_TAGS);
 
-/**
- * One flat saved prefix plus a fixed admission suffix and exact canonical dependencies.
- * The read budget bounds this working set, including history retired by later compaction.
- * Saved-context limits apply in runModel's projection evidence callback, after valid coverage
- * removes that history. The previous Run's immutable original context does not advance when
- * that Run compacts, so its raw suffix can legitimately exceed the saved-context limits.
- */
+/** Fresh admission trusts validated immutable history; recovery verifies its saved Prompt digest. */
 export const initialContext = Effect.fnUntraced(function* (original: CanonicalRecordEnvelope) {
   const reader = yield* ThreadReader;
   const threadId = original.threadId;
   const through = CanonicalSequence.make(original.sequence - 1);
-  const facts = new Map<number, CanonicalRecordEnvelope>();
-  const queue: Array<CanonicalRecordEnvelope> = [];
-  const readIds = new Set<string>();
+  const facts = new Map<number, JournalRecordEnvelope>();
+  const queue: Array<JournalRecordEnvelope> = [];
   const creatorInputs = new Set<string>();
   const terminalInputs = new Set<string>();
-  let readBytes = 0;
+  const declarations = new Set<string>();
 
-  const account = (entry: CanonicalRecordEnvelope) => {
-    if (entry.threadId !== threadId || entry.sequence < 1 || entry.sequence > through) return false;
-    if (readIds.has(entry.record.recordId)) return true;
-    const bytes = recordEncoding(entry.record).bytes;
-
+  const retain = (entry: JournalRecordEnvelope): RunJournalError | undefined => {
     if (
-      readIds.size >= MAX_RUN_CONTEXT_RECORDS + MAX_RUN_EVIDENCE_RECORDS ||
-      readBytes + bytes > MAX_RUN_CONTEXT_BYTES + MAX_RUN_EVIDENCE_BYTES
+      entry.threadId !== threadId ||
+      entry.sequence < 1 ||
+      entry.sequence > through ||
+      !promptTag.has(entry.record.payload._tag)
     )
-      return false;
-    readIds.add(entry.record.recordId);
-    readBytes += bytes;
-
-    return true;
-  };
-
-  const retain = (entry: CanonicalRecordEnvelope) => {
-    if (!account(entry) || !promptTag.has(entry.record.payload._tag))
-      return Effect.fail(
-        invalid("Initial context dependency escaped its admission or read budget"),
-      );
+      return invalid("Initial context dependency escaped its admission boundary");
     const prior = facts.get(entry.sequence);
 
     if (prior !== undefined)
       return prior.record.recordId === entry.record.recordId
-        ? Effect.void
-        : Effect.fail(invalid("Initial context has conflicting canonical identities"));
+        ? undefined
+        : invalid("Initial context has conflicting canonical identities");
     facts.set(entry.sequence, entry);
     queue.push(entry);
+    const payload = entry.record.payload;
 
-    return Effect.void;
+    if (
+      payload._tag === "UserInputRecorded" &&
+      payload.kind === "user" &&
+      payload.runId !== undefined
+    )
+      creatorInputs.add(payload.runId);
+    if (payload._tag === "ModelResponseRecorded") {
+      if ("toolOperations" in payload) {
+        for (const operation of payload.toolOperations)
+          declarations.add(
+            toolCallSettledRecordId(payload.runId, payload.turn, operation.toolCallId),
+          );
+      } else {
+        for (const message of payload.messages.content) {
+          if (message.role !== "assistant") continue;
+          for (const part of message.content)
+            if (part.type === "tool-call" && !part.providerExecuted)
+              declarations.add(`tool-settled:${payload.runId}:${payload.turn}:${part.id}`);
+        }
+      }
+    }
+
+    return undefined;
   };
 
-  const read = Effect.fnUntraced(function* (
-    selection: ThreadSelection,
-    consume: (entry: CanonicalRecordEnvelope) => Effect.Effect<void, RunJournalError>,
-    after = 0,
-  ) {
-    let cursor = CanonicalSequence.make(after);
+  const contexts = yield* reader
+    .read({
+      threadId,
+      selection: { _tag: "LatestRunContext", throughSequence: through },
+      page: { limit: 1 },
+    })
+    .pipe(Stream.take(2), Stream.runCollect);
 
-    while (true) {
-      const page = yield* reader
-        .read({ threadId, selection, page: { afterSequence: cursor, limit: 8 } })
-        .pipe(Stream.take(9), Stream.runCollect);
-
-      if (page.length > 8) return yield* invalid("Initial context page exceeded its record bound");
-      for (const entry of page) {
-        if (entry.sequence <= cursor || !account(entry))
-          return yield* invalid("Initial context selection exceeds its admission or read budget");
-        cursor = entry.sequence;
-        yield* consume(entry);
-      }
-      if (page.length < 8) return;
-    }
-  });
-
-  let base: CanonicalRecordEnvelope | undefined;
-
-  yield* read({ _tag: "LatestRunContext", throughSequence: through }, (entry) => {
-    if (base !== undefined) return Effect.fail(invalid("Initial context locator is ambiguous"));
-    base = entry;
-
-    return Effect.void;
-  });
-  let after = 0;
+  if (contexts.length > 1) return yield* invalid("Initial context locator is ambiguous");
+  let after = CanonicalSequence.make(0);
+  const base = contexts[0];
 
   if (base !== undefined) {
     const context = base.record.payload;
 
-    if (context._tag !== "RunContextRecorded")
-      return yield* invalid("Prior context locator has another record kind");
-    const input = yield* getRunInput({ threadId, runId: context.runId });
-
     if (
-      Option.isNone(input) ||
-      input.value.sequence !== context.historyThrough + 1 ||
-      !account(input.value)
+      base.threadId !== threadId ||
+      base.sequence > through ||
+      context._tag !== "RunContextRecorded" ||
+      context.historyThrough >= base.sequence ||
+      context.historyThrough > through
     )
-      return yield* invalid("Prior context has no exact original input");
-    const prefix: Array<CanonicalRecordEnvelope> = [];
+      return yield* invalid("Prior context locator has an invalid admission boundary");
+    after = CanonicalSequence.make(context.historyFrom - 1);
+    for (const ref of context.retained) {
+      const fact = yield* getRecord({ threadId, recordId: ref.recordId });
 
-    for (const ref of context.history) {
-      const fact = yield* resolveEvidence(threadId, ref);
+      if (Option.isNone(fact) || fact.value.sequence !== ref.sequence)
+        return yield* invalid("Prior context has a missing retained fact");
+      const error = retain(fact.value);
 
-      if (fact.sequence !== ref.sequence)
-        return yield* invalid("Prior context reference has another sequence");
-      yield* retain(fact);
-      prefix.push(fact);
+      if (error !== undefined) return yield* error;
     }
-    yield* projectRunContext(context, input.value, (yield* reference(base.record)).digest, prefix);
-    after = context.historyThrough;
   }
-  yield* read({ _tag: "PromptEvidence", throughSequence: through }, retain, after);
+
+  while (after < through) {
+    const page = yield* reader
+      .readPrompt({ threadId, afterSequence: after, throughSequence: through, limit: 256 })
+      .pipe(Stream.take(257), Stream.runCollect);
+
+    if (page.length > 256) return yield* invalid("Initial context page exceeded its record bound");
+    for (const entry of page) {
+      if (entry.sequence <= after)
+        return yield* invalid("Initial context selection is not in canonical order");
+      after = entry.sequence;
+      const error = retain(entry);
+
+      if (error !== undefined) return yield* error;
+    }
+    if (page.length < 256) break;
+  }
 
   for (let index = 0; index < queue.length; index++) {
     const entry = queue[index];
@@ -149,26 +128,27 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
       const input = yield* getRunInput({ threadId, runId: payload.runId });
 
       if (Option.isNone(input)) return yield* invalid("Compaction has no exact creator input");
-      yield* retain(input.value);
+      const error = retain(input.value);
+
+      if (error !== undefined) return yield* error;
     }
-    if (payload._tag !== "ToolCallSettled") continue;
-    let declaration: CanonicalRecordEnvelope | undefined;
+    if (payload._tag !== "ToolCallSettled" || declarations.has(entry.record.recordId)) continue;
 
-    yield* read(
-      {
-        _tag: "ToolDeclaration",
-        settlementRecordId: entry.record.recordId,
-        throughSequence: through,
-      },
-      (fact) => {
-        if (declaration !== undefined)
-          return Effect.fail(invalid("Late Tool declaration is ambiguous"));
-        declaration = fact;
+    const matches = yield* reader
+      .read({
+        threadId,
+        selection: {
+          _tag: "ToolDeclaration",
+          settlementRecordId: entry.record.recordId,
+          throughSequence: through,
+        },
+        page: { limit: 1 },
+      })
+      .pipe(Stream.take(2), Stream.runCollect);
 
-        return Effect.void;
-      },
-    );
-    if (declaration === undefined || declaration.sequence >= entry.sequence)
+    const declaration = matches[0];
+
+    if (matches.length !== 1 || declaration === undefined || declaration.sequence >= entry.sequence)
       return yield* invalid("Late Tool result has no exact original declaration");
     const response = declaration.record.payload;
 
@@ -205,24 +185,25 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
       )) !== response.messagesDigest
     )
       return yield* invalid("Late Tool declaration arguments or digest are invalid");
-    yield* retain(declaration);
+    const error = retain(declaration);
 
-    // Restore only the immutable terminal proof for retired incomplete pruning/rollover batches.
+    if (error !== undefined) return yield* error;
+
+    // Retired incomplete batches need their original owner and immutable terminal proof.
     if (!terminalInputs.has(payload.runId)) {
       terminalInputs.add(payload.runId);
       const input = yield* getRunInput({ threadId, runId: payload.runId });
 
-      if (
-        Option.isSome(input) &&
-        input.value.record.payload._tag === "UserInputRecorded" &&
-        input.value.record.payload.submissionId !== undefined
-      ) {
-        if (!account(input.value))
-          return yield* invalid("Late Tool owner exceeds the evidence budget");
+      if (Option.isNone(input)) return yield* invalid("Late Tool result has no original owner");
+      const inputError = retain(input.value);
 
+      if (inputError !== undefined) return yield* inputError;
+      const owner = input.value.record.payload;
+
+      if (owner._tag === "UserInputRecorded" && owner.submissionId !== undefined) {
         const terminal = yield* getRecord({
           threadId,
-          recordId: submissionSettlementRecordId(input.value.record.payload.submissionId),
+          recordId: submissionSettlementRecordId(owner.submissionId),
         });
 
         if (Option.isSome(terminal) && terminal.value.sequence <= through) {
@@ -231,7 +212,9 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
             terminal.value.record.payload.runId !== payload.runId
           )
             return yield* invalid("Late Tool owner has invalid terminal evidence");
-          yield* retain(terminal.value);
+          const terminalError = retain(terminal.value);
+
+          if (terminalError !== undefined) return yield* terminalError;
         }
       }
     }

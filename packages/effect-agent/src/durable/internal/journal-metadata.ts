@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import { type RunId, type ToolCallId } from "../../core/Identifiers.ts";
 import {
   type CanonicalRecordEnvelope,
+  type PromptRecordEnvelope,
   type CompactionCreated,
   type ToolCallSettled,
   RecordId,
@@ -16,6 +17,8 @@ export const toolCallSettledRecordId = (
   turn: number,
   toolCallId: ToolCallId,
 ): RecordId => decodeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
+
+export type JournalRecordEnvelope = CanonicalRecordEnvelope | PromptRecordEnvelope;
 
 /** Metadata for one exact canonical prefix, including the exact selected Run evidence. */
 export interface JournalMetadata {
@@ -56,7 +59,7 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
     Array<{
       readonly sequence: number;
       readonly turn: number;
-      readonly callIds: ReadonlyArray<ToolCallId>;
+      readonly callIds: ReadonlyArray<string>;
     }>
   >();
 
@@ -81,7 +84,7 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
   const compactions: Array<{ readonly payload: CompactionCreated; readonly sequence: number }> = [];
 
   return {
-    add: (envelope: CanonicalRecordEnvelope): void => {
+    add: (envelope: JournalRecordEnvelope): void => {
       const payload = envelope.record.payload;
 
       if (
@@ -115,7 +118,16 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
         declarations.push({
           sequence: envelope.sequence,
           turn: payload.turn,
-          callIds: payload.toolOperations.map((operation) => operation.toolCallId),
+          callIds:
+            "toolOperations" in payload
+              ? payload.toolOperations.map((operation) => operation.toolCallId)
+              : payload.messages.content.flatMap((message) =>
+                  message.role === "assistant"
+                    ? message.content.flatMap((part) =>
+                        part.type === "tool-call" && !part.providerExecuted ? [part.id] : [],
+                      )
+                    : [],
+                ),
         });
         declarationsByRun.set(payload.runId, declarations);
       } else if (payload._tag === "ToolCallSettled") {
@@ -124,10 +136,10 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
         if (payload.runId === ownerRunId)
           settledById.set(envelope.record.recordId, {
             isFailure: payload.isFailure,
-            ...(payload.toolSelection === undefined
+            ...(!("toolSelection" in payload) || payload.toolSelection === undefined
               ? {}
               : { toolSelection: payload.toolSelection }),
-            ...(payload.budgetRejected === undefined
+            ...(!("budgetRejected" in payload) || payload.budgetRejected === undefined
               ? {}
               : { budgetRejected: payload.budgetRejected }),
           });
