@@ -23,7 +23,7 @@ Shared sign-in uses `https://auth.yielded.dev` as its OpenID issuer. Register cl
 `https://agent.yielded.dev/travel/auth/yielded/callback`. Set `AUTH_YIELDED_ISSUER`
 to that issuer and `AUTH_YIELDED_CLIENT_SECRET` to its separate client secret.
 The central GitHub app's callback stays at Auth. Direct GitHub sign-in remains
-under **Use an existing Agent account**, with callback
+with email and account switching under **Other sign-in options**, with callback
 `https://agent.yielded.dev/travel/auth/github/callback`. If it shares a GitHub OAuth
 app with Auth, register both exact callback entries and retain those needed by
 other consumers; see [GitHub's callback rules](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls). Set `AUTH_ORIGIN` to `https://agent.yielded.dev` and retain
@@ -85,8 +85,9 @@ verifies issuer, audience, nonce, PKCE and the signed identity before establishi
 an Agent session. Agent requests `max_age=240` so authentication stays within its
 five-minute evidence policy, including time to complete the callback. Auth starts
 GitHub sign-in automatically when its session is absent or older than that limit;
-the original `auth_time` is preserved. **Use another
-Yielded account** explicitly requests account selection; new permissions require
+the original `auth_time` is preserved. The initial screen shows one sign-in button;
+**Other sign-in options** contains account switching and the existing direct GitHub/email
+methods. **Use another Yielded account** explicitly requests account selection; new permissions require
 consent. Cancelling returns to login with a retry action. Auth
 and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
 The browser lab already consumes this Agent session, so the same login covers it;
@@ -126,7 +127,8 @@ vp install
 vp run -F @yielded/agent-example-travel-planner preview
 ```
 
-Open `https://127.0.0.1:4173/travel/` and accept the local certificate. Create an email account;
+Open `https://127.0.0.1:4173/travel/` and accept the local certificate. Expand
+**Other sign-in options** and create an email account;
 the terminal prints the file paths of locally delivered verification emails. After
 registration, sign in with a fresh email code. Connect the synthetic key
 `sk-preview-local` in Settings and send `complete travel cards fixture` to display

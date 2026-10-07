@@ -2801,12 +2801,36 @@
 }
 .login-switch {
   width: 100%;
-  margin: 8px 0 14px;
+  margin: 12px 0 0;
 }
 .login-quiet:not(:disabled):hover {
   color: var(--yl-text);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.login-hint {
+  margin: 10px 0 0;
+  color: var(--yl-text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+.login-options {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--yl-border);
+}
+.login-options > summary {
+  width: fit-content;
+  margin: 0 auto;
+  color: var(--yl-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.login-options > summary:hover {
+  color: var(--yl-text);
+}
+.login-options .login-note {
+  margin: 14px 0;
 }
 .login-divider {
   display: grid;

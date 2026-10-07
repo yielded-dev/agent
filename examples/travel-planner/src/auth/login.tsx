@@ -42,6 +42,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   const leave = useAtomSet(leaveLogin);
   const requestCode = useAtomSet(requestEmailCode);
   const verifyCode = useAtomSet(verifyEmailCode);
+  const [otherOptions, setOtherOptions] = useState(false);
   const [mode, setMode] = useState<"register" | "signin">("signin");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -78,15 +79,25 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             >
               Continue with Yielded →
             </button>
-            <button
-              className="login-quiet login-switch"
-              disabled={busy}
-              onClick={() => startOAuth({ provider: "yielded", returnTarget, selectAccount: true })}
+            <p className="login-hint">Uses your GitHub account.</p>
+            <details
+              className="login-options"
+              open={otherOptions}
+              onToggle={(event) => setOtherOptions(event.currentTarget.open)}
             >
-              Use another Yielded account
-            </button>
-            <details>
-              <summary>Use an existing Agent account</summary>
+              <summary>Other sign-in options</summary>
+              <button
+                className="login-quiet login-switch"
+                disabled={busy}
+                onClick={() =>
+                  startOAuth({ provider: "yielded", returnTarget, selectAccount: true })
+                }
+              >
+                Use another Yielded account
+              </button>
+              <p className="login-note">
+                For an older Agent account, use the same method you used before.
+              </p>
               <button
                 className="login-secondary"
                 disabled={busy}
@@ -94,51 +105,51 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
               >
                 <GithubMark /> Continue with GitHub
               </button>
-            </details>
-            <div className="login-divider">
-              <span>or use email</span>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                requestCode({ mode, email, returnTarget });
-              }}
-            >
-              <div className="login-modes" aria-label="Email account action">
-                <button
-                  type="button"
-                  aria-pressed={mode === "signin"}
-                  onClick={() => setMode("signin")}
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mode === "register"}
-                  onClick={() => setMode("register")}
-                >
-                  Create account
-                </button>
+              <div className="login-divider">
+                <span>or use email</span>
               </div>
-              <label htmlFor="login-email">Email address</label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                disabled={busy}
-              />
-              <button className="login-secondary" disabled={busy}>
-                {busy
-                  ? "Sending…"
-                  : mode === "register"
-                    ? "Create account with email"
-                    : "Send sign-in code"}
-              </button>
-            </form>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  requestCode({ mode, email, returnTarget });
+                }}
+              >
+                <div className="login-modes" aria-label="Email account action">
+                  <button
+                    type="button"
+                    aria-pressed={mode === "signin"}
+                    onClick={() => setMode("signin")}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={mode === "register"}
+                    onClick={() => setMode("register")}
+                  >
+                    Create account
+                  </button>
+                </div>
+                <label htmlFor="login-email">Email address</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={busy}
+                />
+                <button className="login-secondary" disabled={busy}>
+                  {busy
+                    ? "Sending…"
+                    : mode === "register"
+                      ? "Create account with email"
+                      : "Send sign-in code"}
+                </button>
+              </form>
+            </details>
           </>
         ) : (
           <form
@@ -208,10 +219,6 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             Sign-in was cancelled. You can start again when you’re ready.
           </p>
         )}
-        <p className="login-note">
-          Existing email and GitHub accounts stay separate until explicitly connected. Matching
-          email addresses never joins accounts.
-        </p>
       </section>
     </LoginShell>
   );
@@ -276,8 +283,7 @@ function LoginShell({
       </header>
       <main className="login-main">{children}</main>
       <footer className="login-foot">
-        Your Agent session covers the travel planner and browser lab. Signing out of Agent leaves
-        your Yielded Auth session active.
+        Your account works in the travel planner and browser lab.
       </footer>
     </div>
   );
