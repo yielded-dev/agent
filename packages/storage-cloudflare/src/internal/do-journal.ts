@@ -145,12 +145,12 @@ const makeRecordCache = () => {
 
       return prefix;
     },
-    put: (row: RecordRow) => {
+    put: (row: RecordRow, capturedBytes?: number) => {
       const id = key(row.thread_id, row.sequence);
       const prior = records.get(id);
 
       if (prior?.row === row) return;
-      const size = storedTextBytes(row.record_json);
+      const size = capturedBytes ?? storedTextBytes(row.record_json);
 
       if (prior !== undefined) releaseRecord(prior);
 
@@ -391,6 +391,11 @@ const makeJournal = (
         ),
     }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
 
+    yield* Effect.acquireRelease(
+      Effect.sync(() => state.invalidators.add(work.invalidate)),
+      () => Effect.sync(() => state.invalidators.delete(work.invalidate)),
+    );
+
     const workFailure = (cause: unknown) =>
       DoStorageError.make({
         operation: "publish Thread work",
@@ -434,9 +439,8 @@ const makeJournal = (
     const checkValueBound = (
       operation: string,
       value: string,
+      actualBytes = storedTextBytes(value),
     ): Effect.Effect<void, DoValueBoundExceeded> => {
-      const actualBytes = storedTextBytes(value);
-
       return actualBytes > maxStoredValueBytes
         ? Effect.fail(
             DoValueBoundExceeded.make({
@@ -651,14 +655,26 @@ const makeJournal = (
         });
       }
       // Archives store the full batch as one value, so their ceiling also bounds hot appends.
-      yield* checkValueBound("append canonical batch", request.batchJson);
-      yield* checkValueBound("append canonical batch", request.batchDigest);
-      yield* checkValueBound("append canonical batch", request.tailDigest);
-      yield* Effect.forEach(
-        request.records,
-        (record) => checkValueBound("append canonical record", record.recordJson),
-        { discard: true },
+      // The trusted append SPI pairs captured JSON with its exact UTF-8 width. Digests are ASCII.
+      yield* checkValueBound("append canonical batch", request.batchJson, request.batchBytes);
+      yield* checkValueBound(
+        "append canonical batch",
+        request.batchDigest,
+        request.batchDigest.length,
       );
+      yield* checkValueBound(
+        "append canonical batch",
+        request.tailDigest,
+        request.tailDigest.length,
+      );
+      for (const record of request.records) {
+        if (record.recordBytes > maxStoredValueBytes)
+          return yield* DoValueBoundExceeded.make({
+            actualBytes: record.recordBytes,
+            maxBytes: maxStoredValueBytes,
+            operation: "append canonical record",
+          });
+      }
 
       const recordIds: Array<string> = request.records.map((record) => record.recordId);
 
@@ -678,12 +694,14 @@ const makeJournal = (
       const recordIds: Array<string> = request.records.map((record) => record.recordId);
       const threadRows = yield* getThread(request.threadId);
 
-      const thread = yield* decodeSingleRow(
-        Schema.Array(ThreadRow),
-        "effect_agent_threads",
-        request.threadId,
-        threadRows,
-      );
+      const thread = threadRows.length === 1 ? threadRows[0] : undefined;
+
+      if (thread === undefined)
+        return yield* DoStorageCorruptionError.make({
+          table: "effect_agent_threads",
+          rowKey: request.threadId,
+          message: `Expected exactly one row but found ${threadRows.length}.`,
+        });
 
       if (request.producerEpoch !== thread.producer_epoch) {
         return yield* DoFenceRejected.make({
@@ -873,12 +891,13 @@ const makeJournal = (
           yield* sql`INSERT INTO effect_agent_record_runs ${sql.insert(members)}`.pipe(
             Effect.mapError(storageError("index canonical Run membership")),
           );
-        for (const { row } of group) {
+        for (const { row, record } of group) {
           recordCache.put(
             RecordRow.make({
               ...row,
               sequence: Schema.decodeSync(CanonicalSequence)(row.sequence),
             }),
+            record.recordBytes,
           );
           yield* failpoint("append:after-record-insert");
         }

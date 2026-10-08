@@ -1,4 +1,4 @@
-import { Context, Crypto, Effect, Option, Schema, Semaphore, Stream } from "effect";
+import { Context, Crypto, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
@@ -115,6 +115,11 @@ const validateBatchHeader = Schema.decodeSync(
 const validateBatchCount = Schema.decodeSync(
   Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
+
+const ContinuationBytes = Schema.Struct({
+  turnBytes: RunContinuation.fields.turnBytes,
+  terminalBytes: RunContinuation.fields.terminalBytes,
+});
 
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
 const captureFacts = (batch: CanonicalBatch) =>
@@ -1403,23 +1408,24 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         ),
       );
 
-      let record = captureRecord(
-        new RecordEnvelope(
-          {
-            recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
-            family: "thread",
-            schemaVersion: 1,
-            createdAt: last.createdAt,
-            deploymentId: last.deploymentId,
-            payload: continuation,
-          },
-          { disableChecks: true },
-        ),
-      ).canonical;
+      const header = {
+        recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
+        family: "thread" as const,
+        schemaVersion: 1 as const,
+        createdAt: last.createdAt,
+        deploymentId: last.deploymentId,
+      };
 
-      // Only these two natural-number fields change. Converge their encoded widths before
-      // capturing the final record, rather than encoding and copying the whole cursor each time.
-      const initialCursorBytes = canonicalRecordBytes(record);
+      // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
+      // Key order does not change byte width. Measure without capturing a provisional record,
+      // then compare against the final Schema encoding before accepting its accounting.
+      const provisional = {
+        ...header,
+        createdAt: DateTime.formatIso(header.createdAt),
+        payload: continuation,
+      } satisfies typeof RecordEnvelope.Encoded;
+
+      const initialCursorBytes = utf8ByteLength(JSON.stringify(provisional));
 
       const initialWidth =
         String(continuation.turnBytes).length + String(continuation.terminalBytes).length;
@@ -1442,8 +1448,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         turnBytes = nextTurnBytes;
         terminalBytes = nextTerminalBytes;
       }
-      continuation = yield* RunContinuation.makeEffect({
-        ...continuation,
+
+      const checkedBytes = yield* ContinuationBytes.makeEffect({
         turnBytes,
         terminalBytes,
       }).pipe(
@@ -1451,10 +1457,19 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           capacityFailure("Turn exceeds its incremental canonical byte budget"),
         ),
       );
-      record = captureRecord(
-        new RecordEnvelope({ ...record, payload: continuation }, { disableChecks: true }),
+
+      // Every other field was checked above; byte accounting changes only these counters.
+      continuation = new RunContinuation(
+        { ...continuation, ...checkedBytes },
+        { disableChecks: true },
+      );
+
+      const record = captureRecord(
+        new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
       ).canonical;
 
+      if (canonicalRecordBytes(record) !== turnBytes - turnBase)
+        return yield* failure("Continuation byte accounting differs from its Schema encoding");
       if (canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES)
         return yield* capacityFailure(
           "Encoded continuation exceeds 8192 bytes including its envelope",
@@ -1619,7 +1634,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         yield* prepare(owned, after);
 
-        const response = batch.records.find(
+        const response = owned.records.find(
           (record) => record.payload._tag === "ModelResponseRecorded",
         );
 
@@ -1641,11 +1656,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         });
 
         const bytes =
-          batch.records.reduce((total, record) => total + canonicalRecordBytes(record), 0) +
+          owned.records.reduce((total, record) => total + canonicalRecordBytes(record), 0) +
           MAX_RUN_CONTINUATION_BYTES +
           pending.bytes;
 
-        const records = batch.records.length + pending.records;
+        const records = owned.records.length + pending.records;
 
         yield* checkCapacity(progress, new Set(), { turn: response.payload.turn, bytes, records });
         reservations.set(response.recordId, {
@@ -1654,6 +1669,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           bytes,
           records,
         });
+
+        return owned;
       }),
     );
 

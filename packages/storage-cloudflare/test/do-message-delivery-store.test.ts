@@ -152,6 +152,7 @@ it("reuses complete lifecycle heads and rebuilds them after rollback", () => {
       ]),
       Effect.provideService(Tracer.Tracer, tracer),
       Effect.withTracerEnabled(true),
+      Effect.scoped,
     ),
   );
 });
@@ -204,6 +205,7 @@ it("enrolls lifecycle acknowledgement progress only while timed heads remain", (
             progress.push(kind);
           }),
       }),
+      Effect.scoped,
     ),
   );
 });
@@ -247,7 +249,7 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
 
       expect(Result.isFailure(direct) && direct.failure.operation).toBe("stored-value-bytes");
       expect(Result.isFailure(cached) && cached.failure.operation).toBe("stored-value-bytes");
-    }).pipe(Effect.provide([SqliteClient.layer({ storage }), BrowserCrypto.layer])),
+    }).pipe(Effect.provide([SqliteClient.layer({ storage }), BrowserCrypto.layer]), Effect.scoped),
   ));
 
 for (const [index, testCase] of messageDeliveryStoreConformanceCases.entries()) {

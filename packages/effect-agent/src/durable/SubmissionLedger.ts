@@ -1,5 +1,5 @@
 import type { Option, Stream } from "effect";
-import { Context, Duration, Effect, Schema } from "effect";
+import { Brand, Context, Duration, Effect, Schema } from "effect";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
@@ -18,10 +18,10 @@ import { RunUsageSummary } from "../core/Usage.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
 import { canonicalJson } from "./Digest.ts";
 import {
+  type BatchId,
   type RecordEnvelope,
   AbortRequested,
   ApprovalDecision,
-  BatchId,
   CanonicalSequence,
   DefinitionDigests,
   DeploymentId,
@@ -1258,9 +1258,11 @@ export class SubmissionLedger extends Context.Service<
   }
 >()("@effect-agent/thread/SubmissionLedger") {}
 
-const decodeBatchId = Schema.decodeSync(BatchId);
-const decodeRecordId = Schema.decodeSync(RecordId);
-const decodeSettlementId = Schema.decodeSync(SettlementId);
+// These constructors produce nonempty strings from fixed prefixes or validated nonempty IDs.
+// Keep the canonical Schemas as the validation boundary for incoming and persisted values.
+const makeBatchId = Brand.nominal<BatchId>();
+const makeRecordId = Brand.nominal<RecordId>();
+const makeSettlementId = Brand.nominal<SettlementId>();
 
 /**
  * Deterministic identity rules shared by every adapter and the durable coordinator. The batch
@@ -1269,31 +1271,31 @@ const decodeSettlementId = Schema.decodeSync(SettlementId);
  * exactly-once-canonical across Attempts.
  */
 export const submissionInputBatchId = (submissionId: SubmissionId): BatchId =>
-  decodeBatchId(`submission-input:${submissionId}`);
+  makeBatchId(`submission-input:${submissionId}`);
 
 /** Deterministic canonical record identity of one Submission's `UserInputRecorded` record. */
 export const submissionInputRecordId = (submissionId: SubmissionId): RecordId =>
-  decodeRecordId(`input:${submissionId}`);
+  makeRecordId(`input:${submissionId}`);
 
 /** Deterministic `SettlementId` for one Submission: `settlement:{sid}`. */
 export const submissionSettlementId = (submissionId: SubmissionId): SettlementId =>
-  decodeSettlementId(`settlement:${submissionId}`);
+  makeSettlementId(`settlement:${submissionId}`);
 
 /** Deterministic batch identity of one Submission's canonical `SubmissionSettled` append. */
 export const submissionSettlementBatchId = (submissionId: SubmissionId): BatchId =>
-  decodeBatchId(`submission-settlement:${submissionId}`);
+  makeBatchId(`submission-settlement:${submissionId}`);
 
 /** Deterministic canonical record identity of one Submission's `SubmissionSettled` record. */
 export const submissionSettlementRecordId = (submissionId: SubmissionId): RecordId =>
-  decodeRecordId(`settlement:${submissionId}`);
+  makeRecordId(`settlement:${submissionId}`);
 
 /** Deterministic batch identity of one Submission's canonical `AbortRequested` append. */
 export const submissionAbortBatchId = (submissionId: SubmissionId): BatchId =>
-  decodeBatchId(`submission-abort:${submissionId}`);
+  makeBatchId(`submission-abort:${submissionId}`);
 
 /** Deterministic canonical record identity of one Submission's `AbortRequested` record. */
 export const submissionAbortRecordId = (submissionId: SubmissionId): RecordId =>
-  decodeRecordId(`abort:${submissionId}`);
+  makeRecordId(`abort:${submissionId}`);
 
 /** Destination policy, captured when the ledger is acquired. It runs inside fresh admission's
  * serialization after replay lookup. The host must keep it bounded and must not reenter admit.
