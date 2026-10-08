@@ -8,10 +8,11 @@ description: Keep conversations across runs in one application Scope.
 Use `InMemory.layer` from `@yielded/agent` to share conversation history across runs:
 
 ```ts twoslash
-import { planner } from "./node-agent.ts";
 // ---cut---
 import { AgentRuntime, InMemory } from "@yielded/agent";
 import { Effect } from "effect";
+
+import { planner } from "./node-agent.ts";
 
 const conversation = Effect.gen(function* () {
   const first = yield* AgentRuntime.run(planner, "Plan a trip to Lisbon");

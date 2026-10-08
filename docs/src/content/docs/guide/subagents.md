@@ -35,6 +35,7 @@ For background work, expose start and follow-up tools instead:
 
 ```ts twoslash
 import { Subagent } from "@yielded/agent";
+
 import { Summarize } from "./subagent-basics.ts";
 // ---cut---
 const background = Subagent.background(Summarize.target, {

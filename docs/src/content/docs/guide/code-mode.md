@@ -38,15 +38,15 @@ Generated code calls `warehouse.invoices({ region: "emea" })` and computes its a
 rows. The linked warehouse example replaces the fixed data with a brokered SQL query.
 
 ```ts twoslash
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 // @types: @cloudflare/workers-types
 import { InMemory, CodeMode, Agent, AgentRuntime } from "@yielded/agent";
-import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { CloudflareCodeMode } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { Effect, Layer, Redacted, Schema } from "effect";
+import { WorkerEnvironment } from "effect-cf";
 import { Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
-import { WorkerEnvironment } from "effect-cf";
 
 // In an application, Wrangler generates these binding types.
 declare global {

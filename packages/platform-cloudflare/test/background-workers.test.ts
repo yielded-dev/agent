@@ -371,6 +371,8 @@ it("delivers an accepted worker update before completion after eviction with onl
           (await readCanonical(started.worker.threadId)).filter(
             ({ record }) => record.payload._tag === "ToolCallUnknown",
           ).length,
+        // Alarm-driven recovery may outlive Vitest's default polling deadline.
+        { timeout: 5_000 },
       )
       .toBe(1);
     // The native update call lost its acknowledgement; ordinary tool recovery must not replay it.

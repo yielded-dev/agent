@@ -36,9 +36,9 @@ NodeDurableHost.layer;
 For direct module access, unbundled startup, or lazy-loading boundaries, use:
 
 ```ts
+import * as NodeDurableHost from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
-import * as NodeDurableHost from "@yielded/agent-platform-node/node-durable-host";
 ```
 
 Both forms support tree shaking in bundles. Native Node evaluates every namespace re-exported

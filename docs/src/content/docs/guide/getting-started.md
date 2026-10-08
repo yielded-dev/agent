@@ -25,9 +25,9 @@ for compatibility.
 Save as `agent.ts`:
 
 ```ts
-import { InMemory, Agent, AgentRuntime } from "@yielded/agent";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { BunRuntime } from "@effect/platform-bun";
+import { InMemory, Agent, AgentRuntime } from "@yielded/agent";
 import { Config, Console, Effect, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";

@@ -53,8 +53,8 @@ environment, then copies only those names. `LocalSandbox.layer` supplies the Nod
 ```ts twoslash
 // @types: node
 import { NodeRuntime } from "@effect/platform-node";
-import { NetworkDisabled, Sandbox, SandboxRequest } from "@yielded/agent/sandbox";
 import { LocalSandbox } from "@yielded/agent-sandbox-local";
+import { NetworkDisabled, Sandbox, SandboxRequest } from "@yielded/agent/sandbox";
 import { Console, Duration, Effect, Stream } from "effect";
 
 const request = SandboxRequest.make({

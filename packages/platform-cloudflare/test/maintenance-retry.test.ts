@@ -311,54 +311,67 @@ describe("maintenance retry deadlines", () => {
     ));
   // Regression: https://github.com/yielded-dev/agent/commit/8085bda
   it("drains newly enrolled host work when instrumentation returns fresh SQL handles", () =>
-    runInDurableObject(stubFor(`instrumented-due-queue-${crypto.randomUUID()}`), (instance) =>
-      instance[DurableObject.RunSymbol](
-        Effect.gen(function* () {
-          const context = yield* DurableObjectContext;
-          const storage = instrumentedStorage(context.ctx.storage);
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const thread = `instrumented-due-queue-${crypto.randomUUID()}`;
 
-          const ctx = new Proxy(context.ctx, {
-            get(target, property) {
-              if (property === "storage") return storage;
-              const value = Reflect.get(target, property, target);
+        // This fixture drives its own maintenance service; keep the native
+        // alarm from racing it through the original storage handle.
+        yield* TestClock.setTime(Date.now() + 86_400_000);
+        maintenanceClocks.set(thread, yield* Clock.Clock);
+        yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(thread)));
+        yield* Effect.promise(() =>
+          runInDurableObject(stubFor(thread), (instance) =>
+            instance[DurableObject.RunSymbol](
+              Effect.gen(function* () {
+                const context = yield* DurableObjectContext;
+                const storage = instrumentedStorage(context.ctx.storage);
 
-              return typeof value === "function" ? value.bind(target) : value;
-            },
-          });
+                const ctx = new Proxy(context.ctx, {
+                  get(target, property) {
+                    if (property === "storage") return storage;
+                    const value = Reflect.get(target, property, target);
 
-          let delivered = 0;
+                    return typeof value === "function" ? value.bind(target) : value;
+                  },
+                });
 
-          yield* Effect.gen(function* () {
-            const maintenance = yield* ThreadMaintenance;
-            const gate = yield* ThreadMutationGate;
+                let delivered = 0;
 
-            yield* maintenance.pass;
-            for (let input = 0; input < 12; input++) {
-              yield* gate.schedule("test:instrumented-host", 0);
-              yield* maintenance.pass;
-              expect(delivered).toBe(input + 1);
-            }
-          }).pipe(
-            Effect.provide(
-              ThreadMaintenance.layer.pipe(Layer.provideMerge(ThreadMutationGate.layer)),
-            ),
-            Effect.provideService(DurableObjectContext, { ...context, ctx }),
-            Effect.provideService(ThreadHostMaintenance, {
-              lanes: [
-                {
-                  id: "test:instrumented-host",
-                  dispatchTimeoutMillis: 1_000,
-                  run: Effect.sync(() => {
-                    delivered++;
+                yield* Effect.gen(function* () {
+                  const maintenance = yield* ThreadMaintenance;
+                  const gate = yield* ThreadMutationGate;
 
-                    return Option.none();
+                  yield* maintenance.pass;
+                  for (let input = 0; input < 12; input++) {
+                    yield* gate.schedule("test:instrumented-host", 0);
+                    yield* maintenance.pass;
+                    expect(delivered).toBe(input + 1);
+                  }
+                }).pipe(
+                  Effect.provide(
+                    ThreadMaintenance.layer.pipe(Layer.provideMerge(ThreadMutationGate.layer)),
+                  ),
+                  Effect.provideService(DurableObjectContext, { ...context, ctx }),
+                  Effect.provideService(ThreadHostMaintenance, {
+                    lanes: [
+                      {
+                        id: "test:instrumented-host",
+                        dispatchTimeoutMillis: 1_000,
+                        run: Effect.sync(() => {
+                          delivered++;
+
+                          return Option.none();
+                        }),
+                      },
+                    ],
                   }),
-                },
-              ],
-            }),
-          );
-        }),
-      ),
+                );
+              }),
+            ),
+          ),
+        );
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
     ));
 
   // Regression: https://linear.app/reve-ai/issue/KOM-331

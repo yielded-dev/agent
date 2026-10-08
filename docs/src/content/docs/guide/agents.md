@@ -109,10 +109,11 @@ Models are execution requirements: use `Effect.provide` for a Run, `Stream.provi
 stream, and `Layer.provide` for subagent handlers.
 
 ```ts twoslash
-import { Effect, Layer, Stream } from "effect";
 import { AgentRuntime, Subagent } from "@yielded/agent";
-import { ModelLive, planner } from "./node-agent.ts";
+import { Effect, Layer, Stream } from "effect";
+
 import { Research } from "./delegation.ts";
+import { ModelLive, planner } from "./node-agent.ts";
 // ---cut---
 const program = AgentRuntime.run(planner, "Plan a weekend in Lisbon.").pipe(
   Effect.provide(ModelLive),
@@ -140,8 +141,9 @@ The model Layer must have no construction error. Put fallible setup in the enclo
 Effect. When constructing a service that needs to reuse a model, capture its client dependencies:
 
 ```ts twoslash
-import { Effect } from "effect";
 import { AgentRuntime } from "@yielded/agent";
+import { Effect } from "effect";
+
 import { ModelLive, planner } from "./node-agent.ts";
 // ---cut---
 const captured = Effect.gen(function* () {

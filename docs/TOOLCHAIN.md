@@ -16,7 +16,7 @@ Commit the Bun lockfile; CI installs with `--frozen-lockfile`.
 | Tool                                                    | Repository version   |
 | ------------------------------------------------------- | -------------------- |
 | Bun                                                     | `1.4.2`              |
-| Vite+                                                   | `0.3.3`              |
+| Vite+                                                   | `1.1.0`              |
 | Alchemy and its Cloudflare runtime                      | `2.0.0-beta.80`      |
 | Effect and its provider/platform/SQL/Atom/test packages | `4.0.0`              |
 | `effect-cf`                                             | `0.53.0`             |
@@ -40,9 +40,9 @@ The root also installs Alchemy's optional `@effect/platform-bun` peer at the sha
 version so its Bun entry points remain available.
 Vite+ supplies Vitest except in the two Cloudflare packages, whose Workers pool requires a
 direct catalog-pinned Vitest dependency and a Vite task. Run those tasks through `vp run`.
-The repository retains Vitest 4.1.11 for the Workers pool despite `@effect/vitest` declaring
-a Vitest 5 peer minimum, as it did on Effect rc.117. Verify this compatibility with the
-existing suites when either dependency changes.
+Vite+ 1.1.0 bundles Vitest 5.0.3, matching the catalog pin and Effect's test integration.
+Cloudflare tests use `@cloudflare/vitest-plugin` 1.4.0. Keep the Vitest catalog pin
+equal to Vite+'s bundled version and verify upgrades with the existing suites.
 Operational harnesses under `tooling/*` also use Vite tasks for Miniflare tests.
 
 The root temporarily patches Effect 4.0.0 to reuse streaming response decoders when

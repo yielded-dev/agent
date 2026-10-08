@@ -17,6 +17,7 @@ For the default input and result contract, the declaration is optional:
 
 ```ts twoslash
 import { Subagent } from "@yielded/agent";
+
 import { HotelResearcher } from "./background-updates.ts";
 
 // Before: an explicit declaration, with the default name and mappings.
@@ -59,6 +60,7 @@ Map child failures when constructing its handler Layer:
 ```ts twoslash
 import { Subagent } from "@yielded/agent";
 import { Layer } from "effect";
+
 import { Research, ResearchFailed } from "./delegation-custom.ts";
 import { ModelLive } from "./node-agent.ts";
 import { TravelToolsLive } from "./tools.ts";

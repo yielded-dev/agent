@@ -191,8 +191,12 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
     const run = <A, E>(
       body: Effect.Effect<A, E, DurableAgentRuntime | ThreadStore | DurableObjectContext>,
     ) =>
-      runInDurableObject(stubFor(thread), (_instance, state) =>
-        Effect.runPromise(
+      runInDurableObject(stubFor(thread), async (_instance, state) => {
+        // The constructor arms an immediate alarm before this fixture's future clock applies.
+        // Only the manually driven runtime owns this test's unregistered Agent.
+        await state.storage.deleteAlarm();
+
+        return Effect.runPromise(
           body.pipe(
             Effect.provideService(DurableObjectContext, { ctx: state, env }),
             Effect.provide(
@@ -214,8 +218,8 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
             ),
             Effect.provideService(Clock.Clock, clock),
           ),
-        ),
-      );
+        );
+      });
 
     let receipts: { readonly receipt: Receipt; readonly joined: Receipt } | undefined;
 

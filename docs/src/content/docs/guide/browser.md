@@ -127,9 +127,9 @@ the controller is built. The initial attachment read has no cached URL; authoriz
 attachment in the host before exposing its tools.
 
 ```ts twoslash
-import * as NativeBrowser from "@yielded/agent-platform-cloudflare/browser-use";
-import type { BrowserSession } from "@yielded/agent-platform-cloudflare/browser-session";
 import { BrowserUse } from "@yielded/agent";
+import type { BrowserSession } from "@yielded/agent-platform-cloudflare/browser-session";
+import * as NativeBrowser from "@yielded/agent-platform-cloudflare/browser-use";
 import { Effect, Layer } from "effect";
 
 declare const session: BrowserSession;
@@ -265,8 +265,8 @@ observe → DecisionModel: operation + target ──→ guarded input → observ
 ```
 
 ```ts twoslash
-import { BrowserUse } from "@yielded/agent";
 import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
+import { BrowserUse } from "@yielded/agent";
 import { Config, Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 
@@ -518,8 +518,8 @@ import {
   InteractiveBrowserPolicy,
 } from "@yielded/agent/interactive-browser";
 import { Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/http";
 import { WorkerEnvironment } from "effect-cf";
+import { FetchHttpClient } from "effect/http";
 
 // In an application, Wrangler generates these binding types.
 declare global {

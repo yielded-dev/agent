@@ -1,4 +1,4 @@
-import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig, type UserConfig } from "vite-plus";
 
 // Ignore generated Vite files and node_modules directory listings, while
@@ -7,15 +7,17 @@ const run: NonNullable<UserConfig["run"]> = {
   tasks: {
     test: {
       command: "vitest run",
-      env: ["BROWSER_TEST_EXECUTABLE", "VITEST_MAX_WORKERS"],
-      input: [
-        { auto: true },
-        { pattern: "bun.lock", base: "workspace" },
-        { pattern: "!**/node_modules", base: "workspace" },
-        { pattern: "!**/node_modules/.vite*", base: "workspace" },
-        { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-      ],
-      output: [],
+      cache: {
+        env: ["BROWSER_TEST_EXECUTABLE", "VITEST_MAX_WORKERS"],
+        input: [
+          { auto: true },
+          { pattern: "bun.lock", base: "workspace" },
+          { pattern: "!**/node_modules", base: "workspace" },
+          { pattern: "!**/node_modules/.vite*", base: "workspace" },
+          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+        ],
+        output: [],
+      },
     },
   },
 };
@@ -23,10 +25,8 @@ const run: NonNullable<UserConfig["run"]> = {
 // Two lanes, one runner (WP0 probe contract, D-P6-7 Fallback A):
 //
 // - `workerd` — tests execute inside workerd against real SQLite-backed Thread Durable
-//   Objects (`@cloudflare/vitest-pool-workers` 0.21.x via its `cloudflareTest` Vite plugin;
-//   `defineWorkersConfig` no longer exists on the vitest 4 line). The 0.21.x pool has no
-//   `isolatedStorage`: Durable Object storage is SHARED across tests within a run, so every
-//   suite mints a unique Thread name per case.
+//   Objects via `cloudflareTest`. Durable Object storage is shared across tests within
+//   a run, so every suite mints a unique Thread name per case.
 // - `restart` — Node-side Miniflare programmatic runtimes for restart-persistence evidence
 //   (dispose/reopen over one persist directory); these spawn real runtimes and HTTP
 //   listeners and cannot run inside workerd.

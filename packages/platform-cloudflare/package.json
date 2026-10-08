@@ -51,7 +51,7 @@
     "puppeteer-core": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/vitest-plugin": "catalog:",
     "@cloudflare/workers-types": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-d1": "catalog:",
@@ -62,6 +62,7 @@
     "esbuild": "catalog:",
     "miniflare": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },

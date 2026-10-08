@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types", "node"]
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types", "node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts", "vite.config.ts"]
 }

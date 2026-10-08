@@ -32,7 +32,9 @@
     "esbuild": "catalog:",
     "miniflare": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:",
+    "vitest": "catalog:",
     "wrangler": "catalog:"
   }
 }
