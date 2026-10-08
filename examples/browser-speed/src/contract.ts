@@ -15,7 +15,17 @@ export const Task = Schema.Struct({
 
 export type Task = typeof Task.Type;
 export const Board = Schema.Array(Task).check(Schema.isMaxLength(50));
-export const Scenario = Schema.Literals(["create", "triage", "batch", "custom", "wikipedia"]);
+
+export const Scenario = Schema.Literals([
+  "create",
+  "triage",
+  "batch",
+  "custom",
+  "wikipedia",
+  "coffee",
+  "shop",
+]);
+
 export type Scenario = typeof Scenario.Type;
 export const Mode = Schema.Literals(["scripted", "agent", "batched"]);
 export type Mode = typeof Mode.Type;
@@ -23,12 +33,16 @@ export type Mode = typeof Mode.Type;
 export const ModelId = Schema.Literals([
   "gpt-6-luna",
   "gpt-6-sol",
+  "gpt-6.1-sol",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
 ]);
 
 export type ModelId = typeof ModelId.Type;
-export const Grounding = Schema.Literals(["direct", "jev"]);
-export const WikiDriver = Schema.Literals(["model", "jev"]);
+/**
+ * `model`: an agent picks observed refs. `jev`: Jev decides every step, without an agent.
+ * `hybrid`: Jev drives a store task first; when it stops short, a model agent continues.
+ */
+export const Driver = Schema.Literals(["model", "jev", "hybrid"]);
 export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
 export const ServiceTier = Schema.Literals(["fast", "default"]);
 
@@ -60,11 +74,35 @@ export const WikiRace = Schema.Struct({
   path: Schema.Array(WikiHop),
 });
 
-export const modelChoices: ReadonlyArray<{ id: ModelId; label: string }> = [
+// Public https store pages only: no IP literals, ports or credentials in the address.
+export const ShopRequest = Schema.Struct({
+  url: Schema.String.check(
+    Schema.isMaxLength(500),
+    Schema.isPattern(/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]\S*)?$/i),
+  ),
+  item: Schema.NonEmptyString.check(Schema.isMaxLength(120)),
+});
+
+export type ShopRequest = typeof ShopRequest.Type;
+export const defaultShopItem = "a bag of natural process coffee";
+
+export const shopPrompt = (shop: ShopRequest) =>
+  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill each checkout step with the test buyer and click Continue after each step. Leave marketing boxes unchecked. Fill the test card on the payment step, then stop: never place the order.`;
+
+export const modelChoices: ReadonlyArray<{
+  id: ModelId;
+  label: string;
+  /** The model rejects reasoning effort "none"; runs use "low" instead. */
+  requiresReasoning?: true;
+}> = [
   { id: "gpt-6-luna", label: "GPT-6 Luna" },
   { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true },
   { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 · Workers AI" },
 ];
+
+export const requiresReasoning = (model: string) =>
+  modelChoices.some((choice) => choice.id === model && choice.requiresReasoning === true);
 
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
@@ -77,12 +115,12 @@ export const RunInput = Schema.Struct({
   prompt: Schema.String.check(Schema.isMaxLength(2_000)),
   screenshots: Schema.Boolean,
   liveView: Schema.Boolean,
+  driver: Schema.optionalKey(Driver),
   model: Schema.optionalKey(ModelId),
-  grounding: Schema.optionalKey(Grounding),
   reasoning: Schema.optionalKey(Reasoning),
   serviceTier: Schema.optionalKey(ServiceTier),
   wikipedia: Schema.optionalKey(WikipediaChallenge),
-  wikiDriver: Schema.optionalKey(WikiDriver),
+  shop: Schema.optionalKey(ShopRequest),
 });
 
 export type RunInput = typeof RunInput.Type;
@@ -183,6 +221,10 @@ export const Snapshot = Schema.Struct({
     Schema.Struct({ id: ModelId, label: Schema.String, configured: Schema.Boolean }),
   ),
   jevConfigured: Schema.Boolean,
+  /** The field-text model a Jev task-board run would use; null when none is configured. */
+  jevTextModel: Schema.NullOr(Schema.String),
+  /** Public labs run only with visitor keys and have no scripted baseline. */
+  public: Schema.Boolean,
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
   image: Schema.NullOr(Schema.String),
@@ -210,15 +252,29 @@ const headers = {
   "x-lab-session": Schema.String.check(Schema.isUUID()),
 };
 
+/** Visitor-owned provider keys for one run. The lab never stores or reports them. */
+export const VisitorKey = Schema.String.check(Schema.isPattern(/^[\x21-\x7e]{16,512}$/));
+
+const visitorKeyHeaders = {
+  "x-lab-openai-key": Schema.optionalKey(VisitorKey),
+  "x-lab-typesafe-key": Schema.optionalKey(VisitorKey),
+  "x-lab-openrouter-key": Schema.optionalKey(VisitorKey),
+};
+
+/** A travel planner account signed in on this origin. Funded accounts run on the lab's keys. */
+export const Account = Schema.Struct({ displayName: Schema.String, funded: Schema.Boolean });
+export type Account = typeof Account.Type;
+
 export const LabApi = HttpApi.make("BrowserSpeedLab").add(
   HttpApiGroup.make("lab").add(
+    HttpApiEndpoint.get("account", "/api/account", { headers, success: Schema.NullOr(Account) }),
     HttpApiEndpoint.get("snapshot", "/api/snapshot", {
       headers,
       success: Snapshot,
       error: LabError,
     }),
     HttpApiEndpoint.post("run", "/api/run", {
-      headers,
+      headers: { ...headers, ...visitorKeyHeaders },
       payload: RunInput,
       success: Report,
       error: LabError,
@@ -251,6 +307,21 @@ export const scenarios = [
       'Create three tasks named "Write launch notes", "Record demo", and "Publish release", each assigned to Alex with High priority and Todo status. Then mark "Write launch notes" Done. Leave existing tasks unchanged.',
   },
 ] as const;
+
+/** A real store, outside the task-board presets: there is no scripted baseline or board verifier. */
+export const storeTask = {
+  id: "coffee",
+  title: "Check out a bag of coffee",
+  detail: "A real store, hedge.coffee · test details, never pays",
+  prompt:
+    "On the Hedge Coffee store, open one coffee and click Add To Cart once. Then open the cart and click Checkout. Fill each checkout step with the test buyer and click Continue after the email and delivery steps; choose shipping. Leave the mailing-list box unchecked. On the payment step, fill the test card, then stop: never click Continue, Purchase or Place order there.",
+} as const;
+
+export const shopTask = {
+  id: "shop",
+  title: "Check out on any store",
+  detail: "Your store link · test details, never pays · not verified",
+} as const;
 
 export const seed: ReadonlyArray<Task> = [
   { id: 1, title: "Review onboarding", assignee: "Sam", priority: "Medium", status: "Todo" },
@@ -286,6 +357,8 @@ export const verify = (scenario: Scenario, board: ReadonlyArray<Task>): boolean 
   return (
     scenario !== "custom" &&
     scenario !== "wikipedia" &&
+    scenario !== "coffee" &&
+    scenario !== "shop" &&
     expected.length === board.length &&
     expected.every((task) => {
       const actual = board.find((value) => value.id === task.id);

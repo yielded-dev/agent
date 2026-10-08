@@ -2,12 +2,19 @@ import { Cause, Effect, Option, Predicate, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
-import { LabApi, Report, type BrowserEngine, type ModelId, type RunInput } from "./contract.ts";
+import {
+  LabApi,
+  Report,
+  VisitorKey,
+  type BrowserEngine,
+  type ModelId,
+  type RunInput,
+} from "./contract.ts";
 
 export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/client", {
   api: LabApi,
   httpClient: FetchHttpClient.layer,
-  baseUrl: "",
+  baseUrl: import.meta.env.BASE_URL.replace(/\/$/, ""),
 }) {}
 
 const sessionId = crypto.randomUUID();
@@ -23,6 +30,66 @@ export const historyAtom = Atom.make<ReadonlyArray<ClientSample>>([]);
 export const selectedAtom = Atom.make<string | null>(null);
 
 const headers = { "x-lab-session": sessionId };
+
+/** Visitor keys stay in this browser and travel only as headers on run requests. */
+export const ProviderKeys = Schema.Struct({
+  typesafe: Schema.String,
+  openrouter: Schema.String,
+  openai: Schema.String,
+  remember: Schema.Boolean,
+});
+
+export type ProviderKeys = typeof ProviderKeys.Type;
+
+const keyStorage = "yielded-browser-use-keys-v1";
+const emptyKeys: ProviderKeys = { typesafe: "", openrouter: "", openai: "", remember: false };
+const decodeKeys = Schema.decodeUnknownOption(Schema.fromJsonString(ProviderKeys));
+const encodeKeys = Schema.encodeSync(Schema.fromJsonString(ProviderKeys));
+
+// Storage can be missing or blocked (private windows, tests); keys then last for this page only.
+const storedKeys = (): ProviderKeys => {
+  try {
+    const value = localStorage.getItem(keyStorage) ?? sessionStorage.getItem(keyStorage);
+
+    return value === null ? emptyKeys : Option.getOrElse(decodeKeys(value), () => emptyKeys);
+  } catch {
+    return emptyKeys;
+  }
+};
+
+export const keysAtom = Atom.make(storedKeys()).pipe(Atom.keepAlive);
+
+export const saveKeysAtom = Atom.fn<ProviderKeys>()(
+  Effect.fnUntraced(function* (keys, get) {
+    get.set(keysAtom, keys);
+    yield* Effect.sync(() => {
+      try {
+        if (keys.remember) {
+          localStorage.setItem(keyStorage, encodeKeys(keys));
+          sessionStorage.removeItem(keyStorage);
+        } else {
+          localStorage.removeItem(keyStorage);
+          sessionStorage.setItem(keyStorage, encodeKeys(keys));
+        }
+      } catch {
+        // Keys remain in memory for this page.
+      }
+    });
+  }),
+);
+
+export const validKey = (value: string) => Schema.is(VisitorKey)(value.trim());
+
+const keyHeaders = (keys: ProviderKeys) => ({
+  ...(validKey(keys.openai) ? { "x-lab-openai-key": keys.openai.trim() } : {}),
+  ...(validKey(keys.typesafe) ? { "x-lab-typesafe-key": keys.typesafe.trim() } : {}),
+  ...(validKey(keys.openrouter) ? { "x-lab-openrouter-key": keys.openrouter.trim() } : {}),
+});
+
+export const accountAtom = LabClient.query("lab", "account", { headers });
+
+/** The travel planner signs visitors in on this origin and returns them to the lab. */
+export const signInUrl = `/travel/login?return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
 
 const snapshotQuery = LabClient.query("lab", "snapshot", {
   headers,
@@ -53,7 +120,7 @@ export const runAtom = LabClient.runtime.fn<
 
     return yield* Effect.gen(function* () {
       const models =
-        input.wikiDriver === "jev"
+        input.driver === "jev"
           ? [undefined]
           : input.compareModels?.length
             ? input.compareModels
@@ -88,13 +155,11 @@ export const runAtom = LabClient.runtime.fn<
 
         const report = yield* Reactivity.mutation(
           client.lab.run({
-            headers,
+            headers: { ...headers, ...keyHeaders(get(keysAtom)) },
             payload: {
               ...request,
               engine,
-              ...(input.wikiDriver !== "jev" &&
-              input.mode !== "scripted" &&
-              !model?.startsWith("@cf/")
+              ...(input.driver !== "jev" && input.mode !== "scripted" && !model?.startsWith("@cf/")
                 ? {
                     ...(reasoning === undefined ? {} : { reasoning }),
                     ...(serviceTier === undefined ? {} : { serviceTier }),
@@ -180,6 +245,8 @@ const sameWorkload = (value: Report, report: Report) =>
   value.input.scenario === report.input.scenario &&
   value.input.wikipedia?.start === report.input.wikipedia?.start &&
   value.input.wikipedia?.target === report.input.wikipedia?.target &&
+  value.input.shop?.url === report.input.shop?.url &&
+  value.input.shop?.item === report.input.shop?.item &&
   value.input.mode === report.input.mode &&
   value.timing === report.timing &&
   (value.timing === "page-ready-v1" || value.input.temperature === report.input.temperature) &&
@@ -213,8 +280,7 @@ export const cohort = (samples: ReadonlyArray<ClientSample>, report: Report) =>
     ({ report: value }) =>
       sameWorkload(value, report) &&
       value.model === report.model &&
-      settingsKey(value) === settingsKey(report) &&
-      (value.input.grounding ?? "direct") === (report.input.grounding ?? "direct"),
+      settingsKey(value) === settingsKey(report),
   );
 
 const servedTiers = (reports: ReadonlyArray<Report>) =>
@@ -231,14 +297,14 @@ const servedTiers = (reports: ReadonlyArray<Report>) =>
     .join("+") || "unknown";
 
 const settingsKey = (report: Report) =>
-  `${report.input.engine ?? "chromium"}/${report.browserVersion ?? "unrecorded"}/${report.browserRevision ?? "unrecorded"}/${report.commandTimeoutMillis ?? 15_000}/${report.input.wikiDriver ?? "model"}/${report.input.reasoning ?? "provider-default"}/${report.input.serviceTier ?? "provider-default"}`;
+  `${report.input.engine ?? "chromium"}/${report.browserVersion ?? "unrecorded"}/${report.browserRevision ?? "unrecorded"}/${report.commandTimeoutMillis ?? 15_000}/${report.input.driver ?? "model"}/${report.input.reasoning ?? "provider-default"}/${report.input.serviceTier ?? "provider-default"}`;
 
 export const comparisons = (samples: ReadonlyArray<ClientSample>, report: Report) => {
   const groups = new Map<string, Array<Report>>();
 
   for (const { report: candidate } of samples) {
     if (!sameWorkload(candidate, report)) continue;
-    const key = `${candidate.model}/${candidate.input.grounding ?? "direct"}/${settingsKey(candidate)}`;
+    const key = `${candidate.model}/${settingsKey(candidate)}`;
     const group = groups.get(key) ?? [];
 
     group.push(candidate);
@@ -251,18 +317,17 @@ export const comparisons = (samples: ReadonlyArray<ClientSample>, report: Report
     browserVersion: reports[0]?.browserVersion,
     browserRevision: reports[0]?.browserRevision,
     model: reports[0]?.model ?? "none",
-    wikiDriver: reports[0]?.input.wikiDriver ?? "model",
-    grounding: reports[0]?.input.grounding ?? "direct",
+    driver: reports[0]?.input.driver ?? "model",
     reasoning:
-      reports[0]?.input.wikiDriver === "jev"
+      reports[0]?.input.driver === "jev"
         ? "n/a"
         : (reports[0]?.input.reasoning ??
           (reports[0]?.model.startsWith("@cf/") ? "n/a" : "provider-default")),
     serviceTier:
-      reports[0]?.input.wikiDriver === "jev"
+      reports[0]?.input.driver === "jev"
         ? "n/a"
         : (reports[0]?.input.serviceTier ?? "provider-default"),
-    servedTier: reports[0]?.input.wikiDriver === "jev" ? "n/a" : servedTiers(reports),
+    servedTier: reports[0]?.input.driver === "jev" ? "n/a" : servedTiers(reports),
     count: reports.length,
     started: reports.filter(flowStarted).length,
     preparationFailed: reports.filter((value) => !flowStarted(value) && value.status !== "running")

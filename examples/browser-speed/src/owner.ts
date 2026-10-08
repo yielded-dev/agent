@@ -10,8 +10,11 @@ import {
   browserCommandTimeoutMillis,
   defaultChallenge,
   racePrompt,
+  requiresReasoning,
   Report,
   scenarios,
+  shopPrompt,
+  storeTask,
   type ModelApi,
   type ModelId,
   type RunInput,
@@ -20,7 +23,15 @@ import {
 import type { connectKitesurf } from "./kitesurf.ts";
 import { executeTask } from "./runner.ts";
 import { makeTrace, Trace } from "./telemetry.ts";
+import type { textModelLayer } from "./text-model.ts";
 import { normalizeTitle } from "./wikipedia.ts";
+
+/** Validated provider keys for one run: the visitor's, or the lab's for a funded account. */
+export interface VisitorKeys {
+  readonly openai?: string;
+  readonly typesafe?: string;
+  readonly openrouter?: string;
+}
 
 export const Control = Schema.Struct({
   version: Schema.Literal(1),
@@ -66,6 +77,10 @@ export const makeOwner = (
       apiType?: typeof ModelApi.Type;
     }>;
     jevApiKey?: string;
+    /** Field-text model for Jev task-board runs. */
+    jevText?: Parameters<typeof textModelLayer>[0];
+    /** Public labs accept only visitor keys and refuse the scripted baseline. */
+    public?: boolean;
     kitesurf?: (
       retainClose: Parameters<typeof connectKitesurf>[1],
     ) => ReturnType<typeof connectKitesurf>;
@@ -113,6 +128,8 @@ export const makeOwner = (
         configured: apiKey.length > 0,
       })),
       jevConfigured: Boolean(config.jevApiKey),
+      jevTextModel: config.jevText?.model ?? null,
+      public: config.public ?? false,
       report: trace?.snapshot() ?? state.report,
       liveViewUrl,
       image,
@@ -191,7 +208,12 @@ export const makeOwner = (
     trace = undefined;
   });
 
-  const run = Effect.fnUntraced(function* (requested: RunInput) {
+  /** Visitor keys apply to one run only; they never enter owner state, reports or telemetry. */
+  const run = Effect.fnUntraced(function* (
+    requested: RunInput,
+    keys: VisitorKeys = {},
+    access: { readonly funded: boolean } = { funded: false },
+  ) {
     const challenge = requested.wikipedia ?? defaultChallenge;
 
     const wikipedia = {
@@ -212,25 +234,53 @@ export const makeOwner = (
           "A Wikipedia race needs two different article titles and individual agent actions.",
       });
 
-    const jevOnly = requested.wikiDriver === "jev";
+    const jev = requested.driver === "jev";
+    const hybrid = requested.driver === "hybrid";
+    const shopping = requested.scenario === "coffee" || requested.scenario === "shop";
+
+    if (hybrid && !shopping)
+      return yield* new LabError({
+        code: "invalid",
+        message: "Jev with a model fallback runs on store tasks only.",
+      });
+
+    if (shopping && (requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium"))
+      return yield* new LabError({
+        code: "invalid",
+        message: "Store tasks run individual actions in Chromium.",
+      });
+    if (requested.scenario === "shop" && requested.shop === undefined)
+      return yield* new LabError({
+        code: "invalid",
+        message: "The store task needs a store link and an item.",
+      });
+    // Real merchants: strangers must not fill stores with abandoned carts and test orders.
+    if (config.public && shopping && !access.funded)
+      return yield* new LabError({
+        code: "configuration",
+        message: "Store tasks run only for allowlisted accounts. Sign in to run them.",
+      });
+    if (config.public && requested.mode === "scripted")
+      return yield* new LabError({
+        code: "invalid",
+        message: "The public lab runs Jev and model agents only. Choose a driver and add your key.",
+      });
 
     if (
-      jevOnly &&
-      (requested.scenario !== "wikipedia" ||
-        requested.mode !== "agent" ||
+      jev &&
+      (requested.mode !== "agent" ||
         requested.model !== undefined ||
-        requested.grounding !== undefined ||
         requested.reasoning !== undefined ||
         requested.serviceTier !== undefined)
     )
       return yield* new LabError({
         code: "invalid",
         message:
-          "Jev-only routing is for Wikipedia races; omit planner model, grounding, reasoning and service tier settings.",
+          "Jev chooses every action itself: use individual mode and omit model, reasoning and service tier.",
       });
 
     const openai =
-      !jevOnly &&
+      !jev &&
       requested.mode !== "scripted" &&
       !(requested.model ?? config.model).startsWith("@cf/");
 
@@ -241,19 +291,31 @@ export const makeOwner = (
       });
 
     const { temperature: _legacyTemperature, ...settings } = requested;
+    const reasoning = requested.reasoning ?? "none";
 
     const input: RunInput = {
       ...settings,
       engine: requested.engine ?? "chromium",
       ...(requested.scenario === "wikipedia" ? { wikipedia } : {}),
       ...(openai
-        ? { reasoning: requested.reasoning ?? "none", serviceTier: requested.serviceTier ?? "fast" }
+        ? {
+            // A model comparison sends one effort to every model; record what each one ran.
+            reasoning:
+              reasoning === "none" && requiresReasoning(requested.model ?? config.model)
+                ? "low"
+                : reasoning,
+            serviceTier: requested.serviceTier ?? "fast",
+          }
         : {}),
       prompt:
         requested.scenario === "wikipedia"
           ? racePrompt(wikipedia)
-          : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
-            requested.prompt),
+          : requested.scenario === "coffee"
+            ? storeTask.prompt
+            : requested.scenario === "shop" && requested.shop
+              ? shopPrompt(requested.shop)
+              : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
+                requested.prompt),
     };
 
     const state = store.read();
@@ -291,15 +353,42 @@ export const makeOwner = (
         code: "configuration",
         message: "This model is not available in the lab.",
       });
-    if (!jevOnly && input.mode !== "scripted" && !selectedModel.apiKey)
+    const cloudflareModel = selectedModel.model.startsWith("@cf/");
+    const modelKey = cloudflareModel ? selectedModel.apiKey : (keys.openai ?? selectedModel.apiKey);
+    const jevKey = keys.typesafe ?? config.jevApiKey ?? "";
+
+    const jevText: Parameters<typeof textModelLayer>[0] | undefined = keys.openrouter
+      ? {
+          provider: "openrouter",
+          model: "inception/mercury-2.5",
+          reasoning: "none",
+          apiKey: Redacted.make(keys.openrouter),
+        }
+      : keys.openai
+        ? {
+            provider: "openai",
+            model: "gpt-6-luna",
+            reasoning: "low",
+            apiKey: Redacted.make(keys.openai),
+          }
+        : config.jevText;
+
+    if (!jev && input.mode !== "scripted" && !modelKey)
       return yield* new LabError({
         code: "configuration",
-        message: "The selected model's API key is not configured in the Worker.",
+        message: cloudflareModel
+          ? "This model is not available in the lab."
+          : "Add your OpenAI key to run the model agent.",
       });
-    if ((jevOnly || (input.mode !== "scripted" && input.grounding === "jev")) && !config.jevApiKey)
+    if ((jev || hybrid) && !jevKey)
       return yield* new LabError({
         code: "configuration",
-        message: "Set TYPESAFE_API_KEY in the Worker to use Jev.",
+        message: "Add your TypeSafe key to run Jev.",
+      });
+    if ((jev || hybrid) && input.scenario !== "wikipedia" && jevText === undefined)
+      return yield* new LabError({
+        code: "configuration",
+        message: "Add an OpenRouter or OpenAI key so Jev can type into fields.",
       });
     if (input.scenario === "custom" && (input.mode === "scripted" || !input.prompt.trim()))
       return yield* new LabError({
@@ -308,7 +397,15 @@ export const makeOwner = (
       });
     trace = yield* makeTrace(
       input,
-      jevOnly ? "jev-latest" : input.mode === "scripted" ? "none" : selectedModel.model,
+      jev
+        ? input.scenario === "wikipedia"
+          ? "jev-latest"
+          : `jev-latest · ${jevText?.model ?? ""}`
+        : hybrid
+          ? `jev-latest · ${jevText?.model ?? ""} → ${selectedModel.model}`
+          : input.mode === "scripted"
+            ? "none"
+            : selectedModel.model,
     );
     const current = trace;
 
@@ -377,7 +474,17 @@ export const makeOwner = (
         (value) => {
           image = value;
         },
-        input.scenario !== "wikipedia" && input.grounding !== "jev" && input.mode !== "scripted",
+        input.scenario === "wikipedia" || input.mode === "scripted"
+          ? "default"
+          : jev || hybrid
+            ? input.scenario === "coffee" || input.scenario === "shop"
+              ? "jev-store"
+              : "jev"
+            : input.scenario === "coffee"
+              ? "store"
+              : input.scenario === "shop"
+                ? "shop"
+                : "frontier",
       );
 
       const identity = yield* current.measure(
@@ -435,10 +542,11 @@ export const makeOwner = (
       yield* executeTask(
         input,
         selectedModel.model,
-        selectedModel.apiKey,
+        modelKey,
         selectedModel.apiUrl,
         selectedModel.apiType,
-        config.jevApiKey,
+        jevKey,
+        jevText,
       ).pipe(Effect.provideService(Browser, browser));
       current.update({ finishedAt: current.now() });
       yield* browser.capture(true).pipe(Effect.catch(() => Effect.void));

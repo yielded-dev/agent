@@ -85,7 +85,7 @@ it.live(
       assert.isTrue(body.browserConfigured);
       assert.isFalse(body.agentConfigured);
       assert.isFalse(body.jevConfigured);
-      assert.strictEqual(body.models.length, 3);
+      assert.strictEqual(body.models.length, 4);
       assert.isTrue(body.models.every((model) => !model.configured));
       assert.isFalse(body.busy);
       assert.isNull(body.liveViewUrl);
@@ -115,9 +115,9 @@ it.live(
       assert.strictEqual(browserCalls, 0);
       for (const selection of [
         { engine: "unapproved-browser" },
-        { model: "unapproved-model", grounding: "direct" },
-        { model: "gpt-6-luna", grounding: "direct" },
-        { model: "gpt-6-luna", grounding: "jev" },
+        { model: "unapproved-model" },
+        { model: "gpt-6-luna" },
+        { model: "gpt-6-luna", driver: "jev" },
       ]) {
         const rejected = yield* status("/api/run", {
           method: "POST",

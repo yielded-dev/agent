@@ -1,9 +1,5 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import {
-  OpenAiClient as CompletionsClient,
-  OpenAiLanguageModel as CompletionsModel,
-} from "@effect/ai-openai-compat";
-import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
+import { TypeSafeClient, TypeSafeDecisionModel, TypeSafeSchema } from "@effect/ai-typesafe";
 import { Agent, AgentRuntime, CodeMode, InMemory, Thread } from "@yielded/agent";
 import {
   BrowserSessionError,
@@ -28,7 +24,7 @@ import {
   Semaphore,
 } from "effect";
 import { Prompt, Tool, Toolkit } from "effect/ai";
-import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
+import { FetchHttpClient } from "effect/http";
 import { OtlpSerialization, OtlpTracer } from "effect/observability";
 import puppeteer from "puppeteer-core";
 import { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
@@ -36,7 +32,8 @@ import { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js
 import { workerExecutor } from "./code-executor.ts";
 import { Board, verify } from "./contract.ts";
 import { fixtureHtml } from "./fixture.ts";
-import { JevPage, jevDecisionLayer, runJevJourney } from "./jev.ts";
+import { routeProbabilities } from "./route-probabilities.ts";
+import { TextProvider, TextReasoning, textModelLayer } from "./text-model.ts";
 
 class JourneyError extends Schema.TaggedError<JourneyError>()("JourneyError", {
   stage: Schema.String,
@@ -68,52 +65,6 @@ const ContextRequestRecord = Schema.fromJsonString(
   }),
 );
 
-const NullServiceTierCompletion = Schema.StructWithRest(
-  Schema.Struct({ service_tier: Schema.Null }),
-  [Schema.Record(Schema.String, Schema.Json)],
-);
-
-// OpenRouter returns null for absent tier metadata; the compatibility client expects omission.
-const openRouterChatClient = (client: HttpClient.HttpClient) =>
-  client.pipe(
-    HttpClient.transformResponse(
-      Effect.flatMap((response) =>
-        response.status !== 200
-          ? Effect.succeed(response)
-          : response.json.pipe(
-              Effect.flatMap((body) => {
-                if (
-                  typeof body !== "object" ||
-                  body === null ||
-                  !Schema.is(NullServiceTierCompletion)(body)
-                )
-                  return Effect.succeed(response);
-
-                const completion: Record<string, Schema.Json> = { ...body };
-
-                delete completion.service_tier;
-                const headers = new Headers(response.headers);
-
-                headers.delete("content-length");
-                headers.delete("content-encoding");
-
-                return Effect.annotateCurrentSpan(
-                  "openrouter.null_service_tier_omitted",
-                  true,
-                ).pipe(
-                  Effect.as(
-                    HttpClientResponse.fromWeb(
-                      response.request,
-                      Response.json(completion, { status: response.status, headers }),
-                    ),
-                  ),
-                );
-              }),
-            ),
-      ),
-    ),
-  );
-
 const JourneyRecord = Schema.fromJsonString(
   Schema.Struct({
     engine: Schema.String,
@@ -126,18 +77,13 @@ const JourneyRecord = Schema.fromJsonString(
     }),
     model: Schema.String,
     reasoning: Schema.String,
-    path: Schema.Literals(["direct", "plan", "code", "jev"]),
+    path: Schema.Literals(["direct", "code", "jev"]),
     textModel: Schema.NullOr(Schema.String),
-    textProvider: Schema.NullOr(Schema.Literals(["openai", "openrouter"])),
-    textReasoning: Schema.NullOr(Schema.Literals(["none", "low"])),
-    frontierModel: Schema.NullOr(Schema.String),
-    frontierReasoning: Schema.NullOr(Schema.Literal("low")),
-    plannerModel: Schema.NullOr(Schema.String),
+    textProvider: Schema.NullOr(TextProvider),
+    textReasoning: Schema.NullOr(TextReasoning),
     viewportOnly: Schema.Boolean,
     optimizedFrontier: Schema.Boolean,
-    jevAssistance: Schema.Boolean,
     stepBudget: Schema.NullOr(Schema.Natural),
-    minimumProbability: Schema.NullOr(Schema.Finite),
     setupMillis: Schema.Natural,
     tokenBudget: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
     contextTokenLimit: Schema.NullOr(Schema.Natural),
@@ -201,8 +147,6 @@ const finish = Tool.make("finish", {
 const finishing = Toolkit.make(finish);
 const browser = BrowserUse.make({ mode: "batched" });
 
-const plannedBrowser = BrowserUse.make({ grounding: "decision", mode: "plan" });
-
 const codeMode = CodeMode.make("run_browser", {
   description:
     "Inspect and interact through the browser tools. Combine known steps in one program, resolving each next ref from the previous returned observation. Stop at ambiguous state or uncertain input. Recover missing evidence with scoped inspection; return only task-relevant evidence and receipts. Never replay acknowledged or uncertain input.",
@@ -240,20 +184,69 @@ const makeDirectAgent = (tokenBudget: number) =>
     toolkit: Toolkit.merge(finishing, browser.toolkit, BrowserUse.browserTools),
   });
 
-const makePlannedAgent = (tokenBudget: number) =>
-  Agent.make("browser-journey-plan", {
-    ...definition,
-    policy: { ...definition.policy, tokenBudget, onExhaustion: "fail" },
-    instructions: `${definition.instructions} For act, describe target names and purposes rather than refs. Submit a bounded sequence when the intended steps and values are known. Each next step uses the prior returned observation. Use act_ref when a current control is already resolved or planner recovery can identify its ref. Missing controls require inspection or waiting, never repeated classification of unchanged state.`,
-    toolkit: Toolkit.merge(finishing, plannedBrowser.toolkit, BrowserUse.browserTools),
-  });
-
 const makeCodeAgent = (tokenBudget: number) =>
   Agent.make("browser-journey-code", {
     ...definition,
     policy: { ...definition.policy, tokenBudget, onExhaustion: "fail" },
     toolkit: Toolkit.merge(finishing, Toolkit.make(codeMode.tool)),
   });
+
+const JevRequestRecord = Schema.fromJsonString(
+  Schema.Struct({
+    call: Schema.Natural,
+    durationMillis: Schema.Finite,
+    request: Schema.toCodecJson(TypeSafeSchema.SystemOneRequest),
+    response: Schema.NullOr(Schema.toCodecJson(TypeSafeSchema.SystemOneResponse)),
+    error: Schema.NullOr(Schema.String),
+  }),
+);
+
+/** Record actual Jev requests, raw distributions and provider model IDs. No HTTP retries. */
+const recordedJevLayer = (output: string) =>
+  TypeSafeDecisionModel.layer({ model: "jev-latest" }).pipe(
+    Layer.provide(
+      Layer.effect(
+        TypeSafeClient.TypeSafeClient,
+        Effect.gen(function* () {
+          const client = yield* TypeSafeClient.make({
+            apiKey: yield* Config.Redacted("TYPESAFEAI_API_KEY"),
+          });
+
+          const fs = yield* FileSystem.FileSystem;
+          const clock = yield* Clock.Clock;
+          let call = 0;
+
+          return TypeSafeClient.TypeSafeClient.of({
+            ...client,
+            systemOne: Effect.fn("browser.jev.request")(function* (request) {
+              const id = ++call;
+              const started = clock.monotonicTimeNanosUnsafe();
+              const result = yield* client.systemOne(request).pipe(Effect.result);
+
+              yield* fs
+                .writeFileString(
+                  `${output}/jev-requests.jsonl`,
+                  `${Schema.encodeSync(JevRequestRecord)({
+                    call: id,
+                    durationMillis: Number(clock.monotonicTimeNanosUnsafe() - started) / 1_000_000,
+                    request,
+                    response: result._tag === "Success" ? result.success : null,
+                    error: result._tag === "Failure" ? result.failure.reason._tag : null,
+                  })}\n`,
+                  { flag: "a" },
+                )
+                .pipe(Effect.orDie);
+              if (result._tag === "Failure") return yield* result.failure;
+
+              // Reuse the bounded two-decimal rounding rule; raw values stay in the record.
+              return (yield* routeProbabilities(request, result.success)).response;
+            }),
+          });
+        }),
+      ),
+    ),
+    Layer.provide(FetchHttpClient.layer),
+  );
 
 const sdk = <A>(stage: string, action: () => Promise<A>) =>
   Effect.tryPromise({ try: action, catch: () => new JourneyError({ stage }) }).pipe(
@@ -280,7 +273,7 @@ export const journey = Effect.gen(function* () {
 
   const path = yield* Config.String("BROWSER_JOURNEY_PATH").pipe(
     Config.withDefault("direct"),
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["direct", "plan", "code", "jev"]))),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["direct", "code", "jev"]))),
   );
 
   const compactLoop = path === "jev";
@@ -297,12 +290,12 @@ export const journey = Effect.gen(function* () {
 
   const textProvider = yield* Config.String("BROWSER_JOURNEY_TEXT_PROVIDER").pipe(
     Config.withDefault("openai"),
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["openai", "openrouter"]))),
+    Effect.flatMap(Schema.decodeUnknownEffect(TextProvider)),
   );
 
   const textReasoning = yield* Config.String("BROWSER_JOURNEY_TEXT_REASONING").pipe(
     Config.withDefault("low"),
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Literals(["none", "low"]))),
+    Effect.flatMap(Schema.decodeUnknownEffect(TextReasoning)),
   );
 
   const stepBudget = yield* Config.Number("BROWSER_JOURNEY_STEPS").pipe(
@@ -320,13 +313,6 @@ export const journey = Effect.gen(function* () {
     ),
   );
 
-  const minimumProbability = yield* Config.Number("BROWSER_JOURNEY_CONFIDENCE").pipe(
-    Config.withDefault(0.6),
-    Effect.flatMap(
-      Schema.decodeUnknownEffect(Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }))),
-    ),
-  );
-
   const tokenBudget = yield* Config.Number("BROWSER_JOURNEY_TOKEN_BUDGET").pipe(
     Config.withDefault(2_000_000),
     Effect.flatMap(
@@ -337,7 +323,6 @@ export const journey = Effect.gen(function* () {
   );
 
   const agent = makeDirectAgent(tokenBudget);
-  const plannedAgent = makePlannedAgent(tokenBudget);
   const codeAgent = makeCodeAgent(tokenBudget);
   const fs = yield* FileSystem.FileSystem;
   const headless = yield* Config.Boolean("BROWSER_JOURNEY_HEADLESS").pipe(Config.withDefault(true));
@@ -635,55 +620,35 @@ export const journey = Effect.gen(function* () {
       Layer.provide(FetchHttpClient.layer),
     );
 
-    const decisionLayer = TypeSafeDecisionModel.layer({ model: "jev-latest" }).pipe(
-      Layer.provide(TypeSafeClient.layerConfig({ apiKey: Config.Redacted("TYPESAFEAI_API_KEY") })),
-      Layer.provide(FetchHttpClient.layer),
-    );
-
-    const textLayer = (
-      textProvider === "openrouter"
-        ? CompletionsModel.model(textModel, {
-            max_tokens: 1_024,
-            response_format: { type: "json_object" },
-            reasoning: textReasoning === "none" ? { enabled: false } : { effort: textReasoning },
-          }).pipe(
-            Layer.provide(
-              CompletionsClient.layerConfig({
-                apiKey: Config.Redacted("OPENROUTER_API_KEY"),
-                apiUrl: Config.succeed("https://openrouter.ai/api/v1"),
-                transformClient: openRouterChatClient,
-              }),
-            ),
-          )
-        : OpenAiLanguageModel.model(textModel, {
-            max_output_tokens: 1_024,
-            reasoning: { effort: textReasoning },
-          }).pipe(
-            Layer.provide(OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") })),
-          )
-    ).pipe(Layer.provide(FetchHttpClient.layer));
-
     const threadId = ThreadId.make(crypto.randomUUID());
 
     const result = yield* Effect.gen(function* () {
       if (compactLoop)
-        return yield* runJevJourney({
-          goal,
-          output,
-          textModel,
-          textProvider,
-          textReasoning,
-          stepBudget,
-          ready: () => {
-            readyAt = now();
-            readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
-          },
+        return yield* Effect.gen(function* () {
+          const observation = yield* controller.actions.observe;
+
+          readyAt = now();
+          readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
+          const result = yield* BrowserUse.runJev({ goal, observation, maxSteps: stepBudget });
+
+          yield* fs.writeFileString(
+            `${output}/jev-result.json`,
+            Schema.encodeSync(Schema.fromJsonString(BrowserUse.JevResult))(result),
+          );
+
+          return { output: { summary: `${result.stop}: ${result.message}` } };
         }).pipe(
           Effect.provide([
             controller.layer,
-            JevPage.layer(session),
-            jevDecisionLayer(output),
-            textLayer,
+            recordedJevLayer(output),
+            textModelLayer({
+              provider: textProvider,
+              model: textModel,
+              reasoning: textReasoning,
+              apiKey: yield* Config.Redacted(
+                textProvider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY",
+              ),
+            }),
           ]),
           Effect.timeout("8 minutes"),
           Effect.exit,
@@ -691,44 +656,35 @@ export const journey = Effect.gen(function* () {
       const store = yield* Thread.Store;
 
       const run =
-        path === "plan"
-          ? AgentRuntime.run(plannedAgent, goal, { threadId }).pipe(
+        path === "code"
+          ? AgentRuntime.run(codeAgent, goal, { threadId }).pipe(
               Effect.provide(
-                plannedBrowser
-                  .layer({ minimumProbability })
-                  .pipe(Layer.provide(Layer.merge(controller.layer, decisionLayer))),
+                codeMode.handlers.pipe(
+                  Layer.provide(workerExecutor),
+                  Layer.provide(browser.layer().pipe(Layer.provide(controller.layer))),
+                  Layer.provide(BrowserUse.browserLayer.pipe(Layer.provide(controller.layer))),
+                ),
               ),
               Effect.exit,
             )
-          : path === "code"
-            ? AgentRuntime.run(codeAgent, goal, { threadId }).pipe(
-                Effect.provide(
-                  codeMode.handlers.pipe(
-                    Layer.provide(workerExecutor),
-                    Layer.provide(browser.layer().pipe(Layer.provide(controller.layer))),
-                    Layer.provide(BrowserUse.browserLayer.pipe(Layer.provide(controller.layer))),
-                  ),
-                ),
-                Effect.exit,
-              )
-            : AgentRuntime.run(agent, goal, {
-                threadId,
-                context: {
-                  prepare: ({ source, turn }) =>
-                    Effect.gen(function* () {
-                      yield* fs.writeFileString(
-                        `${output}/context-requests.jsonl`,
-                        `${Schema.encodeSync(ContextRequestRecord)({ turn, sourceCharacters: JSON.stringify(source).length, prompt: source.content })}\n`,
-                        { flag: "a" },
-                      );
+          : AgentRuntime.run(agent, goal, {
+              threadId,
+              context: {
+                prepare: ({ source, turn }) =>
+                  Effect.gen(function* () {
+                    yield* fs.writeFileString(
+                      `${output}/context-requests.jsonl`,
+                      `${Schema.encodeSync(ContextRequestRecord)({ turn, sourceCharacters: JSON.stringify(source).length, prompt: source.content })}\n`,
+                      { flag: "a" },
+                    );
 
-                      return { prompt: source };
-                    }),
-                },
-              }).pipe(
-                Effect.provide(browser.layer().pipe(Layer.provide(controller.layer))),
-                Effect.exit,
-              );
+                    return { prompt: source };
+                  }),
+              },
+            }).pipe(
+              Effect.provide(browser.layer().pipe(Layer.provide(controller.layer))),
+              Effect.exit,
+            );
 
       readyAt = now();
       readyUnixNanos = clock.currentTimeNanosUnsafe().toString();
@@ -859,14 +815,9 @@ export const journey = Effect.gen(function* () {
       textModel: compactLoop ? textModel : null,
       textProvider: compactLoop ? textProvider : null,
       textReasoning: compactLoop ? textReasoning : null,
-      frontierModel: null,
-      frontierReasoning: null,
-      plannerModel: null,
       viewportOnly: compactLoop || optimizedFrontier,
       optimizedFrontier,
-      jevAssistance: false,
       stepBudget: compactLoop ? stepBudget : null,
-      minimumProbability: path === "plan" ? minimumProbability : null,
       setupMillis,
       tokenBudget: compactLoop ? null : tokenBudget,
       contextTokenLimit: compactLoop ? null : definition.policy.contextTokenLimit,

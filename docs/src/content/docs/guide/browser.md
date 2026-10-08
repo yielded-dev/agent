@@ -150,7 +150,8 @@ const attach = Effect.gen(function* () {
 ```
 
 Include both `browser.toolkit` and `BrowserUse.browserTools` in the Agent's Toolkit.
-They provide observe/act, scoped inspect, navigation, native key presses, selection,
+The model supplies observed refs, as in `{ action: { kind: "click", ref: "save" } }`;
+`{ mode: "batched" }` accepts `actions` arrays of up to eight. They provide observe/act, scoped inspect, navigation, native key presses, selection,
 scrolling, screenshots, condition waits, observed tab/popup selection, and native dialog
 responses. Inspection accepts CSS and bounded attributes; it never accepts page JavaScript.
 Screenshots return PNG bytes for the host; composing visual model input remains host-owned.
@@ -179,9 +180,9 @@ to find select options by label or value; current selections remain visible.
 `viewportOnly: true` prioritizes controls in view, retaining offscreen popup controls only
 when none of that popup's controls are in view. Duplicate names gain nearby captions.
 `observationMode: "jev"` reads enabled document controls whose centers are in the viewport,
-using accessible names and at most 6,000 characters of visible text. This mode follows the
-Jev reader's roles and naming; its refs must remain in view through input preparation.
-Both modes retain the same native authorization and input guards.
+using accessible names and at most 6,000 characters of visible text, plus page metrics for
+scrolling. This mode follows the Jev reader's roles and naming; its refs must remain in view
+through input preparation. Both modes retain the same native authorization and input guards.
 
 Native fill supports writable inputs, textareas, and contenteditable controls. It verifies native selection
 of existing content before replacing it with native text input; unsupported selection returns
@@ -212,6 +213,8 @@ explicit condition wait for application readiness. A failed read reports that it
 input, without changing earlier input receipts or the session's outstanding-work fencing.
 Read-only navigation races retry with fresh host authorization. Input is never automatically
 retried, and a failed observation never authorizes replay. Use a specific condition wait or fresh inspection to reconcile state.
+A host that reads the next page itself can call `act(actions, { observe: false })`: the result
+has no observation, and every earlier reference is invalidated, so inspect before the next action.
 Password/file inputs remain host-owned; use the existing credential and file-selection
 contracts on the session's original page; selecting a tab does not retarget those host helpers. A blocking JavaScript dialog can be inspected and answered after an input;
 a dialog that prevents navigation from settling remains subject to the native timeout.
@@ -242,40 +245,6 @@ Generated programs can inspect a missing control, wait for readiness, and act on
 new reference through the broker. They get the same authorization, ordering, budgets
 and receipts; they cannot bypass them through CDP. Never replay an uncertain program.
 
-### Opt into decision-grounded browser tools
-
-`BrowserUse.make` pairs a browser toolkit with its handler Layer. Choose grounding and
-batching once; the host supplies the page adapter and provider.
-
-```ts twoslash
-import { BrowserUse } from "@yielded/agent";
-import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
-import { Config, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
-
-const browser = BrowserUse.make({ grounding: "decision" });
-// Include browser.toolkit in your Agent; merge your own completion tool if needed.
-const JevLive = TypeSafeDecisionModel.layer({ model: "jev-latest" }).pipe(
-  Layer.provide(TypeSafeClient.layerConfig({ apiKey: Config.Redacted("TYPESAFE_API_KEY") })),
-  Layer.provide(FetchHttpClient.layer),
-);
-const handlers = browser.layer().pipe(Layer.provide(JevLive));
-// handlers still requires BrowserUse.BrowserActions, supplied by your page adapter.
-```
-
-`BrowserUse.make()` defaults to direct, single actions: the planner supplies an observed
-`ref`, as in `{ action: { kind: "click", ref: "save" } }`. With
-`grounding: "decision"`, it describes `{ action: { kind: "click", target: "Save this task" } }`
-and the supplied native `DecisionModel` selects the control. Add `mode: "batched"` to either
-configuration to accept `actions` arrays of up to eight items. The planner remains your
-ordinary Language Model. Grounding introduces no fallback planner. For a known sequence,
-`{ grounding: "decision", mode: "plan" }` resolves each next step from the previous result
-without another planner turn. It stops on missing or ambiguous controls, failed observation,
-or uncertain input. Inspect or wait before submitting a new plan, and omit completed steps.
-Grounded toolkits also expose `act_ref` for direct actions on already resolved current refs.
-After selection fails, the cached observation cannot be classified again; inspect or wait
-for fresh evidence, or use that direct recovery path. Both paths retain the same native guards.
-
 `BrowserActions` owns observation and dispatch. Its adapter assigns unique refs, limits the
 exposed page data, revalidates targets before input, and enforces navigation and action authority.
 It returns acknowledged action counts even when later observation fails; no handler replays
@@ -283,18 +252,76 @@ completed actions. Browser lifetime, credentials, approvals, and outcome verific
 the host. See the [browser speed lab](https://github.com/yielded-dev/agent/tree/main/examples/browser-speed) for a complete
 adapter using Cloudflare Browser Sessions, tracing, and an independent verifier.
 
-Build one grounded handler Layer per page/run. It serializes observation and selection, keeps the
-latest observation, and discards stale evidence after a failed operation.
-`browser.layer({ initialObservation })` avoids rereading an already prepared page. Selection permits 1–254
-compatible controls per action, includes an abstention choice, defaults to an experimental
-minimum probability of 0.6, and times out after 15 seconds. Calibrate
-`browser.layer({ minimumProbability })` against your own task cohort. These are selection limits, not correctness guarantees. Direct
-`selectTargets` returns choices and token usage for custom tools; it requires only `DecisionModel`.
-Grounded handlers emit `BrowserUse.selectTargets` spans with reference/confidence choices and token usage in the
-`browser.selection` attribute; use standard Effect tracing to observe them.
+### Let Jev drive the browser
+
+`BrowserUse.runJev` drives the page with a native `DecisionModel` such as TypeSafe Jev, without
+an agent or planner. Each step makes one decision request from the current observation: which
+operation to perform and, for each operation, which observed target. A `LanguageModel` runs only
+when the chosen operation types into a field.
+
+```text
+observe → DecisionModel: operation + target ──→ guarded input → observe → …
+                         TYPE_TEXT → LanguageModel → field value
+```
+
+```ts twoslash
+import { BrowserUse } from "@yielded/agent";
+import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
+import { Config, Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+
+const Jev = TypeSafeDecisionModel.layer({ model: "jev-latest" }).pipe(
+  Layer.provide(TypeSafeClient.layerConfig({ apiKey: Config.Redacted("TYPESAFE_API_KEY") })),
+  Layer.provide(FetchHttpClient.layer),
+);
+
+const run = BrowserUse.runJev({ goal: "Create a task called Ship demo." }).pipe(
+  Effect.provide(Jev),
+);
+// run still requires BrowserActions, BrowserControl, and a LanguageModel for field text.
+```
+
+Build the native controller with `observationMode: "jev"`, `viewportOnly: true`, and
+`settleAfterAction: "input"`; the loop needs the page metrics in those observations. Configure
+the field-text model for JSON output. Use a model agent with `BrowserUse.make` when the task needs
+judgment between steps, such as reading results before changing a search.
+
+Jev chooses among `CLICK`, `TYPE_TEXT`, `SELECT`, scrolling, `WAIT`, `DONE`, and `BLOCKED`, with
+only action-compatible observed targets (at most 255 per question). Page-wide choices are
+re-observed before they take effect. Input keeps the controller's guards and receipts; an
+unresolved receipt stops the loop and is never replayed.
+
+The loop returns a `JevResult` instead of failing: `stop` says why it ended and `steps` records
+each operation, target, typed text, and dispatch receipt. Only invalid options fail, with
+`BrowserUseError`. `done` is Jev's claim; verify the requested outcome independently. Defaults:
+60 steps (`maxSteps`, at most 200), a 15-second decision deadline, five seconds for field text
+with one retry after a timeout, 100 ms per `WAIT`, at most ten seconds of consecutive waiting,
+and a stop after three actions leave the page unchanged. Pass an `observation` the host already
+read to start without another read. Trace `BrowserUse.runJev`, `BrowserUse.jevDecision` (with
+the chosen operation and target), `BrowserUse.jevWait`, and the model's own spans.
 
 Wikipedia routing and Kitesurf connection setup remain example-owned. The lab's Browser Sessions
 adapter does not use `InteractiveBrowser`'s separate guarded-action implementation.
+
+### Keep native browser runs fast
+
+Each native operation is a round trip to the remote browser, and each navigation also pays for
+the new page's parse and layout. These measurements come from the browser speed lab racing across
+long Wikipedia articles in Browser Run:
+
+- **Pause only navigations.** Puppeteer's `setRequestInterception(true)` holds every stylesheet,
+  script and image for a round trip and disables the cache. To restrict where a page may go, enable
+  CDP `Fetch` with a `resourceType: "Document"` pattern instead. In the lab, a long article
+  became interactive in 1.0 s instead of 1.4 s.
+- **Skip observations you will not read.** When the host reads the next page itself,
+  `act(actions, { observe: false })` saved about 1.1 s per click on a long article.
+- **Check a condition once before polling.** `page.waitForFunction` sets up polling in each new
+  document. A single `page.evaluate` of the same condition is one round trip; in the lab, checking
+  first cut the arrival wait from about 0.5 s to under 0.1 s. The check can fail while a navigation
+  commits, so fall back to the wait.
+
+Large pages still cost parse and layout time that no option removes: one to two seconds for the
+longest Wikipedia articles.
 
 ## Capture one rendered page from Node
 

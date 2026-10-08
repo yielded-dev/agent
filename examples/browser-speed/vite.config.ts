@@ -1,14 +1,18 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
+// Served at agent.yielded.dev/browser-use. Files keep that prefix inside dist so Workers
+// static assets match request paths directly.
 export default defineConfig({
+  base: "/browser-use/",
+  build: { outDir: "dist/browser-use", emptyOutDir: true },
   plugins: [react()],
   server: {
     host: "127.0.0.1",
     port: 5191,
     strictPort: true,
     proxy: {
-      "/api": {
+      "/browser-use/api": {
         target: "http://127.0.0.1:8791",
         changeOrigin: true,
         configure: (proxy) => {
@@ -73,6 +77,10 @@ export default defineConfig({
       },
       deploy: {
         command: "vp build && wrangler deploy",
+        cache: false,
+      },
+      "deploy:public": {
+        command: "vp build && wrangler deploy --env public",
         cache: false,
       },
     },

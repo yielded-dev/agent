@@ -1,9 +1,8 @@
 import { Agent, AgentRuntime } from "@yielded/agent";
 import { CompactionPolicy } from "@yielded/agent/agent-policy";
-import { selectTargets } from "@yielded/agent/browser-use";
 import { Context, Effect, Option, Schema } from "effect";
-import { DecisionModel, Tool, Toolkit } from "effect/ai";
-import type { HTTPRequest } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
+import { Tool, Toolkit } from "effect/ai";
+import type { Protocol } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { TaskResult, Browser } from "./browser.ts";
 import {
@@ -129,20 +128,6 @@ const directTools = Toolkit.make(
   }),
 );
 
-const jevTools = Toolkit.make(
-  readTool,
-  giveUp,
-  Tool.make("follow", {
-    description:
-      "Describe one link in the current observation by its label and destination. Jev selects and clicks it. Arrival at the goal automatically ends the race.",
-    parameters: Schema.Struct({ target: Schema.NonEmptyString.check(Schema.isMaxLength(300)) }),
-    dependencies: [DecisionModel.DecisionModel],
-    success: WikiObservation,
-    failure: LabError,
-    failureMode: "return",
-  }),
-);
-
 const definition = {
   input: Schema.String,
   inputPrompt: (value: string) => value,
@@ -179,8 +164,6 @@ export const wikiAgent = Agent.make("wikipedia-race-direct", {
   toolkit: directTools,
 });
 
-export const wikiJevAgent = Agent.make("wikipedia-race-jev", { ...definition, toolkit: jevTools });
-
 /** Scoped navigation guard, observed-link capabilities and host verification; no arbitrary navigation tool. */
 export const makeWikipedia = Effect.fnUntraced(function* (
   challenge: WikipediaChallenge,
@@ -200,50 +183,57 @@ export const makeWikipedia = Effect.fnUntraced(function* (
   let observation: typeof WikiObservation.Type | undefined;
   let routePage: RoutePage | undefined;
 
+  // Only document requests pause. Each paused request costs a CDP round trip, and pausing
+  // every request (Puppeteer's interception) also disables the cache: about 1 s per hop.
   yield* Effect.acquireRelease(
     browser.native(async (page) => {
-      const guard = (request: HTTPRequest) => {
-        const url = new URL(request.url());
-        const document = request.isNavigationRequest();
+      const client = await page.createCDPSession();
+      const { frameTree } = await client.send("Page.getFrameTree");
+      // A server redirect keeps its network ID, so an approved navigation may redirect once.
+      const approvedChains = new Set<string>();
 
-        const allowed = document
-          ? request.frame() === page.mainFrame() &&
-            articleTitle(url.href) !== undefined &&
-            (articleTitle(url.href) === articleTitle(approved) ||
-              request
-                .redirectChain()
-                .some((prior) => articleTitle(prior.url()) === articleTitle(approved)))
-          : url.protocol === "data:" ||
-            (url.protocol === "https:" &&
-              ["en.wikipedia.org", "upload.wikimedia.org", "maps.wikimedia.org"].includes(
-                url.hostname,
-              ));
+      const guard = (event: Protocol.Fetch.RequestPausedEvent) => {
+        const title = articleTitle(event.request.url);
 
+        const allowed =
+          event.frameId === frameTree.frame.id &&
+          title !== undefined &&
+          (title === articleTitle(approved) ||
+            (event.networkId !== undefined && approvedChains.has(event.networkId)));
+
+        if (allowed && event.networkId !== undefined) approvedChains.add(event.networkId);
         // Navigation/observation reports the failure. Never leave an event callback rejection unhandled.
-        if (!request.isInterceptResolutionHandled())
-          void (allowed ? request.continue({}, 0) : request.abort("blockedbyclient", 2)).catch(
-            () => {},
-          );
+        void (
+          allowed
+            ? client.send("Fetch.continueRequest", { requestId: event.requestId })
+            : client.send("Fetch.failRequest", {
+                requestId: event.requestId,
+                errorReason: "BlockedByClient",
+              })
+        ).catch(() => {});
       };
 
-      await page.setRequestInterception(true);
-      page.on("request", guard);
+      client.on("Fetch.requestPaused", guard);
+      await client.send("Fetch.enable", {
+        patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }],
+      });
 
-      return { page, guard };
+      return client;
     }),
-    ({ page, guard }) =>
-      Effect.sync(() => page.off("request", guard)).pipe(
-        Effect.andThen(
-          trace.measure(
-            "cleanup",
-            "Release navigation guard",
-            browser.native(() => page.setRequestInterception(false)),
-          ),
+    (client) =>
+      trace
+        .measure(
+          "cleanup",
+          "Release navigation guard",
+          browser.native(() => client.send("Fetch.disable")),
+        )
+        .pipe(
+          // A fenced/dead browser may reject cleanup commands. Keep that span and the original
+          // failure; the owner must confirm browser closure before retrying or releasing ownership.
+          Effect.catch(() => Effect.void),
+          // The CDP session is the lab's own: detaching it ends the guard even behind a fence.
+          Effect.ensuring(Effect.promise(() => client.detach().catch(() => {}))),
         ),
-        // A fenced/dead browser may reject cleanup commands. Keep that span and the original
-        // failure; the owner must confirm browser closure before retrying or releasing ownership.
-        Effect.catch(() => Effect.void),
-      ),
   );
 
   yield* trace.measure(
@@ -483,6 +473,11 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       totalLinks: links.length,
       nextOffset: !fullLinks && offset + linkPageSize < links.length ? offset + linkPageSize : null,
     };
+    // Jev does not reliably follow "avoid the route", so visited articles are not offered;
+    // a page whose every link was visited keeps them rather than ending the race.
+    const visited = new Set(path.map((hop) => articleTitle(hop.url)));
+    const unvisited = pageLinks.filter(({ title }) => !visited.has(title));
+
     routePage = {
       context: {
         current: observation.title,
@@ -491,7 +486,12 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         path: observation.path,
         remainingHops: observation.remainingHops,
       },
-      links: pageLinks.map(({ ref, label, title, url }) => ({ ref, label, title, href: url })),
+      links: (unvisited.length > 0 ? unvisited : pageLinks).map(({ ref, label, title, url }) => ({
+        ref,
+        label,
+        title,
+        href: url,
+      })),
     };
     trace.update({
       race: { start: challenge.start, target, targetUrl: articleUrl(target), maxHops, path },
@@ -521,6 +521,17 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         code: "invalid",
         message: "The 20-hop limit was reached. End the race.",
       });
+    // A race never follows a link to an article already in the route: going back only loops.
+    // A redirect alias can still land on a visited article once; the visited filter above then
+    // withholds the route's articles, so it cannot cycle. Resolving every alias would cost a
+    // Wikipedia API lookup per hop.
+    const revisit = articleTitle(link.url);
+
+    if (revisit !== undefined && path.some((hop) => articleTitle(hop.url) === revisit))
+      return yield* new LabError({
+        code: "invalid",
+        message: `${revisit} is already in the route. No click was dispatched; choose an article you have not visited.`,
+      });
 
     const current = yield* browser
       .inspect({
@@ -528,13 +539,18 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       })
       .pipe(Effect.mapError((error) => new LabError({ code: "browser", message: error.message })));
 
-    const control = current.controls.find(
-      (control) =>
+    const label = normalizeTitle(link.label);
+
+    const control = current.controls.find((control) => {
+      const name = normalizeTitle(control.name.slice(0, 300));
+
+      // Repeated link names carry a nearby caption, as in "Hope (Current missions)".
+      return (
         control.kind === "link" &&
         control.attributes?.href === link.href &&
-        (!control.name ||
-          normalizeTitle(control.name.slice(0, 180)) === normalizeTitle(link.label)),
-    );
+        (!control.name || name === label || name.startsWith(`${label} (`))
+      );
+    });
 
     if (current.tabs?.find((tab) => tab.active)?.url !== currentUrl || control === undefined)
       return yield* new LabError({
@@ -546,7 +562,8 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     approved = link.url;
     observed.clear();
     uncertain = true;
-    const result = yield* browser.act([{ kind: "click", ref: control.ref }]);
+    // The race reads the next article itself, so the click skips the library's observation.
+    const result = yield* browser.act([{ kind: "click", ref: control.ref }], { observe: false });
 
     if (result.dispatch === "not-dispatched") uncertain = false;
     if (result.completed !== 1 || result.dispatch !== "acknowledged")
@@ -561,15 +578,16 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       browser.native(async (page) => {
         // A condition check also observes navigation that finished during the
         // action's own read. It never subscribes too late to a navigation event.
-        const ready = await page.waitForFunction(
-          (previous) =>
-            performance.timeOrigin !== previous &&
-            document.readyState !== "loading" &&
-            document.body.classList.contains("ns-0") &&
-            document.querySelector("#mw-content-text .mw-parser-output") !== null,
-          { timeout: 12_000 },
-          currentDocument,
-        );
+        const arrived = (previous: number) =>
+          performance.timeOrigin !== previous &&
+          document.readyState !== "loading" &&
+          document.body.classList.contains("ns-0") &&
+          document.querySelector("#mw-content-text .mw-parser-output") !== null;
+
+        // A plain check avoids installing Puppeteer's polling helpers into every new article.
+        // It can race the navigation's commit and lose its context; the wait survives that.
+        if (await page.evaluate(arrived, currentDocument).catch(() => false)) return;
+        const ready = await page.waitForFunction(arrived, { timeout: 12_000 }, currentDocument);
 
         await ready.dispose();
       }),
@@ -597,47 +615,6 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       message: "Start and destination resolve to the same article. Choose different pages.",
     });
 
-  const groundedFollow = Effect.fnUntraced(function* (description: string) {
-    if (!observation)
-      return yield* new LabError({
-        code: "invalid",
-        message: "Read the page before selecting a link.",
-      });
-
-    const selected = yield* trace.measure(
-      "decision",
-      "Jev · select article link",
-      selectTargets(
-        {
-          text: observation.excerpt,
-          controls: observation.links.map((link) => ({
-            ref: link.ref,
-            kind: "link",
-            name: link.label,
-            value: link.title,
-            options: [],
-          })),
-        },
-        [{ kind: "click", target: description }],
-      ).pipe(
-        Effect.mapError((error) => new LabError({ code: error.code, message: error.message })),
-      ),
-      ({ usage, choices }) => ({
-        model: "jev-latest",
-        choices,
-        ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
-        ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
-      }),
-    );
-
-    const action = selected.actions[0];
-
-    if (!action)
-      return yield* new LabError({ code: "invalid", message: "Jev did not select a link." });
-
-    return yield* follow(action.ref);
-  });
-
   const handlers = {
     read_links: ({ offset, query }: { offset: number; query?: string }) =>
       read(offset, undefined, query),
@@ -659,7 +636,6 @@ export const makeWikipedia = Effect.fnUntraced(function* (
           ),
     ),
     direct: directTools.toLayer({ ...handlers, follow: ({ ref }) => follow(ref) }),
-    jev: jevTools.toLayer({ ...handlers, follow: ({ target }) => groundedFollow(target) }),
   };
 });
 
@@ -708,14 +684,9 @@ export const runJevWikipedia = Effect.gen(function* () {
   }),
 );
 
-export const runWikipedia = Effect.fnUntraced(function* (
-  challenge: WikipediaChallenge,
-  grounded: boolean,
-) {
+export const runWikipedia = Effect.fnUntraced(function* (challenge: WikipediaChallenge) {
   const wiki = yield* Wikipedia;
   const message = `${racePrompt(challenge)}\n\nInitial browser observation:\n${Schema.encodeSync(Schema.fromJsonString(WikiObservation))(wiki.initial)}`;
 
-  return yield* grounded
-    ? AgentRuntime.run(wikiJevAgent, message).pipe(Effect.provide(wiki.jev))
-    : AgentRuntime.run(wikiAgent, message).pipe(Effect.provide(wiki.direct));
+  return yield* AgentRuntime.run(wikiAgent, message).pipe(Effect.provide(wiki.direct));
 });

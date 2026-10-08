@@ -7,8 +7,8 @@ import type { Span } from "./contract.ts";
 import { Trace } from "./telemetry.ts";
 
 /** Jev has returned two-decimal distributions totaling 0.99. Tolerate at most
- * two percentage points of rounding, only on the route-only path (no threshold).
- * Keep raw values in telemetry; never alter the provider's chosen link or confidence.
+ * two percentage points of rounding; Jev paths apply no probability threshold.
+ * Keep raw values in telemetry; never alter the provider's choice or confidence.
  * Native DecisionModel still validates the resulting distribution and choice.
  */
 export const routeProbabilities = Effect.fnUntraced(function* (
@@ -40,10 +40,10 @@ export const routeProbabilities = Effect.fnUntraced(function* (
       (Math.abs(mass - 1) > 1e-6 && (!rounded || Math.abs(mass - 1) > 0.020000001))
     )
       return yield* new AiError.AiError({
-        module: "WikipediaRoute",
+        module: "JevDecision",
         method: "routeProbabilities",
         reason: new AiError.InvalidOutputError({
-          description: `Jev returned an invalid route distribution for ${question} (reported mass ${mass.toFixed(4)}). Only two-decimal rounding within 0.02 is supported.`,
+          description: `Jev returned an invalid distribution for ${question} (reported mass ${mass.toFixed(4)}). Only two-decimal rounding within 0.02 is supported.`,
         }),
       });
     distributions.push({
@@ -67,7 +67,7 @@ export const routeProbabilities = Effect.fnUntraced(function* (
   return { response: { ...response, answers }, distributions };
 });
 
-export const routeDecisionLayer = (apiKey: string) =>
+export const jevDecisionLayer = (apiKey: string) =>
   TypeSafeDecisionModel.layer({ model: "jev-latest" }).pipe(
     Layer.provide(
       Layer.effect(

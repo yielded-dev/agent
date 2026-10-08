@@ -2,6 +2,8 @@ import type { BrowserSelectFileRequest } from "@yielded/agent/interactive-browse
 import { Base64 } from "effect/encoding";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
+import { pageFunction } from "./page-function.ts";
+
 type Element = NonNullable<Awaited<ReturnType<Page["$"]>>>;
 
 // Both calls run this fixed function in Chromium. No caller-provided code or
@@ -53,7 +55,12 @@ export const makeFileSelection =
 
     const select = async (element: Element): Promise<void> => {
       if (session === undefined)
-        return element.evaluate(setFileSelection, encoded, request.fileName, request.mediaType);
+        return element.evaluate(
+          pageFunction(setFileSelection),
+          encoded,
+          request.fileName,
+          request.mediaType,
+        );
       let onOpened: (event: { backendNodeId?: number }) => void = () => {};
       let onAbort: () => void = () => {};
       let timer: ReturnType<typeof setTimeout> | undefined;

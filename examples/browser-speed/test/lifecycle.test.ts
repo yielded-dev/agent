@@ -145,7 +145,7 @@ it.effect(
         ...request(),
         scenario: "wikipedia",
         mode: "agent",
-        wikiDriver: "jev",
+        driver: "jev",
       };
 
       const services = BrowserSessions.of({
@@ -170,7 +170,7 @@ it.effect(
         for (const invalid of [
           { ...input, scenario: "create" as const },
           { ...input, model: "gpt-6-luna" as const },
-          { ...input, grounding: "jev" as const },
+          { ...input, reasoning: "low" as const },
         ]) {
           assert.strictEqual((yield* owner.run(invalid).pipe(Effect.result))._tag, "Failure");
           assert.strictEqual(allocations, 0);

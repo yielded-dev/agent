@@ -61,6 +61,7 @@ import {
   BrowserRunSessionLifecycle,
   type BrowserRunLifecycleOptions,
 } from "./internal/browser-session-lifecycle.ts";
+import { pageFunction } from "./internal/page-function.ts";
 
 export {
   BrowserRunCleanupError,
@@ -776,364 +777,370 @@ const disposeActionHandles = async (handles: ReadonlyArray<{ dispose: () => Prom
 };
 
 /** Runs entirely in the page realm for both observations and the last bound-element guard. */
-const observePage = (
-  target: object | undefined,
-  requestedSelector: string | undefined,
-  maximum: number,
-  maximumControls: number,
-  input?: {
-    readonly mode: "click" | "fill";
-    readonly expectedTarget: BrowserExpectedTarget;
-    readonly value?: string;
-  },
-) => {
-  const pageDocument = Reflect.get(globalThis, "document");
+const observePage = pageFunction(
+  (
+    target: object | undefined,
+    requestedSelector: string | undefined,
+    maximum: number,
+    maximumControls: number,
+    input?: {
+      readonly mode: "click" | "fill";
+      readonly expectedTarget: BrowserExpectedTarget;
+      readonly value?: string;
+    },
+  ) => {
+    const pageDocument = Reflect.get(globalThis, "document");
 
-  const matches =
-    requestedSelector === undefined
-      ? undefined
-      : Reflect.apply(Reflect.get(pageDocument, "querySelectorAll"), pageDocument, [
-          requestedSelector,
-        ]);
-
-  const selectorMatchCount =
-    matches === undefined || matches === null
-      ? 1
-      : Math.min(10_000, Reflect.get(matches, "length"));
-
-  const element =
-    target ??
-    (matches === undefined || matches === null
-      ? Reflect.get(pageDocument, "body")
-      : Reflect.get(matches, 0));
-
-  if (target !== undefined && Reflect.get(target, "isConnected") !== true)
-    return { _tag: "MissingElement" };
-
-  if (element === null) return { _tag: "MissingElement" };
-  if (element === undefined) return { _tag: "MissingElement" };
-  const innerText = Reflect.get(element, "innerText");
-  const textContent = Reflect.get(element, "textContent");
-
-  const pageText =
-    typeof innerText === "string" ? innerText : typeof textContent === "string" ? textContent : "";
-
-  const primaryControlSelector =
-    'input,select,textarea,label,button,[role="checkbox"],[role="radio"],[role="option"],[role="switch"],[role="tab"],[role="button"]';
-
-  const optionSelector = "select option";
-  const secondaryControlSelector = "a[href]";
-  const controlSelector = `${primaryControlSelector},${optionSelector},${secondaryControlSelector}`;
-
-  const selectorFor = (candidate: object) => {
-    const parts: Array<string> = [];
-    let current: object | null = candidate;
-
-    while (current !== null && current !== undefined) {
-      const tagName = String(Reflect.get(current, "tagName") ?? "").toLowerCase();
-
-      if (tagName === "") break;
-      const parent: object | null = Reflect.get(current, "parentElement");
-
-      if (parent === null) {
-        parts.push(tagName);
-        break;
-      }
-      let sibling = Reflect.get(current, "previousElementSibling");
-      let index = 1;
-
-      while (sibling !== null && sibling !== undefined) {
-        if (String(Reflect.get(sibling, "tagName") ?? "").toLowerCase() === tagName) index++;
-        sibling = Reflect.get(sibling, "previousElementSibling");
-      }
-      parts.push(`${tagName}:nth-of-type(${index})`);
-      current = parent;
-    }
-
-    return parts.reverse().join(" > ");
-  };
-
-  const visible = (candidate: object) => {
-    const hidden = Reflect.get(candidate, "hidden");
-
-    const ariaHidden = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
-      "aria-hidden",
-    ]);
-
-    const rects = Reflect.apply(Reflect.get(candidate, "getClientRects"), candidate, []);
-
-    return (
-      hidden !== true &&
-      ariaHidden !== "true" &&
-      typeof rects === "object" &&
-      rects !== null &&
-      Reflect.get(rects, "length") > 0
-    );
-  };
-
-  const candidates: Array<object> = [];
-  let controlsTruncated = false;
-
-  const consider = (candidate: object) => {
-    const tagName = String(Reflect.get(candidate, "tagName") ?? "").toLowerCase();
-
-    // Collapsed native options have no client rects. Their owning
-    // select determines visibility; observe text/selection, never value.
-    const visibilityTarget =
-      tagName === "option"
-        ? Reflect.apply(Reflect.get(candidate, "closest"), candidate, ["select"])
-        : candidate;
-
-    const actionable = tagName !== "label" || Reflect.get(candidate, "control") !== null;
-
-    if (
-      !actionable ||
-      typeof visibilityTarget !== "object" ||
-      visibilityTarget === null ||
-      !visible(visibilityTarget)
-    )
-      return;
-    candidates.push(candidate);
-    if (candidates.length > maximumControls) controlsTruncated = true;
-  };
-
-  const elementMatches = Reflect.get(element, "matches");
-
-  if (
-    typeof elementMatches === "function" &&
-    Reflect.apply(elementMatches, element, [controlSelector])
-  ) {
-    consider(element);
-  }
-
-  const considerSelector = (candidateSelector: string) => {
-    const descendants = Reflect.apply(Reflect.get(element, "querySelectorAll"), element, [
-      candidateSelector,
-    ]);
-
-    if (typeof descendants !== "object" || descendants === null) return;
-    const descendantCount = Reflect.get(descendants, "length");
-
-    for (let index = 0; index < descendantCount && !controlsTruncated; index++) {
-      consider(Reflect.get(descendants, index));
-    }
-  };
-
-  considerSelector(primaryControlSelector);
-  if (!controlsTruncated) considerSelector(optionSelector);
-  if (!controlsTruncated) considerSelector(secondaryControlSelector);
-
-  const identityKey = Symbol.for("@effect-agent/browser-observation");
-  let identity = Reflect.get(globalThis, identityKey);
-
-  if (identity === undefined || identity.document !== pageDocument) {
-    identity = {
-      document: pageDocument,
-      documentId: crypto.getRandomValues(new Uint32Array(4)).join("-"),
-      nodes: new WeakMap<object, string>(),
-    };
-    Reflect.set(globalThis, identityKey, identity);
-  }
-
-  const controls = candidates.slice(0, maximumControls).map((candidate) => {
-    let nodeId = identity.nodes.get(candidate);
-
-    if (nodeId === undefined) {
-      nodeId = crypto.getRandomValues(new Uint32Array(4)).join("-");
-      identity.nodes.set(candidate, nodeId);
-    }
-    const associated = Reflect.get(candidate, "control") ?? candidate;
-    const tagName = String(Reflect.get(candidate, "tagName") ?? "").toLowerCase();
-    const inputType = String(Reflect.get(associated, "type") ?? "").toLowerCase();
-
-    const role = String(
-      Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, ["role"]) ?? "",
-    ).toLowerCase();
-
-    const ariaLabel = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
-      "aria-label",
-    ]);
-
-    const candidateText =
-      tagName === "textarea" || tagName === "input" || tagName === "select"
+    const matches =
+      requestedSelector === undefined
         ? undefined
-        : Reflect.get(candidate, tagName === "option" ? "label" : "innerText");
+        : Reflect.apply(Reflect.get(pageDocument, "querySelectorAll"), pageDocument, [
+            requestedSelector,
+          ]);
 
-    const associatedLabels = Reflect.get(associated, "labels");
+    const selectorMatchCount =
+      matches === undefined || matches === null
+        ? 1
+        : Math.min(10_000, Reflect.get(matches, "length"));
 
-    const associatedLabel =
-      associatedLabels !== undefined &&
-      associatedLabels !== null &&
-      Reflect.get(associatedLabels, "length") > 0
-        ? Reflect.get(Reflect.get(associatedLabels, 0), "innerText")
-        : undefined;
+    const element =
+      target ??
+      (matches === undefined || matches === null
+        ? Reflect.get(pageDocument, "body")
+        : Reflect.get(matches, 0));
 
-    const label = String(
-      typeof ariaLabel === "string" && ariaLabel !== ""
-        ? ariaLabel
-        : typeof candidateText === "string" && candidateText !== ""
-          ? candidateText
-          : (associatedLabel ?? ""),
-    )
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 200);
-
-    const checked = Reflect.get(associated, "checked");
-
-    const selected =
-      tagName === "select"
-        ? Reflect.get(associated, "selectedIndex") >= 0
-        : Reflect.get(associated, "selected");
-
-    const disabled = Reflect.get(associated, "disabled");
-    const required = Reflect.get(associated, "required");
-    const validity = Reflect.get(associated, "validity");
-    const form = Reflect.get(associated, "form");
-
-    const formMatches =
-      form === null || form === undefined ? undefined : Reflect.get(form, "matches");
-
-    const ariaChecked = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
-      "aria-checked",
-    ]);
-
-    const ariaSelected = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
-      "aria-selected",
-    ]);
-
-    const ariaDisabled = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
-      "aria-disabled",
-    ]);
-
-    return {
-      nodeId,
-      ...(inputType === "" ? {} : { inputType: inputType.slice(0, 64) }),
-      selector: selectorFor(candidate),
-      kind: (tagName === "label"
-        ? `label:${inputType || "control"}`
-        : tagName === "input"
-          ? `input:${inputType || "text"}`
-          : role !== ""
-            ? `role:${role}`
-            : tagName
-      ).slice(0, 128),
-      ...(label === "" ? {} : { label }),
-      ...(typeof checked === "boolean"
-        ? { checked }
-        : ariaChecked === "true" || ariaChecked === "false"
-          ? { checked: ariaChecked === "true" }
-          : {}),
-      ...(typeof selected === "boolean"
-        ? { selected }
-        : ariaSelected === "true" || ariaSelected === "false"
-          ? { selected: ariaSelected === "true" }
-          : {}),
-      ...(typeof disabled === "boolean"
-        ? { disabled }
-        : ariaDisabled === "true" || ariaDisabled === "false"
-          ? { disabled: ariaDisabled === "true" }
-          : {}),
-      ...(typeof required === "boolean" ? { required } : {}),
-      ...(validity !== undefined && typeof Reflect.get(validity, "valid") === "boolean"
-        ? { valid: Reflect.get(validity, "valid") }
-        : {}),
-      ...(typeof formMatches === "function"
-        ? { formValid: Reflect.apply(formMatches, form, [":valid"]) }
-        : {}),
-    };
-  });
-
-  if (input !== undefined) {
-    const expected = input.expectedTarget;
-    const control = controls.find((candidate) => candidate.nodeId === expected.nodeId);
-
-    const fields = [
-      "kind",
-      "inputType",
-      "label",
-      "checked",
-      "selected",
-      "disabled",
-      "required",
-      "valid",
-      "formValid",
-    ] as const;
-
-    if (
-      target === undefined ||
-      identity.documentId !== expected.documentId ||
-      identity.nodes.get(target) !== expected.nodeId ||
-      control === undefined ||
-      (expected.state !== undefined &&
-        fields.some((field) => control[field] !== expected.state?.[field])) ||
-      Reflect.get(target, "isConnected") !== true
-    )
+    if (target !== undefined && Reflect.get(target, "isConnected") !== true)
       return { _tag: "MissingElement" };
-    if (expected.scopeSelector !== undefined) {
-      let roots;
 
-      try {
-        roots = Reflect.apply(Reflect.get(pageDocument, "querySelectorAll"), pageDocument, [
-          expected.scopeSelector,
-        ]);
-      } catch {
-        return { _tag: "MissingElement" };
-      }
-      if (typeof roots !== "object" || roots === null) return { _tag: "MissingElement" };
-      const root = Reflect.get(roots, 0);
+    if (element === null) return { _tag: "MissingElement" };
+    if (element === undefined) return { _tag: "MissingElement" };
+    const innerText = Reflect.get(element, "innerText");
+    const textContent = Reflect.get(element, "textContent");
 
-      if (
-        Reflect.get(roots, "length") !== 1 ||
-        root === undefined ||
-        !Reflect.apply(Reflect.get(root, "contains"), root, [target])
-      )
-        return { _tag: "MissingElement" };
-    }
-    // Validation and dispatch share one page JS task. No coordinate lookup, selector
-    // re-resolution, or asynchronous boundary can select a replacement node.
-    if (input.mode === "click") {
-      const prototype = Reflect.get(Reflect.get(globalThis, "HTMLElement"), "prototype");
+    const pageText =
+      typeof innerText === "string"
+        ? innerText
+        : typeof textContent === "string"
+          ? textContent
+          : "";
 
-      Reflect.apply(Reflect.get(prototype, "click"), target, []);
-    } else {
-      let prototype = Reflect.getPrototypeOf(target);
-      let setValue: ((value: string) => void) | undefined;
+    const primaryControlSelector =
+      'input,select,textarea,label,button,[role="checkbox"],[role="radio"],[role="option"],[role="switch"],[role="tab"],[role="button"]';
 
-      while (prototype !== null) {
-        const setter = Reflect.getOwnPropertyDescriptor(prototype, "value")?.set;
+    const optionSelector = "select option";
+    const secondaryControlSelector = "a[href]";
+    const controlSelector = `${primaryControlSelector},${optionSelector},${secondaryControlSelector}`;
 
-        if (typeof setter === "function") {
-          setValue = setter;
+    const selectorFor = (candidate: object) => {
+      const parts: Array<string> = [];
+      let current: object | null = candidate;
+
+      while (current !== null && current !== undefined) {
+        const tagName = String(Reflect.get(current, "tagName") ?? "").toLowerCase();
+
+        if (tagName === "") break;
+        const parent: object | null = Reflect.get(current, "parentElement");
+
+        if (parent === null) {
+          parts.push(tagName);
           break;
         }
-        prototype = Reflect.getPrototypeOf(prototype);
-      }
-      if (setValue === undefined || input.value === undefined) return { _tag: "MissingElement" };
-      Reflect.apply(setValue, target, [input.value]);
-      const dispatchEvent = Reflect.get(target, "dispatchEvent");
+        let sibling = Reflect.get(current, "previousElementSibling");
+        let index = 1;
 
-      Reflect.apply(dispatchEvent, target, [new Event("input", { bubbles: true })]);
-      Reflect.apply(dispatchEvent, target, [new Event("change", { bubbles: true })]);
+        while (sibling !== null && sibling !== undefined) {
+          if (String(Reflect.get(sibling, "tagName") ?? "").toLowerCase() === tagName) index++;
+          sibling = Reflect.get(sibling, "previousElementSibling");
+        }
+        parts.push(`${tagName}:nth-of-type(${index})`);
+        current = parent;
+      }
+
+      return parts.reverse().join(" > ");
+    };
+
+    const visible = (candidate: object) => {
+      const hidden = Reflect.get(candidate, "hidden");
+
+      const ariaHidden = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
+        "aria-hidden",
+      ]);
+
+      const rects = Reflect.apply(Reflect.get(candidate, "getClientRects"), candidate, []);
+
+      return (
+        hidden !== true &&
+        ariaHidden !== "true" &&
+        typeof rects === "object" &&
+        rects !== null &&
+        Reflect.get(rects, "length") > 0
+      );
+    };
+
+    const candidates: Array<object> = [];
+    let controlsTruncated = false;
+
+    const consider = (candidate: object) => {
+      const tagName = String(Reflect.get(candidate, "tagName") ?? "").toLowerCase();
+
+      // Collapsed native options have no client rects. Their owning
+      // select determines visibility; observe text/selection, never value.
+      const visibilityTarget =
+        tagName === "option"
+          ? Reflect.apply(Reflect.get(candidate, "closest"), candidate, ["select"])
+          : candidate;
+
+      const actionable = tagName !== "label" || Reflect.get(candidate, "control") !== null;
+
+      if (
+        !actionable ||
+        typeof visibilityTarget !== "object" ||
+        visibilityTarget === null ||
+        !visible(visibilityTarget)
+      )
+        return;
+      candidates.push(candidate);
+      if (candidates.length > maximumControls) controlsTruncated = true;
+    };
+
+    const elementMatches = Reflect.get(element, "matches");
+
+    if (
+      typeof elementMatches === "function" &&
+      Reflect.apply(elementMatches, element, [controlSelector])
+    ) {
+      consider(element);
     }
 
-    return { _tag: "Text", text: "" };
-  }
+    const considerSelector = (candidateSelector: string) => {
+      const descendants = Reflect.apply(Reflect.get(element, "querySelectorAll"), element, [
+        candidateSelector,
+      ]);
 
-  // JSON is the bounded wire representation of this existing text result.
-  // eslint-disable-next-line no-restricted-properties
-  const text = JSON.stringify({
-    documentId: identity.documentId,
-    pageText,
-    selectorMatchCount,
-    controls,
-    controlsTruncated,
-  });
+      if (typeof descendants !== "object" || descendants === null) return;
+      const descendantCount = Reflect.get(descendants, "length");
 
-  const observed = new TextEncoder().encode(text).byteLength;
+      for (let index = 0; index < descendantCount && !controlsTruncated; index++) {
+        consider(Reflect.get(descendants, index));
+      }
+    };
 
-  return observed > maximum ? { _tag: "OverLimit", observed } : { _tag: "Text", text };
-};
+    considerSelector(primaryControlSelector);
+    if (!controlsTruncated) considerSelector(optionSelector);
+    if (!controlsTruncated) considerSelector(secondaryControlSelector);
+
+    const identityKey = Symbol.for("@effect-agent/browser-observation");
+    let identity = Reflect.get(globalThis, identityKey);
+
+    if (identity === undefined || identity.document !== pageDocument) {
+      identity = {
+        document: pageDocument,
+        documentId: crypto.getRandomValues(new Uint32Array(4)).join("-"),
+        nodes: new WeakMap<object, string>(),
+      };
+      Reflect.set(globalThis, identityKey, identity);
+    }
+
+    const controls = candidates.slice(0, maximumControls).map((candidate) => {
+      let nodeId = identity.nodes.get(candidate);
+
+      if (nodeId === undefined) {
+        nodeId = crypto.getRandomValues(new Uint32Array(4)).join("-");
+        identity.nodes.set(candidate, nodeId);
+      }
+      const associated = Reflect.get(candidate, "control") ?? candidate;
+      const tagName = String(Reflect.get(candidate, "tagName") ?? "").toLowerCase();
+      const inputType = String(Reflect.get(associated, "type") ?? "").toLowerCase();
+
+      const role = String(
+        Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, ["role"]) ?? "",
+      ).toLowerCase();
+
+      const ariaLabel = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
+        "aria-label",
+      ]);
+
+      const candidateText =
+        tagName === "textarea" || tagName === "input" || tagName === "select"
+          ? undefined
+          : Reflect.get(candidate, tagName === "option" ? "label" : "innerText");
+
+      const associatedLabels = Reflect.get(associated, "labels");
+
+      const associatedLabel =
+        associatedLabels !== undefined &&
+        associatedLabels !== null &&
+        Reflect.get(associatedLabels, "length") > 0
+          ? Reflect.get(Reflect.get(associatedLabels, 0), "innerText")
+          : undefined;
+
+      const label = String(
+        typeof ariaLabel === "string" && ariaLabel !== ""
+          ? ariaLabel
+          : typeof candidateText === "string" && candidateText !== ""
+            ? candidateText
+            : (associatedLabel ?? ""),
+      )
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+
+      const checked = Reflect.get(associated, "checked");
+
+      const selected =
+        tagName === "select"
+          ? Reflect.get(associated, "selectedIndex") >= 0
+          : Reflect.get(associated, "selected");
+
+      const disabled = Reflect.get(associated, "disabled");
+      const required = Reflect.get(associated, "required");
+      const validity = Reflect.get(associated, "validity");
+      const form = Reflect.get(associated, "form");
+
+      const formMatches =
+        form === null || form === undefined ? undefined : Reflect.get(form, "matches");
+
+      const ariaChecked = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
+        "aria-checked",
+      ]);
+
+      const ariaSelected = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
+        "aria-selected",
+      ]);
+
+      const ariaDisabled = Reflect.apply(Reflect.get(candidate, "getAttribute"), candidate, [
+        "aria-disabled",
+      ]);
+
+      return {
+        nodeId,
+        ...(inputType === "" ? {} : { inputType: inputType.slice(0, 64) }),
+        selector: selectorFor(candidate),
+        kind: (tagName === "label"
+          ? `label:${inputType || "control"}`
+          : tagName === "input"
+            ? `input:${inputType || "text"}`
+            : role !== ""
+              ? `role:${role}`
+              : tagName
+        ).slice(0, 128),
+        ...(label === "" ? {} : { label }),
+        ...(typeof checked === "boolean"
+          ? { checked }
+          : ariaChecked === "true" || ariaChecked === "false"
+            ? { checked: ariaChecked === "true" }
+            : {}),
+        ...(typeof selected === "boolean"
+          ? { selected }
+          : ariaSelected === "true" || ariaSelected === "false"
+            ? { selected: ariaSelected === "true" }
+            : {}),
+        ...(typeof disabled === "boolean"
+          ? { disabled }
+          : ariaDisabled === "true" || ariaDisabled === "false"
+            ? { disabled: ariaDisabled === "true" }
+            : {}),
+        ...(typeof required === "boolean" ? { required } : {}),
+        ...(validity !== undefined && typeof Reflect.get(validity, "valid") === "boolean"
+          ? { valid: Reflect.get(validity, "valid") }
+          : {}),
+        ...(typeof formMatches === "function"
+          ? { formValid: Reflect.apply(formMatches, form, [":valid"]) }
+          : {}),
+      };
+    });
+
+    if (input !== undefined) {
+      const expected = input.expectedTarget;
+      const control = controls.find((candidate) => candidate.nodeId === expected.nodeId);
+
+      const fields = [
+        "kind",
+        "inputType",
+        "label",
+        "checked",
+        "selected",
+        "disabled",
+        "required",
+        "valid",
+        "formValid",
+      ] as const;
+
+      if (
+        target === undefined ||
+        identity.documentId !== expected.documentId ||
+        identity.nodes.get(target) !== expected.nodeId ||
+        control === undefined ||
+        (expected.state !== undefined &&
+          fields.some((field) => control[field] !== expected.state?.[field])) ||
+        Reflect.get(target, "isConnected") !== true
+      )
+        return { _tag: "MissingElement" };
+      if (expected.scopeSelector !== undefined) {
+        let roots;
+
+        try {
+          roots = Reflect.apply(Reflect.get(pageDocument, "querySelectorAll"), pageDocument, [
+            expected.scopeSelector,
+          ]);
+        } catch {
+          return { _tag: "MissingElement" };
+        }
+        if (typeof roots !== "object" || roots === null) return { _tag: "MissingElement" };
+        const root = Reflect.get(roots, 0);
+
+        if (
+          Reflect.get(roots, "length") !== 1 ||
+          root === undefined ||
+          !Reflect.apply(Reflect.get(root, "contains"), root, [target])
+        )
+          return { _tag: "MissingElement" };
+      }
+      // Validation and dispatch share one page JS task. No coordinate lookup, selector
+      // re-resolution, or asynchronous boundary can select a replacement node.
+      if (input.mode === "click") {
+        const prototype = Reflect.get(Reflect.get(globalThis, "HTMLElement"), "prototype");
+
+        Reflect.apply(Reflect.get(prototype, "click"), target, []);
+      } else {
+        let prototype = Reflect.getPrototypeOf(target);
+        let setValue: ((value: string) => void) | undefined;
+
+        while (prototype !== null) {
+          const setter = Reflect.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+          if (typeof setter === "function") {
+            setValue = setter;
+            break;
+          }
+          prototype = Reflect.getPrototypeOf(prototype);
+        }
+        if (setValue === undefined || input.value === undefined) return { _tag: "MissingElement" };
+        Reflect.apply(setValue, target, [input.value]);
+        const dispatchEvent = Reflect.get(target, "dispatchEvent");
+
+        Reflect.apply(dispatchEvent, target, [new Event("input", { bubbles: true })]);
+        Reflect.apply(dispatchEvent, target, [new Event("change", { bubbles: true })]);
+      }
+
+      return { _tag: "Text", text: "" };
+    }
+
+    // JSON is the bounded wire representation of this existing text result.
+    // eslint-disable-next-line no-restricted-properties
+    const text = JSON.stringify({
+      documentId: identity.documentId,
+      pageText,
+      selectorMatchCount,
+      controls,
+      controlsTruncated,
+    });
+
+    const observed = new TextEncoder().encode(text).byteLength;
+
+    return observed > maximum ? { _tag: "OverLimit", observed } : { _tag: "Text", text };
+  },
+);
 
 const runObservedPageAction = async (
   page: Page,

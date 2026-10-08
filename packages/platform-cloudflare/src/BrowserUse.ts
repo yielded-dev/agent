@@ -1,4 +1,5 @@
 import {
+  type ActOptions,
   type ActionResult,
   type NavigateRequest,
   Action,
@@ -18,6 +19,7 @@ import { InteractiveBrowserTargetUrl } from "@yielded/agent/interactive-browser"
 import { Deferred, Effect, Fiber, Layer, Schema, Semaphore } from "effect";
 import {
   ElementHandle,
+  TimeoutError,
   type Frame,
   type Page,
   type Dialog,
@@ -129,7 +131,6 @@ export const make = Effect.fnUntraced(function* <R>(
   let dialogSignal: Deferred.Deferred<void> | undefined;
   let nextInput = 0;
   let lastTabs: NonNullable<(typeof Observation.Type)["tabs"]> = [];
-  let latestObservation: typeof Observation.Type | null = null;
 
   const clearInput = () => {
     pendingInput = undefined;
@@ -207,7 +208,6 @@ export const make = Effect.fnUntraced(function* <R>(
             tabs.clear();
             activePage = undefined;
             targets.clear();
-            latestObservation = null;
             frames.clear();
           }),
         ),
@@ -252,6 +252,7 @@ export const make = Effect.fnUntraced(function* <R>(
 
       for (let attempt = 0; ; attempt++) {
         let authorizationChanged = false;
+        let lostDocument = false;
 
         const result = yield* session
           .run(
@@ -329,7 +330,28 @@ export const make = Effect.fnUntraced(function* <R>(
                 throw new Error("Tab changed during authorization");
               attach(selected);
 
-              return action(selected, (name) => span.attribute("browser.native.stage", name));
+              try {
+                return await action(selected, (name) =>
+                  span.attribute("browser.native.stage", name),
+                );
+              } catch (error) {
+                // A read that loses its document to a navigation retries with fresh authorization.
+                // The context can be destroyed before the page reports its new URL.
+                lostDocument =
+                  error instanceof Error &&
+                  /Execution context was destroyed|Cannot find context with specified id/.test(
+                    error.message,
+                  );
+                // The first read of a fresh controller has no page URL yet; a lost document
+                // still retries, and the retry authorizes the page it then finds.
+                if (
+                  read &&
+                  (lostDocument ||
+                    (authorizedUrl !== undefined && selected.url() !== authorizedUrl))
+                )
+                  authorizationChanged = true;
+                throw error;
+              }
             },
             timeoutMillis === undefined ? undefined : { timeoutMillis },
           )
@@ -347,7 +369,8 @@ export const make = Effect.fnUntraced(function* <R>(
           return yield* result.failure;
 
         span.attribute("browser.read.authorization_retries", attempt + 1);
-        yield* Effect.sleep("20 millis");
+        // A destroyed context means the next document has not committed yet; give it time.
+        yield* Effect.sleep(lostDocument ? "250 millis" : "20 millis");
       }
     }).pipe(
       Effect.mapError((error) => {
@@ -389,7 +412,6 @@ export const make = Effect.fnUntraced(function* <R>(
     if (request.frame !== undefined && !frames.has(request.frame))
       return yield* invalid("Frame was not observed. Inspect the page first.");
     targets.clear();
-    latestObservation = null;
     generation++;
 
     if (pendingInput?.fiber.pollUnsafe()?._tag === "Failure") {
@@ -416,8 +438,6 @@ export const make = Effect.fnUntraced(function* <R>(
           },
         ],
       });
-
-      latestObservation = observation;
 
       return observation;
     }
@@ -475,6 +495,7 @@ export const make = Effect.fnUntraced(function* <R>(
       let text = "";
       let readyState: (typeof Observation.Type)["readyState"];
       let truncated = currentFrames.length > 32 || currentTabs.length > 32;
+      let metrics: (typeof Observation.Type)["page"];
       const controls: Array<typeof Control.Type> = [];
 
       for (const frame of inspected) {
@@ -511,19 +532,25 @@ export const make = Effect.fnUntraced(function* <R>(
         let result = Schema.decodeUnknownSync(Observation)(await read());
 
         // Native click acknowledgement can precede document parsing. Settle this
-        // explicit readiness condition before returning an empty loading document.
+        // explicit readiness condition before returning an empty loading document. A document
+        // still parsing after 2 s is observed as it stands, reporting readyState "loading".
         if (result.readyState === "loading") {
           const ready = await frame
             .isolatedRealm()
             .waitForFunction(() => document.readyState !== "loading", {
               timeout: 2_000,
               polling: "raf",
+            })
+            .catch((error: unknown) => {
+              if (error instanceof TimeoutError) return undefined;
+              throw error;
             });
 
-          await ready.dispose();
+          await ready?.dispose();
           result = Schema.decodeUnknownSync(Observation)(await read());
         }
         readyState = result.readyState;
+        if (frame === page.mainFrame()) metrics = result.page;
 
         text += limits.observationMode === "jev" ? result.text : `\n[${ref}]${result.text}`;
         truncated ||= result.truncated ?? false;
@@ -541,11 +568,15 @@ export const make = Effect.fnUntraced(function* <R>(
         text: text.slice(0, textLimit),
         controls,
         ...(readyState === undefined ? {} : { readyState }),
+        ...(metrics === undefined ? {} : { page: metrics }),
         truncated: truncated || text.length > textLimit,
         frames: currentFrames.slice(0, 32).map((frame) => ({
           ref: frameId(frame),
           name: frame.name().slice(0, 300),
-          url: observedUrl(frame.url()),
+          // Fragments are client-side state; payment frames put kilobytes of parameters there.
+          url: observedUrl(
+            frame.url().startsWith("data:") ? frame.url() : frame.url().split("#", 1)[0],
+          ),
           inspected: inspected.includes(frame),
         })),
         tabs: tabObservation,
@@ -556,8 +587,6 @@ export const make = Effect.fnUntraced(function* <R>(
     const observation = yield* bounded(value).pipe(
       Effect.tapError(() => Effect.sync(() => targets.clear())),
     );
-
-    latestObservation = observation;
 
     return observation;
   });
@@ -627,6 +656,7 @@ export const make = Effect.fnUntraced(function* <R>(
     dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]>,
     frame?: string,
     alreadySettled = false,
+    observe = true,
   ) {
     if (dispatch === "acknowledged" && !alreadySettled)
       yield* settle().pipe(
@@ -636,16 +666,20 @@ export const make = Effect.fnUntraced(function* <R>(
           }),
         ),
       );
+    // Without an observation, refs from before the input can no longer be authorized.
+    if (!observe) targets.clear();
 
-    const observation = yield* inspect(frame === undefined ? {} : { frame }, {
-      kind: "observe",
-    }).pipe(
-      Effect.catch((failure) => {
-        error ??= `Input receipt retained; observation failed. Inspect before continuing. ${failure.message}`;
+    const observation = !observe
+      ? null
+      : yield* inspect(frame === undefined ? {} : { frame }, {
+          kind: "observe",
+        }).pipe(
+          Effect.catch((failure) => {
+            error ??= `Input receipt retained; observation failed. Inspect before continuing. ${failure.message}`;
 
-        return Effect.succeed(null);
-      }),
-    );
+            return Effect.succeed(null);
+          }),
+        );
 
     return {
       completed,
@@ -672,8 +706,14 @@ export const make = Effect.fnUntraced(function* <R>(
     yield* charge();
     const command: Command = { kind: "act", action: value };
 
-    // Preparation has its own 2 s budget. It never waits for a missing selector;
-    // an actually pending CDP request is terminated by BrowserSession, not abandoned.
+    // Preparation has its own budget: 2 s, or 8 s inside a frame, where each frame level adds
+    // owner checks and a newly mounted frame first creates its isolated world. It never waits
+    // for a missing selector; an actually pending CDP request is terminated by BrowserSession,
+    // not abandoned.
+    const inFrame = ![...tabs.values()].some(
+      (tab) => frameIds.get(tab.mainFrame()) === target.frame,
+    );
+
     let dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]> = "not-dispatched";
     let refusal: string | undefined;
 
@@ -683,7 +723,16 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return false;
+        // Main-frame refs are checked in place, without resolving and releasing a handle.
+        if (frame.parentFrame() === null) {
+          stage("validate-and-scroll");
 
+          const checked = await frame
+            .isolatedRealm()
+            .evaluate(checkDom, value.ref, target.control, true, value.kind !== "press");
+
+          return checked !== false;
+        }
         stage("resolve-reference");
 
         const handle = await frame
@@ -708,7 +757,7 @@ export const make = Effect.fnUntraced(function* <R>(
           await handle.dispose();
         }
       },
-      2_000,
+      inFrame ? 8_000 : 2_000,
       "prepare",
     ).pipe(
       Effect.mapError(
@@ -733,6 +782,189 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return "not-dispatched" as const;
+        // Main-frame input works on the ref in place, without resolving and releasing a handle.
+        // Focus and its check stay separate reads so focus handlers run before the check.
+        if (frame.parentFrame() === null) {
+          const realm = frame.isolatedRealm();
+
+          const point = await realm.evaluate(
+            checkDom,
+            value.ref,
+            target.control,
+            false,
+            value.kind !== "press",
+          );
+
+          if (point === false) return "not-dispatched" as const;
+          stage("dispatch-input");
+          if (value.kind === "click") {
+            dispatch = "unknown";
+            await page.mouse.click(point.x, point.y);
+          } else if (value.kind === "select") {
+            dispatch = "unknown";
+
+            // Puppeteer's select: an enabled matching option, then input and change events.
+            const selected = await realm.evaluate(
+              (ref, value) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                if (
+                  !(node instanceof HTMLSelectElement) ||
+                  !Array.from(node.options).some(
+                    (option) =>
+                      !option.disabled &&
+                      !(
+                        option.parentElement instanceof HTMLOptGroupElement &&
+                        option.parentElement.disabled
+                      ) &&
+                      option.value === value,
+                  )
+                )
+                  return false;
+                if (node.multiple)
+                  for (const option of Array.from(node.options))
+                    option.selected = option.value === value;
+                else {
+                  for (const option of Array.from(node.options)) option.selected = false;
+                  const match = Array.from(node.options).find((option) => option.value === value);
+
+                  if (match !== undefined) match.selected = true;
+                }
+                node.dispatchEvent(new Event("input", { bubbles: true }));
+                node.dispatchEvent(new Event("change", { bubbles: true }));
+
+                return true;
+              },
+              value.ref,
+              value.value,
+            );
+
+            if (!selected) {
+              dispatch = "not-dispatched";
+
+              return "not-dispatched" as const;
+            }
+          } else if (value.kind === "press") {
+            const focused =
+              (await realm.evaluate((ref) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                if (!(node instanceof HTMLElement)) return false;
+                node.focus();
+
+                return true;
+              }, value.ref)) &&
+              (await realm.evaluate((ref) => {
+                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                  ref,
+                );
+
+                return (
+                  node instanceof Node &&
+                  node.isConnected &&
+                  Reflect.get(node.getRootNode(), "activeElement") === node
+                );
+              }, value.ref));
+
+            if (!focused) return "not-dispatched" as const;
+            dispatch = "unknown";
+            await page.keyboard.press(value.key);
+          } else {
+            const focused = await realm.evaluate((ref) => {
+              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                ref,
+              );
+
+              if (
+                !(
+                  (node instanceof HTMLInputElement &&
+                    ![
+                      "password",
+                      "file",
+                      "checkbox",
+                      "radio",
+                      "hidden",
+                      "submit",
+                      "button",
+                    ].includes(node.type) &&
+                    !node.readOnly) ||
+                  (node instanceof HTMLTextAreaElement && !node.readOnly) ||
+                  (node instanceof HTMLElement &&
+                    node.isContentEditable &&
+                    node.getAttribute("aria-readonly") !== "true")
+                )
+              )
+                return false;
+              node.focus();
+
+              return true;
+            }, value.ref);
+
+            if (!focused) return "not-dispatched" as const;
+
+            // Focus handlers can replace a field. Never transfer input to the new focus.
+            const selected = await realm.evaluate((ref) => {
+              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
+                ref,
+              );
+
+              if (
+                !(node instanceof HTMLElement) ||
+                !node.isConnected ||
+                !(
+                  node.getRootNode() instanceof Document || node.getRootNode() instanceof ShadowRoot
+                ) ||
+                Reflect.get(node.getRootNode(), "activeElement") !== node
+              )
+                return false;
+              let selected = false;
+
+              if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+                node.select();
+                selected =
+                  node.value.length === 0 ||
+                  (node.selectionStart === 0 && node.selectionEnd === node.value.length) ||
+                  globalThis.getSelection()?.toString() === node.value;
+              } else {
+                const selection = globalThis.getSelection();
+
+                if (selection === null) return false;
+                const range = document.createRange();
+
+                range.selectNodeContents(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                selected =
+                  selection.rangeCount === 1 &&
+                  selection.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, range) ===
+                    0 &&
+                  selection.getRangeAt(0).compareBoundaryPoints(Range.END_TO_END, range) === 0;
+              }
+
+              return (
+                selected &&
+                node.isConnected &&
+                Reflect.get(node.getRootNode(), "activeElement") === node
+              );
+            }, value.ref);
+
+            if (!selected) {
+              refusal =
+                "Native selection could not prepare this field for replacement. No input dispatched.";
+
+              return "not-dispatched" as const;
+            }
+            dispatch = "unknown";
+            await page.keyboard.sendCharacter(value.value);
+          }
+          dispatch = "acknowledged";
+
+          return "acknowledged" as const;
+        }
 
         const handle = await frame
           .isolatedRealm()
@@ -924,7 +1156,10 @@ export const make = Effect.fnUntraced(function* <R>(
     return result.success;
   });
 
-  const act = Effect.fnUntraced(function* (values: ReadonlyArray<Action>) {
+  const act = Effect.fnUntraced(function* (
+    values: ReadonlyArray<Action>,
+    options: ActOptions = {},
+  ) {
     yield* Schema.decodeEffect(
       Schema.Array(Action).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
     )(values).pipe(Effect.mapError(() => invalid("Expected 1–8 valid actions.")));
@@ -963,7 +1198,7 @@ export const make = Effect.fnUntraced(function* <R>(
       "browser.dispatch": dispatch,
     });
 
-    return yield* after(completed, error, dispatch, frame, true);
+    return yield* after(completed, error, dispatch, frame, true, options.observe !== false);
   });
 
   const navigate = Effect.fnUntraced(function* (request: typeof NavigateRequest.Type) {
@@ -1278,9 +1513,9 @@ export const make = Effect.fnUntraced(function* <R>(
   });
 
   const actions = BrowserActions.of({
-    latestObservation: Effect.sync(() => latestObservation),
     observe: lock.withPermit(inspect({}, { kind: "observe" })),
-    act: (values) => lock.withPermit(act(values)).pipe(Effect.withSpan("BrowserUse.act")),
+    act: (values, options) =>
+      lock.withPermit(act(values, options)).pipe(Effect.withSpan("BrowserUse.act")),
   });
 
   const control = BrowserControl.of({
