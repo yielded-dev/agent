@@ -68,8 +68,7 @@ export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
 
   const execute = postgres
     ? executePostgres
-    : <A extends object>(statement: Statement<A>) =>
-        Effect.suspend(() => statement.withoutTransform);
+    : <A extends object>(statement: Statement<A>) => statement.withoutTransform;
 
   return {
     table: (name: string) => sql(namespace === undefined ? name : `${namespace}.${name}`),

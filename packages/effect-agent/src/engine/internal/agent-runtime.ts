@@ -3272,8 +3272,11 @@ const invalidProviderUsage = () =>
     message: "Model response usage fields and derived totals must be non-negative safe integers",
   });
 
+const decodeUsageTotal = Schema.decodeEffect(Schema.Natural);
+const decodeProviderUsage = Schema.decodeEffect(ProviderUsage);
+
 const decodeProviderUsageTotal = (value: number): Effect.Effect<number, ModelProtocolError> =>
-  Schema.decodeEffect(Schema.Natural)(value).pipe(Effect.mapError(() => invalidProviderUsage()));
+  decodeUsageTotal(value).pipe(Effect.mapError(() => invalidProviderUsage()));
 
 const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>(
   agent: AgentValue,
@@ -3301,7 +3304,7 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
 
     const webSearchCalls = yield* decodeProviderUsageTotal(response.webSearchCalls ?? 0);
 
-    const providerUsage = yield* Schema.decodeEffect(ProviderUsage)(usage).pipe(
+    const providerUsage = yield* decodeProviderUsage(usage).pipe(
       Effect.mapError(() => invalidProviderUsage()),
     );
 
@@ -4542,9 +4545,14 @@ const makeInitialPrompt = (
     }),
   );
 
+const decodeToolCallIdValue = Schema.decodeEffect(ToolCallId);
+const decodeProviderToolCallIdValue = Schema.decodeEffect(ProviderToolCallId);
+const decodeProviderResponsePartIdValue = Schema.decodeEffect(ProviderResponsePartId);
+const decodeJson = Schema.decodeUnknownEffect(Schema.Json);
+
 const decodeToolCallId = (id: string) =>
   Effect.suspend(() =>
-    Schema.decodeEffect(ToolCallId)(id).pipe(
+    decodeToolCallIdValue(id).pipe(
       Effect.mapError((cause) =>
         ModelProtocolError.make({
           message: `Invalid Tool Call ID: ${cause.message}`,
@@ -4555,7 +4563,7 @@ const decodeToolCallId = (id: string) =>
 
 const decodeProviderToolCallId = (id: string) =>
   Effect.suspend(() =>
-    Schema.decodeEffect(ProviderToolCallId)(id).pipe(
+    decodeProviderToolCallIdValue(id).pipe(
       Effect.mapError(() =>
         ModelProtocolError.make({
           message:
@@ -4567,7 +4575,7 @@ const decodeProviderToolCallId = (id: string) =>
 
 const decodeProviderResponsePartId = (id: string) =>
   Effect.suspend(() =>
-    Schema.decodeEffect(ProviderResponsePartId)(id).pipe(
+    decodeProviderResponsePartIdValue(id).pipe(
       Effect.mapError(() =>
         ModelProtocolError.make({
           message:
@@ -4644,7 +4652,7 @@ const decodeEventJson = (
   label: string,
 ): Effect.Effect<Schema.Json, ModelProtocolError> =>
   Effect.suspend(() =>
-    Schema.decodeUnknownEffect(Schema.Json)(value).pipe(
+    decodeJson(value).pipe(
       Effect.mapError((cause) =>
         ModelProtocolError.make({
           message: `${label} is not JSON: ${cause.message}`,

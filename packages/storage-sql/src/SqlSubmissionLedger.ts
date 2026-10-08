@@ -365,8 +365,12 @@ const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeOwnershipSnapshot = Schema.decodeUnknownEffect(OwnershipSnapshot);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
 
+const decodeSubmissionSnapshotFields = Schema.decodeEffect(
+  Schema.toType(Schema.Struct(SubmissionSnapshot.fields)),
+);
+
 const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
-  Schema.decodeEffect(Schema.toType(Schema.Struct(SubmissionSnapshot.fields)))(input).pipe(
+  decodeSubmissionSnapshotFields(input).pipe(
     Effect.map((fields) => SubmissionSnapshot.make(fields)),
   );
 

@@ -105,6 +105,8 @@ const failure = (message: string, cause?: unknown) =>
 const capacityFailure = (message: string) =>
   failure(message, AgentPersistenceCapacityError.make({ message }));
 
+const decodeResponsePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
+
 const validateBatchHeader = Schema.decodeSync(
   Schema.Struct({
     batchId: CanonicalBatch.fields.batchId,
@@ -583,6 +585,7 @@ const advanceFacts = Effect.fnUntraced(function* (
   let terminal = previous?.continuation.terminal;
   let position = previous?.continuation.position ?? "starting";
   let response = previous?.response;
+  let responsePrompt: Prompt.Prompt | undefined;
   let results = new Map(previous?.results);
   let childResults = new Map(previous?.childResults);
   let completionBytes = previous?.completionBytes;
@@ -606,9 +609,11 @@ const advanceFacts = Effect.fnUntraced(function* (
         if (payload.turn !== accounting.committedTurns + 1)
           return yield* failure("Canonical Turn progress must advance once");
 
-        const messages = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(payload.messages).pipe(
+        const messages = yield* decodeResponsePrompt(payload.messages).pipe(
           Effect.mapError((cause) => failure("Invalid model evidence", cause)),
         );
+
+        responsePrompt = messages;
 
         const calls = messages.content.flatMap((message) =>
           message.role === "assistant"
@@ -741,9 +746,11 @@ const advanceFacts = Effect.fnUntraced(function* (
     response.turn > accounting.accountedToolTurn &&
     response.toolOperations.every((operation) => results.has(operation.toolCallId))
   ) {
-    const messages = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(response.messages).pipe(
-      Effect.mapError((cause) => failure("Invalid batch evidence", cause)),
-    );
+    const messages =
+      responsePrompt ??
+      (yield* decodeResponsePrompt(response.messages).pipe(
+        Effect.mapError((cause) => failure("Invalid batch evidence", cause)),
+      ));
 
     const parts = messages.content.flatMap((message) =>
       message.role === "assistant" ? message.content : [],

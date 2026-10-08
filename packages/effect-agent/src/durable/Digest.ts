@@ -15,6 +15,7 @@ export class DigestError extends Schema.TaggedError<DigestError>()("DigestError"
 }) {}
 
 const utf8 = new TextEncoder();
+const decodeDigest = Schema.decodeEffect(Digest);
 
 /** Serialize schema-encoded JSON with the canonical digest's locale-independent key order. */
 export const canonicalJson = (value: Schema.Json): string => stringifyCanonicalJson(value);
@@ -34,7 +35,7 @@ const digestText = Effect.fnUntraced(function* (
       ),
     );
 
-  return yield* Schema.decodeEffect(Digest)(Hex.encode(digest)).pipe(
+  return yield* decodeDigest(Hex.encode(digest)).pipe(
     Effect.mapError(() => DigestError.make({ message: "SHA-256 returned an invalid digest" })),
   );
 });

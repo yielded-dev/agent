@@ -508,6 +508,7 @@ interface FoldState {
 }
 
 const decodeToolCallId = Schema.decodeSync(ToolCallId);
+const decodeToolCallIdEffect = Schema.decodeEffect(ToolCallId);
 
 const declaredApplicationToolCallIds = (prompt: Prompt.Prompt): ReadonlyArray<string> => {
   const ids: Array<string> = [];
@@ -769,7 +770,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         let lastSettlementSequence = 0;
 
         for (const id of declared) {
-          const callId = yield* Schema.decodeEffect(ToolCallId)(id).pipe(
+          const callId = yield* decodeToolCallIdEffect(id).pipe(
             Effect.mapError((cause) =>
               journalError("Failed to decode a declared Tool Call ID", cause),
             ),
@@ -1350,7 +1351,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
               for (const call of message.content) {
                 if (call.type !== "tool-call" || call.providerExecuted) continue;
 
-                const callId = yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(
+                const callId = yield* decodeToolCallIdEffect(call.id).pipe(
                   Effect.mapError((cause) => journalError("Invalid retired Tool Call ID", cause)),
                 );
 
@@ -1559,7 +1560,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
           state.all.push(message);
           state.before.push(message);
           for (const [partIndex, call] of calls.entries()) {
-            const callId = yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(
+            const callId = yield* decodeToolCallIdEffect(call.id).pipe(
               Effect.mapError((cause) => journalError("Invalid historical Tool Call ID", cause)),
             );
 
