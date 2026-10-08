@@ -95,6 +95,7 @@
       "name": "@yielded/agent-example-durable-bench",
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
+        "@effect/ai-openai-compat": "catalog:",
         "@types/node": "catalog:",
         "@yielded/agent": "workspace:*",
         "@yielded/agent-platform-cloudflare": "workspace:*",
