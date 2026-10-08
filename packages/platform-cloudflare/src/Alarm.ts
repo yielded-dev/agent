@@ -135,8 +135,8 @@ export class DurableAlarmService extends Context.Service<
     readonly ensureScheduledBy: (epochMillis: number) => Effect.Effect<void, DurableAlarmError>;
     /**
      * Arm an immediate alarm (the durable, coalescing local wake) — DEFERRED while a
-     * maintenance pass is executing. Workerd cancels an in-flight alarm handler when a new
-     * EARLIER deadline is written during its execution (`requestScheduledAlarm`), and the
+     * maintenance pass or inline Thread processing is executing. Workerd cancels an in-flight
+     * alarm handler when a new EARLIER deadline is written during its execution (`requestScheduledAlarm`), and the
      * maintenance pass runs INSIDE the alarm handler: an immediate wake landing mid-pass
      * (a routed port mutation, a sibling's `wake()`, the coordinator's own local notify)
      * would kill the running Attempt — manufacturing an ownership loss no real eviction
@@ -145,11 +145,14 @@ export class DurableAlarmService extends Context.Service<
      * pre-arms BEFORE its first durable mutation (the alarm invariant never rests on this
      * call). The pass's durable generation check observes any racing mutation, so the
      * in-memory hint does not need to be flushed after a stable wait is acknowledged.
+     * Inline processing preserves those pre-armed deadlines and requests one immediate wake
+     * on exit for remaining due work. Inside a maintenance pass that request is still deferred.
      */
     readonly scheduleNow: Effect.Effect<void, DurableAlarmError>;
     /**
-     * Run one maintenance pass with wake deferral (see `scheduleNow`). Calls made while `body`
-     * executes are droppable promptness hints; correctness rests on the durable generation.
+     * Coalesce immediate wake hints while `body` executes (see `scheduleNow`); this never cancels
+     * the pre-armed alarm. An inline caller must request `scheduleNow` after the body exits.
+     * A maintenance pass instead acknowledges its durable generation and owns the final alarm.
      */
     readonly withWakesDeferred: <A, E, R>(body: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     /** Clear the slot; correctness-sensitive clears live in maintenance generation transactions. */
@@ -161,8 +164,8 @@ export class DurableAlarmService extends Context.Service<
       Effect.gen(function* () {
         const { ctx } = yield* DurableObjectContext;
         /**
-         * In-memory pass bookkeeping — a pure CACHE, never state: a fresh incarnation has no
-         * running pass, and a deferred wake lost to eviction was only ever a promptness hint
+         * In-memory deferral bookkeeping — a pure CACHE, never state: a fresh incarnation has no
+         * running body, and a deferred wake lost to eviction was only ever a promptness hint
          * on top of the already-committed pre-armed alarm.
          */
         const runningPasses = yield* Ref.make(0);
@@ -207,9 +210,10 @@ export class DurableAlarmService extends Context.Service<
         );
 
         const withWakesDeferred = <A, E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-          Ref.update(runningPasses, (passes) => passes + 1).pipe(
-            Effect.andThen(body),
-            Effect.ensuring(Ref.update(runningPasses, (passes) => passes - 1)),
+          Effect.acquireUseRelease(
+            Ref.update(runningPasses, (passes) => passes + 1),
+            () => body,
+            () => Ref.update(runningPasses, (passes) => passes - 1),
           );
 
         const cancel = storageOperation("delete alarm", () => ctx.storage.deleteAlarm());

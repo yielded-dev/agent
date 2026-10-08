@@ -294,6 +294,14 @@ concurrently, with one active FIFO head per Thread and a durable cursor rotating
 A free slot admits newly ready Threads while another Attempt is busy. Remaining work retains the
 alarm; generation acknowledgement waits for admitted Attempts to finish.
 
+Hosts can also call `DurableAgentRuntime.processThread`, `processThreadResolved`, or
+`processThreadHead` inline. The Cloudflare wake scheduler coalesces immediate alarm hints during
+that processing and requests one wake for remaining due work on exit. Keep the alarm handler
+active: pre-armed deadlines still deliver maintenance while an inline tool awaits a worker,
+message, or other external result. Local progress notifications and remote Thread wakes continue
+normally. Standard submit enqueues work; the alarm handler processes it inside a deferred
+maintenance pass.
+
 An unresolved tool effect stays parked as an Unknown Outcome while later input in the same Thread
 can run. The unknown record and settlement obligation remain intact across eviction, and the effect
 is not replayed. Approval waits and joined input remain ordering barriers; live ownership still

@@ -29,7 +29,9 @@ class RemoteWakeDropped extends Schema.TaggedError<RemoteWakeDropped>()("RemoteW
  * The DC `WakeScheduler` (plan §1.4):
  *
  * - `notify(local)` wakes progress and settlement registrations, publishes a worker hint, and
- *   schedules the earliest alarm. Progress hints skip settlement registrations only.
+ *   schedules the earliest alarm. Processing an owned Thread defers immediate alarms until
+ *   processing exits; pre-armed recovery deadlines remain active. Progress hints skip settlement
+ *   registrations only.
  * - `notify(remote)` → fire-and-forget `wake()` on the owning Object's stub with every error
  *   swallowed and logged: hints are droppable, and the target's own alarm/scan pairing (the
  *   maintenance pass re-polls unsettled children) guarantees liveness without this call.
@@ -51,18 +53,19 @@ export const cloudflareWakeSchedulerLayer: Layer.Layer<
 
     yield* Effect.addFinalizer(() => PubSub.shutdown(hints));
 
+    const scheduleLocal = alarm.scheduleNow.pipe(
+      Effect.catch((error) =>
+        Effect.logWarning("CloudflareWakeScheduler: local alarm wake failed", error),
+      ),
+    );
+
     const notifyLocal = (threadId: ThreadId, kind?: "progress") =>
       (kind === "progress"
         ? progress.notify(threadId)
         : settlements.notify(threadId).pipe(Effect.andThen(progress.notify(threadId)))
       ).pipe(
         Effect.andThen(PubSub.publish(hints, threadId)),
-        Effect.andThen(alarm.scheduleNow),
-        Effect.catch((error) =>
-          // `notify` never fails by contract; a failed alarm write degrades to "hint lost"
-          // and the pass re-arm (or the next entry point's pre-arm) restores the invariant.
-          Effect.logWarning("CloudflareWakeScheduler: local alarm wake failed", error),
-        ),
+        Effect.andThen(scheduleLocal),
         Effect.asVoid,
       );
 
@@ -85,6 +88,10 @@ export const cloudflareWakeSchedulerLayer: Layer.Layer<
       );
 
     return WakeScheduler.of({
+      withProcessing: (threadId, body) =>
+        placement.ownsThread(threadId)
+          ? alarm.withWakesDeferred(body).pipe(Effect.ensuring(scheduleLocal))
+          : body,
       notify: (threadId, kind) =>
         placement.ownsThread(threadId) ? notifyLocal(threadId, kind) : notifyRemote(threadId),
       subscribe: (threadId, kind) =>
