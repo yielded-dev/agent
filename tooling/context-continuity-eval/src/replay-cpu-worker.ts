@@ -14,13 +14,13 @@ import {
   DeploymentId,
   DefinitionDigestInput,
   Digest,
-  ProducerId,
   ModelResponseRecorded,
   PersistedJson,
   ProducerEpoch,
   RecordEnvelope,
   RecordId,
   RunCompleted,
+  RunContinuation,
   ThreadCreated,
   UserInputRecorded,
 } from "@yielded/agent/records";
@@ -29,6 +29,8 @@ import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import {
   FencedAppendRequest,
   ThreadExportRequest,
+  ThreadExportSource,
+  streamExport,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
@@ -70,24 +72,13 @@ declare global {
   }
 }
 
-const AppendReceipt = Schema.Struct({
-  batchId: BatchId,
-  producerId: ProducerId,
-  previousDigest: Digest,
-  firstSequence: Schema.Natural,
-  lastSequence: Schema.Natural,
-  tailDigest: Digest,
-});
-
 const State = Schema.Struct({
   seedRecords: Schema.Natural,
   phase: Schema.Natural,
-  previousCount: Schema.Natural,
   seedDigest: Schema.NullOr(Schema.String),
   seedTailDigest: Schema.NullOr(Digest),
   incarnation: Schema.NullOr(ReplayCpuIncarnation),
   operations: Schema.Array(ReplayCpuOperation).check(Schema.isMaxLength(10)),
-  appends: Schema.Array(AppendReceipt).check(Schema.isMaxLength(500)),
 });
 
 const SeedRequest = Schema.Struct({ records: Schema.Literals([10, 1000]) });
@@ -194,12 +185,10 @@ const application = Layer.unwrap(
         ? {
             seedRecords: 0,
             phase: 0,
-            previousCount: 0,
             seedDigest: null,
             seedTailDigest: null,
             incarnation: null,
             operations: [],
-            appends: [],
           }
         : yield* Schema.decodeEffect(Schema.fromJsonString(State))(prior);
 
@@ -212,17 +201,11 @@ const application = Layer.unwrap(
     let calls = 0;
     let finalizers = 0;
     let toolCalls = 0;
-    let measuring = false;
-    let readPages = 0;
-    let readRecords = 0;
-    let priorRecordsRead = 0;
-    let lastSequence = state.previousCount;
 
     const captures: Array<{
       phase: number;
       call: number;
       prompt: Prompt.Prompt;
-      recordsReadAtProvider: number;
     }> = [];
 
     const model = Model.make(
@@ -249,7 +232,6 @@ const application = Layer.unwrap(
                   phase: state.phase,
                   call: calls,
                   prompt,
-                  recordsReadAtProvider: readRecords,
                 });
 
                 const response =
@@ -303,52 +285,6 @@ const application = Layer.unwrap(
         const services = yield* Effect.context<ThreadObject.Services>();
         const store = yield* ThreadStore;
         const runtime = yield* DurableAgentRuntime;
-        const originalRead = store.read;
-        const originalAppend = store.append;
-
-        // Same public-port observer used by the preceding issue692 comparison. Its cost is included.
-        Object.assign(store, {
-          append: (request: FencedAppendRequest) =>
-            originalAppend(request).pipe(
-              Effect.tap((result) =>
-                Effect.sync(() => {
-                  if (!measuring || result.replayed) return;
-                  if (state.appends.length >= 500)
-                    throw new BenchError({ message: "Append receipt bound exceeded" });
-                  state = {
-                    ...state,
-                    appends: [
-                      ...state.appends,
-                      {
-                        batchId: request.batch.batchId,
-                        producerId: request.batch.producerId,
-                        previousDigest: request.expectedTailDigest,
-                        firstSequence: result.firstSequence,
-                        lastSequence: result.lastSequence,
-                        tailDigest: result.tailDigest,
-                      },
-                    ],
-                  };
-                  lastSequence = result.lastSequence;
-                }),
-              ),
-            ),
-          read: (request: Parameters<typeof originalRead>[0]) =>
-            Stream.suspend(() => {
-              if (measuring) readPages++;
-
-              return originalRead(request).pipe(
-                Stream.tap((entry) =>
-                  Effect.sync(() => {
-                    if (measuring) {
-                      readRecords++;
-                      if (entry.sequence <= state.previousCount) priorRecordsRead++;
-                    }
-                  }),
-                ),
-              );
-            }),
-        });
         const definitions = yield* digestDefinitions(declarations);
         const deploymentId = DeploymentId.make("issue692-hosted-v1");
         const json = (value: unknown) => Schema.decodeUnknownEffect(JsonObject)(value);
@@ -361,7 +297,25 @@ const application = Layer.unwrap(
             ),
           );
 
-        const readLog = store.export(ThreadExportRequest.make({ threadId }));
+        const readLog = Effect.gen(function* () {
+          const pages = yield* Stream.runCollect(
+            streamExport(ThreadExportRequest.make({ threadId })).pipe(
+              Stream.provideService(ThreadExportSource, store),
+            ),
+          );
+
+          const last = pages.at(-1);
+
+          if (last === undefined)
+            return yield* new BenchError({ message: "Missing canonical export snapshot" });
+
+          return {
+            records: pages.flatMap((page) => page.records),
+            batches: pages.flatMap((page) => page.batches),
+            tailSequence: last.tailSequence,
+            tailDigest: last.tailDigest,
+          };
+        });
 
         const seed = Effect.fn("issue692.seed")(function* (count: 10 | 1000) {
           yield* check(state.seedRecords === 0 && state.phase === 0, "Seed already initialized");
@@ -440,7 +394,6 @@ const application = Layer.unwrap(
           state = {
             ...state,
             seedRecords: count,
-            previousCount: count,
             incarnation,
             seedTailDigest: log.tailDigest,
             seedDigest: yield* digestJson(
@@ -479,18 +432,12 @@ const application = Layer.unwrap(
             calls = 0;
             finalizers = 0;
             toolCalls = 0;
-            readPages = 0;
-            readRecords = 0;
-            priorRecordsRead = 0;
-            lastSequence = state.previousCount;
             state = { ...state, phase };
             persist();
 
             const input = isCompactionPhase(phase)
               ? largeInput(phase)
               : `Fresh sequential reply phase ${phase}; use the retained large context.`;
-
-            measuring = true;
 
             const receipt = yield* runtime.submit({ definition }, input, {
               threadId,
@@ -502,26 +449,19 @@ const application = Layer.unwrap(
             yield* runtime.processThreadResolved(threadId);
             const settlement = yield* runtime.awaitSettlement(receipt);
 
-            measuring = false;
-
             const result = {
               phase,
               method,
               incarnation,
-              throughSequence: lastSequence,
               submissionId: receipt.submissionId,
               outcome: settlement.outcome,
               modelCalls: calls,
               modelFinalizers: finalizers,
               toolCalls,
-              journalReadPages: readPages,
-              journalReadRecords: readRecords,
-              priorJournalRecordsRead: priorRecordsRead,
             };
 
             state = {
               ...state,
-              previousCount: lastSequence,
               operations: [...state.operations, result],
             };
             persist();
@@ -537,11 +477,6 @@ const application = Layer.unwrap(
             return yield* json(result);
           },
           Effect.timeout("90 seconds"),
-          Effect.ensuring(
-            Effect.sync(() => {
-              measuring = false;
-            }),
-          ),
           boundary,
         );
 
@@ -562,81 +497,93 @@ const application = Layer.unwrap(
           const expectedCompactions = [1, 4, 6, 9].filter((phase) => phase <= state.phase).length;
           let nextSequence = state.seedRecords + 1;
           let tailDigest = state.seedTailDigest;
-          let batchesUnchanged = true;
+          const producers = new Map(log.batches.map((batch) => [batch.batchId, batch.producerId]));
+          const seen = new Set<string>();
 
-          for (const append of state.appends) {
-            const records = log.records.slice(append.firstSequence - 1, append.lastSequence);
-            const [first, ...rest] = records.map((entry) => entry.record);
+          let batchesUnchanged =
+            log.records.length === log.tailSequence && producers.size === log.batches.length;
+
+          let start = state.seedRecords;
+
+          while (start < log.records.length) {
+            const entry = log.records[start];
+
+            if (entry === undefined) break;
+            let end = start + 1;
+
+            while (end < log.records.length && log.records[end]?.batchId === entry.batchId) end++;
+            const records = log.records.slice(start, end);
+            const [first, ...rest] = records.map((record) => record.record);
+            const producerId = producers.get(entry.batchId);
 
             if (
               first === undefined ||
-              append.firstSequence !== nextSequence ||
-              append.previousDigest !== tailDigest ||
-              records.some((entry) => entry.batchId !== append.batchId)
+              producerId === undefined ||
+              tailDigest === null ||
+              seen.has(entry.batchId) ||
+              records.some(
+                (record, index) =>
+                  record.threadId !== threadId || record.sequence !== nextSequence + index,
+              )
             ) {
               batchesUnchanged = false;
               break;
             }
-
-            const actual = yield* digestCanonicalBatch(
-              append.previousDigest,
+            seen.add(entry.batchId);
+            tailDigest = yield* digestCanonicalBatch(
+              tailDigest,
               CanonicalBatch.make({
-                batchId: append.batchId,
-                producerId: append.producerId,
+                batchId: entry.batchId,
+                producerId,
                 records: [first, ...rest],
               }),
             );
-
-            batchesUnchanged &&= actual === append.tailDigest;
-            nextSequence = append.lastSequence + 1;
-            tailDigest = append.tailDigest;
+            nextSequence += records.length;
+            start = end;
           }
           batchesUnchanged &&=
             nextSequence === log.tailSequence + 1 && tailDigest === log.tailDigest;
 
-          const audits = yield* Effect.forEach(
-            captures,
-            ({ phase, call, prompt, recordsReadAtProvider }) =>
-              Effect.gen(function* () {
-                const encoded = yield* Schema.decodeUnknownEffect(PersistedJson)(
-                  yield* Schema.encodeEffect(Prompt.Prompt)(prompt),
+          const audits = yield* Effect.forEach(captures, ({ phase, call, prompt }) =>
+            Effect.gen(function* () {
+              const encoded = yield* Schema.decodeUnknownEffect(PersistedJson)(
+                yield* Schema.encodeEffect(Prompt.Prompt)(prompt),
+              );
+
+              const text = JSON.stringify(encoded);
+              const largePhase = currentLargePhase(phase);
+
+              const results = prompt.content
+                .filter((message) => message.role === "tool")
+                .flatMap((message) => message.content)
+                .filter(
+                  (part): part is Prompt.ToolResultPart =>
+                    part.type === "tool-result" && part.id.startsWith(`phase-${phase}-`),
                 );
 
-                const text = JSON.stringify(encoded);
-                const largePhase = currentLargePhase(phase);
-
-                const results = prompt.content
-                  .filter((message) => message.role === "tool")
-                  .flatMap((message) => message.content)
-                  .filter(
-                    (part): part is Prompt.ToolResultPart =>
-                      part.type === "tool-result" && part.id.startsWith(`phase-${phase}-`),
-                  );
-
-                return {
-                  phase,
-                  call,
-                  encodedBytes: bytes(text),
-                  nativeEstimatedTokens: native.estimate(prompt.content),
-                  promptDigest: yield* digestJson(encoded),
-                  messageCount: prompt.content.length,
-                  recordsReadAtProvider,
-                  currentLargeInputPresent:
-                    text.includes(`LARGE_CONTEXT_BEGIN_${largePhase}`) &&
-                    text.includes(`LARGE_CONTEXT_END_${largePhase}`),
-                  retiredSeedAbsent: !text.includes("retired-seed-input-"),
-                  retiredLargeInputAbsent: [1, 4, 6, 9]
-                    .filter((priorPhase) => priorPhase < largePhase)
-                    .every((priorPhase) => !text.includes(`LARGE_CONTEXT_BEGIN_${priorPhase}`)),
-                  currentToolResults: results.length,
-                  validToolResults: results.every(
-                    (part) =>
-                      !part.isFailure && JSON.stringify(part.result).includes("small-result-"),
-                  ),
-                  // A real encoded provider prompt is retained once per phase, outside the measured RPC.
-                  ...(call === 2 ? { prompt: encoded } : {}),
-                };
-              }),
+              return {
+                phase,
+                call,
+                encodedBytes: bytes(text),
+                nativeEstimatedTokens: native.estimate(prompt.content),
+                promptDigest: yield* digestJson(encoded),
+                messageCount: prompt.content.length,
+                currentLargeInputPresent:
+                  text.includes(`LARGE_CONTEXT_BEGIN_${largePhase}`) &&
+                  text.includes(`LARGE_CONTEXT_END_${largePhase}`),
+                retiredSeedAbsent: !text.includes("retired-seed-input-"),
+                retiredLargeInputAbsent: [1, 4, 6, 9]
+                  .filter((priorPhase) => priorPhase < largePhase)
+                  .every((priorPhase) => !text.includes(`LARGE_CONTEXT_BEGIN_${priorPhase}`)),
+                currentToolResults: results.length,
+                validToolResults: results.every(
+                  (part) =>
+                    !part.isFailure && JSON.stringify(part.result).includes("small-result-"),
+                ),
+                // A real encoded provider prompt is retained once per phase, outside the measured RPC.
+                ...(call === 2 ? { prompt: encoded } : {}),
+              };
+            }),
           );
 
           const latest = log.records.findLast(
@@ -645,13 +592,18 @@ const application = Layer.unwrap(
 
           const progress = latest?.record.payload;
 
+          const encodedProgress =
+            progress?._tag === "RunContinuation"
+              ? yield* Schema.encodeEffect(RunContinuation)(progress)
+              : undefined;
+
           const continuation =
-            latest !== undefined && progress?._tag === "RunContinuation"
+            latest !== undefined && encodedProgress !== undefined
               ? {
                   present: true,
                   sequence: latest.sequence,
-                  encodedBytes: bytes(JSON.stringify(progress)),
-                  progress,
+                  encodedBytes: bytes(JSON.stringify(encodedProgress)),
+                  progress: encodedProgress,
                 }
               : { present: false };
 
@@ -710,7 +662,6 @@ const application = Layer.unwrap(
               compactions.map((entry) => entry.record),
             ),
             operations: state.operations,
-            appends: state.appends,
             audits,
             continuation,
             databaseBytes: ctx.storage.sql.databaseSize,

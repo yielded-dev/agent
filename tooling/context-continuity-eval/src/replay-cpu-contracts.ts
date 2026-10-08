@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-export const REPLAY_CPU_PROTOCOL = "replay-cpu-v1";
+export const REPLAY_CPU_PROTOCOL = "replay-cpu-v2";
 
 export const REPLAY_CPU_PHASES = [
   "compactFirst",
@@ -37,10 +37,6 @@ export const ReplayCpuOperation = Schema.Struct({
   modelCalls: Schema.Natural,
   modelFinalizers: Schema.Natural,
   toolCalls: Schema.Natural,
-  journalReadPages: Schema.Natural,
-  journalReadRecords: Schema.Natural,
-  priorJournalRecordsRead: Schema.Natural,
-  throughSequence: Schema.Natural,
 });
 
 export const ReplayCpuIdentity = Schema.Struct({

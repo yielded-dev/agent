@@ -259,15 +259,15 @@ retention policy. The warmed cycle also includes the first cycle's canonical rec
 retained captures, so it does not isolate JIT warm-up from that accumulated state.
 
 No archive exports, prompt encoding, hashes or progress inspections run between measured
-operations. The final audit verifies canonical append digests, retained context, exact finite
-model/tool/finalizer counts, settlements and canonical progress. Normalized captured prompts
+operations. The final audit streams the complete canonical export and verifies its batch hash chain,
+retained context, exact finite model/tool/finalizer counts, settlements and Schema-encoded canonical progress. Normalized captured prompts
 must agree across all roles and archive sizes. This proves durable cross-Run continuity;
 existing recovery checks separately cover crashes and ownership loss.
 
 `report.json`, `samples.json`, `table.md`, operation receipts and sanitized invocation exports
 retain the results. CPU means Cloudflare's `cpuTimeMs` for the uniquely matched Object RPC
-through settlement; ingress CPU and client elapsed time are separate. Missing, duplicate,
-truncated or failed invocations cannot become valid samples. Alarm and evidence invocations
+through settlement; ingress CPU and client elapsed time are separate. Object heap and process
+memory are not measured. Missing, duplicate, truncated or failed invocations cannot become valid samples. Alarm and evidence invocations
 remain in the exports and are not added to reply CPU. The primary comparison sums the two
 compaction RPCs per Object, with initial and warmed cycles reported separately. Results include
 ranges, matched candidate/control ratios and each deployment round. The prespecified comparison
