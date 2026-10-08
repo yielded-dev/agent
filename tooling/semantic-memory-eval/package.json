@@ -12,7 +12,7 @@
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "4.3.0",
     "@yielded/agent": "workspace:*",
     "@yielded/agent-storage-memory": "workspace:*",
     "@yielded/agent-storage-sqlite": "workspace:*",
