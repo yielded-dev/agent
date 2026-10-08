@@ -556,6 +556,7 @@
     "@effect/tsgo-linux-x64",
     "@effect/tsgo-win32-x64",
     "@typescript/typescript-darwin-x64",
+    "safe-buffer",
     "@typescript/typescript-linux-s390x",
     "@typescript/typescript-sunos-x64",
     "@effect/tsgo-linux-arm",

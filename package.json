@@ -185,6 +185,7 @@
     "@typescript/typescript-win32-x64",
     "esbuild",
     "react",
+    "safe-buffer",
     "sharp",
     "workerd"
   ]
