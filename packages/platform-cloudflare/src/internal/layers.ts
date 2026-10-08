@@ -413,7 +413,10 @@ export const layerConfig = (
       return Layer.mergeAll(
         runtimeConfigLayer(options, producerId),
         Layer.succeed(ThreadObjectIdentity, { threadId, producerId }),
-        Layer.succeed(ThreadObjectPlacement, { ownsThread: (target) => target === threadId }),
+        Layer.succeed(ThreadObjectPlacement, {
+          threadId,
+          ownsThread: (target) => target === threadId,
+        }),
       );
     }),
   );
@@ -617,7 +620,8 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
     Effect.gen(function* () {
       const { ctx } = yield* DurableObjectContext;
       const config = yield* CloudflareDurableRuntimeConfig;
-      const { ownsThread } = yield* ThreadObjectPlacement;
+      const placement = yield* ThreadObjectPlacement;
+      const { ownsThread } = placement;
 
       const storageOptions: DoStorageOptions = {
         storage: ctx.storage,
@@ -1119,6 +1123,19 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         maintenanceRuntime,
         ThreadMaintenance.layer.pipe(
           Layer.provide(options.recoveryEvents ?? Layer.empty),
+          Layer.provide(
+            Layer.effect(ThreadNativeMaintenance)(
+              Effect.gen(function* () {
+                const previous = yield* ThreadNativeMaintenance;
+                const runtime = yield* DurableAgentRuntime;
+
+                return {
+                  lanes: previous.lanes,
+                  ...(placement.threadId === undefined ? {} : { singleThreadRuntime: runtime }),
+                };
+              }),
+            ),
+          ),
           Layer.provide(maintenanceRuntime),
           Layer.provide(messageRecovery),
         ),
