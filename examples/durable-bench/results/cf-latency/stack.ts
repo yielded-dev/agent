@@ -12,6 +12,8 @@ export default Alchemy.Stack("cf-latency", {
     VERSION: Cloudflare.VersionMetadata(),
     PHASE: yield* Config.String("CF_LATENCY_PHASE").pipe(Config.withDefault("seed")),
     PROVIDER_URL: yield* Config.String("CF_LATENCY_PROVIDER").pipe(Config.withDefault("")),
+    // Force an upload for repeated startup controls without changing module bytes.
+    UPLOAD_REVISION: yield* Config.String("CF_LATENCY_UPLOAD_REVISION").pipe(Config.withDefault("")),
   };
   if (kind === "probe") env.PROBES = Cloudflare.DurableObject("cf-latency-probes", { className: "ProbeDO" });
   if (kind === "network") {

@@ -38,6 +38,11 @@ export const decodeProviderReceipt = Schema.decodeUnknownSync(ProviderReceipt);
 export const Seed = Schema.Struct({ from: Schema.Int, to: Schema.Int });
 export const decodeSeed = Schema.decodeUnknownSync(Seed);
 
+const directoryMetrics = Schema.decodeUnknownSync(Schema.Literals(["true", "false"]));
+/** Router-only observation toggle; native provider and durable values are unchanged. */
+export const readDirectoryMetrics = (url: URL): boolean =>
+  directoryMetrics(url.searchParams.get("directoryMetrics") ?? "true") === "true";
+
 export const readQuery = (url: URL): Query =>
   Schema.decodeUnknownSync(Query)({
     target: url.searchParams.get("target"),

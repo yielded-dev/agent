@@ -91,8 +91,8 @@ export default {
         encoder.encode("data: [DONE]\n\n"),
       ];
 
-      // Hashing is now included in provider time, since the final stream frame
-      // returns a reliable receipt. No framework transcript or adapter changes.
+      // The terminal frame waits for hashing. CPU spent hashing need not appear
+      // in the provider's I/O-clock interval, especially with no timer delays.
       const computeHashes = () => Promise.all([
         fingerprint(transcript),
         crypto.subtle.digest("SHA-256", bodyBytes).then((digest) =>

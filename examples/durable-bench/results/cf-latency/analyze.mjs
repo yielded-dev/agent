@@ -7,6 +7,8 @@ import { Effect, Schema } from "effect";
 import { NodeRuntime } from "@effect/platform-node";
 import { history, next, payload, turn } from "../../src/plan.ts";
 import { analyzeProbe } from "./analyze-probe.mjs";
+import { analyzeInstrumentation } from "./analyze-instrumentation.mjs";
+import { analyzeMinification } from "./analyze-minification.mjs";
 
 // Offline reduction only. No local execution times are benchmark evidence.
 const here = dirname(fileURLToPath(import.meta.url));
@@ -62,7 +64,7 @@ const reference = () => {
     const expected = { 50: "b017b487524e44a4", 250: "dcea9f30b0917245" }[h];
     if (seed !== expected) throw new Error(`Reference fixture drift: h${h} ${seed}`);
     answer[h] = { seed, turns: {} };
-    for (let m = 0; m < 14; m++) answer[h].turns[`m${m}`] = append(turn(`m${m}`, 8));
+    for (let m = 0; m < 16; m++) answer[h].turns[`m${m}`] = append(turn(`m${m}`, 8));
   }
   return answer;
 };
@@ -76,7 +78,7 @@ const invocation = (event) => event.$metadata?.type === "cf-worker-event";
 const worker = (event) => event.$workers?.scriptName;
 const eventKey = (event) => event.$metadata?.id;
 const requestKey = (row) => `${row.worker}/${row.framework}/${row.object}/${row.sample}`;
-const metricNames = ["clientMs", "clientMinusProviderMs", "providerMs", "configuredProviderMs", "firstModelArrivalMs", "stepGapMs", "stepGapTotalMs", "tailFromProviderMs", "doWallMs", "fetchCpuMs", "attributedDoCpuMs", "observedDoCpuMs", "alarmCpuMs", "alarmOverlapCount", "boundaryCpuMs", "sqlBindingBytes", "kvJsonBytes", "transactions", "transactionSync", "writeTransactions", "writeTransactionSync", "overlappingTransactionCallbacks", "nativeSyncCalls", "nativeSyncWaitMs", "explicitProbeSyncMs", "logicalMutationStatements", "setAlarmCalls", "deleteAlarmCalls", "requestBytes", "responseBytes"];
+const metricNames = ["clientMs", "clientMinusScriptedMs", "clientMinusProviderMs", "providerMs", "configuredProviderMs", "firstModelArrivalMs", "stepGapMs", "stepGapTotalMs", "tailFromProviderMs", "doWallMs", "outerWallMs", "clientMinusDoMs", "mainWallMinusFetchCpuMs", "fetchCpuMs", "attributedDoCpuMs", "observedDoCpuMs", "alarmCpuMs", "alarmOverlapCount", "boundaryCpuMs", "sqlBindingBytes", "kvJsonBytes", "transactions", "transactionSync", "writeTransactions", "writeTransactionSync", "overlappingTransactionCallbacks", "transactionRollbacks", "transactionWindowCrossings", "nativeSyncCalls", "nativeSyncWaitMs", "explicitProbeSyncMs", "logicalMutationStatements", "setAlarmCalls", "deleteAlarmCalls", "requestBytes", "responseBytes", "clientReceiptBytes"];
 const objectSummaries = (turns) => Object.fromEntries(metricNames.map((metric) => [metric, stats([...group(turns, (t) => t.object).values()].map((object) => median(object.map((t) => t[metric]))))]));
 
 const AnalysisError = Schema.TaggedError()("CfLatencyAnalysisError", { message: Schema.String });
@@ -104,12 +106,19 @@ const run = Effect.try({
     const records = [];
     const missing = [];
     const fingerprintFailures = [];
-    const phases = ["network", "network-variant", "network-variant-settle"];
+    const phases = ["network", "network-variant", "network-variant-settle", "minification"];
     for (const row of rows.filter((row) => (phases.includes(row.phase) || /^network-pilot\d*$/.test(row.phase)) && row.status === 200 && receipt(row)?.ok)) {
       const r = receipt(row);
       const reasons = [];
+      const isCold = row.sample === "m0" || row.phase === "minification";
+      const query = new URL(row.path, "https://cf-latency").searchParams;
+      const minificationRound = row.phase === "minification" ? Number(query.get("minificationRound")) : null;
+      const minified = row.phase === "minification" ? query.get("minified") === "true" : null;
+      if (row.phase === "minification" && (!query.has("minificationRound") || !Number.isInteger(minificationRound) || !["true", "false"].includes(query.get("minified"))))
+        reasons.push("invalid minification controller round/build flag");
       const actorIdentityStable = row.framework !== "tardie" || ["objectId", "incarnation", "version"].every((key) => row.response.directoryStart?.[key] && row.response.directoryStart[key] === row.response.directory?.[key]);
       if (!actorIdentityStable) reasons.push("Tardie Actor identity changed between begin/end receipts");
+      if (row.framework === "tardie" && row.response.directory?.version !== r.version) reasons.push("Tardie Actor/Thread versions differ");
       const p = r.calls.map((call) => call.providerReceipt ?? provider.get(call.providerRequest)?.source);
       const completeProvider = p.every((receipt, i) => receipt && receipt.requestId === r.calls[i].providerRequest) && p.length === 9 && new Set(r.calls.map((call) => call.providerRequest)).size === 9;
       if (!completeProvider) missing.push({ kind: "provider", key: requestKey(row), missing: r.calls.filter((call) => !call.providerReceipt && !provider.has(call.providerRequest)).map((call) => call.providerRequest) });
@@ -140,6 +149,27 @@ const run = Effect.try({
       const alarmRequests = [...new Set(tagged.filter((log) => log.$metadata?.requestId).map((log) => `${worker(log)}/${log.$metadata.requestId}`))];
       const alarms = [];
       let alarmJoinComplete = tagged.every((log) => log.$metadata?.requestId);
+      // Cloudflare can tag the two edges of one logical alarm under different
+      // invocation contexts. Never turn that ambiguity into extra CPU events.
+      const candidateAlarmIds = new Set([...returnedAlarmIds, ...tagged.map((log) => log.source.alarmId)]);
+      const idsByInvocation = new Map();
+      for (const alarmId of candidateAlarmIds) {
+        const edges = tagged.filter((log) => log.source.alarmId === alarmId);
+        const requests = new Set(edges.map((log) => log.$metadata?.requestId).filter(Boolean));
+        const traces = new Set(edges.map((log) => log.$metadata?.traceId).filter(Boolean));
+        if (requests.size !== 1 || traces.size > 1) {
+          alarmJoinComplete = false;
+          missing.push({ kind: "alarm-identity-ambiguity", key: requestKey(row), alarmId, requestIds: [...requests], traceIds: [...traces] });
+        }
+        for (const request of requests) {
+          if (!idsByInvocation.has(request)) idsByInvocation.set(request, new Set());
+          idsByInvocation.get(request).add(alarmId);
+        }
+      }
+      for (const [request, alarmIds] of idsByInvocation) if (alarmIds.size !== 1) {
+        alarmJoinComplete = false;
+        missing.push({ kind: "alarm-invocation-ambiguity", key: requestKey(row), request, alarmIds: [...alarmIds] });
+      }
       for (const alarmId of returnedAlarmIds) {
         if (!tagged.some((log) => log.source.alarmId === alarmId && log.$metadata?.requestId)) {
           alarmJoinComplete = false;
@@ -149,7 +179,14 @@ const run = Effect.try({
       for (const key of alarmRequests) {
         const joined = (byRequest.get(key) ?? []).filter((e) => e.$workers.eventType === "alarm" && ids.includes(e.$workers.durableObjectId) && e.$workers.scriptVersion?.id === r.version && e.$metadata?.traceId);
         if (joined.length !== 1) { alarmJoinComplete = false; missing.push({ kind: "alarm", key: requestKey(row), request: key, cardinality: joined.length }); }
-        else alarms.push(joined[0]);
+        else {
+          const edges = tagged.filter((log) => `${worker(log)}/${log.$metadata?.requestId}` === key);
+          if (edges.some((log) => (log.$metadata?.traceId && log.$metadata.traceId !== joined[0].$metadata.traceId) || log.source.objectId !== joined[0].$workers.durableObjectId || log.source.version !== joined[0].$workers.scriptVersion?.id)) {
+            alarmJoinComplete = false;
+            missing.push({ kind: "alarm-context-ambiguity", key: requestKey(row), request: key });
+          }
+          alarms.push(joined[0]);
+        }
       }
       const boundary = alarms.filter((event) => {
         const logs = (logsByRequest.get(`${row.worker}/${event.$metadata.requestId}`) ?? []).filter((log) => log.source?.cfLatency === "target-alarm");
@@ -179,28 +216,46 @@ const run = Effect.try({
       const providerMs = completeProvider ? sum(p.map((call) => call.endMs - call.arrivalMs)) : null;
       const sql = r.sql;
       const actor = row.response.directory?.sql;
-      const add = (key) => row.framework === "tardie" ? (finite(sql?.[key]) && finite(actor?.[key]) ? sql[key] + actor[key] : null) : (finite(sql?.[key]) ? sql[key] : null);
-      const cold = rows.find((prior) => prior.phase === "cold-reset" && prior.worker === row.worker && prior.framework === row.framework && prior.object === row.object);
-      const freshIncarnation = row.sample === "m0" && cold?.response?.before?.objectId === r.objectId && cold.response.before.incarnation !== r.incarnation && (row.framework !== "tardie" || cold.response.directoryBefore?.incarnation !== row.response.directory?.incarnation);
+      const addRun = (key) => row.framework === "tardie" ? (finite(sql?.[key]) && finite(actor?.[key]) ? sql[key] + actor[key] : null) : (finite(sql?.[key]) ? sql[key] : null);
+      const hasInitialization = isCold || r.constructorSql !== undefined || row.response.directoryStart?.constructorSql !== undefined;
+      const addConstructor = (key) => !hasInitialization ? 0 : row.framework === "tardie"
+        ? (finite(r.constructorSql?.[key]) && finite(row.response.directoryStart?.constructorSql?.[key]) ? r.constructorSql[key] + row.response.directoryStart.constructorSql[key] : null)
+        : (finite(r.constructorSql?.[key]) ? r.constructorSql[key] : null);
+      const add = (key) => finite(addRun(key)) && finite(addConstructor(key)) ? addRun(key) + addConstructor(key) : null;
+      const coldCandidates = rows.filter((prior) => prior.phase === (row.phase === "minification" ? "minification-reset" : "cold-reset") &&
+        (row.phase !== "minification" || prior.sample === `minify-reset-${row.sample}`) &&
+        prior.worker === row.worker && prior.framework === row.framework && prior.object === row.object);
+      const cold = coldCandidates.length === 1 ? coldCandidates[0] : undefined;
+      const freshIncarnation = isCold && cold?.response?.before?.objectId === r.objectId && cold.response.before.incarnation !== r.incarnation &&
+        (row.phase !== "minification" || cold.response.before.version === r.version) &&
+        (row.framework !== "tardie" || (cold.response.directoryBefore?.incarnation !== row.response.directory?.incarnation && cold.response.directoryBefore?.objectId === row.response.directory?.objectId));
       const construction = constructors.filter((event) => worker(event) === row.worker && event.source.objectId === r.objectId && event.source.incarnation === r.incarnation && event.source.version === r.version);
       const requestConstructed = construction.length === 1 && construction[0].$metadata?.requestId === main?.$metadata?.requestId && main !== undefined;
       const actorConstruction = row.framework !== "tardie" ? [] : constructors.filter((event) => worker(event) === row.worker && event.source.objectId === row.response.directory?.objectId && event.source.incarnation === row.response.directory?.incarnation && event.source.version === r.version);
       const actorRequestConstructed = row.framework !== "tardie" || (actorConstruction.length === 1 && actorConstruction[0].$metadata?.traceId === trace && actorConstruction[0].$workers?.event?.rpcMethod === "begin");
       const beforeIdentities = [cold?.response?.before, cold?.response?.directoryBefore].filter(Boolean);
-      const requestedAbortLogged = freshIncarnation && beforeIdentities.every((id) => coldLogs.some((event) => worker(event) === row.worker && event.source.objectId === id.objectId && event.source.incarnation === id.incarnation && event.source.sample === "cold-reset"));
+      const requestedAbortLogged = freshIncarnation && beforeIdentities.every((id) => coldLogs.some((event) => worker(event) === row.worker && event.source.objectId === id.objectId && event.source.incarnation === id.incarnation && event.source.sample === cold.sample));
       const entryFresh = (entry) => entry?.firstHarnessRequest === true && entry.priorAlarmStarts === 0 && entry.activeAlarmIds?.length === 0;
       const freshRequestReceipt = entryFresh(r.entry) && (row.framework !== "tardie" || entryFresh(row.response.directoryStart?.entry));
       const expectedAborts = cold?.response?.ok === true && cold.response.coldRequested === true;
       // Response evidence survives platform log sampling. There is no external
       // traffic to these authenticated Objects between the acknowledged abort
       // and m0; lifetime counters reject any intervening alarm warmup.
-      const constructorContradiction = [...construction, ...actorConstruction].some((event) => event.$workers?.eventType === "alarm" || (event.$metadata?.traceId && trace && event.$metadata.traceId !== trace)) || construction.some((event) => event.$metadata?.requestId && main?.$metadata?.requestId && event.$metadata.requestId !== main.$metadata.requestId);
-      const coldVerified = Boolean(freshIncarnation && expectedAborts && actorIdentityStable && !constructorContradiction && (freshRequestReceipt || (requestConstructed && actorRequestConstructed && requestedAbortLogged)));
+      const constructorContradiction = [...construction, ...actorConstruction].some((event) => event.$workers?.eventType === "alarm" || (event.$metadata?.traceId && trace && event.$metadata.traceId !== trace)) || construction.some((event) =>
+        (event.$metadata?.requestId && main?.$metadata?.requestId && event.$metadata.requestId !== main.$metadata.requestId) ||
+        (event.$workers?.eventType !== undefined && event.$workers.eventType !== "fetch") ||
+        (queryOf(event)?.path !== undefined && queryOf(event).path !== "/run")) || actorConstruction.some((event) =>
+        (event.$workers?.event?.rpcMethod !== undefined && event.$workers.event.rpcMethod !== "begin") ||
+        (event.$workers?.eventType !== undefined && !["rpc", "jsrpc"].includes(event.$workers.eventType)));
+      // Final-run receipts are mandatory. A sampled constructor event must
+      // never override an explicit negative lifetime/first-entry receipt.
+      const coldVerified = Boolean(freshIncarnation && expectedAborts && actorIdentityStable && !constructorContradiction && freshRequestReceipt);
       const enabledSync = r.syncBeforeFetch ? sumKnown(r.calls.map((call) => difference(call.syncEndedMs, call.syncStartedMs))) : 0;
       const record = {
         key: requestKey(row), phase: row.phase, role: row.target, framework: row.framework,
         object: row.object, objectId: r.objectId, history: r.history, ttftMs: r.ttftMs,
-        sample: row.sample, mode: row.sample === "m0" ? "cold" : row.sample === "m1" ? "settling" : "warm",
+        sample: row.sample, mode: isCold ? "cold" : row.sample === "m1" ? "settling" : "warm",
+        minificationRound, minified,
         variant: r.syncBeforeFetch ? "sync" : r.variant,
         incarnation: r.incarnation, constructedMs: r.constructedMs, version: r.version,
         actorIdentityStable, actorIncarnation: row.response.directory?.incarnation ?? null, actorVersion: row.response.directory?.version ?? null,
@@ -208,6 +263,9 @@ const run = Effect.try({
         constructorInvocationIds: [...construction, ...actorConstruction].map((event) => event.$metadata?.requestId),
         transcriptValid, completeProvider, providerStreamReceipts: r.calls.filter((call) => call.providerReceipt).length, providerLogMatches, recordedAlarmCount: r.alarmEvents ? returnedAlarmIds.size : null, eligible: reasons.length === 0, reasons, cpuJoined,
         clientMs: row.clientWallMs, doWallMs: main?.$workers.wallTimeMs ?? null,
+        outerWallMs: outer?.$workers.wallTimeMs ?? null,
+        clientMinusDoMs: difference(row.clientWallMs, main?.$workers.wallTimeMs),
+        mainWallMinusFetchCpuMs: difference(main?.$workers.wallTimeMs, main?.$workers.cpuTimeMs),
         doIoClockElapsedMs: r.doWallMs, fetchCpuMs: main?.$workers.cpuTimeMs ?? null,
         attributedDoCpuMs: cpuJoined ? sumKnown(fullyAttributed.map((e) => e.$workers.cpuTimeMs)) : null,
         observedDoCpuMs: cpuJoined ? sumKnown(known.map((e) => e.$workers.cpuTimeMs)) : null,
@@ -216,15 +274,19 @@ const run = Effect.try({
         invocationIds: known.map(eventKey), boundaryInvocationIds: boundaryInvocations.map(eventKey),
         alarmInvocationIds: alarms.map(eventKey), providerRequestIds: r.calls.map((call) => call.providerRequest),
         providerMs, configuredProviderMs: 9 * r.ttftMs + 53 * r.chunkDelayMs,
+        clientMinusScriptedMs: row.clientWallMs - (9 * r.ttftMs + 53 * r.chunkDelayMs),
         clientMinusProviderMs: providerMs === null ? null : row.clientWallMs - providerMs,
+        clientReceiptBytes: Buffer.byteLength(JSON.stringify(row.response)),
         firstModelArrivalMs: completeProvider ? p[0].arrivalMs - row.startedAt : null,
         stepGapMs: median(gaps), stepGapTotalMs: completeProvider ? sum(gaps) : null,
         tailFromProviderMs: completeProvider ? row.endedAt - p.at(-1).endMs : null,
         providerColos: [...new Set(p.filter(Boolean).map((call) => call.colo))],
         ingressColo: outer?.$workers.event?.request?.cf?.colo ?? row.cfRay?.split("-").at(-1),
         sqlBindingBytes: add("writeBindingBytes"), kvJsonBytes: add("kvJsonBytes"),
+        runCounts: Object.fromEntries(Object.keys(sql ?? {}).map((key) => [key, addRun(key)])),
+        constructorCounts: Object.fromEntries(Object.keys(sql ?? {}).map((key) => [key, addConstructor(key)])),
         transactions: add("transactions"), transactionSync: add("transactionSync"),
-        writeTransactions: add("writeTransactions"), writeTransactionSync: add("writeTransactionSync"), overlappingTransactionCallbacks: add("overlappingTransactionCallbacks"),
+        writeTransactions: add("writeTransactions"), writeTransactionSync: add("writeTransactionSync"), overlappingTransactionCallbacks: add("overlappingTransactionCallbacks"), transactionRollbacks: add("transactionRollbacks"), transactionWindowCrossings: add("transactionWindowCrossings"),
         nativeSyncCalls: add("syncCalls"), nativeSyncWaitMs: add("syncWaitMs"),
         explicitProbeSyncMs: enabledSync,
         logicalMutationStatements: add("mutationStatements"),
@@ -237,6 +299,7 @@ const run = Effect.try({
           fingerprint: p[i]?.fingerprint, wireFingerprint: p[i]?.rawWireFingerprint,
           fetchToHeadersMs: call.headersMs - call.fetchStartedMs,
           sql: call.sqlSincePreviousCall,
+          sqlAfterPreviousStream: i === 0 || !r.calls[i - 1].sqlAtEnd ? null : Object.fromEntries(Object.keys(call.sqlAtStart).map((key) => [key, difference(call.sqlAtStart[key], r.calls[i - 1].sqlAtEnd[key])])),
           syncProbeMs: call.syncStartedMs === undefined ? null : call.syncEndedMs - call.syncStartedMs,
         })),
       };
@@ -312,13 +375,16 @@ const run = Effect.try({
       excluded: records.filter((r) => !r.eligible || (r.mode === "cold" && !r.coldVerified) || (r.phase === "network" && !completeMainCohorts.has(`${r.role}/${r.framework}/${r.object}`)) || (r.phase === "network-variant" && !completeVariantCohorts.has(`${r.role}/${r.framework}/${r.object}`))).map((r) => ({ key: r.key, phase: r.phase, reasons: [...r.reasons, ...(r.phase === "network" && !completeMainCohorts.has(`${r.role}/${r.framework}/${r.object}`) ? ["incomplete or changed-incarnation/version six-turn cohort"] : []), ...(r.phase === "network-variant" && !completeVariantCohorts.has(`${r.role}/${r.framework}/${r.object}`) ? ["incomplete or changed-incarnation/version variant cohort"] : [])], coldVerified: r.coldVerified, requestConstructed: r.requestConstructed, actorRequestConstructed: r.actorRequestConstructed })),
       coverage: { requests: rows.length, telemetry: unique.length, measuredTurns: measured.length, providerRequests: provider.size, validColdResets: measured.filter((r) => r.mode === "cold" && r.coldVerified).length },
       probe: analyzeProbe(rows, unique),
+      instrumentation: analyzeInstrumentation(rows, expected, load("instrumentation-completed.json", [])),
+      minification: analyzeMinification(records, load("minification.json", null), metricNames),
     };
     save("summary.json", summary);
     save("failed-outcomes.json", { outcomes, failedOutcomes, failedRequests });
     writeFileSync(join(here, "turns.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n");
     const fmt = (value) => value?.median === null || !value ? "—" : `${value.median.toFixed(0)} [${value.q1.toFixed(0)}–${value.q3.toFixed(0)}]`;
-    const table = ["| Target | History | Provider TTFT | State | Objects | Client ms | Client − provider ms | DO wall ms | Attributed DO CPU ms† | Boundary CPU ms† | Step gap ms | First request ms* |", "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|"];
-    for (const g of groups) table.push(`| ${g.role === "control" ? "control " : ""}${g.framework} | ${g.history} | ${g.ttftMs} | ${g.mode} | ${g.objects} | ${fmt(g.metrics.clientMs)} | ${fmt(g.metrics.clientMinusProviderMs)} | ${fmt(g.metrics.doWallMs)} | ${fmt(g.metrics.attributedDoCpuMs)} | ${fmt(g.metrics.boundaryCpuMs)} | ${fmt(g.metrics.stepGapMs)} | ${fmt(g.metrics.firstModelArrivalMs)} |`);
+    const table = ["| Target | History | Provider TTFT | State | Objects | Client ms | Client − scripted ms | DO wall ms† | Observed DO CPU ms† | Boundary CPU ms† | Step gap ms* | First request ms* |", "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|"];
+    for (const g of groups) table.push(`| ${g.role === "control" ? "control " : ""}${g.framework} | ${g.history} | ${g.ttftMs} | ${g.mode} | ${g.objects} | ${fmt(g.metrics.clientMs)} | ${fmt(g.metrics.clientMinusScriptedMs)} | ${fmt(g.metrics.doWallMs)} | ${fmt(g.metrics.attributedDoCpuMs)} | ${fmt(g.metrics.boundaryCpuMs)} | ${fmt(g.metrics.stepGapMs)} | ${fmt(g.metrics.firstModelArrivalMs)} |`);
+    table.push("", "† Available invocation telemetry only; CPU excludes boundary traces shown separately and can omit sampled descendants. Neither column is an exact critical-path allocation. See summary.json telemetryCoverage and per-metric n.", "", "* Timestamp differences across I/O clocks, not CPU-independent synchronized wall clocks. Client totals use the controller's monotonic clock. Scripted provider time is 0 or 4,130 ms per turn.");
     writeFileSync(join(here, "network-table.md"), table.join("\n") + "\n");
     console.log(JSON.stringify({ groups: groups.length, coverage: summary.coverage, missing: missing.length, fingerprintFailures: fingerprintFailures.length, failures: failedRequests.length }));
   },

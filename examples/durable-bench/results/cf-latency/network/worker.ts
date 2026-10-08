@@ -3,6 +3,7 @@ import {
   decodeIdentity,
   decodeSeed,
   errorText,
+  readDirectoryMetrics,
   readQuery,
   type Env,
   type Query,
@@ -139,6 +140,9 @@ export default {
       }
       if (url.pathname === "/cold") return await cold(request, query, thread, actor);
       if (url.pathname !== "/run") return await thread.fetch(request);
+      // Follow-up calibration of the two observation RPCs and their response
+      // payload. This bypass changes no native Thread or Actor operation.
+      if (!readDirectoryMetrics(url)) return await thread.fetch(request);
       const directoryStart = await actor.begin(query);
       let response: Response;
 

@@ -21,7 +21,7 @@ export const program = Effect.tryPromise({
     );
     if (!privateDirectory || !privateDirectory.startsWith("/private/tmp/cf-latency-")) throw new Error("Run experiment init first (private build/state directory)");
     const selected = process.argv.slice(2).filter((arg) => arg !== "--");
-    const entries = { echo: "echo-worker.ts", probe: "probe-worker.ts", provider: "network/provider.ts", network: "network/worker.ts" };
+    const entries = { echo: "echo-worker.ts", probe: "probe-worker.ts", provider: "network/provider.ts", network: "network/worker.ts", "network-min": "network/worker.ts" };
     const identitiesPath = join(here, "build-identities");
     mkdirSync(identitiesPath, { recursive: true });
     const allFile = join(identitiesPath, "all.json");
@@ -31,10 +31,11 @@ export const program = Effect.tryPromise({
       if (selected.length && !selected.includes(name)) continue;
       if (!existsSync(join(here, relative))) continue;
       const output = join(privateDirectory, "bundles", name);
+      const minify = name === "network-min";
       mkdirSync(output, { recursive: true });
       const compiled = await build({
         entryPoints: [join(here, relative)], outfile: join(output, "worker.mjs"), bundle: true,
-        format: "esm", platform: "neutral", target: "es2024", minify: false,
+        format: "esm", platform: "neutral", target: "es2024", minify,
         conditions: ["workerd", "worker", "browser", "import"], mainFields: ["module", "main"],
         external: ["cloudflare:*", "node:*", ...builtinModules], logLevel: "error", metafile: true,
         plugins: [{ name: "cf-latency-third-party-boundary", setup(bundler) {
@@ -52,9 +53,9 @@ export const program = Effect.tryPromise({
       const inputs = Object.keys(compiled.metafile.inputs).sort().map((path) => ({ path: resolve(path).replace(root + "/", ""), sha256: hash(readFileSync(resolve(path))) }));
       const fixtureFiles = ["src/plan.ts", "src/yielded.ts", "third-party/src/pi.ts", "third-party/src/tardie.ts"].map((path) => ({ path, sha256: hash(readFileSync(join(root, "examples/durable-bench", path))) }));
       const identity = {
-        name, repositoryCommit: commit, bundleSha256: hash(bundle), bundleBytes: bundle.length,
+        name, repositoryCommit: commit, bundleSha256: hash(bundle), bundleBytes: bundle.length, gzipBytes: gzipSync(bundle).length,
         fixtureSha256: hash(JSON.stringify(fixtureFiles)), fixtureFiles, inputsSha256: hash(JSON.stringify(inputs)),
-        esbuildVersion, minify: false, target: "es2024", output,
+        esbuildVersion, minify, target: "es2024", output,
         effectVersion: JSON.parse(readFileSync(join(root, "node_modules/effect/package.json"), "utf8")).version,
       };
       writeFileSync(join(identitiesPath, `${name}-${identity.bundleSha256}.mjs.gz`), gzipSync(bundle));

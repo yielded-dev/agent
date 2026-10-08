@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { gunzipSync } from "node:zlib";
 import { Effect, Schema } from "effect";
 import { NodeRuntime } from "@effect/platform-node";
 
@@ -16,7 +17,7 @@ const account = process.env.CLOUDFLARE_ACCOUNT_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const load = (file) => JSON.parse(readFileSync(file, "utf8"));
-const save = (file, value) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file + ".tmp", JSON.stringify(value, null, 2) + "\n"); renameSync(file + ".tmp", file); };
+const save = (file, value) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file + ".tmp", clean(JSON.stringify(value, null, 2)) + "\n"); renameSync(file + ".tmp", file); };
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 let resources;
 let privateState;
@@ -80,7 +81,8 @@ const alchemy = (target, operation) => new Promise((done, fail) => {
     env: { PATH: process.env.PATH, HOME: process.env.HOME, CI: "true", NO_COLOR: "1",
       ALCHEMY_HOME: join(resources.privateDirectory, "auth"), CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token,
       CF_LATENCY_WORKER: target.name, CF_LATENCY_BUNDLE: target.bundle, CF_LATENCY_TOKEN: privateState.token,
-      CF_LATENCY_KIND: target.kind, CF_LATENCY_PHASE: target.phase ?? "seed", CF_LATENCY_PROVIDER: target.provider ?? "" },
+      CF_LATENCY_KIND: target.kind, CF_LATENCY_PHASE: target.phase ?? "seed", CF_LATENCY_PROVIDER: target.provider ?? "",
+      CF_LATENCY_UPLOAD_REVISION: target.uploadRevision ?? "" },
   });
   let captured = "";
   child.stdout.on("data", (data) => { captured += data.toString(); });
@@ -114,6 +116,17 @@ const verifyUpload = async (target) => {
   const uploaded = await api(`workers/scripts/${target.name}`);
   if (!uploaded.ok || !(await uploaded.text()).includes(readFileSync(target.bundle, "utf8"))) throw new Error("Uploaded module differs from recorded bytes");
   const settings = (await apiJson(`workers/scripts/${target.name}/settings`)).result;
+  const deployment = (await apiJson(`workers/scripts/${target.name}/deployments`)).result.deployments[0];
+  if (deployment?.versions?.length !== 1 || deployment.versions[0].percentage !== 100)
+    throw new Error("Expected one fully active Worker version");
+  target.expectedVersion = deployment.versions[0].version_id;
+  const script = (await apiJson("workers/scripts")).result.find((item) => item.id === target.name);
+  if (!script?.tag) throw new Error("Deployed Worker metadata is missing its version lookup identity");
+  const version = (await apiJson(`workers/workers/${script.tag}/versions/${target.expectedVersion}`)).result;
+  if (version.id !== target.expectedVersion) throw new Error("Startup metadata does not match the active version");
+  target.startupTimeMs = typeof version.startup_time_ms === "number" ? version.startup_time_ms : null;
+  target.startupEvidence = { version: version.id, number: version.number, startupTimeMs: target.startupTimeMs,
+    compatibilityDate: version.compatibility_date, limits: version.limits, capturedAt: Date.now() };
   target.uploadedModuleSha256 = target.build.bundleSha256;
   target.settings = { limits: settings.limits, compatibilityDate: settings.compatibility_date, compatibilityFlags: settings.compatibility_flags, observability: settings.observability };
   target.namespaces = (await listNamespaces()).filter((item) => item.script === target.name).map(({ name, script }) => ({ name, script }));
@@ -284,7 +297,7 @@ const refreshNetwork = async (phase) => {
     else {
       const build = load(join(here, "build-identities/all.json")).find((candidate) => candidate.name === "network");
       item.deployments ??= [];
-      item.deployments.push({ build: item.build, phase: item.phase, version: item.version, replacedAt: Date.now() });
+      item.deployments.push({ build: item.build, phase: item.phase, version: item.version, startupEvidence: item.startupEvidence, replacedAt: Date.now() });
       if (phase) item.phase = phase;
       item.build = build;
       item.bundle = join(build.output, "worker.mjs");
@@ -292,7 +305,7 @@ const refreshNetwork = async (phase) => {
       await alchemy(item, "deploy");
       await verifyUpload(item);
     }
-    const ready = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "ready"), (attempt) => `cf-latency-ready-${role}-${Date.now()}-${attempt}`, (row) => receipt(row).generation === item.phase);
+    const ready = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "ready"), (attempt) => `cf-latency-ready-${role}-${Date.now()}-${attempt}`, (row) => receipt(row).generation === item.phase && receipt(row).version === item.expectedVersion);
     if (!receipt(ready).ok || receipt(ready).generation !== item.phase) throw new Error("Network readiness/generation failed");
     item.version = receipt(ready).version;
     save(join(here, "resources.json"), resources);
@@ -304,7 +317,7 @@ const refreshNonNetwork = async (role) => {
   const item = target(role);
   const build = load(join(here, "build-identities/all.json")).find((candidate) => candidate.name === item.kind);
   item.deployments ??= [];
-  item.deployments.push({ build: item.build, phase: item.phase, replacedAt: Date.now() });
+  item.deployments.push({ build: item.build, phase: item.phase, version: item.version, startupEvidence: item.startupEvidence, replacedAt: Date.now() });
   item.build = build;
   item.bundle = join(build.output, "worker.mjs");
   save(join(here, "resources.json"), resources);
@@ -392,7 +405,7 @@ const activateNetwork = async (phase) => {
     save(join(here, "resources.json"), resources);
     await alchemy(item, "deploy");
     await verifyUpload(item);
-    const activation = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "activation"), (attempt) => `cf-latency-activation-${phase}-${item.activatedAt}-${attempt}`, (row) => receipt(row).generation === phase);
+    const activation = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "activation"), (attempt) => `cf-latency-activation-${phase}-${item.activatedAt}-${attempt}`, (row) => receipt(row).generation === phase && receipt(row).version === item.expectedVersion);
     if (receipt(activation).generation !== phase) throw new Error("Updated Worker generation has not propagated");
     item.version = receipt(activation).version;
     save(join(here, "resources.json"), resources);
@@ -473,6 +486,161 @@ const measureNetwork = async (pilot = false) => {
   }
   for (let i = 0; i < 5; i++) await request(target("provider"), `/echo?sample=${name}-clock-end-${i}`, undefined, "clock-calibration");
 };
+const measureInstrumentation = async () => {
+  await open();
+  const mainPlan = load(join(here, "network-plan.json"));
+  const mainDone = load(join(here, "network-completed.json"));
+  if (mainDone.length !== mainPlan.cohorts.length) throw new Error("Finish the native matrix before the observation calibration");
+  const planFile = join(here, "instrumentation-plan.json");
+  const plan = existsSync(planFile) ? load(planFile) : {
+    purpose: "Same-Object Tardie directory observation on/off; native operations unchanged",
+    warmupSamples: ["m6", "m7"], repetitions: 3,
+    cohorts: mainPlan.cohorts.filter((c) => c.role === "primary" && c.framework === "tardie" && c.ttftMs === 0),
+  };
+  if (!existsSync(planFile)) save(planFile, plan);
+  const doneFile = join(here, "instrumentation-completed.json");
+  const done = existsSync(doneFile) ? load(doneFile) : [];
+  const failuresFile = join(here, "instrumentation-failures.json");
+  const failures = existsSync(failuresFile) ? load(failuresFile) : [];
+  const attempts = readFileSync(join(here, "attempted.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  for (const cohort of plan.cohorts) {
+    const key = cohortKey(cohort);
+    if (done.some((c) => c.key === key) || failures.some((c) => c.key === key)) continue;
+    if (attempts.some((r) => r.phase.startsWith("instrumentation") && r.framework === "tardie" && r.object === cohort.object)) {
+      failures.push({ key, at: Date.now(), noRetry: true, error: "Interrupted observation cohort; no canonical input is replayed" });
+      save(failuresFile, failures);
+      continue;
+    }
+    const item = target(cohort.role);
+    try {
+      const cold = await request(item, networkUrl("/cold", cohort, "observation-reset"), {}, "instrumentation-reset", cohort.object);
+      if (!cold.response.ok || !cold.response.coldRequested) throw new Error("Observation reset not acknowledged");
+      const settings = [true, true, ...Array.from({ length: 3 }, (_, repeat) => shuffle([true, false], 331 + cohort.index * 41 + repeat * 13)).flat()];
+      let incarnation;
+      let actorIncarnation;
+      for (const [offset, enabled] of settings.entries()) {
+        const sample = `m${offset + 6}`;
+        const row = await request(item, networkUrl("/run", cohort, sample, { directoryMetrics: String(enabled) }), {}, offset < 2 ? "instrumentation-warmup" : "instrumentation", cohort.object);
+        const r = receipt(row);
+        if (!r.ok || r.seedFingerprint !== expectedFingerprint[cohort.history] || r.calls?.length !== 9 || r.version !== item.version)
+          throw new Error("Observation provider/seed/version receipt failed");
+        if (r.objectId !== cold.response.before.objectId || r.incarnation === cold.response.before.incarnation || (incarnation && incarnation !== r.incarnation))
+          throw new Error("Observation Thread identity changed");
+        incarnation = r.incarnation;
+        if (enabled) {
+          const actor = row.response.directory;
+          if (!actor || actor.objectId !== cold.response.directoryBefore.objectId || actor.incarnation === cold.response.directoryBefore.incarnation || actor.incarnation !== row.response.directoryStart?.incarnation || (actorIncarnation && actorIncarnation !== actor.incarnation))
+            throw new Error("Observation Actor identity changed");
+          actorIncarnation = actor.incarnation;
+        } else if (row.response.thread || row.response.directory) throw new Error("Directory observation toggle was not deployed");
+      }
+      const release = await request(item, networkUrl("/cold", cohort, "observation-release"), {}, "instrumentation-release", cohort.object);
+      if (!release.response.ok || !release.response.coldRequested || release.response.before?.incarnation !== incarnation || release.response.directoryBefore?.incarnation !== actorIncarnation)
+        throw new Error("Observation release or final identity failed");
+      done.push({ key, incarnation, actorIncarnation, version: item.version, completedAt: Date.now() });
+      save(doneFile, done);
+      console.log(`Observation measured ${done.length}/${plan.cohorts.length}: ${key}`);
+    } catch (cause) {
+      failures.push({ key, at: Date.now(), noRetry: true, error: clean(String(cause)) });
+      save(failuresFile, failures);
+      throw cause;
+    }
+  }
+};
+const measureMinification = async () => {
+  await open();
+  const main = load(join(here, "network-plan.json"));
+  if (load(join(here, "network-completed.json")).length !== main.cohorts.length ||
+      load(join(here, "instrumentation-completed.json")).length !== load(join(here, "instrumentation-plan.json")).cohorts.length)
+    throw new Error("Finish both native measurement phases before changing their deployed bytes");
+  const file = join(here, "minification.json");
+  if (existsSync(file)) throw new Error("Minification already attempted; never replay a measured canonical turn");
+  const builds = load(join(here, "build-identities/all.json"));
+  const plain = builds.find((build) => build.name === "network");
+  const minified = builds.find((build) => build.name === "network-min");
+  if (!plain || !minified || plain.inputsSha256 !== minified.inputsSha256 || plain.fixtureSha256 !== minified.fixtureSha256 ||
+      plain.repositoryCommit !== minified.repositoryCommit || plain.minify || !minified.minify ||
+      ["esbuildVersion", "effectVersion", "target"].some((key) => plain[key] !== minified[key]))
+    throw new Error("Minification must compare the same source/fixture with only the build flag changed");
+  const plan = {
+    purpose: "Combined native bundle minification: eight upload rounds, same-Object cold requests, unchanged-code temporal control",
+    startedAt: Date.now(), complete: false,
+    // ABBA BAAB balances linear progression; the control uploads plain bytes throughout.
+    rounds: [false, true, true, false, true, false, false, true],
+    cohorts: main.cohorts.filter((c) => c.framework === "yielded" && c.history === 50 && c.ttftMs === 400)
+      .map((c) => ({ ...c, ttftMs: 0 })),
+    builds: { plain, minified }, deployments: [], completed: [],
+  };
+  save(file, plan);
+  try {
+    // These Objects ended the main matrix at m5 in both Workers. Preserve that
+    // history and append m6/m7 before comparison (lookup #97 is in m7).
+    for (const cohort of shuffle(plan.cohorts, 771)) {
+      const item = target(cohort.role);
+      for (const sample of ["m6", "m7"]) {
+        const row = await request(item, networkUrl("/run", cohort, sample), {}, "minification-prelude", cohort.object);
+        const r = receipt(row);
+        if (!r.ok || r.seedFingerprint !== expectedFingerprint[50] || r.calls?.length !== 9 || r.version !== item.version)
+          throw new Error("Minification prelude identity/provider failure");
+      }
+      const released = await request(item, networkUrl("/cold", cohort, "minify-prelude-release"), {}, "minification-release", cohort.object);
+      if (!released.response.ok || !released.response.coldRequested) throw new Error("Minification prelude release not acknowledged");
+    }
+    for (const [round, enabled] of plan.rounds.entries()) {
+      for (const role of shuffle(["primary", "control"], 401 + round * 23)) {
+        const item = target(role);
+        const build = role === "primary" && enabled ? minified : plain;
+        item.deployments ??= [];
+        item.deployments.push({ build: item.build, phase: item.phase, version: item.version, startupEvidence: item.startupEvidence, uploadRevision: item.uploadRevision, replacedAt: Date.now() });
+        item.build = build;
+        item.bundle = join(build.output, "worker.mjs");
+        if (hash(readFileSync(item.bundle)) !== build.bundleSha256) throw new Error("Minification bundle digest mismatch");
+        item.uploadRevision = `cf-latency-minify-${round}`;
+        const previousVersion = item.expectedVersion;
+        save(join(here, "resources.json"), resources);
+        await alchemy(item, "deploy");
+        await verifyUpload(item);
+        if (item.expectedVersion === previousVersion) throw new Error("Repeated startup round did not create a new active version");
+        const ready = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "minify-ready"),
+          (attempt) => `cf-latency-minify-ready-${role}-${round}-${attempt}`,
+          (row) => receipt(row).generation === "measure" && receipt(row).version === item.expectedVersion);
+        item.version = receipt(ready).version;
+        save(join(here, "resources.json"), resources);
+        plan.deployments.push({ round, role, minify: build.minify, version: item.version, bundleSha256: build.bundleSha256,
+          bundleBytes: build.bundleBytes, gzipBytes: build.gzipBytes, startupTimeMs: item.startupTimeMs ?? null,
+          startupEvidence: item.startupEvidence, uploadRevision: item.uploadRevision, observedAt: Date.now() });
+        save(file, plan);
+      }
+      for (const cohort of shuffle(plan.cohorts, 977 + round * 53)) {
+        const item = target(cohort.role);
+        const sample = `m${8 + round}`;
+        const cold = await request(item, networkUrl("/cold", cohort, `minify-reset-${sample}`), {}, "minification-reset", cohort.object);
+        if (!cold.response.ok || !cold.response.coldRequested || cold.response.before?.version !== item.version)
+          throw new Error("Minification cold reset or current-version identity not acknowledged");
+        const row = await request(item, networkUrl("/run", cohort, sample, {
+          minificationRound: String(round), minified: String(item.build.minify),
+        }), {}, "minification", cohort.object);
+        const r = receipt(row);
+        if (!r.ok || r.seedFingerprint !== expectedFingerprint[50] || r.calls?.length !== 9 || r.version !== item.version ||
+            r.objectId !== cold.response.before.objectId || r.incarnation === cold.response.before.incarnation)
+          throw new Error("Minification cold/provider/identity failure");
+        const release = await request(item, networkUrl("/cold", cohort, `minify-release-${sample}`), {}, "minification-release", cohort.object);
+        if (!release.response.ok || !release.response.coldRequested) throw new Error("Minification release not acknowledged");
+        plan.completed.push({ round, key: cohortKey(cohort), sample, version: r.version, incarnation: r.incarnation,
+          firstEntry: r.entry, completedAt: Date.now() });
+        save(file, plan);
+      }
+      console.log(`Minification round ${round + 1}/${plan.rounds.length}: primary ${enabled ? "minified" : "plain"}, control plain`);
+    }
+    plan.complete = true;
+    plan.finishedAt = Date.now();
+    save(file, plan);
+  } catch (cause) {
+    plan.failure = { at: Date.now(), error: clean(String(cause)), noRetry: true };
+    save(file, plan);
+    throw cause;
+  }
+};
 const telemetry = async () => {
   await open();
   for (const item of resources.targets) {
@@ -529,13 +697,40 @@ const cleanup = async () => {
   save(join(here, "cleanup.json"), { complete: true, accountName: resources.accountName, accountDigest: resources.accountDigest,
     checkedAt: new Date().toISOString(), checks, remaining, secretStateRemoved: true });
 };
+const scanSecrets = async () => {
+  await open();
+  const files = [];
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = join(directory, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (entry.isFile()) files.push(file);
+      else throw new Error("Unexpected non-file in committed evidence");
+    }
+  };
+  walk(here);
+  files.push(join(root, "package.json"), join(root, "bun.lock"), join(here, "../../vite.config.ts"));
+  const secrets = [account, token, privateState.token];
+  const matches = [];
+  let gzipFiles = 0;
+  for (const file of files) {
+    const raw = readFileSync(file);
+    const data = file.endsWith(".gz") ? (gzipFiles++, gunzipSync(raw)) : raw;
+    if (secrets.some((secret) => data.includes(Buffer.from(secret)))) matches.push(file.replace(root + "/", ""));
+  }
+  save(join(here, "secret-scan.json"), { accountName: resources.accountName, checkedAt: new Date().toISOString(),
+    filesChecked: files.length, gzipFilesChecked: gzipFiles, knownCredentialValuesChecked: secrets.length, matches,
+    passed: matches.length === 0, scope: "Exact account ID, Cloudflare API token, and private benchmark token; raw and decompressed result artifacts plus changed root manifests/task config" });
+  if (matches.length) throw new Error(`Known credentials found in ${matches.length} evidence files; do not commit`);
+  console.log(`Credential scan passed: ${files.length} files, including ${gzipFiles} compressed artifacts`);
+};
 
 export const run = Effect.tryPromise({
   try: async () => {
     if (action === "dry-run") {
       console.log(JSON.stringify({ stack: "cf-latency", timing: "deployed Cloudflare only", locationHint: "wnam", cpuLimitMs: 300000,
         calibration: { bytes: [0, 1024, 16384, 65536, 131072, 524288], transactions: [1, 4, 12], modes: ["return", "fetch", "sync-end", "sync-each"], objects: 8, repetitions: 5 },
-        actions: ["init", "deploy-probe", "probe-pilot", "calibrate", "alarms", "deploy-network", "seed-pilot", "seed", "activate", "measure-pilot", "measure", "telemetry", "cleanup"] }, null, 2));
+        actions: ["init", "deploy-probe", "probe-pilot", "calibrate", "alarms2", "transport", "deploy-network", "seed-pilot", "seed", "activate", "measure-pilot", "measure", "metadata", "refresh-network-measure", "instrumentation", "minification", "telemetry", "cleanup"] }, null, 2));
       return;
     }
     if (!account || !token) throw new Error("Cloudflare credentials missing; use checkout direnv");
@@ -563,7 +758,17 @@ export const run = Effect.tryPromise({
     else if (action === "measure-pilot2") await measureNetwork(2);
     else if (action === "measure-pilot3") await measureNetwork(3);
     else if (action === "measure") await measureNetwork(false);
+    else if (action === "instrumentation") await measureInstrumentation();
+    else if (action === "minification") await measureMinification();
+    else if (action === "metadata") {
+      await open();
+      for (const item of resources.targets) {
+        await verifyUpload(item);
+        console.log(`Verified ${item.role} startup metadata: ${item.startupTimeMs ?? "missing"} ms`);
+      }
+    }
     else if (action === "telemetry") await telemetry();
+    else if (action === "secret-scan") await scanSecrets();
     else if (action === "cleanup") await cleanup();
     else throw new Error(`Unknown action: ${action}`);
   }, catch: (cause) => {
