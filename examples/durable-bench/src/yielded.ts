@@ -10,7 +10,7 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { text as textOutput } from "@yielded/agent/output";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
 
@@ -144,6 +144,10 @@ const definitions = DefinitionDigestInput.make({
   tools: { lookup: { revision: 1, executionClass: "readonly" } },
 });
 
+const definitionDigests = Effect.runSync(
+  Effect.cached(digestDefinitions(definitions).pipe(Effect.provide(BrowserCrypto.layer))),
+);
+
 const runtime = ThreadObject.layer([{ agent, definitions }]).pipe(
   Layer.provide(tools.toLayer({ lookup: ({ n }) => Effect.succeed(payload(n)) })),
 );
@@ -158,7 +162,7 @@ const submitAndWait = Effect.fnUntraced(function* (input: Turn) {
     threadId,
     principal,
     idempotencyKey: IdempotencyKey.make(input.id),
-    definitions: yield* digestDefinitions(definitions),
+    definitions: yield* definitionDigests,
   });
 
   const settlement = yield* client.awaitSettlement(receipt);
@@ -255,6 +259,13 @@ export class YieldedDO
 
 type Env = { THREADS: DurableObjectNamespace<YieldedDO> };
 
+let clientRuntime: ManagedRuntime.ManagedRuntime<CloudflareThreadClient, never> | undefined;
+
+const getClientRuntime = (env: Env) =>
+  (clientRuntime ??= ManagedRuntime.make(
+    CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS }),
+  ));
+
 export const inlineWorker = serve<Env>((env) => {
   const stub = env.THREADS.getByName(threadId);
 
@@ -266,16 +277,18 @@ export const inlineWorker = serve<Env>((env) => {
   };
 });
 
-export default serve<Env>((env) => {
-  const stub = env.THREADS.getByName(threadId);
-  const client = CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS });
+export default serve<Env>(
+  (env) => {
+    const stub = env.THREADS.getByName(threadId);
+    const client = getClientRuntime(env);
 
-  return {
-    // The first public submission includes Object construction in the cold measurement.
-    wake: () => Promise.resolve(),
-    turn: (input) =>
-      Effect.runPromise(submitAndWait(input).pipe(Effect.provide([client, BrowserCrypto.layer]))),
-    seed: (turns) => stub.seed(turns),
-    stats: () => stub.stats(),
-  };
-});
+    return {
+      // The first public submission includes Object construction in the cold measurement.
+      wake: () => Promise.resolve(),
+      turn: (input) => client.runPromise(submitAndWait(input)),
+      seed: (turns) => stub.seed(turns),
+      stats: () => stub.stats(),
+    };
+  },
+  (env) => getClientRuntime(env).runPromise(Effect.asVoid(definitionDigests)),
+);

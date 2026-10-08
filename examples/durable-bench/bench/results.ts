@@ -4,7 +4,6 @@ import { Schema } from "effect";
 
 const Line = Schema.Struct({
   target: Schema.String,
-  executionPath: Schema.optionalKey(Schema.Literals(["rpc-alarm", "direct-turn"])),
   version: Schema.String,
   turns: Schema.Number,
   open: Schema.Number,
@@ -38,16 +37,7 @@ export const median = (values: readonly number[]): number => {
 export const lines = readFileSync("results/results.jsonl", "utf8")
   .trim()
   .split("\n")
-  .map((line) => decodeLine(line))
-  .map((line) =>
-    line.target === "yielded" || line.target === "yielded-inline"
-      ? {
-          ...line,
-          // Unmarked Yielded rows predate the public RPC/alarm target.
-          target: line.executionPath === "rpc-alarm" ? "yielded" : "yielded-inline",
-        }
-      : line,
-  );
+  .map((line) => decodeLine(line));
 
 export const label = (line: Line): string => `${line.target} ${line.version}`;
 

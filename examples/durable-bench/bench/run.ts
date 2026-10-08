@@ -42,6 +42,8 @@ for (const size of sizes) {
     const mf = await start(name, dir);
     const startup = performance.now() - at;
 
+    if (name === "yielded") await call(mf, "/setup");
+
     at = performance.now();
     await call(mf, "/wake");
     const open = performance.now() - at;
@@ -60,7 +62,6 @@ for (const size of sizes) {
 
     const line = {
       target: name,
-      executionPath: name === "yielded" ? "rpc-alarm" : "direct-turn",
       version: version(name),
       turns: size,
       sample,
