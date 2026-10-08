@@ -166,7 +166,11 @@ export const prepareModelPrompt = (
   contract: Prompt.SystemMessage | undefined,
   systemMessagesInHistory: boolean,
   staticInstructions: Prompt.RawInput | undefined,
+  preserveContextOrder = false,
 ): Prompt.Prompt => {
+  // Native sidecars precede this ordinary tail; do not reorder or deduplicate its messages.
+  if (preserveContextOrder)
+    return Prompt.fromMessages([...(contract === undefined ? [] : [contract]), ...prompt.content]);
   if (systemMessagesInHistory) {
     const content: Array<Prompt.Message> = [];
     let lastSystem: Prompt.SystemMessage | undefined;

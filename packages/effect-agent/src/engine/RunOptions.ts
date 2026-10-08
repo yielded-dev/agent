@@ -39,7 +39,11 @@ import {
   type ModelCallUsage,
 } from "../core/Usage.ts";
 import type { WorkerBudgetScope, FrameworkMessage } from "../core/Worker.ts";
-import type { CompactionError, ContextMessageTokenEstimator } from "./ContextCompactor.ts";
+import type {
+  NativeCompaction,
+  CompactionError,
+  ContextMessageTokenEstimator,
+} from "./ContextCompactor.ts";
 import type { ContextRolloverSelection, ModelCallContext } from "./ContextWindow.ts";
 import type { RunStepHook, ToolExecutionClassValue } from "./DurableStep.ts";
 
@@ -368,7 +372,7 @@ export interface RunCostEstimateRequest {
   /** Observed hosted web search calls, separately billed from tokens. */
   readonly webSearchCalls?: number | undefined;
   readonly provider: string;
-  /** Configured binding identity; only response.model identifies the returned model. */
+  /** Configured binding identity, or the effective request model for native compaction. */
   readonly model: string;
   readonly usage: Response.Usage;
   /** Actual provider response fields, never the configured binding name. */
@@ -380,7 +384,7 @@ export interface RunCostEstimateRequest {
     | undefined;
   /** Native Effect AI provider metadata, runtime-only; HTTP details are excluded. */
   readonly finishMetadata?: Response.FinishPart["metadata"] | undefined;
-  readonly purpose?: "turn" | "summary" | undefined;
+  readonly purpose?: "turn" | "summary" | "compaction" | undefined;
 }
 
 /**
@@ -582,24 +586,44 @@ export type RunTurnCommit = RunTurnIdentity &
   );
 
 /**
- * One compaction decision the engine applied to its model-visible view
+ * One proposed compaction of the engine's model-visible view
  * (RUN-026). The durable coordinator maps the covered source prefix to complete canonical
  * records, including settled current-Run batches for rollover. It must never infer a wider cutoff
  * from policy or token estimates.
  */
-export interface RunCompactionCommit {
+export type RunCompactionCommit = {
   readonly turn: number;
   /** Exact pre-compaction source and exclusive message bound; live values, never persisted. */
   readonly source: Prompt.Prompt;
   readonly through: number;
-  readonly kind: "clear-tool-results" | "summarize" | "rollover";
-  /** Present exactly when `kind` is `"summarize"`. */
-  readonly summary?: string | undefined;
-  /** Optional continuation state for a rollover; never a generated summary. */
-  readonly handoff?: string | undefined;
   readonly tokensBeforeEstimate: number;
   readonly tokensAfterEstimate: number;
-}
+} & (
+  | {
+      readonly kind: "native";
+      readonly native: NativeCompaction;
+      readonly summary?: never;
+      readonly handoff?: never;
+    }
+  | {
+      readonly kind: "summarize";
+      readonly summary: string;
+      readonly native?: never;
+      readonly handoff?: never;
+    }
+  | {
+      readonly kind: "rollover";
+      readonly handoff?: string | undefined;
+      readonly native?: never;
+      readonly summary?: never;
+    }
+  | {
+      readonly kind: "clear-tool-results";
+      readonly native?: never;
+      readonly summary?: never;
+      readonly handoff?: never;
+    }
+);
 
 /** One completed model call's provider-reported usage, staged for the Turn's canonical commit. */
 export interface RunTurnUsage {
@@ -690,6 +714,13 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
   /** Check the writer fence after approval/authorization and before handler permits; no write. */
   readonly checkToolDispatch: Effect.Effect<void, Error, Requirements>;
   readonly step: RunStepHook<Error, Requirements>;
+  /** Validate exact native prior-Run coverage before spending on a provider call. */
+  readonly validateNativeCompaction?:
+    | ((request: {
+        readonly source: Prompt.Prompt;
+        readonly through: number;
+      }) => Effect.Effect<void, Error, Requirements>)
+    | undefined;
   /**
    * RUN-026: called at the pre-Turn seam BEFORE the engine applies a
    * compaction to its model-visible view or starts the model call whose
@@ -1063,6 +1094,11 @@ export interface RunOptions<HookError = never, HookRequirements = never> {
   readonly runId?: RunId | undefined;
   /** Canonically reconstructed window identity for a resumed durable Run. */
   readonly initialContextWindowId?: string | undefined;
+  /**
+   * Validated native prefix sidecars accompanying ordinary reconstructed history. Nondurable
+   * use requires a history adapter that retains compaction state before inference.
+   */
+  readonly nativeCompactions?: ReadonlyArray<NativeCompaction> | undefined;
   /** Last unconsumed, settled singleton application Tool in this Run; the engine verifies its control annotation. */
   readonly pendingContextToolCallId?: string | undefined;
   /** Canonical instruction/input block for durable recovery; not re-evaluated Attempt input. */

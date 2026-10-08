@@ -1,4 +1,4 @@
-import { OpenAiClient, OpenAiSchema } from "@effect/ai-openai";
+import { OpenAiClient, OpenAiConfig, OpenAiSchema } from "@effect/ai-openai";
 import {
   type ReviewCostControl,
   ReviewCostSnapshot,
@@ -7,7 +7,7 @@ import {
 } from "@yielded/agent-pr-review/review";
 import { Config, Effect, Exit, Option, Ref, Schema, Semaphore, Stream } from "effect";
 import { AiError } from "effect/ai";
-import { HttpBody, HttpClientError, HttpClientResponse } from "effect/http";
+import { HttpBody, HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 
 export const reviewModel = Config.schema(Schema.Trim.check(Schema.isNonEmpty()), "PR_REVIEW_MODEL");
 
@@ -172,6 +172,9 @@ const decodeWebSearchAction = Schema.decodeUnknownOption(
 type Payload = typeof OpenAiSchema.CreateResponse.Encoded;
 const breakpoint = CacheBreakpoint.make({ mode: "explicit" });
 
+const isInputContent = Schema.is(Schema.Array(OpenAiSchema.InputContent));
+const isNativeContext = Schema.is(Schema.Struct({ type: Schema.Literal("compaction") }));
+
 const cacheContent = (content: string | ReadonlyArray<OpenAiSchema.InputContent>, mark = true) => {
   const parts =
     typeof content === "string" ? [{ type: "input_text" as const, text: content }] : content;
@@ -194,7 +197,11 @@ export const withReviewPromptCache = (payload: Payload, key: string) => ({
     typeof payload.input === "string"
       ? [{ role: "user" as const, content: cacheContent(payload.input) }]
       : payload.input?.map((item, index, items) => {
-          if ("role" in item && item.role !== "assistant") {
+          if (
+            "role" in item &&
+            item.role !== "assistant" &&
+            (typeof item.content === "string" || isInputContent(item.content))
+          ) {
             return { ...item, content: cacheContent(item.content) };
           }
           if (item.type === "function_call_output") {
@@ -412,6 +419,11 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
   });
 
   const admit = Effect.fnUntraced(function* (original: Payload) {
+    const scopedConfig = yield* OpenAiConfig.OpenAiConfig.getOrUndefined;
+
+    // Scoped transforms run after token counting and can change the admitted payload.
+    if (scopedConfig?.transformClient !== undefined)
+      return yield* refuse("Scoped HTTP transforms are outside the review spending contract.");
     const hasWebSearch = original.tools?.some((tool) => tool.type === "web_search") === true;
 
     if (
@@ -422,6 +434,7 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
       original.previous_response_id !== undefined ||
       original.background === true ||
       original.modalities !== undefined ||
+      (typeof original.input !== "string" && original.input?.some(isNativeContext)) ||
       original.tools?.some((tool) => tool.type !== "function" && tool.type !== "web_search") ||
       (hasWebSearch && original.max_tool_calls !== REVIEW_WEB_SEARCH_MAX_TOOL_CALLS) ||
       !Number.isSafeInteger(original.max_output_tokens) ||
@@ -694,6 +707,18 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
 
   const client = OpenAiClient.OpenAiClient.of({
     ...native,
+    client: native.client.pipe(
+      HttpClient.mapRequestEffect((request) =>
+        Effect.fail(
+          new HttpClientError.HttpClientError({
+            reason: new HttpClientError.EncodeError({
+              request,
+              description: "Direct provider requests have no review spending reservation",
+            }),
+          }),
+        ),
+      ),
+    ),
     createResponse: Effect.fnUntraced(
       function* (original) {
         const { payload, reservation } = yield* admit(original);

@@ -5,6 +5,7 @@ import * as Model from "effect/ai/Model";
 import * as Prompt from "effect/ai/Prompt";
 import * as Response from "effect/ai/Response";
 import * as ResponseIdTracker from "effect/ai/ResponseIdTracker";
+import * as Telemetry from "effect/ai/Telemetry";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Arr from "effect/Array";
@@ -72,6 +73,7 @@ import {
 } from "../../core/Identifiers.ts";
 import { IdGenerator } from "../../core/IdGenerator.ts";
 import { copyJson } from "../../core/internal/json.ts";
+import { isPersistedJson } from "../../core/internal/persisted-json.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import {
@@ -140,7 +142,7 @@ import {
 } from "../../core/Worker.ts";
 import { MessagingHost } from "../MessagingHost.ts";
 import { SubagentHost } from "../SubagentHost.ts";
-import { ThreadHistory, ThreadHistoryError } from "../ThreadHistory.ts";
+import { ThreadHistory, ThreadHistoryError, type RetainedCompaction } from "../ThreadHistory.ts";
 import { CurrentToolCatalog, RunToolVisibility, type CatalogEntry } from "../ToolExposure.ts";
 import { boundedValueFootprint } from "./bounded-value.ts";
 import { isTextOutput, outputSchemaContract, prepareModelPrompt } from "./output-contract.ts";
@@ -281,8 +283,11 @@ import {
   CompactionDecision,
   CompactionError,
   ContextCompactor,
+  NativeCompaction,
+  MAX_NATIVE_COMPACTION_BYTES,
   type CompactionModelLayer,
   type ContextMessageTokenEstimator,
+  type NativeCompactionProvider,
 } from "../ContextCompactor.ts";
 import {
   ContextRolloverRequest,
@@ -364,6 +369,7 @@ import {
   type ContextCompactionState,
 } from "./compaction.ts";
 import { errorMessage, errorTag } from "./error-diagnostic.ts";
+import { ownNativeCompaction, snapshotNativeCompactions } from "./native-compaction.ts";
 
 /** Schema factory for the terminal value produced by reducing a completed agent event stream. */
 export const AgentResultSchema = <Output extends Schema.Top>(output: Output) =>
@@ -594,6 +600,13 @@ interface RunContext {
   exhaustedDimension: "tokens" | "tool-calls" | "turns" | undefined;
   /** Model-visible view state for engine-native compaction (RUN-026). */
   readonly compaction: ContextCompactionState;
+  readonly priorRunHistory: Prompt.Prompt;
+  readonly validateRetainedNative:
+    | ((through: number) => Effect.Effect<void, ThreadHistoryError>)
+    | undefined;
+  readonly retainCompaction:
+    | ((state: RetainedCompaction) => Effect.Effect<void, ThreadHistoryError>)
+    | undefined;
   /** Owned content snapshots bind disposable compaction indices to prepared history. */
   preparedCompactionSource:
     | {
@@ -611,7 +624,7 @@ interface RunContext {
   /** One allowance shared by threshold compaction and the same Turn's overflow retry. */
   readonly compactionTurn: {
     turn: number;
-    summaryCalls: number;
+    modelCalls: number;
     readonly applied: Set<CompactionDecision["kind"]>;
   };
   /** Finite engine-owned memory ceilings, optionally tightened per Run. */
@@ -2041,15 +2054,19 @@ const modelTelemetryTracer = Effect.fnUntraced(function* (
 
   return Tracer.make({
     span(options) {
-      if (options.name !== "LanguageModel.streamText") return delegate.span(options);
-
-      const span = delegate.span({ ...options, name: `chat ${model}` });
+      if (
+        options.name !== "LanguageModel.streamText" &&
+        options.name !== "NativeCompactionProvider.compact"
+      )
+        return delegate.span(options);
+      const operation = options.name === "NativeCompactionProvider.compact" ? "compaction" : "chat";
+      const span = delegate.span({ ...options, name: `${operation} ${model}` });
 
       onSpan?.(span);
 
       const attributes = {
         ...agentTelemetryAttributes(context),
-        "gen_ai.operation.name": "chat",
+        "gen_ai.operation.name": operation,
         "gen_ai.request.model": model,
         "gen_ai.provider.name": provider,
         agentId: context.agentId,
@@ -3835,6 +3852,7 @@ const stampProviderResultEvent = (
 const estimateContextTokens = Effect.fnUntraced(function* (
   messages: ReadonlyArray<Prompt.Message>,
   messageTokenEstimator?: ContextMessageTokenEstimator,
+  nativeWindows: ReadonlyArray<NativeCompaction> = [],
 ) {
   const compactor = yield* ContextCompactor;
 
@@ -3851,7 +3869,10 @@ const estimateContextTokens = Effect.fnUntraced(function* (
     });
   }
 
-  return yield* Schema.decodeEffect(Schema.Natural)(estimate.value).pipe(
+  return yield* Schema.decodeEffect(Schema.Natural)(
+    estimate.value +
+      nativeWindows.reduce((total, native) => total + native.context.estimatedTokens, 0),
+  ).pipe(
     Effect.mapError((cause) =>
       CompactionError.make({ message: "Compactor returned an invalid token estimate", cause }),
     ),
@@ -3867,6 +3888,7 @@ const nextContextEstimate = Effect.fnUntraced(function* (
   const state = context.compaction;
 
   if (
+    state.nativeWindows.length === 0 &&
     context.lastInputTokens > 0 &&
     state.lastViewLength >= 0 &&
     state.lastViewLength <= view.length
@@ -3884,9 +3906,91 @@ const nextContextEstimate = Effect.fnUntraced(function* (
       undefined,
       systemMessagesInHistory,
       staticInstructions,
+      state.nativeWindows.length > 0,
     ).content,
+    undefined,
+    state.nativeWindows,
   );
 });
+
+const checkNativeAffinity = Effect.fnUntraced(function* (
+  windows: ReadonlyArray<NativeCompaction>,
+): Effect.fn.Return<
+  NativeCompactionProvider["Service"] | undefined,
+  CompactionError | AiError.AiError,
+  ContextCompactor | Model.ProviderName | Model.ModelName
+> {
+  if (windows.length === 0) return;
+  const native = (yield* ContextCompactor).native;
+  const provider = yield* Model.ProviderName;
+  const model = yield* Model.ModelName;
+
+  if (
+    native === undefined ||
+    native.provider !== provider ||
+    windows.some(
+      (window) =>
+        window.affinity.provider !== provider ||
+        window.affinity.model !== model ||
+        window.context.format !== native.format,
+    )
+  )
+    return yield* CompactionError.make({
+      message: "Native context requires its matching provider, format, and inference Model",
+    });
+
+  yield* Effect.forEach(windows, (window) => native.validate(window), { discard: true });
+
+  return native;
+});
+
+function compactionFailureUsage<E>(cause: Cause.Cause<E>): Response.Usage | undefined {
+  const failure = Cause.findErrorOption(cause);
+
+  if (Option.isNone(failure) || !AiError.isAiError(failure.value)) return undefined;
+  const reason = failure.value.reason;
+
+  if (reason._tag !== "InvalidOutputError" && reason._tag !== "StructuredOutputError")
+    return undefined;
+  if (reason.usage === undefined) return undefined;
+
+  const validTokens = (value: number | undefined) =>
+    value === undefined
+      ? undefined
+      : Option.getOrUndefined(Schema.decodeOption(Schema.Natural)(value));
+
+  const prompt = validTokens(reason.usage.promptTokens);
+  const completion = validTokens(reason.usage.completionTokens);
+  const total = validTokens(reason.usage.totalTokens);
+
+  if (prompt === undefined && completion === undefined && total === undefined) return undefined;
+
+  let inputTotal = prompt;
+  let outputTotal = completion;
+
+  if (prompt === undefined) {
+    if (total !== undefined) inputTotal = Math.max(0, total - (completion ?? 0));
+  } else if (completion !== undefined) {
+    inputTotal = Math.max(prompt, (total ?? 0) - completion);
+  }
+  if (completion === undefined && total !== undefined && prompt !== undefined)
+    outputTotal = Math.max(0, total - prompt);
+
+  return Response.Usage.make({
+    inputTokens: { total: inputTotal },
+    outputTokens: { total: outputTotal },
+  });
+}
+
+const NativeCostEstimate = Schema.Union([
+  Schema.Natural,
+  Schema.Struct({
+    costMicrousd: Schema.Natural,
+    serviceTier: Schema.optional(Schema.NonEmptyString.check(Schema.isMaxLength(256))),
+    pricingVersion: Schema.optional(Schema.NonEmptyString.check(Schema.isMaxLength(256))),
+    pricingStatus: Schema.optional(Schema.Literals(["estimated", "unknown"])),
+  }),
+]);
 
 const snapshotCompactionMessages = (messages: ReadonlyArray<Prompt.Message>) =>
   Effect.try({
@@ -3897,7 +4001,10 @@ const snapshotCompactionMessages = (messages: ReadonlyArray<Prompt.Message>) =>
         ),
       ),
     catch: (cause) =>
-      CompactionError.make({ message: "Could not snapshot prepared compaction history", cause }),
+      CompactionError.make({
+        message: "Could not snapshot prepared compaction history",
+        cause,
+      }),
   });
 
 const HttpStatus = AiError.HttpResponseDetails.fields.status.check(
@@ -3952,9 +4059,19 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
   trigger: "pressure" | "overflow" | "requested",
   modelCallAllowed = true,
   requested?: ContextRolloverSelection,
+  nativeRequestOverhead: Effect.Effect<
+    number,
+    CompactionError | AgentPolicyError,
+    ContextCompactor
+  > = Effect.succeed(0),
 ): Effect.Effect<
   CompactionOutcome,
-  AgentPolicyError | ModelProtocolError | AiError.AiError | CompactionError | HookError,
+  | AgentPolicyError
+  | ModelProtocolError
+  | AiError.AiError
+  | CompactionError
+  | ThreadHistoryError
+  | HookError,
   | HookRequirements
   | ContextCompactor
   | ModelUsageAccounting
@@ -3964,6 +4081,7 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
 > =>
   Effect.gen(function* () {
     const state = context.compaction;
+    const compactor = yield* ContextCompactor;
     const events: Array<RunEvent> | undefined = context.publish === undefined ? undefined : [];
     let changed = false;
     const messages = source.content;
@@ -4056,6 +4174,7 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
       requested !== undefined &&
       requested.through === undefined &&
       resolvedRequest !== undefined &&
+      state.nativeWindows.length === 0 &&
       (resolvedRequest.through <= (state.replacement?.through ?? 0) ||
         collectCoveredMessages(messages, state, resolvedRequest.through).length === 0)
     ) {
@@ -4064,10 +4183,14 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
 
     if (allowance.turn !== turn) {
       allowance.turn = turn;
-      allowance.summaryCalls = 0;
+      allowance.modelCalls = 0;
       allowance.applied.clear();
     }
-    if (allowance.applied.has("summarize") || allowance.applied.has("rollover")) {
+    if (
+      allowance.applied.has("summarize") ||
+      allowance.applied.has("rollover") ||
+      allowance.applied.has("native")
+    ) {
       return yield* CompactionError.make({
         message: "Compaction already replaced this Turn's context",
       });
@@ -4076,13 +4199,18 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
     const before = yield* estimateContextTokens(
       buildCompactedView(messages, state),
       messageTokenEstimator,
+      state.nativeWindows,
     );
 
     const summarize = (summarizerPrompt: Prompt.Prompt, model?: CompactionModelLayer) => {
       const generate = Effect.gen(function* () {
-        if (allowance.summaryCalls++ > 0 || !modelCallAllowed) {
+        if (state.nativeWindows.length > 0)
           return yield* CompactionError.make({
-            message: "Compaction exceeded its summary-call allowance",
+            message: "Portable summarization cannot rewrite native context",
+          });
+        if (allowance.modelCalls++ > 0 || !modelCallAllowed) {
+          return yield* CompactionError.make({
+            message: "Compaction exceeded its model-work allowance",
           });
         }
         if (
@@ -4264,9 +4392,330 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
           );
     };
 
-    const applied = allowance.applied;
+    let accountedNative:
+      | { readonly through: number; readonly native: NativeCompaction }
+      | undefined;
 
-    const compactor = yield* ContextCompactor;
+    const inferenceProvider = yield* Model.ProviderName;
+    const inferenceModel = yield* Model.ModelName;
+    const nativeInputLimit = resolvedModelInputLimit ?? agent.definition.policy.contextTokenLimit;
+
+    const compactNative = Effect.fnUntraced(function* (through: number) {
+      if (trigger === "overflow" || !modelCallAllowed || allowance.modelCalls > 0)
+        return yield* CompactionError.make({
+          message: "Native compaction cannot rescue overflow or exceed the model-work allowance",
+        });
+      if (
+        !Number.isSafeInteger(through) ||
+        through <= 0 ||
+        through !== state.protectedStart ||
+        through !== context.priorRunHistory.content.length ||
+        through <= (state.replacement?.through ?? 0) ||
+        through > messages.length ||
+        !context.priorRunHistory.content.every((message, index) => {
+          const prepared = messages[index];
+
+          return prepared !== undefined && Schema.toEquivalence(Prompt.Message)(message, prepared);
+        })
+      )
+        return yield* CompactionError.make({
+          message: "Native compaction requires the unchanged complete prior-Run prefix",
+        });
+
+      const prefix = buildCompactedView(messages.slice(0, through), state);
+
+      if (
+        prefix.length === 0 ||
+        (prefix.at(-1)?.role !== "assistant" && prefix.at(-1)?.role !== "tool")
+      )
+        return yield* CompactionError.make({
+          message: "Native compaction requires additional settled ordinary prior history",
+        });
+
+      const nativeProvider = compactor.native;
+      const provider = yield* Model.ProviderName;
+      const selectedModel = yield* Model.ModelName;
+
+      if (
+        nativeProvider === undefined ||
+        nativeProvider.provider !== provider ||
+        !Schema.is(ModelCallUsage.fields.provider)(nativeProvider.format) ||
+        provider !== inferenceProvider ||
+        selectedModel !== inferenceModel ||
+        selectedModel.length === 0 ||
+        selectedModel.length > 256
+      )
+        return yield* CompactionError.make({
+          message: "The native compaction Model must match the selected inference affinity",
+        });
+      yield* checkNativeAffinity(state.nativeWindows);
+      if (
+        nativeInputLimit === undefined ||
+        nativeInputLimit <= 0 ||
+        (yield* estimateContextTokens(prefix, messageTokenEstimator, state.nativeWindows)) >
+          nativeInputLimit
+      )
+        return yield* CompactionError.make({
+          message: "Native compaction input must fit a known host-selected model capacity",
+        });
+      if (options.durability !== undefined) {
+        if (options.durability.validateNativeCompaction === undefined)
+          return yield* CompactionError.make({
+            message: "The durability adapter cannot validate native compaction coverage",
+          });
+        yield* options.durability.validateNativeCompaction({ source, through });
+      } else {
+        if (context.retainCompaction === undefined || context.validateRetainedNative === undefined)
+          return yield* CompactionError.make({
+            message: "The history adapter cannot validate and retain native context",
+          });
+        yield* context.validateRetainedNative(through);
+      }
+
+      const encodedPrefix = yield* Schema.encodeEffect(Prompt.Prompt)(
+        Prompt.fromMessages(prefix),
+      ).pipe(
+        Effect.mapError(() =>
+          CompactionError.make({ message: "Native compaction input cannot be encoded" }),
+        ),
+      );
+
+      const inputSnapshot = boundedCanonicalJsonSnapshot(encodedPrefix, 1024 * 1024, 64);
+
+      const previous = yield* Schema.encodeEffect(Schema.Array(NativeCompaction))(
+        state.nativeWindows,
+      ).pipe(
+        Effect.mapError(() =>
+          CompactionError.make({ message: "Native prefix context cannot be encoded" }),
+        ),
+      );
+
+      if (
+        inputSnapshot === undefined ||
+        !isPersistedJson({ prompt: inputSnapshot.value, previous })
+      )
+        return yield* CompactionError.make({
+          message: "Native compaction input exceeds canonical context bounds",
+        });
+
+      const input = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(inputSnapshot.value).pipe(
+        Effect.mapError(() => CompactionError.make({ message: "Invalid native compaction input" })),
+      );
+
+      if (allowance.modelCalls++ > 0)
+        return yield* CompactionError.make({
+          message: "Compaction exceeded its model-work allowance",
+        });
+
+      return yield* Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          let terminalUsage: Response.Usage | undefined;
+
+          const operation = nativeProvider
+            .compact({
+              model: selectedModel,
+              prompt: input,
+              previous: state.nativeWindows,
+            })
+            .pipe(
+              // A timeout can discard the losing Exit; observe its usage inside the race.
+              Effect.onExit((result) =>
+                Effect.sync(() => {
+                  terminalUsage = Exit.isSuccess(result)
+                    ? result.value.usage
+                    : compactionFailureUsage(result.cause);
+                }),
+              ),
+              Effect.withSpan("NativeCompactionProvider.compact"),
+              Effect.provideService(Telemetry.CurrentSpanTransformer, () => {}),
+              Effect.provideServiceEffect(Tracer.Tracer, modelTelemetryTracer(context)),
+            );
+
+          const exit = yield* restore(
+            prepareWithinDeadline(
+              context,
+              options.budget === undefined ? operation : options.budget.guard(operation),
+            ),
+          ).pipe(Effect.exit);
+
+          const usage = Exit.isSuccess(exit)
+            ? exit.value.usage
+            : (terminalUsage ?? compactionFailureUsage(exit.cause));
+
+          const priorCalls = context.modelCalls;
+
+          if (usage === undefined) {
+            yield* noteIncompleteUsage(context, turn);
+            if (Exit.isFailure(exit)) return yield* Effect.failCause(exit.cause);
+
+            return yield* CompactionError.make({
+              message: "Native compaction did not report usable accounting",
+            });
+          }
+
+          const responseIdentity =
+            Exit.isSuccess(exit) && exit.value.responseId !== undefined
+              ? Schema.decodeOption(ModelResponseIdentity)({ id: exit.value.responseId })
+              : Option.none<ModelResponseIdentity>();
+
+          let pricingFailure: Cause.Cause<HookError | AgentPolicyError> | undefined;
+          const estimateCost = options.estimateCostMicrousd;
+
+          const pricedOptions: RunOptions<HookError, HookRequirements> =
+            estimateCost === undefined
+              ? options
+              : {
+                  ...options,
+                  estimateCostMicrousd: (usage, request) =>
+                    Effect.interruptible(
+                      prepareWithinDeadline(context, estimateCost(usage, request)),
+                    ).pipe(
+                      Effect.flatMap((estimate) =>
+                        Schema.decodeEffect(NativeCostEstimate)(estimate).pipe(
+                          Effect.mapError(() =>
+                            AgentPolicyError.make({
+                              limit: "cost",
+                              message: "Native compaction cost estimate is invalid",
+                            }),
+                          ),
+                        ),
+                      ),
+                      Effect.filterOrFail(
+                        (estimate) =>
+                          Number.isSafeInteger(
+                            context.costMicrousd +
+                              (typeof estimate === "number" ? estimate : estimate.costMicrousd),
+                          ),
+                        () =>
+                          AgentPolicyError.make({
+                            limit: "cost",
+                            message: "Native compaction cost exceeds accounting capacity",
+                          }),
+                      ),
+                      Effect.catchCause((cause) => {
+                        pricingFailure = cause;
+
+                        return Effect.succeed({
+                          costMicrousd: 0,
+                          pricingStatus: "unknown" as const,
+                        });
+                      }),
+                    ),
+                };
+
+          const accountingProvider =
+            Exit.isSuccess(exit) && Schema.is(ModelCallUsage.fields.provider)(exit.value.provider)
+              ? exit.value.provider
+              : inferenceProvider;
+
+          const accountingModel =
+            Exit.isSuccess(exit) && Schema.is(ModelCallUsage.fields.model)(exit.value.model)
+              ? exit.value.model
+              : inferenceModel;
+
+          const consumed = yield* consumeUsage(agent, context, usage, 0, turn, pricedOptions, {
+            purpose: "compaction",
+            ...(Option.isNone(responseIdentity) ? {} : { response: responseIdentity.value }),
+          }).pipe(
+            Effect.provideService(Model.ProviderName, accountingProvider),
+            Effect.provideService(Model.ModelName, accountingModel),
+            Effect.tapCause(() =>
+              context.modelCalls === priorCalls ? noteIncompleteUsage(context, turn) : Effect.void,
+            ),
+            Effect.exit,
+          );
+
+          if (Exit.isFailure(exit)) return yield* Effect.failCause(exit.cause);
+          if (pricingFailure !== undefined) return yield* Effect.failCause(pricingFailure);
+          if (Exit.isFailure(consumed)) return yield* Effect.failCause(consumed.cause);
+          events?.push(...consumed.value.warnings);
+          const result = exit.value;
+
+          if (result.responseId !== undefined && Option.isNone(responseIdentity))
+            return yield* CompactionError.make({
+              message: "Native response identity exceeds canonical accounting bounds",
+            });
+
+          if (result.provider !== inferenceProvider || result.model !== inferenceModel)
+            return yield* CompactionError.make({
+              message: "Native replacement affinity differs from the intended inference Model",
+            });
+          if (
+            usage.outputTokens.total === undefined ||
+            !Number.isSafeInteger(usage.outputTokens.total) ||
+            usage.outputTokens.total < 0
+          )
+            return yield* CompactionError.make({
+              message: "Native replacement requires a reported output-token total",
+            });
+          if (
+            boundedValueFootprint(
+              { context: result.context, usage: result.usage },
+              context.bufferLimits.maxModelResponseBytes,
+              knownSafeModelResponsePrototypes,
+              64,
+            ) === undefined
+          )
+            return yield* CompactionError.make({
+              message: "Native replacement exceeds the model-response buffer",
+            });
+
+          const encodedUsage = yield* Schema.encodeEffect(ModelCallUsage)(
+            consumed.value.modelUsage,
+          ).pipe(
+            Effect.mapError(() =>
+              CompactionError.make({ message: "Native accounting cannot be encoded" }),
+            ),
+          );
+
+          const snapshot = boundedCanonicalJsonSnapshot(
+            {
+              version: 2,
+              affinity: { provider: result.provider, model: result.model },
+              context: result.context,
+              usage: encodedUsage,
+            },
+            Math.min(MAX_NATIVE_COMPACTION_BYTES, context.bufferLimits.maxModelResponseBytes),
+            64,
+          );
+
+          if (
+            snapshot === undefined ||
+            !isPersistedJson(snapshot.value, MAX_NATIVE_COMPACTION_BYTES)
+          )
+            return yield* CompactionError.make({
+              message: "Native replacement exceeds its bounded envelope",
+            });
+
+          const decode = Schema.decodeUnknownEffect(NativeCompaction, {
+            onExcessProperty: "error",
+          });
+
+          const native = yield* decode(snapshot.value).pipe(
+            Effect.mapError(() =>
+              CompactionError.make({
+                message: "Native replacement has invalid accounting or structure",
+              }),
+            ),
+          );
+
+          if (native.context.format !== nativeProvider.format)
+            return yield* CompactionError.make({
+              message: "Native replacement differs from the selected provider format",
+            });
+          const owned = ownNativeCompaction(native);
+
+          yield* restore(prepareWithinDeadline(context, nativeProvider.validate(owned)));
+
+          // The strategy may emit only this immutable accounted receipt and its source cutoff.
+          accountedNative = { through, native: owned };
+
+          return accountedNative.native;
+        }),
+      );
+    });
+
+    const applied = allowance.applied;
 
     yield* compactor
       .compact({
@@ -4288,24 +4737,45 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
           : { estimateMessageTokens: messageTokenEstimator }),
         ...(resolvedRequest === undefined ? {} : { requested: resolvedRequest }),
         summarize,
+        compactNative,
       })
       .pipe(
         (stream) =>
           enforceDurationDeadline(stream, context.durationDeadlineMillis, context.durationFailure),
         Stream.runForEach((candidate) =>
           Effect.gen(function* () {
-            const decision = yield* Schema.decodeEffect(CompactionDecision)(candidate).pipe(
+            const decision = yield* Schema.decodeEffect(Schema.toType(CompactionDecision))(
+              candidate,
+            ).pipe(
               Effect.mapError((cause) =>
-                CompactionError.make({ message: "Invalid compaction decision", cause }),
+                CompactionError.make({
+                  message: "Invalid compaction decision",
+                  ...(candidate.kind === "native" ? {} : { cause }),
+                }),
               ),
             );
 
-            if (applied.has(decision.kind) || applied.has("summarize") || applied.has("rollover")) {
+            if (
+              applied.has(decision.kind) ||
+              applied.has("summarize") ||
+              applied.has("rollover") ||
+              applied.has("native")
+            ) {
               return yield* CompactionError.make({
                 message: "Compaction exceeded its decision allowance",
               });
             }
             const next = { ...state, lastViewLength: -1 };
+
+            if (
+              state.nativeWindows.length > 0 &&
+              decision.kind !== "native" &&
+              (decision.kind !== "rollover" || trigger !== "requested")
+            )
+              return yield* CompactionError.make({
+                message:
+                  "Native context requires native replacement or an explicit whole-window rollover",
+              });
 
             if (
               resolvedRequest !== undefined &&
@@ -4315,12 +4785,32 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
                 message: "Requested rollover must cover exactly its selected source boundary",
               });
             }
-            if (decision.kind === "rollover") {
+            if (decision.kind === "native") {
               if (
-                decision.through <= (state.replacement?.through ?? 0) ||
+                accountedNative === undefined ||
+                decision.through !== accountedNative.through ||
+                !Schema.toEquivalence(NativeCompaction)(decision.native, accountedNative.native)
+              )
+                return yield* CompactionError.make({
+                  message: "Native decisions must match the accounted replacement and cutoff",
+                });
+              next.replacement = {
+                kind: "native",
+                through: decision.through,
+                native: accountedNative.native,
+              };
+              next.nativeWindows = Object.freeze([accountedNative.native]);
+            } else if (decision.kind === "rollover") {
+              const dropsNative = state.nativeWindows.length > 0;
+              const priorThrough = state.replacement?.through ?? 0;
+
+              if (
+                decision.through < priorThrough ||
+                (!dropsNative && decision.through === priorThrough) ||
                 decision.through > messages.length ||
                 messages[decision.through]?.role === "tool" ||
-                collectCoveredMessages(messages, state, decision.through).length === 0
+                (!dropsNative &&
+                  collectCoveredMessages(messages, state, decision.through).length === 0)
               ) {
                 return yield* CompactionError.make({
                   message:
@@ -4333,6 +4823,7 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
                 windowId: contextWindowId(context.runId, turn),
                 ...(decision.handoff === undefined ? {} : { handoff: decision.handoff }),
               };
+              next.nativeWindows = Object.freeze([]);
             } else if (decision.kind === "summarize") {
               if (utf8ByteLength(decision.summary) > context.bufferLimits.maxModelResponseBytes) {
                 return yield* CompactionError.make({
@@ -4369,7 +4860,41 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
             const after = yield* estimateContextTokens(
               buildCompactedView(messages, next),
               messageTokenEstimator,
+              next.nativeWindows,
             );
+
+            if (decision.kind === "native") {
+              const overhead = yield* nativeRequestOverhead;
+
+              if (
+                after >= before ||
+                (targetTokens !== undefined && after + overhead > targetTokens)
+              )
+                return yield* CompactionError.make({
+                  message: "Native replacement does not reduce context within the admitted target",
+                });
+
+              const projected = yield* Schema.encodeEffect(Prompt.Prompt)(
+                Prompt.fromMessages(buildCompactedView(messages, next)),
+              ).pipe(
+                Effect.mapError(() =>
+                  CompactionError.make({ message: "Native projected context cannot be encoded" }),
+                ),
+              );
+
+              const nativeCompactions = yield* Schema.encodeEffect(Schema.Array(NativeCompaction))(
+                next.nativeWindows,
+              ).pipe(
+                Effect.mapError(() =>
+                  CompactionError.make({ message: "Native projected sidecars cannot be encoded" }),
+                ),
+              );
+
+              if (!isPersistedJson({ prompt: projected, nativeCompactions }))
+                return yield* CompactionError.make({
+                  message: "Native projected context exceeds canonical persistence bounds",
+                });
+            }
 
             if (decision.kind === "rollover" && trigger !== "requested" && after >= before) {
               return yield* CompactionError.make({
@@ -4377,21 +4902,26 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
               });
             }
 
+            const accepted =
+              decision.kind === "native" && next.replacement?.kind === "native"
+                ? {
+                    kind: "native" as const,
+                    through: decision.through,
+                    native: next.replacement.native,
+                  }
+                : decision;
+
             const commit: RunCompactionCommit = {
+              ...accepted,
               turn,
               source,
-              through: decision.through,
-              kind: decision.kind,
-              ...(decision.kind === "summarize" ? { summary: decision.summary } : {}),
-              ...(decision.kind === "rollover" && decision.handoff !== undefined
-                ? { handoff: decision.handoff }
-                : {}),
               tokensBeforeEstimate: before,
               tokensAfterEstimate: after,
             };
 
             if (options.durability !== undefined)
               yield* options.durability.commitCompaction(commit);
+            if (context.retainCompaction !== undefined) yield* context.retainCompaction(next);
             Object.assign(state, next);
             if (next.replacement?.kind === "rollover") context.windowId = next.replacement.windowId;
             if (preparedSource !== undefined && preparedSnapshot !== undefined) {
@@ -5603,8 +6133,15 @@ const makeTurn = <
         (tool) => Tool.isProviderDefined(tool) && !Context.get(tool.annotations, Tool.Readonly),
       );
 
-      const estimateCallTokens = (messages: ReadonlyArray<Prompt.Message>) =>
-        prepareWithinDeadline(context, estimateContextTokens(messages, messageTokenEstimator));
+      const estimateCallTokens = (messages: ReadonlyArray<Prompt.Message>, includeNative = false) =>
+        prepareWithinDeadline(
+          context,
+          estimateContextTokens(
+            messages,
+            messageTokenEstimator,
+            includeNative ? context.compaction.nativeWindows : [],
+          ),
+        );
 
       const modelServices =
         modelContext.modelCall === undefined
@@ -5798,50 +6335,61 @@ const makeTurn = <
             systemMessagesInHistory,
           ).pipe(withCallModel);
 
-      const estimateToolSchemaTokens = Effect.suspend(() => {
-        const choice = modelToolChoice();
+      const estimateToolSchemaTokens = (native = false) =>
+        Effect.suspend(() => {
+          const choice = modelToolChoice();
 
-        const tools =
-          typeof choice === "object" && "oneOf" in choice
-            ? catalog
-                .filter(
-                  (entry) => entry.kind === "native" && choice.oneOf.includes(entry.nativeToolName),
-                )
-                .map((entry) => entry.tool)
-            : Object.values(modelToolkit.tools);
+          const tools =
+            typeof choice === "object" && "oneOf" in choice
+              ? catalog
+                  .filter(
+                    (entry) =>
+                      entry.kind === "native" && choice.oneOf.includes(entry.nativeToolName),
+                  )
+                  .map((entry) => entry.tool)
+              : Object.values(modelToolkit.tools);
 
-        return callContext === undefined || tools.length === 0
-          ? Effect.succeed(0)
-          : Effect.try({
-              try: () =>
-                JSON.stringify(
-                  tools.map((tool) =>
-                    Tool.isProviderDefined(tool)
-                      ? { type: tool.providerName, args: tool.args }
-                      : {
-                          name: tool.name,
-                          description: Tool.getDescription(tool),
-                          // Providers receive the original Tool; pre-encoding its schema can
-                          // discard definitions and annotations their transformer preserves.
-                          parameters: Tool.getJsonSchema(tool, {
-                            transformer: toolSchemaTransformer,
-                          }),
-                        },
+          return (!native &&
+            callContext === undefined &&
+            context.compaction.nativeWindows.length === 0) ||
+            tools.length === 0
+            ? Effect.succeed(0)
+            : Effect.try({
+                try: () =>
+                  JSON.stringify(
+                    tools.map((tool) =>
+                      Tool.isProviderDefined(tool)
+                        ? { type: tool.providerName, args: tool.args }
+                        : {
+                            name: tool.name,
+                            description: Tool.getDescription(tool),
+                            // Providers receive the original Tool; pre-encoding its schema can
+                            // discard definitions and annotations their transformer preserves.
+                            parameters: Tool.getJsonSchema(tool, {
+                              transformer: toolSchemaTransformer,
+                            }),
+                          },
+                    ),
                   ),
+                catch: (cause) =>
+                  CompactionError.make({
+                    message: "Could not estimate native Tool schemas",
+                    cause,
+                  }),
+              }).pipe(
+                Effect.flatMap((content) =>
+                  estimateCallTokens([Prompt.makeMessage("system", { content })]),
                 ),
-              catch: (cause) =>
-                CompactionError.make({
-                  message: "Could not estimate native Tool schemas",
-                  cause,
-                }),
-            }).pipe(
-              Effect.flatMap((content) =>
-                estimateCallTokens([Prompt.makeMessage("system", { content })]),
-              ),
-            );
-      });
+              );
+        });
 
-      let toolSchemaTokens = yield* estimateToolSchemaTokens;
+      let toolSchemaTokens = yield* estimateToolSchemaTokens();
+
+      const nativeRequestOverhead = Effect.suspend(() =>
+        estimateToolSchemaTokens(true).pipe(
+          Effect.map((tokens) => Math.max(0, tokens - toolSchemaTokens)),
+        ),
+      );
 
       const canonicalDecorationPromptTokens = !admissionRequired
         ? 0
@@ -5863,7 +6411,9 @@ const makeTurn = <
                 undefined,
                 systemMessagesInHistory,
                 staticInstructions,
+                context.compaction.nativeWindows.length > 0,
               ).content,
+              true,
             );
 
       let prepared = buildCompactedView(modelContext.prompt.content, context.compaction);
@@ -5917,11 +6467,13 @@ const makeTurn = <
           "requested",
           false,
           requested,
+          nativeRequestOverhead,
         ).pipe(withCallModel);
 
         if (outcome.changed) context.compaction.lastCompactionTurn = turn;
         preEvents = outcome.events;
         refreshPrepared();
+        if (callContext === undefined) toolSchemaTokens = yield* estimateToolSchemaTokens();
       }
 
       const lastToolIndex =
@@ -5984,15 +6536,21 @@ const makeTurn = <
             "requested",
             false,
             { ...request, through: lastToolIndex + 1 },
+            nativeRequestOverhead,
           ).pipe(withCallModel);
 
           context.compaction.lastCompactionTurn = turn;
           preEvents = outcome.events;
           refreshPrepared();
+          if (callContext === undefined) toolSchemaTokens = yield* estimateToolSchemaTokens();
         }
       }
 
       context.pendingContextToolCallId = undefined;
+      yield* prepareWithinDeadline(
+        context,
+        checkNativeAffinity(context.compaction.nativeWindows).pipe(withCallModel),
+      );
       if (!context.finalizing && admissionRequired) {
         const consumedTokens = context.inputTokens + context.outputTokens;
 
@@ -6041,10 +6599,15 @@ const makeTurn = <
             sourceTarget,
             "pressure",
             !tokenPressure,
+            undefined,
+            nativeRequestOverhead,
           ).pipe(withCallModel);
 
           if (context.publish !== undefined) preEvents = [...preEvents, ...outcome.events];
-          if (outcome.changed) refreshPrepared();
+          if (outcome.changed) {
+            refreshPrepared();
+            if (callContext === undefined) toolSchemaTokens = yield* estimateToolSchemaTokens();
+          }
         }
 
         // A summarizing compaction is itself a priced model call. Recompute
@@ -6052,7 +6615,7 @@ const makeTurn = <
         // pre-compaction balance into the research call that follows.
         if (context.tokenExhausted) {
           finalAnswerOnly = true;
-          toolSchemaTokens = yield* estimateToolSchemaTokens;
+          toolSchemaTokens = yield* estimateToolSchemaTokens();
         }
 
         const preparedTokenCallTarget =
@@ -6085,7 +6648,7 @@ const makeTurn = <
           context.tokenExhausted = true;
           context.exhaustedDimension ??= "tokens";
           finalAnswerOnly = true;
-          toolSchemaTokens = yield* estimateToolSchemaTokens;
+          toolSchemaTokens = yield* estimateToolSchemaTokens();
           preparedEstimate = (yield* preparedSourceTokens) + canonicalDecorationTokens();
         }
         if (contextCallTarget !== undefined && preparedEstimate > contextCallTarget) {
@@ -6160,7 +6723,8 @@ const makeTurn = <
         const summarizedThisTurn =
           currentCompactionAllowance &&
           (context.compactionTurn.applied.has("summarize") ||
-            context.compactionTurn.applied.has("rollover"));
+            context.compactionTurn.applied.has("rollover") ||
+            context.compactionTurn.applied.has("native"));
 
         const prunedThisTurn =
           currentCompactionAllowance && context.compactionTurn.applied.has("clear-tool-results");
@@ -6188,15 +6752,20 @@ const makeTurn = <
             sourceTarget,
             "pressure",
             !tokenPressure,
+            undefined,
+            nativeRequestOverhead,
           ).pipe(withCallModel);
 
           if (context.publish !== undefined) preEvents = [...preEvents, ...outcome.events];
-          if (outcome.changed) refreshPrepared();
+          if (outcome.changed) {
+            refreshPrepared();
+            if (callContext === undefined) toolSchemaTokens = yield* estimateToolSchemaTokens();
+          }
           preparedEstimate = (yield* preparedSourceTokens) + derivedPromptTokens();
         }
         if (context.tokenExhausted) {
           finalAnswerOnly = true;
-          toolSchemaTokens = yield* estimateToolSchemaTokens;
+          toolSchemaTokens = yield* estimateToolSchemaTokens();
         }
 
         const preparedTokenCallTarget =
@@ -6227,7 +6796,7 @@ const makeTurn = <
           context.tokenExhausted = true;
           context.exhaustedDimension ??= "tokens";
           finalAnswerOnly = true;
-          toolSchemaTokens = yield* estimateToolSchemaTokens;
+          toolSchemaTokens = yield* estimateToolSchemaTokens();
         }
         preparedEstimate = (yield* preparedSourceTokens) + derivedPromptTokens();
         if (contextTokenLimit !== undefined && preparedEstimate > contextTokenLimit) {
@@ -6330,6 +6899,7 @@ const makeTurn = <
               outputContract._tag === "rendered" ? outputContract.part : undefined,
               systemMessagesInHistory,
               staticInstructions,
+              context.compaction.nativeWindows.length > 0,
             ),
             turn,
             priorToolCalls,
@@ -6339,6 +6909,34 @@ const makeTurn = <
             Effect.flatMap((providerPrompt) =>
               Effect.gen(function* () {
                 yield* checkpointExecution(context, options.durability);
+
+                const nativeProvider = yield* prepareWithinDeadline(
+                  context,
+                  checkNativeAffinity(context.compaction.nativeWindows).pipe(withCallModel),
+                );
+
+                const model = yield* withCallModel(Model.ModelName);
+
+                if (context.compaction.nativeWindows.length > 0) {
+                  const projected = yield* Schema.encodeEffect(Prompt.Prompt)(providerPrompt).pipe(
+                    Effect.mapError(() =>
+                      CompactionError.make({ message: "Native request cannot be encoded" }),
+                    ),
+                  );
+
+                  const nativeCompactions = yield* Schema.encodeEffect(
+                    Schema.Array(NativeCompaction),
+                  )(context.compaction.nativeWindows).pipe(
+                    Effect.mapError(() =>
+                      CompactionError.make({ message: "Native prefix context cannot be encoded" }),
+                    ),
+                  );
+
+                  if (!isPersistedJson({ prompt: projected, nativeCompactions }))
+                    return yield* CompactionError.make({
+                      message: "Complete native request exceeds canonical context bounds",
+                    });
+                }
                 const toolChoice = modelToolChoice();
 
                 let requestToolkit = modelToolkit;
@@ -6386,14 +6984,20 @@ const makeTurn = <
                 const trackContext =
                   contextTokenLimit === undefined && policy.tokenBudget === undefined
                     ? Effect.sync(() => {
-                        context.windowTokens = () => compactor.estimate(providerPrompt.content);
+                        context.windowTokens = () =>
+                          compactor.estimate(providerPrompt.content) +
+                          context.compaction.nativeWindows.reduce(
+                            (total, native) => total + native.context.estimatedTokens,
+                            0,
+                          );
                       })
-                    : estimateCallTokens(providerPrompt.content).pipe(
+                    : estimateCallTokens(providerPrompt.content, true).pipe(
                         Effect.map((tokens) => tokens + toolSchemaTokens),
                         Effect.tap((estimatedTokens) =>
                           contextTokenLimit !== undefined &&
                           (options.context !== undefined ||
-                            options.transientContext !== undefined) &&
+                            options.transientContext !== undefined ||
+                            context.compaction.nativeWindows.length > 0) &&
                           estimatedTokens > contextTokenLimit
                             ? ContextBudgetError.make({
                                 message: `Prepared context could not fit the next model prompt inside the ${contextTokenLimit} token context target`,
@@ -6423,20 +7027,34 @@ const makeTurn = <
                         // Exact required Tool selection preserves the toolkit. A oneOf
                         // subset can drop other schemas and break the cached prefix.
                         ...(toolChoice === undefined ? {} : { toolChoice }),
-                      }),
+                      }).pipe((stream) =>
+                        nativeProvider === undefined
+                          ? stream
+                          : nativeProvider.replay(stream, {
+                              model,
+                              windows: context.compaction.nativeWindows,
+                            }),
+                      ),
                       options.budget,
                     ).pipe(
-                      // Provider-held responses retain prior model-only context.
-                      // Isolate tracking when a later request can discard it.
+                      // Native replay supplies its entire prefix and cannot use response-ID tracking.
+                      // Other changing model-only context gets a fresh tracker per call.
                       (stream) =>
-                        policy.runStatus === "appended" ||
-                        options.context !== undefined ||
-                        options.transientContext !== undefined
+                        context.compaction.nativeWindows.length === 0 &&
+                        (policy.runStatus === "appended" ||
+                          options.context !== undefined ||
+                          options.transientContext !== undefined)
                           ? stream.pipe(
                               Stream.provideServiceEffect(
                                 ResponseIdTracker.ResponseIdTracker,
                                 ResponseIdTracker.make,
                               ),
+                            )
+                          : stream,
+                      (stream) =>
+                        context.compaction.nativeWindows.length > 0
+                          ? stream.pipe(
+                              Stream.provideService(Telemetry.CurrentSpanTransformer, () => {}),
                             )
                           : stream,
                       Stream.provideServiceEffect(
@@ -6592,6 +7210,9 @@ const makeTurn = <
                   messageTokenEstimator,
                   Math.max(0, contextTokenLimit - derivedPromptTokens()),
                   "overflow",
+                  true,
+                  undefined,
+                  nativeRequestOverhead,
                 )
                   .pipe(withCallModel)
                   .pipe(
@@ -6606,7 +7227,11 @@ const makeTurn = <
                     ),
                   );
 
-                if (outcome.changed) refreshPrepared();
+                if (outcome.changed) {
+                  refreshPrepared();
+                  if (callContext === undefined)
+                    toolSchemaTokens = yield* estimateToolSchemaTokens();
+                }
 
                 const retryEstimate = (yield* preparedSourceTokens) + derivedPromptTokens();
 
@@ -8557,6 +9182,56 @@ function executeWithCompletion<
           const languageModel = yield* LanguageModel.LanguageModel;
           const resolver = Agent.isModelResolver(languageModel) ? languageModel : undefined;
 
+          const retainedNativeWindows = retained?.compaction?.nativeWindows ?? [];
+
+          const nativeWindows = yield* snapshotNativeCompactions(
+            options.nativeCompactions ?? retainedNativeWindows,
+          );
+
+          // Restored prefixes can be retained without a local source replacement cutoff.
+          if (
+            retainedNativeWindows.length > 0 &&
+            !Schema.toEquivalence(Schema.Array(NativeCompaction))(
+              retainedNativeWindows,
+              nativeWindows,
+            )
+          )
+            return yield* CompactionError.make({
+              message: "Retained native context requires an equivalent prefix or explicit rollover",
+            });
+
+          const retainedReplacement = retained?.compaction?.replacement;
+
+          if (
+            retainedReplacement?.kind === "native" &&
+            (nativeWindows.length !== 1 ||
+              nativeWindows[0] === undefined ||
+              !Schema.toEquivalence(NativeCompaction)(retainedReplacement.native, nativeWindows[0]))
+          )
+            return yield* CompactionError.make({
+              message: "Retained native coverage differs from its prefix sidecar",
+            });
+          if (
+            retainedReplacement !== undefined &&
+            retainedReplacement.kind !== "native" &&
+            nativeWindows.length > 0
+          )
+            return yield* CompactionError.make({
+              message: "Retained native context cannot include a portable replacement",
+            });
+
+          let retainedNativeContext = retained?.compaction !== undefined;
+          const retainCompaction = retained?.stageCompaction;
+
+          if (
+            nativeWindows.length > 0 &&
+            options.durability === undefined &&
+            retainCompaction === undefined
+          )
+            return yield* CompactionError.make({
+              message: "The history adapter cannot retain restored native context",
+            });
+
           const context: RunContext = {
             publish,
             progressFailure: yield* Deferred.make<never, ModelProtocolError | AgentPolicyError>(),
@@ -8616,9 +9291,26 @@ function executeWithCompletion<
             finalizing: false,
             tokenExhausted: false,
             exhaustedDimension: undefined,
-            compaction: initialCompactionState(),
+            compaction: { ...initialCompactionState(), ...retained?.compaction, nativeWindows },
+            priorRunHistory: options.history ?? Prompt.empty,
+            validateRetainedNative: retained?.validateNativeCompaction,
+            retainCompaction:
+              retainCompaction === undefined
+                ? undefined
+                : (state) => {
+                    if (!retainedNativeContext && state.nativeWindows.length === 0)
+                      return Effect.void;
+
+                    return retainCompaction(state).pipe(
+                      Effect.tap(() =>
+                        Effect.sync(() => {
+                          retainedNativeContext = true;
+                        }),
+                      ),
+                    );
+                  },
             preparedCompactionSource: undefined,
-            compactionTurn: { turn: 0, summaryCalls: 0, applied: new Set() },
+            compactionTurn: { turn: 0, modelCalls: 0, applied: new Set() },
             windowId: options.initialContextWindowId ?? contextWindowId(runId, 0),
             windowTokens: resumeUsage?.lastInputTokens ?? 0,
             windowContextTokenLimit: agent.definition.policy.contextTokenLimit,
@@ -8818,8 +9510,8 @@ function executeWithCompletion<
                 });
               }
 
-              // Ordinary history keeps stable indices. Prepared history must map
-              // an owned copy of this block before applying compaction coverage.
+              // Prepared history must preserve retained coverage on the official source
+              // and map an owned copy of the current instruction/input block.
               if (options.context === undefined) {
                 context.compaction.protectedStart = priorHistoryLength;
                 context.compaction.protectedEnd = prompt.content.length;
@@ -8841,12 +9533,26 @@ function executeWithCompletion<
                 context.preparedCompactionSource = {
                   protectedReferences: protectedMessages,
                   protectedMessages: yield* snapshotCompactionMessages(protectedMessages),
-                  prefix: [],
+                  prefix: yield* snapshotCompactionMessages(
+                    prompt.content.slice(
+                      0,
+                      Math.max(
+                        context.compaction.clearedThrough,
+                        context.compaction.replacement?.through ?? 0,
+                      ),
+                    ),
+                  ),
                   modelSource: undefined,
                   sourceLength: 0,
                 };
               }
               yield* advanceHistory(context, prompt, options);
+              if (
+                options.nativeCompactions !== undefined &&
+                context.compaction.nativeWindows.length > 0 &&
+                context.retainCompaction !== undefined
+              )
+                yield* context.retainCompaction(context.compaction);
 
               let pending:
                 | {
@@ -8927,7 +9633,13 @@ function executeWithCompletion<
 
               const selectionPrompt = yield* Schema.encodeEffect(
                 Schema.fromJsonString(Prompt.Prompt),
-              )(pending.prompt).pipe(
+              )(
+                context.compaction.nativeWindows.length === 0
+                  ? pending.prompt
+                  : Prompt.fromMessages(
+                      buildCompactedView(pending.prompt.content, context.compaction),
+                    ),
+              ).pipe(
                 Effect.mapError(
                   (cause) =>
                     new AiError.AiError({
@@ -9159,6 +9871,7 @@ function executeWithCompletion<
       // Closing execution first joins every owned child and finalizer before validation,
       // history commit and observable success. Application Layers retain their outer Scope.
       return Effect.scoped(events).pipe(
+        Effect.ensuring(retained?.end ?? Effect.void),
         Effect.flatMap((terminal) =>
           Effect.gen(function* () {
             if (onCompleted !== undefined) yield* onCompleted(terminal);

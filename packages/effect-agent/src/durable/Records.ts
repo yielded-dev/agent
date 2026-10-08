@@ -18,7 +18,22 @@ import {
   ToolCallId,
   TurnId,
 } from "../core/Identifiers.ts";
-import { utf8ByteLength } from "../core/internal/utf8.ts";
+import {
+  boundedJson,
+  MAX_PERSISTED_JSON_BYTES,
+  MAX_PERSISTED_JSON_DEPTH,
+  MAX_PERSISTED_JSON_NODES,
+  PersistedJson,
+} from "../core/internal/persisted-json.ts";
+
+export {
+  MAX_PERSISTED_JSON_DEPTH,
+  MAX_PERSISTED_JSON_COLLECTION_LENGTH,
+  MAX_PERSISTED_JSON_NODES,
+  MAX_PERSISTED_JSON_BYTES,
+  PersistedJson,
+} from "../core/internal/persisted-json.ts";
+
 import { IdempotencyKey, Principal, Receipt } from "../core/Receipt.ts";
 import { ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
@@ -33,6 +48,7 @@ import { Selection, Snapshot } from "../core/ToolExposure.ts";
 import { ToolParameterRejection } from "../core/ToolResult.ts";
 import { ModelCallUsage, RunUsageSummary, RunTotals } from "../core/Usage.ts";
 import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../core/Worker.ts";
+import { NativeCompaction } from "../engine/ContextCompactor.ts";
 import { ContextHandoff } from "../engine/ContextWindow.ts";
 
 /** Stable identity of one canonical record. */
@@ -106,108 +122,8 @@ export type SettlementFailureDiagnostic = typeof SettlementFailureDiagnostic.Typ
 /** Positive canonical (Run-relative, Attempt-independent) Turn number. */
 const TurnNumber = Schema.Int.check(Schema.isGreaterThan(0));
 
-export const MAX_PERSISTED_JSON_DEPTH = 64;
-export const MAX_PERSISTED_JSON_COLLECTION_LENGTH = 4_096;
-export const MAX_PERSISTED_JSON_NODES = 65_536;
-export const MAX_PERSISTED_JSON_BYTES = 1024 * 1024;
 /** Whole record wire includes bounded payloads and their canonical envelope. */
 export const MAX_CANONICAL_RECORD_BYTES = 4 * 1024 * 1024;
-
-/**
- * Iteratively preflights an unknown value before Schema's recursive JSON validation. This is the
- * one narrow `Schema.declare` exception in the persistence model: Effect v4's `Unknown.decodeTo`
- * preserves `unknown` as the encoded type, which would leak through every nested record codec.
- * Schema.Json still owns the accepted value shape after this resource preflight succeeds.
- */
-const isJson = Schema.is(Schema.Json);
-// No Unicode flag: match surrogate code units so astral characters take the UTF-8 path too.
-const nonAscii = /[\u0080-\uFFFF]/;
-
-const boundedJson =
-  (limits: { readonly depth: number; readonly nodes: number; readonly bytes: number }) =>
-  (input: unknown): input is Schema.Json => {
-    const pending: Array<
-      | { readonly _tag: "visit"; readonly value: unknown; readonly depth: number }
-      | { readonly _tag: "leave"; readonly value: object }
-    > = [{ _tag: "visit", value: input, depth: 0 }];
-
-    // Only ancestors indicate a cycle. Shared acyclic values serialize once per occurrence,
-    // so revisit them and charge every occurrence against the same resource limits.
-    const ancestors = new WeakSet<object>();
-    let nodes = 0;
-    let textUnits = 0;
-
-    try {
-      while (pending.length > 0) {
-        const current = pending.pop();
-
-        if (current === undefined) return false;
-        if (current._tag === "leave") {
-          ancestors.delete(current.value);
-          continue;
-        }
-        if (current.depth > limits.depth || ++nodes > limits.nodes) {
-          return false;
-        }
-
-        const value = current.value;
-
-        if (value === null || typeof value === "boolean") continue;
-        if (typeof value === "number") {
-          if (!Number.isFinite(value)) return false;
-          continue;
-        }
-        if (typeof value === "string") {
-          textUnits += value.length;
-          if (textUnits > limits.bytes) return false;
-          continue;
-        }
-        if (typeof value !== "object" || ancestors.has(value)) return false;
-        ancestors.add(value);
-        pending.push({ _tag: "leave", value });
-
-        const entries = Array.isArray(value)
-          ? Array.from(value, (entry, index) => [index, entry] as const)
-          : Object.entries(value);
-
-        if (entries.length > MAX_PERSISTED_JSON_COLLECTION_LENGTH) return false;
-        for (const [key, entry] of entries) {
-          textUnits += typeof key === "string" ? key.length : 0;
-          if (textUnits > limits.bytes) return false;
-          pending.push({ _tag: "visit", value: entry, depth: current.depth + 1 });
-        }
-      }
-
-      if (!isJson(input)) return false;
-      const encoded = JSON.stringify(input);
-
-      // Escaping is already reflected in the serialized text. UTF-8 uses one to three bytes per
-      // UTF-16 code unit; ASCII uses exactly one. Only ambiguous Unicode needs the exact count.
-      return (
-        encoded !== undefined &&
-        encoded.length <= limits.bytes &&
-        (encoded.length <= limits.bytes / 3 ||
-          !nonAscii.test(encoded) ||
-          utf8ByteLength(encoded) <= limits.bytes)
-      );
-    } catch {
-      return false;
-    }
-  };
-
-const isPersistedJson = boundedJson({
-  depth: MAX_PERSISTED_JSON_DEPTH,
-  nodes: MAX_PERSISTED_JSON_NODES,
-  bytes: MAX_PERSISTED_JSON_BYTES,
-});
-
-/** Canonical JSON admitted to persisted records and checkpoints under explicit resource limits. */
-export const PersistedJson = Schema.declare(isPersistedJson, {
-  identifier: "@effect-agent/thread/PersistedJson",
-  description: "JSON bounded by canonical persistence depth, collection, node, and byte limits",
-});
-
-export type PersistedJson = typeof PersistedJson.Type;
 
 /** Whole record wire reserves room for the payload's envelope and additional bounded fields. */
 export const RecordJson = Schema.declare(
@@ -592,26 +508,41 @@ export class ModelCallAborted extends Schema.TaggedClass<ModelCallAborted>()("Mo
 /**
  * One engine-native compaction committed before the pre-Turn view changes (RUN-026).
  * `coversThrough` is a Thread record sequence: the projection
- * renders records at or below it as a summary (`summarize`), a fresh window (`rollover`), or with
- * cleared tool results (kind `clear-tool-results`), never erasing source
+ * renders records at or below it as a complete native window, a summary, a rollover, or with
+ * cleared tool results, never erasing source
  * history. The record carries no digest by decision: it is appended by the
  * fenced owner into the very log it covers, and re-verifying a digest would
  * re-read the covered range on every wake — the O(history) work compaction
  * exists to remove. Host-supplied ContextCompactor decisions use this same commit path.
  * Summaries exceeding BoundedText are rejected before append, never truncated.
  * `summary` is present exactly for `summarize` records; the projection
- * treats a summarize record without one as invalid and ignores it fail-safe.
+ * treats a summarize record without one as invalid and ignores it fail-safe. Invalid native
+ * envelopes or coverage instead fail closed; replay must never resurrect their covered history.
  */
 export class CompactionCreated extends Schema.TaggedClass<CompactionCreated>(
   "@effect-agent/thread/CompactionCreated",
-)("CompactionCreated", {
-  runId: RunId,
-  turn: TurnNumber,
-  kind: Schema.Literals(["clear-tool-results", "summarize", "rollover"]),
-  coversThrough: CanonicalSequence,
-  summary: Schema.optionalKey(BoundedText),
-  handoff: Schema.optionalKey(ContextHandoff),
-}) {}
+)(
+  "CompactionCreated",
+  Schema.Struct({
+    runId: RunId,
+    turn: TurnNumber,
+    kind: Schema.Literals(["clear-tool-results", "summarize", "rollover", "native"]),
+    coversThrough: CanonicalSequence,
+    summary: Schema.optionalKey(BoundedText),
+    handoff: Schema.optionalKey(ContextHandoff),
+    native: Schema.optionalKey(NativeCompaction),
+  }).check(
+    Schema.makeFilter(
+      (record) =>
+        record.kind === "native"
+          ? record.native !== undefined &&
+            record.summary === undefined &&
+            record.handoff === undefined
+          : record.native === undefined,
+      { title: "Native compaction carries only its versioned replacement envelope" },
+    ),
+  ),
+) {}
 
 export class RunFailed extends Schema.TaggedClass<RunFailed>("@effect-agent/thread/RunFailed")(
   "RunFailed",
@@ -1164,9 +1095,9 @@ export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()
     historyFrom: CanonicalSequence.check(Schema.isGreaterThan(0)),
     /** Fixed prior-history boundary, immediately before the original accepted input. */
     historyThrough: CanonicalSequence,
-    /** Facts below historyFrom still needed after summarize or rollover coverage. */
+    /** Facts below historyFrom still needed after replacement coverage. */
     retained: Schema.Array(ContextEvidenceReference).check(Schema.isMaxLength(4_096)),
-    /** Pins the projected prior Prompt, not a second copy or a per-record manifest. */
+    /** Pins the prior Prompt and any native sidecars, without copying them or their source facts. */
     historyDigest: Digest,
     priorHistoryLength: Schema.Natural,
     contextWindowId: Schema.optionalKey(BoundedName),

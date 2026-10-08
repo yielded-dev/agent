@@ -11,7 +11,19 @@ import {
   layerMemory,
   toPrompt,
   type ThreadError,
+  type ThreadMessage,
 } from "../core/Thread.ts";
+import type { ContextCompactionState } from "./internal/compaction.ts";
+
+/** Process-local view state without Run-local guards; official Thread messages remain append-only. */
+export type RetainedCompaction = Pick<
+  ContextCompactionState,
+  "replacement" | "clearedThrough" | "nativeWindows"
+>;
+
+// The first immutable record owns the sidecar lifetime, including scoped Store eviction.
+const retainedCompactions = new WeakMap<ThreadMessage, RetainedCompaction>();
+const closedRuns = new WeakMap<ThreadMessage, ReadonlySet<RunId>>();
 
 /** A history adapter rejected a read, staged value, or completed Run commit. */
 export class ThreadHistoryError extends Schema.TaggedError<ThreadHistoryError>()(
@@ -44,6 +56,16 @@ export class ThreadHistoryError extends Schema.TaggedError<ThreadHistoryError>()
  */
 export interface ThreadHistoryRun {
   readonly prompt: Prompt.Prompt;
+  readonly compaction?: RetainedCompaction | undefined;
+  /** Native coverage requires terminal prior Runs, not merely a currently settled Tool batch. */
+  readonly validateNativeCompaction?:
+    | ((through: number) => Effect.Effect<void, ThreadHistoryError>)
+    | undefined;
+  /** Infallible local lifecycle evidence after execution Scope closure, including interruption. */
+  readonly end?: Effect.Effect<void> | undefined;
+  readonly stageCompaction?:
+    | ((state: RetainedCompaction) => Effect.Effect<void, ThreadHistoryError>)
+    | undefined;
   readonly stageInput: (input: unknown) => Effect.Effect<void, ThreadHistoryError>;
   readonly stageHistory: (history: {
     /** Exact source messages; compaction changes only the model view. */
@@ -114,6 +136,77 @@ export class ThreadHistory extends Context.Service<
 
           return {
             prompt: toPrompt(snapshot),
+            compaction:
+              snapshot.messages[0] === undefined
+                ? undefined
+                : retainedCompactions.get(snapshot.messages[0]),
+            validateNativeCompaction: (through: number) =>
+              threads.snapshot(threadId).pipe(
+                Effect.mapError(historyError),
+                Effect.flatMap((current) => {
+                  const anchor = current.messages[0];
+                  const closed = anchor === undefined ? undefined : closedRuns.get(anchor);
+
+                  return through > 0 &&
+                    through <= current.messages.length &&
+                    current.messages
+                      .slice(0, through)
+                      .every(
+                        (entry) =>
+                          entry.runId !== undefined &&
+                          entry.runId !== runId &&
+                          closed?.has(entry.runId) === true,
+                      )
+                    ? Effect.void
+                    : Effect.fail(
+                        ThreadHistoryError.make({
+                          threadId,
+                          reason: "incompatible",
+                          message: "Native compaction requires complete retained prior Runs",
+                        }),
+                      );
+                }),
+              ),
+            end: threads.snapshot(threadId).pipe(
+              Effect.match({
+                // Missing or closed history cannot authorize a later native prefix.
+                onFailure: () => undefined,
+                onSuccess: (current) => {
+                  const anchor = current.messages[0];
+
+                  if (
+                    anchor !== undefined &&
+                    current.messages.some((entry) => entry.runId === runId)
+                  )
+                    closedRuns.set(anchor, new Set([...(closedRuns.get(anchor) ?? []), runId]));
+                },
+              }),
+            ),
+            stageCompaction: (state: RetainedCompaction) =>
+              threads.snapshot(threadId).pipe(
+                Effect.mapError(historyError),
+                Effect.flatMap((current) => {
+                  const anchor = current.messages[0];
+
+                  if (
+                    anchor === undefined ||
+                    (state.replacement?.through ?? 0) > current.messages.length
+                  )
+                    return ThreadHistoryError.make({
+                      threadId,
+                      reason: "conflict",
+                      message: "Native view has no retained source prefix",
+                    });
+
+                  return Effect.sync(() => {
+                    retainedCompactions.set(anchor, {
+                      replacement: state.replacement,
+                      clearedThrough: state.clearedThrough,
+                      nativeWindows: [...state.nativeWindows],
+                    });
+                  });
+                }),
+              ),
             stageInput: () => Effect.void,
             stageHistory: ({ source }) =>
               threads

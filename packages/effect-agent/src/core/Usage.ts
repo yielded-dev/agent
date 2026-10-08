@@ -59,12 +59,12 @@ export class ModelCallUsage extends Schema.Class<ModelCallUsage>(
   "@effect-agent/core/ModelCallUsage",
 )({
   provider: UsageIdentity,
-  /** Configured binding identity. See response.model for provider-reported identity. */
+  /** Configured binding identity, or the effective request model for native compaction. */
   model: UsageIdentity,
   serviceTier: Schema.optionalKey(UsageIdentity),
   pricingVersion: Schema.optionalKey(UsageIdentity),
   response: Schema.optionalKey(ModelResponseIdentity),
-  purpose: Schema.optionalKey(Schema.Literals(["turn", "summary"])),
+  purpose: Schema.optionalKey(Schema.Literals(["turn", "summary", "compaction"])),
   usageStatus: Schema.optionalKey(UsageCompleteness),
   pricingStatus: Schema.optionalKey(Schema.Literals(["estimated", "unknown"])),
   inputTokens: InputTokenUsage,

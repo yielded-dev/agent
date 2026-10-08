@@ -21,10 +21,12 @@ import {
   contextWindowId,
   contextWindowMessage,
 } from "../engine/Compaction.ts";
+import { NativeCompaction } from "../engine/ContextCompactor.ts";
 import type { RunTurnToolResult } from "../engine/RunOptions.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
 import {
   makeJournalMetadata,
+  nativeCoverageIsComplete,
   toolCallSettledRecordId,
   type JournalMetadata,
   type JournalRecordEnvelope,
@@ -128,14 +130,14 @@ export const toolCallResultBatchId = (
 export const compactionRecordId = (
   runId: RunId,
   turn: number,
-  kind: "clear-tool-results" | "summarize" | "rollover",
+  kind: "clear-tool-results" | "summarize" | "rollover" | "native",
 ): RecordId => makeRecordId(`compaction:${runId}:${turn}:${kind}`);
 
 /** Deterministic batch identity of one compaction append (same string as its record id). */
 export const compactionBatchId = (
   runId: RunId,
   turn: number,
-  kind: "clear-tool-results" | "summarize" | "rollover",
+  kind: "clear-tool-results" | "summarize" | "rollover" | "native",
 ): BatchId => makeBatchId(`compaction:${runId}:${turn}:${kind}`);
 
 /** Deterministic canonical record identity of one Turn's `ModelResponseRecorded` record. */
@@ -423,8 +425,10 @@ export interface RunJournalProjection {
   readonly prompt: Prompt.Prompt;
   /** Prior-Run history with model-only unknown results closing incomplete application calls. */
   readonly historyBefore: Prompt.Prompt;
-  /** Inclusive range after effective summarize/rollover coverage; earlier used facts stay retained. */
+  /** Inclusive range after effective replacement coverage; earlier used facts stay retained. */
   readonly historyFrom: CanonicalSequence;
+  /** Exact ordered native prefix sidecars, including affinity and complete token estimates. */
+  readonly nativeCompactions: ReadonlyArray<NativeCompaction>;
   /** Number of canonical Turns already committed for the projected Run. */
   readonly committedTurns: number;
   /** Summed per-call usage of the projected Run's committed responses; zeros for records predating usage capture. */
@@ -602,6 +606,8 @@ export interface RunJournalContext {
   readonly runId: RunId;
   readonly prompt: Prompt.Prompt;
   readonly priorHistoryLength: number;
+  /** The native prefix retains a zero-length canonical boundary in boundaries. */
+  readonly nativeCompactions: ReadonlyArray<NativeCompaction>;
   readonly historyFrom: CanonicalSequence;
   readonly boundaries: ReadonlyArray<JournalBoundary>;
   readonly contextWindowId?: string | undefined;
@@ -654,8 +660,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   // RUN-026 pre-scan: valid compactions retire only their creator's Run view. A bound
   // stays below its own sequence and cannot split a visible response from its settled results.
   // Pruning and rollovers may cover complete owner-Run batches; a summarize record carries
-  // its summary. Invalid records leave full history authoritative. A wider containing view
-  // replaces earlier coverage, with equal bounds preferring the later record.
+  // its summary. Invalid portable records leave full history authoritative; native records fail.
+  // A wider containing view replaces earlier coverage, with equal bounds preferring the later record.
   // Exact declaration spans are validated at each compaction's own captured prefix.
   // Later results preserve committed coverage and close retained or summarized calls below.
   if (preparedMetadata !== undefined && preparedMetadata.ownerRunId !== ownerRunId)
@@ -680,6 +686,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     settledById,
   } = metadata;
 
+  const completeMetadata = metadata;
   const declarationByResultSequence = new Map(settledSpans.map(({ from, to }) => [to, from]));
   const spansByDeclaration = new Map<number, Array<(typeof settledSpans)[number]>>();
 
@@ -812,15 +819,35 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     if (coversThrough <= 0 || coversThrough >= ownSequence) return false;
     const ownerFirst = firstSequenceByRun.get(runId);
 
-    if (payload.kind === "summarize" && ownerFirst !== undefined && coversThrough >= ownerFirst)
+    if (
+      (payload.kind === "summarize" || payload.kind === "native") &&
+      ownerFirst !== undefined &&
+      coversThrough >= ownerFirst
+    )
       return false;
+    if (payload.kind === "native") {
+      if (savedContext !== undefined && runId === savedContext.runId) {
+        const lastBoundary = savedContext.boundaries.at(-1);
+
+        if (
+          savedContext.priorHistoryLength === 0 ||
+          lastBoundary?.sequence !== coversThrough ||
+          lastBoundary.promptLength !== savedContext.priorHistoryLength ||
+          savedContext.boundaries.some(
+            (boundary) => boundary.incomplete === true || boundary.terminalPriorRun !== true,
+          )
+        )
+          return false;
+      } else if (!nativeCoverageIsComplete(completeMetadata, runId, coversThrough, evidence))
+        return false;
+    }
     if (
       payload.kind !== "summarize" &&
       savedContext?.boundaries.some(
         (boundary) =>
           boundary.sequence <= coversThrough &&
           boundary.incomplete === true &&
-          boundary.terminalPriorRun !== true,
+          (payload.kind === "native" || boundary.terminalPriorRun !== true),
       )
     )
       return false;
@@ -847,7 +874,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
           if (terminal !== undefined) evidence.add(terminal);
           if (lastResponse !== undefined) evidence.add(lastResponse);
         }
-        if (!isTerminalPriorRun(response.runId, runId, ownSequence)) return false;
+        if (payload.kind === "native" || !isTerminalPriorRun(response.runId, runId, ownSequence))
+          return false;
       }
     }
     for (const span of settledSpans) {
@@ -898,9 +926,49 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   let latestWindowSequence = -1;
   let latestWindow: CompactionView | undefined;
   let rolloverCoveredThrough = 0;
+  let retainedNative = savedContext?.nativeCompactions ?? [];
+
+  const retainedNativeThrough = savedContext?.boundaries.findLast(
+    (boundary) => boundary.tag === "CompactionCreated" && boundary.promptLength === 0,
+  )?.sequence;
+
+  if (retainedNative.length > 0 && retainedNativeThrough === undefined)
+    return yield* journalError("Saved native context lacks its canonical prefix boundary");
 
   for (const { payload, sequence } of compactions) {
-    if (!boundIsValid(payload, sequence)) continue;
+    if (payload.kind === "native") {
+      const native = yield* Schema.decodeUnknownEffect(NativeCompaction)(payload.native).pipe(
+        Effect.mapError(() => journalError("Canonical native compaction envelope is invalid")),
+      );
+
+      if (!boundIsValid(payload, sequence))
+        return yield* journalError("Canonical native compaction has invalid coverage");
+      if (
+        [
+          ...retainedNative,
+          ...replacements.flatMap(({ payload }) =>
+            payload.kind === "native" && payload.native !== undefined ? [payload.native] : [],
+          ),
+        ].some(
+          (window) =>
+            window.affinity.provider !== native.affinity.provider ||
+            window.affinity.model !== native.affinity.model ||
+            window.context.format !== native.context.format,
+        )
+      )
+        return yield* journalError("Native compaction changed affinity without a rollover");
+    } else if (!boundIsValid(payload, sequence)) continue;
+    if (
+      payload.kind !== "native" &&
+      payload.kind !== "rollover" &&
+      (retainedNative.length > 0 || replacements.some((view) => view.payload.kind === "native"))
+    )
+      return yield* journalError("Portable compaction cannot rewrite a retained native window");
+    if (retainedNative.length > 0 && (payload.kind === "native" || payload.kind === "rollover")) {
+      if (payload.coversThrough < (retainedNativeThrough ?? Infinity))
+        return yield* journalError("Compaction cannot split a saved native prefix");
+      retainedNative = [];
+    }
     if (payload.kind === "rollover" && sequence > latestWindowSequence) {
       latestWindowId = contextWindowId(payload.runId, payload.turn);
       latestWindowSequence = sequence;
@@ -908,7 +976,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     }
     if (payload.kind === "rollover")
       rolloverCoveredThrough = Math.max(rolloverCoveredThrough, payload.coversThrough);
-    if (payload.kind === "summarize" || payload.kind === "rollover") {
+    if (payload.kind === "summarize" || payload.kind === "rollover" || payload.kind === "native") {
       if (payload.kind === "summarize" && payload.summary === undefined) continue;
       replacements = retainCompaction(replacements, { payload, sequence });
     } else clearings = retainCompaction(clearings, { payload, sequence });
@@ -967,13 +1035,37 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     ? (protectedContext?.content ?? [])
     : [];
 
-  const replacementLength = retainedPrefix.length + replacements.length;
+  const nativeCompactions = [
+    ...retainedNative,
+    ...replacements.flatMap(({ payload }) =>
+      payload.kind === "native" && payload.native !== undefined ? [payload.native] : [],
+    ),
+  ];
+
+  if (
+    nativeCompactions.length > 0 &&
+    (retainedPrefix.length > 0 || replacements.some(({ payload }) => payload.kind !== "native"))
+  )
+    return yield* journalError("Native context cannot be interleaved with portable replacements");
+
+  const replacementLength =
+    retainedPrefix.length + replacements.filter(({ payload }) => payload.kind !== "native").length;
 
   const emitSummary = () => {
     if (summaryEmitted || replacements.length === 0) return;
     summaryEmitted = true;
     state.all.push(...retainedPrefix);
     for (const { payload: replacement } of replacements) {
+      if (replacement.kind === "native") {
+        onBoundary?.({
+          sequence: replacement.coversThrough,
+          tag: "CompactionCreated",
+          promptLength: state.all.length,
+          terminalPriorRun: true,
+        });
+        continue;
+      }
+
       const message =
         replacement.kind === "rollover"
           ? contextWindowMessage(
@@ -1227,6 +1319,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   const retiredLateCalls = new Map<string, Prompt.ToolCallPart>();
 
   let pendingToolOrder = new Map<string, number>();
+  let nativeTailStarted = state.all.length > 0;
+  let nativeCoverageIndex = -1;
 
   const flushTools = Effect.fnUntraced(function* (
     current: FoldState,
@@ -1244,6 +1338,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     const toolMessage = yield* toolMessageFromSettled(ordered);
 
     current.all.push(toolMessage);
+    nativeTailStarted = true;
     if (!current.pendingToolsForRun) current.before.push(toolMessage);
 
     return {
@@ -1329,10 +1424,57 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       // the one summary message emitted at the covered/kept transition.
       if (payload._tag === "CompactionCreated") {
         if (contextCompactions.has(envelope.sequence)) retainEvidence(envelope);
+        if (
+          payload.kind === "native" &&
+          payload.native !== undefined &&
+          payload.runId === ownerRunId
+        ) {
+          const call = payload.native.usage;
+
+          usage.modelCalls = yield* addProjectedUsage("modelCalls", usage.modelCalls, 1);
+          usage.inputTokens = yield* addProjectedUsage(
+            "inputTokens",
+            usage.inputTokens,
+            call.inputTokens.total,
+          );
+          usage.outputTokens = yield* addProjectedUsage(
+            "outputTokens",
+            usage.outputTokens,
+            call.outputTokens.total,
+          );
+          usage.costMicrousd = yield* addProjectedUsage(
+            "costMicrousd",
+            usage.costMicrousd,
+            call.costMicrousd,
+          );
+          usage.modelUsage.push(call);
+        }
 
         return;
       }
-      if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
+
+      const covering = replacements.flatMap(({ payload }, index) =>
+        isCovered(envelope, payload) ? [index] : [],
+      );
+
+      if (covering.length > 0) {
+        if (
+          nativeCompactions.length > 0 &&
+          (payload._tag === "ModelResponseRecorded" ||
+            payload._tag === "ToolCallSettled" ||
+            (payload._tag === "ModelCompleted" && payload.history !== undefined))
+        ) {
+          const index = covering[0];
+
+          if (
+            nativeTailStarted ||
+            covering.length !== 1 ||
+            index === undefined ||
+            index < nativeCoverageIndex
+          )
+            return yield* journalError("Native windows do not form one unambiguous ordered prefix");
+          nativeCoverageIndex = index;
+        }
         if (payload._tag === "ModelResponseRecorded" && payload.runId !== ownerRunId) {
           const late = (spansByDeclaration.get(envelope.sequence) ?? []).filter((span) =>
             replacements.some(
@@ -1506,6 +1648,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
           tag: payload._tag,
           promptLength: state.all.length,
         });
+        if (messages.content.length > 0) nativeTailStarted = true;
 
         return;
       }
@@ -1528,6 +1671,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         state.all.push(message);
         if (!forRun) state.before.push(message);
       }
+      if (visibleMessages.length > 0) nativeTailStarted = true;
       if (!forRun) {
         const calls = messages.content.flatMap((message) =>
           message.role === "assistant"
@@ -1604,7 +1748,17 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     ),
   );
 
+  if (nativeCompactions.length > 0) {
+    yield* Schema.encodeEffect(
+      Schema.Struct({ prompt: Prompt.Prompt, nativeCompactions: Schema.Array(NativeCompaction) }),
+    )({ prompt: Prompt.fromMessages(state.all), nativeCompactions }).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(PersistedJson)),
+      Effect.mapError(() => journalError("Canonical native context exceeds persistence bounds")),
+    );
+  }
+
   return {
+    nativeCompactions,
     ...(toolSelection === undefined ? {} : { toolSelection }),
     policyUsage: validatedPolicyUsage,
     prompt: Prompt.fromMessages(state.all),
@@ -1630,13 +1784,18 @@ export const projectRunJournal = (
 /**
  * Pure valid-prompt projection from canonical records: `UserInputRecorded` +
  * `ModelResponseRecorded` + complete `ToolCallSettled` batches → the deterministic model-visible
- * Prompt (plan §Coordinator flow step 3).
+ * Prompt. Native contexts require the paired sidecars from projectRunJournal; a Prompt alone
+ * cannot represent their full context.
  */
 export const promptFromCanonicalRecords = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ): Effect.Effect<Prompt.Prompt, RunJournalError> =>
   projectRunJournalStream(Stream.fromIterable(records), undefined).pipe(
-    Effect.map((projection) => projection.prompt),
+    Effect.flatMap((projection) =>
+      projection.nativeCompactions.length === 0
+        ? Effect.succeed(projection.prompt)
+        : Effect.fail(journalError("Native context requires its projected prefix sidecars")),
+    ),
   );
 
 /** Everything one committed Turn contributes to its canonical batch. */

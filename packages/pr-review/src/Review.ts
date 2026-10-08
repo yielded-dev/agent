@@ -55,7 +55,7 @@ export const ReviewContextTokenLimit = Schema.Int.check(
 
 /** Emitted native compaction evidence, without source, summaries, or handoff text. */
 export const ReviewCompactionEvent = Schema.Struct({
-  kind: Schema.Literals(["clear-tool-results", "summarize", "rollover"]),
+  kind: Schema.Literals(["clear-tool-results", "summarize", "rollover", "native"]),
   turn: Schema.Int.check(Schema.isGreaterThan(0)),
   tokensBeforeEstimate: Schema.Natural,
   tokensAfterEstimate: Schema.Natural,

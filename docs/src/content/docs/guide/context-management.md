@@ -1074,15 +1074,85 @@ oversized structured tool results receive an explicit omission marker. An oversi
 is rejected before rendering. These limits change only the model view, leaving canonical evidence
 intact.
 
-If the provider reports context overflow, the engine may compact and retry once. Transport
-ambiguity can duplicate that model call. A second rejection, or overflow without a definition
-context limit or resolved `modelCall` allowance, fails as `ContextOverflowError`.
+With a portable strategy, a provider context overflow may trigger compaction and one retry.
+Transport ambiguity can duplicate that model call. A second rejection, or overflow without a
+definition context limit or resolved `modelCall` allowance, fails as `ContextOverflowError`.
+Native compaction must run before overflow.
+
+### Native OpenAI compaction
+
+`OpenAiCompaction.layer` from `@yielded/agent-openai` supplies a `ContextCompactor` using OpenAI's
+stateless `POST /responses/compact` operation:
+
+```ts twoslash
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { OpenAiCompaction } from "@yielded/agent-openai";
+import { Config, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+
+export const model = OpenAiLanguageModel.model("gpt-5.4-mini", {
+  store: false,
+  reasoning: { effort: "none" },
+});
+export const CompactorLive = OpenAiCompaction.layer;
+export const OpenAiLive = Layer.merge(model, CompactorLive).pipe(
+  Layer.provideMerge(OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") })),
+  Layer.provide(FetchHttpClient.layer),
+);
+```
+
+Compose `OpenAiLive` with your runtime, or provide `CompactorLive` and its OpenAI client to the
+[durable host Layer](#install-a-compactor-for-durable-runs). The stock Effect model remains the
+inference provider. The compactor requires `OpenAiClient` at construction and uses the runtime's
+selected model identity for each compact request. This integration supports published Effect
+and `@effect/ai-openai` 4.0.0 APIs.
+
+Native replay uses full HTTP input with `store: false`. Response-ID tracking, conversations,
+background requests, item references, and WebSocket mode are rejected. Keep shared scoped
+configuration explicit; model-constructor defaults belong to the inference model. The initial
+input encoder supports text and ordinary tool history; the example disables reasoning because
+encrypted reasoning in newly covered history has no trusted token reserve.
+
+```text
+prior-Run view → metered native compaction → durable commit → next inference
+```
+
+OpenAI returns a **whole replacement window**, including retained items and opaque encrypted
+state. Yielded stores that window beside the ordinary prompt. The OpenAI adapter prepends every
+stored item in order to the stock model's encoded current-Run tail. Instructions, input, current
+exchanges, and trailing steering remain unchanged. Retained tool calls stay historical. Further
+compaction uses the stored window plus newly eligible prior Runs.
+
+Only complete prior-Run prefixes are eligible, in ephemeral retained history and durable history.
+Current-Run batches remain outside native coverage. Protected instructions, unsettled tool pairs,
+or an ambiguous prepared-history mapping prevent compaction. Preparation must preserve the
+already-covered source prefix across Runs; removing or changing it fails before inference.
+
+**Compact early.** Set `contextTokenLimit` below the model window and supply known model input
+capacity. The prefix must fit before dispatch. Overflow, pressure from current-Run growth alone,
+or a replacement that cannot reduce the estimate and fit the next request fails with
+`CompactionError`.
+
+The compaction model and every later inference must match the retained state's exact provider
+and effective request-model string. This check also applies after recovery or routing changes.
+Prefer pinned snapshots; mutable aliases can change their backend weights.
+
+Keep opaque state intact, sensitive, and outside logs. The adapter counts each returned window
+through OpenAI's input-token endpoint before the engine commits it. See
+[native limits and accounting](/reference/packages/#native-compaction) and the
+[commit/recovery model](/concepts/durability/#recover-a-native-window).
+
+The portable default, `layerWithModel`, and `layerRollover` remain available. Pruning and
+summarization reject attempts to rewrite an active native window. Before switching provider,
+model, or strategy, commit an explicit [rollover](#context-windows) that drops the entire native
+window, or start a fresh Thread. Canonical evidence stays available; rollover notes remain
+untrusted excerpts.
 
 <a id="replacing-compaction"></a>
 
 ### Replace compaction
 
-Install a `ContextCompactor` Layer to change the strategy, estimator, or summary model. The default
+Install a `ContextCompactor` Layer to change the strategy, estimator, or compaction model. The default
 is `ContextCompactor.layer`. All `AgentRuntime` entry points also need a
 [Thread history policy](/guide/threads/#history-policy-and-append-ownership).
 
@@ -1096,21 +1166,27 @@ The summary model's Layer requirements stay visible. Its usage is charged under 
 provider and name.
 
 A custom `compact` implementation emits `CompactionDecision` values. Each decision covers an
-exclusive source prefix and clears old tool results, supplies a summary, or starts a fresh context
-window. The interpreter rejects cuts through tool pairs, changes to protected instructions or input,
-decisions that make no progress, and more than one prune followed by one replacement in a turn.
-`request.trigger` distinguishes `pressure`, `overflow`, and an explicit `requested` rollover;
-`request.modelCallAllowed` tells the strategy whether a separate summary call is admitted.
-Summary calls must use
-`request.summarize` so metering, response limits, and the run deadline still apply.
+exclusive source prefix and clears old tool results, supplies a summary or native window, or starts
+a fresh context window. The interpreter rejects cuts through tool pairs, changes to protected
+instructions or input, decisions that make no progress, and more than one prune followed by one
+replacement in a turn. `request.trigger` distinguishes `pressure`, `overflow`, and an explicit
+`requested` rollover; `request.modelCallAllowed` tells the strategy whether model work is admitted.
+
+Use `request.summarize` or `request.compactNative(through)` for model work so metering,
+response limits, and the Run deadline still apply. They share one model-call allowance per Turn.
+The native callback returns `NativeCompaction`; emit `{ kind: "native", through, native }` with
+the unchanged result and cutoff. Native compaction uses the selected inference model and the existing
+replacement allowance while Turn and cumulative budget accounting continue. Decorators must retain
+the underlying compactor's `native` capability to replay saved provider context.
 
 `estimate` must return a non-negative finite integer. Strategy failures use `CompactionError`.
 Defects and interruption retain their Effect meaning.
 
 Durable coordinators map the covered prefix to complete canonical records before committing a
-decision. Summarization covers prior-run records. Pruning and rollover can also cover settled batches
-inside the current run, preserving its original instructions and input. A transform or decision that
-cannot map cleanly fails before the view changes. The canonical log remains append-only.
+decision. Summarization and native replacement cover prior-Run records. Pruning and rollover can
+also cover settled batches inside the current Run, preserving its original instructions and input.
+A transform or decision that cannot map cleanly fails before the view changes. The canonical log
+remains append-only.
 
 A completed Tool batch enters official history before the repeated-failure limit ends a Run,
 including provider-executed results. A later Run may cover an incomplete prior-Run batch already

@@ -90,7 +90,7 @@ import {
   type AgentCompletionProjectionRequirements,
   type RuntimeBinding,
 } from "../engine/AgentRuntime.ts";
-import { ContextCompactor, CompactionError } from "../engine/ContextCompactor.ts";
+import { ContextCompactor, CompactionError, NativeCompaction } from "../engine/ContextCompactor.ts";
 import { ContextRolloverTool } from "../engine/ContextWindow.ts";
 import { getToolExecutionClass } from "../engine/DurableStep.ts";
 import { MessagingHost } from "../engine/MessagingHost.ts";
@@ -108,6 +108,7 @@ import {
   type RunContextHook,
   type RunCostEstimator,
   type RunDurabilityHook,
+  type RunCompactionCommit,
   type RunInputCommand,
   type RunInputHook,
   type RunOptions,
@@ -5119,6 +5120,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const recordCommittedUsage = (batch: CanonicalBatch) => {
         for (const record of batch.records) {
+          if (record.payload._tag === "CompactionCreated" && record.payload.native !== undefined) {
+            const turn = record.payload.turn;
+
+            committedUsageLengths.set(turn, (committedUsageLengths.get(turn) ?? 0) + 1);
+            continue;
+          }
           if (
             record.payload._tag !== "ModelResponseRecorded" &&
             record.payload._tag !== "ModelCallAborted"
@@ -5734,6 +5741,169 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
             };
 
+      const compactionCoverage = Effect.fnUntraced(function* (
+        commit: Pick<RunCompactionCommit, "kind" | "source" | "through">,
+      ) {
+        let sourceJournal = journal;
+        let sourceBoundaries = boundaries;
+
+        if (commit.kind !== "summarize" && commit.kind !== "native") {
+          // Results must be canonical before pruning or rollover can cover them. Newly committed
+          // compactions remain overlays on this Attempt's append-only source, so omit those
+          // overlays while reconstructing the exact source-to-record mapping.
+          const tail = yield* ctx.tail;
+
+          sourceBoundaries = [];
+          sourceJournal = yield* recordHalt(
+            projectRunJournalStream(
+              Stream.concat(
+                canonical,
+                Stream.fromIterable(
+                  yield* recordHalt(
+                    selectedRange(ctx.threadId, [submissionId], tail.sequence, canonicalThrough),
+                  ),
+                ),
+              ).pipe(
+                Stream.filter(
+                  (envelope) =>
+                    envelope.record.payload._tag !== "CompactionCreated" ||
+                    envelope.sequence <= canonicalThrough,
+                ),
+              ),
+              runId,
+              (boundary) => sourceBoundaries.push(boundary),
+              priorContext,
+            ),
+          );
+        }
+
+        // Summaries use the initial prior-Run boundaries; pruning and rollover also admit
+        // complete current-Run boundaries from the fresh canonical source above.
+        const coverable = sourceBoundaries.filter(
+          (boundary) =>
+            (commit.kind !== "summarize" && commit.kind !== "native") ||
+            ownerFirstSequence === undefined ||
+            boundary.sequence < ownerFirstSequence,
+        );
+
+        if (coverable.length === 0) {
+          return yield* CompactionError.make({
+            message:
+              commit.kind === "rollover"
+                ? "Durable rollover requires complete canonical records"
+                : "Durable compaction requires eligible canonical records",
+          });
+        }
+
+        const comparisonView = instructionView(
+          sourceJournal.prompt.content,
+          initialInstructions,
+          false,
+          sourceJournal.historyBefore.content.length,
+        );
+
+        // Compare each visible message once. A transformed source can authorize only its
+        // exact canonical prefix; no per-candidate rereads or full encoded Prompt copies.
+        let matchingPrefix = 0;
+        let requiredThrough = 0;
+        const comparisonLimit = Math.min(comparisonView.messages.length, commit.through);
+
+        for (let index = 0; index < commit.through; index += 1) {
+          const message = commit.source.content[index];
+
+          if (
+            message !== undefined &&
+            (commit.kind === "clear-tool-results"
+              ? message.role === "tool"
+              : message.role !== "system")
+          )
+            requiredThrough = index + 1;
+          if (index >= comparisonLimit || index !== matchingPrefix || message === undefined)
+            continue;
+          const canonicalMessage = comparisonView.messages[index];
+
+          if (canonicalMessage === undefined) continue;
+
+          // Preserve Prompt's JSON projection while ignoring persisted object-key order.
+          const encode = (entry: Prompt.Message) =>
+            encodeCompactionMessageJson(entry).pipe(
+              Effect.flatMap(decodeCompactionMessageJson),
+              Effect.map(canonicalJson),
+              Effect.mapError((cause) =>
+                CompactionError.make({
+                  message: "Could not encode the canonical compaction prefix",
+                  ...(commit.kind === "native" ? {} : { cause }),
+                }),
+              ),
+            );
+
+          const left = yield* encode(canonicalMessage);
+          const right = yield* encode(message);
+
+          if (left === right) matchingPrefix += 1;
+        }
+
+        let lastCovered: JournalBoundary | undefined;
+
+        for (let index = 0; index < coverable.length; index += 1) {
+          const candidate = coverable[index];
+
+          if (candidate === undefined) continue;
+          const following = coverable[index + 1];
+
+          if (following?.tag === "ToolCallSettled") continue;
+
+          const length = comparisonView.prefixLength(candidate.promptLength);
+
+          if (
+            length > commit.through ||
+            (length === 0 &&
+              (commit.kind !== "rollover" || sourceJournal.nativeCompactions.length === 0))
+          )
+            continue;
+          if (length < requiredThrough || length > matchingPrefix) continue;
+          lastCovered = candidate;
+        }
+        if (lastCovered === undefined) {
+          return yield* CompactionError.make({
+            message:
+              commit.kind === "rollover"
+                ? "Rollover coverage cannot be mapped to complete canonical records"
+                : "Compaction coverage cannot be mapped to complete canonical records",
+          });
+        }
+        const coveredSequence = lastCovered.sequence;
+
+        if (
+          commit.kind !== "summarize" &&
+          sourceBoundaries.some(
+            (boundary) =>
+              boundary.incomplete === true &&
+              (commit.kind === "native" || boundary.terminalPriorRun !== true) &&
+              boundary.sequence <= coveredSequence,
+          )
+        ) {
+          return yield* CompactionError.make({
+            message: "Compaction cannot cover an incomplete Tool batch",
+          });
+        }
+        if (
+          commit.kind === "native" &&
+          (comparisonView.prefixLength(sourceJournal.historyBefore.content.length) !==
+            commit.through ||
+            comparisonView.prefixLength(lastCovered.promptLength) !== commit.through ||
+            matchingPrefix !== commit.through ||
+            lastCovered.sequence !==
+              coverable.reduce((last, boundary) => Math.max(last, boundary.sequence), 0) ||
+            coverable.some((boundary) => boundary.terminalPriorRun !== true))
+        )
+          return yield* CompactionError.make({
+            message: "Native coverage must be the exact complete canonical prior-Run prefix",
+          });
+
+        return lastCovered;
+      });
+
       const durability: RunDurabilityHook<
         CoordinatorHalt | AgentPersistenceCapacityError | CompactionError,
         CurrentRunStart
@@ -5765,6 +5935,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               const historyDigest = yield* withCrypto(
                 digestRunHistory(
                   Prompt.fromMessages(initialHistory.content.slice(0, priorHistoryLength)),
+                  journal.nativeCompactions,
                 ),
               );
 
@@ -6326,6 +6497,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               .get(ctx)
               ?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
           }),
+        validateNativeCompaction: (request) =>
+          compactionCoverage({ ...request, kind: "native" }).pipe(Effect.asVoid),
         commitCompaction: (commit) =>
           Effect.gen(function* () {
             const canonicalTurn = commit.turn;
@@ -6337,149 +6510,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               });
             }
 
-            let sourceJournal = journal;
-            let sourceBoundaries = boundaries;
+            const lastCovered = yield* compactionCoverage(commit);
 
-            if (commit.kind !== "summarize") {
-              // Results must be canonical before pruning or rollover can cover them. Newly committed
-              // compactions remain overlays on this Attempt's append-only source, so omit those
-              // overlays while reconstructing the exact source-to-record mapping.
-              const tail = yield* ctx.tail;
-
-              sourceBoundaries = [];
-              sourceJournal = yield* recordHalt(
-                projectRunJournalStream(
-                  Stream.concat(
-                    canonical,
-                    Stream.fromIterable(
-                      yield* recordHalt(
-                        selectedRange(
-                          ctx.threadId,
-                          [submissionId],
-                          tail.sequence,
-                          canonicalThrough,
-                        ),
-                      ),
-                    ),
-                  ).pipe(
-                    Stream.filter(
-                      (envelope) =>
-                        envelope.record.payload._tag !== "CompactionCreated" ||
-                        envelope.sequence <= canonicalThrough,
-                    ),
-                  ),
-                  runId,
-                  (boundary) => sourceBoundaries.push(boundary),
-                  priorContext,
-                ),
-              );
-            }
-
-            // Summaries use the initial prior-Run boundaries; pruning and rollover also admit
-            // complete current-Run boundaries from the fresh canonical source above.
-            const coverable = sourceBoundaries.filter(
-              (boundary) =>
-                commit.kind !== "summarize" ||
-                ownerFirstSequence === undefined ||
-                boundary.sequence < ownerFirstSequence,
-            );
-
-            if (coverable.length === 0) {
-              return yield* CompactionError.make({
-                message:
-                  commit.kind === "rollover"
-                    ? "Durable rollover requires complete canonical records"
-                    : "Durable compaction requires eligible canonical records",
-              });
-            }
-
-            const comparisonView = instructionView(
-              sourceJournal.prompt.content,
-              initialInstructions,
-              false,
-              sourceJournal.historyBefore.content.length,
-            );
-
-            // Compare each visible message once. A transformed source can authorize only its
-            // exact canonical prefix; no per-candidate rereads or full encoded Prompt copies.
-            let matchingPrefix = 0;
-            let requiredThrough = 0;
-            const comparisonLimit = Math.min(comparisonView.messages.length, commit.through);
-
-            for (let index = 0; index < commit.through; index += 1) {
-              const message = commit.source.content[index];
-
-              if (
-                message !== undefined &&
-                (commit.kind === "clear-tool-results"
-                  ? message.role === "tool"
-                  : message.role !== "system")
-              )
-                requiredThrough = index + 1;
-              if (index >= comparisonLimit || index !== matchingPrefix || message === undefined)
-                continue;
-              const canonicalMessage = comparisonView.messages[index];
-
-              if (canonicalMessage === undefined) continue;
-
-              // Preserve Prompt's JSON projection while ignoring persisted object-key order.
-              const encode = (entry: Prompt.Message) =>
-                encodeCompactionMessageJson(entry).pipe(
-                  Effect.flatMap(decodeCompactionMessageJson),
-                  Effect.map(canonicalJson),
-                  Effect.mapError((cause) =>
-                    CompactionError.make({
-                      message: "Could not encode the canonical compaction prefix",
-                      cause,
-                    }),
-                  ),
-                );
-
-              const left = yield* encode(canonicalMessage);
-              const right = yield* encode(message);
-
-              if (left === right) matchingPrefix += 1;
-            }
-
-            let lastCovered: JournalBoundary | undefined;
-
-            for (let index = 0; index < coverable.length; index += 1) {
-              const candidate = coverable[index];
-
-              if (candidate === undefined) continue;
-              const following = coverable[index + 1];
-
-              if (following?.tag === "ToolCallSettled") continue;
-
-              const length = comparisonView.prefixLength(candidate.promptLength);
-
-              if (length === 0 || length > commit.through) continue;
-              if (length < requiredThrough || length > matchingPrefix) continue;
-              lastCovered = candidate;
-            }
-            if (lastCovered === undefined) {
-              return yield* CompactionError.make({
-                message:
-                  commit.kind === "rollover"
-                    ? "Rollover coverage cannot be mapped to complete canonical records"
-                    : "Compaction coverage cannot be mapped to complete canonical records",
-              });
-            }
-            const coveredSequence = lastCovered.sequence;
-
-            if (
-              commit.kind !== "summarize" &&
-              sourceBoundaries.some(
-                (boundary) =>
-                  boundary.incomplete === true &&
-                  boundary.terminalPriorRun !== true &&
-                  boundary.sequence <= coveredSequence,
-              )
-            ) {
-              return yield* CompactionError.make({
-                message: "Compaction cannot cover an incomplete Tool batch",
-              });
-            }
             if (commit.kind === "summarize" && (commit.summary ?? "").trim().length === 0) {
               return yield* CompactionError.make({
                 message: "A summarize compaction commit carried no summary",
@@ -6493,6 +6525,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               kind: commit.kind,
               coversThrough: lastCovered.sequence,
               ...(commit.kind === "summarize" ? { summary: commit.summary } : {}),
+              ...(commit.kind === "native"
+                ? {
+                    native: yield* Schema.encodeEffect(NativeCompaction)(commit.native).pipe(
+                      Effect.mapError(() =>
+                        CompactionError.make({ message: "Native envelope cannot be persisted" }),
+                      ),
+                    ),
+                  }
+                : {}),
               ...(commit.kind === "rollover" && commit.handoff !== undefined
                 ? { handoff: commit.handoff }
                 : {}),
@@ -6500,25 +6541,63 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               Effect.mapError((cause) =>
                 CompactionError.make({
                   message: "Compaction decision exceeds canonical persistence bounds",
-                  cause,
+                  ...(commit.kind === "native" ? {} : { cause }),
                 }),
               ),
             );
 
+            if (commit.kind === "native") {
+              const calls = usageForCommit(canonicalTurn)?.modelUsage;
+
+              if (
+                calls?.length !== 1 ||
+                calls[0] === undefined ||
+                !Schema.toEquivalence(ModelCallUsage)(calls[0], commit.native.usage)
+              )
+                return yield* CompactionError.make({
+                  message: "Native commit does not match its staged accounted call",
+                });
+
+              const projected = yield* Schema.encodeEffect(Prompt.Prompt)(
+                Prompt.fromMessages(commit.source.content.slice(commit.through)),
+              ).pipe(
+                Effect.mapError(() =>
+                  CompactionError.make({ message: "Native saved context cannot be encoded" }),
+                ),
+              );
+
+              const nativeCompactions = yield* Schema.encodeEffect(Schema.Array(NativeCompaction))([
+                commit.native,
+              ]).pipe(
+                Effect.mapError(() =>
+                  CompactionError.make({ message: "Native saved accounting cannot be encoded" }),
+                ),
+              );
+
+              yield* decodePersisted({ prompt: projected, nativeCompactions }).pipe(
+                Effect.mapError(() =>
+                  CompactionError.make({
+                    message: "Complete native saved context exceeds canonical bounds",
+                  }),
+                ),
+              );
+            }
             const envelope = yield* recordHalt(makeEnvelope(recordId, payload));
 
+            const batch = CanonicalBatch.make({
+              batchId: compactionBatchId(runId, canonicalTurn, commit.kind),
+              producerId: config.producerId,
+              records: [envelope],
+            });
+
             yield* recordHalt(hit("compaction:before-canonical-append"));
-            yield* recordHalt(
-              appendBatch(
-                ctx,
-                CanonicalBatch.make({
-                  batchId: compactionBatchId(runId, canonicalTurn, commit.kind),
-                  producerId: config.producerId,
-                  records: [envelope],
-                }),
-              ),
+            yield* Effect.uninterruptibleMask((restore) =>
+              Effect.gen(function* () {
+                yield* restore(recordHalt(appendBatch(ctx, batch)));
+                knownIds.add(recordId);
+                recordCommittedUsage(batch);
+              }),
             );
-            knownIds.add(recordId);
             yield* recordHalt(hit("compaction:after-canonical-append"));
           }),
       };
@@ -7616,6 +7695,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         threadId: submission.threadId,
         runId,
         history: pending === undefined ? journal.historyBefore : resumeProjection.historyBefore,
+        nativeCompactions: journal.nativeCompactions,
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",

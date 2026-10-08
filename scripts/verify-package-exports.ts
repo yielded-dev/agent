@@ -38,6 +38,7 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "AgentRuntime.run",
     "AgentRuntime.start",
     "AgentRuntime.model",
+    "NativeCompactionProvider.compact",
   ],
   "packages/effect-agent/src/durable/DurableAgentRuntime.ts": [
     "DurableAgentRuntime.recoverSubmission",

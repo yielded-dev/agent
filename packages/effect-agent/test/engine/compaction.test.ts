@@ -6,6 +6,7 @@ import {
   CompactionError,
   ContextCompactor,
   type CompactionDecision,
+  type NativeCompactionProvider,
 } from "@yielded/agent/context-compactor";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
@@ -446,6 +447,8 @@ export const verifyCompactionCallbackAndModelRequirements = () =>
         turn: 1,
         trigger: "pressure",
         modelCallAllowed: true,
+        compactNative: () =>
+          SummaryConfig.pipe(Effect.andThen(Effect.fail(SummaryFailure.make({})))),
         summarize,
       })
       .pipe(Stream.runCollect);
@@ -477,5 +480,12 @@ export const verifyCompactionCallbackAndModelRequirements = () =>
       ? true
       : false = true;
 
-    void [errorProof, requirementProof, modelRequirements];
+    const native: Layer.Layer<ContextCompactor, never, NativeCompactionProvider> =
+      ContextCompactor.layerNative;
+
+    const nativeProviderRequirement: NativeCompactionProvider extends Layer.Services<typeof native>
+      ? true
+      : false = true;
+
+    void [errorProof, requirementProof, modelRequirements, nativeProviderRequirement];
   });

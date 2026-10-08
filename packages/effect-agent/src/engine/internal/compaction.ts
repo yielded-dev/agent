@@ -2,7 +2,7 @@ import * as Prompt from "effect/ai/Prompt";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import type { ContextMessageTokenEstimator } from "../ContextCompactor.ts";
+import type { NativeCompaction, ContextMessageTokenEstimator } from "../ContextCompactor.ts";
 import { boundedCanonicalJsonSnapshot } from "./provider-result-staging.ts";
 
 /**
@@ -170,9 +170,10 @@ export interface ContextCompactionState {
   clearedThrough: number;
   /**
    * Source messages below this bound (outside the protected block) are
-   * replaced by a summary or a fresh-window marker. Absent before the first replacement.
+   * replaced by a native sidecar, summary, or fresh-window marker. Absent before the first replacement.
    */
   replacement:
+    | { readonly kind: "native"; readonly through: number; readonly native: NativeCompaction }
     | { readonly kind: "summarize"; readonly through: number; readonly summary: string }
     | {
         readonly kind: "rollover";
@@ -181,6 +182,8 @@ export interface ContextCompactionState {
         readonly handoff?: string;
       }
     | undefined;
+  /** Exact ordered native prefix sidecars, with complete cold-replay token estimates. */
+  nativeWindows: ReadonlyArray<NativeCompaction>;
   /** Loop guard: at most one threshold compaction per Turn. */
   lastCompactionTurn: number;
   /** RUN-027 guard: at most one overflow compact-and-retry per Turn. */
@@ -199,6 +202,7 @@ export const initialCompactionState = (): ContextCompactionState => ({
   protectedEnd: -1,
   clearedThrough: 0,
   replacement: undefined,
+  nativeWindows: [],
   lastCompactionTurn: 0,
   overflowRetryTurn: 0,
   lastViewLength: -1,
@@ -264,9 +268,12 @@ export const buildCompactedView = (
   if (state.replacement === undefined && state.clearedThrough === 0) {
     return source;
   }
+  if (state.replacement?.kind === "native") {
+    return source.slice(state.replacement.through);
+  }
   const view: Array<Prompt.Message> = [];
 
-  if (state.replacement !== undefined && state.replacement.through > 0) {
+  if (state.replacement !== undefined) {
     const protectedStart =
       state.protectedStart >= 0 && !state.protectSystemMessages ? state.protectedStart : 0;
 

@@ -52,6 +52,12 @@ export interface ProgressAppendRecord {
 
 const progressRecord = (record: RecordEnvelope, bytes: number): ProgressAppendRecord => {
   const payload = record.payload;
+  let terminalUsageBytes = 0;
+
+  if (payload._tag === "ModelResponseRecorded" || payload._tag === "ModelCallAborted")
+    terminalUsageBytes = terminalUsageCharge(payload.modelUsage ?? []);
+  else if (payload._tag === "CompactionCreated" && payload.native !== undefined)
+    terminalUsageBytes = terminalUsageCharge([payload.native.usage]);
 
   return Object.freeze({
     recordId: record.recordId,
@@ -59,10 +65,7 @@ const progressRecord = (record: RecordEnvelope, bytes: number): ProgressAppendRe
     recordBytes: bytes,
     preContinuation: isPreContinuationFact(record),
     terminal: isTerminalBudgetFact(record),
-    terminalUsageBytes:
-      payload._tag === "ModelResponseRecorded" || payload._tag === "ModelCallAborted"
-        ? terminalUsageCharge(payload.modelUsage ?? [])
-        : 0,
+    terminalUsageBytes,
     ...(payload._tag === "RunContinuation" ? { continuation: payload } : {}),
   });
 };

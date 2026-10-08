@@ -603,6 +603,18 @@ const advanceFacts = Effect.fnUntraced(function* (
         savedContext = yield* reference(fact);
         position = "awaiting-model";
         break;
+      case "CompactionCreated": {
+        if (payload.kind !== "native") break;
+        if (savedContext === undefined || payload.native === undefined)
+          return yield* failure("Native compaction has no saved context or accounted usage");
+        const call = payload.native.usage;
+
+        accounting.modelCalls += 1;
+        accounting.inputTokens += call.inputTokens.total;
+        accounting.outputTokens += call.outputTokens.total;
+        accounting.costMicrousd += call.costMicrousd;
+        break;
+      }
       case "ModelResponseRecorded": {
         if (savedContext === undefined)
           return yield* failure("A model response has no saved original Run context");

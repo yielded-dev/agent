@@ -11,6 +11,7 @@
   "fixed": [
     [
       "@yielded/agent-ai-decision",
+      "@yielded/agent-openai",
       "@yielded/agent-platform-cloudflare",
       "@yielded/agent-platform-node",
       "@yielded/agent-pr-review",
