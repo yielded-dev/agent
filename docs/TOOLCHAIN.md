@@ -45,10 +45,12 @@ a Vitest 5 peer minimum, as it did on Effect rc.117. Verify this compatibility w
 existing suites when either dependency changes.
 Operational harnesses under `tooling/*` also use Vite tasks for Miniflare tests.
 
-The root temporarily patches Effect 4.0.0 to reuse streaming response decoders when
-tool declarations stay unchanged. This applies to repository installations; published
-libraries still resolve their consumer's Effect peer. Remove the patch when adopting
-an upstream release containing the change.
+The root temporarily patches Effect 4.0.0 to reuse streaming response decoders when tool declarations
+stay unchanged. This applies to repository installations; published libraries resolve their
+consumer's Effect peer. Remove that performance patch when adopting an upstream release containing
+it. Native compaction lives in `@yielded/agent-openai` and uses published Effect/OpenAI APIs without
+compaction patches. See [native compaction](src/content/docs/guide/context-management.md#native-openai-compaction)
+for its runtime limits.
 
 Astro uses its own Vite dependency. Keep the root Vite+ core alias required by Vite+;
 do not add a global Vite override.
@@ -81,13 +83,15 @@ See the [package map](src/content/docs/reference/packages.md) for public package
 | `docs/`                            | Astro Starlight site using `@yielded/starlight-theme`     |
 
 Framework code stays in `packages/*`. The canonical app and operational harnesses are leaf workspaces.
-Provider integrations come from upstream Effect AI Layers, including `@effect/ai-typesafe`.
+Model inference comes from upstream Effect AI Layers, including `@effect/ai-typesafe`.
+`openai` adds native agent-context services around the stock OpenAI model and client.
 `ai-decision` owns thread model selection and consumes Effect's native `Decision` and `DecisionModel`.
 
 ```text
 @yielded/agent <- storage-sql <- storage-sqlite / storage-postgres / storage-cloudflare
 @yielded/agent <- storage-memory
 @yielded/agent <- workflow
+@yielded/agent + @effect/ai-openai <- openai
 @yielded/agent + selected adapters <- platform packages
 @yielded/agent <- sandbox-local
 @yielded/agent <- testing
@@ -242,7 +246,7 @@ unknown paths. Retain the domain and redirects.
 
 ## Releasing to npm
 
-All thirteen public packages share one Changesets fixed group and publish to `beta`
+All fourteen public packages share one Changesets fixed group and publish to `beta`
 as `X.Y.Z-beta.N`. Keep the group in `.changeset/config.json` aligned with public workspaces.
 The travel planner is a private application with no package version. It does not receive
 changesets, version bumps, changelogs, package tags, or npm releases. Private-package versioning

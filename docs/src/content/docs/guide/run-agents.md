@@ -428,11 +428,11 @@ Agent span names replace `AgentRuntime.run`; update filters using that old name.
 Successful tool executions log at Debug; failures log at Warning. The default logger omits
 successful tool logs. Tool spans retain their identity and outcome attributes at either log level.
 
-Model calls label the existing Effect AI `LanguageModel.streamText` span rather than
-creating a second model-call span. The configured model and provider are recorded as
-`gen_ai.request.model` and `gen_ai.provider.name`; native providers retain their response
-and token-usage annotations. Each retry and compaction summary has its own model span.
-These labels add identifiers, not prompts, instructions, or tool payloads.
+Ordinary model calls label Effect AI's `LanguageModel.streamText` span; native compaction uses
+`NativeCompactionProvider.compact`. The configured model and provider are recorded as
+`gen_ai.request.model` and `gen_ai.provider.name`; providers retain their response and token-usage
+annotations. Each retry, summary, and native compaction has its own model span. These labels carry
+identifiers; prompt, instruction, tool-payload, and opaque-context content stays out of them.
 
 Library generators use `Effect.fnUntraced`; direct Effect-returning helpers need no wrapper.
 Spans are reserved for agent run/turn, model and tool calls, browser and transport operations,
@@ -464,8 +464,9 @@ provider-reported identity in `request.response`. Use the latter for response-se
 Run totals and durable per-model summaries retain `webSearchCalls`. It excludes OpenAI page/find
 actions and unobserved work, and legacy records may omit it.
 `request.finishMetadata` carries native Effect AI finish metadata only during estimation; the
-engine never persists provider HTTP details or raw metadata in accounting records. A summarizer
-uses the same estimator with `purpose: "summary"`.
+engine never persists provider HTTP details or raw metadata in accounting records. Summarization
+uses the same estimator with `purpose: "summary"`; native compaction uses `purpose: "compaction"`.
+Observed compaction usage remains charged when the returned window is rejected or its commit fails.
 
 Calls and Run totals retain `usageStatus` and `pricingStatus`. Missing legacy status is unknown, and a numeric
 zero without an estimate is not evidence of free execution. Run summaries distinguish complete,
@@ -487,7 +488,8 @@ Attempt-bound update acceptance at composition, retaining updates before acknowl
 Hosts that need public progress can use `streamWithUsageAccountingUnknown` with the same services.
 Ordinary `stream`, `run`, and `start` calls provide ephemeral accounting and update acceptance.
 
-Canonical response records own committed per-call usage. Terminal settlement
-`uncommittedModelUsage` retains only staged calls not already present in a response record;
-its charges are already included in `usageSummary`, so do not add them a second time. An isolate
-loss before either response or settlement commit cannot prove the lost call's usage or cost.
+Canonical response records own ordinary committed per-call usage; native `CompactionCreated`
+records own their successful compaction call's usage. Recovery restores each recorded call once.
+Terminal settlement `uncommittedModelUsage` retains the remaining staged calls. Its charges are
+already included in `usageSummary`. An isolate loss before any of those commits leaves the lost
+call's usage and cost unproven.

@@ -52,6 +52,25 @@ calls and subagent invocations by Run and Tool Call ID. Decode projection state 
 before replaying a suffix. Earlier versions, including empty views, must be discarded and rebuilt
 from canonical records.
 
+<a id="recover-a-native-window"></a>
+
+### Recover a native window
+
+[Native compaction](/guide/context-management/#native-openai-compaction) commits its complete
+replacement window, provider/model affinity, current-window token count, and call usage in `CompactionCreated`
+before inference can use it. The provider window stays beside the ordinary Prompt; replay restores
+both and supplies the complete window to the selected adapter. Saved-context integrity covers both
+values. Retained tool calls remain historical evidence.
+
+Recovery restores that recorded usage once under the Run that created the window. A failed append
+keeps the prior view; observed usage from the failed candidate remains charged. Provider work may
+repeat after transport ambiguity or ownership loss.
+
+Recovery validates native records and saved-context digests before use. A corrupt canonical window
+fails recovery under the same continuation-verification rules as other execution evidence. Every
+later model request must match the saved provider and model. Commit an explicit rollover or start
+a fresh Thread before switching that identity.
+
 ## Complete a submission
 
 The storage owner publishes one canonical `SubmissionSettled` record after checking the current

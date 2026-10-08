@@ -416,7 +416,10 @@ balance, and minimum possible request reservation. The Action's spending admissi
 reviewer's cumulative token quota, so reusing cached context does not force early finalization.
 Spending admission is the primary budget for diff navigation and research. The five-minute
 deadline and native rollover at a 128,000-token working context still apply; the provider's separate
-exact-input admission boundary remains 128,000 tokens.
+exact-input admission boundary remains 128,000 tokens. Its spending adapter does not admit
+provider-native compaction or opaque replacement windows. Calls must use its reserved response
+helpers; raw provider requests and scoped HTTP transforms are refused because they can bypass
+admission or change the token-counted payload.
 
 The Action uses explicit-only caching with a 30-minute TTL and a stable head-based routing key.
 It marks reusable instructions, the diff, and completed tool batches, retaining earlier boundaries

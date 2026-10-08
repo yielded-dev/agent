@@ -58,12 +58,10 @@ it("preserves client requirements and selector errors when composing different p
     "small",
     Layer.effect(
       LanguageModel.LanguageModel,
-      Effect.as(
+      Effect.andThen(
         ClientA,
-        LanguageModel.LanguageModel.of({
-          [LanguageModel.TypeId]: LanguageModel.TypeId,
+        LanguageModel.make({
           generateText: () => Effect.die("unused"),
-          generateObject: () => Effect.die("unused"),
           streamText: () => Stream.die("unused"),
         }),
       ),
@@ -75,12 +73,10 @@ it("preserves client requirements and selector errors when composing different p
     "large",
     Layer.effect(
       LanguageModel.LanguageModel,
-      Effect.as(
+      Effect.andThen(
         ClientB,
-        LanguageModel.LanguageModel.of({
-          [LanguageModel.TypeId]: LanguageModel.TypeId,
+        LanguageModel.make({
           generateText: () => Effect.die("unused"),
-          generateObject: () => Effect.die("unused"),
           streamText: () => Stream.die("unused"),
         }),
       ),

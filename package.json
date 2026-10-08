@@ -46,6 +46,7 @@
     "@types/node": "catalog:",
     "@yielded/agent": "workspace:*",
     "@yielded/agent-ai-decision": "workspace:*",
+    "@yielded/agent-openai": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
     "@yielded/agent-platform-node": "workspace:*",
     "@yielded/agent-sandbox-local": "workspace:*",

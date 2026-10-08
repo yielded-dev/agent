@@ -179,3 +179,47 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
     }),
   };
 };
+
+/** Native coverage is the complete prior-Run prefix, with every producer closed before its owner. */
+export const nativeCoverageIsComplete = (
+  metadata: JournalMetadata,
+  runId: RunId,
+  through: number,
+  evidence?: Set<number>,
+): boolean => {
+  const ownerFirst = metadata.firstSequenceByRun.get(runId);
+
+  if (ownerFirst === undefined) return false;
+  let lastBoundary = 0;
+
+  for (const [priorRun, responses] of metadata.responseSequencesByRun) {
+    const responseSequence = responses.at(-1);
+
+    if (responseSequence === undefined) return false;
+    if (priorRun === runId || (metadata.firstSequenceByRun.get(priorRun) ?? Infinity) >= ownerFirst)
+      continue;
+    const terminal = metadata.terminalSequenceByRun.get(priorRun);
+
+    if (
+      responseSequence >= ownerFirst ||
+      terminal === undefined ||
+      terminal >= ownerFirst ||
+      terminal <= responseSequence
+    )
+      return false;
+    lastBoundary = Math.max(lastBoundary, responseSequence);
+    evidence?.add(responseSequence);
+    evidence?.add(terminal);
+  }
+  for (const span of metadata.settledSpans) {
+    if (span.from >= ownerFirst || span.runId === runId) continue;
+    if (span.to >= ownerFirst) return false;
+    lastBoundary = Math.max(lastBoundary, span.to);
+    if (span.to === through) {
+      evidence?.add(span.from);
+      evidence?.add(span.to);
+    }
+  }
+
+  return lastBoundary > 0 && through === lastBoundary;
+};

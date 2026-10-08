@@ -343,18 +343,17 @@ The bounded rules governing maximum turns, tool calls, duration, usage, cost, re
 and acceptable final output.
 
 **Compaction**  
-A reduction of the model-visible prompt by pruning, summarizing, or starting a fresh context window without erasing
-canonical evidence. Physical record deletion is a separate retention operation. The engine
-compacts natively at the pre-Turn seam when the estimated next context exceeds the Context Token
-Limit or would consume the Completion Reserve. It prunes old Tool results, summarizes through one
-metered model call, and records
-each compaction in durable assemblies as a canonical `CompactionCreated` record that
-projections fold. The engine-owned `ContextCompactor` service selects the strategy, token estimator,
-summary prompt, and Model. `ContextCompactor.layer` supplies the bounded default. Cloudflare
-Thread Objects install the same service through a scoped `ContextCompactor` Layer,
-rebuilt after eviction. The interpreter owns metering, protected messages, events, and commits;
-the durable coordinator maps actual covered messages to complete canonical records. Pruning and
-summarization cover prior-Run records; rollover can cover settled batches in the current Run.
+A reduction of the model-visible prompt through pruning, summarization, provider-issued context,
+or a fresh context window. Canonical evidence remains append-only; physical deletion is a separate
+retention operation. `ContextCompactor` selects the strategy, estimator, and Model. The interpreter
+owns metering, protected messages, events, and the pre-Turn commit boundary; durable assemblies
+record each replacement in `CompactionCreated` before using it.
+
+`ContextCompactor.layer` supplies bounded pruning and summarization. `OpenAiCompaction.layer` from
+`@yielded/agent-openai` uses OpenAI's native compaction for complete prior-Run prefixes and retains
+the returned window beside the ordinary Prompt with its exact provider/model affinity.
+Summarization also covers prior Runs; pruning and rollover can cover settled batches in the current
+Run. Hosts install the compactor as a scoped Layer and retain its choice across replacement Attempts.
 
 **Context Window**
 

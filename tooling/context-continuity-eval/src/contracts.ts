@@ -67,7 +67,7 @@ export const CompactionEvidence = Schema.Struct({
   trigger: Schema.Literals(["pressure", "overflow", "requested"]),
   estimatedTokens: Schema.Natural,
   targetTokens: Schema.NullOr(Schema.Natural),
-  kind: Schema.Literals(["rollover", "summarize", "clear-tool-results"]),
+  kind: Schema.Literals(["rollover", "summarize", "clear-tool-results", "native"]),
 });
 
 export type CompactionEvidence = typeof CompactionEvidence.Type;

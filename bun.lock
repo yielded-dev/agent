@@ -23,6 +23,7 @@
         "@types/node": "catalog:",
         "@yielded/agent": "workspace:*",
         "@yielded/agent-ai-decision": "workspace:*",
+        "@yielded/agent-openai": "workspace:*",
         "@yielded/agent-platform-cloudflare": "workspace:*",
         "@yielded/agent-platform-node": "workspace:*",
         "@yielded/agent-sandbox-local": "workspace:*",
@@ -182,6 +183,23 @@
         "vite-plus": "catalog:",
       },
       "peerDependencies": {
+        "effect": "^4.0.0",
+      },
+    },
+    "packages/openai": {
+      "name": "@yielded/agent-openai",
+      "version": "0.1.0-beta.167",
+      "dependencies": {
+        "@yielded/agent": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/ai-openai": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+      },
+      "peerDependencies": {
+        "@effect/ai-openai": "^4.0.0",
         "effect": "^4.0.0",
       },
     },
@@ -1780,6 +1798,8 @@
     "@yielded/agent-example-semantic-memory-eval": ["@yielded/agent-example-semantic-memory-eval@workspace:tooling/semantic-memory-eval"],
 
     "@yielded/agent-example-travel-planner": ["@yielded/agent-example-travel-planner@workspace:examples/travel-planner"],
+
+    "@yielded/agent-openai": ["@yielded/agent-openai@workspace:packages/openai"],
 
     "@yielded/agent-platform-cloudflare": ["@yielded/agent-platform-cloudflare@workspace:packages/platform-cloudflare"],
 

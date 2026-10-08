@@ -140,6 +140,38 @@ implementation directories are private.
 Use `ContextCompactor` to customize compaction and `AgentPolicy.runStatus` to configure status
 messages. Token estimators and `ContextCompactionState` support custom compactors.
 
+<a id="native-compaction"></a>
+
+### Native compaction limits
+
+`OpenAiCompaction.layer` from `@yielded/agent-openai` provides `ContextCompactor` and requires a
+stock `OpenAiClient`. Core owns the `NativeCompaction` and `NativeCompactionContext` Schemas in
+`@yielded/agent/context-compactor`. See the [usage guide](/guide/context-management/#native-openai-compaction)
+for model/client Layer composition.
+
+| Boundary    | Limit                                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Coverage    | Complete prior-Run prefixes with unambiguous canonical mapping                                                                         |
+| Identity    | Exact provider and effective model; each name is at most 256 characters                                                                |
+| Replacement | Version 2 envelope, at most 256 KiB of UTF-8 JSON; the OpenAI format allows at most 1,024 provider items                               |
+| Context     | The complete saved context must fit the existing 1 MiB persisted-JSON bound; any lower active model-response buffer limit also applies |
+| Model work  | Native compaction and summarization share one call allowance per Turn                                                                  |
+
+The initial OpenAI path accepts text, plain reasoning with provider identity, complete ordinary tool
+pairs with results in tool messages, and saved native context. It rejects multimodal content,
+provider-hosted tools, protected instructions in the covered prefix, and newly covered encrypted
+reasoning without a trusted reserve. Oversized or invalid windows fail as a whole. Inference uses
+stateless HTTP with `store: false`; conversations, response-ID tracking, item references, background
+requests, and WebSocket mode are unsupported.
+
+After compaction, the adapter counts the complete returned window with OpenAI's
+`/responses/input_tokens` endpoint and persists that model-specific count. Admission adds it to
+the ordinary prompt and request overhead exactly once. Each replacement gets its own current
+count; cumulative compaction usage remains in the accounting ledger. The endpoint must be available
+through the configured client. Counting, validation, or commit failures preserve observed compaction
+usage. [Durable recovery](/concepts/durability/#recover-a-native-window) restores the committed count,
+usage, and complete window together.
+
 <a id="capability-inventory"></a>
 
 ## Find a capability
@@ -205,6 +237,18 @@ first turn, including new subagents. A shared selection store retains choices ac
 
 Start with the [decision guide](/guide/tools/#decision-transitions), then use the
 [API reference](/reference/decision-models/) for options and results.
+
+### `@yielded/agent-openai`
+
+`OpenAiCompaction.layer` supplies OpenAI native context compaction and exact replay through the
+stock Effect OpenAI client. It depends inward on `@yielded/agent`; core keeps budgets, canonical
+coverage, commits, and recovery. Model selection continues to use `OpenAiLanguageModel.model`
+from `@effect/ai-openai`.
+
+Import `OpenAiCompaction` from the package root or use the direct
+`@yielded/agent-openai/openai-compaction` module. Start with the
+[native compaction guide](/guide/context-management/#native-openai-compaction) and its
+[limits](#native-compaction).
 
 <a id="typesafe-ai"></a>
 

@@ -51,6 +51,9 @@
     },
     {
       "path": "./packages/ai-decision"
+    },
+    {
+      "path": "./packages/openai"
     }
   ]
 }

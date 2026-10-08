@@ -106,6 +106,7 @@ effect <- ai-decision (thread model selection)
 @yielded/agent <- storage-sql <- storage-sqlite / storage-postgres / storage-cloudflare
 @yielded/agent <- storage-memory
 @yielded/agent <- workflow
+@yielded/agent + @effect/ai-openai <- openai
 @yielded/agent + selected adapters <- platform packages
 @yielded/agent <- sandbox-local
 @yielded/agent <- testing
@@ -124,8 +125,10 @@ or deepen an inward port and implement an outward adapter.
 Framework code lives only in `packages/*`; do not create an `apps/` workspace. Runnable consumer
 benches live in `examples/*`, remain leaf workspaces, and may depend inward on public framework
 packages and `@yielded/agent-testing`. Create a new framework package only for a
-genuinely new framework concern agreed with the repository owner. Provider integrations remain upstream Effect AI Layers, not framework provider
-packages.
+genuinely new framework concern agreed with the repository owner. Model inference remains in upstream
+Effect AI Layers. The `openai` package provides agent-level native context services around those
+Layers; it depends inward on core and must reuse Effect's Model, LanguageModel, Prompt, and Response
+primitives. Keep provider-specific transport and codecs in that outward adapter.
 
 ## Toolchain rules
 

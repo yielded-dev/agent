@@ -125,9 +125,12 @@ or `{ toolAuthorization: SearchOnlyLive }` for a [tool policy](/guide/tools/#aut
 Use `{ toolReconciler: SupplierReconcilerLive }` for supplier-backed recovery of unconfirmed tool
 outcomes. Configure these services independently or together.
 
-Select [native compaction](/guide/context-management/#replacing-compaction) by providing its Layer
-directly to the host, for example `HostLive.pipe(Layer.provide(ContextCompactor.layerRollover))`.
-Without an injected `ContextCompactor`, the host uses the default pruning and summarization strategy.
+Select a [compaction strategy](/guide/context-management/#replacing-compaction) by providing its
+Layer directly to the host, for example `HostLive.pipe(Layer.provide(ContextCompactor.layerRollover))`.
+For [OpenAI native compaction](/guide/context-management/#native-openai-compaction), provide
+`OpenAiCompaction.layer` from `@yielded/agent-openai` and its configured `OpenAiClient`.
+Inference continues to use the stock Effect OpenAI model with `store: false`. The host defaults to
+pruning and summarization when no compactor is supplied.
 
 The assembled layer retains each extension's construction errors and application dependencies
 in its error and requirement types. The host supplies `Crypto.Crypto`. Provide the remaining

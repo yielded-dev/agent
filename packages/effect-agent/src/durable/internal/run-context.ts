@@ -1,6 +1,7 @@
 import { type Crypto, Effect, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
+import { NativeCompaction } from "../../engine/ContextCompactor.ts";
 import { digestJson } from "../Digest.ts";
 import {
   CanonicalSequence,
@@ -19,8 +20,20 @@ import { RunContextReader } from "./run-context-reader.ts";
 const invalid = (message: string) => RunJournalError.make({ message });
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 
-export const digestRunHistory = (prompt: Prompt.Prompt) =>
-  encodePrompt(prompt).pipe(
+const encodeNativeHistory = Schema.encodeEffect(
+  Schema.toCodecJson(
+    Schema.Struct({ prompt: Prompt.Prompt, nativeCompactions: Schema.Array(NativeCompaction) }),
+  ),
+);
+
+export const digestRunHistory = (
+  prompt: Prompt.Prompt,
+  nativeCompactions: ReadonlyArray<NativeCompaction> = [],
+) =>
+  (nativeCompactions.length === 0
+    ? encodePrompt(prompt)
+    : encodeNativeHistory({ prompt, nativeCompactions })
+  ).pipe(
     Effect.flatMap(digestJson),
     Effect.mapError((cause) =>
       RunJournalError.make({ message: "Original model history integrity is unavailable", cause }),
@@ -78,7 +91,7 @@ export const projectRunContext = Effect.fnUntraced(function* (
     (boundary) => boundaries.push(boundary),
   );
 
-  const historyDigest = yield* digestRunHistory(history.prompt);
+  const historyDigest = yield* digestRunHistory(history.prompt, history.nativeCompactions);
 
   if (
     historyDigest !== context.historyDigest ||
@@ -96,6 +109,7 @@ export const projectRunContext = Effect.fnUntraced(function* (
     runId: context.runId,
     prompt: Prompt.fromMessages([...history.prompt.content, ...prefix.content]),
     priorHistoryLength: context.priorHistoryLength,
+    nativeCompactions: history.nativeCompactions,
     historyFrom: context.historyFrom,
     boundaries: boundaries.filter(
       (boundary) => boundary.promptLength <= context.priorHistoryLength,
