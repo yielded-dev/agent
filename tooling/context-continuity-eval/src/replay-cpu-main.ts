@@ -287,6 +287,9 @@ const command = Command.make(
 
         const failures: Array<{ role: string; cohort: number; size: string; error: string }> = [];
 
+        // A freshly enabled workers.dev route can briefly return a routing 404 even
+        // after an identity request succeeds. This happens before any Object is seeded.
+        yield* Effect.sleep("20 seconds");
         for (const cohort of block.cohorts) {
           for (const { role, size } of cohort.order) {
             const target = targets.get(role);
@@ -456,24 +459,41 @@ const command = Command.make(
             if (complete) break;
             if (poll < 12) yield* Effect.sleep("10 seconds");
           }
-          yield* requireReplayCpu(
-            complete,
-            "Invocation telemetry incomplete; retained all exports without rerunning workload",
-          );
+          const gaps = [];
+
           for (const { cohort, proof, elapsed, prompts } of expected) {
             for (const [index, operation] of proof.operations.entries()) {
-              const event = telemetryFor(events, proof.objectId, operation.method)[0];
+              const matches = telemetryFor(events, proof.objectId, operation.method);
+              const event = matches.length === 1 ? matches[0] : undefined;
 
-              if (event === undefined)
-                return yield* new ReplayCpuError({ message: "Missing invocation" });
+              if (event === undefined) {
+                gaps.push({
+                  cohort,
+                  objectId: proof.objectId,
+                  method: operation.method,
+                  reason: "missing-or-duplicate-cpu-invocation",
+                  matches: matches.length,
+                });
+                continue;
+              }
 
-              const ingress = events.find(
+              const ingressMatches = events.filter(
                 (candidate) =>
                   candidate.executionModel === "stateless" && candidate.traceId === event.traceId,
               );
 
-              if (ingress === undefined)
-                return yield* new ReplayCpuError({ message: "Missing ingress invocation" });
+              const ingress = ingressMatches.length === 1 ? ingressMatches[0] : undefined;
+
+              if (ingress === undefined) {
+                gaps.push({
+                  cohort,
+                  objectId: proof.objectId,
+                  method: operation.method,
+                  reason: "missing-or-duplicate-ingress-invocation",
+                  matches: ingressMatches.length,
+                });
+                continue;
+              }
 
               yield* requireReplayCpu(
                 event.scriptVersion?.id === target.identity.deploymentVersion &&
@@ -505,10 +525,23 @@ const command = Command.make(
               );
             }
           }
+          yield* writeReplayCpuJson(
+            path.join(output, `block-${block.block}`, role, "telemetry-gaps.json"),
+            { complete, gaps },
+          );
+          yield* Console.log(
+            `Block ${block.block + 1}, ${role}: ${gaps.length} missing telemetry pairs retained`,
+          );
         }
         yield* writeReplayCpuJson(path.join(output, "samples.json"), samples);
         yield* deployment.cleanup();
       }
+      yield* writeReplayCpuJson(path.join(output, "completeness.json"), {
+        expectedSamples: 720,
+        actualSamples: samples.length,
+        complete: samples.length === 720,
+        note: "Missing telemetry was retained explicitly; no request was replayed or CPU value imputed.",
+      });
       yield* requireReplayCpu(
         samples.length === 720 &&
           new Set(samples.map((sample) => sample.invocationId)).size === 720,
