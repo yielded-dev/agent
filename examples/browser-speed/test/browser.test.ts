@@ -204,6 +204,30 @@ it.live("fills and clicks inside a cross-origin frame", (test) =>
       "Test;",
       "Exactly one trusted click after the fill",
     );
+
+    // Individual transform properties apply outside `transform`; refuse scaled or rotated frames.
+    for (const style of ["scale: 2", "rotate: 180deg"]) {
+      yield* browser.native((page) =>
+        page.$eval(
+          "iframe",
+          (node, style) =>
+            node.setAttribute(
+              "style",
+              `width:400px;height:200px;transform:translateZ(0);transform-origin:0 0;${style}`,
+            ),
+          style,
+        ),
+      );
+
+      const target = (yield* browser.inspect({ frame: frame!.ref })).controls.find(
+        (control) => control.name === "Go",
+      );
+
+      const refused = yield* browser.act([{ kind: "click", ref: target!.ref }]);
+
+      assert.strictEqual(refused.completed, 0, `${style} must refuse pointer input`);
+      assert.strictEqual(refused.dispatch, "not-dispatched");
+    }
   }).pipe(Effect.scoped),
 );
 

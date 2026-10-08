@@ -768,6 +768,10 @@ export const checkFrameDom = pageFunction(
           matrix.m44 === 1
         ) ||
         current.perspective !== "none" ||
+        // Individual scale, rotate and motion-path properties apply outside `transform`.
+        current.scale !== "none" ||
+        current.rotate !== "none" ||
+        current.offsetPath !== "none" ||
         (current.zoom !== "1" && current.zoom !== "normal")
       )
         return false;
