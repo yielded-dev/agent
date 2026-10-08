@@ -1,0 +1,39 @@
+{
+  "name": "driver",
+  "mode": "ab",
+  "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "dirtyStatus": "M docs/src/content/docs/platforms/cloudflare.md\n M packages/effect-agent/src/durable/DurableAgentRuntime.ts\n M packages/effect-agent/src/durable/WakeScheduler.ts\n M packages/platform-cloudflare/src/Alarm.ts\n M packages/platform-cloudflare/src/WakeScheduler.ts\n?? .changeset/quiet-inline-thread-wakes.md",
+  "reusedFrom": {
+    "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+    "path": "examples/durable-bench/results/cf-latency"
+  },
+  "bundleSha256": "b61a5e442e9503273a945b90533efbc31646995e45d4cb016f393418e171aed0",
+  "bundleBytes": 3035,
+  "gzipBytes": 1193,
+  "inputsSha256": "65e950fa9f6059ecb41ea03f122f14f003c4d8ac16612018d8641b8e30f2595e",
+  "sourcesSha256": "43aff0625b8784abddab830a8a7a1f12c62a4b0048580dbaefae2e69782cf153",
+  "fixtureFiles": [
+    {
+      "path": "examples/durable-bench/src/plan.ts",
+      "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+    },
+    {
+      "path": "package.json",
+      "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+    }
+  ],
+  "expectedSeeds": {
+    "50": "b017b487524e44a4",
+    "250": "dcea9f30b0917245"
+  },
+  "instrumentation": [],
+  "esbuildVersion": "0.28.1",
+  "target": "es2024",
+  "minify": false,
+  "output": "/private/tmp/wake-defer-build-jUA86c/driver.mjs",
+  "effectVersion": "4.0.0"
+}

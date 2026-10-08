@@ -1,0 +1,127 @@
+{
+  "name": "network-ab",
+  "mode": "ab",
+  "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "dirtyStatus": "M docs/src/content/docs/platforms/cloudflare.md\n M packages/effect-agent/src/durable/DurableAgentRuntime.ts\n M packages/effect-agent/src/durable/WakeScheduler.ts\n M packages/platform-cloudflare/src/Alarm.ts\n M packages/platform-cloudflare/src/WakeScheduler.ts\n?? .changeset/quiet-inline-thread-wakes.md",
+  "reusedFrom": {
+    "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+    "path": "examples/durable-bench/results/cf-latency"
+  },
+  "bundleSha256": "706b270974f29630b4966139fc04ba1e92b8788ab7267e8ce4d5e2ce67702668",
+  "bundleBytes": 3574240,
+  "gzipBytes": 691116,
+  "inputsSha256": "4861ac639061011179c80d5a84d586b9d63c97bb563c111e6f2cdc9b7f8725bc",
+  "sourcesSha256": "636caf9d46dfe27ba29578123ee5d5859436ab4e6f2a0c4cdf2ea261ceef5ceb",
+  "fixtureFiles": [
+    {
+      "path": "examples/durable-bench/src/plan.ts",
+      "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+    },
+    {
+      "path": "package.json",
+      "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+    }
+  ],
+  "expectedSeeds": {
+    "50": "b017b487524e44a4",
+    "250": "dcea9f30b0917245"
+  },
+  "instrumentation": [
+    {
+      "path": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+      "changes": [
+        {
+          "label": "runtime-meter",
+          "occurrences": 1
+        },
+        {
+          "label": "appendBatch",
+          "occurrences": 1
+        },
+        {
+          "label": "canonicalSettlement",
+          "occurrences": 2
+        },
+        {
+          "label": "settlement",
+          "occurrences": 9
+        },
+        {
+          "label": "claim-attempt",
+          "occurrences": 1
+        },
+        {
+          "label": "claim",
+          "occurrences": 1
+        },
+        {
+          "label": "recovery-decision",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "packages/platform-cloudflare/src/Alarm.ts",
+      "changes": [
+        {
+          "label": "alarm-meter",
+          "occurrences": 1
+        },
+        {
+          "label": "scheduleNow",
+          "occurrences": 1
+        },
+        {
+          "label": "armNow",
+          "occurrences": 1
+        },
+        {
+          "label": "maintenance-meter",
+          "occurrences": 1
+        },
+        {
+          "label": "beginPass",
+          "occurrences": 1
+        },
+        {
+          "label": "recovery",
+          "occurrences": 1
+        },
+        {
+          "label": "maintenanceReport",
+          "occurrences": 1
+        },
+        {
+          "label": "scan",
+          "occurrences": 1
+        },
+        {
+          "label": "remaining-scan",
+          "occurrences": 1
+        },
+        {
+          "label": "checkpoint",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "packages/platform-cloudflare/src/internal/layers.ts",
+      "changes": [
+        {
+          "label": "wake-layer",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "esbuildVersion": "0.28.1",
+  "target": "es2024",
+  "minify": false,
+  "output": "/private/tmp/wake-defer-build-jUA86c/network-ab.mjs",
+  "effectVersion": "4.0.0"
+}

@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "checkedAt": "2026-10-08T22:29:56.187Z",
+  "filesChecked": 96,
+  "gzipFilesChecked": 34,
+  "matches": [],
+  "scope": "Exact current Cloudflare account ID and API token after final reporting and archiving, including deployment logs. Benchmark token and opaque upload identifiers were additionally checked before private state deletion; see secret-scan.json. Archives preserve the scanned bytes with verified hashes."
+}

@@ -1,0 +1,54 @@
+{
+  "archivedAt": "2026-10-08T22:29:45.022Z",
+  "method": "gzip level 9; preserve original sanitized log bytes including trailing whitespace; verified exact round trip",
+  "files": [
+    {
+      "path": "wake-defer-221f58cd-driver-deploy.log",
+      "compressedPath": "wake-defer-221f58cd-driver-deploy.log.gz",
+      "rawBytes": 7532,
+      "rawSha256": "bdcd82783c808522c6952834c77143b2ca87b47c95a90dcf498a1af46abf14d2",
+      "compressedBytes": 1263,
+      "compressedSha256": "b51aefa48f17261da7cf721a5da61fef4b7096be8af564ec86ba92bf78e0bff5"
+    },
+    {
+      "path": "wake-defer-221f58cd-driver-destroy.log",
+      "compressedPath": "wake-defer-221f58cd-driver-destroy.log.gz",
+      "rawBytes": 1412,
+      "rawSha256": "ba5111538ef1619ebc3e1ba33d63c5695ace9ccd8487e10d5f11ad4a2127de5d",
+      "compressedBytes": 499,
+      "compressedSha256": "3cf4eebdc21ad3262aeb74dda2e402232cddfeaaa2e820c669aafd23dbf64e60"
+    },
+    {
+      "path": "wake-defer-221f58cd-network-deploy.log",
+      "compressedPath": "wake-defer-221f58cd-network-deploy.log.gz",
+      "rawBytes": 13558,
+      "rawSha256": "431b57c5ca72a5eccf550800699106cf433ecd20f56b32fbdb245dc689f6d43c",
+      "compressedBytes": 1693,
+      "compressedSha256": "bbe7ba3d6a45f5807d98b9fd0bc53190faebce58e22d1592eab519561aaf8f91"
+    },
+    {
+      "path": "wake-defer-221f58cd-network-destroy.log",
+      "compressedPath": "wake-defer-221f58cd-network-destroy.log.gz",
+      "rawBytes": 1476,
+      "rawSha256": "bbb80d57f78398c59125e3fe87e67dc7c568ae8cc5a2fe245d8967ae30d89ecb",
+      "compressedBytes": 506,
+      "compressedSha256": "0161036ca3744b9d088bdad78aa23c616a37773ed4fdac755f6701248f929f8b"
+    },
+    {
+      "path": "wake-defer-221f58cd-provider-deploy.log",
+      "compressedPath": "wake-defer-221f58cd-provider-deploy.log.gz",
+      "rawBytes": 7583,
+      "rawSha256": "3df3da6cd3feb93d09294c55a9111be40c2d5dc3ffa007bd71033bd492e7b304",
+      "compressedBytes": 1258,
+      "compressedSha256": "8a1881dbba03303170fc345aaf96ea669dec063ccac93ab8170985e4b07fc21f"
+    },
+    {
+      "path": "wake-defer-221f58cd-provider-destroy.log",
+      "compressedPath": "wake-defer-221f58cd-provider-destroy.log.gz",
+      "rawBytes": 1417,
+      "rawSha256": "9c6a2b50b92dfc2e941c7c7cd8fbd8154936f1775220917cdec86fe1fad70f75",
+      "compressedBytes": 503,
+      "compressedSha256": "58e798e23cc6cf7764dc1f4899854591cf520cfb5e98f4a2634230588335876d"
+    }
+  ]
+}

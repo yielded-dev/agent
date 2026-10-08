@@ -1,0 +1,73 @@
+{
+  "status": "final; collection complete, paired analysis excludes three Objects",
+  "sourceGeneratedAt": "2026-10-08T22:23:00.266Z",
+  "policy": "Exclude the entire Object from paired summaries when any scheduled turn fails admission, including contradictory constructor telemetry. Retain every returned observation; never replay the input or replace a measured observation.",
+  "plannedObjects": 28,
+  "completedObjects": 28,
+  "admittedObjects": 25,
+  "returnedMeasuredTurns": 224,
+  "admittedMeasuredTurns": 200,
+  "excludedObjects": [
+    "wake-defer-221f58cd-r2-ab-h250-d0-o4",
+    "wake-defer-221f58cd-r2-ab-h250-d0-o0",
+    "wake-defer-221f58cd-r2-ab-h250-d0-o1"
+  ],
+  "observations": [
+    {
+      "object": "wake-defer-221f58cd-r2-ab-h250-d0-o4",
+      "sample": "m6",
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "cold",
+      "variant": "candidate",
+      "reasons": [
+        "Cold incarnation/first-entry proof failed"
+      ],
+      "transcriptValid": true,
+      "coldVerified": false,
+      "constructorContradiction": true
+    },
+    {
+      "object": "wake-defer-221f58cd-r2-ab-h250-d0-o0",
+      "sample": "m4",
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "cold",
+      "variant": "candidate",
+      "reasons": [
+        "Cold incarnation/first-entry proof failed"
+      ],
+      "transcriptValid": true,
+      "coldVerified": false,
+      "constructorContradiction": true
+    },
+    {
+      "object": "wake-defer-221f58cd-r2-ab-h250-d0-o1",
+      "sample": "m8",
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "cold",
+      "variant": "candidate",
+      "reasons": [
+        "Cold incarnation/first-entry proof failed"
+      ],
+      "transcriptValid": true,
+      "coldVerified": false,
+      "constructorContradiction": true
+    },
+    {
+      "object": "wake-defer-221f58cd-r2-ab-h250-d0-o1",
+      "sample": "m9",
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "cold",
+      "variant": "baseline",
+      "reasons": [
+        "Cold incarnation/first-entry proof failed"
+      ],
+      "transcriptValid": true,
+      "coldVerified": false,
+      "constructorContradiction": true
+    }
+  ]
+}

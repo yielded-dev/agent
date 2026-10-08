@@ -1,0 +1,27 @@
+{
+  "kind": "Local workerd deterministic-count evidence only; no latency or CPU timing claims",
+  "capturedScriptSha256": "44d12367f1d21aea648cbb0017060b455f1cd758340ebff46264e2925583bd13",
+  "capturedScript": "captured-script.mjs.gz",
+  "definition": "Two seed turns, then three measured turns with nine model calls and eight lookup tools. A scripted 25ms model wait allows real native alarms to interleave.",
+  "revisions": "Before was captured from the unmodified repository commit. After was captured from the dirty candidate at the same commit. The archived compiled bytes identify the two variants; the raw baseline field alone does not distinguish them.",
+  "variants": [
+    {
+      "variant": "before",
+      "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "bundleSha256": "84ea9bfac47d445e0186afb02c0b83b0b30c85e0f072f9f5413628e5121733fb",
+      "bundleBytes": 3437740,
+      "countsSha256": "ba34e7f5e91cdeced29d4c69631edd6f5d166fe280196067e230d98cfc81e2ed",
+      "counts": "../wake-defer-mechanism-before.json",
+      "bundle": "before.mjs.gz"
+    },
+    {
+      "variant": "after",
+      "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "bundleSha256": "ec374d85eef3368efb87e46647f443bf9839aef004a14f57a02bda579d7237e4",
+      "bundleBytes": 3437913,
+      "countsSha256": "19d54a4f19529e733204c73e549ca32351c6846c7f24b0f7429f91e351b77ce8",
+      "counts": "../wake-defer-mechanism-after.json",
+      "bundle": "after.mjs.gz"
+    }
+  ]
+}

@@ -1,0 +1,397 @@
+{
+  "run": "221f58cd",
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/private/tmp/wake-defer-3DPH6p",
+  "startedAt": 1791491505501,
+  "targets": [
+    {
+      "role": "provider",
+      "kind": "provider",
+      "name": "wake-defer-221f58cd-provider",
+      "bundle": "/private/tmp/wake-defer-3DPH6p/provider.mjs",
+      "build": {
+        "name": "provider",
+        "mode": "ab",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "dirtyStatus": "M docs/src/content/docs/platforms/cloudflare.md\n M packages/effect-agent/src/durable/DurableAgentRuntime.ts\n M packages/effect-agent/src/durable/WakeScheduler.ts\n M packages/platform-cloudflare/src/Alarm.ts\n M packages/platform-cloudflare/src/WakeScheduler.ts\n?? .changeset/quiet-inline-thread-wakes.md",
+        "reusedFrom": {
+          "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+          "path": "examples/durable-bench/results/cf-latency"
+        },
+        "bundleSha256": "bba7c535d0f314ea0ea8da77f8d9537d624bea12417782843dae87be25752e85",
+        "bundleBytes": 558145,
+        "gzipBytes": 113760,
+        "inputsSha256": "2ad40b6256c4bef5c17007a9b51b879710b25a9a59865656a77750e058242ba6",
+        "sourcesSha256": "0f0ac00b8ff164d46716a0d44225bb7619bb1d061d61c743e23b84a0a86681e3",
+        "fixtureFiles": [
+          {
+            "path": "examples/durable-bench/src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "bun.lock",
+            "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+          },
+          {
+            "path": "package.json",
+            "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+          }
+        ],
+        "expectedSeeds": {
+          "50": "b017b487524e44a4",
+          "250": "dcea9f30b0917245"
+        },
+        "instrumentation": [],
+        "esbuildVersion": "0.28.1",
+        "target": "es2024",
+        "minify": false,
+        "output": "/private/tmp/wake-defer-build-jUA86c/provider.mjs",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "seed",
+      "provider": "",
+      "targetUrl": "",
+      "url": "https://wake-defer-221f58cd-provider.danieljmerwe.workers.dev",
+      "deployedAt": 1791491928461,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "2e1802f9142fde612a742839c511146e86f1ba9e0644c42781008d071c6c428a",
+      "startupTimeMs": 10,
+      "startupEvidence": {
+        "version": "2e1802f9142fde612a742839c511146e86f1ba9e0644c42781008d071c6c428a",
+        "number": 4,
+        "startupTimeMs": 10,
+        "metadataEndpoint": "workers/versions",
+        "startupTimeUnavailableReason": null,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "buildId": "bba7c535d0f314ea0ea8da77f8d9537d624bea12417782843dae87be25752e85",
+        "capturedAt": 1791495261180
+      },
+      "uploadedModuleSha256": "bba7c535d0f314ea0ea8da77f8d9537d624bea12417782843dae87be25752e85",
+      "settings": {
+        "placement": {},
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": []
+    },
+    {
+      "role": "network",
+      "kind": "network",
+      "name": "wake-defer-221f58cd-network",
+      "bundle": "/private/tmp/wake-defer-3DPH6p/network.mjs",
+      "build": {
+        "name": "network-ab",
+        "mode": "ab",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "dirtyStatus": "M docs/src/content/docs/platforms/cloudflare.md\n M packages/effect-agent/src/durable/DurableAgentRuntime.ts\n M packages/effect-agent/src/durable/WakeScheduler.ts\n M packages/platform-cloudflare/src/Alarm.ts\n M packages/platform-cloudflare/src/WakeScheduler.ts\n?? .changeset/quiet-inline-thread-wakes.md",
+        "reusedFrom": {
+          "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+          "path": "examples/durable-bench/results/cf-latency"
+        },
+        "bundleSha256": "706b270974f29630b4966139fc04ba1e92b8788ab7267e8ce4d5e2ce67702668",
+        "bundleBytes": 3574240,
+        "gzipBytes": 691116,
+        "inputsSha256": "4861ac639061011179c80d5a84d586b9d63c97bb563c111e6f2cdc9b7f8725bc",
+        "sourcesSha256": "636caf9d46dfe27ba29578123ee5d5859436ab4e6f2a0c4cdf2ea261ceef5ceb",
+        "fixtureFiles": [
+          {
+            "path": "examples/durable-bench/src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "bun.lock",
+            "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+          },
+          {
+            "path": "package.json",
+            "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+          }
+        ],
+        "expectedSeeds": {
+          "50": "b017b487524e44a4",
+          "250": "dcea9f30b0917245"
+        },
+        "instrumentation": [
+          {
+            "path": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+            "changes": [
+              {
+                "label": "runtime-meter",
+                "occurrences": 1
+              },
+              {
+                "label": "appendBatch",
+                "occurrences": 1
+              },
+              {
+                "label": "canonicalSettlement",
+                "occurrences": 2
+              },
+              {
+                "label": "settlement",
+                "occurrences": 9
+              },
+              {
+                "label": "claim-attempt",
+                "occurrences": 1
+              },
+              {
+                "label": "claim",
+                "occurrences": 1
+              },
+              {
+                "label": "recovery-decision",
+                "occurrences": 1
+              }
+            ]
+          },
+          {
+            "path": "packages/platform-cloudflare/src/Alarm.ts",
+            "changes": [
+              {
+                "label": "alarm-meter",
+                "occurrences": 1
+              },
+              {
+                "label": "scheduleNow",
+                "occurrences": 1
+              },
+              {
+                "label": "armNow",
+                "occurrences": 1
+              },
+              {
+                "label": "maintenance-meter",
+                "occurrences": 1
+              },
+              {
+                "label": "beginPass",
+                "occurrences": 1
+              },
+              {
+                "label": "recovery",
+                "occurrences": 1
+              },
+              {
+                "label": "maintenanceReport",
+                "occurrences": 1
+              },
+              {
+                "label": "scan",
+                "occurrences": 1
+              },
+              {
+                "label": "remaining-scan",
+                "occurrences": 1
+              },
+              {
+                "label": "checkpoint",
+                "occurrences": 1
+              }
+            ]
+          },
+          {
+            "path": "packages/platform-cloudflare/src/internal/layers.ts",
+            "changes": [
+              {
+                "label": "wake-layer",
+                "occurrences": 1
+              }
+            ]
+          }
+        ],
+        "esbuildVersion": "0.28.1",
+        "target": "es2024",
+        "minify": false,
+        "output": "/private/tmp/wake-defer-build-jUA86c/network-ab.mjs",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "measure",
+      "provider": "https://wake-defer-221f58cd-provider.danieljmerwe.workers.dev/v1",
+      "targetUrl": "",
+      "url": "https://wake-defer-221f58cd-network.danieljmerwe.workers.dev",
+      "deployedAt": 1791492184504,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "e01dec9304c52561eede9963f6654bb7a0cfe76957fdaac5671ae7f7504537d4",
+      "startupTimeMs": 128,
+      "startupEvidence": {
+        "version": "e01dec9304c52561eede9963f6654bb7a0cfe76957fdaac5671ae7f7504537d4",
+        "number": 6,
+        "startupTimeMs": 128,
+        "metadataEndpoint": "workers/versions",
+        "startupTimeUnavailableReason": null,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "buildId": "706b270974f29630b4966139fc04ba1e92b8788ab7267e8ce4d5e2ce67702668",
+        "capturedAt": 1791496176475
+      },
+      "uploadedModuleSha256": "706b270974f29630b4966139fc04ba1e92b8788ab7267e8ce4d5e2ce67702668",
+      "settings": {
+        "placement": {},
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "name": "wake-defer-221f58cd-network_NetworkYieldedDO",
+          "script": "wake-defer-221f58cd-network"
+        }
+      ],
+      "activatedAt": 1791496169480
+    },
+    {
+      "role": "driver",
+      "kind": "driver",
+      "name": "wake-defer-221f58cd-driver",
+      "bundle": "/private/tmp/wake-defer-3DPH6p/driver.mjs",
+      "build": {
+        "name": "driver",
+        "mode": "ab",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "dirtyStatus": "M docs/src/content/docs/platforms/cloudflare.md\n M packages/effect-agent/src/durable/DurableAgentRuntime.ts\n M packages/effect-agent/src/durable/WakeScheduler.ts\n M packages/platform-cloudflare/src/Alarm.ts\n M packages/platform-cloudflare/src/WakeScheduler.ts\n?? .changeset/quiet-inline-thread-wakes.md",
+        "reusedFrom": {
+          "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+          "path": "examples/durable-bench/results/cf-latency"
+        },
+        "bundleSha256": "b61a5e442e9503273a945b90533efbc31646995e45d4cb016f393418e171aed0",
+        "bundleBytes": 3035,
+        "gzipBytes": 1193,
+        "inputsSha256": "65e950fa9f6059ecb41ea03f122f14f003c4d8ac16612018d8641b8e30f2595e",
+        "sourcesSha256": "43aff0625b8784abddab830a8a7a1f12c62a4b0048580dbaefae2e69782cf153",
+        "fixtureFiles": [
+          {
+            "path": "examples/durable-bench/src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "bun.lock",
+            "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+          },
+          {
+            "path": "package.json",
+            "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+          }
+        ],
+        "expectedSeeds": {
+          "50": "b017b487524e44a4",
+          "250": "dcea9f30b0917245"
+        },
+        "instrumentation": [],
+        "esbuildVersion": "0.28.1",
+        "target": "es2024",
+        "minify": false,
+        "output": "/private/tmp/wake-defer-build-jUA86c/driver.mjs",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "seed",
+      "provider": "",
+      "targetUrl": "https://wake-defer-221f58cd-network.danieljmerwe.workers.dev",
+      "url": "https://wake-defer-221f58cd-driver.danieljmerwe.workers.dev",
+      "deployedAt": 1791492198928,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "77f1649cb23ae511d9effdddd3353b4eb93afaf2721b45152556ba9a85f47769",
+      "startupTimeMs": null,
+      "startupEvidence": {
+        "version": "77f1649cb23ae511d9effdddd3353b4eb93afaf2721b45152556ba9a85f47769",
+        "number": 4,
+        "startupTimeMs": null,
+        "metadataEndpoint": "scripts/versions",
+        "startupTimeUnavailableReason": "Beta version endpoint returned HTTP 500; standard version response has no startup_time_ms",
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "buildId": "b61a5e442e9503273a945b90533efbc31646995e45d4cb016f393418e171aed0",
+        "capturedAt": 1791495291547
+      },
+      "uploadedModuleSha256": "b61a5e442e9503273a945b90533efbc31646995e45d4cb016f393418e171aed0",
+      "settings": {
+        "placement": {
+          "mode": "targeted",
+          "region": "aws:us-west-1",
+          "evidence": "active version resources.script.placement.target; opaque region ID omitted"
+        },
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": []
+    }
+  ],
+  "cohortRun": "221f58cd-r2",
+  "recoveredAt": 1791495252949
+}

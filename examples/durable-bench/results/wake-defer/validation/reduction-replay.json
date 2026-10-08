@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "checkedAt": "2026-10-08T22:26:51.857Z",
+  "command": "vp exec node examples/durable-bench/results/wake-defer/analyze.mjs",
+  "input": "Compressed raw evidence; no credentials or remote calls",
+  "semanticSha256": "5eb5ec246a764dc4ab890f732db4cc908dc301c13373330d9d96f89c0ceeedf5",
+  "excludedField": "generatedAt only",
+  "archiveFilesVerified": 6,
+  "completeObjects": 25,
+  "admittedMeasuredTurns": 200,
+  "returnedMeasuredTurns": 224
+}

@@ -1,0 +1,12 @@
+{
+  "command": "vp run ready",
+  "startedAt": "2026-10-08T21:35:48.643Z",
+  "endedAt": "2026-10-08T21:38:42.357Z",
+  "exitCode": 0,
+  "signal": null,
+  "postgres": "Temporary Postgres 18 on loopback port 55432",
+  "log": "ready-resumed.log.gz",
+  "logOriginalSha256": "8b2a066e94ff95f247e071de08741f541c93ec2013a0d8567bd602850913cd82",
+  "logRedactedSha256": "8b2a066e94ff95f247e071de08741f541c93ec2013a0d8567bd602850913cd82",
+  "logRedaction": "Hexadecimal identifiers of 32–128 characters and ANSI colors removed."
+}

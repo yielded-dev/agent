@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-10-08T21:34:09.238Z",
+  "retainedMeasuredTurns": 32,
+  "retainedCompleteObjects": 4,
+  "lastObservedBeforeSessionLoss": {
+    "completeObjects": 12,
+    "measuredTurns": 101
+  },
+  "loss": "The resumed environment retained the checkout but none of the private temporary directory or running processes. Post-interruption raw receipts, telemetry and temporary validation logs are unavailable.",
+  "treatment": "Retain surviving evidence separately. Do not replay any previous Object input. Rotate the disposable secret and restore the exact archived bundles through Alchemy; use fresh r2 Objects for the complete primary comparison.",
+  "deployedResourcesStillOwned": true,
+  "originalPrivateStateAvailable": false
+}

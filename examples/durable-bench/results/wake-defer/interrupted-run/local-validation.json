@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-08T20:36:18.837Z",
+  "scope": "Local plan/reference/archive proof only; no Cloudflare calls or performance claims",
+  "plan": {
+    "objects": 28,
+    "measuredTurns": 224,
+    "objectsByHistoryDelay": {
+      "h50/d400": 7,
+      "h50/d0": 7,
+      "h250/d400": 7,
+      "h250/d0": 7
+    },
+    "repeatsPerArmAndTemperature": 2,
+    "constantMeasuredToolPayloadBytes": 256,
+    "seedFingerprints": {
+      "50": "b017b487524e44a4",
+      "250": "dcea9f30b0917245"
+    }
+  },
+  "archive": [
+    {
+      "name": "driver",
+      "sha256": "a55d6a1442e5651f48d67600153ecc8c675549e6666c7f4a60821dcd30b8c6cd",
+      "bytes": 552223,
+      "verified": true
+    },
+    {
+      "name": "driver",
+      "sha256": "b61a5e442e9503273a945b90533efbc31646995e45d4cb016f393418e171aed0",
+      "bytes": 3035,
+      "verified": true
+    },
+    {
+      "name": "network-ab",
+      "sha256": "706b270974f29630b4966139fc04ba1e92b8788ab7267e8ce4d5e2ce67702668",
+      "bytes": 3574240,
+      "verified": true
+    },
+    {
+      "name": "network-baseline",
+      "sha256": "78db54e3ddfdbe20a5ba632b17c8d5671186206f5057e89b5d5031e4b7502b56",
+      "bytes": 3574037,
+      "verified": true
+    },
+    {
+      "name": "provider",
+      "sha256": "bba7c535d0f314ea0ea8da77f8d9537d624bea12417782843dae87be25752e85",
+      "bytes": 558145,
+      "verified": true
+    }
+  ],
+  "originalBaseline": {
+    "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "productFilesCompared": 184,
+    "allExact": true
+  }
+}

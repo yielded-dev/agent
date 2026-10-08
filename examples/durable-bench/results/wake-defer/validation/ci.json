@@ -1,0 +1,1139 @@
+{
+  "conclusion": "success",
+  "headSha": "9e0c2a15c2fd8320cdc10c676934f2687dc17b64",
+  "jobs": [
+    {
+      "completedAt": "2026-10-08T21:05:27Z",
+      "conclusion": "success",
+      "databaseId": 113541051509,
+      "name": "Select required checks",
+      "startedAt": "2026-10-08T21:05:23Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:24Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:25Z",
+          "conclusion": "success",
+          "name": "Classify the complete PR diff",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:25Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:25Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541051509"
+    },
+    {
+      "completedAt": "2026-10-08T21:08:56Z",
+      "conclusion": "success",
+      "databaseId": 113541112334,
+      "name": "Static checks",
+      "startedAt": "2026-10-08T21:05:30Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:32Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:41Z",
+          "conclusion": "success",
+          "name": "Pull rhysd/actionlint:1.7.12",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:43Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:41Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 4,
+          "startedAt": "2026-10-08T21:05:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:46Z",
+          "conclusion": "success",
+          "name": "Validate GitHub Actions workflows",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:46Z",
+          "conclusion": "skipped",
+          "name": "Check formatting for a limited diff",
+          "number": 6,
+          "startedAt": "2026-10-08T21:06:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:43Z",
+          "conclusion": "success",
+          "name": "Format, lint, and type checks",
+          "number": 7,
+          "startedAt": "2026-10-08T21:06:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:44Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 8,
+          "startedAt": "2026-10-08T21:08:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:44Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 15,
+          "startedAt": "2026-10-08T21:08:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:44Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 16,
+          "startedAt": "2026-10-08T21:08:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:44Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "startedAt": "2026-10-08T21:08:44Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112334"
+    },
+    {
+      "completedAt": "2026-10-08T21:09:42Z",
+      "conclusion": "success",
+      "databaseId": 113541112347,
+      "name": "Build",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:34Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:36Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:22Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:22Z",
+          "conclusion": "skipped",
+          "name": "Restore verified version PR build",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:59Z",
+          "conclusion": "success",
+          "name": "Build packages, examples, and docs",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:25Z",
+          "conclusion": "success",
+          "name": "Validate versioned release packages",
+          "number": 6,
+          "startedAt": "2026-10-08T21:08:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:27Z",
+          "conclusion": "success",
+          "name": "Record release build",
+          "number": 7,
+          "startedAt": "2026-10-08T21:09:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:30Z",
+          "conclusion": "success",
+          "name": "Upload release build",
+          "number": 8,
+          "startedAt": "2026-10-08T21:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:32Z",
+          "conclusion": "success",
+          "name": "Upload the Action bundle",
+          "number": 9,
+          "startedAt": "2026-10-08T21:09:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:34Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 10,
+          "startedAt": "2026-10-08T21:09:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:34Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 19,
+          "startedAt": "2026-10-08T21:09:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:35Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 20,
+          "startedAt": "2026-10-08T21:09:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:35Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 21,
+          "startedAt": "2026-10-08T21:09:35Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112347"
+    },
+    {
+      "completedAt": "2026-10-08T21:07:43Z",
+      "conclusion": "success",
+      "databaseId": 113541112673,
+      "name": "Tests (workspace)",
+      "startedAt": "2026-10-08T21:05:32Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:34Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:36Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:25Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:30Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:32Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:32Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:07:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:32Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:07:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:32Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:07:32Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112673"
+    },
+    {
+      "completedAt": "2026-10-08T21:06:59Z",
+      "conclusion": "success",
+      "databaseId": 113541112732,
+      "name": "Tests (storage-cloudflare)",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:32Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:35Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:15Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:48Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:49Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:49Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:06:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:50Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:06:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:50Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:06:50Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112732"
+    },
+    {
+      "completedAt": "2026-10-08T21:07:39Z",
+      "conclusion": "success",
+      "databaseId": 113541112750,
+      "name": "Tests (storage-postgres-16)",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:32Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:53Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:54Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:39Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 4,
+          "startedAt": "2026-10-08T21:05:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:29Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:29Z",
+          "conclusion": "skipped",
+          "name": "Save Vite Task cache",
+          "number": 6,
+          "startedAt": "2026-10-08T21:07:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:30Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 10,
+          "startedAt": "2026-10-08T21:07:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:30Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 11,
+          "startedAt": "2026-10-08T21:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:30Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 12,
+          "startedAt": "2026-10-08T21:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:30Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-10-08T21:07:30Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112750"
+    },
+    {
+      "completedAt": "2026-10-08T21:06:33Z",
+      "conclusion": "success",
+      "databaseId": 113541112755,
+      "name": "Tests (runtime-benchmark)",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:32Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:35Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:21Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:30Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:31Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:31Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:06:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:32Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:06:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:32Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:06:32Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112755"
+    },
+    {
+      "completedAt": "2026-10-08T21:08:39Z",
+      "conclusion": "success",
+      "databaseId": 113541112792,
+      "name": "Tests (testing)",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:33Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:03Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:05Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 3,
+          "startedAt": "2026-10-08T21:06:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:08Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 5,
+          "startedAt": "2026-10-08T21:07:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "skipped",
+          "name": "Save Vite Task cache",
+          "number": 6,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 10,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 11,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:36Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 12,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:36Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-10-08T21:08:36Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112792"
+    },
+    {
+      "completedAt": "2026-10-08T21:07:12Z",
+      "conclusion": "success",
+      "databaseId": 113541112796,
+      "name": "Tests (context-continuity)",
+      "startedAt": "2026-10-08T21:05:32Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:34Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:35Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:16Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:10Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:10Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:07:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:10Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:07:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:11Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:07:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:11Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:07:11Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112796"
+    },
+    {
+      "completedAt": "2026-10-08T21:07:40Z",
+      "conclusion": "success",
+      "databaseId": 113541112810,
+      "name": "Tests (platform-node)",
+      "startedAt": "2026-10-08T21:05:32Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:33Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:35Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:24Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:36Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:37Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:07:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:37Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:07:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:38Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:07:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:38Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:07:38Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112810"
+    },
+    {
+      "completedAt": "2026-10-08T21:06:47Z",
+      "conclusion": "success",
+      "databaseId": 113541112823,
+      "name": "Tests (travel-planner)",
+      "startedAt": "2026-10-08T21:05:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:33Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:34Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:21Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:38Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:39Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:06:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:39Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:06:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:40Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:06:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:40Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:06:40Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112823"
+    },
+    {
+      "completedAt": "2026-10-08T21:08:38Z",
+      "conclusion": "success",
+      "databaseId": 113541112910,
+      "name": "Tests (platform-cloudflare)",
+      "startedAt": "2026-10-08T21:05:40Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:05:42Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:05:43Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-08T21:05:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:23Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 3,
+          "startedAt": "2026-10-08T21:05:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Save Vite Task cache",
+          "number": 5,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 9,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:35Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-08T21:08:35Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112910"
+    },
+    {
+      "completedAt": "2026-10-08T21:08:21Z",
+      "conclusion": "success",
+      "databaseId": 113541112913,
+      "name": "Tests (storage-postgres-18)",
+      "startedAt": "2026-10-08T21:05:59Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:06:01Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:05:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:27Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-10-08T21:06:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:06:29Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 3,
+          "startedAt": "2026-10-08T21:06:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:07:29Z",
+          "conclusion": "success",
+          "name": "Set up CI",
+          "number": 4,
+          "startedAt": "2026-10-08T21:06:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:06Z",
+          "conclusion": "success",
+          "name": "Run workspace test suites",
+          "number": 5,
+          "startedAt": "2026-10-08T21:07:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:06Z",
+          "conclusion": "skipped",
+          "name": "Save Vite Task cache",
+          "number": 6,
+          "startedAt": "2026-10-08T21:08:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:06Z",
+          "conclusion": "success",
+          "name": "Post Set up CI",
+          "number": 10,
+          "startedAt": "2026-10-08T21:08:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:06Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 11,
+          "startedAt": "2026-10-08T21:08:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:07Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 12,
+          "startedAt": "2026-10-08T21:08:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:08:07Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-10-08T21:08:07Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541112913"
+    },
+    {
+      "completedAt": "2026-10-08T21:05:27Z",
+      "conclusion": "skipped",
+      "databaseId": 113541113289,
+      "name": "Verify release equivalence",
+      "startedAt": "2026-10-08T21:05:28Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541113289"
+    },
+    {
+      "completedAt": "2026-10-08T21:05:27Z",
+      "conclusion": "skipped",
+      "databaseId": 113541113698,
+      "name": "Release gates",
+      "startedAt": "2026-10-08T21:05:28Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541113698"
+    },
+    {
+      "completedAt": "2026-10-08T21:05:27Z",
+      "conclusion": "skipped",
+      "databaseId": 113541113913,
+      "name": "Build docs",
+      "startedAt": "2026-10-08T21:05:28Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113541113913"
+    },
+    {
+      "completedAt": "2026-10-08T21:09:48Z",
+      "conclusion": "success",
+      "databaseId": 113542845390,
+      "name": "ready",
+      "startedAt": "2026-10-08T21:09:45Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-08T21:09:46Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-08T21:09:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:46Z",
+          "conclusion": "success",
+          "name": "Verify all required gates passed",
+          "number": 2,
+          "startedAt": "2026-10-08T21:09:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:46Z",
+          "conclusion": "skipped",
+          "name": "Verify release gates passed",
+          "number": 3,
+          "startedAt": "2026-10-08T21:09:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-08T21:09:46Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 4,
+          "startedAt": "2026-10-08T21:09:46Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113542845390"
+    },
+    {
+      "completedAt": "2026-10-08T21:09:42Z",
+      "conclusion": "skipped",
+      "databaseId": 113542847308,
+      "name": "Publish Action",
+      "startedAt": "2026-10-08T21:09:43Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228/job/113542847308"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228",
+  "workflowName": "CI"
+}

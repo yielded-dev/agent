@@ -1,0 +1,18 @@
+{
+  "observedAt": "2026-10-08T21:09:28.949Z",
+  "kind": "local-controller-filesystem-interruption",
+  "error": "ENOENT while appending response/error evidence; checkout later accessible again",
+  "causeEstablished": false,
+  "unmatched": {
+    "object": "wake-defer-221f58cd-ab-h250-d0-o5",
+    "sample": "m1",
+    "phase": "warmup",
+    "variant": "candidate",
+    "startedAt": 1791493767396
+  },
+  "completedObjectsBeforeInterruption": 4,
+  "retiredObject": "wake-defer-221f58cd-ab-h250-d0-o5",
+  "reason": "Checkout temporarily unavailable during warmup m1; unmatched request retained, no measured pairs attempted; do not replay",
+  "originalPlanSha256": "cb37882a06ae842f71d100fa9704d7f314317b93a7463ec351020b27b7e902f4",
+  "stableEvidenceDirectory": "/private/tmp/wake-defer-evidence-lCEt0Q/evidence/"
+}

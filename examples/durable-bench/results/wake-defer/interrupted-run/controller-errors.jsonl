@@ -1,0 +1,5 @@
+{"action":"deploy-ab","at":1791491937654,"message":"Error: Uploaded module differs from exact archived bytes"}
+{"action":"deploy-ab","at":1791492206887,"message":"Error: Cloudflare workers/workers/[sha256:032648ef2c0f7d96bc6b76173c568d3150902e64d6ad12c2d1b83491aefddfb8]/versions/[sha256:8801250f9519f35f72155d99f67386a9eb7ad669027be5b4de58404faf89065a]: 500 non-JSON gateway response; ray a477fa52ff5b26d3-SJC"}
+{"action":"deploy-ab","at":1791492235562,"message":"Error: Cloudflare workers/workers/[sha256:032648ef2c0f7d96bc6b76173c568d3150902e64d6ad12c2d1b83491aefddfb8]/versions/[sha256:8801250f9519f35f72155d99f67386a9eb7ad669027be5b4de58404faf89065a]: 500 non-JSON gateway response; ray a477fb072b97f378-SJC"}
+{"action":"deploy-ab","at":1791492348422,"message":"Error: Targeted driver placement not confirmed by Cloudflare settings"}
+{"action":"seed","at":1791492453088,"message":"Error: Worker driver /seed returned 404"}

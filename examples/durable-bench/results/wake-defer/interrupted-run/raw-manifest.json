@@ -1,0 +1,26 @@
+{
+  "scope": "Surviving interrupted-run evidence; separate from the primary r2 comparison",
+  "files": [
+    {
+      "file": "analysis.json.gz",
+      "rawSha256": "52c87126ad495b5f886c42ff0778bff591f13f2f2a893d865e097183bfdaad0d",
+      "rawBytes": 5848824,
+      "gzipSha256": "8eac9e821f543cb4e760cd509ad113fe95d492d2c3009b202f6a85078ace198d",
+      "gzipBytes": 365115
+    },
+    {
+      "file": "attempted.jsonl.gz",
+      "rawSha256": "03373ce6f37fde5a32fd291221ba4609e5ce92bb0ff953493986ddcea2795c82",
+      "rawBytes": 213570,
+      "gzipSha256": "6344fa0a3fd2f151bb4c4401bd9d78a49964d89a16165dfdabc3fabb43d5b029",
+      "gzipBytes": 8722
+    },
+    {
+      "file": "requests.jsonl.gz",
+      "rawSha256": "f657a2dd0c313fe2c4f91597230e8424509233cb39dc133148bf715eea28119b",
+      "rawBytes": 22795782,
+      "gzipSha256": "0b0d083146994e53100c212e5fe9355fc8fc5507d56a6b0854144f83b299ca68",
+      "gzipBytes": 898408
+    }
+  ]
+}

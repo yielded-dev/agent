@@ -1,0 +1,3034 @@
+{
+  "kind": "deterministic-counts-only; local timings are not evidence",
+  "baseline": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "turns": [
+    {
+      "events": [
+        {
+          "event": "notifyLocal",
+          "phase": "submit",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "submit",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "submit",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "UserInputRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "RunStarted",
+            "RunContextRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "23",
+          "nonterminal": 0
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "25",
+          "nonterminal": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 1,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "26",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "28",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "30",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 1,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "31",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "RunCompleted"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "canonicalSettlement"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "settlementOrRecovery"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "process",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": -3
+        }
+      ],
+      "after": [
+        {
+          "event": "alarm:start",
+          "phase": "returned",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "returned",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "34",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "returned",
+          "alarms": 1,
+          "states": []
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 0,
+          "settled": 0,
+          "nonterminal": 0,
+          "alarm": "cleared"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "returned",
+          "alarms": 1
+        }
+      ]
+    },
+    {
+      "events": [
+        {
+          "event": "notifyLocal",
+          "phase": "submit",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "submit",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "submit",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "UserInputRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "RunStarted",
+            "RunContextRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "38",
+          "nonterminal": 0
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "40",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "42",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "44",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "46",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "RunCompleted"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "canonicalSettlement"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "settlementOrRecovery"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "process",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": 0
+        }
+      ],
+      "after": [
+        {
+          "event": "alarm:start",
+          "phase": "returned",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "returned",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "49",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "returned",
+          "alarms": 1,
+          "states": []
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 0,
+          "settled": 0,
+          "nonterminal": 0,
+          "alarm": "cleared"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "returned",
+          "alarms": 1
+        }
+      ]
+    },
+    {
+      "events": [
+        {
+          "event": "notifyLocal",
+          "phase": "submit",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "submit",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "submit",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "UserInputRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "RunStarted",
+            "RunContextRecorded"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "53",
+          "nonterminal": 0
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "55",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "57",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "59",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "ToolCallSettled"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "model:start",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "alarm:start",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "61",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 1,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "beginPass",
+          "phase": "process",
+          "alarms": 1,
+          "tag": "CaughtUp",
+          "generation": "",
+          "nonterminal": 1
+        },
+        {
+          "event": "recovery",
+          "phase": "process",
+          "alarms": 1,
+          "reports": [
+            {
+              "decision": "ResumeFromTurnBoundary",
+              "disposition": "deferred"
+            }
+          ],
+          "work": [
+            {
+              "disposition": "deferred"
+            }
+          ],
+          "blocked": 0
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 1,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 1,
+          "deferred": true
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "process",
+          "alarms": 1,
+          "states": [
+            "input-applied"
+          ]
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 2,
+          "settled": 0,
+          "nonterminal": 1,
+          "alarm": "rearmed"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "process",
+          "alarms": 1
+        },
+        {
+          "event": "model:end",
+          "phase": "process",
+          "alarms": 0
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "appendBatch",
+          "tags": [
+            "ModelResponseRecorded",
+            "RunCompleted"
+          ]
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "canonicalSettlement"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "progress"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "notifySite",
+          "phase": "process",
+          "alarms": 0,
+          "site": "settlementOrRecovery"
+        },
+        {
+          "event": "notifyLocal",
+          "phase": "process",
+          "alarms": 0,
+          "kind": "settlement"
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": true
+        },
+        {
+          "event": "claim",
+          "phase": "process",
+          "alarms": 0,
+          "claimed": false
+        },
+        {
+          "event": "scheduleNow",
+          "phase": "process",
+          "alarms": 0,
+          "deferred": false
+        },
+        {
+          "event": "armNow",
+          "phase": "process",
+          "alarms": 0,
+          "due": true,
+          "nextDelay": 0
+        }
+      ],
+      "after": [
+        {
+          "event": "alarm:start",
+          "phase": "returned",
+          "alarms": 1
+        },
+        {
+          "event": "beginPass",
+          "phase": "returned",
+          "alarms": 1,
+          "tag": "Actionable",
+          "generation": "64",
+          "nonterminal": 1
+        },
+        {
+          "event": "maintenanceScan",
+          "phase": "returned",
+          "alarms": 1,
+          "states": []
+        },
+        {
+          "event": "passReport",
+          "phase": "actionable",
+          "alarms": 1,
+          "recovered": 0,
+          "settled": 0,
+          "nonterminal": 0,
+          "alarm": "cleared"
+        },
+        {
+          "event": "alarm:end",
+          "phase": "returned",
+          "alarms": 1
+        }
+      ]
+    }
+  ]
+}

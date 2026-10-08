@@ -1,0 +1,62 @@
+{
+  "archivedAt": "2026-10-08T22:25:27.115Z",
+  "method": "gzip level 9; decompressed bytes verified identical before removing plain input",
+  "analysisSemanticSha256": "5eb5ec246a764dc4ab890f732db4cc908dc301c13373330d9d96f89c0ceeedf5",
+  "analysisSemanticExclusion": "generatedAt only",
+  "files": [
+    {
+      "path": "requests.jsonl",
+      "compressedPath": "requests.jsonl.gz",
+      "rawBytes": 143571378,
+      "rawSha256": "f0d67327d3bd5d4f89f31fdf5e25c13f1da4dfcc644b883b9fa1c0f1048355b0",
+      "compressedBytes": 5616034,
+      "compressedSha256": "11136ec5f3cebc283d42a38c556918d3f28bc47ab903990487f9830c6653eb85"
+    },
+    {
+      "path": "attempted.jsonl",
+      "compressedPath": "attempted.jsonl.gz",
+      "rawBytes": 481830,
+      "rawSha256": "9e2f7ebb0d68ac3cbf138077333b79574e9a9c9e306deab501ba7a32c0aa68b2",
+      "compressedBytes": 17755,
+      "compressedSha256": "9f21d1c94357d671783ad726c8634f242e7cb3ec8d9a2045bc4c65849c538abd"
+    },
+    {
+      "path": "telemetry-provider.json",
+      "compressedPath": "telemetry-provider.json.gz",
+      "rawBytes": 25469805,
+      "rawSha256": "978d24e8590ace026cf7c9797494aa75fb5ddf85ce8bdc3d7cc8f334a25a7cbf",
+      "compressedBytes": 1782960,
+      "compressedSha256": "7f75cbe21a58a44d000b8238a851cea433bd0b4df4749a66b85eeeab6bdc7f51"
+    },
+    {
+      "path": "telemetry-network.json",
+      "compressedPath": "telemetry-network.json.gz",
+      "rawBytes": 85808049,
+      "rawSha256": "4caf3f4b632e768678e4cd8de1745823bba706f7cea21b92ea51007af0bb2eef",
+      "compressedBytes": 5364905,
+      "compressedSha256": "b9f2af93132adaf9fc6535981c97052a1018a4a977a3514606281a5a9eaadfda"
+    },
+    {
+      "path": "telemetry-driver.json",
+      "compressedPath": "telemetry-driver.json.gz",
+      "rawBytes": 10263142,
+      "rawSha256": "3ba54de62e0e76fa5725cbd094472da5381f3320fd7ad2671535c635e2e49758",
+      "compressedBytes": 669273,
+      "compressedSha256": "2aa28af49e5c83a621d1b59f86409fe9ad1042d8c3a246b42555ecf9326e7b8c"
+    },
+    {
+      "path": "analysis.json",
+      "compressedPath": "analysis.json.gz",
+      "rawBytes": 36313207,
+      "rawSha256": "c9d765ba3d27cf408f06643461ac200a76e8ab6e024ac0ff7fc47d97d9b37292",
+      "compressedBytes": 2723297,
+      "compressedSha256": "fb575ff64fd96debcb9cbdbaf875ffa451ce084c21e6a8de429213d6f4edf821"
+    }
+  ],
+  "otherManifests": [
+    "interrupted-run/raw-manifest.json",
+    "local-counts/provenance.json",
+    "build-identities/all.json",
+    "alchemy/raw-manifest.json"
+  ]
+}

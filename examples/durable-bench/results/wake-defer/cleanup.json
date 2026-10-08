@@ -1,0 +1,35 @@
+{
+  "complete": true,
+  "resourcesVerified": true,
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "checkedAt": "2026-10-08T22:22:43.386Z",
+  "checks": [
+    {
+      "worker": "wake-defer-221f58cd-driver",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T22:22:35.578Z"
+    },
+    {
+      "worker": "wake-defer-221f58cd-network",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T22:22:37.930Z"
+    },
+    {
+      "worker": "wake-defer-221f58cd-provider",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T22:22:40.251Z"
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "errors": [],
+  "finalTelemetryTailCollected": true,
+  "secretScanPassed": true,
+  "secretStateRemoved": true
+}

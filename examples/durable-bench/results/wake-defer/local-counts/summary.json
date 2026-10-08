@@ -1,0 +1,2318 @@
+{
+  "before": [
+    {
+      "turn": 0,
+      "counts": {
+        "notifyLocal": 23,
+        "scheduleNow": 23,
+        "armNow": 14,
+        "claim": 11,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 9,
+        "beginPass": 19,
+        "maintenanceScan": 27,
+        "recovery": 18,
+        "passReport": 9,
+        "alarm:end": 9,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 14,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 2,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 4,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 5,
+          "afterModelRequests": 5,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 6,
+          "afterModelRequests": 6,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 7,
+          "afterModelRequests": 7,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 8,
+          "afterModelRequests": 8,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 9,
+          "afterModelRequests": 9,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    },
+    {
+      "turn": 1,
+      "counts": {
+        "notifyLocal": 23,
+        "scheduleNow": 23,
+        "armNow": 14,
+        "claim": 11,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 9,
+        "beginPass": 19,
+        "maintenanceScan": 27,
+        "recovery": 18,
+        "passReport": 9,
+        "alarm:end": 9,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 14,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 2,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 4,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 5,
+          "afterModelRequests": 5,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 6,
+          "afterModelRequests": 6,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 7,
+          "afterModelRequests": 7,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 8,
+          "afterModelRequests": 8,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 9,
+          "afterModelRequests": 9,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    },
+    {
+      "turn": 2,
+      "counts": {
+        "notifyLocal": 23,
+        "scheduleNow": 23,
+        "armNow": 14,
+        "claim": 11,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 9,
+        "beginPass": 20,
+        "maintenanceScan": 27,
+        "recovery": 18,
+        "passReport": 9,
+        "alarm:end": 9,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 14,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 2,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 4,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 5,
+          "afterModelRequests": 5,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 6,
+          "afterModelRequests": 6,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 7,
+          "afterModelRequests": 7,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 8,
+          "afterModelRequests": 8,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 9,
+          "afterModelRequests": 9,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    }
+  ],
+  "after": [
+    {
+      "turn": 0,
+      "counts": {
+        "notifyLocal": 18,
+        "scheduleNow": 23,
+        "armNow": 2,
+        "claim": 6,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 4,
+        "beginPass": 10,
+        "maintenanceScan": 14,
+        "recovery": 8,
+        "passReport": 4,
+        "alarm:end": 4,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 2,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "Actionable"
+          ],
+          "scans": 4,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 6,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 8,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp",
+            "Actionable"
+          ],
+          "scans": 4,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    },
+    {
+      "turn": 1,
+      "counts": {
+        "notifyLocal": 19,
+        "scheduleNow": 25,
+        "armNow": 2,
+        "claim": 7,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 5,
+        "beginPass": 10,
+        "maintenanceScan": 15,
+        "recovery": 10,
+        "passReport": 5,
+        "alarm:end": 5,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 2,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 5,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 7,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 5,
+          "afterModelRequests": 9,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    },
+    {
+      "turn": 2,
+      "counts": {
+        "notifyLocal": 19,
+        "scheduleNow": 25,
+        "armNow": 2,
+        "claim": 7,
+        "notifySite": 13,
+        "model:start": 9,
+        "alarm:start": 5,
+        "beginPass": 11,
+        "maintenanceScan": 15,
+        "recovery": 10,
+        "passReport": 5,
+        "alarm:end": 5,
+        "model:end": 9
+      },
+      "nondeferredScheduleNow": 2,
+      "alarms": [
+        {
+          "ordinal": 1,
+          "afterModelRequests": 1,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "afterModelRequests": 3,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "afterModelRequests": 5,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 4,
+          "afterModelRequests": 7,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        },
+        {
+          "ordinal": 5,
+          "afterModelRequests": 9,
+          "modelPending": true,
+          "completedWithinTurn": true,
+          "begins": [
+            "Actionable",
+            "CaughtUp"
+          ],
+          "scans": 3,
+          "recovery": [
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            },
+            {
+              "reports": [
+                {
+                  "decision": "ResumeFromTurnBoundary",
+                  "disposition": "deferred"
+                }
+              ],
+              "work": [
+                {
+                  "disposition": "deferred"
+                }
+              ],
+              "blocked": 0
+            }
+          ],
+          "claims": [
+            false
+          ],
+          "reports": [
+            {
+              "phase": "actionable",
+              "recovered": 2,
+              "settled": 0,
+              "nonterminal": 1,
+              "alarm": "rearmed"
+            }
+          ]
+        }
+      ],
+      "trailingAlarmStarts": 1
+    }
+  ]
+}

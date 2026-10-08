@@ -1,0 +1,7374 @@
+{
+  "status": "partial; no complete-matrix claim",
+  "sourceGeneratedAt": "2026-10-08T22:23:00.266Z",
+  "method": "Two repeats per arm reduce to one median per Object and temperature. Each reported metric uses only Objects with both arm medians known. Positive delta is baseline minus candidate. Repeat columns are absolute differences between the two repeats; the conservative positive-effect flag additionally requires every paired effect positive and the median larger than the largest observed within-arm repeat difference. This is descriptive, not a confidence interval.",
+  "coverage": {
+    "turns": 224,
+    "validTranscripts": 224,
+    "providerStreamReceipts": 2016,
+    "matchedFingerprints": 2016,
+    "matchedProviderLogs": 1986,
+    "coldVerified": 108,
+    "mainCpuReceipts": 221,
+    "alarmCountReceipts": 224,
+    "observedAlarmOverlaps": 1502,
+    "observedAlarmStartsInside": 1502,
+    "sharedAlarmOverlapMemberships": 0,
+    "uniqueObservedAlarmIds": 1502,
+    "uniqueJoinedAlarmInvocations": 1462,
+    "joinedAlarmOverlaps": 1462,
+    "missingOrAmbiguousAlarmOverlaps": 40,
+    "completeAlarmJoins": 203,
+    "alarmCpuReceipts": 203,
+    "fullOverlapCpuReceipts": 203,
+    "mechanismReceipts": 224,
+    "driverPlacementReceipts": 224,
+    "driverIncomingPlacementReceipts": 0
+  },
+  "cells": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "mode": "warm",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 2308,
+            "min": 1159.5,
+            "q1": 2135.25,
+            "q3": 2787.5,
+            "max": 4470
+          },
+          "candidate": {
+            "n": 7,
+            "median": 1664,
+            "min": 1069.5,
+            "q1": 1311,
+            "q3": 1670.25,
+            "max": 1875
+          },
+          "delta": {
+            "n": 7,
+            "median": 910.5,
+            "min": 62,
+            "q1": 630,
+            "q3": 1192.25,
+            "max": 2595
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 637,
+            "min": 30,
+            "q1": 180.5,
+            "q3": 971,
+            "max": 986
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 205,
+            "min": 7,
+            "q1": 32.5,
+            "q3": 298.5,
+            "max": 492
+          },
+          "largestRepeatDifference": 986,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 2330.0135419999715,
+            "min": 1182.5632914999733,
+            "q1": 2158.43996850005,
+            "q3": 2819.521843750059,
+            "max": 4501.190520499949
+          },
+          "candidate": {
+            "n": 7,
+            "median": 1685.6865830000024,
+            "min": 1095.3320834999904,
+            "q1": 1334.5930312499404,
+            "q3": 1705.6708020000078,
+            "max": 1919.4712079999736
+          },
+          "delta": {
+            "n": 7,
+            "median": 920.8662080001086,
+            "min": 60.273374999989755,
+            "q1": 618.4933544999767,
+            "q3": 1194.4139165001106,
+            "max": 2581.719312499976
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 639.2807909999974,
+            "min": 7.586541000055149,
+            "q1": 181.15158399997745,
+            "q3": 972.3403335000039,
+            "max": 1007.5777920000255
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 237.72349899995606,
+            "min": 8.575416999869049,
+            "q1": 28.994083500059787,
+            "q3": 295.22708350000903,
+            "max": 526.6750000000466
+          },
+          "largestRepeatDifference": 1007.5777920000255,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 311,
+            "min": 161,
+            "q1": 272.5,
+            "q3": 333.25,
+            "max": 380.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 305,
+            "min": 220,
+            "q1": 274.25,
+            "q3": 319.25,
+            "max": 357
+          },
+          "delta": {
+            "n": 7,
+            "median": -2,
+            "min": -59,
+            "q1": -13.5,
+            "q3": 17.25,
+            "max": 48.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 20,
+            "min": 8,
+            "q1": 14,
+            "q3": 37.5,
+            "max": 123
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 46,
+            "min": 6,
+            "q1": 35.5,
+            "q3": 56.5,
+            "max": 130
+          },
+          "largestRepeatDifference": 130,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 188.5,
+            "min": 110.25,
+            "q1": 179,
+            "q3": 285.875,
+            "max": 450
+          },
+          "candidate": {
+            "n": 7,
+            "median": 94.5,
+            "min": 71.5,
+            "q1": 87.125,
+            "q3": 135.25,
+            "max": 146.75
+          },
+          "delta": {
+            "n": 7,
+            "median": 93.25,
+            "min": 15.75,
+            "q1": 70.75,
+            "q3": 153.25,
+            "max": 364
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 33.5,
+            "min": 0,
+            "q1": 15.25,
+            "q3": 162.5,
+            "max": 252
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 18.5,
+            "min": 6,
+            "q1": 11.75,
+            "q3": 33,
+            "max": 123
+          },
+          "largestRepeatDifference": 252,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 1679,
+            "min": 916.5,
+            "q1": 1530.25,
+            "q3": 2099.75,
+            "max": 3609.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 949.5,
+            "min": 666.5,
+            "q1": 876,
+            "q3": 1117.25,
+            "max": 1208.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 749.5,
+            "min": 108.5,
+            "q1": 652,
+            "q3": 1045.5,
+            "max": 2401
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 660,
+            "min": 17,
+            "q1": 170.5,
+            "q3": 970.5,
+            "max": 1119
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 65,
+            "min": 3,
+            "q1": 28.5,
+            "q3": 126.5,
+            "max": 624
+          },
+          "largestRepeatDifference": 1119,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.25,
+            "max": 8
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 13.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -11,
+            "q1": 0,
+            "q3": 0,
+            "max": 8
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 2.5,
+            "max": 16
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 27
+          },
+          "largestRepeatDifference": 27,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 476,
+            "min": 363.5,
+            "q1": 397.5,
+            "q3": 496.5,
+            "max": 533.5
+          },
+          "candidate": {
+            "n": 5,
+            "median": 442,
+            "min": 393.5,
+            "q1": 400.5,
+            "q3": 445,
+            "max": 553.5
+          },
+          "delta": {
+            "n": 5,
+            "median": 4,
+            "min": -78.5,
+            "q1": -20,
+            "q3": 51.5,
+            "max": 75.5
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 177,
+            "min": 11,
+            "q1": 85,
+            "q3": 217,
+            "max": 234
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 56,
+            "min": 5,
+            "q1": 30,
+            "q3": 119,
+            "max": 137
+          },
+          "largestRepeatDifference": 234,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 476,
+            "min": 363.5,
+            "q1": 397.5,
+            "q3": 496.5,
+            "max": 533.5
+          },
+          "candidate": {
+            "n": 5,
+            "median": 415,
+            "min": 384.5,
+            "q1": 393.5,
+            "q3": 445,
+            "max": 553.5
+          },
+          "delta": {
+            "n": 5,
+            "median": 4,
+            "min": -51.5,
+            "q1": -20,
+            "q3": 51.5,
+            "max": 91.5
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 177,
+            "min": 11,
+            "q1": 85,
+            "q3": 217,
+            "max": 234
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 110,
+            "min": 5,
+            "q1": 30,
+            "q3": 137,
+            "max": 151
+          },
+          "largestRepeatDifference": 234,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 16,
+            "max": 27
+          },
+          "delta": {
+            "n": 5,
+            "median": 0,
+            "min": -27,
+            "q1": -16,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 32,
+            "max": 54
+          },
+          "largestRepeatDifference": 54,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 70,
+            "min": 60.5,
+            "q1": 63.375,
+            "q3": 77,
+            "max": 607.5
+          },
+          "candidate": {
+            "n": 6,
+            "median": 73.5,
+            "min": 51,
+            "q1": 56.875,
+            "q3": 93.125,
+            "max": 118
+          },
+          "delta": {
+            "n": 6,
+            "median": 8.5,
+            "min": -20,
+            "q1": -12.125,
+            "q3": 12.625,
+            "max": 489.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 11,
+            "min": 5,
+            "q1": 7.75,
+            "q3": 13.5,
+            "max": 113
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 17,
+            "min": 9,
+            "q1": 16,
+            "q3": 40.5,
+            "max": 57
+          },
+          "largestRepeatDifference": 113,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 20.5,
+            "min": 15.5,
+            "q1": 20.5,
+            "q3": 21.5,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 25,
+            "min": 19,
+            "q1": 24.75,
+            "q3": 25.75,
+            "max": 26
+          },
+          "delta": {
+            "n": 7,
+            "median": -4.5,
+            "min": -5.5,
+            "q1": -4.75,
+            "q3": -3.25,
+            "max": -2
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 1,
+            "q3": 3,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 2
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 12.5,
+            "min": 10.5,
+            "q1": 12,
+            "q3": 12.75,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 1.5,
+            "q1": 1.75,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 10.5,
+            "min": 8.5,
+            "q1": 10.25,
+            "q3": 11,
+            "max": 12
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0.5,
+            "q3": 1.5,
+            "max": 2
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6.5,
+            "min": 1.5,
+            "q1": 6.5,
+            "q3": 7.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 2,
+            "q1": 5,
+            "q3": 5.5,
+            "max": 5.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": -0.5,
+            "q1": 1,
+            "q3": 2.25,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 1,
+            "q3": 3,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 1
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6.5,
+            "min": 1.5,
+            "q1": 6.5,
+            "q3": 7.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 2,
+            "q1": 5,
+            "q3": 5.5,
+            "max": 5.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": -0.5,
+            "q1": 1,
+            "q3": 2.25,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 1,
+            "q3": 3,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 1
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 32,
+            "min": 13,
+            "q1": 31.5,
+            "q3": 34.5,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 21.5,
+            "min": 14,
+            "q1": 21.25,
+            "q3": 23.5,
+            "max": 25.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 10,
+            "min": -1,
+            "q1": 7.25,
+            "q3": 12.25,
+            "max": 16.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 6,
+            "min": 0,
+            "q1": 3,
+            "q3": 8,
+            "max": 10
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 3,
+            "min": 2,
+            "q1": 2,
+            "q3": 3.5,
+            "max": 5
+          },
+          "largestRepeatDifference": 10,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6.5,
+            "min": 1.5,
+            "q1": 6.5,
+            "q3": 7.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 2,
+            "q1": 4.75,
+            "q3": 5.25,
+            "max": 5.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": -0.5,
+            "q1": 1.25,
+            "q3": 2.5,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 1,
+            "q3": 3,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 1
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 7.5,
+            "min": 2.5,
+            "q1": 7.5,
+            "q3": 8.5,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 6,
+            "min": 3,
+            "q1": 5.75,
+            "q3": 6.25,
+            "max": 6.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": -0.5,
+            "q1": 1.25,
+            "q3": 2.5,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 1,
+            "q3": 3,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 1
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 252,
+          "coldVerified": 0,
+          "mainCpuReceipts": 27,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 157,
+          "observedAlarmStartsInside": 157,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 157,
+          "uniqueJoinedAlarmInvocations": 153,
+          "joinedAlarmOverlaps": 153,
+          "missingOrAmbiguousAlarmOverlaps": 4,
+          "completeAlarmJoins": 25,
+          "alarmCpuReceipts": 25,
+          "fullOverlapCpuReceipts": 25,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 252,
+          "coldVerified": 0,
+          "mainCpuReceipts": 27,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 157,
+          "observedAlarmStartsInside": 157,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 157,
+          "uniqueJoinedAlarmInvocations": 153,
+          "joinedAlarmOverlaps": 153,
+          "missingOrAmbiguousAlarmOverlaps": 4,
+          "completeAlarmJoins": 25,
+          "alarmCpuReceipts": 25,
+          "fullOverlapCpuReceipts": 25,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "mode": "cold",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 3170.5,
+            "min": 1828.5,
+            "q1": 2526.75,
+            "q3": 3381.5,
+            "max": 4785.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 1898,
+            "min": 1491,
+            "q1": 1819.5,
+            "q3": 2221,
+            "max": 2608.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 939,
+            "min": 47.5,
+            "q1": 676,
+            "q3": 1503.5,
+            "max": 2177
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 118,
+            "min": 9,
+            "q1": 35.5,
+            "q3": 450,
+            "max": 992
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 250,
+            "min": 4,
+            "q1": 176,
+            "q3": 435.5,
+            "max": 856
+          },
+          "largestRepeatDifference": 992,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 3204.35206200002,
+            "min": 1852.7315420000814,
+            "q1": 2556.1166877499927,
+            "q3": 3404.969145750074,
+            "max": 4810.278500000015
+          },
+          "candidate": {
+            "n": 7,
+            "median": 1921.6772290000226,
+            "min": 1520.9392290000105,
+            "q1": 1842.8076042500325,
+            "q3": 2245.9264480000184,
+            "max": 2628.916229500028
+          },
+          "delta": {
+            "n": 7,
+            "median": 941.5574375000033,
+            "min": 45.758499999996275,
+            "q1": 681.1179374999774,
+            "q3": 1504.8094480000727,
+            "max": 2181.362270499987
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 108.8840840000048,
+            "min": 13.952334000030532,
+            "q1": 34.80233299988322,
+            "q3": 445.60677050001686,
+            "max": 991.7524990000529
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 251.8064580000937,
+            "min": 3.696332999970764,
+            "q1": 177.0513745000353,
+            "q3": 432.0381664999877,
+            "max": 847.7026249999981
+          },
+          "largestRepeatDifference": 991.7524990000529,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 636.5,
+            "min": 532.5,
+            "q1": 613.25,
+            "q3": 646.75,
+            "max": 661
+          },
+          "candidate": {
+            "n": 7,
+            "median": 628,
+            "min": 504.5,
+            "q1": 567.5,
+            "q3": 707.25,
+            "max": 871
+          },
+          "delta": {
+            "n": 7,
+            "median": -9,
+            "min": -217,
+            "q1": -81,
+            "q3": 41.5,
+            "max": 102
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 65,
+            "min": 10,
+            "q1": 40,
+            "q3": 76.5,
+            "max": 166
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 69,
+            "min": 16,
+            "q1": 54,
+            "q3": 165.5,
+            "max": 382
+          },
+          "largestRepeatDifference": 382,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 278.25,
+            "min": 137.5,
+            "q1": 210.5,
+            "q3": 325.625,
+            "max": 451
+          },
+          "candidate": {
+            "n": 7,
+            "median": 144,
+            "min": 101.25,
+            "q1": 122.75,
+            "q3": 171.375,
+            "max": 205.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 127,
+            "min": 19.75,
+            "q1": 72.375,
+            "q3": 162.625,
+            "max": 283.25
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 13,
+            "min": 0.5,
+            "q1": 5.75,
+            "q3": 43.5,
+            "max": 87
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 28.5,
+            "min": 0,
+            "q1": 6.25,
+            "q3": 87.75,
+            "max": 156.5
+          },
+          "largestRepeatDifference": 156.5,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 2130.5,
+            "min": 1085.5,
+            "q1": 1634.25,
+            "q3": 2504.25,
+            "max": 3625.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 1100.5,
+            "min": 826.5,
+            "q1": 1034.75,
+            "q3": 1303.25,
+            "max": 1498
+          },
+          "delta": {
+            "n": 7,
+            "median": 1025,
+            "min": 104,
+            "q1": 488.5,
+            "q3": 1392,
+            "max": 2127.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 189,
+            "min": 5,
+            "q1": 20.5,
+            "q3": 412.5,
+            "max": 841
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 255,
+            "min": 41,
+            "q1": 46.5,
+            "q3": 324.5,
+            "max": 478
+          },
+          "largestRepeatDifference": 841,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 33
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 14
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 19
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 26
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 6
+          },
+          "largestRepeatDifference": 26,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 417,
+            "min": 370.5,
+            "q1": 409.5,
+            "q3": 421,
+            "max": 454.5
+          },
+          "candidate": {
+            "n": 5,
+            "median": 424.5,
+            "min": 377.5,
+            "q1": 414.5,
+            "q3": 449.5,
+            "max": 467
+          },
+          "delta": {
+            "n": 5,
+            "median": -32.5,
+            "min": -57.5,
+            "q1": -54,
+            "q3": 40,
+            "max": 43.5
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 65,
+            "min": 37,
+            "q1": 58,
+            "q3": 153,
+            "max": 228
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 39,
+            "min": 7,
+            "q1": 9,
+            "q3": 68,
+            "max": 99
+          },
+          "largestRepeatDifference": 228,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 417,
+            "min": 370.5,
+            "q1": 409.5,
+            "q3": 421,
+            "max": 434.5
+          },
+          "candidate": {
+            "n": 5,
+            "median": 424.5,
+            "min": 360.5,
+            "q1": 414.5,
+            "q3": 449.5,
+            "max": 449.5
+          },
+          "delta": {
+            "n": 5,
+            "median": -32.5,
+            "min": -54,
+            "q1": -40,
+            "q3": 20,
+            "max": 60.5
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 65,
+            "min": 37,
+            "q1": 58,
+            "q3": 113,
+            "max": 228
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 39,
+            "min": 7,
+            "q1": 33,
+            "q3": 43,
+            "max": 99
+          },
+          "largestRepeatDifference": 228,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 20
+          },
+          "candidate": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 17,
+            "max": 17.5
+          },
+          "delta": {
+            "n": 5,
+            "median": 0,
+            "min": -17.5,
+            "q1": -17,
+            "q3": 0,
+            "max": 20
+          },
+          "baselineRepeat": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 40
+          },
+          "candidateRepeat": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 34,
+            "max": 35
+          },
+          "largestRepeatDifference": 40,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 105.5,
+            "min": 70,
+            "q1": 81.75,
+            "q3": 130.25,
+            "max": 381.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 104,
+            "min": 75,
+            "q1": 96,
+            "q3": 113.25,
+            "max": 200
+          },
+          "delta": {
+            "n": 7,
+            "median": -4,
+            "min": -27,
+            "q1": -15.5,
+            "q3": 32,
+            "max": 181.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 9,
+            "min": 2,
+            "q1": 3.5,
+            "q3": 62.5,
+            "max": 413
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 22,
+            "min": 4,
+            "q1": 11.5,
+            "q3": 53,
+            "max": 98
+          },
+          "largestRepeatDifference": 413,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 21,
+            "min": 19.5,
+            "q1": 20.5,
+            "q3": 22.5,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 25,
+            "min": 24,
+            "q1": 25,
+            "q3": 25.75,
+            "max": 27.5
+          },
+          "delta": {
+            "n": 7,
+            "median": -4,
+            "min": -6.5,
+            "q1": -5.5,
+            "q3": -3,
+            "max": -1
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 6
+          },
+          "largestRepeatDifference": 6,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 12.5,
+            "min": 11,
+            "q1": 11,
+            "q3": 13.5,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 1.5,
+            "q1": 1.5,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 11,
+            "min": 9,
+            "q1": 9.25,
+            "q3": 11.5,
+            "max": 12.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0,
+            "q3": 3,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 1
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 7,
+            "min": 5.5,
+            "q1": 6.5,
+            "q3": 8.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 5,
+            "q1": 5,
+            "q3": 5.5,
+            "max": 6.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 2,
+            "min": 0.5,
+            "q1": 0.5,
+            "q3": 3.25,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 2
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 7,
+            "min": 5.5,
+            "q1": 6.5,
+            "q3": 8.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 5,
+            "q1": 5,
+            "q3": 5.5,
+            "max": 6.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 2,
+            "min": 0.5,
+            "q1": 0.5,
+            "q3": 3.25,
+            "max": 4
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 1,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 2
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 33,
+            "min": 30,
+            "q1": 32,
+            "q3": 37,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 24.5,
+            "min": 21,
+            "q1": 23.25,
+            "q3": 25.25,
+            "max": 26
+          },
+          "delta": {
+            "n": 7,
+            "median": 9,
+            "min": 4,
+            "q1": 7.5,
+            "q3": 12.75,
+            "max": 17
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 5,
+            "max": 8
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 3,
+            "min": 0,
+            "q1": 0.5,
+            "q3": 3.5,
+            "max": 12
+          },
+          "largestRepeatDifference": 12,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 7,
+            "min": 5.5,
+            "q1": 6.25,
+            "q3": 8.5,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5,
+            "min": 4.5,
+            "q1": 5,
+            "q3": 5.25,
+            "max": 6
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": 0.5,
+            "q1": 1,
+            "q3": 3.25,
+            "max": 4.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 2,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 3
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 8,
+            "min": 6.5,
+            "q1": 7.25,
+            "q3": 9.5,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 6,
+            "min": 5.5,
+            "q1": 6,
+            "q3": 6.25,
+            "max": 7
+          },
+          "delta": {
+            "n": 7,
+            "median": 1.5,
+            "min": 0.5,
+            "q1": 1,
+            "q3": 3.25,
+            "max": 4.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 2,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 3
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 249,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 178,
+          "observedAlarmStartsInside": 178,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 178,
+          "uniqueJoinedAlarmInvocations": 174,
+          "joinedAlarmOverlaps": 174,
+          "missingOrAmbiguousAlarmOverlaps": 4,
+          "completeAlarmJoins": 26,
+          "alarmCpuReceipts": 26,
+          "fullOverlapCpuReceipts": 26,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 249,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 178,
+          "observedAlarmStartsInside": 178,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 178,
+          "uniqueJoinedAlarmInvocations": 174,
+          "joinedAlarmOverlaps": 174,
+          "missingOrAmbiguousAlarmOverlaps": 4,
+          "completeAlarmJoins": 26,
+          "alarmCpuReceipts": 26,
+          "fullOverlapCpuReceipts": 26,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 400,
+      "mode": "warm",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6289.5,
+            "min": 5913,
+            "q1": 6242,
+            "q3": 6625.75,
+            "max": 6994.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5617.5,
+            "min": 5451,
+            "q1": 5543.75,
+            "q3": 5933.25,
+            "max": 6726.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 605,
+            "min": -111,
+            "q1": 455.25,
+            "q3": 807.5,
+            "max": 1164
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 61,
+            "min": 31,
+            "q1": 40.5,
+            "q3": 241,
+            "max": 430
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 88,
+            "min": 33,
+            "q1": 57.5,
+            "q3": 443.5,
+            "max": 1741
+          },
+          "largestRepeatDifference": 1741,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6315.74295799993,
+            "min": 5935.511916499992,
+            "q1": 6272.8789585000195,
+            "q3": 6656.331989750033,
+            "max": 7019.7398544999305
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5644.980770499969,
+            "min": 5494.381667000009,
+            "q1": 5570.205583000003,
+            "q3": 5956.049208500015,
+            "max": 6751.522021000041
+          },
+          "delta": {
+            "n": 7,
+            "median": 611.4838550000568,
+            "min": -102.77306249993853,
+            "q1": 455.5118959999527,
+            "q3": 799.3992289999442,
+            "max": 1167.489541499992
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 53.2115829999093,
+            "min": 32.24954099999741,
+            "q1": 35.85064649989363,
+            "q3": 247.3374584999401,
+            "max": 425.6731669999426
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 86.67200000002049,
+            "min": 33.286375000025146,
+            "q1": 60.28581250004936,
+            "q3": 444.2224795000511,
+            "max": 1743.096458000131
+          },
+          "largestRepeatDifference": 1743.096458000131,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 350.5,
+            "min": 295,
+            "q1": 318.5,
+            "q3": 402,
+            "max": 465.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 359.5,
+            "min": 308,
+            "q1": 336.75,
+            "q3": 435.25,
+            "max": 540
+          },
+          "delta": {
+            "n": 7,
+            "median": -23,
+            "min": -74.5,
+            "q1": -40,
+            "q3": -13.25,
+            "max": 4.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 16,
+            "min": 8,
+            "q1": 13.5,
+            "q3": 102.5,
+            "max": 166
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 40,
+            "min": 6,
+            "q1": 16.5,
+            "q3": 79,
+            "max": 262
+          },
+          "largestRepeatDifference": 262,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 192.25,
+            "min": 162.5,
+            "q1": 177.75,
+            "q3": 216.75,
+            "max": 270
+          },
+          "candidate": {
+            "n": 7,
+            "median": 104.5,
+            "min": 92.5,
+            "q1": 101.375,
+            "q3": 129.75,
+            "max": 161.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 85.75,
+            "min": 50.75,
+            "q1": 68.5,
+            "q3": 88,
+            "max": 143.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 2.5,
+            "min": 1.5,
+            "q1": 1.75,
+            "q3": 4,
+            "max": 38
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 7,
+            "min": 3.5,
+            "q1": 6,
+            "q3": 18,
+            "max": 62
+          },
+          "largestRepeatDifference": 62,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 1616,
+            "min": 1289,
+            "q1": 1519.25,
+            "q3": 1790.25,
+            "max": 2184.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 953.5,
+            "min": 809,
+            "q1": 863,
+            "q3": 1035.75,
+            "max": 1839.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 748,
+            "min": -59,
+            "q1": 448,
+            "q3": 779.5,
+            "max": 1165
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 94,
+            "min": 0,
+            "q1": 24.5,
+            "q3": 143,
+            "max": 220
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 73,
+            "min": 29,
+            "q1": 61.5,
+            "q3": 351.5,
+            "max": 1445
+          },
+          "largestRepeatDifference": 1445,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 901.75,
+            "min": 412.5,
+            "q1": 673.5,
+            "q3": 1046.875,
+            "max": 1058.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 1113.25,
+            "min": 594.5,
+            "q1": 980,
+            "q3": 1181,
+            "max": 1370
+          },
+          "delta": {
+            "n": 4,
+            "median": -246.75,
+            "min": -357.5,
+            "q1": -323,
+            "q3": -152.875,
+            "max": -65.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 79,
+            "min": 25,
+            "q1": 41.5,
+            "q3": 120.25,
+            "max": 148
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 78.5,
+            "min": 5,
+            "q1": 58.25,
+            "q3": 175.25,
+            "max": 458
+          },
+          "largestRepeatDifference": 458,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 901.75,
+            "min": 412.5,
+            "q1": 673.5,
+            "q3": 1046.875,
+            "max": 1058.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 1113.25,
+            "min": 594.5,
+            "q1": 980,
+            "q3": 1181,
+            "max": 1370
+          },
+          "delta": {
+            "n": 4,
+            "median": -246.75,
+            "min": -357.5,
+            "q1": -323,
+            "q3": -152.875,
+            "max": -65.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 79,
+            "min": 25,
+            "q1": 41.5,
+            "q3": 120.25,
+            "max": 148
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 78.5,
+            "min": 5,
+            "q1": 58.25,
+            "q3": 175.25,
+            "max": 458
+          },
+          "largestRepeatDifference": 458,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 87.75,
+            "min": 65.5,
+            "q1": 66.5,
+            "q3": 115,
+            "max": 161.5
+          },
+          "candidate": {
+            "n": 6,
+            "median": 115.5,
+            "min": 62,
+            "q1": 87.5,
+            "q3": 167.5,
+            "max": 202
+          },
+          "delta": {
+            "n": 6,
+            "median": -19.75,
+            "min": -96,
+            "q1": -23,
+            "q3": -16.875,
+            "max": 3.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 5,
+            "min": 3,
+            "q1": 4.25,
+            "q3": 19.25,
+            "max": 57
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 14,
+            "min": 0,
+            "q1": 4,
+            "q3": 21,
+            "max": 52
+          },
+          "largestRepeatDifference": 57,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 23,
+            "min": 22.5,
+            "q1": 23,
+            "q3": 23,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 33,
+            "min": 33,
+            "q1": 33,
+            "q3": 33,
+            "max": 33
+          },
+          "delta": {
+            "n": 7,
+            "median": -10,
+            "min": -10.5,
+            "q1": -10,
+            "q3": -10,
+            "max": -10
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 14,
+            "min": 13.5,
+            "q1": 14,
+            "q3": 14,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 2,
+            "q1": 2,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 12,
+            "min": 11.5,
+            "q1": 12,
+            "q3": 12,
+            "max": 12
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8.5,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8.5,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 38,
+            "min": 37,
+            "q1": 38,
+            "q3": 38,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 30,
+            "min": 29.5,
+            "q1": 30,
+            "q3": 30,
+            "max": 30
+          },
+          "delta": {
+            "n": 7,
+            "median": 8,
+            "min": 7,
+            "q1": 8,
+            "q3": 8,
+            "max": 8.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 2
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8.5,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 10,
+            "min": 9.5,
+            "q1": 10,
+            "q3": 10,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 10,
+            "min": 10,
+            "q1": 10,
+            "q3": 10,
+            "max": 10
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 248,
+          "coldVerified": 0,
+          "mainCpuReceipts": 27,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 251,
+          "observedAlarmStartsInside": 251,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 251,
+          "uniqueJoinedAlarmInvocations": 243,
+          "joinedAlarmOverlaps": 243,
+          "missingOrAmbiguousAlarmOverlaps": 8,
+          "completeAlarmJoins": 25,
+          "alarmCpuReceipts": 25,
+          "fullOverlapCpuReceipts": 25,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 248,
+          "coldVerified": 0,
+          "mainCpuReceipts": 27,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 251,
+          "observedAlarmStartsInside": 251,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 251,
+          "uniqueJoinedAlarmInvocations": 243,
+          "joinedAlarmOverlaps": 243,
+          "missingOrAmbiguousAlarmOverlaps": 8,
+          "completeAlarmJoins": 25,
+          "alarmCpuReceipts": 25,
+          "fullOverlapCpuReceipts": 25,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 400,
+      "mode": "cold",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6802,
+            "min": 6201,
+            "q1": 6404.25,
+            "q3": 7119.25,
+            "max": 7294.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5887.5,
+            "min": 5654.5,
+            "q1": 5755.25,
+            "q3": 6216.25,
+            "max": 6424.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 810.5,
+            "min": 411.5,
+            "q1": 606.5,
+            "q3": 900.5,
+            "max": 1199
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 124,
+            "min": 8,
+            "q1": 49,
+            "q3": 394,
+            "max": 543
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 117,
+            "min": 24,
+            "q1": 74,
+            "q3": 213,
+            "max": 326
+          },
+          "largestRepeatDifference": 543,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6828.594041500008,
+            "min": 6228.972687500005,
+            "q1": 6430.592332999986,
+            "q3": 7144.12415649998,
+            "max": 7318.7337710000575
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5913.591165999998,
+            "min": 5677.724146000051,
+            "q1": 5786.16548950001,
+            "q3": 6242.461354000086,
+            "max": 6448.59291700006
+          },
+          "delta": {
+            "n": 7,
+            "median": 809.2806249998976,
+            "min": 410.5398334999918,
+            "q1": 610.0658644999494,
+            "q3": 896.6583644999846,
+            "max": 1195.302646499942
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 128.6787909999257,
+            "min": 12.440583000076003,
+            "q1": 54.636062500139815,
+            "q3": 395.5427084999392,
+            "max": 545.5085420000833
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 105.22608299995773,
+            "min": 24.01858300017193,
+            "q1": 63.97268750000512,
+            "q3": 213.04452100006165,
+            "max": 324.76391700003296
+          },
+          "largestRepeatDifference": 545.5085420000833,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 759.5,
+            "min": 604,
+            "q1": 660,
+            "q3": 829.25,
+            "max": 986.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 667,
+            "min": 593,
+            "q1": 631.5,
+            "q3": 783.5,
+            "max": 1001
+          },
+          "delta": {
+            "n": 7,
+            "median": 11.5,
+            "min": -41,
+            "q1": -19,
+            "q3": 30,
+            "max": 245
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 29,
+            "min": 7,
+            "q1": 15.5,
+            "q3": 138.5,
+            "max": 389
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 98,
+            "min": 62,
+            "q1": 81,
+            "q3": 146,
+            "max": 234
+          },
+          "largestRepeatDifference": 389,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 197.5,
+            "min": 138.25,
+            "q1": 177.25,
+            "q3": 222.125,
+            "max": 268.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 107.25,
+            "min": 69.75,
+            "q1": 97.625,
+            "q3": 121.875,
+            "max": 136.25
+          },
+          "delta": {
+            "n": 7,
+            "median": 94,
+            "min": 58.5,
+            "q1": 76.625,
+            "q3": 99.125,
+            "max": 146.75
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 8,
+            "min": 1.5,
+            "q1": 4,
+            "q3": 10.75,
+            "max": 30
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 4.5,
+            "min": 1.5,
+            "q1": 3.25,
+            "q3": 6.25,
+            "max": 22.5
+          },
+          "largestRepeatDifference": 30,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 1563.5,
+            "min": 1168.5,
+            "q1": 1442.5,
+            "q3": 1837.25,
+            "max": 2153.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 858.5,
+            "min": 641,
+            "q1": 809.25,
+            "q3": 1017.75,
+            "max": 1160.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 705,
+            "min": 476.5,
+            "q1": 611,
+            "q3": 777.25,
+            "max": 1173
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 19,
+            "min": 5,
+            "q1": 8,
+            "q3": 198,
+            "max": 318
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 28,
+            "min": 11,
+            "q1": 19.5,
+            "q3": 66.5,
+            "max": 213
+          },
+          "largestRepeatDifference": 318,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 532.75,
+            "min": 329,
+            "q1": 403.125,
+            "q3": 782.375,
+            "max": 837.5
+          },
+          "candidate": {
+            "n": 6,
+            "median": 835,
+            "min": 477.5,
+            "q1": 569.875,
+            "q3": 1111.75,
+            "max": 1152.5
+          },
+          "delta": {
+            "n": 6,
+            "median": -256,
+            "min": -389,
+            "q1": -320.125,
+            "q3": -166.75,
+            "max": -148.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 34,
+            "min": 3,
+            "q1": 19.5,
+            "q3": 70.25,
+            "max": 221
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 83.5,
+            "min": 37,
+            "q1": 47.75,
+            "q3": 161.25,
+            "max": 218
+          },
+          "largestRepeatDifference": 221,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 532.75,
+            "min": 329,
+            "q1": 403.125,
+            "q3": 782.375,
+            "max": 837.5
+          },
+          "candidate": {
+            "n": 6,
+            "median": 835,
+            "min": 477.5,
+            "q1": 569.875,
+            "q3": 1111.75,
+            "max": 1152.5
+          },
+          "delta": {
+            "n": 6,
+            "median": -256,
+            "min": -389,
+            "q1": -320.125,
+            "q3": -166.75,
+            "max": -148.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 34,
+            "min": 3,
+            "q1": 19.5,
+            "q3": 70.25,
+            "max": 221
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 83.5,
+            "min": 37,
+            "q1": 47.75,
+            "q3": 161.25,
+            "max": 218
+          },
+          "largestRepeatDifference": 221,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 150,
+            "min": 75.5,
+            "q1": 131.75,
+            "q3": 184,
+            "max": 237.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 154,
+            "min": 86,
+            "q1": 117,
+            "q3": 223,
+            "max": 278
+          },
+          "delta": {
+            "n": 7,
+            "median": -4,
+            "min": -76,
+            "q1": -41,
+            "q3": 14,
+            "max": 30.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 24,
+            "min": 4,
+            "q1": 14,
+            "q3": 54,
+            "max": 103
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 48,
+            "min": 16,
+            "q1": 19.5,
+            "q3": 137,
+            "max": 219
+          },
+          "largestRepeatDifference": 219,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 23,
+            "min": 23,
+            "q1": 23,
+            "q3": 23,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 33,
+            "min": 33,
+            "q1": 33,
+            "q3": 33,
+            "max": 33
+          },
+          "delta": {
+            "n": 7,
+            "median": -10,
+            "min": -10,
+            "q1": -10,
+            "q3": -10,
+            "max": -10
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 14,
+            "min": 14,
+            "q1": 14,
+            "q3": 14,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 2,
+            "q1": 2,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 12,
+            "min": 12,
+            "q1": 12,
+            "q3": 12,
+            "max": 12
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 38,
+            "min": 37.5,
+            "q1": 38,
+            "q3": 38,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 30,
+            "min": 30,
+            "q1": 30,
+            "q3": 30,
+            "max": 30
+          },
+          "delta": {
+            "n": 7,
+            "median": 8,
+            "min": 7.5,
+            "q1": 8,
+            "q3": 8,
+            "max": 8
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 9,
+            "q1": 9,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 10,
+            "min": 10,
+            "q1": 10,
+            "q3": 10,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 10,
+            "min": 10,
+            "q1": 10,
+            "q3": 10,
+            "max": 10
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 250,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 252,
+          "observedAlarmStartsInside": 252,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 252,
+          "uniqueJoinedAlarmInvocations": 249,
+          "joinedAlarmOverlaps": 249,
+          "missingOrAmbiguousAlarmOverlaps": 3,
+          "completeAlarmJoins": 27,
+          "alarmCpuReceipts": 27,
+          "fullOverlapCpuReceipts": 27,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 250,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 252,
+          "observedAlarmStartsInside": 252,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 252,
+          "uniqueJoinedAlarmInvocations": 249,
+          "joinedAlarmOverlaps": 249,
+          "missingOrAmbiguousAlarmOverlaps": 3,
+          "completeAlarmJoins": 27,
+          "alarmCpuReceipts": 27,
+          "fullOverlapCpuReceipts": 27,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "warm",
+      "objects": 4,
+      "metrics": {
+        "driverMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 1826,
+            "min": 1358.5,
+            "q1": 1540.75,
+            "q3": 2086.875,
+            "max": 2196
+          },
+          "candidate": {
+            "n": 4,
+            "median": 1478.5,
+            "min": 1371,
+            "q1": 1418.25,
+            "q3": 1690.75,
+            "max": 2194
+          },
+          "delta": {
+            "n": 4,
+            "median": 40.25,
+            "min": -75.5,
+            "q1": -17.375,
+            "q3": 228.75,
+            "max": 679.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 467.5,
+            "min": 233,
+            "q1": 375.5,
+            "q3": 523.25,
+            "max": 557
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 71,
+            "min": 6,
+            "q1": 48,
+            "q3": 86.5,
+            "max": 106
+          },
+          "largestRepeatDifference": 557,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 1852.5421144999564,
+            "min": 1377.2601040001027,
+            "q1": 1565.8972446249973,
+            "q3": 2111.153338624965,
+            "max": 2215.6895420000073
+          },
+          "candidate": {
+            "n": 4,
+            "median": 1500.3480522500467,
+            "min": 1393.3804585000034,
+            "q1": 1439.6861931250023,
+            "q3": 1712.8830935000733,
+            "max": 2214.8083745000185
+          },
+          "delta": {
+            "n": 4,
+            "median": 42.041396249929676,
+            "min": -77.86133399989922,
+            "q1": -18.8044578749832,
+            "q3": 233.1330884998897,
+            "max": 682.9274789999472
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 468.30693699995754,
+            "min": 242.22333299997263,
+            "q1": 379.5096142499824,
+            "q3": 519.9071137499704,
+            "max": 545.6019570000935
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 73.63556249986868,
+            "min": 10.722916999831796,
+            "q1": 50.04851074976614,
+            "q3": 88.65231249993667,
+            "max": 102.26700099976733
+          },
+          "largestRepeatDifference": 545.6019570000935,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 361,
+            "min": 302.5,
+            "q1": 335.5,
+            "q3": 408.25,
+            "max": 506.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 402,
+            "min": 306.5,
+            "q1": 371.375,
+            "q3": 449.25,
+            "max": 564
+          },
+          "delta": {
+            "n": 4,
+            "median": -37.5,
+            "min": -64.5,
+            "q1": -59.25,
+            "q3": -14.125,
+            "max": -4
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 38,
+            "min": 21,
+            "q1": 24,
+            "q3": 61.5,
+            "max": 93
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 43,
+            "min": 21,
+            "q1": 36.75,
+            "q3": 59.5,
+            "max": 106
+          },
+          "largestRepeatDifference": 106,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 130.5,
+            "min": 86.75,
+            "q1": 103.0625,
+            "q3": 161.9375,
+            "max": 190.25
+          },
+          "candidate": {
+            "n": 4,
+            "median": 120.625,
+            "min": 68.75,
+            "q1": 107.375,
+            "q3": 134.8125,
+            "max": 176.25
+          },
+          "delta": {
+            "n": 4,
+            "median": 1.125,
+            "min": -34.25,
+            "q1": -17.375,
+            "q3": 31.4375,
+            "max": 83.75
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 61.25,
+            "min": 49.5,
+            "q1": 52.875,
+            "q3": 88.125,
+            "max": 147
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 1.5,
+            "min": 0.5,
+            "q1": 1.25,
+            "q3": 2.125,
+            "max": 4
+          },
+          "largestRepeatDifference": 147,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapTotalMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 1263.75,
+            "min": 832.5,
+            "q1": 1069.125,
+            "q3": 1421.125,
+            "max": 1546
+          },
+          "candidate": {
+            "n": 4,
+            "median": 950.25,
+            "min": 852.5,
+            "q1": 872.375,
+            "q3": 1094.625,
+            "max": 1314
+          },
+          "delta": {
+            "n": 4,
+            "median": 179.25,
+            "min": -20,
+            "q1": 89.875,
+            "q3": 299.125,
+            "max": 500.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 450.5,
+            "min": 235,
+            "q1": 286.75,
+            "q3": 597.75,
+            "max": 600
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 84.5,
+            "min": 44,
+            "q1": 54.5,
+            "q3": 111.5,
+            "max": 113
+          },
+          "largestRepeatDifference": 600,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 25.5,
+            "min": 0,
+            "q1": 18.75,
+            "q3": 40.125,
+            "max": 82.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 36.25,
+            "min": 13,
+            "q1": 17.5,
+            "q3": 97.5,
+            "max": 229.5
+          },
+          "delta": {
+            "n": 4,
+            "median": -20.25,
+            "min": -147,
+            "q1": -57.375,
+            "q3": -8.25,
+            "max": 6
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2.5,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 5.5,
+            "max": 10
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 34.5,
+            "min": 4,
+            "q1": 20.5,
+            "q3": 107.5,
+            "max": 301
+          },
+          "largestRepeatDifference": 301,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 623.5,
+            "min": 455.5,
+            "q1": 539.5,
+            "q3": 819.25,
+            "max": 1015
+          },
+          "candidate": {
+            "n": 3,
+            "median": 585.5,
+            "min": 563.5,
+            "q1": 574.5,
+            "q3": 877.25,
+            "max": 1169
+          },
+          "delta": {
+            "n": 3,
+            "median": -130,
+            "min": -154,
+            "q1": -142,
+            "q3": -35,
+            "max": 60
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 50,
+            "min": 3,
+            "q1": 26.5,
+            "q3": 174.5,
+            "max": 299
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 61,
+            "min": 11,
+            "q1": 36,
+            "q3": 72.5,
+            "max": 84
+          },
+          "largestRepeatDifference": 299,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 539.5,
+            "min": 455.5,
+            "q1": 497.5,
+            "q3": 760.75,
+            "max": 982
+          },
+          "candidate": {
+            "n": 3,
+            "median": 585.5,
+            "min": 563.5,
+            "q1": 574.5,
+            "q3": 853,
+            "max": 1120.5
+          },
+          "delta": {
+            "n": 3,
+            "median": -130,
+            "min": -138.5,
+            "q1": -134.25,
+            "q3": -77,
+            "max": -24
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 171,
+            "min": 16,
+            "q1": 93.5,
+            "q3": 235,
+            "max": 299
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 13,
+            "min": 11,
+            "q1": 12,
+            "q3": 37,
+            "max": 61
+          },
+          "largestRepeatDifference": 299,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 33,
+            "min": 0,
+            "q1": 16.5,
+            "q3": 58.5,
+            "max": 84
+          },
+          "candidate": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 24.25,
+            "max": 48.5
+          },
+          "delta": {
+            "n": 3,
+            "median": 0,
+            "min": -15.5,
+            "q1": -7.75,
+            "q3": 42,
+            "max": 84
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 66,
+            "min": 0,
+            "q1": 33,
+            "q3": 117,
+            "max": 168
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 48.5,
+            "max": 97
+          },
+          "largestRepeatDifference": 168,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 127.5,
+            "min": 111.5,
+            "q1": 119.5,
+            "q3": 169.75,
+            "max": 212
+          },
+          "candidate": {
+            "n": 3,
+            "median": 173.5,
+            "min": 104.5,
+            "q1": 139,
+            "q3": 224.75,
+            "max": 276
+          },
+          "delta": {
+            "n": 3,
+            "median": -46,
+            "min": -64,
+            "q1": -55,
+            "q3": -19.5,
+            "max": 7
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 29,
+            "min": 17,
+            "q1": 23,
+            "q3": 51.5,
+            "max": 74
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 62,
+            "min": 19,
+            "q1": 40.5,
+            "q3": 80.5,
+            "max": 99
+          },
+          "largestRepeatDifference": 99,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 17,
+            "min": 17,
+            "q1": 17,
+            "q3": 17.125,
+            "max": 17.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 19.25,
+            "min": 17,
+            "q1": 17,
+            "q3": 22.375,
+            "max": 25
+          },
+          "delta": {
+            "n": 4,
+            "median": -2,
+            "min": -8,
+            "q1": -5,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2,
+            "min": 1,
+            "q1": 1.75,
+            "q3": 2.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 10.25,
+            "min": 8,
+            "q1": 9.125,
+            "q3": 11.125,
+            "max": 11.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2,
+            "min": 1.5,
+            "q1": 1.875,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 4,
+            "median": 8.25,
+            "min": 6.5,
+            "q1": 7.25,
+            "q3": 9.125,
+            "max": 9.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 1.5,
+            "min": 1,
+            "q1": 1,
+            "q3": 2.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 3,
+            "min": 3,
+            "q1": 3,
+            "q3": 3.125,
+            "max": 3.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2.25,
+            "min": 1,
+            "q1": 1,
+            "q3": 3.875,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 1,
+            "min": -2,
+            "q1": -0.5,
+            "q3": 2,
+            "max": 2
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2,
+            "min": 1,
+            "q1": 1.75,
+            "q3": 2.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 3,
+            "min": 3,
+            "q1": 3,
+            "q3": 3.125,
+            "max": 3.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2.25,
+            "min": 1,
+            "q1": 1,
+            "q3": 3.875,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 1,
+            "min": -2,
+            "q1": -0.5,
+            "q3": 2,
+            "max": 2
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2,
+            "min": 1,
+            "q1": 1.75,
+            "q3": 2.5,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 19.5,
+            "min": 19,
+            "q1": 19,
+            "q3": 20.875,
+            "max": 23.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 16.25,
+            "min": 9,
+            "q1": 10.5,
+            "q3": 22.125,
+            "max": 24
+          },
+          "delta": {
+            "n": 4,
+            "median": 5,
+            "min": -5,
+            "q1": 0.25,
+            "q3": 8.75,
+            "max": 11
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 13,
+            "min": 5,
+            "q1": 10.25,
+            "q3": 15,
+            "max": 18
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 18,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "maintenancePasses": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 3,
+            "min": 2.5,
+            "q1": 2.875,
+            "q3": 3,
+            "max": 3
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2,
+            "min": 1,
+            "q1": 1,
+            "q3": 3.5,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 0.75,
+            "min": -2,
+            "q1": -0.5,
+            "q3": 1.625,
+            "max": 2
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2.5,
+            "min": 0,
+            "q1": 1.5,
+            "q3": 3.25,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 4,
+            "min": 3.5,
+            "q1": 3.875,
+            "q3": 4,
+            "max": 4
+          },
+          "candidate": {
+            "n": 4,
+            "median": 3,
+            "min": 2,
+            "q1": 2,
+            "q3": 4.5,
+            "max": 6
+          },
+          "delta": {
+            "n": 4,
+            "median": 0.75,
+            "min": -2,
+            "q1": -0.5,
+            "q3": 1.625,
+            "max": 2
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 2.5,
+            "min": 0,
+            "q1": 1.5,
+            "q3": 3.25,
+            "max": 4
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 4,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 16
+      },
+      "driverPlacements": {
+        "local-SJC": 16
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 249,
+          "coldVerified": 0,
+          "mainCpuReceipts": 27,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 73,
+          "observedAlarmStartsInside": 73,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 73,
+          "uniqueJoinedAlarmInvocations": 66,
+          "joinedAlarmOverlaps": 66,
+          "missingOrAmbiguousAlarmOverlaps": 7,
+          "completeAlarmJoins": 21,
+          "alarmCpuReceipts": 21,
+          "fullOverlapCpuReceipts": 21,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 16,
+          "validTranscripts": 16,
+          "providerStreamReceipts": 144,
+          "matchedFingerprints": 144,
+          "matchedProviderLogs": 141,
+          "coldVerified": 0,
+          "mainCpuReceipts": 15,
+          "alarmCountReceipts": 16,
+          "observedAlarmOverlaps": 46,
+          "observedAlarmStartsInside": 46,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 46,
+          "uniqueJoinedAlarmInvocations": 45,
+          "joinedAlarmOverlaps": 45,
+          "missingOrAmbiguousAlarmOverlaps": 1,
+          "completeAlarmJoins": 15,
+          "alarmCpuReceipts": 15,
+          "fullOverlapCpuReceipts": 15,
+          "mechanismReceipts": 16,
+          "driverPlacementReceipts": 16,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "mode": "cold",
+      "objects": 4,
+      "metrics": {
+        "driverMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 2664.25,
+            "min": 2351,
+            "q1": 2532.875,
+            "q3": 2795.875,
+            "max": 2978.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2076,
+            "min": 1667.5,
+            "q1": 1910.5,
+            "q3": 2248.125,
+            "max": 2511
+          },
+          "delta": {
+            "n": 4,
+            "median": 629,
+            "min": 82.5,
+            "q1": 451.5,
+            "q3": 759.375,
+            "max": 987
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 378,
+            "min": 217,
+            "q1": 232.75,
+            "q3": 589.25,
+            "max": 803
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 201,
+            "min": 7,
+            "q1": 146.5,
+            "q3": 296.25,
+            "max": 558
+          },
+          "largestRepeatDifference": 803,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 2683.861812500021,
+            "min": 2374.954792000004,
+            "q1": 2554.1524948750157,
+            "q3": 2818.9152603750263,
+            "max": 3014.1453540000366
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2102.200020749937,
+            "min": 1692.6183955000015,
+            "q1": 1941.982973874925,
+            "q3": 2267.950270749978,
+            "max": 2533.9144584999885
+          },
+          "delta": {
+            "n": 4,
+            "median": 628.4397087500256,
+            "min": 79.97060400003102,
+            "q1": 450.8999167500442,
+            "q3": 759.0125108750362,
+            "max": 989.0408540001372
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 379.15414649999,
+            "min": 239.06620800006203,
+            "q1": 240.88630200002808,
+            "q3": 587.0355009999766,
+            "max": 797.6961250000168
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 197.64710400009062,
+            "min": 14.842166000045836,
+            "q1": 144.67813475016737,
+            "q3": 294.32806249998976,
+            "max": 555.299999000039
+          },
+          "largestRepeatDifference": 797.6961250000168,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 714.25,
+            "min": 619.5,
+            "q1": 664.5,
+            "q3": 798.625,
+            "max": 947.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 761,
+            "min": 500.5,
+            "q1": 671.875,
+            "q3": 805.75,
+            "max": 844
+          },
+          "delta": {
+            "n": 4,
+            "median": 34.75,
+            "min": -95,
+            "q1": -60.875,
+            "q3": 127.875,
+            "max": 154.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 78.5,
+            "min": 23,
+            "q1": 59,
+            "q3": 92.75,
+            "max": 113
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 108.5,
+            "min": 8,
+            "q1": 41,
+            "q3": 197.75,
+            "max": 296
+          },
+          "largestRepeatDifference": 296,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 190.5,
+            "min": 187.75,
+            "q1": 188.5,
+            "q3": 213.25,
+            "max": 276.25
+          },
+          "candidate": {
+            "n": 4,
+            "median": 151.125,
+            "min": 121.25,
+            "q1": 139.8125,
+            "q3": 162,
+            "max": 179.25
+          },
+          "delta": {
+            "n": 4,
+            "median": 49.5,
+            "min": 13,
+            "q1": 26.875,
+            "q3": 83.1875,
+            "max": 130.25
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 58,
+            "min": 0.5,
+            "q1": 20.75,
+            "q3": 92.75,
+            "max": 105.5
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 28.75,
+            "min": 1.5,
+            "q1": 8.25,
+            "q3": 48.625,
+            "max": 53.5
+          },
+          "largestRepeatDifference": 105.5,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapTotalMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 1540.75,
+            "min": 1438,
+            "q1": 1497.625,
+            "q3": 1671.125,
+            "max": 1992.5
+          },
+          "candidate": {
+            "n": 4,
+            "median": 1135.5,
+            "min": 891,
+            "q1": 1022.625,
+            "q3": 1233,
+            "max": 1318.5
+          },
+          "delta": {
+            "n": 4,
+            "median": 453.25,
+            "min": 199,
+            "q1": 319.375,
+            "q3": 641.75,
+            "max": 926
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 355,
+            "min": 137,
+            "q1": 172.25,
+            "q3": 560.75,
+            "max": 665
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 134,
+            "min": 10,
+            "q1": 97.75,
+            "q3": 154,
+            "max": 193
+          },
+          "largestRepeatDifference": 665,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 32,
+            "min": 11,
+            "q1": 24.5,
+            "q3": 49.25,
+            "max": 92
+          },
+          "candidate": {
+            "n": 4,
+            "median": 22.75,
+            "min": 8,
+            "q1": 15.5,
+            "q3": 34.75,
+            "max": 56.5
+          },
+          "delta": {
+            "n": 4,
+            "median": 7,
+            "min": -21.5,
+            "q1": -10.625,
+            "q3": 31.875,
+            "max": 64.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 13,
+            "min": 2,
+            "q1": 3.5,
+            "q3": 22.5,
+            "max": 24
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 29.5,
+            "min": 2,
+            "q1": 12.5,
+            "q3": 44.5,
+            "max": 49
+          },
+          "largestRepeatDifference": 49,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 555,
+            "min": 533,
+            "q1": 544,
+            "q3": 796,
+            "max": 1037
+          },
+          "candidate": {
+            "n": 3,
+            "median": 688.5,
+            "min": 538.5,
+            "q1": 613.5,
+            "q3": 708.75,
+            "max": 729
+          },
+          "delta": {
+            "n": 3,
+            "median": 16.5,
+            "min": -155.5,
+            "q1": -69.5,
+            "q3": 162.25,
+            "max": 308
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 50,
+            "min": 20,
+            "q1": 35,
+            "q3": 177,
+            "max": 304
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 119,
+            "min": 35,
+            "q1": 77,
+            "q3": 162.5,
+            "max": 206
+          },
+          "largestRepeatDifference": 304,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 555,
+            "min": 533,
+            "q1": 544,
+            "q3": 747.25,
+            "max": 939.5
+          },
+          "candidate": {
+            "n": 3,
+            "median": 666,
+            "min": 538.5,
+            "q1": 602.25,
+            "q3": 697.5,
+            "max": 729
+          },
+          "delta": {
+            "n": 3,
+            "median": 16.5,
+            "min": -133,
+            "q1": -58.25,
+            "q3": 113.5,
+            "max": 210.5
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 50,
+            "min": 20,
+            "q1": 35,
+            "q3": 274.5,
+            "max": 499
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 164,
+            "min": 35,
+            "q1": 99.5,
+            "q3": 185,
+            "max": 206
+          },
+          "largestRepeatDifference": 499,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 48.75,
+            "max": 97.5
+          },
+          "candidate": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 11.25,
+            "max": 22.5
+          },
+          "delta": {
+            "n": 3,
+            "median": 0,
+            "min": -22.5,
+            "q1": -11.25,
+            "q3": 48.75,
+            "max": 97.5
+          },
+          "baselineRepeat": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 97.5,
+            "max": 195
+          },
+          "candidateRepeat": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 22.5,
+            "max": 45
+          },
+          "largestRepeatDifference": 195,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 190.25,
+            "min": 165,
+            "q1": 167.25,
+            "q3": 238.875,
+            "max": 318
+          },
+          "candidate": {
+            "n": 4,
+            "median": 212,
+            "min": 133,
+            "q1": 167.875,
+            "q3": 244.625,
+            "max": 245
+          },
+          "delta": {
+            "n": 4,
+            "median": 34,
+            "min": -79.5,
+            "q1": 4.875,
+            "q3": 44.5,
+            "max": 73
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 48,
+            "min": 19,
+            "q1": 34.75,
+            "q3": 72,
+            "max": 120
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 18.5,
+            "min": 4,
+            "q1": 7,
+            "q3": 40,
+            "max": 73
+          },
+          "largestRepeatDifference": 120,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 19,
+            "min": 16,
+            "q1": 17.125,
+            "q3": 20.625,
+            "max": 21
+          },
+          "candidate": {
+            "n": 4,
+            "median": 22.75,
+            "min": 17,
+            "q1": 20.75,
+            "q3": 23.875,
+            "max": 25
+          },
+          "delta": {
+            "n": 4,
+            "median": -3.5,
+            "min": -4.5,
+            "q1": -4.5,
+            "q3": -2.125,
+            "max": -1
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 2.25,
+            "max": 6
+          },
+          "largestRepeatDifference": 6,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 11,
+            "min": 8.5,
+            "q1": 10,
+            "q3": 11.625,
+            "max": 12
+          },
+          "candidate": {
+            "n": 4,
+            "median": 2,
+            "min": 1.5,
+            "q1": 1.875,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 4,
+            "median": 9,
+            "min": 6.5,
+            "q1": 8,
+            "q3": 9.75,
+            "max": 10.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 1,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 1,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.25,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 5,
+            "min": 2,
+            "q1": 3.125,
+            "q3": 6.625,
+            "max": 7
+          },
+          "candidate": {
+            "n": 4,
+            "median": 4,
+            "min": 1,
+            "q1": 2.875,
+            "q3": 4.625,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 1.25,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 1.75,
+            "max": 2.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 3
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 5,
+            "min": 2,
+            "q1": 3.125,
+            "q3": 6.625,
+            "max": 7
+          },
+          "candidate": {
+            "n": 4,
+            "median": 4,
+            "min": 1,
+            "q1": 2.875,
+            "q3": 4.625,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 1.25,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 1.75,
+            "max": 2.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0.5,
+            "min": 0,
+            "q1": 0,
+            "q3": 1.5,
+            "max": 3
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 28,
+            "min": 17,
+            "q1": 21.5,
+            "q3": 33.25,
+            "max": 34
+          },
+          "candidate": {
+            "n": 4,
+            "median": 21.5,
+            "min": 12,
+            "q1": 18.375,
+            "q3": 23.375,
+            "max": 26
+          },
+          "delta": {
+            "n": 4,
+            "median": 6,
+            "min": 2.5,
+            "q1": 4.375,
+            "q3": 8.125,
+            "max": 11.5
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 4,
+            "min": 0,
+            "q1": 1.5,
+            "q3": 8,
+            "max": 14
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 1.5,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 4.25,
+            "max": 11
+          },
+          "largestRepeatDifference": 14,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "maintenancePasses": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 5,
+            "min": 1.5,
+            "q1": 3,
+            "q3": 6.625,
+            "max": 7
+          },
+          "candidate": {
+            "n": 4,
+            "median": 3.75,
+            "min": 1,
+            "q1": 2.875,
+            "q3": 4.25,
+            "max": 5
+          },
+          "delta": {
+            "n": 4,
+            "median": 1,
+            "min": 0,
+            "q1": 0.375,
+            "q3": 1.875,
+            "max": 3
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 1,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 1.5,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.75,
+            "max": 3
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "median": 6,
+            "min": 2.5,
+            "q1": 4,
+            "q3": 7.625,
+            "max": 8
+          },
+          "candidate": {
+            "n": 4,
+            "median": 4.75,
+            "min": 2,
+            "q1": 3.875,
+            "q3": 5.25,
+            "max": 6
+          },
+          "delta": {
+            "n": 4,
+            "median": 1,
+            "min": 0,
+            "q1": 0.375,
+            "q3": 1.875,
+            "max": 3
+          },
+          "baselineRepeat": {
+            "n": 4,
+            "median": 1,
+            "min": 0,
+            "q1": 0.75,
+            "q3": 1.5,
+            "max": 3
+          },
+          "candidateRepeat": {
+            "n": 4,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.75,
+            "max": 3
+          },
+          "largestRepeatDifference": 3,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 16
+      },
+      "driverPlacements": {
+        "local-SJC": 16
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 239,
+          "coldVerified": 24,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 109,
+          "observedAlarmStartsInside": 109,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 109,
+          "uniqueJoinedAlarmInvocations": 107,
+          "joinedAlarmOverlaps": 107,
+          "missingOrAmbiguousAlarmOverlaps": 2,
+          "completeAlarmJoins": 26,
+          "alarmCpuReceipts": 26,
+          "fullOverlapCpuReceipts": 26,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 16,
+          "validTranscripts": 16,
+          "providerStreamReceipts": 144,
+          "matchedFingerprints": 144,
+          "matchedProviderLogs": 131,
+          "coldVerified": 16,
+          "mainCpuReceipts": 16,
+          "alarmCountReceipts": 16,
+          "observedAlarmOverlaps": 66,
+          "observedAlarmStartsInside": 66,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 66,
+          "uniqueJoinedAlarmInvocations": 65,
+          "joinedAlarmOverlaps": 65,
+          "missingOrAmbiguousAlarmOverlaps": 1,
+          "completeAlarmJoins": 15,
+          "alarmCpuReceipts": 15,
+          "fullOverlapCpuReceipts": 15,
+          "mechanismReceipts": 16,
+          "driverPlacementReceipts": 16,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 400,
+      "mode": "warm",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6431.5,
+            "min": 6082.5,
+            "q1": 6124.5,
+            "q3": 6558.75,
+            "max": 6922.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5768.5,
+            "min": 5575,
+            "q1": 5708.75,
+            "q3": 5905.5,
+            "max": 5964
+          },
+          "delta": {
+            "n": 7,
+            "median": 593.5,
+            "min": 338,
+            "q1": 403.75,
+            "q3": 771.5,
+            "max": 985
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 143,
+            "min": 13,
+            "q1": 63.5,
+            "q3": 358,
+            "max": 537
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 42,
+            "min": 1,
+            "q1": 14,
+            "q3": 127.5,
+            "max": 680
+          },
+          "largestRepeatDifference": 680,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6457.284749999992,
+            "min": 6114.904771000009,
+            "q1": 6148.370239750046,
+            "q3": 6590.529614749976,
+            "max": 6946.390791499929
+          },
+          "candidate": {
+            "n": 7,
+            "median": 5794.374437499995,
+            "min": 5601.309811999992,
+            "q1": 5734.866406250039,
+            "q3": 5944.963916499983,
+            "max": 5990.341000500019
+          },
+          "delta": {
+            "n": 7,
+            "median": 601.4172079999698,
+            "min": 333.7913750000007,
+            "q1": 406.8733127500127,
+            "q3": 764.0798857499758,
+            "max": 973.5791459999746
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 143.62049999996088,
+            "min": 13.401708999997936,
+            "q1": 59.67681249999441,
+            "q3": 364.8821040000403,
+            "max": 522.3070829999633
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 50.90395899990108,
+            "min": 0.9593750000349246,
+            "q1": 33.51441649996559,
+            "q3": 123.59443749989441,
+            "max": 684.548582999967
+          },
+          "largestRepeatDifference": 684.548582999967,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 469,
+            "min": 365,
+            "q1": 444,
+            "q3": 479.25,
+            "max": 542.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 434.5,
+            "min": 371,
+            "q1": 416,
+            "q3": 466.25,
+            "max": 515.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 34.5,
+            "min": -96.5,
+            "q1": 11,
+            "q3": 50,
+            "max": 77.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 137,
+            "min": 14,
+            "q1": 27,
+            "q3": 228.5,
+            "max": 256
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 32,
+            "min": 25,
+            "q1": 26.5,
+            "q3": 59,
+            "max": 81
+          },
+          "largestRepeatDifference": 256,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 195.5,
+            "min": 154.5,
+            "q1": 163.875,
+            "q3": 205,
+            "max": 257
+          },
+          "candidate": {
+            "n": 7,
+            "median": 106.25,
+            "min": 96.75,
+            "q1": 100.375,
+            "q3": 119.125,
+            "max": 136
+          },
+          "delta": {
+            "n": 7,
+            "median": 79.75,
+            "min": 53,
+            "q1": 61.125,
+            "q3": 95.375,
+            "max": 121
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 2,
+            "min": 0.5,
+            "q1": 1,
+            "q3": 9,
+            "max": 14
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 3.5,
+            "min": 0.5,
+            "q1": 1.75,
+            "q3": 6.25,
+            "max": 7
+          },
+          "largestRepeatDifference": 14,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 1611,
+            "min": 1224.5,
+            "q1": 1324.25,
+            "q3": 1698,
+            "max": 2057.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 890,
+            "min": 804,
+            "q1": 841.75,
+            "q3": 1057.5,
+            "max": 1234.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 537,
+            "min": 363,
+            "q1": 450,
+            "q3": 721,
+            "max": 968.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 84,
+            "min": 1,
+            "q1": 9.5,
+            "q3": 102.5,
+            "max": 312
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 42,
+            "min": 8,
+            "q1": 19,
+            "q3": 99.5,
+            "max": 599
+          },
+          "largestRepeatDifference": 599,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 50
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 50
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 100
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 100,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 937.5,
+            "min": 610.5,
+            "q1": 719.125,
+            "q3": 1244,
+            "max": 1322
+          },
+          "candidate": {
+            "n": 6,
+            "median": 1098.75,
+            "min": 776,
+            "q1": 825.375,
+            "q3": 1324.125,
+            "max": 1458.5
+          },
+          "delta": {
+            "n": 6,
+            "median": -142.25,
+            "min": -174.5,
+            "q1": -161.125,
+            "q3": -96.75,
+            "max": -57.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 149,
+            "min": 27,
+            "q1": 71,
+            "q3": 182.75,
+            "max": 202
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 86.5,
+            "min": 10,
+            "q1": 76,
+            "q3": 181.75,
+            "max": 320
+          },
+          "largestRepeatDifference": 320,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 937.5,
+            "min": 610.5,
+            "q1": 719.125,
+            "q3": 1244,
+            "max": 1322
+          },
+          "candidate": {
+            "n": 6,
+            "median": 1098.75,
+            "min": 776,
+            "q1": 825.375,
+            "q3": 1324.125,
+            "max": 1458.5
+          },
+          "delta": {
+            "n": 6,
+            "median": -142.25,
+            "min": -174.5,
+            "q1": -161.125,
+            "q3": -96.75,
+            "max": -57.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 149,
+            "min": 27,
+            "q1": 71,
+            "q3": 182.75,
+            "max": 202
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 86.5,
+            "min": 10,
+            "q1": 76,
+            "q3": 181.75,
+            "max": 320
+          },
+          "largestRepeatDifference": 320,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 182.5,
+            "min": 98,
+            "q1": 169,
+            "q3": 243.5,
+            "max": 289.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 234,
+            "min": 102.5,
+            "q1": 142,
+            "q3": 244.5,
+            "max": 279
+          },
+          "delta": {
+            "n": 7,
+            "median": 26.5,
+            "min": -79,
+            "q1": -30.25,
+            "q3": 33.25,
+            "max": 53
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 55,
+            "min": 2,
+            "q1": 31.5,
+            "q3": 96,
+            "max": 222
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 30,
+            "min": 5,
+            "q1": 14.5,
+            "q3": 36.5,
+            "max": 90
+          },
+          "largestRepeatDifference": 222,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 23,
+            "min": 22,
+            "q1": 22.25,
+            "q3": 23,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 33,
+            "min": 31,
+            "q1": 32,
+            "q3": 33,
+            "max": 33
+          },
+          "delta": {
+            "n": 7,
+            "median": -10,
+            "min": -10,
+            "q1": -10,
+            "q3": -9.75,
+            "max": -9
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 2
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 14,
+            "min": 13,
+            "q1": 13,
+            "q3": 14,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 2,
+            "q1": 2,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 12,
+            "min": 11,
+            "q1": 11,
+            "q3": 12,
+            "max": 12
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.5,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.5,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 38,
+            "min": 35.5,
+            "q1": 36.5,
+            "q3": 38,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 29.5,
+            "min": 29,
+            "q1": 29.25,
+            "q3": 30,
+            "max": 30
+          },
+          "delta": {
+            "n": 7,
+            "median": 8,
+            "min": 6.5,
+            "q1": 7.25,
+            "q3": 8,
+            "max": 8.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 2
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 2
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9,
+            "min": 8,
+            "q1": 8.5,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 10,
+            "min": 9,
+            "q1": 9.25,
+            "q3": 10,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 10,
+            "min": 9,
+            "q1": 9.5,
+            "q3": 10,
+            "max": 10
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 251,
+          "coldVerified": 0,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 243,
+          "observedAlarmStartsInside": 243,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 243,
+          "uniqueJoinedAlarmInvocations": 233,
+          "joinedAlarmOverlaps": 233,
+          "missingOrAmbiguousAlarmOverlaps": 10,
+          "completeAlarmJoins": 26,
+          "alarmCpuReceipts": 26,
+          "fullOverlapCpuReceipts": 26,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 251,
+          "coldVerified": 0,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 243,
+          "observedAlarmStartsInside": 243,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 243,
+          "uniqueJoinedAlarmInvocations": 233,
+          "joinedAlarmOverlaps": 233,
+          "missingOrAmbiguousAlarmOverlaps": 10,
+          "completeAlarmJoins": 26,
+          "alarmCpuReceipts": 26,
+          "fullOverlapCpuReceipts": 26,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 400,
+      "mode": "cold",
+      "objects": 7,
+      "metrics": {
+        "driverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6750,
+            "min": 6416,
+            "q1": 6556.75,
+            "q3": 6869.5,
+            "max": 7487.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 6079.5,
+            "min": 5775,
+            "q1": 5956.25,
+            "q3": 6265.75,
+            "max": 6600
+          },
+          "delta": {
+            "n": 7,
+            "median": 498.5,
+            "min": 350,
+            "q1": 473,
+            "q3": 919,
+            "max": 975
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 90,
+            "min": 19,
+            "q1": 27,
+            "q3": 131,
+            "max": 265
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 70,
+            "min": 12,
+            "q1": 19.5,
+            "q3": 166,
+            "max": 640
+          },
+          "largestRepeatDifference": 640,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "laptopMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 6777.848188000004,
+            "min": 6448.293333000001,
+            "q1": 6585.594906250066,
+            "q3": 6899.065249999971,
+            "max": 7511.122979499982
+          },
+          "candidate": {
+            "n": 7,
+            "median": 6102.100750000012,
+            "min": 5801.112958000012,
+            "q1": 5984.462406250001,
+            "q3": 6294.206198249973,
+            "max": 6628.224832999986
+          },
+          "delta": {
+            "n": 7,
+            "median": 507.92839549999917,
+            "min": 350.28408350015525,
+            "q1": 478.27581224999085,
+            "q3": 913.1548647499876,
+            "max": 976.7352299999911
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 80.40695799997775,
+            "min": 14.033582999836653,
+            "q1": 15.565187500040338,
+            "q3": 125.86187499991502,
+            "max": 257.82587400000193
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 67.24558399990201,
+            "min": 15.435915999987628,
+            "q1": 17.335645500017563,
+            "q3": 158.57693750000908,
+            "max": 625.8548319998663
+          },
+          "largestRepeatDifference": 625.8548319998663,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelDispatchIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "firstModelArrivalFromDriverMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 801,
+            "min": 685,
+            "q1": 774.5,
+            "q3": 898.5,
+            "max": 927.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 820.5,
+            "min": 621,
+            "q1": 710,
+            "q3": 846.5,
+            "max": 1012.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 41,
+            "min": -85,
+            "q1": -62.5,
+            "q3": 70,
+            "max": 221.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 142,
+            "min": 44,
+            "q1": 78.5,
+            "q3": 182.5,
+            "max": 241
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 51,
+            "min": 16,
+            "q1": 36.5,
+            "q3": 129.5,
+            "max": 365
+          },
+          "largestRepeatDifference": 365,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "modelGapMedianMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 196.5,
+            "min": 150,
+            "q1": 162.25,
+            "q3": 208.5,
+            "max": 266.25
+          },
+          "candidate": {
+            "n": 7,
+            "median": 111.75,
+            "min": 97,
+            "q1": 106.125,
+            "q3": 120,
+            "max": 147.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 83,
+            "min": 45.5,
+            "q1": 52.5,
+            "q3": 96.75,
+            "max": 118.75
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 2.5,
+            "min": 0.5,
+            "q1": 2.25,
+            "q3": 5.25,
+            "max": 10.5
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 4.5,
+            "min": 0.5,
+            "q1": 3,
+            "q3": 13.25,
+            "max": 17.5
+          },
+          "largestRepeatDifference": 17.5,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "modelGapTotalMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 1599.5,
+            "min": 1273.5,
+            "q1": 1330.25,
+            "q3": 1676.5,
+            "max": 2122.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 938.5,
+            "min": 778,
+            "q1": 910.5,
+            "q3": 1024.5,
+            "max": 1177
+          },
+          "delta": {
+            "n": 7,
+            "median": 607,
+            "min": 375.5,
+            "q1": 380.75,
+            "q3": 778,
+            "max": 945.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 55,
+            "min": 6,
+            "q1": 13.5,
+            "q3": 84.5,
+            "max": 99
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 95,
+            "min": 12,
+            "q1": 55.5,
+            "q3": 112.5,
+            "max": 250
+          },
+          "largestRepeatDifference": 250,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "objectModelGapMedianIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "objectModelGapTotalIoMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 40.5
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -40.5,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 81
+          },
+          "largestRepeatDifference": 81,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 949,
+            "min": 559,
+            "q1": 716.375,
+            "q3": 1132.875,
+            "max": 1470
+          },
+          "candidate": {
+            "n": 6,
+            "median": 1115,
+            "min": 752,
+            "q1": 838.875,
+            "q3": 1406.875,
+            "max": 1467
+          },
+          "delta": {
+            "n": 6,
+            "median": -208.75,
+            "min": -343,
+            "q1": -244.375,
+            "q3": -46,
+            "max": 68.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 56.5,
+            "min": 37,
+            "q1": 51.25,
+            "q3": 98.5,
+            "max": 344
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 82.5,
+            "min": 15,
+            "q1": 35.5,
+            "q3": 152.75,
+            "max": 188
+          },
+          "largestRepeatDifference": 344,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "containedAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 949,
+            "min": 559,
+            "q1": 716.375,
+            "q3": 1132.875,
+            "max": 1470
+          },
+          "candidate": {
+            "n": 6,
+            "median": 1115,
+            "min": 752,
+            "q1": 838.875,
+            "q3": 1406.875,
+            "max": 1467
+          },
+          "delta": {
+            "n": 6,
+            "median": -208.75,
+            "min": -343,
+            "q1": -244.375,
+            "q3": -46,
+            "max": 68.5
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 56.5,
+            "min": 37,
+            "q1": 51.25,
+            "q3": 98.5,
+            "max": 344
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 82.5,
+            "min": 15,
+            "q1": 35.5,
+            "q3": 152.75,
+            "max": 188
+          },
+          "largestRepeatDifference": 344,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "boundaryAlarmCpuMs": {
+          "n": 6,
+          "baseline": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidate": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "delta": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "baselineRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "candidateRepeat": {
+            "n": 6,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 0,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "fetchCpuMs": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 273,
+            "min": 121.5,
+            "q1": 201.5,
+            "q3": 310.5,
+            "max": 352.5
+          },
+          "candidate": {
+            "n": 7,
+            "median": 306.5,
+            "min": 125.5,
+            "q1": 195.25,
+            "q3": 323.25,
+            "max": 369
+          },
+          "delta": {
+            "n": 7,
+            "median": -39.5,
+            "min": -72,
+            "q1": -62.5,
+            "q3": -0.25,
+            "max": 170
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 50,
+            "min": 9,
+            "q1": 31,
+            "q3": 103,
+            "max": 135
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 50,
+            "min": 1,
+            "q1": 35.5,
+            "q3": 113,
+            "max": 160
+          },
+          "largestRepeatDifference": 160,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "scheduleNowCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 22.5,
+            "min": 22,
+            "q1": 22,
+            "q3": 23,
+            "max": 23
+          },
+          "candidate": {
+            "n": 7,
+            "median": 32,
+            "min": 31,
+            "q1": 31.5,
+            "q3": 33,
+            "max": 33
+          },
+          "delta": {
+            "n": 7,
+            "median": -10,
+            "min": -10.5,
+            "q1": -10,
+            "q3": -9,
+            "max": -9
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 1,
+            "max": 2
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nondeferredScheduleNow": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 13.5,
+            "min": 13,
+            "q1": 13,
+            "q3": 14,
+            "max": 14
+          },
+          "candidate": {
+            "n": 7,
+            "median": 2,
+            "min": 2,
+            "q1": 2,
+            "q3": 2,
+            "max": 2
+          },
+          "delta": {
+            "n": 7,
+            "median": 11.5,
+            "min": 11,
+            "q1": 11,
+            "q3": 12,
+            "max": 12
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 0
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "alarmOverlapObservedCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": -0.25,
+            "q3": 0,
+            "max": 0.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "alarmStartedInsideCount": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": -0.25,
+            "q3": 0,
+            "max": 0.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "nativeSetAlarmCalls": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 37,
+            "min": 36,
+            "q1": 36,
+            "q3": 38,
+            "max": 38
+          },
+          "candidate": {
+            "n": 7,
+            "median": 29.5,
+            "min": 29,
+            "q1": 29.25,
+            "q3": 30,
+            "max": 30
+          },
+          "delta": {
+            "n": 7,
+            "median": 7,
+            "min": 6.5,
+            "q1": 7,
+            "q3": 8,
+            "max": 8.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 2
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 2,
+          "positiveBeyondObservedRepeatRange": true
+        },
+        "maintenancePasses": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8,
+            "q3": 9,
+            "max": 9
+          },
+          "candidate": {
+            "n": 7,
+            "median": 8.5,
+            "min": 8,
+            "q1": 8.25,
+            "q3": 9,
+            "max": 9
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": -0.25,
+            "q3": 0,
+            "max": 0.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        },
+        "failedClaims": {
+          "n": 7,
+          "baseline": {
+            "n": 7,
+            "median": 9.5,
+            "min": 9,
+            "q1": 9,
+            "q3": 10,
+            "max": 10
+          },
+          "candidate": {
+            "n": 7,
+            "median": 9.5,
+            "min": 9,
+            "q1": 9.25,
+            "q3": 10,
+            "max": 10
+          },
+          "delta": {
+            "n": 7,
+            "median": 0,
+            "min": -0.5,
+            "q1": -0.25,
+            "q3": 0,
+            "max": 0.5
+          },
+          "baselineRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0,
+            "max": 1
+          },
+          "candidateRepeat": {
+            "n": 7,
+            "median": 0,
+            "min": 0,
+            "q1": 0,
+            "q3": 0.5,
+            "max": 1
+          },
+          "largestRepeatDifference": 1,
+          "positiveBeyondObservedRepeatRange": false
+        }
+      },
+      "laptopColos": {
+        "SJC": 28
+      },
+      "driverPlacements": {
+        "local-SJC": 28
+      },
+      "coverage": {
+        "plannedTurns": 28,
+        "returned": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 248,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 239,
+          "observedAlarmStartsInside": 239,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 239,
+          "uniqueJoinedAlarmInvocations": 237,
+          "joinedAlarmOverlaps": 237,
+          "missingOrAmbiguousAlarmOverlaps": 2,
+          "completeAlarmJoins": 27,
+          "alarmCpuReceipts": 27,
+          "fullOverlapCpuReceipts": 27,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        },
+        "admitted": {
+          "turns": 28,
+          "validTranscripts": 28,
+          "providerStreamReceipts": 252,
+          "matchedFingerprints": 252,
+          "matchedProviderLogs": 248,
+          "coldVerified": 28,
+          "mainCpuReceipts": 28,
+          "alarmCountReceipts": 28,
+          "observedAlarmOverlaps": 239,
+          "observedAlarmStartsInside": 239,
+          "sharedAlarmOverlapMemberships": 0,
+          "uniqueObservedAlarmIds": 239,
+          "uniqueJoinedAlarmInvocations": 237,
+          "joinedAlarmOverlaps": 237,
+          "missingOrAmbiguousAlarmOverlaps": 2,
+          "completeAlarmJoins": 27,
+          "alarmCpuReceipts": 27,
+          "fullOverlapCpuReceipts": 27,
+          "mechanismReceipts": 28,
+          "driverPlacementReceipts": 28,
+          "driverIncomingPlacementReceipts": 0
+        }
+      }
+    }
+  ]
+}

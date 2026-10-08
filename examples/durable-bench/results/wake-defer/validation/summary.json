@@ -1,0 +1,14 @@
+{
+  "productCommit": "9e0c2a15c2fd8320cdc10c676934f2687dc17b64",
+  "localReady": {
+    "passed": true,
+    "receipt": "ready-resumed.json"
+  },
+  "ci": {
+    "passed": true,
+    "url": "https://github.com/yielded-dev/agent/actions/runs/37844252228",
+    "receipt": "ci.json"
+  },
+  "temporaryPostgresCleanedUp": true,
+  "priorAttempts": "Earlier local attempts encountered unchanged five-second fixture timeouts during slow host process launches. After session resume, process launch was responsive; an initial attempt then found the missing temporary Postgres server. Restoring that isolated dependency allowed the complete unchanged gate to pass. No test timeout or skip was changed."
+}

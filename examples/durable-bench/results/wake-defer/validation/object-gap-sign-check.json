@@ -1,0 +1,52 @@
+{
+  "scope": "Unmodified disposable interrupted-run receipt copy only; excludes altered incomplete copy and active r2 matrix",
+  "inspectedTurns": 57,
+  "inspectedGaps": 456,
+  "negativeTurns": 0,
+  "negativeGaps": 0,
+  "minimumGapMs": 0,
+  "byPosition": [
+    {
+      "nextCall": 1,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 2,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 3,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 4,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 5,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 6,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 7,
+      "negative": 0,
+      "minMs": 0
+    },
+    {
+      "nextCall": 8,
+      "negative": 0,
+      "minMs": 0
+    }
+  ],
+  "clamped": false,
+  "analyzerChanged": false
+}

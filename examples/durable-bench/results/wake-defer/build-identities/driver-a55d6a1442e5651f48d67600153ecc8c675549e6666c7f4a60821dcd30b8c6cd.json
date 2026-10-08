@@ -1,0 +1,39 @@
+{
+  "name": "driver",
+  "mode": "baseline",
+  "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "dirtyStatus": "",
+  "reusedFrom": {
+    "revision": "52e3fd18e3977dcdeae78d2d1b23c7685ed0106e",
+    "path": "examples/durable-bench/results/cf-latency"
+  },
+  "bundleSha256": "a55d6a1442e5651f48d67600153ecc8c675549e6666c7f4a60821dcd30b8c6cd",
+  "bundleBytes": 552223,
+  "gzipBytes": 112080,
+  "inputsSha256": "e4713bbec79f1b8a3ad8628a5090e9fd3d7659706de4dfaeed035cd5c102e414",
+  "sourcesSha256": "b7c737a2319b4116e3d08a31caedb18cf7b46f4297adee0df83af8dd6f2612e7",
+  "fixtureFiles": [
+    {
+      "path": "examples/durable-bench/src/plan.ts",
+      "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf"
+    },
+    {
+      "path": "package.json",
+      "sha256": "8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5"
+    }
+  ],
+  "expectedSeeds": {
+    "50": "b017b487524e44a4",
+    "250": "dcea9f30b0917245"
+  },
+  "instrumentation": [],
+  "esbuildVersion": "0.28.1",
+  "target": "es2024",
+  "minify": false,
+  "output": "/private/tmp/wake-defer-build-8fPZ2r/driver.mjs",
+  "effectVersion": "4.0.0"
+}
