@@ -1,0 +1,6 @@
+{
+  "expectedSamples": 720,
+  "actualSamples": 611,
+  "complete": false,
+  "note": "Missing telemetry was retained explicitly; no request was replayed or CPU value imputed."
+}

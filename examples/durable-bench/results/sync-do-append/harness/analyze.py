@@ -61,14 +61,14 @@ for role in ("baseline", "candidate"):
             "firstAppendStage": append,
             "firstPerAppend": {
                 key: append[key] / append["calls"]
-                for key in ("evaluations", "allocations", "sqlStatements")
+                for key in ("evaluations", "allocations", "sqlStatements", "syncTransactions")
             },
             "laterAppendStage": {
                 key: stats([
                     row["inclusiveStages"]["durable-object-append"][key]
                     for row in turns[1:]
                 ])
-                for key in ("evaluations", "allocations", "sqlStatements")
+                for key in ("evaluations", "allocations", "sqlStatements", "syncTransactions")
             },
             "appendSitePartition": first.get("stageSites", {}).get("durable-object-append"),
             "individualAppends": first["appends"],
@@ -84,7 +84,11 @@ if sample_path.exists():
     by_key = collections.defaultdict(dict)
     for sample in samples:
         key = (sample["seedRecords"], sample["block"], sample["cohort"], sample["operation"]["phase"])
+        if sample["role"] in by_key[key]:
+            raise ValueError("Duplicate role for a matched operation")
         by_key[key][sample["role"]] = sample
+    if len({sample["invocationId"] for sample in samples}) != len(samples):
+        raise ValueError("An invocation was counted more than once")
     triples = {key: row for key, row in by_key.items() if len(row) == 3}
     rows = []
     for seed in (10, 1000):
@@ -139,22 +143,32 @@ if sample_path.exists():
             summary["criterionMet"] = len(summary["blocks"]) == 3 and all(row["criterionMet"] for row in summary["blocks"])
             rows.append(summary)
     telemetry_outcomes = collections.Counter()
+    telemetry_by_method = collections.defaultdict(list)
     telemetry_invocations = {}
     for path in deployed.glob("block-*/*/telemetry-*.json"):
-        for event in read(path)["events"]:
+        for event in read(path).get("events", []):
             telemetry_invocations[event["id"]] = event
     for event in telemetry_invocations.values():
         telemetry_outcomes[f'{event.get("executionModel")}/{event.get("outcome")}'] += 1
+        if isinstance(event.get("cpuTimeMs"), (int, float)):
+            method = event.get("rpcMethod") or event.get("eventType") or "unknown"
+            telemetry_by_method[f'{event.get("executionModel")}/{method}/{event.get("outcome")}'].append(event["cpuTimeMs"])
     failures = [
         {"path": str(path.relative_to(root)), **read(path)}
         for path in deployed.glob("block-*/cohort-*/*/*/failure.json")
     ]
+    gaps = [gap for path in deployed.glob("block-*/*/telemetry-gaps.json") for gap in read(path)["gaps"]]
     output["cloudflare"] = {
         "validatedSamples": len(samples),
         "matchedTriples": len(triples),
         "unmatchedValidatedSamples": sum(len(row) for row in by_key.values() if len(row) != 3),
+        "completedObjectProofs": len(list(deployed.glob("block-*/cohort-*/*/*/evidence.json*"))),
+        "telemetryGaps": len(gaps),
+        "telemetryGapReasons": dict(collections.Counter(gap["reason"] for gap in gaps)),
+        "telemetryGapMatchCounts": dict(collections.Counter(gap["matches"] for gap in gaps)),
         "failures": failures,
         "telemetryOutcomes": dict(telemetry_outcomes),
+        "telemetryCpuByMethod": {key: stats(values) for key, values in telemetry_by_method.items()},
         "rows": rows,
         "limits": [
             "Only complete baseline/candidate/control triples enter the paired tables; unmatched samples and failed requests remain in the raw evidence.",

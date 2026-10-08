@@ -1,0 +1,374 @@
+[
+  {
+    "run": "deployed-attempt-1",
+    "worker": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+    "block": 0,
+    "role": "baseline",
+    "namespaceIds": [
+      "6feee273ea1c45fb9427b9cc1ad7a027"
+    ],
+    "deploymentVersion": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed-attempt-1/block-0/baseline/identity.json",
+    "deploymentReceipt": "deployed-attempt-1/block-0/baseline/deployment.json"
+  },
+  {
+    "run": "deployed-attempt-1",
+    "worker": "sync-do-append-48ccb19d8d634f41-b0-candidate",
+    "block": 0,
+    "role": "candidate",
+    "namespaceIds": [
+      "865c8f503ca14a0388831696eb2da3f9"
+    ],
+    "deploymentVersion": "62cf2041-b7d5-4fd1-9604-508338520fd9",
+    "build": {
+      "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "b6650059d385ecbdd1d26465205995f23c93f78508866a84b2f7fa5fb77e4b98",
+      "bundleBytes": 1668363,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 529
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed-attempt-1/block-0/candidate/identity.json",
+    "deploymentReceipt": "deployed-attempt-1/block-0/candidate/deployment.json"
+  },
+  {
+    "run": "deployed-attempt-1",
+    "worker": "sync-do-append-48ccb19d8d634f41-b0-control",
+    "block": 0,
+    "role": "control",
+    "namespaceIds": [
+      "a1828935d1d94b3eafd0c0d1d81ed505"
+    ],
+    "deploymentVersion": "44d648e6-4d8a-478a-a87a-3f598a26e692",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed-attempt-1/block-0/control/identity.json",
+    "deploymentReceipt": "deployed-attempt-1/block-0/control/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b0-baseline",
+    "block": 0,
+    "role": "baseline",
+    "namespaceIds": [
+      "4ca265adc4104986b78f892f2f8f5c59"
+    ],
+    "deploymentVersion": "075653e5-a282-4725-b68d-846a9cf1ade2",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-0/baseline/identity.json",
+    "deploymentReceipt": "deployed/block-0/baseline/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b0-candidate",
+    "block": 0,
+    "role": "candidate",
+    "namespaceIds": [
+      "46db82611a2a48ff83aadc7179c0c0ec"
+    ],
+    "deploymentVersion": "c880dac4-b15a-4dc6-9509-f37c19d3734b",
+    "build": {
+      "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "b6650059d385ecbdd1d26465205995f23c93f78508866a84b2f7fa5fb77e4b98",
+      "bundleBytes": 1668363,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 529
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-0/candidate/identity.json",
+    "deploymentReceipt": "deployed/block-0/candidate/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b0-control",
+    "block": 0,
+    "role": "control",
+    "namespaceIds": [
+      "18cf39a6c6b446beb3db15120fc3720a"
+    ],
+    "deploymentVersion": "25b7dc4b-3c4a-48ba-90ad-47b4487f23de",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-0/control/identity.json",
+    "deploymentReceipt": "deployed/block-0/control/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b1-baseline",
+    "block": 1,
+    "role": "baseline",
+    "namespaceIds": [
+      "dedf99b725ff466cb2880d2190d18e5a"
+    ],
+    "deploymentVersion": "e73ec74a-8701-4667-b4c5-dfad8c30f1e3",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-1/baseline/identity.json",
+    "deploymentReceipt": "deployed/block-1/baseline/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b1-candidate",
+    "block": 1,
+    "role": "candidate",
+    "namespaceIds": [
+      "492722dcde7e48b684155aeac043fc05"
+    ],
+    "deploymentVersion": "4a9e47ca-4735-4c39-84ed-b3b7c993fe84",
+    "build": {
+      "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "b6650059d385ecbdd1d26465205995f23c93f78508866a84b2f7fa5fb77e4b98",
+      "bundleBytes": 1668363,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 529
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-1/candidate/identity.json",
+    "deploymentReceipt": "deployed/block-1/candidate/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b1-control",
+    "block": 1,
+    "role": "control",
+    "namespaceIds": [
+      "e9c1865d7791472bbe893b5d366922a4"
+    ],
+    "deploymentVersion": "f7da5a3a-e884-40bd-b8b4-333e41291a49",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-1/control/identity.json",
+    "deploymentReceipt": "deployed/block-1/control/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b2-baseline",
+    "block": 2,
+    "role": "baseline",
+    "namespaceIds": [
+      "099f21dda813461dbd8b759a054d507f"
+    ],
+    "deploymentVersion": "a88247f4-7146-453d-b6a4-974e247d901f",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-2/baseline/identity.json",
+    "deploymentReceipt": "deployed/block-2/baseline/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b2-candidate",
+    "block": 2,
+    "role": "candidate",
+    "namespaceIds": [
+      "03e1d26258be4c13ba4e0e42f54915ff"
+    ],
+    "deploymentVersion": "26c72b02-4334-4a0e-87fc-b9afa9e6be00",
+    "build": {
+      "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "b6650059d385ecbdd1d26465205995f23c93f78508866a84b2f7fa5fb77e4b98",
+      "bundleBytes": 1668363,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 529
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-2/candidate/identity.json",
+    "deploymentReceipt": "deployed/block-2/candidate/deployment.json"
+  },
+  {
+    "run": "deployed",
+    "worker": "sync-do-append-9ae06eab24224b46-b2-control",
+    "block": 2,
+    "role": "control",
+    "namespaceIds": [
+      "85fcd4ed718945fb939aee17eacc92e1"
+    ],
+    "deploymentVersion": "75c468cb-9d56-487b-b6b8-6bf03b0dcbba",
+    "build": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "locationHint": "wnam",
+    "cpuLimitMs": 300000,
+    "identityReceipt": "deployed/block-2/control/identity.json",
+    "deploymentReceipt": "deployed/block-2/control/deployment.json"
+  }
+]

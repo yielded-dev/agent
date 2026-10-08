@@ -1,0 +1,21 @@
+{
+  "startedAtMillis": 1791476130755,
+  "endedAtMillis": 1791476131416,
+  "clientElapsedMs": 661.294334,
+  "status": 200,
+  "cfRay": "a47671da19840db5-CPH",
+  "response": {
+    "phase": 10,
+    "method": "warmFreshThird",
+    "incarnation": {
+      "module": "510a4c90-79cb-40be-866c-d2be3c684350",
+      "runtime": "22d65d7f-6a5f-49e6-a9d8-b89275a8e9f1"
+    },
+    "submissionId": "01a11c4c-62ca-7c1e-baa8-cb7c0ebb0d32:sync-do-append-9ae06eab24224b46-b2-candidate-small-2",
+    "outcome": "completed",
+    "modelCalls": 2,
+    "modelFinalizers": 2,
+    "toolCalls": 2,
+    "objectWallTimeMs": 0
+  }
+}

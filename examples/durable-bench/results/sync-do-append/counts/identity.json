@@ -1,0 +1,37 @@
+{
+  "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "candidateFrameworkRevision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+  "collectionHead": "452949cb57b417f3b481eb68afd9893d2bb7aa1b",
+  "runs": [
+    {
+      "role": "baseline",
+      "historicalTurns": 50,
+      "bundleSha256": "715892dfeb5c8397715d50675b11bf99ad69cf58dce9f7105714c876541da39c",
+      "rawReportSha256": "b469b78cd2f2ede224d0f03cd1d2e609fe68dbfee76baf71a7e8db55bafb4231",
+      "fingerprint": "b017b487524e44a4"
+    },
+    {
+      "role": "baseline",
+      "historicalTurns": 250,
+      "bundleSha256": "d52ff5371f774140e8c88c1cd54574619915f56568f5eaa7b84b080f7dbc3d84",
+      "rawReportSha256": "d227c411d77e9f76cf7567867379606785b92bbf33147d8c9a5eb006034e937e",
+      "fingerprint": "dcea9f30b0917245"
+    },
+    {
+      "role": "candidate",
+      "historicalTurns": 50,
+      "bundleSha256": "3b846d5d6f3d83e282d3115281eb006c2a0a1cc65da9d519a0ae588c85b8ed81",
+      "rawReportSha256": "68c3d7e75387bf74907f33ecaec652e43a20bc60254ca267b1409d9aceba5403",
+      "fingerprint": "b017b487524e44a4"
+    },
+    {
+      "role": "candidate",
+      "historicalTurns": 250,
+      "bundleSha256": "d70a03776e34f90b61ce42e1732d61b154f5d96cfc45f50bfb58caa0023d0475",
+      "rawReportSha256": "f605d16251212bf835752c1be8466a21d40e563dfd3234b1d93ba8b6854b42bd",
+      "fingerprint": "dcea9f30b0917245"
+    }
+  ],
+  "counts.mjsSha256": "071ce3899ab2d1d1768637f687b608faf4543f754614785af22b69cca6bb4c5b",
+  "count-probe.jsSha256": "84d60112d6a00461967a4fb5af156bd584179f9a6056db844dc2fc555ceccffb"
+}

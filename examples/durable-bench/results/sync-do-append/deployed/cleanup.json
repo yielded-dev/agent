@@ -1,0 +1,69 @@
+{
+  "complete": true,
+  "secretRemoved": true,
+  "targets": [
+    {
+      "block": 0,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b0-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b0-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b0-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b1-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b1-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b1-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b2-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b2-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b2-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    }
+  ]
+}

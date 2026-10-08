@@ -1,0 +1,27 @@
+{
+  "complete": true,
+  "secretRemoved": true,
+  "targets": [
+    {
+      "block": 0,
+      "role": "control",
+      "stage": "48ccb19d8d634f41-b0-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "candidate",
+      "stage": "48ccb19d8d634f41-b0-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "baseline",
+      "stage": "48ccb19d8d634f41-b0-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    }
+  ]
+}

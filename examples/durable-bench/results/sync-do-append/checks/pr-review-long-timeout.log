@@ -1,0 +1,10 @@
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/pr-review-eval
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  08:41:06
+   Duration  42.72s (transform 301ms, setup 0ms, import 731ms, tests 41.90s, environment 0ms)
+

@@ -1,0 +1,12 @@
+{
+  "block": 0,
+  "role": "candidate",
+  "stage": "9ae06eab24224b46-b0-candidate",
+  "cleanupRequired": true,
+  "cleanupComplete": false,
+  "name": "sync-do-append-9ae06eab24224b46-b0-candidate",
+  "url": "https://sync-do-append-9ae06eab24224b46-b0-candidate.danieljmerwe.workers.dev",
+  "namespaces": [
+    "46db82611a2a48ff83aadc7179c0c0ec"
+  ]
+}

@@ -5,7 +5,7 @@ globalThis.__kom433 = (() => {
   let active;
   const sqlSpans = new WeakMap();
   const rows = [];
-  const empty = () => ({ evaluations: 0, inlineSuccesses: 0, allocations: 0, calls: 0, sqlStatements: 0 });
+  const empty = () => ({ evaluations: 0, inlineSuccesses: 0, allocations: 0, calls: 0, sqlStatements: 0, syncTransactions: 0 });
   const bucket = (table, name) => table[name] ??= empty();
   const stack = (fiber = globalThis[key]) => fiber ? (stacks.get(fiber) ?? []) : outside;
   const bump = (kind, name, fiber) => {
@@ -31,6 +31,7 @@ globalThis.__kom433 = (() => {
     allocation(site) { bump("allocations", site); },
     sqlSpan(span) { sqlSpans.set(span, this.enter("effect/sql/Statement.useSpan", null)); },
     closeSqlSpan(span) { this.leave(sqlSpans.get(span)); sqlSpans.delete(span); },
+    transactionSync(storage, ...args) { bump("syncTransactions", "transactionSync"); return storage.transactionSync(...args); },
     exec(sql, ...args) {
       bump("sqlStatements", "exec");
       if (active) {

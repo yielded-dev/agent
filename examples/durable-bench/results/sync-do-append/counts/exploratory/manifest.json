@@ -1,0 +1,65 @@
+[
+  {
+    "sourceRun": "baseline-initial-counts",
+    "file": "counts/exploratory/baseline-initial-counts/report.json.gz",
+    "rawSha256": "42574b75abe889fa925624991223dbcd6c3f6dd73f0397bd186bd759d7457bc0",
+    "rawBytes": 786478,
+    "gzipBytes": 23136
+  },
+  {
+    "sourceRun": "baseline-initial-counts",
+    "file": "counts/exploratory/baseline-initial-counts/sites.json.gz",
+    "rawSha256": "b580129790900a6c131fb51710562da60a116ffec7131b6c1e3e2c6f87b82d0a",
+    "rawBytes": 14488,
+    "gzipBytes": 2042
+  },
+  {
+    "sourceRun": "baseline-counts-50",
+    "file": "counts/exploratory/baseline-counts-50/report.json.gz",
+    "rawSha256": "4d36f1d6e10119c3d18b548bfb0d848be030e25bf5214758d833e9d3a61a60a5",
+    "rawBytes": 2154,
+    "gzipBytes": 806
+  },
+  {
+    "sourceRun": "baseline-counts-50-v2",
+    "file": "counts/exploratory/baseline-counts-50-v2/report.json.gz",
+    "rawSha256": "8aec74df6298bc9825d891f982ecae81abc3027eeeb6225f8a08ac62b2af6e79",
+    "rawBytes": 3577706,
+    "gzipBytes": 307912
+  },
+  {
+    "sourceRun": "baseline-counts-50-v2",
+    "file": "counts/exploratory/baseline-counts-50-v2/sites.json.gz",
+    "rawSha256": "e1dd66b49174aded649fdb6e19bf3833723c0c2e75bec3d0151d2106e4b17e5a",
+    "rawBytes": 26860,
+    "gzipBytes": 3093
+  },
+  {
+    "sourceRun": "baseline-counts-250",
+    "file": "counts/exploratory/baseline-counts-250/report.json.gz",
+    "rawSha256": "bca17ae00d60f68f595085d718b5f3aecd96c5558e2c1dd398cba27d88ab959f",
+    "rawBytes": 15779057,
+    "gzipBytes": 1375400
+  },
+  {
+    "sourceRun": "baseline-counts-250",
+    "file": "counts/exploratory/baseline-counts-250/sites.json.gz",
+    "rawSha256": "f1e7839b40a3668d07d21bf1f5a9e116f9a137216c3787e3ed6d460867c3947a",
+    "rawBytes": 26860,
+    "gzipBytes": 3091
+  },
+  {
+    "sourceRun": "candidate-counts-50-v1",
+    "file": "counts/exploratory/candidate-counts-50-v1/report.json.gz",
+    "rawSha256": "da2238928e64e6170d974b4c5b71ccf1abb32f79de76d305614dd9029795bef6",
+    "rawBytes": 3184162,
+    "gzipBytes": 271747
+  },
+  {
+    "sourceRun": "candidate-counts-50-v1",
+    "file": "counts/exploratory/candidate-counts-50-v1/sites.json.gz",
+    "rawSha256": "fa841ce0833f72b9f9c8af17bf1a4d293c3b32a0dbce653bead7c7df2f4a41e8",
+    "rawBytes": 26860,
+    "gzipBytes": 3083
+  }
+]

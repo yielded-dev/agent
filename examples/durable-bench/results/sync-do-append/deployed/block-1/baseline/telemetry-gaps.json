@@ -1,0 +1,103 @@
+{
+  "complete": false,
+  "gaps": [
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "compactAgain",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "freshThird",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "warmCompactFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "94cc7d702dedd434d8b3da77658124b6cf035e1e38444fe0537355d0e839f269",
+      "method": "warmCompactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "dd9462664ddf9f08cc32129318c472d63f1ba646ac7514db56128c5f2c9411ee",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "dd9462664ddf9f08cc32129318c472d63f1ba646ac7514db56128c5f2c9411ee",
+      "method": "freshThird",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "dd9462664ddf9f08cc32129318c472d63f1ba646ac7514db56128c5f2c9411ee",
+      "method": "warmCompactFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "dd9462664ddf9f08cc32129318c472d63f1ba646ac7514db56128c5f2c9411ee",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "dd9462664ddf9f08cc32129318c472d63f1ba646ac7514db56128c5f2c9411ee",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "02982b9384d6bf05e9f273358ed2162d2712ed299fa0a333fe7f861d76ec8e35",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "02982b9384d6bf05e9f273358ed2162d2712ed299fa0a333fe7f861d76ec8e35",
+      "method": "freshSecond",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    }
+  ]
+}

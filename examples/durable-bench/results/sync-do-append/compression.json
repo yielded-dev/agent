@@ -1,0 +1,746 @@
+[
+  {
+    "source": "deployed-attempt-1/block-0/cohort-0/baseline/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-0/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102437,
+    "sha256": "d14db186ca2a8838793f80171d59752960450494034f87dccf5e82ffc7046b38",
+    "gzipSha256": "5c2ad1e0e24c5f2209db4169cd80a951484053335c9a6f1f708cd759da78d254"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-0/candidate/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-0/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102454,
+    "sha256": "7da28294d021bb61ed4f143b7e230f1a8deb6a2c972a66b97750aae22e52e400",
+    "gzipSha256": "b5b02d7511ab8fc19bf2b79e7535021c807d4c8e075927c261b1ffe1502fd0d1"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-0/candidate/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-0/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72836,
+    "sha256": "1f4d3b656de276f17907bde65d9e4e7eaa1441234a6749360b0713589290373b",
+    "gzipSha256": "f6a974dd487e6344daf62b81f2825686341f61c80e8c9a0b3555ce32085543fa"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-0/control/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-0/control/large/evidence.json.gz",
+    "bytes": 9737674,
+    "gzipBytes": 102417,
+    "sha256": "85708883a04bdf3d637e13ce71f3586fca4cfcb6cb716864d17e73f3c08397f5",
+    "gzipSha256": "0f9cdd48771597bbc233c3d2b8d03dda17878dbdc261374ef7bbc7521a5be371"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-0/control/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-0/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72825,
+    "sha256": "ba7adbe552b9d7cce734958467313fa00232b4a99c683df4fa427b0a20e86be0",
+    "gzipSha256": "d1eb20bbf0fe955b335bfba28275e5ac5dc16f23bfb9b534de5c2631766f7446"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/baseline/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102443,
+    "sha256": "33bf64334110b847bf45a594e27d1407ef086003a3f800afe58f2d4c7a3942e8",
+    "gzipSha256": "ae2eb9ba30504d529a00d273add06b69d6aa812badf3ae58a2cadcf47ae2468a"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/baseline/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72836,
+    "sha256": "0e639300770d4e43351e72afe1849d89f6db1fe140a40189cf7f7c8f478e82c1",
+    "gzipSha256": "c356894dddd2b1caec359d04a2c51d82373cca3e4fa1f39c16592190efe06415"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/candidate/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/candidate/large/evidence.json.gz",
+    "bytes": 9739235,
+    "gzipBytes": 102449,
+    "sha256": "156fb4a91a09695078cb9b95e015e20ac8c921342e8d7292fdeb586380f2efce",
+    "gzipSha256": "9213ce5576fa84431f3923f42b413f9535b5f7267bb25971bbcbcdcd08af7516"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/candidate/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/candidate/small/evidence.json.gz",
+    "bytes": 9157325,
+    "gzipBytes": 72847,
+    "sha256": "a4d051c1676fe5486d949a6849d44ec4a70d1e2613b7eb196df3877c233ac5a5",
+    "gzipSha256": "eac1c14f44e97ee48508a615cad3bf729d083a6e2130e9276d23e265846e853a"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/control/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102408,
+    "sha256": "1abf8c65864b4667c9b1e1b51d28d413c398abb7e21f2d9ef6754bbc2990c315",
+    "gzipSha256": "f2302ed6ffd15a8f32674ddc2c43f325586d7b8de133c8d4b7a62407bbd3f8b2"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-1/control/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-1/control/small/evidence.json.gz",
+    "bytes": 9155763,
+    "gzipBytes": 72808,
+    "sha256": "425875c4d823d2848d2b6b773b5fe7873c511a627ff6d6315c2a76133df1d1de",
+    "gzipSha256": "21c65386df17adc0f8fcdea969e0e0d8292326c2b8963c8ee3a85cc7ba0364d6"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/baseline/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102448,
+    "sha256": "e0bbdc7d5d8354299a940d6569b520d0bb2df41e1f7631dc10cc885e05431b3d",
+    "gzipSha256": "189419aff96b7d8799acad680c49eb3a7a54fcc80d58a3ba38c5ae600b75a11e"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/baseline/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72839,
+    "sha256": "7ec0d6e070f70c0c6dd97e1a01faf08f8bb27986dcef87aaa5bd69db78fa64ae",
+    "gzipSha256": "f481db55c57b290fd43e960f90069096efba4592ec26de5ac641fe57e54585e9"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/candidate/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102477,
+    "sha256": "a1faf1c8e4c5426f147ecd052100fc22c7beb16c2f17a698a4215f5c5278b03a",
+    "gzipSha256": "3cce1f351b0c19650d5572883c8be9c4c231e3b379f15d6a101cfabc8a7ac05a"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/candidate/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72838,
+    "sha256": "54693d81990825cc095a532031ae4a9fa1f3328eb6f9a9a8ee1d8e70775ecf53",
+    "gzipSha256": "ef8c775e06faa619a1fe273b90ef075392fc42c035fe675bacd778d4e1b66edf"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/control/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102410,
+    "sha256": "24677b725f0c9f9e1ce385614e9ad80d13796f6151433804300988d234ec98bd",
+    "gzipSha256": "62935de13df17a2c0cb4af0f3d3e0aae1d8ccc2b2ec7060b1cf7442267f5ea31"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-2/control/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-2/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72831,
+    "sha256": "bbd19db0d332d9f070450ffa3003c2ab9acd3cc72d6bfc82fa18436f3b673c88",
+    "gzipSha256": "8e13f355c51f975f0cf649e0a7d2098d1005145b92fc5011f750d73ab9cb7472"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/baseline/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102479,
+    "sha256": "525046078cb46b4d5eee667fcab0c66133fe12c0e0ec3152a65661e4e7c8ab4f",
+    "gzipSha256": "f6e87ad8f92ba6ccd50303357473b2982a6bd15196dd381548b4636bec9847b1"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/baseline/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72857,
+    "sha256": "2636e97093ce775affea55ab7aae5647f37180c56074e01b2e97d955a244c927",
+    "gzipSha256": "0bd1e48ff9c8500c313ec65223c55fe3c195abc991ce708c8875af17114529f6"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/candidate/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102441,
+    "sha256": "f9bf73f9758dd2b05babb2a3ebda937d7151a5a5d3502e036da8032206278c80",
+    "gzipSha256": "2babbc796026be645b029f6de52f007cb041fbda16d1e060f099499cc31f89f2"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/candidate/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/candidate/small/evidence.json.gz",
+    "bytes": 9157325,
+    "gzipBytes": 72843,
+    "sha256": "4765feae16cca527a6383c80d7527455996b0bbbbd06172cae0cbf45a5a41c39",
+    "gzipSha256": "f94fb3391743db08113677afb2815432ecbd31a9968c184eea6241193aef289c"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/control/large/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/control/large/evidence.json.gz",
+    "bytes": 9737673,
+    "gzipBytes": 102417,
+    "sha256": "844c382c065ff4b0ce78befa8509da1fa46f312f8433ad605700c8b39983195f",
+    "gzipSha256": "b40b573b7e2fcb3c7bac62a2976fe364adb7505e0fa25faf9d47e76d181f5df9"
+  },
+  {
+    "source": "deployed-attempt-1/block-0/cohort-3/control/small/evidence.json",
+    "compressed": "deployed-attempt-1/block-0/cohort-3/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72828,
+    "sha256": "ba5ec6b52eb52b1cd71de8532176b4eda6ca3c9bb8a35de22399408c88f3cef6",
+    "gzipSha256": "1ed2e2f598079c08ae45654c7f25961021769cf6d06714daaec16cadd752d2a6"
+  },
+  {
+    "source": "builds/baseline/worker.mjs.map",
+    "compressed": "builds/baseline/worker.mjs.map.gz",
+    "bytes": 13800891,
+    "gzipBytes": 2513152,
+    "sha256": "c4cbf122dae6e1c64bf18cd39ba26f3be4f912c4bdbd9b0e85251ddf40148e4f",
+    "gzipSha256": "f0043d8e9c89041697d016c185c97ae10cf4a790360ed804f2c86808fa457dff"
+  },
+  {
+    "source": "builds/candidate/worker.mjs.map",
+    "compressed": "builds/candidate/worker.mjs.map.gz",
+    "bytes": 13851405,
+    "gzipBytes": 2529642,
+    "sha256": "53600f3ceeb8b598d356d2efb01ee923c29679fdc3bfc823ad3eaffa9c34eb3a",
+    "gzipSha256": "fb04d9768a46e155524980f3adaad31372f311ced25695773d7c144ef357d208"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/baseline/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/baseline/large/evidence.json.gz",
+    "bytes": 9738454,
+    "gzipBytes": 102454,
+    "sha256": "10743081f53b6c4d7e6dd19a5c91c9aa85fb1c8e572e0df4e2f8b8447708dd6a",
+    "gzipSha256": "ae3e56f3d11e56acef196ab762e80ce42116331a8849130fa36ce09e4985b132"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/baseline/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72834,
+    "sha256": "fd5dd0908d225fa908d85d4173cc9846de6dd639153695657a19ba84546e892c",
+    "gzipSha256": "9671a94d97c334e515793118a24377add8325c2f9d0cdca9470fa743ce71850b"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/candidate/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/candidate/large/evidence.json.gz",
+    "bytes": 9739236,
+    "gzipBytes": 102468,
+    "sha256": "07ee9f0b2c8f6900ebc25c6026054563b3ca13cc839f910551a28a36f74bcf04",
+    "gzipSha256": "0e8476f86f993191a5678e00cf49b3fb868ff7ede2aa83caeec23ba93c096e4c"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/candidate/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72847,
+    "sha256": "199770b48ac5b490b32ddda56123727f2494b1b68228514c659718f3ce682705",
+    "gzipSha256": "a6269af1e2030425dfba459b8eec8a9ebd34879d3341b8f2b5c2615d585a18df"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/control/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/control/large/evidence.json.gz",
+    "bytes": 9737673,
+    "gzipBytes": 102375,
+    "sha256": "47b16be1dda4e6979f8273491a235a0583a660ded78aae9bb04094c0fff963e7",
+    "gzipSha256": "b091dadd103b80545707359b924b6c55b7a65b65887d6496b9ddfc815c732a3f"
+  },
+  {
+    "source": "deployed/block-0/cohort-0/control/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-0/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72804,
+    "sha256": "062809351a1f7bc7cb47a1bdfac6d2476c16e3a59724d154d2f6aeb9dc6dae74",
+    "gzipSha256": "bac73c8fa70dd99e923ece7b6dfa4fc8335a1a1f859632e282e1f7a7089a5d2c"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/baseline/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102439,
+    "sha256": "b0b4485c7d4de088929f61f0e7f31642af7c25f5219e9d58c9504041ddaceb7f",
+    "gzipSha256": "03ffff1ec568db7ee844e63247537216b8df1be603abd890cad8c82a0b76626d"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/baseline/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72825,
+    "sha256": "d145c6caf1076858fb83d3617b71283b79be0a9d0e5641919f9e250f00bedca5",
+    "gzipSha256": "15e50f7e9ecb1af5df16017fa74f60f529b6a3676b0e66e38c8f9b22b6dbcbef"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/candidate/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102445,
+    "sha256": "61efc19acacdd4bb7c77d704584024613529595a0ad2e18ed14e088fe4356846",
+    "gzipSha256": "874623e6624b9764409d148221d2e1b196702cf6f359ab8f839b77b3581a6227"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/candidate/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72826,
+    "sha256": "a992f1aa31ff1d5b2fe8c37df7cc46d42ef1cd38a86db79a160992403c9758c2",
+    "gzipSha256": "ac1e8cb563dbcac43dfcd5bf376abccda4cbfec778ad2cd986dcbe8876a07e60"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/control/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102398,
+    "sha256": "27df89bd13306085fdd23e8191c3c0a1d58c1bfec9e9eca4e6d21eb3152a9bf0",
+    "gzipSha256": "70c1ab4f99d2e92bed7040f82b273253d3a957843377fccfc11041d3277cded6"
+  },
+  {
+    "source": "deployed/block-0/cohort-1/control/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-1/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72810,
+    "sha256": "61b380e9452c95b5cac195ee746398555984084e4a38829df3107a944518d9a3",
+    "gzipSha256": "b40949368a2f500b93bbcc7da313aa24df06b2e8aec29bccbeacaf20a718f4a8"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/baseline/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102478,
+    "sha256": "9516e30a8b8afd265996fe72d4935dbe8c0d0343a45ec9af9bbce3ea16baecb6",
+    "gzipSha256": "4bf367a5551297bfdbe18646b64d892e15f13b986e9fcf4e7a7bb262ac74eafe"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/baseline/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72839,
+    "sha256": "1c0bdfd8280cae629f318d94e0322d7b3f68f171962610dea407c17794df2c9a",
+    "gzipSha256": "db09160141af59fc5af77affe74571afed0532df45c3c6978a74c4773ae62dc0"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/candidate/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/candidate/large/evidence.json.gz",
+    "bytes": 9739236,
+    "gzipBytes": 102465,
+    "sha256": "29277cf3e05dfd5786f11cdd110d4ef3e88135cde66e7980e6c7b8648215b063",
+    "gzipSha256": "c3c71eeba903e80e01373264c8a9aee517340e55d763ff77ce56d9441717f794"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/candidate/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72836,
+    "sha256": "93613d8e3d332da9ac204fd5057700f87de16db8414c94af3fb22c0d6a87c256",
+    "gzipSha256": "a94da8cb606d9f37b4058d13f72c58e8b680f4c2de227dee7c75918ce4be0779"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/control/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102436,
+    "sha256": "43737f8e0afd4700bf937bedcd865d92f3385a7f606ba7e3e52a3c7077aaed92",
+    "gzipSha256": "53d30ed03c66e0756569fd97ae07a9c98b415914a7db56034d9bc655e05eee4a"
+  },
+  {
+    "source": "deployed/block-0/cohort-2/control/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-2/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72836,
+    "sha256": "a941c26e07ead1c0670ee18c545679304adca8e37b7845345a30c4110be81515",
+    "gzipSha256": "2c29f98b10dafdeff1e88b3faa268aaf6d639f1a491fa5d2a6736764368aa363"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/baseline/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102473,
+    "sha256": "4d3755041c173f207fa8dd2ab8351b87468693dc2352c720f155a0efcc619a17",
+    "gzipSha256": "bb5e1f9be70d0c0d3350bba8da12088c980481d7100fb9e2f92f389366f29efd"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/baseline/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72827,
+    "sha256": "7bddf5716a104ed25b62ac566753c141da2882a949466cf3898e8c12516201de",
+    "gzipSha256": "75bd078e3fc5a284a8a2b50dfba61c8b987cbd2be27f3f0277a159a2a9da15e3"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/candidate/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102445,
+    "sha256": "712b4a2777f91852f7d7c85395acc5059d3fcc026562746cbba1c233d45380c4",
+    "gzipSha256": "b4148e6e44b17b1c840ed8f554f114bc0c570b0c04675a1606eb09dcc5edeea1"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/candidate/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72850,
+    "sha256": "8d270dfa9f0af7d926cf3e259e8c8785b335f2b8cd856ffd0c80eca739a4afad",
+    "gzipSha256": "62d6d1dd046108a18136d108360e18e94ccd815ae70bf96d6341fa711093e290"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/control/large/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102431,
+    "sha256": "751c2955e55563b4f67e512343b8039fafe9d2804f6773d5019ca42c85c48c1f",
+    "gzipSha256": "8e3e129a2a9d26a864e91149143151cda5ecba7ec6c8eb25f8c6dde1a9c58833"
+  },
+  {
+    "source": "deployed/block-0/cohort-3/control/small/evidence.json",
+    "compressed": "deployed/block-0/cohort-3/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72825,
+    "sha256": "82b7e0d6c5b50b965179b6d8971f5eaefd4170a17eb9a24b7f95d43e8237a800",
+    "gzipSha256": "1832a2693c9368ddbddc40003f8097412784b9f2dbf214bc744dbe9c9bd1aa27"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/baseline/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102441,
+    "sha256": "1df827a5d5e22c5070e08f9316cb3617465e6057c819f77a4ba9cfec672467e1",
+    "gzipSha256": "808762d2352b1000d45e61dcb3481c13b94b2ae2219feaadee62498f07a612b3"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/baseline/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72835,
+    "sha256": "f253b10231e671a4564faa4eaa86f5b8987115ba84ccc8574a2536fda62fed0e",
+    "gzipSha256": "9a336a3f39ce1c6d35bb676f196dba194fcae4bdf51fac99b6357994989bdfdb"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/candidate/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102441,
+    "sha256": "bfb3675dd252629dbba89eace4074d2e66fd245fa1dbb212bd5715b558ea92fc",
+    "gzipSha256": "3d12599869f1c00cb9e42c6be39ab49f8e1e861f0f7758dabe234c7a51c128c5"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/candidate/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72835,
+    "sha256": "11160ef1ea79cde347da8017bdd3774b0b90f6458fd2098c0ec6254fd5c9e9b5",
+    "gzipSha256": "a7efb3d890aad1e905384025cc754e669fbc89bd753f3fa4eab7eb50bf71fccb"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/control/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102410,
+    "sha256": "915fa675632ae7936fa3295bd2393333174f40734f8c1f3d0ad8a235ba782619",
+    "gzipSha256": "cb327adc0ff73931c6abd0f5163697a507a31da52192d4c274468b6d652c9707"
+  },
+  {
+    "source": "deployed/block-1/cohort-0/control/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-0/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72831,
+    "sha256": "dbc9c822951a6c21b7adc02b178b52d6dd6c4ed2ea8098f8525d20c971d2af7a",
+    "gzipSha256": "2ca67a7d06a4d98c21ee6695afc979ebb05253633ddad67606a093fc48831c76"
+  },
+  {
+    "source": "deployed/block-1/cohort-1/candidate/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-1/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102464,
+    "sha256": "270e3185fed66fdce5fee92fed8e676ff62ef082db7b976ce0f76934f9df45d2",
+    "gzipSha256": "eb35aa7541ec2bdc430f72cde5888f8d9a1eb4b2609164cbef583d33ba9b6adf"
+  },
+  {
+    "source": "deployed/block-1/cohort-1/control/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-1/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102406,
+    "sha256": "70e04e5243d53ddc950b4ba0a56d7545e28c377274bac3b949a31f93e1a0df06",
+    "gzipSha256": "0229331cab591314e0740148de1371115e117a287c82299c48c959f82b7ec588"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/baseline/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102460,
+    "sha256": "ae3e2049165604e2f7a7faaa5542435299ccfd5eab0a613ba2d119176da9ad4e",
+    "gzipSha256": "5215b55e7bdb5ce812c18b27b6b6fee94f3a328bbfdfeb6dc26fa7706f8ad98b"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/baseline/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72842,
+    "sha256": "d8d2ff7d06836f67f512b1dd782f83374d2023a0719ec53e8d2a8c928926e16e",
+    "gzipSha256": "b1f5ea771204b319360c29b502148e5f235c9ac90765863fd699e5da7e82c530"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/candidate/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/candidate/large/evidence.json.gz",
+    "bytes": 9739235,
+    "gzipBytes": 102449,
+    "sha256": "d8713600a24ed450bf2d4f38ab2942c18f288c3c94973d25fa9ecd4894ea882a",
+    "gzipSha256": "8093e974f650f1e3f5696ef7235dccd4276669ff591fcbeedeb0d8f423fb7dc2"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/candidate/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72855,
+    "sha256": "183b8b59821d7f86e49b2f0799edcb24a0249b87d3ac05d44f7af87457c61dc1",
+    "gzipSha256": "feb5efe2af7902a2db9dbf2a527f478857b34563865a492290645f89efa5dd8e"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/control/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102422,
+    "sha256": "e4fd348e95d05de5b9d0792f7ef5815e12561deb0193f83b48319f89886a2b4f",
+    "gzipSha256": "ad390d3c30a7e0969e3def5bed634a4e416924676651437e806ceaa98e28a7a1"
+  },
+  {
+    "source": "deployed/block-1/cohort-2/control/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-2/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72810,
+    "sha256": "341dff2237815364b83ad830ab2fcb74c8917edca78ae1b572fcec2dff75e8dc",
+    "gzipSha256": "3ce26aacb0848e0bd862913c294ed727e5756fbf848909784855e7b8a9b687e1"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/baseline/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102450,
+    "sha256": "c7ad1d125465478a226ae3f0963cc786bb822f5d741f9a45b735296400d09d91",
+    "gzipSha256": "5ffed4e68a5b27c03c25335bde925e267a3b2704ad9b2aed1dd3730ca7bb42f5"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/baseline/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72838,
+    "sha256": "2e53e19e36ccf6c8195784509836764a9f734a55307fa538e7d66bf8c3badcd2",
+    "gzipSha256": "518df5c4c4d65ce808b9122d11736a52248929c1294d70cc2e5c2b96fbab5bb0"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/candidate/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102474,
+    "sha256": "bb37ddbe06a1d6bfe7efe4beb3bcd68c1ef8db36e3899d1e2905ca454d4987b9",
+    "gzipSha256": "e4ce771be1d50a9e8e981195f4cc05ea781a68c316dc8cd7721ed1632f2e1b89"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/candidate/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72857,
+    "sha256": "43d3285003c6144fbc4a9d8095f62bcc6ce3379c4b3e1fa9147936e3f49960c4",
+    "gzipSha256": "4e7a6e43e30809119fe876909c15f61a9d2cd5a7c58f8af9c5878c074e931fe3"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/control/large/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102438,
+    "sha256": "3dd3928f481428fd53355e213ec1289ffd7ea803f3ab82059924d5be27a53bfa",
+    "gzipSha256": "902b285ea6c2709770cbe4a1424236852ad4d00b3bd002e84583b85464e8188f"
+  },
+  {
+    "source": "deployed/block-1/cohort-3/control/small/evidence.json",
+    "compressed": "deployed/block-1/cohort-3/control/small/evidence.json.gz",
+    "bytes": 9155763,
+    "gzipBytes": 72856,
+    "sha256": "5ad59eac86095e05ed28228d1c9a2ee1e2fc4e82c1bf3953ce31ba84afa254cf",
+    "gzipSha256": "963de6bbba1cccf7d86fac89c8657658101dd02958d452e10f160d33168020d9"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/baseline/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102441,
+    "sha256": "3e3bad8582e82953229bca7e92b5010e12039d5801146cef99d4a9984e539072",
+    "gzipSha256": "e81b64ac8f7bf80e877137ff2e59d66fb3d97564401cce0f6dc56f012bfad763"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/baseline/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72854,
+    "sha256": "51e7128c4224b03e30312865f2316bb11a4a9686493897776cb05011e2188972",
+    "gzipSha256": "87e54f329f4ef0ac454e79265332f58e6ce33fac335f45d51e3cce36032a3662"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/candidate/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102466,
+    "sha256": "6efd60bbbbb55142b130e5289cc98f1582b853fecd1ebe4887e2fe6fc6296c07",
+    "gzipSha256": "18aff78b32d47132b1aeeaf5e4b2c2fb78a6ecb44dc2c7d1cb77a3fa17fbb162"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/candidate/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/candidate/small/evidence.json.gz",
+    "bytes": 9157325,
+    "gzipBytes": 72850,
+    "sha256": "e9de9d29cf58e8b05f94074728403da08f3c2a95cf33a37b61be88bbbf57e111",
+    "gzipSha256": "94a9b837774386e3745ca34a344356cdc71fc633ed59c1709a80fb5438b9ad1f"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/control/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102429,
+    "sha256": "b6d7c0e2e0af17407a91aaea92ee4d9b668098551eb387b819f0c4c8550f3ed6",
+    "gzipSha256": "9121c05b79df8df241d6bac381415b80a580c31f113e7b3836b9f20457da4455"
+  },
+  {
+    "source": "deployed/block-2/cohort-0/control/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-0/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72834,
+    "sha256": "bd5b1ed210f4e8bfa543f48b34927051c27fbc8f74238edcabbb7c02aeaf42d2",
+    "gzipSha256": "cf7f87ab29dfc98d2d8953f4d7c5151bef88937696af04d5dc8079236aac98cd"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/baseline/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102447,
+    "sha256": "ca360e839624ecccb644a5a19f9e6a31aee7e1770d4f8522252ae1a8c7ea9bb9",
+    "gzipSha256": "d4eefda2b8035178eced7460f65e942bef43078997a6fba86353831ee36b7988"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/baseline/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/baseline/small/evidence.json.gz",
+    "bytes": 9156542,
+    "gzipBytes": 72825,
+    "sha256": "aae6eea974bffc46f4fed691f899f92514dceae7773c72aa7c4660528f9a3552",
+    "gzipSha256": "82b436cc3438d21c089c7886f75c1b3c704400916a2aec5cc5f0d8efd5a4a02b"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/candidate/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102471,
+    "sha256": "0eccfacf3e30b4b17868837b76b5bb2a5c8f2d956a84f52f650aff19cf76072a",
+    "gzipSha256": "85e01e08937b2a844d7871034246be6450bc2dcf69126c309c32c33414924182"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/candidate/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72840,
+    "sha256": "2d733c7d6682bb128cb19d7701b4bfc0667f52bd93ac9aa117e1d5ac783ba330",
+    "gzipSha256": "a2e68ae9ba1b020d9f4deec40742c3589c1a327a2bda4e256a4ba074f2b66839"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/control/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/control/large/evidence.json.gz",
+    "bytes": 9737674,
+    "gzipBytes": 102413,
+    "sha256": "0b6231c5124ca2538a280bbfcb63c4f560ac9dc830a02b65e9e7eee06a940ca2",
+    "gzipSha256": "b5c5686c2aefcec5fe37a5edff494fb2d6e900ebd3a5a6d4b85573aa0bea5f6f"
+  },
+  {
+    "source": "deployed/block-2/cohort-1/control/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-1/control/small/evidence.json.gz",
+    "bytes": 9155761,
+    "gzipBytes": 72806,
+    "sha256": "e1c33f18193afc1d2a9786e4985b653cff65371a392ddc5e1a2b2fd7dc7a999d",
+    "gzipSha256": "18cc7c0c459130c7a086fd564c8a5fbf829815c3911e4f2e1391a66a3b588318"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/baseline/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102457,
+    "sha256": "fc793b365882b77493c45911998fd376db9c96b5c7ed70f4141c2b3829a0af7f",
+    "gzipSha256": "62f09a3a956fc36a717c876f9f8fd3d2a8f4e182d8d5db36c35b5b491e6c1e70"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/baseline/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72852,
+    "sha256": "beadad11376cd7691799f1b727f62b137ab783cc86a5e476ced03a9ce695351f",
+    "gzipSha256": "9c3ff0cfc1b7b5c24d835f3808b0905fbcdff7c26bca7f1005ac5fb26434a7ea"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/candidate/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102464,
+    "sha256": "267e30e640c5ee300908300330a39aeb62276e03b71127866ad30c2c1cc084b6",
+    "gzipSha256": "9da1ca803a7b0870803c5e061b3a7d371cf835aee9a1b88f599606206ad90285"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/candidate/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72850,
+    "sha256": "3b87598116eda8b58861deec08faa1b0597560b0c55fbd56fc26564941caac5f",
+    "gzipSha256": "4b593d1309ab577c45dd1479c0d83938bf390b3563f0dbddc0b7a304a07002ff"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/control/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102428,
+    "sha256": "ff00c88a7a319bd092d99f980838aa00dcdbeeee7b14efcb0f9d9423721dd4ec",
+    "gzipSha256": "e24dc5f25ab86dabfd98034c51d0f42be7407032017c6e25f0d8f88a1269eda6"
+  },
+  {
+    "source": "deployed/block-2/cohort-2/control/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-2/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72823,
+    "sha256": "ec79545b6218c63acc4138b829de53442a3c5f525f0d02f4a64bcbd011234b4d",
+    "gzipSha256": "1ba750ea0aa403c124ccdd0cf83078bd557c6a1e30a035e1287730de1792453e"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/baseline/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/baseline/large/evidence.json.gz",
+    "bytes": 9738456,
+    "gzipBytes": 102449,
+    "sha256": "94a4c20fcec44dc8ddf3c586a2e724806c378c3913c41fb892fa4c1878757198",
+    "gzipSha256": "c572c043fb97bf224b771c5f1c2daa27f933e5b338240a078aa323e3a72bc8da"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/baseline/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/baseline/small/evidence.json.gz",
+    "bytes": 9156545,
+    "gzipBytes": 72860,
+    "sha256": "9d536f9d5b0e772f63f79f3b421c55549d061edf1e90e0e4692d032b4a664eb7",
+    "gzipSha256": "6c85e5c5606c1558d6001f5b188cfd412cd033b6b961f5cc011a3657be0ae1e7"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/candidate/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/candidate/large/evidence.json.gz",
+    "bytes": 9739237,
+    "gzipBytes": 102465,
+    "sha256": "782df5ac14ef0187f31887b4f91ab8cecff8a3f2a5d52d78304ff3ef0b1cfd8a",
+    "gzipSha256": "3e0d29004799410697c2ffe918d08f97fe780cdecbf0f8d49017e3a49dd0e188"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/candidate/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/candidate/small/evidence.json.gz",
+    "bytes": 9157326,
+    "gzipBytes": 72829,
+    "sha256": "adabd79d5eb18dcfaf286873caf7c131c4619997f9836ca3ca3e9fa4f88e79fc",
+    "gzipSha256": "6ddef4d6fd0520af604e7b0c0c6c834852874eb63a14cabc31a352f2e3f21566"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/control/large/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/control/large/evidence.json.gz",
+    "bytes": 9737675,
+    "gzipBytes": 102440,
+    "sha256": "47f7e7af22d76fd16687ff93cd807897bd7c91e794b8dd45e445a45778450851",
+    "gzipSha256": "bfbf5cc2ae5d001d826c98701f2ca2f70d1557f912f806c66680b9159db55c7f"
+  },
+  {
+    "source": "deployed/block-2/cohort-3/control/small/evidence.json",
+    "compressed": "deployed/block-2/cohort-3/control/small/evidence.json.gz",
+    "bytes": 9155764,
+    "gzipBytes": 72838,
+    "sha256": "c2fa65992a4cc1533602064c42d55d1c6c090cb57c373dfcb6321e19733efbf1",
+    "gzipSha256": "b83ff9990e09d4041aad9710237812242f940584bb97ce4ec193faed1bd51d2c"
+  }
+]

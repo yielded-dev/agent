@@ -1,0 +1,98 @@
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /private/tmp/sync-do-append-baseline-8c05714d/tooling/pr-review-eval
+
+ ❯ test/local-git-repository.test.ts (6 tests | 6 failed) 34235ms
+     × validates an exact changed path beyond the 100-result file listing 6187ms
+     × accepts changed source searchable despite the read-file line bound 6057ms
+     × keeps capacity-excluded paths readable while honoring explicit source exclusions 5007ms
+     × fails closed when a pinned blob is missing from a partial clone 6777ms
+     × exposes committed callers and keeps the Action's ignore, binary, and symlink scope 5195ms
+     × stamps local source identity on observations without claiming frozen fixture source 5011ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > validates an exact changed path beyond the 100-result file listing
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:156:6
+    154|
+    155| describe("pinned local Git review source", () => {
+    156|   it.effect("validates an exact changed path beyond the 100-result fil…
+       |      ^
+    157|     Effect.acquireUseRelease(
+    158|       Effect.sync(makeCrowdedGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > accepts changed source searchable despite the read-file line bound
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:184:6
+    182|   );
+    183|
+    184|   it.effect("accepts changed source searchable despite the read-file l…
+       |      ^
+    185|     Effect.acquireUseRelease(
+    186|       Effect.sync(makeLongLineGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > keeps capacity-excluded paths readable while honoring explicit source exclusions
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:210:6
+    208|   );
+    209|
+    210|   it.effect(
+       |      ^
+    211|     "keeps capacity-excluded paths readable while honoring explicit so…
+    212|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > fails closed when a pinned blob is missing from a partial clone
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:259:6
+    257|   );
+    258|
+    259|   it.effect("fails closed when a pinned blob is missing from a partial…
+       |      ^
+    260|     Effect.acquireUseRelease(
+    261|       Effect.sync(makePartialGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > exposes committed callers and keeps the Action's ignore, binary, and symlink scope
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:290:6
+    288|   );
+    289|
+    290|   it.effect(
+       |      ^
+    291|     "exposes committed callers and keeps the Action's ignore, binary, …
+    292|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > stamps local source identity on observations without claiming frozen fixture source
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:359:6
+    357|   );
+    358|
+    359|   it.effect(
+       |      ^
+    360|     "stamps local source identity on observations without claiming fro…
+    361|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  08:41:06
+   Duration  35.10s (transform 297ms, setup 0ms, import 772ms, tests 34.24s, environment 0ms)
+

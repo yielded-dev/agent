@@ -1,0 +1,26 @@
+{
+  "complete": false,
+  "gaps": [
+    {
+      "cohort": 0,
+      "objectId": "885d16cba18444fa0aaeff1d3add80164b98b4176788edafe10a4c145517e0ef",
+      "method": "warmCompactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "743bc58f21b9c331810c27e836d1cd2f582f2e59cac19025e4d801189c889f1d",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "92a0ccb0b00296cd98b1e7f5f9b7043ac8baa1e5444871061766bacb56d52982",
+      "method": "freshFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    }
+  ]
+}

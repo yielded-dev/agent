@@ -1,0 +1,12 @@
+{
+  "command": "vp run perf:cloudflare:cpu --baseline-dir examples/durable-bench/results/sync-do-append/builds/baseline --candidate-dir examples/durable-bench/results/sync-do-append/builds/candidate --output-dir examples/durable-bench/results/sync-do-append/deployed",
+  "controllerRevision": "452949cb57b417f3b481eb68afd9893d2bb7aa1b",
+  "exitCode": 1,
+  "reason": "The strict 720-sample completeness gate failed. No CPU values were imputed.",
+  "completedBlocks": 3,
+  "completedObjectProofs": 68,
+  "failedObjectSequences": 4,
+  "validatedSamples": 611,
+  "telemetryGaps": 69,
+  "cleanupComplete": true
+}

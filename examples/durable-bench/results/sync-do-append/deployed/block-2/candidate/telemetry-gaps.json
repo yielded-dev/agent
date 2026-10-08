@@ -1,0 +1,82 @@
+{
+  "complete": false,
+  "gaps": [
+    {
+      "cohort": 0,
+      "objectId": "c4466c996696dbfdd1926c55ff7df732d09feefe6f27ae555017fa08972badaf",
+      "method": "freshThird",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "c4466c996696dbfdd1926c55ff7df732d09feefe6f27ae555017fa08972badaf",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "c4466c996696dbfdd1926c55ff7df732d09feefe6f27ae555017fa08972badaf",
+      "method": "warmCompactAgain",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 1,
+      "objectId": "c5403a07fadcf327d6dbd1ebad0da17becc7627e4c0c9d8cdd1bd834082ae4a9",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "9699dd0e060264cdef78bba3840defb9d5cbe48fb2c06c10b34e533758bced5b",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "9699dd0e060264cdef78bba3840defb9d5cbe48fb2c06c10b34e533758bced5b",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "9699dd0e060264cdef78bba3840defb9d5cbe48fb2c06c10b34e533758bced5b",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "e5a4e49cc33b3774760289294d7ee53e66fbf75f0c1484438cc1361e2551caed",
+      "method": "compactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "1f4a1c368c92455cf433664b3baa63b7f9b1fcb5dbdeeb270cf7119737597540",
+      "method": "compactAgain",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "1f4a1c368c92455cf433664b3baa63b7f9b1fcb5dbdeeb270cf7119737597540",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "1f4a1c368c92455cf433664b3baa63b7f9b1fcb5dbdeeb270cf7119737597540",
+      "method": "warmFreshThird",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    }
+  ]
+}

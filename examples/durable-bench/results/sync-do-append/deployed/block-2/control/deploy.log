@@ -1,0 +1,36 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[09:12:14.034] INFO (#1): Deploy · 9ae06eab24224b46-b2-control
+[09:12:14.034] INFO (#1): Importing stack module
+[09:12:14.774] INFO (#1): Resolving stack services
+[09:12:14.783] INFO (#1): Loading stack state
+[09:12:14.784] INFO (#1): Computing plan
+[09:12:14.787] INFO (#315): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[09:12:14.787] INFO (#315): Cloudflare Worker read: checking sync-do-append-9ae06eab24224b46-b2-control
+[09:12:14.941] INFO (#1): Plan ready (907ms)
+[09:12:14.942] INFO (#1): Plan: 1 to create, 4 binding changes
+[09:12:14.942] INFO (#1): [sync-do-append-worker] create
+[09:12:14.942] INFO (#1): [sync-do-append-worker/REPLAY_CPU_RUN] create
+[09:12:14.942] INFO (#1): [sync-do-append-worker/REPLAY_CPU_THREADS] create
+[09:12:14.942] INFO (#1): [sync-do-append-worker/REPLAY_CPU_TOKEN] create
+[09:12:14.942] INFO (#1): [sync-do-append-worker/REPLAY_CPU_VERSION] create
+[09:12:14.942] INFO (#1): 
+[09:12:14.945] INFO (#396): [sync-do-append-worker] pre-creating
+[09:12:14.946] INFO (#396): Cloudflare Worker precreate: starting sync-do-append-9ae06eab24224b46-b2-control
+[09:12:14.946] INFO (#396): Cloudflare Worker precreate: durable objects [{"logicalId":"REPLAY_CPU_THREADS","bindingName":"REPLAY_CPU_THREADS","className":"ReplayCpuThread"}]
+[09:12:15.933] INFO (#396): [sync-do-append-worker] creating
+[09:12:15.933] INFO (#396): Cloudflare Worker reconcile: starting sync-do-append-9ae06eab24224b46-b2-control
+[09:12:15.933] INFO (#396): Cloudflare Worker reconcile: durable objects [{"logicalId":"REPLAY_CPU_THREADS","className":"ReplayCpuThread"}]
+[09:12:16.043] INFO (#396): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:REPLAY_CPU_THREADS=ReplayCpuThread"]
+[09:12:16.043] INFO (#396): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:REPLAY_CPU_THREADS=ReplayCpuThread"]
+[09:12:16.044] INFO (#396): Cloudflare Worker create: preparing bundle for sync-do-append-9ae06eab24224b46-b2-control
+[09:12:16.048] INFO (#396): Cloudflare Worker create: uploading script for sync-do-append-9ae06eab24224b46-b2-control
+[09:12:16.048] INFO (#396): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"REPLAY_CPU_THREADS":"ReplayCpuThread"},"currentDoClassNameByLogicalId":{"REPLAY_CPU_THREADS":"ReplayCpuThread"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[09:12:18.121] INFO (#396): [sync-do-append-worker] created — Enabling workers.dev subdomain... (3.2s)
+[09:12:18.122] INFO (#497): [sync-do-append-worker] created — Enabling workers.dev subdomain... (3.2s)
+[09:12:18.123] INFO (#1): 
+[09:12:18.123] INFO (#1): Done: 1 succeeded (3.2s)
+{
+  workerName: 'sync-do-append-9ae06eab24224b46-b2-control',
+  url: 'https://sync-do-append-9ae06eab24224b46-b2-control.danieljmerwe.workers.dev',
+  namespaces: { ReplayCpuThread: '85fcd4ed718945fb939aee17eacc92e1' }
+}

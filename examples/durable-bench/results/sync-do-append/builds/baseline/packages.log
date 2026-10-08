@@ -1,0 +1,877 @@
+~/packages/effect-agent$ vp pack
+~/packages/ai-decision$ vp pack
+ℹ entry: src/index.ts, src/durable/ThreadImport.ts, src/durable/ThreadArchiveRange.ts, src/durable/ThreadTransfer.ts, src/durable/RecordFormat.ts, src/core/Agent.ts, src/core/AgentError.ts, src/core/AgentPolicy.ts, src/engine/AgentRuntime.ts, src/core/AgentUpdates.ts, src/capabilities/Approval.ts, src/capabilities/Budget.ts, src/capabilities/BrowserUse.ts, src/sandbox/CodeExecutor.ts, src/capabilities/CodeMode.ts, src/capabilities/Commands.ts, src/engine/Compaction.ts, src/engine/ContextCompactor.ts, src/engine/ContextHistory.ts, src/capabilities/ContextTools.ts, src/engine/ContextWindow.ts, src/engine/DurableStep.ts, src/core/FailureDiagnostic.ts, src/InMemory.ts, src/core/Thread.ts, src/core/IdGenerator.ts, src/core/Identifiers.ts, src/sandbox/InteractiveBrowser.ts, src/capabilities/Mcp.ts, src/capabilities/McpClient.ts, src/core/Memory.ts, src/core/MemoryNamespace.ts, src/capabilities/MemoryNotes.ts, src/core/MemoryReference.ts, src/core/MemoryRevalidation.ts, src/core/MemoryStore.ts, src/capabilities/Messaging.ts, src/engine/MessagingHost.ts, src/capabilities/ModelContext.ts, src/engine/Output.ts, src/sandbox/PageCapture.ts, src/sandbox/PageCrawl.ts, src/sandbox/PageScreenshot.ts, src/core/Receipt.ts, src/capabilities/Redaction.ts, src/capabilities/Remembering.ts, src/core/RememberingStore.ts, src/core/RunEvent.ts, src/engine/RunEventSink.ts, src/capabilities/RunHooks.ts, src/engine/RunOptions.ts, src/core/RunPolicyUsage.ts, src/sandbox/Sandbox.ts, src/capabilities/SemanticMemory.ts, src/core/SemanticMemoryIndex.ts, src/core/SemanticMemoryRevalidation.ts, src/capabilities/Subagent.ts, src/core/SubagentContract.ts, src/engine/SubagentHost.ts, src/capabilities/SubagentReservations.ts, src/engine/ThreadHistory.ts, src/engine/ToolBroker.ts, src/capabilities/ToolDiscovery.ts, src/ToolExposure.ts, src/core/ToolResult.ts, src/core/Usage.ts, src/capabilities/WebCapture.ts, src/capabilities/WebSearch.ts, src/core/Worker.ts, src/durable/ActivityStore.ts, src/durable/Admin.ts, src/durable/AgentRegistration.ts, src/durable/CommittedActivity.ts, src/durable/Digest.ts, src/durable/DurableAgentRuntime.ts, src/durable/DurableFailpoint.ts, src/durable/EventSource.ts, src/durable/GitHubWorkflowSource.ts, src/durable/OperationAuthorizer.ts, src/durable/MessageDelivery.ts, src/durable/LifecyclePublication.ts, src/durable/PersistentHistory.ts, src/durable/PreparedInputAdmission.ts, src/durable/Records.ts, src/durable/Recovery.ts, src/durable/RunJournal.ts, src/durable/RunContinuation.ts, src/durable/ThreadWork.ts, src/durable/RunStorage.ts, src/durable/Schedule.ts, src/durable/ScheduleTransition.ts, src/durable/Scheduling.ts, src/durable/SqlMemoryStore.ts, src/durable/SubmissionLedger.ts, src/durable/SettlementPublisher.ts, src/durable/SubmissionStatus.ts, src/durable/Subscription.ts, src/durable/SubscriptionInput.ts, src/durable/Subscriptions.ts, src/durable/SubscriptionTools.ts, src/durable/SubscriptionTransition.ts, src/durable/Certification.ts, src/durable/DurableFailpointTestControl.ts, src/durable/ScheduleStoreConformance.ts, src/durable/SubmissionLedgerConformance.ts, src/durable/SubscriptionStoreConformance.ts, src/durable/ThreadStoreConformance.ts, src/durable/ThreadInvariants.ts, src/durable/ThreadProjectionMaintenance.ts, src/durable/ThreadProjection.ts, src/durable/ThreadStore.ts, src/durable/ThreadReader.ts, src/durable/ToolReconciler.ts, src/durable/WakeScheduler.ts, src/durable/WorkerHost.ts, src/durable/WorkerAdmission.ts, src/durable/ThreadContextHistory.ts, src/durable/ThreadContextHistoryProjection.ts, src/durable/MessageDeliveryStoreConformance.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ entry: src/index.ts, src/AutoModel.ts, src/LanguageModelDecisionModel.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ Emit types with typescript@7.0.2
+ℹ dist/AutoModel.mjs                        9.93 kB │ gzip: 3.40 kB
+ℹ dist/LanguageModelDecisionModel.mjs       2.90 kB │ gzip: 1.23 kB
+ℹ dist/index.mjs                            0.26 kB │ gzip: 0.12 kB
+ℹ dist/AutoModel.mjs.map                   19.95 kB │ gzip: 5.97 kB
+ℹ dist/LanguageModelDecisionModel.mjs.map   4.67 kB │ gzip: 1.72 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip: 0.26 kB
+ℹ dist/AutoModel.d.mts                      7.25 kB │ gzip: 2.58 kB
+ℹ dist/LanguageModelDecisionModel.d.mts     0.85 kB │ gzip: 0.45 kB
+ℹ dist/index.d.mts                          0.27 kB │ gzip: 0.12 kB
+ℹ 9 files, total: 46.45 kB
+✔ Build complete in 873ms
+
+ℹ dist/durable/SubmissionLedgerConformance.mjs          145.56 kB │ gzip:  24.95 kB
+ℹ dist/durable/SubmissionLedger.mjs                      57.12 kB │ gzip:  14.88 kB
+ℹ dist/durable/Records.mjs                               55.63 kB │ gzip:  15.36 kB
+ℹ dist/durable/Recovery.mjs                              41.48 kB │ gzip:  10.51 kB
+ℹ dist/durable/Subscriptions.mjs                         32.75 kB │ gzip:   6.78 kB
+ℹ dist/durable/ThreadStoreConformance.mjs                31.12 kB │ gzip:   7.45 kB
+ℹ dist/durable/SqlMemoryStore.mjs                        30.91 kB │ gzip:   7.12 kB
+ℹ dist/capabilities/BrowserUse.mjs                       29.76 kB │ gzip:   8.80 kB
+ℹ dist/durable/MessageDelivery.mjs                       26.95 kB │ gzip:   6.39 kB
+ℹ dist/durable/SubscriptionStoreConformance.mjs          25.90 kB │ gzip:   5.73 kB
+ℹ dist/capabilities/CodeMode.mjs                         24.73 kB │ gzip:   7.86 kB
+ℹ dist/capabilities/McpClient.mjs                        23.95 kB │ gzip:   7.12 kB
+ℹ dist/sandbox/PageCapture.mjs                           23.27 kB │ gzip:   5.92 kB
+ℹ dist/durable/Admin.mjs                                 22.12 kB │ gzip:   7.00 kB
+ℹ dist/capabilities/SubagentReservations.mjs             21.58 kB │ gzip:   4.70 kB
+ℹ dist/durable/ThreadWork.mjs                            21.26 kB │ gzip:   5.70 kB
+ℹ dist/core/Usage.mjs                                    18.61 kB │ gzip:   4.21 kB
+ℹ dist/durable/ScheduleStoreConformance.mjs              17.10 kB │ gzip:   3.83 kB
+ℹ dist/capabilities/Remembering.mjs                      16.39 kB │ gzip:   4.34 kB
+ℹ dist/capabilities/WebCapture.mjs                       15.58 kB │ gzip:   4.28 kB
+ℹ dist/durable/Subscription.mjs                          14.71 kB │ gzip:   3.55 kB
+ℹ dist/durable/Schedule.mjs                              14.63 kB │ gzip:   3.28 kB
+ℹ dist/core/RunEvent.mjs                                 14.07 kB │ gzip:   3.79 kB
+ℹ dist/capabilities/SemanticMemory.mjs                   13.94 kB │ gzip:   3.95 kB
+ℹ dist/capabilities/Budget.mjs                           13.41 kB │ gzip:   3.75 kB
+ℹ dist/durable/GitHubWorkflowSource.mjs                  12.62 kB │ gzip:   3.61 kB
+ℹ dist/core/Thread.mjs                                   12.58 kB │ gzip:   3.36 kB
+ℹ dist/capabilities/Mcp.mjs                              12.48 kB │ gzip:   3.63 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.mjs       12.21 kB │ gzip:   3.15 kB
+ℹ dist/sandbox/InteractiveBrowser.mjs                    12.14 kB │ gzip:   2.92 kB
+ℹ dist/index.mjs                                         11.96 kB │ gzip:   2.04 kB
+ℹ dist/sandbox/CodeExecutor.mjs                          11.81 kB │ gzip:   3.49 kB
+ℹ dist/durable/RunStorage.mjs                            11.29 kB │ gzip:   2.90 kB
+ℹ dist/capabilities/ToolDiscovery.mjs                    11.10 kB │ gzip:   3.61 kB
+ℹ dist/capabilities/Approval.mjs                         10.93 kB │ gzip:   2.97 kB
+ℹ dist/capabilities/ModelContext.mjs                     10.53 kB │ gzip:   3.19 kB
+ℹ dist/durable/SubscriptionTransition.mjs                10.51 kB │ gzip:   2.49 kB
+ℹ dist/durable/LifecyclePublication.mjs                  10.43 kB │ gzip:   3.51 kB
+ℹ dist/sandbox/Sandbox.mjs                               10.21 kB │ gzip:   2.67 kB
+ℹ dist/core/MemoryStore.mjs                              10.10 kB │ gzip:   3.06 kB
+ℹ dist/durable/ThreadContextHistory.mjs                  10.04 kB │ gzip:   3.04 kB
+ℹ dist/durable/SubscriptionTools.mjs                      9.64 kB │ gzip:   2.53 kB
+ℹ dist/durable/ThreadInvariants.mjs                       9.05 kB │ gzip:   2.70 kB
+ℹ dist/durable/ScheduleTransition.mjs                     8.79 kB │ gzip:   2.18 kB
+ℹ dist/core/Memory.mjs                                    8.65 kB │ gzip:   2.99 kB
+ℹ dist/durable/ThreadTransfer.mjs                         8.54 kB │ gzip:   2.52 kB
+ℹ dist/durable/ThreadProjection.mjs                       8.46 kB │ gzip:   2.49 kB
+ℹ dist/core/SubagentContract.mjs                          8.27 kB │ gzip:   2.70 kB
+ℹ dist/durable/CommittedActivity.mjs                      8.20 kB │ gzip:   2.59 kB
+ℹ dist/capabilities/RunHooks.mjs                          8.12 kB │ gzip:   2.99 kB
+ℹ dist/engine/RunOptions.mjs                              8.03 kB │ gzip:   2.85 kB
+ℹ dist/durable/PersistentHistory.mjs                      7.93 kB │ gzip:   2.56 kB
+ℹ dist/durable/Certification.mjs                          7.81 kB │ gzip:   2.84 kB
+ℹ dist/core/SemanticMemoryRevalidation.mjs                7.72 kB │ gzip:   2.38 kB
+ℹ dist/core/SemanticMemoryIndex.mjs                       7.70 kB │ gzip:   2.46 kB
+ℹ dist/durable/ThreadContextHistoryProjection.mjs         7.57 kB │ gzip:   2.67 kB
+ℹ dist/capabilities/Messaging.mjs                         7.11 kB │ gzip:   2.26 kB
+ℹ dist/core/ToolResult.mjs                                6.84 kB │ gzip:   2.56 kB
+ℹ dist/engine/ContextCompactor.mjs                        6.69 kB │ gzip:   2.34 kB
+ℹ dist/core/AgentError.mjs                                6.58 kB │ gzip:   1.89 kB
+ℹ dist/core/RememberingStore.mjs                          6.58 kB │ gzip:   2.23 kB
+ℹ dist/capabilities/WebSearch.mjs                         6.51 kB │ gzip:   2.52 kB
+ℹ dist/durable/SettlementPublisher.mjs                    6.04 kB │ gzip:   1.95 kB
+ℹ dist/durable/ActivityStore.mjs                          5.91 kB │ gzip:   1.87 kB
+ℹ dist/capabilities/MemoryNotes.mjs                       5.82 kB │ gzip:   2.25 kB
+ℹ dist/core/MemoryNamespace.mjs                           5.78 kB │ gzip:   1.89 kB
+ℹ dist/core/MemoryRevalidation.mjs                        5.74 kB │ gzip:   2.11 kB
+ℹ dist/capabilities/ContextTools.mjs                      5.55 kB │ gzip:   1.96 kB
+ℹ dist/sandbox/PageCrawl.mjs                              5.43 kB │ gzip:   1.68 kB
+ℹ dist/core/MemoryReference.mjs                           5.15 kB │ gzip:   1.80 kB
+ℹ dist/durable/ToolReconciler.mjs                         4.92 kB │ gzip:   1.78 kB
+ℹ dist/capabilities/Redaction.mjs                         4.87 kB │ gzip:   1.95 kB
+ℹ dist/core/AgentPolicy.mjs                               4.76 kB │ gzip:   1.90 kB
+ℹ dist/durable/WorkerHost.mjs                             4.63 kB │ gzip:   1.70 kB
+ℹ dist/durable/DurableFailpoint.mjs                       4.25 kB │ gzip:   1.49 kB
+ℹ dist/durable/WakeScheduler.mjs                          3.96 kB │ gzip:   1.68 kB
+ℹ dist/engine/ContextHistory.mjs                          3.76 kB │ gzip:   1.45 kB
+ℹ dist/durable/RecordFormat.mjs                           3.69 kB │ gzip:   1.34 kB
+ℹ dist/durable/OperationAuthorizer.mjs                    3.63 kB │ gzip:   1.44 kB
+ℹ dist/engine/ContextWindow.mjs                           3.50 kB │ gzip:   1.45 kB
+ℹ dist/InMemory.mjs                                       3.46 kB │ gzip:   1.50 kB
+ℹ dist/engine/ThreadHistory.mjs                           3.45 kB │ gzip:   1.39 kB
+ℹ dist/core/AgentUpdates.mjs                              3.39 kB │ gzip:   1.25 kB
+ℹ dist/durable/SubscriptionInput.mjs                      3.37 kB │ gzip:   1.25 kB
+ℹ dist/durable/EventSource.mjs                            3.36 kB │ gzip:   1.13 kB
+ℹ dist/durable/ThreadArchiveRange.mjs                     3.17 kB │ gzip:   0.98 kB
+ℹ dist/engine/DurableStep.mjs                             2.99 kB │ gzip:   1.36 kB
+ℹ dist/sandbox/PageScreenshot.mjs                         2.90 kB │ gzip:   1.07 kB
+ℹ dist/capabilities/Commands.mjs                          2.85 kB │ gzip:   1.14 kB
+ℹ dist/engine/SubagentHost.mjs                            2.81 kB │ gzip:   1.00 kB
+ℹ dist/durable/ThreadStore.mjs                            2.65 kB │ gzip:   0.80 kB
+ℹ dist/durable/RunJournal.mjs                             2.63 kB │ gzip:   0.69 kB
+ℹ dist/core/Identifiers.mjs                               2.49 kB │ gzip:   0.81 kB
+ℹ dist/engine/ToolBroker.mjs                              2.01 kB │ gzip:   0.93 kB
+ℹ dist/core/Receipt.mjs                                   1.79 kB │ gzip:   0.79 kB
+ℹ dist/durable/PreparedInputAdmission.mjs                 1.73 kB │ gzip:   0.71 kB
+ℹ dist/core/IdGenerator.mjs                               1.63 kB │ gzip:   0.69 kB
+ℹ dist/durable/ThreadProjectionMaintenance.mjs            1.53 kB │ gzip:   0.70 kB
+ℹ dist/ToolExposure.mjs                                   1.17 kB │ gzip:   0.46 kB
+ℹ dist/durable/DurableFailpointTestControl.mjs            1.14 kB │ gzip:   0.52 kB
+ℹ dist/core/RunPolicyUsage.mjs                            1.13 kB │ gzip:   0.61 kB
+ℹ dist/engine/RunEventSink.mjs                            1.11 kB │ gzip:   0.57 kB
+ℹ dist/capabilities/Subagent.mjs                          1.10 kB │ gzip:   0.42 kB
+ℹ dist/durable/RunContinuation.mjs                        1.09 kB │ gzip:   0.41 kB
+ℹ dist/engine/Compaction.mjs                              1.01 kB │ gzip:   0.41 kB
+ℹ dist/durable/DurableAgentRuntime.mjs                    0.98 kB │ gzip:   0.35 kB
+ℹ dist/durable/SubmissionStatus.mjs                       0.97 kB │ gzip:   0.44 kB
+ℹ dist/durable/AgentRegistration.mjs                      0.96 kB │ gzip:   0.37 kB
+ℹ dist/engine/AgentRuntime.mjs                            0.93 kB │ gzip:   0.37 kB
+ℹ dist/core/Worker.mjs                                    0.86 kB │ gzip:   0.34 kB
+ℹ dist/durable/ThreadReader.mjs                           0.83 kB │ gzip:   0.29 kB
+ℹ dist/durable/ThreadImport.mjs                           0.83 kB │ gzip:   0.30 kB
+ℹ dist/durable/Digest.mjs                                 0.50 kB │ gzip:   0.23 kB
+ℹ dist/engine/Output.mjs                                  0.35 kB │ gzip:   0.23 kB
+ℹ dist/core/FailureDiagnostic.mjs                         0.27 kB │ gzip:   0.17 kB
+ℹ dist/engine/MessagingHost.mjs                           0.26 kB │ gzip:   0.16 kB
+ℹ dist/durable/WorkerAdmission.mjs                        0.24 kB │ gzip:   0.14 kB
+ℹ dist/core/Agent.mjs                                     0.20 kB │ gzip:   0.15 kB
+ℹ dist/durable/Scheduling.mjs                             0.16 kB │ gzip:   0.12 kB
+ℹ dist/DurableAgentRuntime-CXaEnhaA.mjs.map             953.71 kB │ gzip: 200.37 kB
+ℹ dist/AgentRuntime-FpegokIP.mjs.map                    622.74 kB │ gzip: 137.63 kB
+ℹ dist/DurableAgentRuntime-CXaEnhaA.mjs                 464.37 kB │ gzip:  98.11 kB
+ℹ dist/AgentRuntime-FpegokIP.mjs                        279.82 kB │ gzip:  64.47 kB
+ℹ dist/durable/SubmissionLedgerConformance.mjs.map      265.06 kB │ gzip:  43.77 kB
+ℹ dist/Subagent-CPX-Ev23.mjs.map                        193.77 kB │ gzip:  40.10 kB
+ℹ dist/RunJournal-y1w4GHfS.mjs.map                      115.73 kB │ gzip:  27.85 kB
+ℹ dist/RunContinuation-Bo3s2-ld.mjs.map                 104.73 kB │ gzip:  23.93 kB
+ℹ dist/durable/Records.mjs.map                           74.97 kB │ gzip:  19.57 kB
+ℹ dist/durable/SubmissionLedger.mjs.map                  73.22 kB │ gzip:  17.93 kB
+ℹ dist/Subagent-CPX-Ev23.mjs                             72.45 kB │ gzip:  15.92 kB
+ℹ dist/ThreadStore-uxF6KUWe.mjs.map                      68.35 kB │ gzip:  17.07 kB
+ℹ dist/Scheduling-DbUgsQZq.mjs.map                       67.92 kB │ gzip:  14.56 kB
+ℹ dist/durable/Subscriptions.mjs.map                     64.15 kB │ gzip:  13.33 kB
+ℹ dist/RunJournal-y1w4GHfS.mjs                           62.25 kB │ gzip:  14.77 kB
+ℹ dist/engine/RunOptions.mjs.map                         61.50 kB │ gzip:  18.00 kB
+ℹ dist/durable/Recovery.mjs.map                          59.19 kB │ gzip:  14.36 kB
+ℹ dist/ThreadImport-B7e0bXxC.mjs.map                     57.64 kB │ gzip:  14.03 kB
+ℹ dist/durable/ThreadStoreConformance.mjs.map            57.29 kB │ gzip:  12.84 kB
+ℹ dist/durable/SqlMemoryStore.mjs.map                    56.81 kB │ gzip:  13.55 kB
+ℹ dist/RunContinuation-Bo3s2-ld.mjs                      56.79 kB │ gzip:  13.20 kB
+ℹ dist/capabilities/CodeMode.mjs.map                     54.36 kB │ gzip:  15.62 kB
+ℹ dist/capabilities/BrowserUse.mjs.map                   52.96 kB │ gzip:  14.36 kB
+ℹ dist/capabilities/McpClient.mjs.map                    48.84 kB │ gzip:  13.43 kB
+ℹ dist/durable/SubscriptionStoreConformance.mjs.map      47.82 kB │ gzip:  10.13 kB
+ℹ dist/durable/MessageDelivery.mjs.map                   47.74 kB │ gzip:  10.88 kB
+ℹ dist/compaction-CgFMDiXL.mjs.map                       43.33 kB │ gzip:  12.42 kB
+ℹ dist/capabilities/SubagentReservations.mjs.map         42.02 kB │ gzip:   9.22 kB
+ℹ dist/ThreadStore-uxF6KUWe.mjs                          39.08 kB │ gzip:  10.41 kB
+ℹ dist/sandbox/PageCapture.mjs.map                       37.51 kB │ gzip:   8.83 kB
+ℹ dist/durable/ThreadWork.mjs.map                        37.01 kB │ gzip:   8.99 kB
+ℹ dist/capabilities/WebCapture.mjs.map                   33.40 kB │ gzip:   8.11 kB
+ℹ dist/agent-registration-dR0A0JX-.mjs.map               33.35 kB │ gzip:   9.65 kB
+ℹ dist/Scheduling-DbUgsQZq.mjs                           33.28 kB │ gzip:   7.45 kB
+ℹ dist/ThreadImport-B7e0bXxC.mjs                         32.43 kB │ gzip:   8.18 kB
+ℹ dist/durable/ScheduleStoreConformance.mjs.map          31.39 kB │ gzip:   6.67 kB
+ℹ dist/capabilities/Remembering.mjs.map                  30.77 kB │ gzip:   7.55 kB
+ℹ dist/core/Usage.mjs.map                                30.71 kB │ gzip:   6.99 kB
+ℹ dist/durable/Admin.mjs.map                             30.31 kB │ gzip:   9.06 kB
+ℹ dist/Agent-0WvBWWbM.mjs.map                            29.59 kB │ gzip:   7.21 kB
+ℹ dist/durable/RunStorage.mjs.map                        27.25 kB │ gzip:   6.41 kB
+ℹ dist/capabilities/Budget.mjs.map                       26.74 kB │ gzip:   7.21 kB
+ℹ dist/durable/Subscription.mjs.map                      26.66 kB │ gzip:   6.02 kB
+ℹ dist/durable/Schedule.mjs.map                          24.17 kB │ gzip:   5.26 kB
+ℹ dist/core/Thread.mjs.map                               24.02 kB │ gzip:   6.25 kB
+ℹ dist/compaction-CgFMDiXL.mjs                           23.97 kB │ gzip:   7.48 kB
+ℹ dist/durable/GitHubWorkflowSource.mjs.map              23.91 kB │ gzip:   6.50 kB
+ℹ dist/capabilities/SemanticMemory.mjs.map               23.13 kB │ gzip:   6.13 kB
+ℹ dist/capabilities/ToolDiscovery.mjs.map                21.78 kB │ gzip:   6.43 kB
+ℹ dist/capabilities/Mcp.mjs.map                          21.08 kB │ gzip:   5.86 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.mjs.map   20.94 kB │ gzip:   4.94 kB
+ℹ dist/FailureDiagnostic-D9oW23Cn.mjs.map                20.32 kB │ gzip:   5.90 kB
+ℹ dist/core/RunEvent.mjs.map                             19.15 kB │ gzip:   4.79 kB
+ℹ dist/durable/ThreadContextHistory.mjs.map              18.43 kB │ gzip:   4.91 kB
+ℹ dist/sandbox/InteractiveBrowser.mjs.map                18.39 kB │ gzip:   4.49 kB
+ℹ dist/core/MemoryStore.mjs.map                          17.96 kB │ gzip:   4.93 kB
+ℹ dist/capabilities/Approval.mjs.map                     17.86 kB │ gzip:   4.69 kB
+ℹ dist/capabilities/ModelContext.mjs.map                 17.77 kB │ gzip:   5.16 kB
+ℹ dist/durable/LifecyclePublication.mjs.map              17.63 kB │ gzip:   5.59 kB
+ℹ dist/durable/SubscriptionTransition.mjs.map            17.30 kB │ gzip:   4.21 kB
+ℹ dist/durable/SubscriptionTools.mjs.map                 16.78 kB │ gzip:   4.47 kB
+ℹ dist/sandbox/CodeExecutor.mjs.map                      16.70 kB │ gzip:   4.75 kB
+ℹ dist/durable/ThreadInvariants.mjs.map                  16.45 kB │ gzip:   4.67 kB
+ℹ dist/durable/PersistentHistory.mjs.map                 15.64 kB │ gzip:   4.52 kB
+ℹ dist/durable/CommittedActivity.mjs.map                 15.11 kB │ gzip:   4.53 kB
+ℹ dist/durable/ThreadTransfer.mjs.map                    14.99 kB │ gzip:   4.32 kB
+ℹ dist/core/Memory.mjs.map                               14.84 kB │ gzip:   4.75 kB
+ℹ dist/core/RememberingStore.mjs.map                     14.66 kB │ gzip:   4.56 kB
+ℹ dist/Worker-DZjdMjZn.mjs.map                           14.62 kB │ gzip:   4.16 kB
+ℹ dist/output-contract-CMIhu4Cw.mjs.map                  14.60 kB │ gzip:   4.95 kB
+ℹ dist/engine/ContextCompactor.mjs.map                   14.51 kB │ gzip:   4.62 kB
+ℹ dist/sandbox/Sandbox.mjs.map                           14.48 kB │ gzip:   3.69 kB
+ℹ dist/durable/ScheduleTransition.mjs.map                14.31 kB │ gzip:   3.45 kB
+ℹ dist/WorkerAdmission-D493rBiO.mjs.map                  14.17 kB │ gzip:   4.19 kB
+ℹ dist/capabilities/RunHooks.mjs.map                     14.07 kB │ gzip:   4.61 kB
+ℹ dist/core/SemanticMemoryIndex.mjs.map                  13.85 kB │ gzip:   3.69 kB
+ℹ dist/agent-registration-dR0A0JX-.mjs                   13.04 kB │ gzip:   3.98 kB
+ℹ dist/capabilities/Messaging.mjs.map                    13.02 kB │ gzip:   3.62 kB
+ℹ dist/durable/ThreadProjection.mjs.map                  13.00 kB │ gzip:   3.68 kB
+ℹ dist/core/SemanticMemoryRevalidation.mjs.map           12.69 kB │ gzip:   3.78 kB
+ℹ dist/engine/SubagentHost.mjs.map                       12.25 kB │ gzip:   3.55 kB
+ℹ dist/durable/ThreadContextHistoryProjection.mjs.map    11.61 kB │ gzip:   3.77 kB
+ℹ dist/durable/Certification.mjs.map                     11.55 kB │ gzip:   3.87 kB
+ℹ dist/capabilities/WebSearch.mjs.map                    11.12 kB │ gzip:   3.84 kB
+ℹ dist/FailureDiagnostic-D9oW23Cn.mjs                    10.86 kB │ gzip:   3.52 kB
+ℹ dist/core/SubagentContract.mjs.map                     10.71 kB │ gzip:   3.49 kB
+ℹ dist/core/MemoryNamespace.mjs.map                      10.57 kB │ gzip:   3.16 kB
+ℹ dist/durable/WorkerHost.mjs.map                        10.02 kB │ gzip:   3.20 kB
+ℹ dist/Worker-DZjdMjZn.mjs                                9.82 kB │ gzip:   3.16 kB
+ℹ dist/core/ToolResult.mjs.map                            9.77 kB │ gzip:   3.50 kB
+ℹ dist/durable/SettlementPublisher.mjs.map                9.68 kB │ gzip:   3.02 kB
+ℹ dist/core/MemoryRevalidation.mjs.map                    9.48 kB │ gzip:   3.19 kB
+ℹ dist/MessagingHost-DJZJZILu.mjs.map                     9.23 kB │ gzip:   2.89 kB
+ℹ dist/capabilities/MemoryNotes.mjs.map                   8.98 kB │ gzip:   3.17 kB
+ℹ dist/core/AgentPolicy.mjs.map                           8.87 kB │ gzip:   3.18 kB
+ℹ dist/core/AgentError.mjs.map                            8.75 kB │ gzip:   2.35 kB
+ℹ dist/output-contract-CMIhu4Cw.mjs                       8.56 kB │ gzip:   2.95 kB
+ℹ dist/WorkerAdmission-D493rBiO.mjs                       8.54 kB │ gzip:   2.76 kB
+ℹ dist/durable/ActivityStore.mjs.map                      8.44 kB │ gzip:   2.55 kB
+ℹ dist/Digest-HhQNzgqB.mjs.map                            8.23 kB │ gzip:   2.78 kB
+ℹ dist/durable/EventSource.mjs.map                        8.02 kB │ gzip:   2.30 kB
+ℹ dist/capabilities/Redaction.mjs.map                     7.91 kB │ gzip:   3.00 kB
+ℹ dist/sandbox/PageCrawl.mjs.map                          7.69 kB │ gzip:   2.29 kB
+ℹ dist/tool-operations-BXBmagY1.mjs.map                   7.53 kB │ gzip:   2.44 kB
+ℹ dist/capabilities/ContextTools.mjs.map                  7.49 kB │ gzip:   2.48 kB
+ℹ dist/engine/ToolBroker.mjs.map                          7.44 kB │ gzip:   2.93 kB
+ℹ dist/durable/WakeScheduler.mjs.map                      7.43 kB │ gzip:   2.79 kB
+ℹ dist/core/MemoryReference.mjs.map                       7.40 kB │ gzip:   2.42 kB
+ℹ dist/engine/ThreadHistory.mjs.map                       7.15 kB │ gzip:   2.53 kB
+ℹ dist/engine/DurableStep.mjs.map                         6.99 kB │ gzip:   2.75 kB
+ℹ dist/durable/SubscriptionInput.mjs.map                  6.92 kB │ gzip:   2.18 kB
+ℹ dist/durable/ToolReconciler.mjs.map                     5.92 kB │ gzip:   2.19 kB
+ℹ dist/core/AgentUpdates.mjs.map                          5.89 kB │ gzip:   1.89 kB
+ℹ dist/engine/RunEventSink.mjs.map                        5.73 kB │ gzip:   1.85 kB
+ℹ dist/durable/RecordFormat.mjs.map                       5.43 kB │ gzip:   1.93 kB
+ℹ dist/Digest-HhQNzgqB.mjs                                5.19 kB │ gzip:   1.84 kB
+ℹ dist/durable/DurableFailpoint.mjs.map                   5.17 kB │ gzip:   1.68 kB
+ℹ dist/durable/ThreadArchiveRange.mjs.map                 5.09 kB │ gzip:   1.56 kB
+ℹ dist/engine/ContextHistory.mjs.map                      4.98 kB │ gzip:   1.78 kB
+ℹ dist/Agent-0WvBWWbM.mjs                                 4.94 kB │ gzip:   1.89 kB
+ℹ dist/durable/OperationAuthorizer.mjs.map                4.66 kB │ gzip:   1.85 kB
+ℹ dist/MessagingHost-DJZJZILu.mjs                         4.57 kB │ gzip:   1.63 kB
+ℹ dist/capabilities/Commands.mjs.map                      4.50 kB │ gzip:   1.63 kB
+ℹ dist/InMemory.mjs.map                                   4.43 kB │ gzip:   1.84 kB
+ℹ dist/engine/ContextWindow.mjs.map                       4.34 kB │ gzip:   1.80 kB
+ℹ dist/tool-operations-BXBmagY1.mjs                       4.13 kB │ gzip:   1.42 kB
+ℹ dist/ToolExposure-hTJT2ekj.mjs.map                      4.10 kB │ gzip:   1.61 kB
+ℹ dist/sandbox/PageScreenshot.mjs.map                     3.81 kB │ gzip:   1.36 kB
+ℹ dist/durable/ThreadProjectionMaintenance.mjs.map        3.79 kB │ gzip:   1.68 kB
+ℹ dist/core/Identifiers.mjs.map                           3.26 kB │ gzip:   0.92 kB
+ℹ dist/durable/PreparedInputAdmission.mjs.map             3.13 kB │ gzip:   1.13 kB
+ℹ dist/ToolExposure-hTJT2ekj.mjs                          2.47 kB │ gzip:   1.02 kB
+ℹ dist/core/IdGenerator.mjs.map                           2.44 kB │ gzip:   0.96 kB
+ℹ dist/foreign-diagnostic-DBQ1XHKh.mjs.map                2.30 kB │ gzip:   0.99 kB
+ℹ dist/core/Receipt.mjs.map                               2.29 kB │ gzip:   0.97 kB
+ℹ dist/ToolExposure-DBATXxmL.mjs.map                      2.04 kB │ gzip:   0.91 kB
+ℹ dist/durable/DurableFailpointTestControl.mjs.map        2.04 kB │ gzip:   0.84 kB
+ℹ dist/utf8-B5pAmhTo.mjs.map                              1.34 kB │ gzip:   0.70 kB
+ℹ dist/core/RunPolicyUsage.mjs.map                        1.27 kB │ gzip:   0.69 kB
+ℹ dist/foreign-diagnostic-DBQ1XHKh.mjs                    1.26 kB │ gzip:   0.60 kB
+ℹ dist/json-BlJVQZxN.mjs.map                              1.04 kB │ gzip:   0.58 kB
+ℹ dist/durable/SubmissionStatus.mjs.map                   1.00 kB │ gzip:   0.47 kB
+ℹ dist/utf8-B5pAmhTo.mjs                                  0.81 kB │ gzip:   0.44 kB
+ℹ dist/utf8-B770uxC3.mjs.map                              0.69 kB │ gzip:   0.47 kB
+ℹ dist/ToolExposure-DBATXxmL.mjs                          0.65 kB │ gzip:   0.39 kB
+ℹ dist/durable/AgentRegistration.mjs.map                  0.63 kB │ gzip:   0.34 kB
+ℹ dist/json-BlJVQZxN.mjs                                  0.56 kB │ gzip:   0.37 kB
+ℹ dist/engine/Compaction.mjs.map                          0.46 kB │ gzip:   0.30 kB
+ℹ dist/utf8-B770uxC3.mjs                                  0.45 kB │ gzip:   0.33 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs                      0.36 kB │ gzip:   0.26 kB
+ℹ dist/engine/Output.mjs.map                              0.26 kB │ gzip:   0.20 kB
+ℹ dist/ToolExposure.mjs.map                               0.21 kB │ gzip:   0.15 kB
+ℹ dist/core/RememberingStore.d.mts                      100.59 kB │ gzip:   6.51 kB
+ℹ dist/capabilities/BrowserUse.d.mts                     95.25 kB │ gzip:   5.73 kB
+ℹ dist/core/SemanticMemoryIndex.d.mts                    52.34 kB │ gzip:   4.07 kB
+ℹ dist/durable/SqlMemoryStore.d.mts                      48.38 kB │ gzip:   3.55 kB
+ℹ dist/capabilities/Remembering.d.mts                    29.26 kB │ gzip:   3.92 kB
+ℹ dist/capabilities/SemanticMemory.d.mts                 27.91 kB │ gzip:   3.52 kB
+ℹ dist/capabilities/MemoryNotes.d.mts                    27.03 kB │ gzip:   2.87 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.d.mts     22.35 kB │ gzip:   2.40 kB
+ℹ dist/sandbox/InteractiveBrowser.d.mts                  17.59 kB │ gzip:   2.92 kB
+ℹ dist/capabilities/SubagentReservations.d.mts           13.61 kB │ gzip:   3.13 kB
+ℹ dist/durable/SubscriptionTools.d.mts                   13.51 kB │ gzip:   1.83 kB
+ℹ dist/sandbox/CodeExecutor.d.mts                        12.93 kB │ gzip:   3.13 kB
+ℹ dist/index.d.mts                                       12.00 kB │ gzip:   2.38 kB
+ℹ dist/core/MemoryStore.d.mts                            11.68 kB │ gzip:   2.64 kB
+ℹ dist/durable/WorkerAdmission.d.mts                     11.55 kB │ gzip:   2.11 kB
+ℹ dist/capabilities/CodeMode.d.mts                        9.43 kB │ gzip:   2.99 kB
+ℹ dist/capabilities/WebCapture.d.mts                      9.15 kB │ gzip:   2.36 kB
+ℹ dist/durable/Certification.d.mts                        9.07 kB │ gzip:   2.83 kB
+ℹ dist/durable/GitHubWorkflowSource.d.mts                 8.62 kB │ gzip:   2.27 kB
+ℹ dist/durable/ActivityStore.d.mts                        8.41 kB │ gzip:   1.97 kB
+ℹ dist/capabilities/Approval.d.mts                        8.33 kB │ gzip:   1.85 kB
+ℹ dist/durable/WorkerHost.d.mts                           8.20 kB │ gzip:   2.64 kB
+ℹ dist/capabilities/ContextTools.d.mts                    8.07 kB │ gzip:   1.15 kB
+ℹ dist/capabilities/ToolDiscovery.d.mts                   7.57 kB │ gzip:   2.24 kB
+ℹ dist/capabilities/Budget.d.mts                          7.23 kB │ gzip:   1.99 kB
+ℹ dist/capabilities/RunHooks.d.mts                        7.05 kB │ gzip:   2.52 kB
+ℹ dist/capabilities/McpClient.d.mts                       6.57 kB │ gzip:   2.25 kB
+ℹ dist/capabilities/Mcp.d.mts                             6.41 kB │ gzip:   1.88 kB
+ℹ dist/capabilities/ModelContext.d.mts                    6.23 kB │ gzip:   1.83 kB
+ℹ dist/sandbox/PageCrawl.d.mts                            5.95 kB │ gzip:   1.51 kB
+ℹ dist/durable/Subscriptions.d.mts                        5.82 kB │ gzip:   1.42 kB
+ℹ dist/durable/ThreadProjection.d.mts                     5.30 kB │ gzip:   1.58 kB
+ℹ dist/durable/SubmissionLedger.d.mts                     5.00 kB │ gzip:   1.32 kB
+ℹ dist/durable/ThreadStoreConformance.d.mts               4.68 kB │ gzip:   1.45 kB
+ℹ dist/durable/Records.d.mts                              4.64 kB │ gzip:   1.33 kB
+ℹ dist/durable/CommittedActivity.d.mts                    4.59 kB │ gzip:   1.75 kB
+ℹ dist/durable/ThreadContextHistoryProjection.d.mts       4.47 kB │ gzip:   1.61 kB
+ℹ dist/capabilities/WebSearch.d.mts                       4.40 kB │ gzip:   1.60 kB
+ℹ dist/durable/Scheduling.d.mts                           4.39 kB │ gzip:   1.16 kB
+ℹ dist/engine/ContextHistory.d.mts                        4.05 kB │ gzip:   1.41 kB
+ℹ dist/sandbox/PageScreenshot.d.mts                       3.55 kB │ gzip:   1.11 kB
+ℹ dist/core/Memory.d.mts                                  3.41 kB │ gzip:   1.43 kB
+ℹ dist/capabilities/Commands.d.mts                        3.36 kB │ gzip:   1.03 kB
+ℹ dist/durable/ThreadProjectionMaintenance.d.mts          3.25 kB │ gzip:   1.36 kB
+ℹ dist/core/MemoryRevalidation.d.mts                      3.10 kB │ gzip:   1.25 kB
+ℹ dist/engine/RunOptions.d.mts                            3.07 kB │ gzip:   0.84 kB
+ℹ dist/InMemory.d.mts                                     3.04 kB │ gzip:   1.32 kB
+ℹ dist/core/SemanticMemoryRevalidation.d.mts              2.94 kB │ gzip:   1.05 kB
+ℹ dist/durable/RunJournal.d.mts                           2.89 kB │ gzip:   0.75 kB
+ℹ dist/durable/ThreadStore.d.mts                          2.86 kB │ gzip:   0.84 kB
+ℹ dist/durable/ThreadTransfer.d.mts                       2.82 kB │ gzip:   1.06 kB
+ℹ dist/capabilities/Redaction.d.mts                       2.42 kB │ gzip:   1.10 kB
+ℹ dist/durable/SubscriptionTransition.d.mts               2.36 kB │ gzip:   0.74 kB
+ℹ dist/durable/ThreadContextHistory.d.mts                 2.24 kB │ gzip:   1.07 kB
+ℹ dist/durable/SubmissionLedgerConformance.d.mts          2.14 kB │ gzip:   0.85 kB
+ℹ dist/durable/Schedule.d.mts                             2.08 kB │ gzip:   0.57 kB
+ℹ dist/capabilities/Subagent.d.mts                        1.98 kB │ gzip:   0.63 kB
+ℹ dist/sandbox/PageCapture.d.mts                          1.95 kB │ gzip:   0.54 kB
+ℹ dist/durable/Recovery.d.mts                             1.87 kB │ gzip:   0.63 kB
+ℹ dist/durable/DurableAgentRuntime.d.mts                  1.83 kB │ gzip:   0.54 kB
+ℹ dist/engine/AgentRuntime.d.mts                          1.74 kB │ gzip:   0.58 kB
+ℹ dist/durable/ScheduleTransition.d.mts                   1.70 kB │ gzip:   0.71 kB
+ℹ dist/durable/ThreadWork.d.mts                           1.63 kB │ gzip:   0.55 kB
+ℹ dist/durable/Subscription.d.mts                         1.57 kB │ gzip:   0.45 kB
+ℹ dist/durable/MessageDelivery.d.mts                      1.56 kB │ gzip:   0.40 kB
+ℹ dist/durable/ThreadInvariants.d.mts                     1.50 kB │ gzip:   0.68 kB
+ℹ dist/core/Agent.d.mts                                   1.32 kB │ gzip:   0.47 kB
+ℹ dist/core/IdGenerator.d.mts                             1.32 kB │ gzip:   0.62 kB
+ℹ dist/core/RunEvent.d.mts                                1.17 kB │ gzip:   0.42 kB
+ℹ dist/durable/RunContinuation.d.mts                      1.16 kB │ gzip:   0.43 kB
+ℹ dist/sandbox/Sandbox.d.mts                              1.15 kB │ gzip:   0.40 kB
+ℹ dist/ToolExposure.d.mts                                 1.11 kB │ gzip:   0.37 kB
+ℹ dist/durable/ScheduleStoreConformance.d.mts             1.09 kB │ gzip:   0.45 kB
+ℹ dist/durable/SubscriptionStoreConformance.d.mts         1.07 kB │ gzip:   0.41 kB
+ℹ dist/durable/Admin.d.mts                                1.07 kB │ gzip:   0.39 kB
+ℹ dist/durable/ThreadImport.d.mts                         1.05 kB │ gzip:   0.35 kB
+ℹ dist/durable/DurableFailpointTestControl.d.mts          0.98 kB │ gzip:   0.43 kB
+ℹ dist/core/Worker.d.mts                                  0.87 kB │ gzip:   0.35 kB
+ℹ dist/core/SubagentContract.d.mts                        0.86 kB │ gzip:   0.32 kB
+ℹ dist/durable/ThreadReader.d.mts                         0.84 kB │ gzip:   0.30 kB
+ℹ dist/core/AgentError.d.mts                              0.82 kB │ gzip:   0.31 kB
+ℹ dist/durable/PersistentHistory.d.mts                    0.81 kB │ gzip:   0.48 kB
+ℹ dist/engine/Compaction.d.mts                            0.79 kB │ gzip:   0.31 kB
+ℹ dist/durable/LifecyclePublication.d.mts                 0.73 kB │ gzip:   0.22 kB
+ℹ dist/durable/AgentRegistration.d.mts                    0.71 kB │ gzip:   0.30 kB
+ℹ dist/core/Usage.d.mts                                   0.70 kB │ gzip:   0.29 kB
+ℹ dist/engine/RunEventSink.d.mts                          0.68 kB │ gzip:   0.23 kB
+ℹ dist/engine/ToolBroker.d.mts                            0.66 kB │ gzip:   0.24 kB
+ℹ dist/capabilities/Messaging.d.mts                       0.66 kB │ gzip:   0.28 kB
+ℹ dist/durable/ThreadArchiveRange.d.mts                   0.66 kB │ gzip:   0.24 kB
+ℹ dist/engine/SubagentHost.d.mts                          0.65 kB │ gzip:   0.24 kB
+ℹ dist/core/Thread.d.mts                                  0.54 kB │ gzip:   0.25 kB
+ℹ dist/durable/SettlementPublisher.d.mts                  0.52 kB │ gzip:   0.20 kB
+ℹ dist/durable/ToolReconciler.d.mts                       0.48 kB │ gzip:   0.20 kB
+ℹ dist/durable/Digest.d.mts                               0.46 kB │ gzip:   0.21 kB
+ℹ dist/durable/OperationAuthorizer.d.mts                  0.45 kB │ gzip:   0.18 kB
+ℹ dist/engine/DurableStep.d.mts                           0.43 kB │ gzip:   0.20 kB
+ℹ dist/durable/RunStorage.d.mts                           0.41 kB │ gzip:   0.21 kB
+ℹ dist/engine/ContextCompactor.d.mts                      0.39 kB │ gzip:   0.18 kB
+ℹ dist/core/MemoryReference.d.mts                         0.38 kB │ gzip:   0.19 kB
+ℹ dist/engine/MessagingHost.d.mts                         0.38 kB │ gzip:   0.20 kB
+ℹ dist/engine/ContextWindow.d.mts                         0.38 kB │ gzip:   0.18 kB
+ℹ dist/core/ToolResult.d.mts                              0.36 kB │ gzip:   0.17 kB
+ℹ dist/core/Identifiers.d.mts                             0.36 kB │ gzip:   0.21 kB
+ℹ dist/durable/DurableFailpoint.d.mts                     0.32 kB │ gzip:   0.14 kB
+ℹ dist/durable/RecordFormat.d.mts                         0.31 kB │ gzip:   0.16 kB
+ℹ dist/durable/SubscriptionInput.d.mts                    0.30 kB │ gzip:   0.14 kB
+ℹ dist/core/FailureDiagnostic.d.mts                       0.26 kB │ gzip:   0.16 kB
+ℹ dist/core/MemoryNamespace.d.mts                         0.24 kB │ gzip:   0.16 kB
+ℹ dist/core/AgentPolicy.d.mts                             0.22 kB │ gzip:   0.12 kB
+ℹ dist/core/Receipt.d.mts                                 0.21 kB │ gzip:   0.15 kB
+ℹ dist/durable/EventSource.d.mts                          0.20 kB │ gzip:   0.13 kB
+ℹ dist/engine/ThreadHistory.d.mts                         0.20 kB │ gzip:   0.12 kB
+ℹ dist/durable/WakeScheduler.d.mts                        0.20 kB │ gzip:   0.12 kB
+ℹ dist/core/AgentUpdates.d.mts                            0.19 kB │ gzip:   0.14 kB
+ℹ dist/durable/SubmissionStatus.d.mts                     0.18 kB │ gzip:   0.13 kB
+ℹ dist/durable/PreparedInputAdmission.d.mts               0.17 kB │ gzip:   0.11 kB
+ℹ dist/core/RunPolicyUsage.d.mts                          0.10 kB │ gzip:   0.09 kB
+ℹ dist/engine/Output.d.mts                                0.09 kB │ gzip:   0.09 kB
+ℹ dist/Admin-CzLZWrzY.d.mts                             417.56 kB │ gzip:  69.98 kB
+ℹ dist/Subagent-C3T4-A8z.d.mts                          101.18 kB │ gzip:  14.51 kB
+ℹ dist/Records-DV9HkZqV.d.mts                            98.31 kB │ gzip:  14.86 kB
+ℹ dist/ThreadImport-CLwFaA6_.d.mts                       79.45 kB │ gzip:   7.59 kB
+ℹ dist/RunOptions-Ht8kH2RP.d.mts                         60.56 kB │ gzip:  17.79 kB
+ℹ dist/Subscription-CsF1cBcb.d.mts                       58.37 kB │ gzip:   6.12 kB
+ℹ dist/MessageDelivery-VgBMNWDS.d.mts                    57.48 kB │ gzip:   6.67 kB
+ℹ dist/Messaging-D0rE04ME.d.mts                          54.73 kB │ gzip:   2.56 kB
+ℹ dist/Schedule-CyOBzfM4.d.mts                           45.29 kB │ gzip:   4.77 kB
+ℹ dist/PageCapture-Df8Xwskw.d.mts                        33.68 kB │ gzip:   5.01 kB
+ℹ dist/RunEvent-C5jVQZ6K.d.mts                           33.47 kB │ gzip:   4.11 kB
+ℹ dist/AgentRuntime-CW5l0g_i.d.mts                       30.61 kB │ gzip:   7.89 kB
+ℹ dist/Worker-lFkFV-3A.d.mts                             27.84 kB │ gzip:   3.41 kB
+ℹ dist/Agent-DhOXNAyG.d.mts                              22.89 kB │ gzip:   5.50 kB
+ℹ dist/Messaging-DF_IWnxV.d.mts                          12.20 kB │ gzip:   1.77 kB
+ℹ dist/Sandbox-CEsDWBLq.d.mts                            11.54 kB │ gzip:   2.63 kB
+ℹ dist/SubagentHost-BpDoeaok.d.mts                       10.32 kB │ gzip:   3.19 kB
+ℹ dist/FailureDiagnostic-DvHruCSJ.d.mts                  10.01 kB │ gzip:   1.75 kB
+ℹ dist/AgentError-CBH7_MjG.d.mts                          9.73 kB │ gzip:   2.16 kB
+ℹ dist/ContextCompactor-CWyRLaa8.d.mts                    9.69 kB │ gzip:   3.59 kB
+ℹ dist/RunContinuation-DpzqsNp6.d.mts                     9.53 kB │ gzip:   2.80 kB
+ℹ dist/Usage-CzZJ6A2n.d.mts                               8.51 kB │ gzip:   2.08 kB
+ℹ dist/SubagentContract-DdPzxYQj.d.mts                    8.43 kB │ gzip:   2.45 kB
+ℹ dist/Thread-CkSX8UtZ.d.mts                              8.14 kB │ gzip:   2.28 kB
+ℹ dist/ToolBroker-P5t4ZN78.d.mts                          7.73 kB │ gzip:   2.87 kB
+ℹ dist/AgentPolicy-DFSPEKr8.d.mts                         6.75 kB │ gzip:   1.94 kB
+ℹ dist/DurableStep-DXGn7KQ4.d.mts                         6.70 kB │ gzip:   2.57 kB
+ℹ dist/DurableFailpoint-BugHZKvJ.d.mts                    6.44 kB │ gzip:   1.56 kB
+ℹ dist/RunEventSink-shh6Qf9E.d.mts                        6.13 kB │ gzip:   1.92 kB
+ℹ dist/ToolReconciler-SrOHkvF8.d.mts                      5.79 kB │ gzip:   1.85 kB
+ℹ dist/RecordFormat-BzFqFXRz.d.mts                        5.56 kB │ gzip:   1.67 kB
+ℹ dist/MemoryReference-B8Q3UJoJ.d.mts                     4.69 kB │ gzip:   1.50 kB
+ℹ dist/OperationAuthorizer-TzcQtpX5.d.mts                 4.68 kB │ gzip:   1.57 kB
+ℹ dist/ToolResult-5SdG8FE2.d.mts                          4.28 kB │ gzip:   1.66 kB
+ℹ dist/ThreadHistory-C8CjWsHL.d.mts                       4.15 kB │ gzip:   1.65 kB
+ℹ dist/MessagingHost-DoQOQ-jz.d.mts                       4.03 kB │ gzip:   1.40 kB
+ℹ dist/WakeScheduler-5qSuoFcH.d.mts                       3.72 kB │ gzip:   1.59 kB
+ℹ dist/ContextWindow-Cvv8N9Xy.d.mts                       3.64 kB │ gzip:   1.29 kB
+ℹ dist/SubscriptionInput-BH4Pe3LQ.d.mts                   3.32 kB │ gzip:   1.10 kB
+ℹ dist/AgentUpdates-DksV4D0A.d.mts                        3.31 kB │ gzip:   1.22 kB
+ℹ dist/EventSource-CLTAa0r8.d.mts                         3.19 kB │ gzip:   1.11 kB
+ℹ dist/Digest-BnodHfO0.d.mts                              2.93 kB │ gzip:   1.01 kB
+ℹ dist/Identifiers-CN2s30fF.d.mts                         2.72 kB │ gzip:   0.82 kB
+ℹ dist/ToolExposure-jTheYXrK.d.mts                        2.62 kB │ gzip:   1.05 kB
+ℹ dist/Receipt-BkM21Qiu.d.mts                             2.20 kB │ gzip:   0.77 kB
+ℹ dist/MemoryNamespace-BbRW5p71.d.mts                     2.13 kB │ gzip:   0.79 kB
+ℹ dist/PreparedInputAdmission-CmcZWB7x.d.mts              2.09 kB │ gzip:   0.85 kB
+ℹ dist/ToolExposure-DFQKf9ET.d.mts                        1.82 kB │ gzip:   0.82 kB
+ℹ dist/RunPolicyUsage-QmYVw9z8.d.mts                      1.09 kB │ gzip:   0.54 kB
+ℹ dist/Output-CEDrZQ3U.d.mts                              1.02 kB │ gzip:   0.60 kB
+ℹ dist/run-context-reader-BN0_VtXD.d.mts                  1.02 kB │ gzip:   0.52 kB
+ℹ 441 files, total: 9.01 MB
+✔ Build complete in 3270ms
+
+~/packages/storage-sql$ vp pack
+~/packages/storage-memory$ vp pack
+ℹ entry: src/index.ts, src/SqlThreadImport.ts, src/SqlStorage.ts, src/SqlRunStorage.ts, src/SqlStorageFailpoint.ts, src/SqlStorageProgress.ts, src/SqlJournal.ts, src/SqlThreadArchiveRange.ts, src/SqlThreadStore.ts, src/SqlThreadWork.ts, src/SqlSubmissionLedger.ts, src/SqlAdmissionFacts.ts, src/SqlActivityStore.ts, src/SqlScheduleStore.ts, src/SqliteLayoutInspection.ts, src/SqlThreadNativeReads.ts, src/SqlMessageDeliveryStore.ts, src/SqlLifecyclePublication.ts, src/SqlSubscriptionStore.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ entry: src/index.ts, src/MemoryScheduleStore.ts, src/MemorySemanticIndex.ts, src/MemorySubmissionLedger.ts, src/MemorySubscriptionStore.ts, src/MemoryMessageDeliveryStore.ts, src/MemoryThreadStore.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/MemorySubmissionLedger.mjs               94.50 kB │ gzip: 18.22 kB
+ℹ dist/MemoryThreadStore.mjs                    81.56 kB │ gzip: 17.92 kB
+ℹ dist/MemorySubscriptionStore.mjs              45.33 kB │ gzip:  7.79 kB
+ℹ dist/MemoryMessageDeliveryStore.mjs           25.61 kB │ gzip:  6.09 kB
+ℹ dist/MemorySemanticIndex.mjs                  10.69 kB │ gzip:  3.00 kB
+ℹ dist/MemoryScheduleStore.mjs                   8.94 kB │ gzip:  2.10 kB
+ℹ dist/index.mjs                                 0.84 kB │ gzip:  0.20 kB
+ℹ dist/MemorySubmissionLedger.mjs.map          203.84 kB │ gzip: 37.30 kB
+ℹ dist/MemoryThreadStore.mjs.map               164.76 kB │ gzip: 35.25 kB
+ℹ dist/MemorySubscriptionStore.mjs.map          91.55 kB │ gzip: 15.68 kB
+ℹ dist/MemoryMessageDeliveryStore.mjs.map       51.47 kB │ gzip: 11.46 kB
+ℹ dist/MemorySemanticIndex.mjs.map              19.85 kB │ gzip:  5.28 kB
+ℹ dist/MemoryScheduleStore.mjs.map              17.27 kB │ gzip:  3.94 kB
+ℹ dist/WorkSelection-CmqTuws3.mjs.map            7.93 kB │ gzip:  2.31 kB
+ℹ dist/WorkSelection-CmqTuws3.mjs                1.18 kB │ gzip:  0.60 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs             0.36 kB │ gzip:  0.26 kB
+ℹ dist/MemorySubmissionLedger.d.mts              1.77 kB │ gzip:  0.78 kB
+ℹ dist/MemorySemanticIndex.d.mts                 1.29 kB │ gzip:  0.57 kB
+ℹ dist/MemoryMessageDeliveryStore.d.mts          1.28 kB │ gzip:  0.51 kB
+ℹ dist/MemoryThreadStore.d.mts                   1.20 kB │ gzip:  0.51 kB
+ℹ dist/index.d.mts                               0.86 kB │ gzip:  0.20 kB
+ℹ dist/MemorySubscriptionStore.d.mts             0.48 kB │ gzip:  0.24 kB
+ℹ dist/MemoryScheduleStore.d.mts                 0.47 kB │ gzip:  0.22 kB
+ℹ dist/MemoryThreadStoreKernel-ii96DH8c.d.mts    5.98 kB │ gzip:  1.60 kB
+ℹ 24 files, total: 839.00 kB
+✔ Build complete in 676ms
+
+~/packages/workflow$ vp pack
+ℹ dist/SqlSubmissionLedger.mjs                 125.30 kB │ gzip: 20.02 kB
+ℹ dist/SqlThreadImport.mjs                      65.40 kB │ gzip: 13.75 kB
+ℹ dist/SqlSubscriptionStore.mjs                 50.52 kB │ gzip:  8.72 kB
+ℹ dist/SqlThreadNativeReads.mjs                 48.99 kB │ gzip:  9.41 kB
+ℹ dist/SqlThreadArchiveRange.mjs                28.40 kB │ gzip:  6.17 kB
+ℹ dist/SqlLifecyclePublication.mjs              28.37 kB │ gzip:  6.65 kB
+ℹ dist/SqlJournal.mjs                           26.07 kB │ gzip:  5.17 kB
+ℹ dist/SqlMessageDeliveryStore.mjs              23.26 kB │ gzip:  5.74 kB
+ℹ dist/SqlThreadStore.mjs                       22.98 kB │ gzip:  5.38 kB
+ℹ dist/SqlRunStorage.mjs                        22.36 kB │ gzip:  5.29 kB
+ℹ dist/SqlActivityStore.mjs                     16.82 kB │ gzip:  3.73 kB
+ℹ dist/SqlScheduleStore.mjs                     13.88 kB │ gzip:  2.99 kB
+ℹ dist/SqlStorage.mjs                            4.72 kB │ gzip:  1.87 kB
+ℹ dist/SqliteLayoutInspection.mjs                4.23 kB │ gzip:  1.55 kB
+ℹ dist/SqlAdmissionFacts.mjs                     3.54 kB │ gzip:  1.15 kB
+ℹ dist/index.mjs                                 2.23 kB │ gzip:  0.43 kB
+ℹ dist/SqlStorageFailpoint.mjs                   1.95 kB │ gzip:  0.57 kB
+ℹ dist/SqlStorageProgress.mjs                    1.26 kB │ gzip:  0.64 kB
+ℹ dist/SqlThreadWork.mjs                         0.16 kB │ gzip:  0.11 kB
+ℹ dist/SqlSubmissionLedger.mjs.map             231.09 kB │ gzip: 39.78 kB
+ℹ dist/SqlThreadImport.mjs.map                 127.62 kB │ gzip: 25.66 kB
+ℹ dist/SqlSubscriptionStore.mjs.map             90.71 kB │ gzip: 16.32 kB
+ℹ dist/SqlThreadNativeReads.mjs.map             85.26 kB │ gzip: 17.39 kB
+ℹ dist/SqlThreadWork-thH2rt7E.mjs.map           68.27 kB │ gzip: 15.67 kB
+ℹ dist/SqlLifecyclePublication.mjs.map          54.18 kB │ gzip: 12.80 kB
+ℹ dist/SqlThreadArchiveRange.mjs.map            47.47 kB │ gzip: 10.72 kB
+ℹ dist/SqlJournal.mjs.map                       45.38 kB │ gzip:  9.54 kB
+ℹ dist/SqlRunStorage.mjs.map                    44.75 kB │ gzip: 10.39 kB
+ℹ dist/SqlThreadStore.mjs.map                   43.50 kB │ gzip: 10.04 kB
+ℹ dist/SqlMessageDeliveryStore.mjs.map          42.17 kB │ gzip: 10.42 kB
+ℹ dist/SqlThreadWork-thH2rt7E.mjs               38.55 kB │ gzip:  8.64 kB
+ℹ dist/SqlActivityStore.mjs.map                 29.30 kB │ gzip:  6.62 kB
+ℹ dist/SqlScheduleStore.mjs.map                 23.95 kB │ gzip:  5.34 kB
+ℹ dist/SqlStorage.mjs.map                       10.34 kB │ gzip:  3.43 kB
+ℹ dist/SqliteLayoutInspection.mjs.map            8.10 kB │ gzip:  2.81 kB
+ℹ dist/SqlAdmissionFacts.mjs.map                 6.49 kB │ gzip:  1.82 kB
+ℹ dist/SqlStorageFailpoint.mjs.map               2.31 kB │ gzip:  0.56 kB
+ℹ dist/sql-json-e2wWH7rg.mjs.map                 2.16 kB │ gzip:  0.90 kB
+ℹ dist/SqlStorageProgress.mjs.map                1.57 kB │ gzip:  0.82 kB
+ℹ dist/sql-json-e2wWH7rg.mjs                     1.00 kB │ gzip:  0.51 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs             0.36 kB │ gzip:  0.26 kB
+ℹ dist/SqlRunStorage.d.mts                      21.39 kB │ gzip:  3.00 kB
+ℹ dist/SqlSubmissionLedger.d.mts                16.46 kB │ gzip:  2.82 kB
+ℹ dist/SqlThreadStore.d.mts                      9.34 kB │ gzip:  1.93 kB
+ℹ dist/SqlSubscriptionStore.d.mts                5.56 kB │ gzip:  1.32 kB
+ℹ dist/SqlThreadArchiveRange.d.mts               4.73 kB │ gzip:  1.16 kB
+ℹ dist/SqlMessageDeliveryStore.d.mts             3.11 kB │ gzip:  1.07 kB
+ℹ dist/SqlAdmissionFacts.d.mts                   2.56 kB │ gzip:  0.75 kB
+ℹ dist/index.d.mts                               2.28 kB │ gzip:  0.46 kB
+ℹ dist/SqlThreadImport.d.mts                     2.27 kB │ gzip:  0.76 kB
+ℹ dist/SqlActivityStore.d.mts                    1.99 kB │ gzip:  0.65 kB
+ℹ dist/SqlThreadWork.d.mts                       1.96 kB │ gzip:  0.69 kB
+ℹ dist/SqliteLayoutInspection.d.mts              1.85 kB │ gzip:  0.70 kB
+ℹ dist/SqlScheduleStore.d.mts                    1.53 kB │ gzip:  0.54 kB
+ℹ dist/SqlStorageProgress.d.mts                  1.41 kB │ gzip:  0.65 kB
+ℹ dist/SqlStorage.d.mts                          0.52 kB │ gzip:  0.24 kB
+ℹ dist/SqlJournal.d.mts                          0.44 kB │ gzip:  0.21 kB
+ℹ dist/SqlThreadNativeReads.d.mts                0.42 kB │ gzip:  0.21 kB
+ℹ dist/SqlLifecyclePublication.d.mts             0.34 kB │ gzip:  0.16 kB
+ℹ dist/SqlStorageFailpoint.d.mts                 0.13 kB │ gzip:  0.10 kB
+ℹ dist/SqlJournal-elKV36Uc.d.mts                32.12 kB │ gzip:  4.66 kB
+ℹ dist/SqlStorage-B8ivKu4F.d.mts                 4.38 kB │ gzip:  1.56 kB
+ℹ dist/SqlLifecyclePublication-DQm0xr5V.d.mts    3.25 kB │ gzip:  1.27 kB
+ℹ dist/SqlStorageFailpoint-C3KlhpkX.d.mts        1.87 kB │ gzip:  0.54 kB
+ℹ 64 files, total: 1.61 MB
+✔ Build complete in 1132ms
+
+~/packages/storage-postgres$ vp pack
+~/packages/storage-sqlite$ vp pack
+ℹ entry: src/index.ts, src/AgentWorkflow.ts, src/WorkflowAgentHost.ts, src/WorkflowDispatch.ts, src/WorkflowExecution.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ entry: src/index.ts, src/PostgresStorage.ts, src/PostgresStorageError.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/WorkflowDispatch.mjs                 4.58 kB │ gzip: 1.54 kB
+ℹ dist/AgentWorkflow.mjs                    2.46 kB │ gzip: 1.02 kB
+ℹ dist/WorkflowExecution.mjs                0.96 kB │ gzip: 0.49 kB
+ℹ dist/index.mjs                            0.49 kB │ gzip: 0.17 kB
+ℹ dist/WorkflowAgentHost.mjs                0.28 kB │ gzip: 0.16 kB
+ℹ dist/WorkflowAgentHost-DTcWCdU2.mjs.map  32.55 kB │ gzip: 8.41 kB
+ℹ dist/WorkflowAgentHost-DTcWCdU2.mjs      16.27 kB │ gzip: 4.37 kB
+ℹ dist/WorkflowDispatch.mjs.map             6.09 kB │ gzip: 2.00 kB
+ℹ dist/AgentWorkflow.mjs.map                2.90 kB │ gzip: 1.12 kB
+ℹ dist/WorkflowExecution.mjs.map            1.59 kB │ gzip: 0.77 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip: 0.26 kB
+ℹ dist/WorkflowExecution.d.mts              6.21 kB │ gzip: 0.99 kB
+ℹ dist/WorkflowDispatch.d.mts               5.71 kB │ gzip: 1.61 kB
+ℹ dist/WorkflowAgentHost.d.mts              4.65 kB │ gzip: 1.48 kB
+ℹ dist/AgentWorkflow.d.mts                  3.11 kB │ gzip: 1.10 kB
+ℹ dist/index.d.mts                          0.49 kB │ gzip: 0.15 kB
+ℹ 16 files, total: 88.70 kB
+✔ Build complete in 479ms
+
+ℹ entry: src/index.ts, src/SqliteMessageDeliveryStore.ts, src/SqliteActivityStore.ts, src/SqliteScheduleStore.ts, src/SqliteStorageConfig.ts, src/SqliteStorageError.ts, src/SqliteStorageFailpoint.ts, src/SqliteStorageVersion.ts, src/SqliteSubmissionLedger.ts, src/SqliteSubscriptionStore.ts, src/SqliteThreadStore.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/PostgresStorageError.mjs            2.65 kB │ gzip:  0.89 kB
+ℹ dist/PostgresStorage.mjs                 0.54 kB │ gzip:  0.24 kB
+ℹ dist/index.mjs                           0.27 kB │ gzip:  0.12 kB
+ℹ dist/PostgresStorage-BgpVkmjj.mjs.map  136.30 kB │ gzip: 25.62 kB
+ℹ dist/PostgresStorage-BgpVkmjj.mjs       90.95 kB │ gzip: 16.77 kB
+ℹ dist/PostgresStorageError.mjs.map        3.34 kB │ gzip:  1.14 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs       0.36 kB │ gzip:  0.26 kB
+ℹ dist/PostgresStorageError.d.mts          6.25 kB │ gzip:  1.25 kB
+ℹ dist/PostgresStorage.d.mts               0.62 kB │ gzip:  0.26 kB
+ℹ dist/index.d.mts                         0.28 kB │ gzip:  0.12 kB
+ℹ dist/PostgresStorage-UQP9PVNN.d.mts      6.59 kB │ gzip:  1.57 kB
+ℹ 11 files, total: 248.14 kB
+✔ Build complete in 900ms
+
+ℹ dist/SqliteStorageError.mjs                4.46 kB │ gzip: 1.41 kB
+ℹ dist/SqliteSubmissionLedger.mjs            2.56 kB │ gzip: 0.98 kB
+ℹ dist/SqliteStorageConfig.mjs               2.25 kB │ gzip: 1.07 kB
+ℹ dist/index.mjs                             1.38 kB │ gzip: 0.28 kB
+ℹ dist/SqliteActivityStore.mjs               1.37 kB │ gzip: 0.53 kB
+ℹ dist/SqliteSubscriptionStore.mjs           1.17 kB │ gzip: 0.52 kB
+ℹ dist/SqliteMessageDeliveryStore.mjs        0.96 kB │ gzip: 0.44 kB
+ℹ dist/SqliteScheduleStore.mjs               0.94 kB │ gzip: 0.45 kB
+ℹ dist/SqliteStorageFailpoint.mjs            0.76 kB │ gzip: 0.41 kB
+ℹ dist/SqliteStorageVersion.mjs              0.43 kB │ gzip: 0.24 kB
+ℹ dist/SqliteThreadStore.mjs                 0.41 kB │ gzip: 0.20 kB
+ℹ dist/migrations-BgO7Oi6D.mjs.map          35.99 kB │ gzip: 6.63 kB
+ℹ dist/migrations-BgO7Oi6D.mjs              31.85 kB │ gzip: 5.31 kB
+ℹ dist/SqliteThreadStore-BGXZUJcH.mjs.map   24.11 kB │ gzip: 7.04 kB
+ℹ dist/SqliteThreadStore-BGXZUJcH.mjs       14.07 kB │ gzip: 4.37 kB
+ℹ dist/sqlite-journal-D32BDyU_.mjs.map      11.78 kB │ gzip: 3.53 kB
+ℹ dist/sqlite-journal-D32BDyU_.mjs           6.79 kB │ gzip: 2.08 kB
+ℹ dist/SqliteStorageError.mjs.map            5.43 kB │ gzip: 1.67 kB
+ℹ dist/SqliteSubmissionLedger.mjs.map        3.68 kB │ gzip: 1.32 kB
+ℹ dist/SqliteStorageConfig.mjs.map           2.54 kB │ gzip: 1.20 kB
+ℹ dist/SqliteSubscriptionStore.mjs.map       1.83 kB │ gzip: 0.75 kB
+ℹ dist/SqliteActivityStore.mjs.map           1.68 kB │ gzip: 0.66 kB
+ℹ dist/SqliteScheduleStore.mjs.map           1.30 kB │ gzip: 0.56 kB
+ℹ dist/SqliteStorageFailpoint.mjs.map        1.11 kB │ gzip: 0.53 kB
+ℹ dist/SqliteMessageDeliveryStore.mjs.map    0.97 kB │ gzip: 0.49 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs         0.36 kB │ gzip: 0.26 kB
+ℹ dist/SqliteStorageVersion.mjs.map          0.30 kB │ gzip: 0.21 kB
+ℹ dist/SqliteThreadStore.d.mts               6.87 kB │ gzip: 2.35 kB
+ℹ dist/SqliteStorageConfig.d.mts             2.06 kB │ gzip: 0.97 kB
+ℹ dist/SqliteSubmissionLedger.d.mts          1.49 kB │ gzip: 0.57 kB
+ℹ dist/index.d.mts                           1.43 kB │ gzip: 0.29 kB
+ℹ dist/SqliteActivityStore.d.mts             1.12 kB │ gzip: 0.40 kB
+ℹ dist/SqliteMessageDeliveryStore.d.mts      1.12 kB │ gzip: 0.43 kB
+ℹ dist/SqliteStorageFailpoint.d.mts          1.03 kB │ gzip: 0.44 kB
+ℹ dist/SqliteSubscriptionStore.d.mts         0.85 kB │ gzip: 0.33 kB
+ℹ dist/SqliteScheduleStore.d.mts             0.78 kB │ gzip: 0.33 kB
+ℹ dist/SqliteStorageError.d.mts              0.62 kB │ gzip: 0.23 kB
+ℹ dist/SqliteStorageVersion.d.mts            0.13 kB │ gzip: 0.10 kB
+ℹ dist/SqliteStorageError-1jp6wcmW.d.mts     7.14 kB │ gzip: 1.78 kB
+ℹ dist/SqliteStorageVersion-PHs6hg_Q.d.mts   0.45 kB │ gzip: 0.25 kB
+ℹ 40 files, total: 185.57 kB
+✔ Build complete in 822ms
+
+~/packages/platform-node$ vp pack
+ℹ entry: src/index.ts, src/NodeDurableAgentRuntime.ts, src/NodeDurableHost.ts, src/NodeScheduling.ts, src/NodeSubscriptions.ts, src/NodeWakeScheduler.ts, src/NodeWorkflow.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/NodeWorkflow.mjs                           7.97 kB │ gzip:  2.28 kB
+ℹ dist/NodeSubscriptions.mjs                      4.24 kB │ gzip:  1.45 kB
+ℹ dist/NodeWakeScheduler.mjs                      3.27 kB │ gzip:  1.39 kB
+ℹ dist/NodeScheduling.mjs                         3.27 kB │ gzip:  1.33 kB
+ℹ dist/index.mjs                                  0.64 kB │ gzip:  0.20 kB
+ℹ dist/NodeDurableAgentRuntime.mjs                0.37 kB │ gzip:  0.17 kB
+ℹ dist/NodeDurableHost.mjs                        0.17 kB │ gzip:  0.13 kB
+ℹ dist/NodeDurableAgentRuntime-ZKrALTTe.mjs.map  36.35 kB │ gzip:  9.39 kB
+ℹ dist/NodeDurableHost-CvoSuWNr.mjs.map          35.82 kB │ gzip: 10.20 kB
+ℹ dist/NodeDurableAgentRuntime-ZKrALTTe.mjs      17.64 kB │ gzip:  4.98 kB
+ℹ dist/NodeDurableHost-CvoSuWNr.mjs              15.12 kB │ gzip:  4.92 kB
+ℹ dist/NodeWorkflow.mjs.map                      13.30 kB │ gzip:  3.65 kB
+ℹ dist/NodeSubscriptions.mjs.map                  7.55 kB │ gzip:  2.40 kB
+ℹ dist/NodeScheduling.mjs.map                     5.84 kB │ gzip:  2.12 kB
+ℹ dist/NodeWakeScheduler.mjs.map                  5.34 kB │ gzip:  2.10 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs              0.36 kB │ gzip:  0.26 kB
+ℹ dist/NodeDurableHost.d.mts                     20.05 kB │ gzip:  4.22 kB
+ℹ dist/NodeSubscriptions.d.mts                    1.74 kB │ gzip:  0.60 kB
+ℹ dist/NodeWakeScheduler.d.mts                    1.59 kB │ gzip:  0.73 kB
+ℹ dist/NodeWorkflow.d.mts                         1.50 kB │ gzip:  0.69 kB
+ℹ dist/NodeScheduling.d.mts                       1.13 kB │ gzip:  0.50 kB
+ℹ dist/index.d.mts                                0.65 kB │ gzip:  0.19 kB
+ℹ dist/NodeDurableAgentRuntime.d.mts              0.60 kB │ gzip:  0.20 kB
+ℹ dist/NodeDurableAgentRuntime-Dy-2Jlm9.d.mts    17.75 kB │ gzip:  4.18 kB
+ℹ 24 files, total: 202.28 kB
+✔ Build complete in 1168ms
+
+~/packages/testing$ vp pack
+ℹ entry: src/index.ts, src/Certification.ts, src/Chaos.ts, src/CodeExecutorConformance.ts, src/CodeExecutorSubstitute.ts, src/DocsResearcher.ts, src/ScriptedModel.ts, src/TravelPlanner.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/TravelPlanner.mjs                       88.45 kB │ gzip: 21.27 kB
+ℹ dist/Chaos.mjs                               33.55 kB │ gzip:  9.51 kB
+ℹ dist/Certification.mjs                       27.70 kB │ gzip:  8.26 kB
+ℹ dist/DocsResearcher.mjs                      23.91 kB │ gzip:  7.07 kB
+ℹ dist/CodeExecutorConformance.mjs             14.43 kB │ gzip:  3.66 kB
+ℹ dist/CodeExecutorSubstitute.mjs              13.69 kB │ gzip:  4.09 kB
+ℹ dist/ScriptedModel.mjs                        6.82 kB │ gzip:  2.14 kB
+ℹ dist/index.mjs                                0.12 kB │ gzip:  0.09 kB
+ℹ dist/TravelPlanner.mjs.map                  149.23 kB │ gzip: 32.46 kB
+ℹ dist/Chaos.mjs.map                           65.09 kB │ gzip: 17.21 kB
+ℹ dist/Certification.mjs.map                   58.47 kB │ gzip: 16.55 kB
+ℹ dist/DocsResearcher.mjs.map                  44.01 kB │ gzip: 12.11 kB
+ℹ dist/deterministic-layers-BmRxLIws.mjs.map   34.19 kB │ gzip:  8.18 kB
+ℹ dist/CodeExecutorConformance.mjs.map         27.08 kB │ gzip:  6.51 kB
+ℹ dist/CodeExecutorSubstitute.mjs.map          26.20 kB │ gzip:  7.57 kB
+ℹ dist/deterministic-layers-BmRxLIws.mjs       18.36 kB │ gzip:  4.88 kB
+ℹ dist/ScriptedModel.mjs.map                   13.97 kB │ gzip:  4.01 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs            0.36 kB │ gzip:  0.26 kB
+ℹ dist/TravelPlanner.d.mts                     94.75 kB │ gzip: 15.58 kB
+ℹ dist/DocsResearcher.d.mts                    18.35 kB │ gzip:  4.21 kB
+ℹ dist/Chaos.d.mts                             10.22 kB │ gzip:  3.34 kB
+ℹ dist/Certification.d.mts                      7.31 kB │ gzip:  2.96 kB
+ℹ dist/CodeExecutorConformance.d.mts            1.72 kB │ gzip:  0.76 kB
+ℹ dist/CodeExecutorSubstitute.d.mts             1.00 kB │ gzip:  0.52 kB
+ℹ dist/ScriptedModel.d.mts                      0.54 kB │ gzip:  0.20 kB
+ℹ dist/index.d.mts                              0.13 kB │ gzip:  0.10 kB
+ℹ dist/ScriptedModel-8VUrTtr7.d.mts            12.97 kB │ gzip:  1.98 kB
+ℹ 27 files, total: 792.58 kB
+✔ Build complete in 932ms
+
+~/packages/storage-cloudflare$ vp pack
+ℹ entry: src/index.ts, src/DoMessageDeliveryStore.ts, src/DoMemoryStore.ts, src/DoScheduleStore.ts, src/DoStorageConfig.ts, src/DoStorageError.ts, src/DoStorageFailpoint.ts, src/DoStorageVersion.ts, src/DoSubmissionLedger.ts, src/DoSubscriptionStore.ts, src/DoThreadStore.ts, src/MemoryProtocol.ts, src/PortProtocol.ts, src/PortRouting.ts, src/DoStorageFailpointTesting.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/DoSubmissionLedger.mjs             118.87 kB │ gzip: 20.30 kB
+ℹ dist/PortRouting.mjs                     50.94 kB │ gzip: 10.40 kB
+ℹ dist/PortProtocol.mjs                    23.57 kB │ gzip:  5.03 kB
+ℹ dist/DoScheduleStore.mjs                 18.79 kB │ gzip:  3.90 kB
+ℹ dist/DoSubscriptionStore.mjs             11.62 kB │ gzip:  2.69 kB
+ℹ dist/MemoryProtocol.mjs                  10.37 kB │ gzip:  2.78 kB
+ℹ dist/DoStorageError.mjs                   6.79 kB │ gzip:  2.12 kB
+ℹ dist/DoMemoryStore.mjs                    3.32 kB │ gzip:  1.20 kB
+ℹ dist/DoStorageConfig.mjs                  2.89 kB │ gzip:  1.36 kB
+ℹ dist/DoMessageDeliveryStore.mjs           1.93 kB │ gzip:  0.78 kB
+ℹ dist/index.mjs                            1.52 kB │ gzip:  0.32 kB
+ℹ dist/DoStorageFailpointTesting.mjs        1.27 kB │ gzip:  0.71 kB
+ℹ dist/DoStorageFailpoint.mjs               0.75 kB │ gzip:  0.41 kB
+ℹ dist/DoStorageVersion.mjs                 0.40 kB │ gzip:  0.24 kB
+ℹ dist/DoThreadStore.mjs                    0.38 kB │ gzip:  0.19 kB
+ℹ dist/DoSubmissionLedger.mjs.map         222.12 kB │ gzip: 40.33 kB
+ℹ dist/PortRouting.mjs.map                 96.50 kB │ gzip: 18.06 kB
+ℹ dist/do-journal-Dc4l3A_L.mjs.map         77.61 kB │ gzip: 18.22 kB
+ℹ dist/DoThreadStore-CEjDpGZN.mjs.map      44.71 kB │ gzip: 10.97 kB
+ℹ dist/do-journal-Dc4l3A_L.mjs             41.31 kB │ gzip:  9.65 kB
+ℹ dist/migrations-BRSsG4zX.mjs.map         32.36 kB │ gzip:  6.15 kB
+ℹ dist/DoScheduleStore.mjs.map             31.66 kB │ gzip:  6.89 kB
+ℹ dist/PortProtocol.mjs.map                29.43 kB │ gzip:  6.11 kB
+ℹ dist/migrations-BRSsG4zX.mjs             28.42 kB │ gzip:  4.91 kB
+ℹ dist/DoThreadStore-CEjDpGZN.mjs          24.25 kB │ gzip:  6.17 kB
+ℹ dist/MemoryProtocol.mjs.map              17.58 kB │ gzip:  4.57 kB
+ℹ dist/DoSubscriptionStore.mjs.map         17.38 kB │ gzip:  4.26 kB
+ℹ dist/owned-state-DZgV9l10.mjs.map        11.69 kB │ gzip:  3.94 kB
+ℹ dist/DoStorageError.mjs.map               8.44 kB │ gzip:  2.53 kB
+ℹ dist/owned-state-DZgV9l10.mjs             5.54 kB │ gzip:  2.14 kB
+ℹ dist/DoMemoryStore.mjs.map                4.48 kB │ gzip:  1.58 kB
+ℹ dist/DoStorageConfig.mjs.map              3.15 kB │ gzip:  1.50 kB
+ℹ dist/DoStorageFailpointTesting.mjs.map    2.52 kB │ gzip:  1.16 kB
+ℹ dist/DoMessageDeliveryStore.mjs.map       2.38 kB │ gzip:  0.96 kB
+ℹ dist/DoStorageFailpoint.mjs.map           1.07 kB │ gzip:  0.54 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip:  0.26 kB
+ℹ dist/DoStorageVersion.mjs.map             0.29 kB │ gzip:  0.20 kB
+ℹ dist/MemoryProtocol.d.mts                 2.58 MB
+ℹ dist/PortProtocol.d.mts                 442.34 kB │ gzip: 38.14 kB
+ℹ dist/PortRouting.d.mts                    8.69 kB │ gzip:  2.88 kB
+ℹ dist/DoStorageConfig.d.mts                2.50 kB │ gzip:  1.20 kB
+ℹ dist/DoScheduleStore.d.mts                2.45 kB │ gzip:  0.92 kB
+ℹ dist/DoMemoryStore.d.mts                  2.44 kB │ gzip:  0.84 kB
+ℹ dist/DoSubscriptionStore.d.mts            1.98 kB │ gzip:  0.63 kB
+ℹ dist/index.d.mts                          1.59 kB │ gzip:  0.34 kB
+ℹ dist/DoStorageFailpointTesting.d.mts      1.54 kB │ gzip:  0.77 kB
+ℹ dist/DoSubmissionLedger.d.mts             1.49 kB │ gzip:  0.62 kB
+ℹ dist/DoMessageDeliveryStore.d.mts         1.16 kB │ gzip:  0.48 kB
+ℹ dist/DoStorageFailpoint.d.mts             0.98 kB │ gzip:  0.45 kB
+ℹ dist/DoStorageError.d.mts                 0.54 kB │ gzip:  0.23 kB
+ℹ dist/DoThreadStore.d.mts                  0.42 kB │ gzip:  0.21 kB
+ℹ dist/DoStorageVersion.d.mts               0.12 kB │ gzip:  0.09 kB
+ℹ dist/DoStorageError-MskZRxCC.d.mts        9.25 kB │ gzip:  2.16 kB
+ℹ dist/DoThreadStore-CHix3tIq.d.mts         5.02 kB │ gzip:  1.89 kB
+ℹ dist/DoStorageVersion-31lKFz3o.d.mts      0.42 kB │ gzip:  0.25 kB
+ℹ 55 files, total: 4.02 MB
+✔ Build complete in 2621ms
+
+~/packages/platform-cloudflare$ vp pack
+ℹ entry: src/index.ts, src/Alarm.ts, src/BrowserRestCapture.ts, src/BrowserRestCrawl.ts, src/CloudflareBindings.ts, src/CloudflareAiGateway.ts, src/CloudflareBrowser.ts, src/CloudflareCodeMode.ts, src/CloudflareConfig.ts, src/CloudflareMemory.ts, src/CloudflareScheduling.ts, src/CloudflareSubscriptions.ts, src/CloudflareThreadClient.ts, src/InteractiveBrowser.ts, src/BrowserSession.ts, src/BrowserUse.ts, src/BrowserCredentials.ts, src/ThreadObject.ts, src/WakeScheduler.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Emit types with typescript@7.0.2
+ℹ dist/CloudflareSubscriptions.mjs               28.43 kB │ gzip:  6.04 kB
+ℹ dist/CloudflareCodeMode.mjs                    24.30 kB │ gzip:  6.80 kB
+ℹ dist/CloudflareScheduling.mjs                  19.44 kB │ gzip:  4.56 kB
+ℹ dist/BrowserRestCrawl.mjs                      13.13 kB │ gzip:  4.00 kB
+ℹ dist/BrowserRestCapture.mjs                    12.94 kB │ gzip:  3.71 kB
+ℹ dist/CloudflareMemory.mjs                      11.97 kB │ gzip:  3.42 kB
+ℹ dist/CloudflareConfig.mjs                       7.13 kB │ gzip:  2.52 kB
+ℹ dist/CloudflareBindings.mjs                     5.81 kB │ gzip:  2.13 kB
+ℹ dist/BrowserCredentials.mjs                     5.22 kB │ gzip:  1.82 kB
+ℹ dist/CloudflareAiGateway.mjs                    4.45 kB │ gzip:  1.89 kB
+ℹ dist/WakeScheduler.mjs                          3.64 kB │ gzip:  1.52 kB
+ℹ dist/CloudflareThreadClient.mjs                 1.95 kB │ gzip:  0.53 kB
+ℹ dist/index.mjs                                  1.84 kB │ gzip:  0.41 kB
+ℹ dist/InteractiveBrowser.mjs                     1.16 kB │ gzip:  0.34 kB
+ℹ dist/ThreadObject.mjs                           1.03 kB │ gzip:  0.39 kB
+ℹ dist/Alarm.mjs                                  0.69 kB │ gzip:  0.27 kB
+ℹ dist/BrowserSession.mjs                         0.62 kB │ gzip:  0.23 kB
+ℹ dist/CloudflareBrowser.mjs                      0.62 kB │ gzip:  0.21 kB
+ℹ dist/BrowserUse.mjs                             0.07 kB │ gzip:  0.08 kB
+ℹ dist/InteractiveBrowser-LdKzQeLR.mjs.map      208.96 kB │ gzip: 44.81 kB
+ℹ dist/Alarm-BFjyv3-O.mjs.map                   200.05 kB │ gzip: 46.62 kB
+ℹ dist/BrowserUse-AstK0jKX.mjs.map              144.48 kB │ gzip: 33.18 kB
+ℹ dist/ThreadObject-DNWAjD3Q.mjs.map            138.48 kB │ gzip: 30.76 kB
+ℹ dist/InteractiveBrowser-LdKzQeLR.mjs           99.11 kB │ gzip: 21.75 kB
+ℹ dist/Alarm-BFjyv3-O.mjs                        92.50 kB │ gzip: 21.52 kB
+ℹ dist/BrowserUse-AstK0jKX.mjs                   69.23 kB │ gzip: 16.32 kB
+ℹ dist/ThreadObject-DNWAjD3Q.mjs                 61.23 kB │ gzip: 14.65 kB
+ℹ dist/BrowserSession-BfNmyayH.mjs.map           60.20 kB │ gzip: 14.62 kB
+ℹ dist/CloudflareSubscriptions.mjs.map           53.43 kB │ gzip: 11.00 kB
+ℹ dist/CloudflareThreadClient-DF0Drn_j.mjs.map   44.60 kB │ gzip: 10.16 kB
+ℹ dist/CloudflareBrowser-Vt8qTdYW.mjs.map        43.80 kB │ gzip: 10.70 kB
+ℹ dist/CloudflareCodeMode.mjs.map                41.07 kB │ gzip: 10.83 kB
+ℹ dist/CloudflareScheduling.mjs.map              37.42 kB │ gzip:  8.37 kB
+ℹ dist/BrowserSession-BfNmyayH.mjs               28.08 kB │ gzip:  7.46 kB
+ℹ dist/BrowserRestCrawl.mjs.map                  27.52 kB │ gzip:  7.49 kB
+ℹ dist/CloudflareThreadClient-DF0Drn_j.mjs       25.09 kB │ gzip:  6.09 kB
+ℹ dist/BrowserRestCapture.mjs.map                24.43 kB │ gzip:  6.56 kB
+ℹ dist/CloudflareBrowser-Vt8qTdYW.mjs            24.27 kB │ gzip:  6.19 kB
+ℹ dist/CloudflareMemory.mjs.map                  20.98 kB │ gzip:  5.56 kB
+ℹ dist/CloudflareBindings.mjs.map                11.49 kB │ gzip:  3.90 kB
+ℹ dist/CloudflareAiGateway.mjs.map                8.65 kB │ gzip:  3.16 kB
+ℹ dist/CloudflareConfig.mjs.map                   8.28 kB │ gzip:  3.03 kB
+ℹ dist/BrowserCredentials.mjs.map                 7.42 kB │ gzip:  2.45 kB
+ℹ dist/prepared-admission-DLPJz5bd.mjs.map        7.39 kB │ gzip:  1.96 kB
+ℹ dist/WakeScheduler.mjs.map                      5.37 kB │ gzip:  2.09 kB
+ℹ dist/prepared-admission-DLPJz5bd.mjs            4.22 kB │ gzip:  1.19 kB
+ℹ dist/boundary-BguazVkh.mjs.map                  2.98 kB │ gzip:  1.16 kB
+ℹ dist/boundary-BguazVkh.mjs                      1.76 kB │ gzip:  0.73 kB
+ℹ dist/page-function-CmUCcyNP.mjs.map             0.88 kB │ gzip:  0.54 kB
+ℹ dist/page-function-CmUCcyNP.mjs                 0.62 kB │ gzip:  0.39 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs              0.36 kB │ gzip:  0.26 kB
+ℹ dist/CloudflareThreadClient.d.mts              91.65 kB │ gzip: 12.19 kB
+ℹ dist/Alarm.d.mts                               19.24 kB │ gzip:  6.14 kB
+ℹ dist/CloudflareMemory.d.mts                    11.90 kB │ gzip:  1.87 kB
+ℹ dist/CloudflareBindings.d.mts                   7.84 kB │ gzip:  2.62 kB
+ℹ dist/CloudflareSubscriptions.d.mts              7.74 kB │ gzip:  1.90 kB
+ℹ dist/BrowserUse.d.mts                           4.51 kB │ gzip:  1.55 kB
+ℹ dist/CloudflareScheduling.d.mts                 4.16 kB │ gzip:  1.27 kB
+ℹ dist/CloudflareAiGateway.d.mts                  3.25 kB │ gzip:  1.36 kB
+ℹ dist/CloudflareCodeMode.d.mts                   2.63 kB │ gzip:  1.14 kB
+ℹ dist/BrowserRestCapture.d.mts                   2.19 kB │ gzip:  0.85 kB
+ℹ dist/InteractiveBrowser.d.mts                   1.90 kB │ gzip:  0.46 kB
+ℹ dist/index.d.mts                                1.89 kB │ gzip:  0.40 kB
+ℹ dist/ThreadObject.d.mts                         1.62 kB │ gzip:  0.54 kB
+ℹ dist/WakeScheduler.d.mts                        1.27 kB │ gzip:  0.66 kB
+ℹ dist/BrowserRestCrawl.d.mts                     0.92 kB │ gzip:  0.46 kB
+ℹ dist/CloudflareBrowser.d.mts                    0.90 kB │ gzip:  0.26 kB
+ℹ dist/BrowserCredentials.d.mts                   0.72 kB │ gzip:  0.25 kB
+ℹ dist/BrowserSession.d.mts                       0.67 kB │ gzip:  0.23 kB
+ℹ dist/CloudflareConfig.d.mts                     0.64 kB │ gzip:  0.26 kB
+ℹ dist/ThreadObject-yR1G2rSC.d.mts               69.31 kB │ gzip: 12.26 kB
+ℹ dist/InteractiveBrowser-wV2Bti5e.d.mts         15.65 kB │ gzip:  3.92 kB
+ℹ dist/BrowserSession-Bx0V1-6_.d.mts             10.20 kB │ gzip:  3.08 kB
+ℹ dist/BrowserCredentials-C5IWfi7f.d.mts          6.53 kB │ gzip:  1.70 kB
+ℹ dist/CloudflareConfig-qDrRLofL.d.mts            6.47 kB │ gzip:  2.18 kB
+ℹ dist/CloudflareBrowser-gu7gma0Y.d.mts           6.35 kB │ gzip:  1.71 kB
+ℹ 76 files, total: 1.93 MB
+✔ Build complete in 1382ms
+
+---
+vp run: 0/11 cache hit (0%). (Run `vp run --last-details` for full details)

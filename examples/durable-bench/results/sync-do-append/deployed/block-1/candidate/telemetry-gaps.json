@@ -1,0 +1,68 @@
+{
+  "complete": false,
+  "gaps": [
+    {
+      "cohort": 0,
+      "objectId": "aab9fbc6ed79d0d8adf941c0f1bb0782c2518d96f3849fa851b7187bf92b1723",
+      "method": "warmFreshThird",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "5f70b95aa734b27dffa5800ce11666208122e739570bedee541e629d7ce4de93",
+      "method": "freshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "5f70b95aa734b27dffa5800ce11666208122e739570bedee541e629d7ce4de93",
+      "method": "compactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 1,
+      "objectId": "40d9124bf6e51ed82c50a476aeaadd8ee239c1e5c0d9d347b934a4cda49b0983",
+      "method": "warmFreshThird",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "44df1b5c2dd0230bafeef34c6af74b207964c85c522edd99392351c0a2ae6257",
+      "method": "warmCompactFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "44df1b5c2dd0230bafeef34c6af74b207964c85c522edd99392351c0a2ae6257",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "44df1b5c2dd0230bafeef34c6af74b207964c85c522edd99392351c0a2ae6257",
+      "method": "warmCompactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "44df1b5c2dd0230bafeef34c6af74b207964c85c522edd99392351c0a2ae6257",
+      "method": "warmFreshThird",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "702693fa5ec8b96d135dd38ae07edbc92deb47e59ae99b1f24bb7271a1a58972",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-ingress-invocation",
+      "matches": 0
+    }
+  ]
+}

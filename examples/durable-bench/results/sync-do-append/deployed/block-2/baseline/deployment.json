@@ -1,0 +1,12 @@
+{
+  "block": 2,
+  "role": "baseline",
+  "stage": "9ae06eab24224b46-b2-baseline",
+  "cleanupRequired": true,
+  "cleanupComplete": false,
+  "name": "sync-do-append-9ae06eab24224b46-b2-baseline",
+  "url": "https://sync-do-append-9ae06eab24224b46-b2-baseline.danieljmerwe.workers.dev",
+  "namespaces": [
+    "099f21dda813461dbd8b759a054d507f"
+  ]
+}

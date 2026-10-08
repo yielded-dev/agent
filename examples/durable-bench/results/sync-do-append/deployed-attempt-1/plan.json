@@ -1,0 +1,431 @@
+{
+  "protocol": "replay-cpu-v2",
+  "run": "48ccb19d8d634f41",
+  "builds": {
+    "baseline": {
+      "revision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+      "bundleBytes": 1645601,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 528
+    },
+    "candidate": {
+      "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+      "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+      "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+      "bundleSha256": "b6650059d385ecbdd1d26465205995f23c93f78508866a84b2f7fa5fb77e4b98",
+      "bundleBytes": 1668363,
+      "effectBuildSha256": "0a5f6c215f0ed6be984037050462ee4fd45e295af6a20be71f8c59207b42b4cd",
+      "versions": {
+        "@yielded/agent": "0.1.0-beta.167",
+        "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+        "@yielded/agent-storage-sql": "0.1.0-beta.167",
+        "effect": "4.0.0",
+        "effect-cf": "0.53.0"
+      },
+      "inputFiles": 529
+    }
+  },
+  "schedule": [
+    {
+      "block": 0,
+      "deploymentOrder": [
+        "control",
+        "candidate",
+        "baseline"
+      ],
+      "cohorts": [
+        {
+          "cohort": 0,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 1,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 2,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 3,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "block": 1,
+      "deploymentOrder": [
+        "baseline",
+        "candidate",
+        "control"
+      ],
+      "cohorts": [
+        {
+          "cohort": 0,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 1,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 2,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 3,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "block": 2,
+      "deploymentOrder": [
+        "baseline",
+        "control",
+        "candidate"
+      ],
+      "cohorts": [
+        {
+          "cohort": 0,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 1,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 2,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        },
+        {
+          "cohort": 3,
+          "order": [
+            {
+              "role": "baseline",
+              "size": "small"
+            },
+            {
+              "role": "candidate",
+              "size": "small"
+            },
+            {
+              "role": "control",
+              "size": "small"
+            },
+            {
+              "role": "baseline",
+              "size": "large"
+            },
+            {
+              "role": "candidate",
+              "size": "large"
+            },
+            {
+              "role": "control",
+              "size": "large"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "controlBundleSha256": "a0ad376da1c509ed28baf074971e83c8b16f02e0698adf30bc8a4e7c1573f5c6",
+  "objects": 72,
+  "measuredOperations": 720,
+  "locationHint": "wnam",
+  "workerCpuLimitMs": 300000,
+  "modelApiCalls": 0,
+  "workloadDeadlineMinutes": 45,
+  "primaryMetric": "Same-incarnation warmed cycle: sum of two compaction RPC cpuTimeMs per Object",
+  "initialCycle": "First five operations after seed; not guaranteed cold",
+  "warmup": "One complete five-operation cycle with no intervening evidence RPC",
+  "attribution": "At least 10% paired-median reduction in all three deployment blocks, exceeding each block's identical-code control shift"
+}

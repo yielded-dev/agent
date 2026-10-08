@@ -1,0 +1,26 @@
+[
+  {
+    "role": "baseline",
+    "cohort": 1,
+    "size": "small",
+    "error": "HttpClientError: Transport error (POST https://sync-do-append-9ae06eab24224b46-b1-baseline.danieljmerwe.workers.dev/warmCompactAgain?object=small-1)"
+  },
+  {
+    "role": "candidate",
+    "cohort": 1,
+    "size": "small",
+    "error": "HttpClientError: Transport error (POST https://sync-do-append-9ae06eab24224b46-b1-candidate.danieljmerwe.workers.dev/seed?object=small-1)"
+  },
+  {
+    "role": "control",
+    "cohort": 1,
+    "size": "small",
+    "error": "HttpClientError: Transport error (POST https://sync-do-append-9ae06eab24224b46-b1-control.danieljmerwe.workers.dev/warmFreshFirst?object=small-1)"
+  },
+  {
+    "role": "baseline",
+    "cohort": 1,
+    "size": "large",
+    "error": "HttpClientError: Transport error (POST https://sync-do-append-9ae06eab24224b46-b1-baseline.danieljmerwe.workers.dev/warmCompactAgain?object=large-1)"
+  }
+]

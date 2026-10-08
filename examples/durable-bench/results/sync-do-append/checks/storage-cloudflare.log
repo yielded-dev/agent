@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/packages/storage-cloudflare
+
+
+ Test Files  9 passed (9)
+      Tests  111 passed (111)
+   Start at  08:32:17
+   Duration  12.21s (transform 15.13s, setup 0ms, import 68.07s, tests 3.07s, environment 2ms)
+

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/packages/testing
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 2 skipped (3)
+   Start at  08:56:39
+   Duration  9.02s (transform 36ms, setup 0ms, import 269ms, tests 8.68s, environment 0ms)
+

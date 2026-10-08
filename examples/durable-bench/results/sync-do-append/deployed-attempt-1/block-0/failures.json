@@ -1,0 +1,8 @@
+[
+  {
+    "role": "baseline",
+    "cohort": 0,
+    "size": "small",
+    "error": "ReplayCpuError: Request failed; inspect /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/examples/durable-bench/results/sync-do-append/deployed/block-0/cohort-0/baseline/small/freshSecond.json"
+  }
+]

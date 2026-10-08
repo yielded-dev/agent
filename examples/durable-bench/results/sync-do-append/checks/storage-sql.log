@@ -1,0 +1,9 @@
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/packages/storage-sql
+
+No test files found, exiting with code 0
+
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/.git/**
+

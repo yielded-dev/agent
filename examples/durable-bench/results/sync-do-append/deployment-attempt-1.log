@@ -1,0 +1,32 @@
+$ bun tooling/context-continuity-eval/src/replay-cpu-main.ts --baseline-dir examples/durable-bench/results/sync-do-append/builds/baseline --candidate-dir examples/durable-bench/results/sync-do-append/builds/candidate --output-dir examples/durable-bench/results/sync-do-append/deployed ⊘ cache disabled
+Deploying block 1/3 through Alchemy
+Block 1, cohort 1, baseline/small: failed; evidence retained
+Block 1, cohort 1, candidate/small: 10 operations and final proof passed
+Block 1, cohort 1, control/small: 10 operations and final proof passed
+Block 1, cohort 1, baseline/large: 10 operations and final proof passed
+Block 1, cohort 1, candidate/large: 10 operations and final proof passed
+Block 1, cohort 1, control/large: 10 operations and final proof passed
+Block 1, cohort 2, baseline/small: 10 operations and final proof passed
+Block 1, cohort 2, candidate/small: 10 operations and final proof passed
+Block 1, cohort 2, control/small: 10 operations and final proof passed
+Block 1, cohort 2, baseline/large: 10 operations and final proof passed
+Block 1, cohort 2, candidate/large: 10 operations and final proof passed
+Block 1, cohort 2, control/large: 10 operations and final proof passed
+Block 1, cohort 3, baseline/small: 10 operations and final proof passed
+Block 1, cohort 3, candidate/small: 10 operations and final proof passed
+Block 1, cohort 3, control/small: 10 operations and final proof passed
+Block 1, cohort 3, baseline/large: 10 operations and final proof passed
+Block 1, cohort 3, candidate/large: 10 operations and final proof passed
+Block 1, cohort 3, control/large: 10 operations and final proof passed
+Block 1, cohort 4, baseline/small: 10 operations and final proof passed
+Block 1, cohort 4, candidate/small: 10 operations and final proof passed
+Block 1, cohort 4, control/small: 10 operations and final proof passed
+Block 1, cohort 4, baseline/large: 10 operations and final proof passed
+Block 1, cohort 4, candidate/large: 10 operations and final proof passed
+Block 1, cohort 4, control/large: 10 operations and final proof passed
+[08:45:24.448] ERROR (#2): ReplayCpuError: Invocation telemetry incomplete; retained all exports without rerunning workload
+    at requireReplayCpu (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-build.ts:19:41)
+    at <anonymous> (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-main.ts:459:18)
+    at ReplayCpu.run (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/node_modules/.bun/effect@4.0.0/node_modules/effect/dist/cli/Command.js:1103:31)
+    at ReplayCpu.run (definition) (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-main.ts:76:10)
+

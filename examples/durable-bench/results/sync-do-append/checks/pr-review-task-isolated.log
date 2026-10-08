@@ -1,0 +1,23 @@
+~/tooling/pr-review-eval$ vp test ◉ cache hit, replaying
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/pr-review-eval
+
+ ✓ test/review-loop-fixtures.test.ts (1 test) 22ms
+ ✓ test/report.test.ts (5 tests) 31ms
+ ✓ test/eval-runner.test.ts (7 tests) 182ms
+ ✓ test/local-git-repository.test.ts (6 tests) 20428ms
+     ✓ validates an exact changed path beyond the 100-result file listing  3140ms
+     ✓ accepts changed source searchable despite the read-file line bound  3620ms
+     ✓ keeps capacity-excluded paths readable while honoring explicit source exclusions  3445ms
+     ✓ fails closed when a pinned blob is missing from a partial clone  3648ms
+     ✓ exposes committed callers and keeps the Action's ignore, binary, and symlink scope  4328ms
+     ✓ stamps local source identity on observations without claiming frozen fixture source  2246ms
+
+ Test Files  4 passed (4)
+      Tests  19 passed (19)
+   Start at  08:52:16
+   Duration  22.86s (transform 2.47s, setup 0ms, import 6.36s, tests 20.66s, environment 0ms)
+
+
+---
+vp run: cache hit, 23.07s saved.

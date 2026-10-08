@@ -140,8 +140,8 @@ const instrument = {
       const ast = parse(transformed, { ecmaVersion: "latest", sourceType: "module", locations: true });
       const edits = [];
       if (countSql) walk(ast, (node) => {
-        if (node.type !== "CallExpression" || node.callee.type !== "MemberExpression" || node.callee.computed || node.callee.property.name !== "exec") return;
-        edits.push([node.start, "globalThis.__kom433.exec("]);
+        if (node.type !== "CallExpression" || node.callee.type !== "MemberExpression" || node.callee.computed || !["exec", "transactionSync"].includes(node.callee.property.name)) return;
+        edits.push([node.start, `globalThis.__kom433.${node.callee.property.name}(`]);
         edits.push([node.callee.object.end, ", ", node.arguments[0]?.start ?? node.end - 1]);
       });
       for (const selection of selected) {

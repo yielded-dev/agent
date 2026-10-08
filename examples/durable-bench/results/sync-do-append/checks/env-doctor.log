@@ -1,0 +1,48 @@
+[1mInstallation[0m
+  [32m✓[39m Bin dir           ~/.vite-plus/bin
+  [32m✓[39m Data dir          ~/.vite-plus
+  [32m✓[39m Cache dir         ~/.vite-plus/cache
+  [32m✓[39m Config dir        ~/.vite-plus
+  [32m✓[39m State dir         ~/.vite-plus
+  [32m✓[39m Shims             node, npm, npx, pnpm, pnpx, yarn, yarnpkg, bun, bunx, vpx, vpr
+
+[1mConfiguration[0m
+  [32m✓[39m Node.js           managed mode
+  [32m✓[39m npm               system-first mode
+  [32m✓[39m pnpm              system-first mode
+  [32m✓[39m Yarn              managed mode
+  [32m✓[39m Bun               system-first mode
+  [32m✓[39m IDE integration   env sourced in ~/.zshenv
+
+[1mPATH[0m
+  [32m✓[39m vp                in PATH
+  [32m✓[39m node              ~/.vite-plus/bin/node [2m(vp shim)[0m
+  [32m✓[39m npm               ~/.vite-plus/bin/npm [2m(vp shim)[0m
+  [32m✓[39m npx               ~/.vite-plus/bin/npx [2m(vp shim)[0m
+  [32m✓[39m pnpm              ~/.vite-plus/bin/pnpm [2m(vp shim)[0m
+  [32m✓[39m pnpx              ~/.vite-plus/bin/pnpx [2m(vp shim)[0m
+  [32m✓[39m yarn              ~/.vite-plus/bin/yarn [2m(vp shim)[0m
+  [32m✓[39m yarnpkg           ~/.vite-plus/bin/yarnpkg [2m(vp shim)[0m
+  [32m✓[39m bun               ~/.vite-plus/bin/bun [2m(vp shim)[0m
+  [32m✓[39m bunx              ~/.vite-plus/bin/bunx [2m(vp shim)[0m
+  [32m✓[39m vpx               ~/.vite-plus/bin/vpx [2m(vp shim)[0m
+  [32m✓[39m vpr               ~/.vite-plus/bin/vpr [2m(vp shim)[0m
+
+[1mNode.js Resolution[0m
+  Directory         /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike
+  Source            /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/package.json (engines.node)
+  Version           [92m24.21.0[39m
+  [32m✓[39m Node binary       installed
+
+[1mPackage Manager Resolution[0m
+  Source            system PATH
+  Version           [92mbun@1.4.2[39m
+  [32m✓[39m PM binary         /opt/homebrew/bin/bun
+
+[1mConflicts[0m
+  [33m⚠[39m nvm               [33mdetected (NVM_DIR is set)[39m
+  [33m⚠[39m volta             [33mdetected (VOLTA_HOME is set)[39m
+  [2mnote: Consider removing other version managers from your PATH[0m
+  [2mnote: to avoid version conflicts.[0m
+
+[1m[32m✓ All checks passed[39m[0m

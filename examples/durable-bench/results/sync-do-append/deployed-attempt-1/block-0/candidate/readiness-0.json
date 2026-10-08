@@ -1,0 +1,26 @@
+{
+  "startedAtMillis": 1791473962775,
+  "endedAtMillis": 1791473963232,
+  "clientElapsedMs": 457.364709,
+  "status": 200,
+  "cfRay": "a4763cec1ec6c146-PDX",
+  "response": {
+    "protocol": "replay-cpu-v2",
+    "revision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+    "fixtureSha256": "65271b42f22ea6da49d879645cec3d9519c0446964420507223b009d8a7a1ab4",
+    "packageVersions": {
+      "@yielded/agent": "0.1.0-beta.167",
+      "@yielded/agent-platform-cloudflare": "0.1.0-beta.167",
+      "@yielded/agent-storage-cloudflare": "0.1.0-beta.167",
+      "@yielded/agent-storage-sql": "0.1.0-beta.167",
+      "effect": "4.0.0",
+      "effect-cf": "0.53.0"
+    },
+    "deploymentVersion": "62cf2041-b7d5-4fd1-9604-508338520fd9",
+    "maxObjects": 8,
+    "phasesPerObject": 10,
+    "modelCallsPerPhase": 2,
+    "toolCallsPerPhase": 2,
+    "modelKind": "scripted-no-network"
+  }
+}

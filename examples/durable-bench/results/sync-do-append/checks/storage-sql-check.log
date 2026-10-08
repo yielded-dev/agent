@@ -1,0 +1,2 @@
+~/packages/storage-sql$ tsc --noEmit -p tsconfig.json
+

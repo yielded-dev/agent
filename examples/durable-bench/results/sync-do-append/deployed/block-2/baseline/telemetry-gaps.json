@@ -1,0 +1,68 @@
+{
+  "complete": false,
+  "gaps": [
+    {
+      "cohort": 0,
+      "objectId": "d5bd89e59c42755fe021bc9b76ccc69632a163eeb765a12d22cc6686769d9323",
+      "method": "compactFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "d5bd89e59c42755fe021bc9b76ccc69632a163eeb765a12d22cc6686769d9323",
+      "method": "freshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "d5bd89e59c42755fe021bc9b76ccc69632a163eeb765a12d22cc6686769d9323",
+      "method": "freshThird",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "d5bd89e59c42755fe021bc9b76ccc69632a163eeb765a12d22cc6686769d9323",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 0,
+      "objectId": "d5bd89e59c42755fe021bc9b76ccc69632a163eeb765a12d22cc6686769d9323",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "68fc2a7fd0d064a6220ab99539a8a73f4795d3f19e8e591ce8de1da516a84f5b",
+      "method": "compactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "68fc2a7fd0d064a6220ab99539a8a73f4795d3f19e8e591ce8de1da516a84f5b",
+      "method": "warmFreshSecond",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 2,
+      "objectId": "6442ea9a620f5d0e1a5958b8636860741ec34e2cce2f58f3ffb86ebe08a9b276",
+      "method": "warmCompactAgain",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    },
+    {
+      "cohort": 3,
+      "objectId": "3811aeed0fd4603b20cd49f890eb483cf9ba670c6e3de121b6f6b391883958ef",
+      "method": "warmFreshFirst",
+      "reason": "missing-or-duplicate-cpu-invocation",
+      "matches": 0
+    }
+  ]
+}

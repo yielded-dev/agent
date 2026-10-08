@@ -1,0 +1,518 @@
+{
+  "query": {
+    "queryId": "sync-do-append-diagnostic-object",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791473881527,
+      "to": 1791474339511
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "sync-do-append-48ccb19d8d634f41-b0-baseline"
+        },
+        {
+          "key": "$workers.durableObjectId",
+          "operation": "eq",
+          "type": "string",
+          "value": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083"
+        }
+      ]
+    }
+  },
+  "count": 22,
+  "statistics": {
+    "elapsed": 0.491608497,
+    "rows_read": 5049118,
+    "bytes_read": 733290317,
+    "abr_level": 1
+  },
+  "events": [
+    {
+      "timestamp": 1791474051702,
+      "id": "01M4E2SAKP00000000000004N5",
+      "metadataType": "cf-worker-event",
+      "traceId": "71eb374b2e75e830c73291ca693b92dc",
+      "cpuTimeMs": 963,
+      "wallTimeMs": 1232,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "evidence"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474051702,
+      "id": "01M4E2SAKP0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "1c54a7f21069613b9e6854f0eb41e044",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1090,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474051584,
+      "id": "01M4E2SAG000000000000000DW",
+      "metadataType": "cf-worker-event",
+      "traceId": "ad89ea90bc0126c41e99bd9e59ef35dc",
+      "cpuTimeMs": 112,
+      "wallTimeMs": 305,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "warmFreshThird"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474051584,
+      "id": "01M4E2SAG00000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "834bf71f0d2d4bd2f1ca4c5e1b2645c5",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 144,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474050851,
+      "id": "01M4E2S9S30000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "e09cffcd6df9680a6c4deb897dc31dc7",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 249,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474050745,
+      "id": "01M4E2S9NS00000000000000DW",
+      "metadataType": "cf-worker-event",
+      "traceId": "42ebdd371e286cea03e1792d823e7843",
+      "cpuTimeMs": 85,
+      "wallTimeMs": 274,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "warmFreshSecond"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474050744,
+      "id": "01M4E2S9NR0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "eb028f0ebb415ce54870d82860a431d0",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 140,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474050441,
+      "id": "01M4E2S9C90000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "5a591ce2e171f5193dfb1a829d1227d4",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 171,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474050308,
+      "id": "01M4E2S98400000000000000DW",
+      "metadataType": "cf-worker-event",
+      "traceId": "e016611f4295dfff8804fff3ebd54dfd",
+      "cpuTimeMs": 101,
+      "wallTimeMs": 298,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "warmFreshFirst"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049858,
+      "id": "01M4E2S8T200000000000000F8",
+      "metadataType": "cf-worker-event",
+      "traceId": "6e4af879770c3cac93ae2131f34688ef",
+      "cpuTimeMs": 167,
+      "wallTimeMs": 365,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "warmCompactFirst"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049857,
+      "id": "01M4E2S8T10000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "353739acf83b039b15630a0830c57445",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 146,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049499,
+      "id": "01M4E2S8EV0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "f8262d6ccb783b514c2a6e19fc48531f",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 244,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049380,
+      "id": "01M4E2S8B400000000000000DW",
+      "metadataType": "cf-worker-event",
+      "traceId": "ccd43d62989dfc582d0bc4fa3f1daf20",
+      "cpuTimeMs": 226,
+      "wallTimeMs": 423,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "freshThird"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049379,
+      "id": "01M4E2S8B30000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "6b0df8a4a04c105ca803952a7e87122b",
+      "cpuTimeMs": 8,
+      "wallTimeMs": 139,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474049022,
+      "id": "01M4E2S7ZY0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "3834d1e6ccbb74d71fdbc9fa8e494b93",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 309,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474048899,
+      "id": "01M4E2S7W300000000000000F8",
+      "metadataType": "cf-worker-event",
+      "traceId": "8bd796ef4557ff16fc511589374ea72e",
+      "cpuTimeMs": 278,
+      "wallTimeMs": 503,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "compactAgain"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474048898,
+      "id": "01M4E2S7W20000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "dc604b7912b067eb2fe07e635f7395c1",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 146,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474048488,
+      "id": "01M4E2S7F80000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "12f7c84355edc991622fe2a76d7fa3f8",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 379,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474048364,
+      "id": "01M4E2S7BC00000000000000DW",
+      "metadataType": "cf-worker-event",
+      "traceId": "ff4dd53dfede704861e32e82392e41b1",
+      "cpuTimeMs": 136,
+      "wallTimeMs": 331,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "freshSecond"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474047527,
+      "id": "01M4E2S6H70000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "af2335ad65ea3e811c6c8c696491859b",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 247,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474046837,
+      "id": "01M4E2S5VN00000000000002D2",
+      "metadataType": "cf-worker-event",
+      "traceId": "5f707f60d95f09a0e88e6ef9902febf7",
+      "cpuTimeMs": 826,
+      "wallTimeMs": 981,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": [
+        "seed"
+      ],
+      "rpcCallCount": 1,
+      "sampling": {}
+    },
+    {
+      "timestamp": 1791474046837,
+      "id": "01M4E2S5VN000000000000002P",
+      "metadataType": "cf-worker-event",
+      "traceId": "075c4237eb391e710e8a1f95c5526ab9",
+      "cpuTimeMs": 38,
+      "wallTimeMs": 77,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "e9e6774de9f26ce52bf5ae7587fadaedeaefda6625ca9fa33bdce3811c69c083",
+      "scriptName": "sync-do-append-48ccb19d8d634f41-b0-baseline",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "e048bc7a-16d4-45ec-96b7-8cac080b4ffc"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": null,
+      "rpcCallCount": null,
+      "sampling": {}
+    }
+  ]
+}

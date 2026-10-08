@@ -1,0 +1,29 @@
+~/packages/testing$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/packages/testing
+
+ ❯ test/toolchain.test.ts (3 tests | 1 failed) 31711ms
+     × publishes Action artifacts atomically without changing source commits 30010ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/toolchain.test.ts > workspace toolchain > publishes Action artifacts atomically without changing source commits
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ Array.<anonymous> test/toolchain.test.ts:296:6
+    294|   );
+    295|
+    296|   it.effect(
+       |      ^
+    297|     "publishes Action artifacts atomically without changing source com…
+    298|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 19 passed (20)
+      Tests  1 failed | 127 passed (128)
+   Start at  08:55:11
+   Duration  74.27s (transform 11.74s, setup 0ms, import 23.68s, tests 174.88s, environment 1ms)
+
+

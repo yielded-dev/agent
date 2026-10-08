@@ -1,0 +1,70 @@
+{
+  "run": "9ae06eab24224b46",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/var/folders/8p/p34jzpn978v2szrghvpvf5_00000gn/T/sync-do-append-ad6Rsp",
+  "targets": [
+    {
+      "block": 0,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b0-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b0-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 0,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b0-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b1-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b1-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 1,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b1-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "control",
+      "stage": "9ae06eab24224b46-b2-control",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "baseline",
+      "stage": "9ae06eab24224b46-b2-baseline",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "block": 2,
+      "role": "candidate",
+      "stage": "9ae06eab24224b46-b2-candidate",
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    }
+  ]
+}

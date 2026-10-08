@@ -1,0 +1,3 @@
+{
+  "error": "ReplayCpuError: Invocation telemetry incomplete; retained all exports without rerunning workload\n    at requireReplayCpu (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-build.ts:19:41)\n    at <anonymous> (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-main.ts:459:18)\n    at ReplayCpu.run (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/node_modules/.bun/effect@4.0.0/node_modules/effect/dist/cli/Command.js:1103:31)\n    at ReplayCpu.run (definition) (/Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/tooling/context-continuity-eval/src/replay-cpu-main.ts:76:10)"
+}

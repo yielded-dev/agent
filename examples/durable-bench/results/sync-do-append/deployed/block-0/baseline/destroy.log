@@ -1,0 +1,20 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:59:56.112] INFO (#1): Destroy · 9ae06eab24224b46-b0-baseline
+[08:59:56.112] INFO (#1): Importing stack module
+[08:59:56.873] INFO (#1): Resolving stack services
+[08:59:56.883] INFO (#1): Loading stack state
+[08:59:56.884] INFO (#1): Computing plan
+[08:59:56.887] INFO (#1): Plan ready (775ms)
+[08:59:56.888] INFO (#1): Plan: 1 to delete, 4 binding changes
+[08:59:56.888] INFO (#1): [sync-do-append-worker] delete
+[08:59:56.888] INFO (#1): [sync-do-append-worker/REPLAY_CPU_RUN] unbind
+[08:59:56.888] INFO (#1): [sync-do-append-worker/REPLAY_CPU_THREADS] unbind
+[08:59:56.888] INFO (#1): [sync-do-append-worker/REPLAY_CPU_TOKEN] unbind
+[08:59:56.888] INFO (#1): [sync-do-append-worker/REPLAY_CPU_VERSION] unbind
+[08:59:56.888] INFO (#1): 
+[08:59:56.889] INFO (#318): [sync-do-append-worker] deleting
+[08:59:56.891] INFO (#318): Cloudflare Worker delete: deleting sync-do-append-9ae06eab24224b46-b0-baseline
+[08:59:56.891] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:59:57.391] INFO (#318): [sync-do-append-worker] deleted (502ms)
+[08:59:57.394] INFO (#1): 
+[08:59:57.394] INFO (#1): Done: 1 succeeded (506ms)

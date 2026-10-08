@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-sync-do-append-spike/packages/storage-cloudflare
+
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:2306:21)
+    at listenInCluster (node:net:2437:12)
+    at node:net:2666:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2416:8)
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v24.21.0

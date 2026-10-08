@@ -1,0 +1,12 @@
+{
+  "block": 0,
+  "role": "control",
+  "stage": "9ae06eab24224b46-b0-control",
+  "cleanupRequired": true,
+  "cleanupComplete": false,
+  "name": "sync-do-append-9ae06eab24224b46-b0-control",
+  "url": "https://sync-do-append-9ae06eab24224b46-b0-control.danieljmerwe.workers.dev",
+  "namespaces": [
+    "18cf39a6c6b446beb3db15120fc3720a"
+  ]
+}

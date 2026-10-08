@@ -1,0 +1,70 @@
+{
+  "sourceRevision": "452949cb57b417f3b481eb68afd9893d2bb7aa1b",
+  "prototypeRevision": "f5a3f74f2783ce1ed6f4b09e3d41aa3adc822502",
+  "commands": [
+    {
+      "command": "vp -C packages/storage-cloudflare test",
+      "exitCode": 0,
+      "log": "storage-cloudflare.log",
+      "sha256": "37749e9c9515aa4a3a5512fc3bd2ec7f8d4992a3230fe8e0eb358aa57098d9cd",
+      "logLastModifiedUtc": "2026-10-08T15:32:29.676749+00:00",
+      "passedTests": 111
+    },
+    {
+      "command": "vp -C packages/storage-sql test --passWithNoTests",
+      "exitCode": 0,
+      "log": "storage-sql.log",
+      "sha256": "4fb1dd36223cf9d2f1f2d8913743bb5bfadaaa8332e7a81cd5e5ce64a0692ff9",
+      "logLastModifiedUtc": "2026-10-08T15:33:44.126351+00:00",
+      "passedTests": 0
+    },
+    {
+      "command": "vp run -F @yielded/agent-storage-sql check",
+      "exitCode": 0,
+      "log": "storage-sql-check.log",
+      "sha256": "e3468ca47bf13d324ec24d53239dca9ecd76c0a6c8e8019d06643ad6ea9a9053",
+      "logLastModifiedUtc": "2026-10-08T15:33:22.129264+00:00"
+    },
+    {
+      "command": "vp -C packages/effect-agent test test/durable",
+      "exitCode": 0,
+      "log": "durable.log",
+      "sha256": "4df8b83ccba0aeb5d85911b5b39d41a18bcc5668b78bdc264d840c8cdf490e2d",
+      "logLastModifiedUtc": "2026-10-08T15:30:33.863843+00:00",
+      "passedTests": 61
+    },
+    {
+      "command": "vp run check",
+      "exitCode": 0,
+      "log": "check.log",
+      "sha256": "54da93157711051ef751afbf4a3861922570a7a9d7d71506435bafaa64f648cf",
+      "logLastModifiedUtc": "2026-10-08T15:44:30.638451+00:00"
+    },
+    {
+      "command": "vp run build",
+      "exitCode": 0,
+      "log": "build.log",
+      "sha256": "058b06c53c1c544435dba6bf4b97701e8854a8f5f5cd67dd824d9205cbd33242",
+      "logLastModifiedUtc": "2026-10-08T15:45:48.486345+00:00"
+    },
+    {
+      "command": "vp env doctor",
+      "exitCode": 0,
+      "log": "env-doctor.log",
+      "sha256": "9f72521f54fc5d9b9e3145e36b7242ba9b7958390333ee95549fcb88340b6814",
+      "logLastModifiedUtc": "2026-10-08T15:39:58.930559+00:00"
+    },
+    {
+      "command": "PATH=/usr/bin:$PATH vp run ready",
+      "exitCode": 0,
+      "log": "ready.log",
+      "sha256": "17032203f8624d31c8f4a60a945ee873a724c306f0700dfdf362c2176b2a7dcd",
+      "logLastModifiedUtc": "2026-10-08T15:59:47.552368+00:00"
+    }
+  ],
+  "notes": [
+    "Exit codes are retained from the command tool results. Test-run durations in these correctness logs are not performance evidence.",
+    "The storage-sql package has type-contract checks and no runnable test files.",
+    "Earlier local Git fixture timeouts are retained in separate logs. The final full gate used the system Git first on PATH and changed no test or timeout."
+  ]
+}

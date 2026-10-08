@@ -1,0 +1,3 @@
+{
+  "error": "HttpClientError: Transport error (POST https://sync-do-append-9ae06eab24224b46-b1-baseline.danieljmerwe.workers.dev/warmCompactAgain?object=small-1)"
+}
