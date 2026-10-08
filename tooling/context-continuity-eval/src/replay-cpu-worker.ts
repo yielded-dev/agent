@@ -35,7 +35,7 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { Cause, Clock, Context, Crypto, DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import {
   AiError,
@@ -415,6 +415,8 @@ const application = Layer.unwrap(
 
         const operate = Effect.fn("issue692.operate")(
           function* (phase: number) {
+            const objectStarted = yield* Clock.currentTimeMillis;
+
             yield* check(
               state.seedRecords > 0 && phase === state.phase + 1 && phase <= 10,
               "Out-of-order or repeated phase",
@@ -458,6 +460,8 @@ const application = Layer.unwrap(
               modelCalls: calls,
               modelFinalizers: finalizers,
               toolCalls,
+              // Workers clocks advance across I/O: this is elapsed wall time, never CPU time.
+              objectWallTimeMs: (yield* Clock.currentTimeMillis) - objectStarted,
             };
 
             state = {
@@ -758,7 +762,12 @@ export default {
           url.searchParams.get("object"),
         );
 
-        const object = env.REPLAY_CPU_THREADS.getByName(`issue692-${env.REPLAY_CPU_RUN}-${name}`);
+        const object = env.REPLAY_CPU_THREADS.getByName(
+          `sync-do-append-${env.REPLAY_CPU_RUN}-${name}`,
+          {
+            locationHint: "wnam",
+          },
+        );
 
         const rpc = <A>(run: () => Promise<A>) =>
           Effect.tryPromise({

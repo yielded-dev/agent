@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "spike:sync-do-append:counts": "bun results/sync-do-append/harness/counts.mjs",
     "vendor": "bun install --cwd third-party",
     "seed": "bun bench/seed.ts",
     "bench": "bun bench/run.ts",

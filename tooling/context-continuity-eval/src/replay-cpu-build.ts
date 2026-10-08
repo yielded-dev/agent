@@ -177,13 +177,22 @@ export const buildReplayCpu = Effect.fn("ReplayCpu.build")(function* (
       "Benchmark fixture changed while building",
     );
 
+  const effectSources = yield* Effect.forEach(
+    ["package.json", "dist/internal/core.js", "dist/internal/effect.js"],
+    (name) => fs.readFileString(path.join(sourceRoot, "node_modules/effect", name)),
+  );
+
+  const bundle = yield* fs.readFile(path.join(directory, "worker.mjs"));
+
   const metadata = ReplayCpuBuild.make({
     revision,
     fixtureSha256,
     lockfileSha256,
     versions,
     inputFiles: inputs.length,
-    bundleSha256: yield* sha256(yield* fs.readFile(path.join(directory, "worker.mjs"))),
+    bundleSha256: yield* sha256(bundle),
+    bundleBytes: bundle.byteLength,
+    effectBuildSha256: yield* sha256(JSON.stringify(effectSources)),
   });
 
   yield* fs.writeFileString(path.join(directory, "build.json"), JSON.stringify(metadata, null, 2));

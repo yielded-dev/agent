@@ -20,7 +20,7 @@ import {
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { ThreadStoreDiagnostic, ThreadStoreError } from "@yielded/agent/thread-store";
-import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
+import { Cause, Clock, Crypto, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
 
@@ -35,6 +35,7 @@ import {
   type DoStorageFailpointLocation,
 } from "../DoStorageError.ts";
 import { ensureDoStorageLayout } from "./migrations.ts";
+import { noFailpoint } from "./no-failpoint.ts";
 import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
 import {
   isAppendContention,
@@ -42,6 +43,7 @@ import {
   storageResult,
   withStorageSpan,
 } from "./storage-span.ts";
+import { makeSyncAppend, prepareSyncReferences } from "./sync-append.ts";
 
 /**
  * Static schema ceiling for stored text columns. Writes are bounded in BYTES by the
@@ -251,8 +253,6 @@ type DoJournalFailpoint = (
   location: DoStorageFailpointLocation,
 ) => Effect.Effect<void, DoStorageFailpointError>;
 
-const noFailpoint: DoJournalFailpoint = () => Effect.void;
-
 const storageError =
   (operation: string) =>
   (error: SqlError): DoStorageError =>
@@ -375,6 +375,7 @@ const makeJournal = (
   Effect.gen(function* () {
     const owner = (yield* SqlStorageOwner) ?? state;
     const progress = yield* SqlStorageProgress;
+    const crypto = yield* Crypto.Crypto;
 
     const work = yield* makeSqlThreadWork({
       read: (body) => state.read(body),
@@ -688,7 +689,7 @@ const makeJournal = (
       return request;
     });
 
-    const appendPrepared = Effect.fnUntraced(function* (
+    const appendPreparedEffectful = Effect.fnUntraced(function* (
       request: RawAppendRequest,
     ): Effect.fn.Return<RawAppendResult, AppendError> {
       const recordIds: Array<string> = request.records.map((record) => record.recordId);
@@ -965,6 +966,82 @@ const makeJournal = (
         replayed: false,
         tailDigest: request.tailDigest,
       });
+    });
+
+    const synchronous =
+      state.storage === undefined
+        ? undefined
+        : makeSyncAppend(state.storage, {
+            thread: (id) => threads.peek("thread_id", id),
+            acceptThread: (row) => {
+              threads.accept([ThreadRow.make(row)]);
+            },
+            prefix: recordCache.prefix,
+            acceptRecord: (row, bytes) => {
+              recordCache.put(RecordRow.make(row), bytes);
+            },
+          });
+
+    if (synchronous !== undefined)
+      yield* Effect.acquireRelease(
+        Effect.sync(() => state.invalidators.add(synchronous.invalidate)),
+        () => Effect.sync(() => state.invalidators.delete(synchronous.invalidate)),
+      );
+
+    const appendPrepared = Effect.fnUntraced(function* (
+      request: RawAppendRequest,
+    ): Effect.fn.Return<RawAppendResult, AppendError> {
+      // Arbitrary failpoints may suspend or interrupt at a precise write cut. Keep that
+      // explicit test authority; production uses one synchronous SQL core per append.
+      if (synchronous === undefined || failpoint !== noFailpoint)
+        return yield* appendPreparedEffectful(request);
+
+      const references = yield* prepareSyncReferences(request).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
+
+      const result = yield* Effect.suspend(() =>
+        Effect.fromResult(synchronous.append(request, references)),
+      );
+
+      if (result.replayed) return result;
+      const records = request.records;
+
+      // Retain one start prefix atomically with its canonical proof, before model/tool
+      // execution. Later facts stay journal-backed until the settlement publication wave.
+      if (
+        lifecycle !== undefined &&
+        records.some(
+          ({ canonical: { payload } }) =>
+            payload._tag === "RunStarted" || payload._tag === "SubagentStarted",
+        )
+      )
+        yield* flushCanonical(request.threadId).pipe(
+          Effect.provideService(SqlLifecycleRetainer, { retainMany: lifecycle.retainMany }),
+          Effect.mapError((cause) =>
+            DoStorageError.make({
+              operation: "retain lifecycle start prefix",
+              message: "Lifecycle start intent could not be retained",
+              cause,
+            }),
+          ),
+        );
+
+      yield* progress.committed("canonical").pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              DoStorageError.make({
+                operation: "enroll canonical progress",
+                message: error.message,
+                cause: error,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      return result;
     });
 
     const append = Effect.fnUntraced(

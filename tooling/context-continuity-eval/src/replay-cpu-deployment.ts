@@ -47,8 +47,7 @@ const Namespaces = Schema.Struct({
   ),
 });
 
-export const workerName = (target: typeof ReplayCpuTarget.Type) =>
-  `effect-agent-cpu-${target.stage}`;
+export const workerName = (target: typeof ReplayCpuTarget.Type) => `sync-do-append-${target.stage}`;
 
 export const writeReplayCpuJson = Effect.fnUntraced(function* (file: string, value: unknown) {
   const fs = yield* FileSystem.FileSystem;
@@ -69,7 +68,7 @@ export const prepareReplayCpuResources = Effect.fn("ReplayCpu.prepareResources")
   const crypto = yield* Crypto.Crypto;
   const config = yield* credentials;
   const accountDigest = yield* sha256(config.accountId);
-  const privateDirectory = yield* fs.makeTempDirectory({ prefix: "effect-agent-cpu-" });
+  const privateDirectory = yield* fs.makeTempDirectory({ prefix: "sync-do-append-" });
 
   yield* fs.chmod(privateDirectory, 0o700);
 

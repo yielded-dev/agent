@@ -37,6 +37,7 @@ export const ReplayCpuOperation = Schema.Struct({
   modelCalls: Schema.Natural,
   modelFinalizers: Schema.Natural,
   toolCalls: Schema.Natural,
+  objectWallTimeMs: Schema.Number,
 });
 
 export const ReplayCpuIdentity = Schema.Struct({
@@ -57,6 +58,8 @@ export const ReplayCpuBuild = Schema.Struct({
   fixtureSha256: Schema.String,
   lockfileSha256: Schema.String,
   bundleSha256: Schema.String,
+  bundleBytes: Schema.Natural,
+  effectBuildSha256: Schema.String,
   versions: Schema.Record(Schema.String, Schema.String),
   inputFiles: Schema.Natural,
 });

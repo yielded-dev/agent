@@ -12,6 +12,7 @@ const ActiveState = Context.Reference<OwnedState | undefined>(
 
 /** One disposable view per physical Object database, including separately acquired adapters. */
 export class OwnedState {
+  constructor(readonly storage: SqliteClient.SqliteClient["config"]["storage"]) {}
   private readonly gate = Semaphore.makeUnsafe(1);
   readonly invalidators = new Set<() => void>();
 
@@ -67,7 +68,7 @@ export const ownedState = (sql: SqlClient) =>
       let state = states.get(key);
 
       if (state === undefined) {
-        state = new OwnedState();
+        state = new OwnedState(client.config.storage);
         states.set(key, state);
       }
 
@@ -182,48 +183,64 @@ export const ownedRows = <A, I>(
         sql`SELECT * FROM ${sql(table)} WHERE ${sql.and(fields.map(([field, value]) => sql`${sql(field)} = ${value}`))}`,
       );
 
+    const accept = (rows: ReadonlyArray<A>, remove = false) => {
+      const changed = new Set(rows.map(key));
+
+      for (const { id, matches, maxRows, rows: prior } of Array.from(current.values())) {
+        const next = prior.filter((row) => !changed.has(key(row)));
+
+        if (!remove) next.push(...rows.filter(matches));
+        retain(id, matches, next, maxRows);
+      }
+      // A RETURNING row completely defines its unique-key view, even on a new Thread.
+      if (identityColumn !== undefined)
+        for (const row of rows) {
+          const value = row[identityColumn];
+
+          if (typeof value === "string")
+            retain(
+              JSON.stringify([identityColumn, value]),
+              (row) => row[identityColumn] === value,
+              remove ? [] : [row],
+              Infinity,
+            );
+        }
+
+      for (const row of rows)
+        for (const fields of uniqueFields) {
+          const values = fields.map((field) => [field, row[field]] as const);
+
+          retain(
+            JSON.stringify(values),
+            (candidate) => values.every(([field, value]) => candidate[field] === value),
+            remove ? [] : [row],
+            1,
+          );
+        }
+
+      return rows;
+    };
+
     const apply =
       (remove: boolean) =>
       <E, R>(effect: Effect.Effect<ReadonlyArray<unknown>, E, R>) =>
         Effect.gen(function* () {
           const rows = yield* decode(yield* effect);
-          const changed = new Set(rows.map(key));
 
-          for (const { id, matches, maxRows, rows: prior } of Array.from(current.values())) {
-            const next = prior.filter((row) => !changed.has(key(row)));
-
-            if (!remove) next.push(...rows.filter(matches));
-            retain(id, matches, next, maxRows);
-          }
-          // A RETURNING row completely defines its unique-key view, even on a new Thread.
-          if (identityColumn !== undefined)
-            for (const row of rows) {
-              const value = row[identityColumn];
-
-              if (typeof value === "string")
-                retain(
-                  JSON.stringify([identityColumn, value]),
-                  (row) => row[identityColumn] === value,
-                  remove ? [] : [row],
-                  Infinity,
-                );
-            }
-
-          for (const row of rows)
-            for (const fields of uniqueFields) {
-              const values = fields.map((field) => [field, row[field]] as const);
-
-              retain(
-                JSON.stringify(values),
-                (candidate) => values.every(([field, value]) => candidate[field] === value),
-                remove ? [] : [row],
-                1,
-              );
-            }
-
-          return rows;
+          return accept(rows, remove);
         });
 
-    return { by, byFields, matching, seed, write: apply(false), remove: apply(true) };
+    return {
+      by,
+      byFields,
+      matching,
+      seed,
+      accept,
+      write: apply(false),
+      remove: apply(true),
+      // The native synchronous append owns the same writer and seeds only a complete row.
+      peek: (field: keyof A & string, value: string) =>
+        current.get(JSON.stringify([field, value]))?.rows,
+    };
   };
 };

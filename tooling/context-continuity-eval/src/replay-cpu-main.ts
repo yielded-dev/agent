@@ -135,9 +135,7 @@ const command = Command.make(
         const cohorts = [];
 
         for (const cohort of [0, 1, 2, 3]) {
-          const order = yield* Random.shuffle(
-            roles.flatMap((role) => sizes.map((size) => ({ role, size }))),
-          );
+          const order = sizes.flatMap((size) => roles.map((role) => ({ role, size })));
 
           cohorts.push({ cohort, order });
         }
@@ -155,6 +153,8 @@ const command = Command.make(
       controlBundleSha256: builds.baseline.bundleSha256,
       objects: 72,
       measuredOperations: 720,
+      locationHint: "wnam",
+      workerCpuLimitMs: 300_000,
       modelApiCalls: 0,
       workloadDeadlineMinutes: 45,
       primaryMetric:
