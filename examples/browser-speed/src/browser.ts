@@ -114,6 +114,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
         controller.actions.act(values, options).pipe(Effect.mapError(asLabError)),
       );
 
+      checkout.settle(values, result);
       yield* capture().pipe(Effect.ignore);
 
       return result;

@@ -64,8 +64,10 @@ ever pays:
   subdomains. Payment and captcha frames still load. The one exception is `shop.app/checkout/`,
   where Shopify sends every checkout before returning it to the store.
 - Host authorization refuses order and payment buttons, account creation and marketing opt-ins,
-  and types the test email only on checkout pages, never into signup popups. Once a card field is
-  filled it refuses every further click and key press, so payment is never submitted.
+  and types the test email only on checkout pages, never into signup popups. Once checkout starts
+  (a checkout URL, or any test-buyer detail typed), buttons and links may only move between steps,
+  such as Continue or Edit, and Enter and Space are refused, so no label can submit the order.
+  Once a card field is filled it refuses every further click and key press.
 - On Hedge Coffee the host then reads the checkout itself. The run passes only with exactly one
   bag, quantity 1, completed email and delivery steps, the payment step active, and the test card
   entered. Any-store runs are not verified; the report says whether the host saw the card entered.

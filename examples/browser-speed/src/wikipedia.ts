@@ -521,7 +521,10 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         code: "invalid",
         message: "The 20-hop limit was reached. End the race.",
       });
-    // A race never revisits an article; going back only loops between the same pages.
+    // A race never follows a link to an article already in the route: going back only loops.
+    // A redirect alias can still land on a visited article once; the visited filter above then
+    // withholds the route's articles, so it cannot cycle. Resolving every alias would cost a
+    // Wikipedia API lookup per hop.
     const revisit = articleTitle(link.url);
 
     if (revisit !== undefined && path.some((hop) => articleTitle(hop.url) === revisit))
