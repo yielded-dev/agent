@@ -1,15 +1,26 @@
-import { Context, Crypto, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
+import {
+  Context,
+  Crypto,
+  DateTime,
+  Effect,
+  Option,
+  Result,
+  Schema,
+  Semaphore,
+  Stream,
+} from "effect";
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
 import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { ToolCallId } from "../core/Identifiers.ts";
+import { summarizeModelUsageResult } from "../core/internal/usage.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
-import { summarizeModelUsage } from "../core/Usage.ts";
 import { reference, resolveEvidence } from "./internal/evidence.ts";
 export { reference, resolveEvidence } from "./internal/evidence.ts";
 import {
   captureRecord,
+  captureRecordResult,
   recordEncoding,
   type ProgressAppendRecord,
 } from "./internal/record-encoding.ts";
@@ -105,16 +116,18 @@ const failure = (message: string, cause?: unknown) =>
 const capacityFailure = (message: string) =>
   failure(message, AgentPersistenceCapacityError.make({ message }));
 
-const decodeResponsePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
+const decodeResponsePrompt = Schema.decodeUnknownResult(Prompt.Prompt);
+const decodeResponseToolCallId = Schema.decodeResult(ToolCallId);
+const decodeContinuation = Schema.decodeResult(RunContinuation);
 
-const validateBatchHeader = Schema.decodeSync(
+const validateBatchHeader = Schema.decodeResult(
   Schema.Struct({
     batchId: CanonicalBatch.fields.batchId,
     producerId: CanonicalBatch.fields.producerId,
   }),
 );
 
-const validateBatchCount = Schema.decodeSync(
+const validateBatchCount = Schema.decodeResult(
   Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
@@ -123,24 +136,42 @@ const ContinuationBytes = Schema.Struct({
   terminalBytes: RunContinuation.fields.terminalBytes,
 });
 
+const decodeContinuationBytes = Schema.decodeResult(ContinuationBytes);
+
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
+const captureFactsResult = (
+  batch: CanonicalBatch,
+): Result.Result<CanonicalBatch, ThreadStoreError> => {
+  const header = validateBatchHeader(batch);
+
+  if (Result.isFailure(header))
+    return Result.fail(failure("Cannot capture canonical progress facts", header.failure));
+  const count = validateBatchCount(batch.records);
+
+  if (Result.isFailure(count))
+    return Result.fail(failure("Cannot capture canonical progress facts", count.failure));
+  const records: Array<RecordEnvelope> = [];
+
+  for (let index = 0; index < batch.records.length; index++) {
+    const captured = captureRecordResult(batch.records[index]);
+
+    if (Result.isFailure(captured))
+      return Result.fail(failure("Cannot capture canonical progress facts", captured.failure));
+    records.push(captured.success.canonical);
+  }
+
+  return Result.succeed(
+    Object.freeze(
+      new CanonicalBatch(
+        { ...header.success, records: Object.freeze([records[0]!, ...records.slice(1)]) },
+        { disableChecks: true },
+      ),
+    ),
+  );
+};
+
 const captureFacts = (batch: CanonicalBatch) =>
-  Effect.try({
-    try: () => {
-      const header = validateBatchHeader(batch);
-
-      validateBatchCount(batch.records);
-      const records = batch.records.map((record) => captureRecord(record).canonical);
-
-      return Object.freeze(
-        new CanonicalBatch(
-          { ...header, records: [records[0]!, ...records.slice(1)] },
-          { disableChecks: true },
-        ),
-      );
-    },
-    catch: (cause) => failure("Cannot capture canonical progress facts", cause),
-  });
+  Effect.suspend(() => Effect.fromResult(captureFactsResult(batch)));
 
 /** Exact UTF-8 wire accounting reuses the append's privately captured Schema encoding. */
 export const canonicalRecordBytes = (record: RecordEnvelope): number =>
@@ -573,12 +604,11 @@ const emptyAccounting = (): ContinuationAccounting => ({
 });
 
 /** Recompute semantic progress solely from immutable owning facts. No port grants authority. */
-const advanceFacts = Effect.fnUntraced(function* (
+const makeFactReducer = (
   previous: ProgressState | undefined,
-  facts: ReadonlyArray<RecordEnvelope>,
   submissionId: SubmissionId,
   initialBytes: number,
-) {
+) => {
   const accounting = { ...(previous?.continuation.accounting ?? emptyAccounting()) };
   let savedContext = previous?.continuation.savedContext;
   let latestResponse = previous?.continuation.latestResponse;
@@ -590,7 +620,9 @@ const advanceFacts = Effect.fnUntraced(function* (
   let childResults = new Map(previous?.childResults);
   let completionBytes = previous?.completionBytes;
 
-  for (const fact of facts) {
+  const add = (
+    fact: RecordEnvelope,
+  ): ThreadStoreError | "savedContext" | "latestResponse" | "terminal" | undefined => {
     const payload = fact.payload;
 
     switch (payload._tag) {
@@ -599,19 +631,20 @@ const advanceFacts = Effect.fnUntraced(function* (
         break;
       case "RunContextRecorded":
         if (savedContext !== undefined)
-          return yield* failure("A Run's original context cannot be replaced");
-        savedContext = yield* reference(fact);
+          return failure("A Run's original context cannot be replaced");
         position = "awaiting-model";
-        break;
+
+        return "savedContext";
       case "ModelResponseRecorded": {
         if (savedContext === undefined)
-          return yield* failure("A model response has no saved original Run context");
+          return failure("A model response has no saved original Run context");
         if (payload.turn !== accounting.committedTurns + 1)
-          return yield* failure("Canonical Turn progress must advance once");
+          return failure("Canonical Turn progress must advance once");
 
-        const messages = yield* decodeResponsePrompt(payload.messages).pipe(
-          Effect.mapError((cause) => failure("Invalid model evidence", cause)),
-        );
+        const decoded = decodeResponsePrompt(payload.messages);
+
+        if (Result.isFailure(decoded)) return failure("Invalid model evidence", decoded.failure);
+        const messages = decoded.success;
 
         responsePrompt = messages;
 
@@ -621,12 +654,14 @@ const advanceFacts = Effect.fnUntraced(function* (
             : [],
         );
 
-        const summary =
+        const summarized =
           payload.modelUsage === undefined
             ? undefined
-            : yield* summarizeModelUsage(payload.modelUsage).pipe(
-                Effect.mapError((cause) => failure("Invalid usage evidence", cause)),
-              );
+            : summarizeModelUsageResult(payload.modelUsage);
+
+        if (summarized !== undefined && Result.isFailure(summarized))
+          return failure("Invalid usage evidence", summarized.failure);
+        const summary = summarized?.success;
 
         accounting.committedTurns = payload.turn;
         accounting.toolCalls += calls.length;
@@ -637,12 +672,12 @@ const advanceFacts = Effect.fnUntraced(function* (
         accounting.lastInputTokens = summary?.inputTokens.total ?? payload.inputTokens ?? 0;
         accounting.lastOutputTokens = summary?.outputTokens.total ?? payload.outputTokens ?? 0;
         accounting.unobservedModelCalls += payload.unobservedModelCalls ?? 0;
-        latestResponse = yield* reference(fact);
         response = payload;
         results = new Map();
         childResults = new Map();
         position = payload.toolOperations.length === 0 ? "awaiting-model" : "processing-operations";
-        break;
+
+        return "latestResponse";
       }
       case "ToolCallSettled":
         results.set(payload.toolCallId, payload);
@@ -692,17 +727,19 @@ const advanceFacts = Effect.fnUntraced(function* (
           payload.programmaticToolCalls < accounting.programmaticToolCalls ||
           (accounting.finalizationUsed && !payload.finalizationUsed)
         )
-          return yield* failure("Run reservations cannot be refunded");
+          return failure("Run reservations cannot be refunded");
         accounting.programmaticToolCalls = payload.programmaticToolCalls;
         accounting.finalizationUsed = payload.finalizationUsed;
         break;
       case "ModelCallAborted": {
         if (payload.restart !== (accounting.modelRestarts ?? 0) + 1)
-          return yield* failure("Model restart progress must advance once");
+          return failure("Model restart progress must advance once");
 
-        const summary = yield* summarizeModelUsage(payload.modelUsage).pipe(
-          Effect.mapError((cause) => failure("Invalid cancelled model usage", cause)),
-        );
+        const summarized = summarizeModelUsageResult(payload.modelUsage);
+
+        if (Result.isFailure(summarized))
+          return failure("Invalid cancelled model usage", summarized.failure);
+        const summary = summarized.success;
 
         accounting.modelRestarts = payload.restart;
         accounting.modelCalls += summary.modelCalls;
@@ -721,12 +758,11 @@ const advanceFacts = Effect.fnUntraced(function* (
                 ? 0
                 : utf8ByteLength(JSON.stringify(payload.runDisposition)))
             : undefined;
-        terminal = yield* reference(fact);
         position = "settling";
-        break;
+
+        return "terminal";
       case "SubmissionSettled":
         if (payload.submissionId !== submissionId) break;
-        terminal = yield* reference(fact);
         position = "settled";
         if (payload.usageSummary !== undefined) {
           accounting.modelCalls = payload.usageSummary.modelCalls;
@@ -736,91 +772,140 @@ const advanceFacts = Effect.fnUntraced(function* (
           accounting.unobservedModelCalls =
             payload.usageSummary.unobservedModelCalls ?? accounting.unobservedModelCalls;
         }
-        break;
+
+        return "terminal";
       default:
         break;
     }
-  }
-  if (
-    response !== undefined &&
-    response.turn > accounting.accountedToolTurn &&
-    response.toolOperations.every((operation) => results.has(operation.toolCallId))
-  ) {
-    const messages =
-      responsePrompt ??
-      (yield* decodeResponsePrompt(response.messages).pipe(
-        Effect.mapError((cause) => failure("Invalid batch evidence", cause)),
-      ));
+  };
 
-    const parts = messages.content.flatMap((message) =>
-      message.role === "assistant" ? message.content : [],
+  const finish = (facts: ReadonlyArray<RecordEnvelope>) => {
+    if (
+      response !== undefined &&
+      response.turn > accounting.accountedToolTurn &&
+      response.toolOperations.every((operation) => results.has(operation.toolCallId))
+    ) {
+      if (responsePrompt === undefined) {
+        const decoded = decodeResponsePrompt(response.messages);
+
+        if (Result.isFailure(decoded))
+          return Result.fail(failure("Invalid batch evidence", decoded.failure));
+        responsePrompt = decoded.success;
+      }
+      const messages = responsePrompt;
+
+      const parts = messages.content.flatMap((message) =>
+        message.role === "assistant" ? message.content : [],
+      );
+
+      for (const call of parts) {
+        if (call.type !== "tool-call") continue;
+
+        let result: Prompt.Part | ToolCallSettled | undefined;
+
+        if (call.providerExecuted)
+          result = parts.find((part) => part.type === "tool-result" && part.id === call.id);
+        else {
+          const callId = decodeResponseToolCallId(call.id);
+
+          if (Result.isFailure(callId))
+            return Result.fail(failure("Invalid batch evidence", callId.failure));
+          result = results.get(callId.success);
+        }
+
+        if (
+          result === undefined ||
+          !("isFailure" in result) ||
+          ("budgetRejected" in result && result.budgetRejected === true)
+        )
+          continue;
+        accounting.consecutiveToolFailures = result.isFailure
+          ? accounting.consecutiveToolFailures + 1
+          : 0;
+      }
+      accounting.accountedToolTurn = response.turn;
+      results.clear();
+      if (position !== "settling" && position !== "settled") position = "awaiting-model";
+    }
+    const last = facts.at(-1);
+
+    if (last === undefined) return Result.fail(failure("Progress has no owning fact"));
+    if (previous?.continuation.position === "settled") position = "settled";
+    else if (previous?.continuation.position === "settling" && position !== "settled")
+      position = "settling";
+    const factBytes = facts.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0);
+
+    const turn = facts.reduce(
+      (current, fact) => ("turn" in fact.payload ? Math.max(current, fact.payload.turn) : current),
+      previous?.continuation.turn ?? 1,
     );
 
-    for (const call of parts) {
-      if (call.type !== "tool-call") continue;
+    const turnBase =
+      (previous?.continuation.turn === turn ? previous.continuation.turnBytes : initialBytes) +
+      factBytes;
 
-      const result = call.providerExecuted
-        ? parts.find((part) => part.type === "tool-result" && part.id === call.id)
-        : results.get(ToolCallId.make(call.id));
+    const usageCharge = factUsageCharge(facts);
+    const terminalUsageBytes = (previous?.continuation.terminalUsageBytes ?? 0) + usageCharge;
 
-      if (
-        result === undefined ||
-        !("isFailure" in result) ||
-        ("budgetRejected" in result && result.budgetRejected === true)
-      )
-        continue;
-      accounting.consecutiveToolFailures = result.isFailure
-        ? accounting.consecutiveToolFailures + 1
-        : 0;
-    }
-    accounting.accountedToolTurn = response.turn;
-    results.clear();
-    if (position !== "settling" && position !== "settled") position = "awaiting-model";
-  }
-  const last = facts.at(-1);
+    const closing = facts.filter(isTerminalBudgetFact);
 
-  if (last === undefined) return yield* failure("Progress has no owning fact");
-  if (previous?.continuation.position === "settled") position = "settled";
-  else if (previous?.continuation.position === "settling" && position !== "settled")
-    position = "settling";
-  const factBytes = facts.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0);
-
-  const turn = facts.reduce(
-    (current, fact) => ("turn" in fact.payload ? Math.max(current, fact.payload.turn) : current),
-    previous?.continuation.turn ?? 1,
-  );
-
-  const turnBase =
-    (previous?.continuation.turn === turn ? previous.continuation.turnBytes : initialBytes) +
-    factBytes;
-
-  const usageCharge = factUsageCharge(facts);
-  const terminalUsageBytes = (previous?.continuation.terminalUsageBytes ?? 0) + usageCharge;
-
-  const closing = facts.filter(isTerminalBudgetFact);
+    return Result.succeed({
+      accounting,
+      savedContext,
+      latestResponse,
+      terminal,
+      position,
+      response,
+      results,
+      childResults,
+      completionBytes,
+      last,
+      factBytes,
+      turn,
+      turnBase,
+      usageCharge,
+      terminalUsageBytes,
+      terminalBytes:
+        (previous?.continuation.terminalBytes ?? 0) +
+        closing.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0),
+      terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closing.length,
+      closing: closing.length > 0,
+    });
+  };
 
   return {
-    accounting,
-    savedContext,
-    latestResponse,
-    terminal,
-    position,
-    response,
-    results,
-    childResults,
-    completionBytes,
-    last,
-    factBytes,
-    turn,
-    turnBase,
-    usageCharge,
-    terminalUsageBytes,
-    terminalBytes:
-      (previous?.continuation.terminalBytes ?? 0) +
-      closing.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0),
-    terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closing.length,
-    closing: closing.length > 0,
+    add,
+    finish,
+    setReference: (
+      kind: "savedContext" | "latestResponse" | "terminal",
+      ref: EvidenceReference,
+    ) => {
+      if (kind === "savedContext") savedContext = ref;
+      else if (kind === "latestResponse") latestResponse = ref;
+      else terminal = ref;
+    },
   };
+};
+
+const advanceFacts = Effect.fnUntraced(function* (
+  previous: ProgressState | undefined,
+  facts: ReadonlyArray<RecordEnvelope>,
+  submissionId: SubmissionId,
+  initialBytes: number,
+) {
+  const reducer = makeFactReducer(previous, submissionId, initialBytes);
+
+  for (const fact of facts) {
+    const step = reducer.add(fact);
+
+    if (step !== undefined && typeof step !== "string") return yield* step;
+    if (typeof step === "string") reducer.setReference(step, yield* reference(fact));
+  }
+  const result = reducer.finish(facts);
+
+  if (Result.isFailure(result)) return yield* result.failure;
+
+  return result.success;
 });
 
 /**
@@ -1157,10 +1242,10 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     };
   });
 
-  const checkFutureShapes = (state: ProgressState): Effect.Effect<void, ThreadStoreError> => {
+  const checkFutureShapes = (state: ProgressState): ThreadStoreError | undefined => {
     const progress = state.continuation;
 
-    if (progress.position === "settled") return Effect.void;
+    if (progress.position === "settled") return;
     const size = canonicalRecordBytes(state.record);
     const textBytes = (value: string) => utf8ByteLength(JSON.stringify(value));
     const refBytes = (value: EvidenceReference) => utf8ByteLength(JSON.stringify(value));
@@ -1192,7 +1277,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         ref(runCompletedRecordId(progress.runId)),
       )
     )
-      return Effect.fail(capacityFailure("Run has no room for a terminal continuation envelope"));
+      return capacityFailure("Run has no room for a terminal continuation envelope");
 
     if (
       state.response !== undefined &&
@@ -1206,13 +1291,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
             ref(toolCallSettledRecordId(progress.runId, state.response.turn, operation.toolCallId)),
           )
         )
-          return Effect.fail(
-            capacityFailure("Tool dispatch has no room for its result continuation envelope"),
-          );
+          return capacityFailure("Tool dispatch has no room for its result continuation envelope");
       }
     }
 
-    return Effect.void;
+    return undefined;
   };
 
   const checkCapacity = (
@@ -1220,7 +1303,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     consumed: ReadonlySet<RecordId> = new Set(),
     extra?: { readonly turn: number; readonly bytes: number; readonly records: number },
     committedUsageBytes = 0,
-  ): Effect.Effect<void, ThreadStoreError> => {
+  ): ThreadStoreError | undefined => {
     const progress = state.continuation;
     const pending = resultCapacity(state);
 
@@ -1264,26 +1347,182 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       recordBytes > MAX_RUN_EVIDENCE_BYTES ||
       recordCount > MAX_RUN_EVIDENCE_RECORDS
     )
-      return Effect.fail(
-        failure(
-          "Run has no remaining canonical dispatch capacity",
-          AgentPersistenceCapacityError.make({
-            message: "Run has no room for the next result and a bounded terminal settlement",
-          }),
-        ),
+      return failure(
+        "Run has no remaining canonical dispatch capacity",
+        AgentPersistenceCapacityError.make({
+          message: "Run has no room for the next result and a bounded terminal settlement",
+        }),
       );
 
-    return Effect.void;
+    return undefined;
+  };
+
+  const buildContinuation = ({
+    batch,
+    runId,
+    submissionId,
+    previous,
+    originalCount,
+    initialBytes,
+    originalInput,
+    lastFact,
+    next,
+    facts,
+  }: {
+    readonly batch: CanonicalBatch;
+    readonly runId: RunId;
+    readonly submissionId: SubmissionId;
+    readonly previous: ProgressState | undefined;
+    readonly originalCount: number;
+    readonly initialBytes: number;
+    readonly originalInput: EvidenceReference;
+    readonly lastFact: EvidenceReference;
+    readonly next: Effect.Success<ReturnType<typeof advanceFacts>>;
+    readonly facts: ReadonlyArray<RecordEnvelope>;
+  }): Result.Result<ProgressState, ThreadStoreError> => {
+    const {
+      accounting,
+      savedContext,
+      latestResponse,
+      terminal,
+      position,
+      response,
+      results,
+      childResults,
+      completionBytes,
+      last,
+      factBytes,
+      turn,
+      turnBase,
+      usageCharge,
+      terminalUsageBytes,
+    } = next;
+
+    const decoded = decodeContinuation({
+      _tag: "RunContinuation",
+      version: 1,
+      runId,
+      submissionId,
+      revision: (previous?.continuation.revision ?? 0) + 1,
+      recordCount: (previous?.continuation.recordCount ?? originalCount) + facts.length,
+      recordBytes: (previous?.continuation.recordBytes ?? initialBytes) + factBytes,
+      turn,
+      turnBytes: turnBase,
+      terminalUsageBytes,
+      terminalBytes: next.terminalBytes,
+      terminalRecords: next.terminalRecords,
+      originalInput,
+      ...(savedContext === undefined ? {} : { savedContext }),
+      ...(latestResponse === undefined ? {} : { latestResponse }),
+      ...(terminal === undefined ? {} : { terminal }),
+      lastFact,
+      position,
+      accounting,
+    });
+
+    if (Result.isFailure(decoded))
+      return Result.fail(capacityFailure("Canonical continuation exceeds its protocol bounds"));
+    let continuation = decoded.success;
+
+    const header = {
+      recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
+      family: "thread" as const,
+      schemaVersion: 1 as const,
+      createdAt: last.createdAt,
+      deploymentId: last.deploymentId,
+    };
+
+    // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
+    // Key order does not change byte width. Measure without capturing a provisional record,
+    // then compare against the final Schema encoding before accepting its accounting.
+    const provisional = {
+      ...header,
+      createdAt: DateTime.formatIso(header.createdAt),
+      payload: continuation,
+    } satisfies typeof RecordEnvelope.Encoded;
+
+    const initialCursorBytes = utf8ByteLength(JSON.stringify(provisional));
+
+    const initialWidth =
+      String(continuation.turnBytes).length + String(continuation.terminalBytes).length;
+
+    let turnBytes = continuation.turnBytes;
+    let terminalBytes = continuation.terminalBytes;
+
+    for (let attempts = 0; ; attempts++) {
+      const cursorBytes =
+        initialCursorBytes + String(turnBytes).length + String(terminalBytes).length - initialWidth;
+
+      const nextTurnBytes = turnBase + cursorBytes;
+      const nextTerminalBytes = next.terminalBytes + (next.closing ? cursorBytes : 0);
+
+      if (nextTurnBytes === turnBytes && nextTerminalBytes === terminalBytes) break;
+      if (attempts >= 4)
+        return Result.fail(failure("Continuation byte accounting did not converge"));
+      turnBytes = nextTurnBytes;
+      terminalBytes = nextTerminalBytes;
+    }
+
+    const checkedBytes = decodeContinuationBytes({
+      turnBytes,
+      terminalBytes,
+    });
+
+    if (Result.isFailure(checkedBytes))
+      return Result.fail(capacityFailure("Turn exceeds its incremental canonical byte budget"));
+
+    // Every other field was checked above; byte accounting changes only these counters.
+    continuation = new RunContinuation(
+      { ...continuation, ...checkedBytes.success },
+      { disableChecks: true },
+    );
+
+    const captured = captureRecordResult(
+      new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
+    );
+
+    if (Result.isFailure(captured))
+      return Result.fail(failure("Cannot capture canonical progress facts", captured.failure));
+    const { canonical: record, bytes } = captured.success;
+
+    if (bytes !== turnBytes - turnBase)
+      return Result.fail(failure("Continuation byte accounting differs from its Schema encoding"));
+    if (bytes > MAX_RUN_CONTINUATION_BYTES)
+      return Result.fail(
+        capacityFailure("Encoded continuation exceeds 8192 bytes including its envelope"),
+      );
+
+    const state = {
+      continuation,
+      record,
+      ...(response === undefined ? {} : { response }),
+      results,
+      childResults,
+      ...(completionBytes === undefined ? {} : { completionBytes }),
+    };
+
+    if (
+      !facts.every((fact) => isTerminalBudgetFact(fact) && fact.payload._tag !== "RunCompleted")
+    ) {
+      const error = checkCapacity(
+        state,
+        new Set(batch.records.map(({ recordId }) => recordId)),
+        undefined,
+        usageCharge,
+      );
+
+      if (error !== undefined) return Result.fail(error);
+    }
+    const futureError = checkFutureShapes(state);
+
+    return futureError === undefined ? Result.succeed(state) : Result.fail(futureError);
   };
 
   const prepare = Effect.fnUntraced(function* (batch: CanonicalBatch, after: CanonicalSequence) {
     if (batch.records.some((record) => record.payload._tag === "RunContinuation"))
       return yield* failure("A caller cannot supply interpreter progress to the progress writer");
 
-    const ownedRecords = yield* Effect.try({
-      try: () => batch.records.map((record) => captureRecord(record).canonical),
-      catch: (cause) => failure("Cannot capture canonical progress facts", cause),
-    });
+    const ownedRecords = batch.records;
 
     const groups = new Map<RunId, Array<RecordEnvelope>>();
 
@@ -1372,137 +1611,22 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
       const next = yield* provide(advanceFacts(previous, facts, submissionId, initialBytes));
 
-      const {
-        accounting,
-        savedContext,
-        latestResponse,
-        terminal,
-        position,
-        response,
-        results,
-        childResults,
-        completionBytes,
-        last,
-        factBytes,
-        turn,
-        turnBase,
-        usageCharge,
-        terminalUsageBytes,
-      } = next;
-
-      let continuation = yield* RunContinuation.makeEffect({
-        version: 1,
+      const built = buildContinuation({
+        batch,
         runId,
         submissionId,
-        revision: (previous?.continuation.revision ?? 0) + 1,
-        recordCount: (previous?.continuation.recordCount ?? originalCount) + facts.length,
-        recordBytes: (previous?.continuation.recordBytes ?? initialBytes) + factBytes,
-        turn,
-        turnBytes: turnBase,
-        terminalUsageBytes,
-        terminalBytes: next.terminalBytes,
-        terminalRecords: next.terminalRecords,
+        previous,
+        originalCount,
+        initialBytes,
         originalInput,
-        ...(savedContext === undefined ? {} : { savedContext }),
-        ...(latestResponse === undefined ? {} : { latestResponse }),
-        ...(terminal === undefined ? {} : { terminal }),
-        lastFact: yield* provide(reference(last)),
-        position,
-        accounting,
-      }).pipe(
-        Effect.mapError(() =>
-          capacityFailure("Canonical continuation exceeds its protocol bounds"),
-        ),
-      );
+        lastFact: yield* provide(reference(next.last)),
+        next,
+        facts,
+      });
 
-      const header = {
-        recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
-        family: "thread" as const,
-        schemaVersion: 1 as const,
-        createdAt: last.createdAt,
-        deploymentId: last.deploymentId,
-      };
-
-      // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
-      // Key order does not change byte width. Measure without capturing a provisional record,
-      // then compare against the final Schema encoding before accepting its accounting.
-      const provisional = {
-        ...header,
-        createdAt: DateTime.formatIso(header.createdAt),
-        payload: continuation,
-      } satisfies typeof RecordEnvelope.Encoded;
-
-      const initialCursorBytes = utf8ByteLength(JSON.stringify(provisional));
-
-      const initialWidth =
-        String(continuation.turnBytes).length + String(continuation.terminalBytes).length;
-
-      let turnBytes = continuation.turnBytes;
-      let terminalBytes = continuation.terminalBytes;
-
-      for (let attempts = 0; ; attempts++) {
-        const cursorBytes =
-          initialCursorBytes +
-          String(turnBytes).length +
-          String(terminalBytes).length -
-          initialWidth;
-
-        const nextTurnBytes = turnBase + cursorBytes;
-        const nextTerminalBytes = next.terminalBytes + (next.closing ? cursorBytes : 0);
-
-        if (nextTurnBytes === turnBytes && nextTerminalBytes === terminalBytes) break;
-        if (attempts >= 4) return yield* failure("Continuation byte accounting did not converge");
-        turnBytes = nextTurnBytes;
-        terminalBytes = nextTerminalBytes;
-      }
-
-      const checkedBytes = yield* ContinuationBytes.makeEffect({
-        turnBytes,
-        terminalBytes,
-      }).pipe(
-        Effect.mapError(() =>
-          capacityFailure("Turn exceeds its incremental canonical byte budget"),
-        ),
-      );
-
-      // Every other field was checked above; byte accounting changes only these counters.
-      continuation = new RunContinuation(
-        { ...continuation, ...checkedBytes },
-        { disableChecks: true },
-      );
-
-      const record = captureRecord(
-        new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
-      ).canonical;
-
-      if (canonicalRecordBytes(record) !== turnBytes - turnBase)
-        return yield* failure("Continuation byte accounting differs from its Schema encoding");
-      if (canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES)
-        return yield* capacityFailure(
-          "Encoded continuation exceeds 8192 bytes including its envelope",
-        );
-      continuations.push(record);
-
-      const state = {
-        continuation,
-        record,
-        ...(response === undefined ? {} : { response }),
-        results,
-        childResults,
-        ...(completionBytes === undefined ? {} : { completionBytes }),
-      };
-
-      if (
-        !facts.every((fact) => isTerminalBudgetFact(fact) && fact.payload._tag !== "RunCompleted")
-      )
-        yield* checkCapacity(
-          state,
-          new Set(batch.records.map(({ recordId }) => recordId)),
-          undefined,
-          usageCharge,
-        );
-      yield* checkFutureShapes(state);
-      accepted.set(runId, state);
+      if (Result.isFailure(built)) return yield* built.failure;
+      continuations.push(built.success.record);
+      accepted.set(runId, built.success);
     }
 
     if (ownedRecords.length + continuations.length > 256)
@@ -1617,11 +1741,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         if (state === undefined) return yield* failure("Dispatch has no canonical Run progress");
         if (reservations.has(recordId))
           return yield* failure("Dispatch capacity is already reserved");
-        yield* checkCapacity(state, new Set(), {
+
+        const capacityError = checkCapacity(state, new Set(), {
           turn: state.continuation.turn,
           bytes,
           records: 1,
         });
+
+        if (capacityError !== undefined) return yield* capacityError;
         reservations.set(recordId, { runId, turn: state.continuation.turn, bytes, records: 1 });
 
         return gate.withPermits(1)(
@@ -1669,7 +1796,13 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         const records = owned.records.length + pending.records;
 
-        yield* checkCapacity(progress, new Set(), { turn: response.payload.turn, bytes, records });
+        const capacityError = checkCapacity(progress, new Set(), {
+          turn: response.payload.turn,
+          bytes,
+          records,
+        });
+
+        if (capacityError !== undefined) return yield* capacityError;
         reservations.set(response.recordId, {
           runId: response.payload.runId,
           turn: response.payload.turn,
@@ -1687,9 +1820,17 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         const state = yield* loadState(runId, yield* tail);
 
         if (state === undefined) return yield* failure("Execution has no canonical Run progress");
-        yield* checkFutureShapes(state);
-        if (state.continuation.position !== "settling" && state.continuation.position !== "settled")
-          yield* checkCapacity(state);
+        const futureError = checkFutureShapes(state);
+
+        if (futureError !== undefined) return yield* futureError;
+        if (
+          state.continuation.position !== "settling" &&
+          state.continuation.position !== "settled"
+        ) {
+          const capacityError = checkCapacity(state);
+
+          if (capacityError !== undefined) return yield* capacityError;
+        }
       }),
     );
 

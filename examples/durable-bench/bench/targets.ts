@@ -96,6 +96,7 @@ export const prepare = (name: Target): Promise<string> => bundle(name);
 export const start = async (name: Target, persist: string): Promise<Miniflare> => {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
+      modulesRoot: "/",
       modules: [{ type: "ESModule", path: await bundle(name) }],
       compatibilityDate: "2026-08-18",
       compatibilityFlags: ["nodejs_compat"],

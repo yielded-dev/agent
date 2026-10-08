@@ -52,6 +52,7 @@ import {
 } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
 import { copyJson } from "../core/internal/json.ts";
+import { summarizeModelUsageResult } from "../core/internal/usage.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { Receipt } from "../core/Receipt.ts";
 import type { ExhaustedLimit } from "../core/RunEvent.ts";
@@ -77,7 +78,6 @@ import {
   unknownRunTotals,
   runTotalsFromSummary,
   sumRunTotals,
-  summarizeModelUsage,
   OutputTokenUsage,
 } from "../core/Usage.ts";
 import { FrameworkMessage } from "../core/Worker.ts";
@@ -459,7 +459,8 @@ const decodeBatchId = Schema.decodeSync(BatchId);
 const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const decodeRecordId = Schema.decodeSync(RecordId);
 const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
-const decodeUsageTotal = Schema.decodeEffect(Schema.Natural);
+const decodeUsageTotal = Schema.decodeResult(Schema.Natural);
+const decodeUsageSummary = Schema.decodeResult(RunUsageSummary);
 const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
@@ -5151,202 +5152,198 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           record.payload._tag === "ModelResponseInterrupted" && record.payload.runId === runId,
       );
 
-      const checkedUsageTotal = (
-        field: string,
-        value: number,
-      ): Effect.Effect<number, RunJournalError> =>
-        decodeUsageTotal(value).pipe(
-          Effect.mapError((cause) =>
-            RunJournalError.make({
-              message: `Run usage summary exceeds safe-integer bounds at ${field}`,
-              cause,
-            }),
-          ),
+      const checkedUsageTotal = (field: string, value: number): number | RunJournalError => {
+        if (Number.isSafeInteger(value) && value >= 0) return value;
+        const invalid = decodeUsageTotal(value);
+
+        return RunJournalError.make({
+          message: `Run usage summary exceeds safe-integer bounds at ${field}`,
+          ...(Result.isFailure(invalid) ? { cause: invalid.failure } : {}),
+        });
+      };
+
+      const summarizeCurrentUsage = (): Result.Result<RunUsageSummary, RunJournalError> => {
+        const stagedCalls = [...stagedUsage.values()].flatMap((usage) => usage.modelUsage);
+        let unobservedModelCalls = journal.usage.unobservedModelCalls ?? 0;
+
+        for (const count of stagedUnobservedCalls.values()) {
+          const next = checkedUsageTotal("unobservedModelCalls", unobservedModelCalls + count);
+
+          if (typeof next !== "number") return Result.fail(next);
+          unobservedModelCalls = next;
+        }
+
+        const summarized = summarizeModelUsageResult(
+          [...journal.usage.modelUsage, ...stagedCalls],
+          journal.usage.summarizedModelUsage,
         );
 
-      const addUsageTotal = (field: string, left: number, right: number) =>
-        checkedUsageTotal(field, left + right);
+        if (Result.isFailure(summarized))
+          return Result.fail(
+            RunJournalError.make({
+              message: "Run detailed usage exceeds safe-integer accounting bounds",
+              cause: summarized.failure,
+            }),
+          );
+        const detailed = summarized.success;
 
-      const subtractUsageTotal = (field: string, left: number, right: number) =>
-        checkedUsageTotal(field, left - right);
+        const totals = {
+          inputTokens: journal.usage.inputTokens,
+          outputTokens: journal.usage.outputTokens,
+          costMicrousd: journal.usage.costMicrousd,
+        };
 
-      const currentUsageSummary = (): Effect.Effect<RunUsageSummary, RunJournalError> =>
-        Effect.gen(function* () {
-          const stagedCalls = [...stagedUsage.values()].flatMap((usage) => usage.modelUsage);
-          let unobservedModelCalls = journal.usage.unobservedModelCalls ?? 0;
+        for (const usage of stagedUsage.values()) {
+          for (const field of ["inputTokens", "outputTokens", "costMicrousd"] as const) {
+            const next = checkedUsageTotal(field, totals[field] + usage[field]);
 
-          for (const count of stagedUnobservedCalls.values()) {
-            unobservedModelCalls = yield* addUsageTotal(
-              "unobservedModelCalls",
-              unobservedModelCalls,
-              count,
-            );
+            if (typeof next !== "number") return Result.fail(next);
+            totals[field] = next;
           }
-          const detailedCalls = [...journal.usage.modelUsage, ...stagedCalls];
+        }
 
-          const detailed = yield* summarizeModelUsage(
-            detailedCalls,
-            journal.usage.summarizedModelUsage,
-          ).pipe(
-            Effect.mapError((cause) =>
-              RunJournalError.make({
-                message: "Run detailed usage exceeds safe-integer accounting bounds",
-                cause,
-              }),
-            ),
-          );
+        const modelCalls = checkedUsageTotal(
+          "modelCalls",
+          journal.usage.modelCalls + stagedCalls.length,
+        );
 
-          let inputTokens = journal.usage.inputTokens;
-          let outputTokens = journal.usage.outputTokens;
-          let costMicrousd = journal.usage.costMicrousd;
+        if (typeof modelCalls !== "number") return Result.fail(modelCalls);
 
-          for (const usage of stagedUsage.values()) {
-            inputTokens = yield* addUsageTotal("inputTokens", inputTokens, usage.inputTokens);
-            outputTokens = yield* addUsageTotal("outputTokens", outputTokens, usage.outputTokens);
-            costMicrousd = yield* addUsageTotal("costMicrousd", costMicrousd, usage.costMicrousd);
-          }
+        const legacy = {
+          modelCalls: modelCalls - detailed.modelCalls,
+          inputTokens: totals.inputTokens - detailed.inputTokens.total,
+          outputTokens: totals.outputTokens - detailed.outputTokens.total,
+          costMicrousd: totals.costMicrousd - detailed.costMicrousd,
+        };
 
-          const modelCalls = yield* addUsageTotal(
-            "modelCalls",
-            journal.usage.modelCalls,
-            stagedCalls.length,
-          );
+        for (const field of [
+          "modelCalls",
+          "inputTokens",
+          "outputTokens",
+          "costMicrousd",
+        ] as const) {
+          const checked = checkedUsageTotal(`legacy.${field}`, legacy[field]);
 
-          const legacyCalls = yield* subtractUsageTotal(
-            "legacy.modelCalls",
-            modelCalls,
-            detailed.modelCalls,
-          );
-
-          const legacyInput = yield* subtractUsageTotal(
-            "legacy.inputTokens",
-            inputTokens,
-            detailed.inputTokens.total,
-          );
-
-          const legacyOutput = yield* subtractUsageTotal(
-            "legacy.outputTokens",
-            outputTokens,
-            detailed.outputTokens.total,
-          );
-
-          const legacyCost = yield* subtractUsageTotal(
-            "legacy.costMicrousd",
-            costMicrousd,
-            detailed.costMicrousd,
-          );
-
-          if (legacyCalls === 0 && (legacyInput !== 0 || legacyOutput !== 0 || legacyCost !== 0)) {
-            return yield* RunJournalError.make({
+          if (typeof checked !== "number") return Result.fail(checked);
+        }
+        if (
+          legacy.modelCalls === 0 &&
+          (legacy.inputTokens !== 0 || legacy.outputTokens !== 0 || legacy.costMicrousd !== 0)
+        )
+          return Result.fail(
+            RunJournalError.make({
               message: "Run aggregate usage has legacy totals without a legacy model call",
-            });
-          }
-          const byModel = [...detailed.byModel];
+            }),
+          );
+        const byModel = [...detailed.byModel];
 
-          if (legacyCalls > 0) {
-            const existingIndex = byModel.findIndex(
-              (group) =>
-                group.provider === "unknown" &&
-                group.model === "legacy-record" &&
-                group.responseModel === undefined &&
-                group.serviceTier === undefined &&
-                group.pricingVersion === undefined,
-            );
-
-            const existing = existingIndex < 0 ? undefined : byModel[existingIndex];
-
-            const legacyGroup = ModelUsageGroup.make({
-              provider: "unknown",
-              model: "legacy-record",
-              modelCalls: yield* addUsageTotal(
-                "byModel.modelCalls",
-                existing?.modelCalls ?? 0,
-                legacyCalls,
-              ),
-              inputTokens: InputTokenUsage.make({
-                total: yield* addUsageTotal(
-                  "byModel.inputTokens.total",
-                  existing?.inputTokens.total ?? 0,
-                  legacyInput,
-                ),
-                uncached: yield* addUsageTotal(
-                  "byModel.inputTokens.uncached",
-                  existing?.inputTokens.uncached ?? 0,
-                  legacyInput,
-                ),
-                cacheRead: existing?.inputTokens.cacheRead ?? 0,
-                cacheWrite: existing?.inputTokens.cacheWrite ?? 0,
-              }),
-              outputTokens: OutputTokenUsage.make({
-                total: yield* addUsageTotal(
-                  "byModel.outputTokens.total",
-                  existing?.outputTokens.total ?? 0,
-                  legacyOutput,
-                ),
-                text: yield* addUsageTotal(
-                  "byModel.outputTokens.text",
-                  existing?.outputTokens.text ?? 0,
-                  legacyOutput,
-                ),
-                reasoning: existing?.outputTokens.reasoning ?? 0,
-              }),
-              costMicrousd: yield* addUsageTotal(
-                "byModel.costMicrousd",
-                existing?.costMicrousd ?? 0,
-                legacyCost,
-              ),
-            });
-
-            if (existingIndex < 0) byModel.push(legacyGroup);
-            else byModel[existingIndex] = legacyGroup;
-          }
-
-          const uncached = yield* addUsageTotal(
-            "inputTokens.uncached",
-            detailed.inputTokens.uncached,
-            legacyInput,
+        if (legacy.modelCalls > 0) {
+          const existingIndex = byModel.findIndex(
+            (group) =>
+              group.provider === "unknown" &&
+              group.model === "legacy-record" &&
+              group.responseModel === undefined &&
+              group.serviceTier === undefined &&
+              group.pricingVersion === undefined,
           );
 
-          const text = yield* addUsageTotal(
-            "outputTokens.text",
-            detailed.outputTokens.text,
-            legacyOutput,
-          );
+          const existing = existingIndex < 0 ? undefined : byModel[existingIndex];
 
-          return RunUsageSummary.make({
-            ...(legacyCalls === 0 && detailed.webSearchCalls !== undefined
+          const combined = {
+            modelCalls: (existing?.modelCalls ?? 0) + legacy.modelCalls,
+            "inputTokens.total": (existing?.inputTokens.total ?? 0) + legacy.inputTokens,
+            "inputTokens.uncached": (existing?.inputTokens.uncached ?? 0) + legacy.inputTokens,
+            "outputTokens.total": (existing?.outputTokens.total ?? 0) + legacy.outputTokens,
+            "outputTokens.text": (existing?.outputTokens.text ?? 0) + legacy.outputTokens,
+            costMicrousd: (existing?.costMicrousd ?? 0) + legacy.costMicrousd,
+          };
+
+          for (const [field, value] of Object.entries(combined)) {
+            const checked = checkedUsageTotal(`byModel.${field}`, value);
+
+            if (typeof checked !== "number") return Result.fail(checked);
+          }
+
+          const legacyGroup = ModelUsageGroup.make({
+            provider: "unknown",
+            model: "legacy-record",
+            modelCalls: combined.modelCalls,
+            inputTokens: InputTokenUsage.make({
+              total: combined["inputTokens.total"],
+              uncached: combined["inputTokens.uncached"],
+              cacheRead: existing?.inputTokens.cacheRead ?? 0,
+              cacheWrite: existing?.inputTokens.cacheWrite ?? 0,
+            }),
+            outputTokens: OutputTokenUsage.make({
+              total: combined["outputTokens.total"],
+              text: combined["outputTokens.text"],
+              reasoning: existing?.outputTokens.reasoning ?? 0,
+            }),
+            costMicrousd: combined.costMicrousd,
+          });
+
+          if (existingIndex < 0) byModel.push(legacyGroup);
+          else byModel[existingIndex] = legacyGroup;
+        }
+
+        const uncached = checkedUsageTotal(
+          "inputTokens.uncached",
+          detailed.inputTokens.uncached + legacy.inputTokens,
+        );
+
+        if (typeof uncached !== "number") return Result.fail(uncached);
+
+        const text = checkedUsageTotal(
+          "outputTokens.text",
+          detailed.outputTokens.text + legacy.outputTokens,
+        );
+
+        if (typeof text !== "number") return Result.fail(text);
+
+        return Result.mapError(
+          decodeUsageSummary({
+            ...(legacy.modelCalls === 0 && detailed.webSearchCalls !== undefined
               ? { webSearchCalls: detailed.webSearchCalls }
               : {}),
             modelCalls,
-            inputTokens: InputTokenUsage.make({
-              total: inputTokens,
+            inputTokens: {
+              total: totals.inputTokens,
               // Legacy aggregate inputs are conservatively classified as uncached.
               uncached,
               cacheRead: detailed.inputTokens.cacheRead,
               cacheWrite: detailed.inputTokens.cacheWrite,
-            }),
-            outputTokens: OutputTokenUsage.make({
-              total: outputTokens,
+            },
+            outputTokens: {
+              total: totals.outputTokens,
               text,
               reasoning: detailed.outputTokens.reasoning,
-            }),
-            costMicrousd,
+            },
+            costMicrousd: totals.costMicrousd,
             byModel,
             unobservedModelCalls,
             usageStatus:
-              legacyCalls > 0 || unobservedModelCalls > 0 || interruptedUsage
+              legacy.modelCalls > 0 || unobservedModelCalls > 0 || interruptedUsage
                 ? detailed.usageStatus === "unknown"
                   ? "unknown"
                   : "partial"
                 : detailed.usageStatus,
             pricingStatus:
-              legacyCalls > 0 || unobservedModelCalls > 0 || interruptedUsage
+              legacy.modelCalls > 0 || unobservedModelCalls > 0 || interruptedUsage
                 ? detailed.pricingStatus === "unknown"
                   ? "unknown"
                   : "partial"
                 : detailed.pricingStatus,
-          });
-        });
+          }),
+          (cause) =>
+            RunJournalError.make({
+              message: "Run usage summary has invalid accounting",
+              cause,
+            }),
+        );
+      };
+
+      const currentUsageSummary = (): Effect.Effect<RunUsageSummary, RunJournalError> =>
+        Effect.suspend(() => Effect.fromResult(summarizeCurrentUsage()));
 
       const recordedCompletion = records.find(
         (envelope) => envelope.record.recordId === runCompletedRecordId(runId),

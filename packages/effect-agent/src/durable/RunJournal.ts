@@ -1,4 +1,13 @@
-import { Brand, type Crypto, Effect, Predicate, Schema, Stream, type DateTime } from "effect";
+import {
+  Brand,
+  type Crypto,
+  Effect,
+  Predicate,
+  Result,
+  Schema,
+  Stream,
+  type DateTime,
+} from "effect";
 import { Prompt } from "effect/ai";
 
 import {
@@ -9,11 +18,12 @@ import {
   type SubmissionId,
 } from "../core/Identifiers.ts";
 import { copyJson } from "../core/internal/json.ts";
+import { summarizeModelUsageResult } from "../core/internal/usage.ts";
 import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
-import { ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
+import { ModelCallUsage, type RunUsageSummary } from "../core/Usage.ts";
 import type { WorkerRef } from "../core/Worker.ts";
 import {
   CLEARED_TOOL_RESULT,
@@ -326,35 +336,29 @@ export const childIdempotencyKeyFor = (
   toolCallId: ToolCallId,
 ): IdempotencyKey => decodeIdempotencyKey(`subagent:${parentRunId}:${toolCallId}`);
 
-const decodePersistedPrompt = (
-  messages: PersistedJson,
-): Effect.Effect<Prompt.Prompt, RunJournalError> =>
-  Schema.decodeUnknownEffect(Prompt.Prompt)(messages).pipe(
-    Effect.mapError((cause) =>
-      journalError("Canonical messages are not Schema-encoded Prompt messages", cause),
-    ),
-  );
+const decodePersistedPrompt = Schema.decodeUnknownResult(Prompt.Prompt);
 
 // Canonical payloads are immutable. Weak keys let retained storage rows own the lifetime
 // while repeated projections of an advancing tail reuse their validated Prompt values.
 const decodedMessages = new WeakMap<object, Prompt.Prompt>();
 
-const decodePromptMessages = (messages: PersistedJson | Prompt.Prompt) =>
-  Effect.suspend(() => {
-    if (Prompt.isPrompt(messages)) return Effect.succeed(messages);
-    if (!Predicate.isObject(messages)) return decodePersistedPrompt(messages);
-    const cached = decodedMessages.get(messages);
+const decodePromptMessages = (
+  messages: PersistedJson | Prompt.Prompt,
+): Result.Result<Prompt.Prompt, RunJournalError> => {
+  if (Prompt.isPrompt(messages)) return Result.succeed(messages);
+  const cached = Predicate.isObject(messages) ? decodedMessages.get(messages) : undefined;
 
-    return cached === undefined
-      ? decodePersistedPrompt(messages).pipe(
-          Effect.tap((prompt) =>
-            Effect.sync(() => {
-              decodedMessages.set(messages, prompt);
-            }),
-          ),
-        )
-      : Effect.succeed(cached);
-  });
+  if (cached !== undefined) return Result.succeed(cached);
+  const decoded = decodePersistedPrompt(messages);
+
+  if (Result.isFailure(decoded))
+    return Result.fail(
+      journalError("Canonical messages are not Schema-encoded Prompt messages", decoded.failure),
+    );
+  if (Predicate.isObject(messages)) decodedMessages.set(messages, decoded.success);
+
+  return Result.succeed(decoded.success);
+};
 
 interface PendingSettledTool {
   readonly record: Pick<ToolCallSettled, "toolCallId" | "toolName" | "result" | "isFailure">;
@@ -362,23 +366,17 @@ interface PendingSettledTool {
   readonly cleared: boolean;
 }
 
-const toolMessageFromSettled = (
-  settled: ReadonlyArray<PendingSettledTool>,
-): Effect.Effect<Prompt.Message, RunJournalError> =>
-  Effect.try({
-    try: () =>
-      Prompt.makeMessage("tool", {
-        content: settled.map(({ record, cleared }) =>
-          Prompt.makePart("tool-result", {
-            id: record.toolCallId,
-            name: record.toolName,
-            result: cleared ? CLEARED_TOOL_RESULT : record.result,
-            isFailure: record.isFailure,
-            providerExecuted: false,
-          }),
-        ),
+const toolMessageFromSettled = (settled: ReadonlyArray<PendingSettledTool>): Prompt.Message =>
+  Prompt.makeMessage("tool", {
+    content: settled.map(({ record, cleared }) =>
+      Prompt.makePart("tool-result", {
+        id: record.toolCallId,
+        name: record.toolName,
+        result: cleared ? CLEARED_TOOL_RESULT : record.result,
+        isFailure: record.isFailure,
+        providerExecuted: false,
       }),
-    catch: (cause) => journalError("Unable to rebuild Tool message from ToolCallSettled", cause),
+    ),
   });
 
 /**
@@ -447,57 +445,61 @@ interface ProjectedResponseUsage {
 
 const projectedResponseUsage = (
   response: ModelResponseRecorded,
-): Effect.Effect<ProjectedResponseUsage, RunJournalError> =>
-  Effect.gen(function* () {
-    const calls = response.modelUsage;
+): Result.Result<ProjectedResponseUsage, RunJournalError> => {
+  const calls = response.modelUsage;
 
-    if (calls === undefined) {
-      return {
-        modelCalls: 1,
-        inputTokens: response.inputTokens ?? 0,
-        outputTokens: response.outputTokens ?? 0,
-        costMicrousd: response.costMicrousd ?? 0,
-        modelUsage: [],
-      };
-    }
-    if (calls.length === 0) {
-      return yield* journalError("A canonical modelUsage list must not be empty");
-    }
+  if (calls === undefined) {
+    return Result.succeed({
+      modelCalls: 1,
+      inputTokens: response.inputTokens ?? 0,
+      outputTokens: response.outputTokens ?? 0,
+      costMicrousd: response.costMicrousd ?? 0,
+      modelUsage: [],
+    });
+  }
+  if (calls.length === 0)
+    return Result.fail(journalError("A canonical modelUsage list must not be empty"));
+  const summarized = summarizeModelUsageResult(calls);
 
-    const summary = yield* summarizeModelUsage(calls).pipe(
-      Effect.mapError((cause) =>
-        journalError("Canonical model usage exceeds accounting bounds", cause),
-      ),
+  if (Result.isFailure(summarized))
+    return Result.fail(
+      journalError("Canonical model usage exceeds accounting bounds", summarized.failure),
     );
+  const summary = summarized.success;
 
-    if (
-      (response.inputTokens !== undefined && response.inputTokens !== summary.inputTokens.total) ||
-      (response.outputTokens !== undefined &&
-        response.outputTokens !== summary.outputTokens.total) ||
-      (response.costMicrousd !== undefined && response.costMicrousd !== summary.costMicrousd)
-    ) {
-      return yield* journalError("Canonical detailed and aggregate model usage disagree");
-    }
+  if (
+    (response.inputTokens !== undefined && response.inputTokens !== summary.inputTokens.total) ||
+    (response.outputTokens !== undefined && response.outputTokens !== summary.outputTokens.total) ||
+    (response.costMicrousd !== undefined && response.costMicrousd !== summary.costMicrousd)
+  )
+    return Result.fail(journalError("Canonical detailed and aggregate model usage disagree"));
 
-    return {
-      modelCalls: summary.modelCalls,
-      inputTokens: summary.inputTokens.total,
-      outputTokens: summary.outputTokens.total,
-      costMicrousd: summary.costMicrousd,
-      modelUsage: calls,
-    };
+  return Result.succeed({
+    modelCalls: summary.modelCalls,
+    inputTokens: summary.inputTokens.total,
+    outputTokens: summary.outputTokens.total,
+    costMicrousd: summary.costMicrousd,
+    modelUsage: calls,
   });
+};
+
+const decodeUsageNatural = Schema.decodeResult(Schema.Natural);
 
 const addProjectedUsage = (
   field: string,
   left: number,
   right: number,
-): Effect.Effect<number, RunJournalError> =>
-  Schema.decodeEffect(Schema.Natural)(left + right).pipe(
-    Effect.mapError((cause) =>
-      journalError(`Canonical projected usage exceeds safe-integer bounds at ${field}`, cause),
-    ),
+): number | RunJournalError => {
+  const total = left + right;
+
+  if (Number.isSafeInteger(total) && total >= 0) return total;
+  const invalid = decodeUsageNatural(total);
+
+  return journalError(
+    `Canonical projected usage exceeds safe-integer bounds at ${field}`,
+    Result.isFailure(invalid) ? invalid.failure : undefined,
   );
+};
 
 interface FoldState {
   readonly all: Array<Prompt.Message>;
@@ -507,8 +509,7 @@ interface FoldState {
   readonly committedTurns: number;
 }
 
-const decodeToolCallId = Schema.decodeSync(ToolCallId);
-const decodeToolCallIdEffect = Schema.decodeEffect(ToolCallId);
+const decodeToolCallId = Schema.decodeResult(ToolCallId);
 
 const declaredApplicationToolCallIds = (prompt: Prompt.Prompt): ReadonlyArray<string> => {
   const ids: Array<string> = [];
@@ -608,6 +609,30 @@ export interface RunJournalContext {
   readonly digest: string;
 }
 
+/** Bound resident reduction even when a caller supplies one large stream chunk. */
+const foldJournalRecords = <A, E, R>(
+  records: Stream.Stream<A, E, R>,
+  visit: (record: A) => RunJournalError | undefined,
+): Effect.Effect<void, E | RunJournalError, R> =>
+  Stream.runForEachArray(
+    records,
+    Effect.fnUntraced(function* (chunk) {
+      for (let start = 0; start < chunk.length; start += 8) {
+        yield* Effect.suspend(() => {
+          const end = Math.min(start + 8, chunk.length);
+
+          for (let index = start; index < end; index++) {
+            const error = visit(chunk[index]);
+
+            if (error !== undefined) return Effect.fail(error);
+          }
+
+          return Effect.void;
+        });
+      }
+    }),
+  );
+
 /**
  * Reconstruct a fixed canonical prefix from a re-readable stream. The caller must keep the same
  * records visible on every traversal. The first collects compaction and settlement metadata;
@@ -666,7 +691,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   if (metadata === undefined) {
     const collected = makeJournalMetadata(ownerRunId);
 
-    yield* Stream.runForEach(records, (envelope) => Effect.sync(() => collected.add(envelope)));
+    yield* foldJournalRecords(records, (envelope) => {
+      collected.add(envelope);
+
+      return undefined;
+    });
     metadata = collected.snapshot();
   }
 
@@ -759,47 +788,48 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       : Prompt.fromMessages(initialContext.content.slice(savedContext?.priorHistoryLength));
 
   if (settledCoverage > 0) {
-    yield* Stream.runForEach(recordsForRun, (envelope) =>
-      Effect.gen(function* () {
-        const payload = envelope.record.payload;
+    yield* foldJournalRecords(recordsForRun, (envelope) => {
+      const payload = envelope.record.payload;
 
-        if (payload._tag !== "ModelResponseRecorded" || envelope.sequence > settledCoverage) return;
-        const messages = yield* decodePromptMessages(payload.messages);
-        const declared = declaredApplicationToolCallIds(messages);
+      if (payload._tag !== "ModelResponseRecorded" || envelope.sequence > settledCoverage) return;
+      const decoded = decodePromptMessages(payload.messages);
 
-        let lastSettlementSequence = 0;
+      if (Result.isFailure(decoded)) return decoded.failure;
+      const messages = decoded.success;
+      const declared = declaredApplicationToolCallIds(messages);
 
-        for (const id of declared) {
-          const callId = yield* decodeToolCallIdEffect(id).pipe(
-            Effect.mapError((cause) =>
-              journalError("Failed to decode a declared Tool Call ID", cause),
-            ),
-          );
+      let lastSettlementSequence = 0;
 
-          lastSettlementSequence = Math.max(
-            lastSettlementSequence,
-            settledSequenceById.get(toolCallSettledRecordId(payload.runId, payload.turn, callId)) ??
-              Infinity,
-          );
-        }
-        if (declared.length > 0)
-          incompleteResponseSequences.push({
-            sequence: envelope.sequence,
-            runId: payload.runId,
-            lastSettlementSequence,
-          });
-        if (
-          payload.runId === ownerRunId &&
-          payload.turn === 1 &&
-          payload.runScopedPrefixLength !== undefined
-        ) {
-          ownerPrefixSequence = envelope.sequence;
-          protectedContext = Prompt.fromMessages(
-            messages.content.slice(0, payload.runScopedPrefixLength),
-          );
-        }
-      }),
-    );
+      for (const id of declared) {
+        const decodedId = decodeToolCallId(id);
+
+        if (Result.isFailure(decodedId))
+          return journalError("Failed to decode a declared Tool Call ID", decodedId.failure);
+        const callId = decodedId.success;
+
+        lastSettlementSequence = Math.max(
+          lastSettlementSequence,
+          settledSequenceById.get(toolCallSettledRecordId(payload.runId, payload.turn, callId)) ??
+            Infinity,
+        );
+      }
+      if (declared.length > 0)
+        incompleteResponseSequences.push({
+          sequence: envelope.sequence,
+          runId: payload.runId,
+          lastSettlementSequence,
+        });
+      if (
+        payload.runId === ownerRunId &&
+        payload.turn === 1 &&
+        payload.runScopedPrefixLength !== undefined
+      ) {
+        ownerPrefixSequence = envelope.sequence;
+        protectedContext = Prompt.fromMessages(
+          messages.content.slice(0, payload.runScopedPrefixLength),
+        );
+      }
+    });
   }
 
   const boundIsValid = (
@@ -1090,14 +1120,14 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     modelRestarts: 0,
   };
 
-  const accountResponse = Effect.fnUntraced(function* (
+  const accountResponse = (
     envelope: JournalRecordEnvelope,
     payload: Extract<
       JournalRecordEnvelope["record"]["payload"],
       { readonly _tag: "ModelResponseRecorded" }
     >,
     messages: Prompt.Prompt,
-  ) {
+  ): RunJournalError | undefined => {
     const record = envelope.record;
 
     const declared = declaredApplicationToolCallIds(messages);
@@ -1105,10 +1135,11 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     let incomplete = false;
 
     for (const id of declared) {
-      const toolCallId = yield* Effect.try({
-        try: () => decodeToolCallId(id),
-        catch: (cause) => journalError("Failed to decode a declared Tool Call ID", cause),
-      });
+      const decodedId = decodeToolCallId(id);
+
+      if (Result.isFailure(decodedId))
+        return journalError("Failed to decode a declared Tool Call ID", decodedId.failure);
+      const toolCallId = decodedId.success;
 
       const resultId = toolCallSettledRecordId(payload.runId, payload.turn, toolCallId);
 
@@ -1122,41 +1153,62 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     }
     if (payload.runId !== ownerRunId) return;
     if (!("toolOperations" in payload))
-      return yield* journalError("Owning Run execution requires full canonical evidence");
+      return journalError("Owning Run execution requires full canonical evidence");
     if (payload.turn === 1 && payload.runScopedPrefixLength !== undefined) {
       protectedContext = Prompt.fromMessages(
         messages.content.slice(0, payload.runScopedPrefixLength),
       );
     }
 
-    const responseUsage = yield* projectedResponseUsage(payload);
+    const projected = projectedResponseUsage(payload);
 
-    unobservedModelCalls = yield* addProjectedUsage(
+    if (Result.isFailure(projected)) return projected.failure;
+    const responseUsage = projected.success;
+
+    const nextUnobservedModelCalls = addProjectedUsage(
       "unobservedModelCalls",
       unobservedModelCalls,
       payload.unobservedModelCalls ?? 0,
     );
 
-    usage.modelCalls = yield* addProjectedUsage(
+    if (typeof nextUnobservedModelCalls !== "number") return nextUnobservedModelCalls;
+    unobservedModelCalls = nextUnobservedModelCalls;
+
+    const nextUsageModelCalls = addProjectedUsage(
       "modelCalls",
       usage.modelCalls,
       responseUsage.modelCalls,
     );
-    usage.inputTokens = yield* addProjectedUsage(
+
+    if (typeof nextUsageModelCalls !== "number") return nextUsageModelCalls;
+    usage.modelCalls = nextUsageModelCalls;
+
+    const nextUsageInputTokens = addProjectedUsage(
       "inputTokens",
       usage.inputTokens,
       responseUsage.inputTokens,
     );
-    usage.outputTokens = yield* addProjectedUsage(
+
+    if (typeof nextUsageInputTokens !== "number") return nextUsageInputTokens;
+    usage.inputTokens = nextUsageInputTokens;
+
+    const nextUsageOutputTokens = addProjectedUsage(
       "outputTokens",
       usage.outputTokens,
       responseUsage.outputTokens,
     );
-    usage.costMicrousd = yield* addProjectedUsage(
+
+    if (typeof nextUsageOutputTokens !== "number") return nextUsageOutputTokens;
+    usage.outputTokens = nextUsageOutputTokens;
+
+    const nextUsageCostMicrousd = addProjectedUsage(
       "costMicrousd",
       usage.costMicrousd,
       responseUsage.costMicrousd,
     );
+
+    if (typeof nextUsageCostMicrousd !== "number") return nextUsageCostMicrousd;
+    usage.costMicrousd = nextUsageCostMicrousd;
     usage.modelUsage.push(...responseUsage.modelUsage);
     if (payload.turn > usageTurn) {
       usageTurn = payload.turn;
@@ -1209,7 +1261,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         ? policyUsage.consecutiveToolFailures + 1
         : 0;
     }
-  });
+  };
 
   // Slots refer to the retained Prompt itself, not an additional history payload index.
   // Only still-unseen results retain a slot; late results fill the original declaration in place.
@@ -1228,9 +1280,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
 
   let pendingToolOrder = new Map<string, number>();
 
-  const flushTools = Effect.fnUntraced(function* (
-    current: FoldState,
-  ): Effect.fn.Return<FoldState, RunJournalError> {
+  const flushTools = (current: FoldState): FoldState => {
     if (current.pendingTools.length === 0) return current;
 
     // Suspension can persist an ordinary sibling before a delegated call joins. Model context
@@ -1241,7 +1291,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         (pendingToolOrder.get(right.record.toolCallId) ?? Number.MAX_SAFE_INTEGER),
     );
 
-    const toolMessage = yield* toolMessageFromSettled(ordered);
+    const toolMessage = toolMessageFromSettled(ordered);
 
     current.all.push(toolMessage);
     if (!current.pendingToolsForRun) current.before.push(toolMessage);
@@ -1251,352 +1301,385 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       pendingTools: [],
       pendingToolsForRun: false,
     };
-  });
+  };
 
-  yield* Stream.runForEach(recordsForRun, (envelope) =>
-    Effect.gen(function* () {
-      const payload = envelope.record.payload;
+  yield* foldJournalRecords(recordsForRun, (envelope) => {
+    const payload = envelope.record.payload;
 
-      if (contextEvidence.has(envelope.sequence)) retainEvidence(envelope);
+    if (contextEvidence.has(envelope.sequence)) retainEvidence(envelope);
+    if (
+      (payload._tag === "RunCompleted" ||
+        payload._tag === "RunFailed" ||
+        payload._tag === "SubmissionSettled") &&
+      payload.runId !== undefined &&
+      incompleteContextRuns.has(payload.runId)
+    )
+      retainEvidence(envelope);
+
+    if (
+      ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
+        payload.runId === ownerRunId) ||
+      (payload._tag === "SubmissionSettled" &&
+        runIdForSubmission(payload.submissionId) === ownerRunId)
+    )
+      ownerTerminated = true;
+
+    if (payload._tag === "RunPolicyUsageReserved" && payload.runId === ownerRunId) {
       if (
-        (payload._tag === "RunCompleted" ||
-          payload._tag === "RunFailed" ||
-          payload._tag === "SubmissionSettled") &&
-        payload.runId !== undefined &&
-        incompleteContextRuns.has(payload.runId)
-      )
-        retainEvidence(envelope);
-
-      if (
-        ((payload._tag === "RunCompleted" || payload._tag === "RunFailed") &&
-          payload.runId === ownerRunId) ||
-        (payload._tag === "SubmissionSettled" &&
-          runIdForSubmission(payload.submissionId) === ownerRunId)
-      )
-        ownerTerminated = true;
-
-      if (payload._tag === "RunPolicyUsageReserved" && payload.runId === ownerRunId) {
-        if (
-          payload.programmaticToolCalls < policyUsage.programmaticToolCalls ||
-          (policyUsage.finalizationUsed && !payload.finalizationUsed)
-        ) {
-          return yield* journalError("Run policy reservations must be monotonic");
-        }
-        policyUsage.programmaticToolCalls = payload.programmaticToolCalls;
-        policyUsage.finalizationUsed = payload.finalizationUsed;
+        payload.programmaticToolCalls < policyUsage.programmaticToolCalls ||
+        (policyUsage.finalizationUsed && !payload.finalizationUsed)
+      ) {
+        return journalError("Run policy reservations must be monotonic");
       }
-      if (payload._tag === "ModelCallAborted" && payload.runId === ownerRunId) {
-        if (payload.restart !== policyUsage.modelRestarts + 1)
-          return yield* journalError("Model restart reservations must advance once");
-        policyUsage.modelRestarts = payload.restart;
+      policyUsage.programmaticToolCalls = payload.programmaticToolCalls;
+      policyUsage.finalizationUsed = payload.finalizationUsed;
+    }
+    if (payload._tag === "ModelCallAborted" && payload.runId === ownerRunId) {
+      if (payload.restart !== policyUsage.modelRestarts + 1)
+        return journalError("Model restart reservations must advance once");
+      policyUsage.modelRestarts = payload.restart;
 
-        const summary = yield* summarizeModelUsage(payload.modelUsage).pipe(
-          Effect.mapError((cause) =>
-            journalError("Aborted model usage exceeds accounting bounds", cause),
-          ),
+      const summarized = summarizeModelUsageResult(payload.modelUsage);
+
+      if (Result.isFailure(summarized))
+        return journalError("Aborted model usage exceeds accounting bounds", summarized.failure);
+      const summary = summarized.success;
+
+      const nextUsageModelCalls = addProjectedUsage(
+        "modelCalls",
+        usage.modelCalls,
+        summary.modelCalls,
+      );
+
+      if (typeof nextUsageModelCalls !== "number") return nextUsageModelCalls;
+      usage.modelCalls = nextUsageModelCalls;
+
+      const nextUsageInputTokens = addProjectedUsage(
+        "inputTokens",
+        usage.inputTokens,
+        summary.inputTokens.total,
+      );
+
+      if (typeof nextUsageInputTokens !== "number") return nextUsageInputTokens;
+      usage.inputTokens = nextUsageInputTokens;
+
+      const nextUsageOutputTokens = addProjectedUsage(
+        "outputTokens",
+        usage.outputTokens,
+        summary.outputTokens.total,
+      );
+
+      if (typeof nextUsageOutputTokens !== "number") return nextUsageOutputTokens;
+      usage.outputTokens = nextUsageOutputTokens;
+
+      const nextUsageCostMicrousd = addProjectedUsage(
+        "costMicrousd",
+        usage.costMicrousd,
+        summary.costMicrousd,
+      );
+
+      if (typeof nextUsageCostMicrousd !== "number") return nextUsageCostMicrousd;
+      usage.costMicrousd = nextUsageCostMicrousd;
+      usage.modelUsage.push(...payload.modelUsage);
+
+      const nextUnobservedModelCalls = addProjectedUsage(
+        "unobservedModelCalls",
+        unobservedModelCalls,
+        payload.unobservedModelCalls,
+      );
+
+      if (typeof nextUnobservedModelCalls !== "number") return nextUnobservedModelCalls;
+      unobservedModelCalls = nextUnobservedModelCalls;
+    }
+    if (PROMPT_TRANSPARENT_TAGS.has(payload._tag)) return;
+    // The compaction record governs the fold (pre-scan) and contributes no
+    // message of its own; records at or below the summarize bound render as
+    // the one summary message emitted at the covered/kept transition.
+    if (payload._tag === "CompactionCreated") {
+      if (contextCompactions.has(envelope.sequence)) retainEvidence(envelope);
+
+      return;
+    }
+    if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
+      if (payload._tag === "ModelResponseRecorded" && payload.runId !== ownerRunId) {
+        const late = (spansByDeclaration.get(envelope.sequence) ?? []).filter((span) =>
+          replacements.some((view) => isCovered(envelope, view.payload) && span.to > view.sequence),
         );
 
-        usage.modelCalls = yield* addProjectedUsage(
-          "modelCalls",
-          usage.modelCalls,
-          summary.modelCalls,
-        );
-        usage.inputTokens = yield* addProjectedUsage(
-          "inputTokens",
-          usage.inputTokens,
-          summary.inputTokens.total,
-        );
-        usage.outputTokens = yield* addProjectedUsage(
-          "outputTokens",
-          usage.outputTokens,
-          summary.outputTokens.total,
-        );
-        usage.costMicrousd = yield* addProjectedUsage(
-          "costMicrousd",
-          usage.costMicrousd,
-          summary.costMicrousd,
-        );
-        usage.modelUsage.push(...payload.modelUsage);
-        unobservedModelCalls = yield* addProjectedUsage(
-          "unobservedModelCalls",
-          unobservedModelCalls,
-          payload.unobservedModelCalls,
-        );
-      }
-      if (PROMPT_TRANSPARENT_TAGS.has(payload._tag)) return;
-      // The compaction record governs the fold (pre-scan) and contributes no
-      // message of its own; records at or below the summarize bound render as
-      // the one summary message emitted at the covered/kept transition.
-      if (payload._tag === "CompactionCreated") {
-        if (contextCompactions.has(envelope.sequence)) retainEvidence(envelope);
+        if (late.length > 0) {
+          // Even a rollover-hidden late result needs its exact declaration to stay hidden.
+          retainEvidence(envelope);
+          if (latestWindow !== undefined && isCovered(envelope, latestWindow.payload)) return;
+          const decoded = decodePromptMessages(payload.messages);
 
-        return;
-      }
-      if (replacements.some(({ payload }) => isCovered(envelope, payload))) {
-        if (payload._tag === "ModelResponseRecorded" && payload.runId !== ownerRunId) {
-          const late = (spansByDeclaration.get(envelope.sequence) ?? []).filter((span) =>
-            replacements.some(
-              (view) => isCovered(envelope, view.payload) && span.to > view.sequence,
-            ),
-          );
+          if (Result.isFailure(decoded)) return decoded.failure;
+          const messages = decoded.success;
 
-          if (late.length > 0) {
-            // Even a rollover-hidden late result needs its exact declaration to stay hidden.
-            retainEvidence(envelope);
-            if (latestWindow !== undefined && isCovered(envelope, latestWindow.payload)) return;
-            const messages = yield* decodePromptMessages(payload.messages);
+          for (const message of messages.content) {
+            if (message.role !== "assistant") continue;
+            for (const call of message.content) {
+              if (call.type !== "tool-call" || call.providerExecuted) continue;
 
-            for (const message of messages.content) {
-              if (message.role !== "assistant") continue;
-              for (const call of message.content) {
-                if (call.type !== "tool-call" || call.providerExecuted) continue;
+              const decodedId = decodeToolCallId(call.id);
 
-                const callId = yield* decodeToolCallIdEffect(call.id).pipe(
-                  Effect.mapError((cause) => journalError("Invalid retired Tool Call ID", cause)),
-                );
+              if (Result.isFailure(decodedId))
+                return journalError("Invalid retired Tool Call ID", decodedId.failure);
+              const callId = decodedId.success;
 
-                const id = toolCallSettledRecordId(payload.runId, payload.turn, callId);
+              const id = toolCallSettledRecordId(payload.runId, payload.turn, callId);
 
-                if (late.some((span) => span.recordId === id)) retiredLateCalls.set(id, call);
-              }
+              if (late.some((span) => span.recordId === id)) retiredLateCalls.set(id, call);
             }
           }
         }
-        // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
-        if (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) {
-          const messages = yield* decodePromptMessages(payload.messages);
-
-          yield* accountResponse(envelope, payload, messages);
-          state = { ...state, committedTurns: Math.max(state.committedTurns, payload.turn) };
-        }
-
-        return;
       }
-      emitSummary();
-      if (payload._tag === "ToolCallSettled") {
-        const declaration = declarationByResultSequence.get(envelope.sequence);
+      // Retiring Prompt payloads does not retire the owning Run's policy or usage accounting.
+      if (payload._tag === "ModelResponseRecorded" && payload.runId === ownerRunId) {
+        const decoded = decodePromptMessages(payload.messages);
 
-        const declarationFact = {
-          sequence: declaration ?? Infinity,
-          record: { payload: { _tag: "ModelResponseRecorded", runId: payload.runId } },
-        };
+        if (Result.isFailure(decoded)) return decoded.failure;
+        const messages = decoded.success;
 
-        const declarationCovered = (compaction: CompactionCreated) =>
-          declarationFact.sequence <= compaction.coversThrough &&
-          isInRunView(declarationFact.sequence, declarationFact.record.payload, compaction.runId);
+        const accountingError = accountResponse(envelope, payload, messages);
 
-        if (latestWindow !== undefined && declarationCovered(latestWindow.payload)) return;
-        retainEvidence(envelope);
-        if (payload.runId !== ownerRunId) {
-          const slot = historicalResults.get(envelope.record.recordId);
+        if (accountingError !== undefined) return accountingError;
+        state = { ...state, committedTurns: Math.max(state.committedTurns, payload.turn) };
+      }
 
-          if (slot === undefined) {
-            const call = retiredLateCalls.get(envelope.record.recordId);
+      return;
+    }
+    emitSummary();
+    if (payload._tag === "ToolCallSettled") {
+      const declaration = declarationByResultSequence.get(envelope.sequence);
 
-            if (
-              call === undefined ||
-              call.id !== payload.toolCallId ||
-              call.name !== payload.toolName
-            )
-              return yield* journalError("Historical Tool result has no matching declaration");
+      const declarationFact = {
+        sequence: declaration ?? Infinity,
+        record: { payload: { _tag: "ModelResponseRecorded", runId: payload.runId } },
+      };
 
-            const pair = [
-              Prompt.makeMessage("assistant", { content: [call] }),
-              Prompt.makeMessage("tool", {
-                content: [
-                  Prompt.makePart("tool-result", {
-                    id: call.id,
-                    name: call.name,
-                    result: clearings.some(({ payload }) => declarationCovered(payload))
-                      ? CLEARED_TOOL_RESULT
-                      : payload.result,
-                    isFailure: payload.isFailure,
-                    providerExecuted: false,
-                  }),
-                ],
-              }),
-            ];
+      const declarationCovered = (compaction: CompactionCreated) =>
+        declarationFact.sequence <= compaction.coversThrough &&
+        isInRunView(declarationFact.sequence, declarationFact.record.payload, compaction.runId);
 
-            state.all.push(...pair);
-            state.before.push(...pair);
-            retiredLateCalls.delete(envelope.record.recordId);
-            onBoundary?.({
-              sequence: envelope.sequence,
-              tag: payload._tag,
-              promptLength: state.all.length,
-            });
+      if (latestWindow !== undefined && declarationCovered(latestWindow.payload)) return;
+      retainEvidence(envelope);
+      if (payload.runId !== ownerRunId) {
+        const slot = historicalResults.get(envelope.record.recordId);
 
-            return;
-          }
-          const declared = slot.parts[slot.partIndex];
+        if (slot === undefined) {
+          const call = retiredLateCalls.get(envelope.record.recordId);
 
-          if (declared?.id !== payload.toolCallId || declared.name !== payload.toolName)
-            return yield* journalError("Historical Tool result differs from its declaration");
-          slot.parts[slot.partIndex] = Prompt.makePart("tool-result", {
-            id: payload.toolCallId,
-            name: payload.toolName,
-            result: clearings.some(
-              ({ payload }) => isCovered(envelope, payload) || declarationCovered(payload),
-            )
-              ? CLEARED_TOOL_RESULT
-              : payload.result,
-            isFailure: payload.isFailure,
-            providerExecuted: false,
-          });
-          const message = Prompt.makeMessage("tool", { content: [...slot.parts] });
+          if (
+            call === undefined ||
+            call.id !== payload.toolCallId ||
+            call.name !== payload.toolName
+          )
+            return journalError("Historical Tool result has no matching declaration");
 
-          state.all[slot.allIndex] = message;
-          state.before[slot.beforeIndex] = message;
-          historicalResults.delete(envelope.record.recordId);
+          const pair = [
+            Prompt.makeMessage("assistant", { content: [call] }),
+            Prompt.makeMessage("tool", {
+              content: [
+                Prompt.makePart("tool-result", {
+                  id: call.id,
+                  name: call.name,
+                  result: clearings.some(({ payload }) => declarationCovered(payload))
+                    ? CLEARED_TOOL_RESULT
+                    : payload.result,
+                  isFailure: payload.isFailure,
+                  providerExecuted: false,
+                }),
+              ],
+            }),
+          ];
+
+          state.all.push(...pair);
+          state.before.push(...pair);
+          retiredLateCalls.delete(envelope.record.recordId);
           onBoundary?.({
             sequence: envelope.sequence,
             tag: payload._tag,
             promptLength: state.all.length,
-            ...(incompleteToolCalls.has(envelope.record.recordId) ? { incomplete: true } : {}),
-            ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
-              ? { terminalPriorRun: true }
-              : {}),
           });
 
           return;
         }
-        if (
-          state.pendingTools.length > 0 &&
-          state.pendingToolsForRun !== (payload.runId === ownerRunId)
-        ) {
-          state = yield* flushTools(state);
-        }
-        state.pendingTools.push({
-          record: payload,
-          cleared: clearings.some(({ payload }) => isCovered(envelope, payload)),
+        const declared = slot.parts[slot.partIndex];
+
+        if (declared?.id !== payload.toolCallId || declared.name !== payload.toolName)
+          return journalError("Historical Tool result differs from its declaration");
+        slot.parts[slot.partIndex] = Prompt.makePart("tool-result", {
+          id: payload.toolCallId,
+          name: payload.toolName,
+          result: clearings.some(
+            ({ payload }) => isCovered(envelope, payload) || declarationCovered(payload),
+          )
+            ? CLEARED_TOOL_RESULT
+            : payload.result,
+          isFailure: payload.isFailure,
+          providerExecuted: false,
         });
-        state = {
-          ...state,
-          pendingToolsForRun: payload.runId === ownerRunId,
-        };
-        onBoundary?.({
-          sequence: envelope.sequence,
-          tag: payload._tag,
-          promptLength: state.all.length + 1,
-          ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
-            ? { terminalPriorRun: true }
-            : {}),
-          ...(incompleteToolCalls.has(envelope.record.recordId) ? { incomplete: true } : {}),
-        });
+        const message = Prompt.makeMessage("tool", { content: [...slot.parts] });
 
-        return;
-      }
-      state = yield* flushTools(state);
-      if (payload._tag === "ModelCompleted" && payload.history !== undefined) {
-        retainEvidence(envelope);
-        const messages = yield* decodePromptMessages(payload.history);
-
-        state.all.length = 0;
-        state.before.length = 0;
-        historicalResults.clear();
-
-        for (const message of messages.content) {
-          state.all.push(message);
-          if (payload.runId !== ownerRunId) state.before.push(message);
-        }
-        // Persistent, non-durable model history needs the same original compaction mapping
-        // as durable responses; cold selected-Run recovery cannot infer it from later history.
+        state.all[slot.allIndex] = message;
+        state.before[slot.beforeIndex] = message;
+        historicalResults.delete(envelope.record.recordId);
         onBoundary?.({
           sequence: envelope.sequence,
           tag: payload._tag,
           promptLength: state.all.length,
+          ...(incompleteToolCalls.has(envelope.record.recordId) ? { incomplete: true } : {}),
+          ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
+            ? { terminalPriorRun: true }
+            : {}),
         });
 
         return;
       }
-      if (payload._tag !== "ModelResponseRecorded") return;
-      retainEvidence(envelope);
-      const messages = yield* decodePromptMessages(payload.messages);
-      const forRun = payload.runId === ownerRunId;
-
-      pendingToolOrder = new Map(
-        declaredApplicationToolCallIds(messages).map((id, index) => [id, index]),
-      );
-
-      yield* accountResponse(envelope, payload, messages);
-
-      const visibleMessages = forRun
-        ? messages.content
-        : messages.content.filter((message) => message.role !== "system");
-
-      for (const message of visibleMessages) {
-        state.all.push(message);
-        if (!forRun) state.before.push(message);
+      if (
+        state.pendingTools.length > 0 &&
+        state.pendingToolsForRun !== (payload.runId === ownerRunId)
+      ) {
+        state = flushTools(state);
       }
-      if (!forRun) {
-        const calls = messages.content.flatMap((message) =>
-          message.role === "assistant"
-            ? message.content.filter(
-                (part): part is Prompt.ToolCallPart =>
-                  part.type === "tool-call" && !part.providerExecuted,
-              )
-            : [],
-        );
-
-        if (calls.length > 0) {
-          const parts = calls.map((call) =>
-            Prompt.makePart("tool-result", {
-              id: call.id,
-              name: call.name,
-              result: {
-                _tag: "ToolOutcomeUnknown",
-                message:
-                  "This earlier operation has no recorded outcome. It may have executed. Do not assume success or retry it; its original operation remains unresolved.",
-              },
-              isFailure: true,
-              providerExecuted: false,
-            }),
-          );
-
-          const allIndex = state.all.length;
-          const beforeIndex = state.before.length;
-          const message = Prompt.makeMessage("tool", { content: parts });
-
-          state.all.push(message);
-          state.before.push(message);
-          for (const [partIndex, call] of calls.entries()) {
-            const callId = yield* decodeToolCallIdEffect(call.id).pipe(
-              Effect.mapError((cause) => journalError("Invalid historical Tool Call ID", cause)),
-            );
-
-            const resultId = toolCallSettledRecordId(payload.runId, payload.turn, callId);
-
-            // A fixed replay can fill only a result present in its captured metadata. Missing
-            // calls retain their visible Unknown part without an expanded identity directory.
-            if (!settledToolCallRecordIds.has(resultId)) continue;
-            historicalResults.set(resultId, {
-              allIndex,
-              beforeIndex,
-              parts,
-              partIndex,
-            });
-          }
-        }
-      }
+      state.pendingTools.push({
+        record: payload,
+        cleared: clearings.some(({ payload }) => isCovered(envelope, payload)),
+      });
       state = {
         ...state,
-        committedTurns: forRun
-          ? Math.max(state.committedTurns, payload.turn)
-          : state.committedTurns,
+        pendingToolsForRun: payload.runId === ownerRunId,
       };
       onBoundary?.({
         sequence: envelope.sequence,
         tag: payload._tag,
-        promptLength: state.all.length,
+        promptLength: state.all.length + 1,
         ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
           ? { terminalPriorRun: true }
           : {}),
-        ...(incompleteToolTurns.has(envelope.record.recordId) ? { incomplete: true } : {}),
+        ...(incompleteToolCalls.has(envelope.record.recordId) ? { incomplete: true } : {}),
       });
-    }),
-  );
+
+      return;
+    }
+    state = flushTools(state);
+    if (payload._tag === "ModelCompleted" && payload.history !== undefined) {
+      retainEvidence(envelope);
+      const decoded = decodePromptMessages(payload.history);
+
+      if (Result.isFailure(decoded)) return decoded.failure;
+      const messages = decoded.success;
+
+      state.all.length = 0;
+      state.before.length = 0;
+      historicalResults.clear();
+
+      for (const message of messages.content) {
+        state.all.push(message);
+        if (payload.runId !== ownerRunId) state.before.push(message);
+      }
+      // Persistent, non-durable model history needs the same original compaction mapping
+      // as durable responses; cold selected-Run recovery cannot infer it from later history.
+      onBoundary?.({
+        sequence: envelope.sequence,
+        tag: payload._tag,
+        promptLength: state.all.length,
+      });
+
+      return;
+    }
+    if (payload._tag !== "ModelResponseRecorded") return;
+    retainEvidence(envelope);
+    const decoded = decodePromptMessages(payload.messages);
+
+    if (Result.isFailure(decoded)) return decoded.failure;
+    const messages = decoded.success;
+    const forRun = payload.runId === ownerRunId;
+
+    pendingToolOrder = new Map(
+      declaredApplicationToolCallIds(messages).map((id, index) => [id, index]),
+    );
+
+    const accountingError = accountResponse(envelope, payload, messages);
+
+    if (accountingError !== undefined) return accountingError;
+
+    const visibleMessages = forRun
+      ? messages.content
+      : messages.content.filter((message) => message.role !== "system");
+
+    for (const message of visibleMessages) {
+      state.all.push(message);
+      if (!forRun) state.before.push(message);
+    }
+    if (!forRun) {
+      const calls = messages.content.flatMap((message) =>
+        message.role === "assistant"
+          ? message.content.filter(
+              (part): part is Prompt.ToolCallPart =>
+                part.type === "tool-call" && !part.providerExecuted,
+            )
+          : [],
+      );
+
+      if (calls.length > 0) {
+        const parts = calls.map((call) =>
+          Prompt.makePart("tool-result", {
+            id: call.id,
+            name: call.name,
+            result: {
+              _tag: "ToolOutcomeUnknown",
+              message:
+                "This earlier operation has no recorded outcome. It may have executed. Do not assume success or retry it; its original operation remains unresolved.",
+            },
+            isFailure: true,
+            providerExecuted: false,
+          }),
+        );
+
+        const allIndex = state.all.length;
+        const beforeIndex = state.before.length;
+        const message = Prompt.makeMessage("tool", { content: parts });
+
+        state.all.push(message);
+        state.before.push(message);
+        for (const [partIndex, call] of calls.entries()) {
+          const decodedId = decodeToolCallId(call.id);
+
+          if (Result.isFailure(decodedId))
+            return journalError("Invalid historical Tool Call ID", decodedId.failure);
+          const callId = decodedId.success;
+
+          const resultId = toolCallSettledRecordId(payload.runId, payload.turn, callId);
+
+          // A fixed replay can fill only a result present in its captured metadata. Missing
+          // calls retain their visible Unknown part without an expanded identity directory.
+          if (!settledToolCallRecordIds.has(resultId)) continue;
+          historicalResults.set(resultId, {
+            allIndex,
+            beforeIndex,
+            parts,
+            partIndex,
+          });
+        }
+      }
+    }
+    state = {
+      ...state,
+      committedTurns: forRun ? Math.max(state.committedTurns, payload.turn) : state.committedTurns,
+    };
+    onBoundary?.({
+      sequence: envelope.sequence,
+      tag: payload._tag,
+      promptLength: state.all.length,
+      ...(isTerminalPriorRun(payload.runId, ownerRunId, Number.POSITIVE_INFINITY)
+        ? { terminalPriorRun: true }
+        : {}),
+      ...(incompleteToolTurns.has(envelope.record.recordId) ? { incomplete: true } : {}),
+    });
+  });
   emitSummary();
-  state = yield* flushTools(state);
+  state = flushTools(state);
 
   const validatedPolicyUsage = yield* Schema.decodeEffect(RunPolicyUsage)(policyUsage).pipe(
     Effect.mapError((cause) =>
@@ -1645,12 +1728,10 @@ export const promptFromCanonicalRecords = (
  * fractions would under-record canonical usage, and NaN/Infinity must fail
  * typed instead of escaping as a record-construction defect (RUN-023).
  */
-const validStagedUsage = (label: string, value: number): Effect.Effect<number, RunJournalError> =>
+const validStagedUsage = (label: string, value: number): RunJournalError | undefined =>
   Number.isSafeInteger(value) && value >= 0
-    ? Effect.succeed(value)
-    : Effect.fail(
-        journalError(`Staged ${label} must be a non-negative safe integer, got ${String(value)}`),
-      );
+    ? undefined
+    : journalError(`Staged ${label} must be a non-negative safe integer, got ${String(value)}`);
 
 export interface TurnCommitInput {
   readonly toolResultMaxBytes?: number | undefined;
@@ -1695,26 +1776,36 @@ export interface TurnCommitInput {
     | undefined;
 }
 
-const decodePersistedJson = Schema.decodeUnknownEffect(PersistedJson);
-const encodePrompt = Schema.encodeEffect(Prompt.Prompt);
-const decodeModelUsage = Schema.decodeUnknownEffect(Schema.Array(ModelCallUsage));
+const decodePersistedJson = Schema.decodeUnknownResult(PersistedJson);
+const encodePrompt = Schema.encodeResult(Prompt.Prompt);
+const decodeModelUsage = Schema.decodeResult(Schema.Array(ModelCallUsage));
+const decodeModelResponse = Schema.decodeResult(ModelResponseRecorded);
+const decodeSettledTool = Schema.decodeResult(ToolCallSettled);
 
-const requireCanonicalTurn = (turn: number): Effect.Effect<void, RunJournalError> =>
+const requireCanonicalTurn = (turn: number): RunJournalError | undefined =>
   !Number.isInteger(turn) || turn <= 0
-    ? Effect.fail(journalError(`Canonical turn number must be a positive integer: ${turn}`))
-    : Effect.void;
+    ? journalError(`Canonical turn number must be a positive integer: ${turn}`)
+    : undefined;
 
-const modelResponseRecord = Effect.fnUntraced(function* (
+const prepareModelResponse = (
   input: TurnCommitInput,
-): Effect.fn.Return<RecordEnvelope, RunJournalError | DigestError, Crypto.Crypto> {
+): Result.Result<
+  {
+    readonly messages: PersistedJson;
+    readonly runScopedPrefixLength: number | undefined;
+  },
+  RunJournalError
+> => {
   const promptMessages = input.responseMessages;
 
-  if (promptMessages.length === 0) {
-    return yield* journalError(`Turn ${input.turn} appended no model-visible Prompt messages`);
-  }
-  if (promptMessages.some((message) => message.role === "tool")) {
-    return yield* journalError("Application Tool outcomes must be supplied as terminal facts");
-  }
+  if (promptMessages.length === 0)
+    return Result.fail(
+      journalError(`Turn ${input.turn} appended no model-visible Prompt messages`),
+    );
+  if (promptMessages.some((message) => message.role === "tool"))
+    return Result.fail(
+      journalError("Application Tool outcomes must be supplied as terminal facts"),
+    );
   const runScopedPrefixLength = input.runScopedPrefixLength;
 
   if (
@@ -1726,50 +1817,121 @@ const modelResponseRecord = Effect.fnUntraced(function* (
       promptMessages
         .slice(0, runScopedPrefixLength)
         .some((message) => message.role !== "system" && message.role !== "user"))
-  ) {
-    return yield* journalError(
-      "Run-scoped Prompt provenance must identify a non-empty system/user prefix of Turn 1 before its assistant response",
+  )
+    return Result.fail(
+      journalError(
+        "Run-scoped Prompt provenance must identify a non-empty system/user prefix of Turn 1 before its assistant response",
+      ),
     );
-  }
+  const encodedMessages = encodePrompt(Prompt.fromMessages([...promptMessages]));
 
-  const encodedMessages = yield* encodePrompt(Prompt.fromMessages([...promptMessages])).pipe(
-    Effect.mapError((cause) => journalError("Turn Prompt messages failed to encode", cause)),
-  );
-
-  const messages = yield* decodePersistedJson(encodedMessages).pipe(
-    Effect.map(copyJson),
-    Effect.mapError((cause) =>
-      journalError("Turn Prompt messages exceed canonical persistence bounds", cause),
-    ),
-  );
-
-  const messagesDigest = yield* digestJson(messages);
-
-  const modelUsage =
-    input.usage?.modelUsage === undefined
-      ? undefined
-      : yield* decodeModelUsage(input.usage.modelUsage).pipe(
-          Effect.mapError((cause) => journalError("Turn model usage failed to decode", cause)),
-        );
-
-  if (modelUsage !== undefined) {
-    if (modelUsage.length === 0) {
-      return yield* journalError("Turn model usage must contain at least one completed call");
-    }
-
-    const summary = yield* summarizeModelUsage(modelUsage).pipe(
-      Effect.mapError((cause) => journalError("Turn model usage exceeds accounting bounds", cause)),
+  if (Result.isFailure(encodedMessages))
+    return Result.fail(
+      journalError("Turn Prompt messages failed to encode", encodedMessages.failure),
     );
+  const boundedMessages = decodePersistedJson(encodedMessages.success);
+
+  if (Result.isFailure(boundedMessages))
+    return Result.fail(
+      journalError(
+        "Turn Prompt messages exceed canonical persistence bounds",
+        boundedMessages.failure,
+      ),
+    );
+
+  return Result.succeed({ messages: copyJson(boundedMessages.success), runScopedPrefixLength });
+};
+
+const prepareResponseUsage = (
+  input: TurnCommitInput,
+): Result.Result<ReadonlyArray<ModelCallUsage> | undefined, RunJournalError> => {
+  let modelUsage: ReadonlyArray<ModelCallUsage> | undefined;
+
+  if (input.usage?.modelUsage !== undefined) {
+    const decoded = decodeModelUsage(input.usage.modelUsage);
+
+    if (Result.isFailure(decoded))
+      return Result.fail(journalError("Turn model usage failed to decode", decoded.failure));
+    modelUsage = decoded.success;
+    if (modelUsage.length === 0)
+      return Result.fail(journalError("Turn model usage must contain at least one completed call"));
+    const summarized = summarizeModelUsageResult(modelUsage);
+
+    if (Result.isFailure(summarized))
+      return Result.fail(
+        journalError("Turn model usage exceeds accounting bounds", summarized.failure),
+      );
+    const summary = summarized.success;
 
     if (
-      input.usage === undefined ||
       input.usage.inputTokens !== summary.inputTokens.total ||
       input.usage.outputTokens !== summary.outputTokens.total ||
       (input.usage.costMicrousd ?? 0) !== summary.costMicrousd
-    ) {
-      return yield* journalError("Turn detailed and aggregate model usage disagree");
-    }
+    )
+      return Result.fail(journalError("Turn detailed and aggregate model usage disagree"));
   }
+
+  for (const [label, value] of [
+    ["unobservedModelCalls", input.unobservedModelCalls],
+    ["inputTokens", input.usage?.inputTokens],
+    ["outputTokens", input.usage?.outputTokens],
+    ["costMicrousd", input.usage?.costMicrousd],
+  ] as const) {
+    if (value === undefined) continue;
+    const error = validStagedUsage(label, value);
+
+    if (error !== undefined) return Result.fail(error);
+  }
+
+  return Result.succeed(modelUsage);
+};
+
+const modelResponseRecord = Effect.fnUntraced(function* (
+  input: TurnCommitInput,
+): Effect.fn.Return<RecordEnvelope, RunJournalError | DigestError, Crypto.Crypto> {
+  const prepared = prepareModelResponse(input);
+
+  if (Result.isFailure(prepared)) return yield* prepared.failure;
+  const { messages, runScopedPrefixLength } = prepared.success;
+  const messagesDigest = yield* digestJson(messages);
+  const usage = prepareResponseUsage(input);
+
+  if (Result.isFailure(usage)) return yield* usage.failure;
+  const modelUsage = usage.success;
+
+  const decoded = decodeModelResponse({
+    _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
+    toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
+    toolOperations: input.toolOperations ?? [],
+    ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
+      ? {}
+      : { toolParameterRejections: input.toolParameterRejections }),
+    ...(input.toolExposure === undefined ? {} : { toolExposure: input.toolExposure }),
+    runId: input.runId,
+    turnId: input.turnId,
+    turn: input.turn,
+    messages,
+    messagesDigest,
+    ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
+    ...(modelUsage === undefined ? {} : { modelUsage }),
+    ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
+      ? {}
+      : { unobservedModelCalls: input.unobservedModelCalls }),
+    ...(input.usage === undefined
+      ? {}
+      : {
+          inputTokens: input.usage.inputTokens,
+          outputTokens: input.usage.outputTokens,
+          // Absent cost re-seeds as zero without changing the canonical wire.
+          ...(input.usage.costMicrousd === undefined || input.usage.costMicrousd === 0
+            ? {}
+            : { costMicrousd: input.usage.costMicrousd }),
+        }),
+  });
+
+  if (Result.isFailure(decoded))
+    return yield* journalError("Invalid model response operation evidence", decoded.failure.issue);
 
   return RecordEnvelope.make({
     recordId: modelResponseRecordId(input.runId, input.turn),
@@ -1777,65 +1939,46 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     schemaVersion: 1,
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
-    payload: yield* ModelResponseRecorded.makeEffect({
-      toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
-      toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
-      toolOperations: input.toolOperations ?? [],
-      ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
-        ? {}
-        : { toolParameterRejections: input.toolParameterRejections }),
-      ...(input.toolExposure === undefined ? {} : { toolExposure: input.toolExposure }),
-      runId: input.runId,
-      turnId: input.turnId,
-      turn: input.turn,
-      messages,
-      messagesDigest,
-      ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
-      ...(modelUsage === undefined ? {} : { modelUsage }),
-      ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
-        ? {}
-        : {
-            unobservedModelCalls: yield* validStagedUsage(
-              "unobservedModelCalls",
-              input.unobservedModelCalls,
-            ),
-          }),
-      ...(input.usage === undefined
-        ? {}
-        : {
-            inputTokens: yield* validStagedUsage("inputTokens", input.usage.inputTokens),
-            outputTokens: yield* validStagedUsage("outputTokens", input.usage.outputTokens),
-            // Written only when non-zero: absent re-seeds as zero, so the
-            // no-estimator case stays byte-identical to pre-cost histories.
-            ...(input.usage.costMicrousd === undefined || input.usage.costMicrousd === 0
-              ? {}
-              : {
-                  costMicrousd: yield* validStagedUsage("costMicrousd", input.usage.costMicrousd),
-                }),
-          }),
-    }).pipe(
-      Effect.mapError((cause) => journalError("Invalid model response operation evidence", cause)),
-    ),
+    payload: decoded.success,
   });
 });
 
-const toolSettledRecords = Effect.fnUntraced(function* (
+const toolSettledRecords = (
   input: TurnCommitInput,
-): Effect.fn.Return<Array<RecordEnvelope>, RunJournalError> {
+): Result.Result<Array<RecordEnvelope>, RunJournalError> => {
   const toolRecords: Array<RecordEnvelope> = [];
 
   for (const part of input.toolResults) {
-    const result = yield* decodePersistedJson(part.result).pipe(
-      Effect.mapError((cause) =>
-        journalError(`Tool result ${part.toolCallId} exceeds canonical persistence bounds`, cause),
-      ),
-    );
+    const result = decodePersistedJson(part.result);
 
-    const toolCallId = yield* Effect.try({
-      try: () => decodeToolCallId(part.toolCallId),
-      catch: (cause) => journalError(`Invalid Tool Call ID ${part.toolCallId}`, cause),
+    if (Result.isFailure(result))
+      return Result.fail(
+        journalError(
+          `Tool result ${part.toolCallId} exceeds canonical persistence bounds`,
+          result.failure,
+        ),
+      );
+    const decodedId = decodeToolCallId(part.toolCallId);
+
+    if (Result.isFailure(decodedId))
+      return Result.fail(
+        journalError(`Invalid Tool Call ID ${part.toolCallId}`, decodedId.failure),
+      );
+    const toolCallId = decodedId.success;
+
+    const payload = decodeSettledTool({
+      _tag: "ToolCallSettled",
+      ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
+      runId: input.runId,
+      toolCallId,
+      toolName: part.toolName,
+      result: result.success,
+      isFailure: part.isFailure,
+      ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
     });
 
+    if (Result.isFailure(payload))
+      return Result.fail(journalError(`Invalid Tool result ${part.toolCallId}`, payload.failure));
     toolRecords.push(
       RecordEnvelope.make({
         recordId: toolCallSettledRecordId(input.runId, input.turn, toolCallId),
@@ -1843,21 +1986,13 @@ const toolSettledRecords = Effect.fnUntraced(function* (
         schemaVersion: 1,
         createdAt: input.createdAt,
         deploymentId: input.deploymentId,
-        payload: ToolCallSettled.make({
-          ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
-          runId: input.runId,
-          toolCallId,
-          toolName: part.toolName,
-          result,
-          isFailure: part.isFailure,
-          ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
-        }),
+        payload: payload.success,
       }),
     );
   }
 
-  return toolRecords;
-});
+  return Result.succeed(toolRecords);
+};
 
 /** Integrity of the original validated terminal values; never a current-code projection. */
 export const runCompletionDigest = (
@@ -1904,10 +2039,17 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
 export const turnCanonicalBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
-  yield* requireCanonicalTurn(input.turn);
+  const invalidTurn = requireCanonicalTurn(input.turn);
+
+  if (invalidTurn !== undefined) return yield* invalidTurn;
   const modelResponse = yield* modelResponseRecord(input);
-  const toolRecords = yield* toolSettledRecords(input);
-  const completionRecord = yield* runCompletionRecord(input);
+  const settled = toolSettledRecords(input);
+
+  if (Result.isFailure(settled)) return yield* settled.failure;
+  const toolRecords = settled.success;
+
+  const completionRecord =
+    input.runCompletion === undefined ? undefined : yield* runCompletionRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnBatchId(input.runId, input.turn),
@@ -1929,7 +2071,9 @@ export const turnCanonicalBatch = Effect.fnUntraced(function* (
 export const turnResponseBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
-  yield* requireCanonicalTurn(input.turn);
+  const invalidTurn = requireCanonicalTurn(input.turn);
+
+  if (invalidTurn !== undefined) return yield* invalidTurn;
   const modelResponse = yield* modelResponseRecord(input);
 
   return CanonicalBatch.make({
@@ -1948,10 +2092,17 @@ export const turnResponseBatch = Effect.fnUntraced(function* (
 export const turnResultsBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
 ): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
-  yield* requireCanonicalTurn(input.turn);
-  const toolRecords = yield* toolSettledRecords(input);
+  const invalidTurn = requireCanonicalTurn(input.turn);
+
+  if (invalidTurn !== undefined) return yield* invalidTurn;
+  const settled = toolSettledRecords(input);
+
+  if (Result.isFailure(settled)) return yield* settled.failure;
+  const toolRecords = settled.success;
   const first = toolRecords[0];
-  const completionRecord = yield* runCompletionRecord(input);
+
+  const completionRecord =
+    input.runCompletion === undefined ? undefined : yield* runCompletionRecord(input);
 
   if (first === undefined) {
     if (completionRecord === undefined) {

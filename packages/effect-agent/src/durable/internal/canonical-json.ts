@@ -1,4 +1,4 @@
-import { Array, type Schema } from "effect";
+import { Array, Result, type Schema } from "effect";
 
 interface JsonLimits {
   readonly depth: number;
@@ -7,19 +7,30 @@ interface JsonLimits {
   readonly textUnits: number;
 }
 
+export interface CanonicalJsonBoundsError {
+  readonly _tag: "CanonicalJsonBoundsError";
+  readonly message: string;
+}
+
+const exceeded = (bound: string): CanonicalJsonBoundsError => ({
+  _tag: "CanonicalJsonBoundsError",
+  message: `Canonical JSON exceeds its ${bound} bound`,
+});
+
 /** Values have already crossed their Schema boundary; visit each serialized occurrence. */
-export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string => {
+export const canonicalJsonResult = (
+  value: Schema.Json,
+  limits?: JsonLimits,
+): Result.Result<string, CanonicalJsonBoundsError> => {
   let nodes = 0;
   let textUnits = 0;
 
-  const charge = (length: number) => {
-    if (limits !== undefined && (textUnits += length) > limits.textUnits)
-      throw new RangeError("Canonical JSON exceeds its text bound");
-  };
+  const charge = (length: number): boolean =>
+    limits === undefined || (textUnits += length) <= limits.textUnits;
 
-  const visit = (value: Schema.Json, depth: number): string => {
+  const visit = (value: Schema.Json, depth: number): string | CanonicalJsonBoundsError => {
     if (limits !== undefined && (depth > limits.depth || ++nodes > limits.nodes))
-      throw new RangeError("Canonical JSON exceeds its traversal bound");
+      return exceeded("traversal");
     if (
       value === null ||
       typeof value === "boolean" ||
@@ -28,16 +39,22 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
     ) {
       const encoded = JSON.stringify(value);
 
-      charge(encoded.length);
-
-      return encoded;
+      return charge(encoded.length) ? encoded : exceeded("text");
     }
     if (Array.isArray<Schema.Json>(value)) {
       if (limits !== undefined && value.length > limits.collectionLength)
-        throw new RangeError("Canonical JSON exceeds its collection bound");
-      charge(2 + Math.max(0, value.length - 1));
+        return exceeded("collection");
+      if (!charge(2 + Math.max(0, value.length - 1))) return exceeded("text");
+      const entries: globalThis.Array<string> = [];
 
-      return `[${globalThis.Array.from(value, (entry) => visit(entry, depth + 1)).join(",")}]`;
+      for (let index = 0; index < value.length; index++) {
+        const encoded = visit(value[index], depth + 1);
+
+        if (typeof encoded !== "string") return encoded;
+        entries.push(encoded);
+      }
+
+      return `[${entries.join(",")}]`;
     }
 
     const entries = Object.entries(value).sort(([left], [right]) =>
@@ -45,19 +62,27 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
     );
 
     if (limits !== undefined && entries.length > limits.collectionLength)
-      throw new RangeError("Canonical JSON exceeds its collection bound");
-    charge(2 + Math.max(0, entries.length - 1));
+      return exceeded("collection");
+    if (!charge(2 + Math.max(0, entries.length - 1))) return exceeded("text");
+    const encodedEntries: globalThis.Array<string> = [];
 
-    return `{${entries
-      .map(([key, entry]) => {
-        const encodedKey = JSON.stringify(key);
+    for (const [key, entry] of entries) {
+      const encodedKey = JSON.stringify(key);
 
-        charge(encodedKey.length + 1);
+      if (!charge(encodedKey.length + 1)) return exceeded("text");
+      const encoded = visit(entry, depth + 1);
 
-        return `${encodedKey}:${visit(entry, depth + 1)}`;
-      })
-      .join(",")}}`;
+      if (typeof encoded !== "string") return encoded;
+      encodedEntries.push(`${encodedKey}:${encoded}`);
+    }
+
+    return `{${encodedEntries.join(",")}}`;
   };
 
-  return visit(value, 0);
+  const encoded = visit(value, 0);
+
+  return typeof encoded === "string" ? Result.succeed(encoded) : Result.fail(encoded);
 };
+
+export const canonicalJson = (value: Schema.Json): string =>
+  Result.getOrThrow(canonicalJsonResult(value));

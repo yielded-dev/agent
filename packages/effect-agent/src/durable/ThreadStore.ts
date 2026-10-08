@@ -7,7 +7,8 @@ import { AssignmentTerminal } from "../core/Worker.ts";
 import type { IntegrityReport } from "./Admin.ts";
 import { digestCanonicalBatchJson } from "./Digest.ts";
 import {
-  captureRecord,
+  captureRecordResult,
+  type RecordEncoding,
   recordEncoding,
   type ProgressAppendRecord,
 } from "./internal/record-encoding.ts";
@@ -300,9 +301,9 @@ const AppendHeader = Schema.Struct({
   producerId: ProducerId,
 });
 
-const validateHeader = Schema.decodeUnknownSync(AppendHeader);
+const validateHeader = Schema.decodeResult(AppendHeader);
 
-const validateRecordCount = Schema.decodeUnknownSync(
+const validateRecordCount = Schema.decodeResult(
   Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
@@ -358,103 +359,114 @@ export interface PreparedAppend extends FencedAppendRequest {
   readonly digest: () => ReturnType<typeof digestCanonicalBatchJson>;
 }
 
+const captureAppend = (
+  input: FencedAppendRequest,
+): Result.Result<PreparedAppend, ThreadStoreError> => {
+  const header = validateHeader({
+    ...input,
+    batchId: input?.batch?.batchId,
+    producerId: input?.batch?.producerId,
+  });
+
+  const invalid = (cause: Schema.SchemaError | { readonly message: string }) =>
+    ThreadStoreError.make({
+      operation: "prepare canonical append",
+      message: Schema.isSchemaError(cause) ? cause.message : "Canonical append capture failed",
+      cause,
+    });
+
+  if (Result.isFailure(header)) return Result.fail(invalid(header.failure));
+  const count = validateRecordCount(input.batch.records);
+
+  if (Result.isFailure(count)) return Result.fail(invalid(count.failure));
+  const encodings: Array<RecordEncoding> = [];
+
+  // Visit sparse slots too: capture owns each record's validation boundary.
+  for (let index = 0; index < input.batch.records.length; index++) {
+    const captured = captureRecordResult(input.batch.records[index]);
+
+    if (Result.isFailure(captured)) return Result.fail(invalid(captured.failure));
+    encodings.push(captured.success);
+  }
+  const prefix = `{"batchId":${JSON.stringify(header.success.batchId)},"producerId":${JSON.stringify(header.success.producerId)},"records":[`;
+  const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
+
+  const batchBytes = encodings.reduce(
+    (total, record) => total + record.bytes,
+    utf8ByteLength(prefix) + encodings.length + 1,
+  );
+
+  if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
+    return Result.fail(
+      ThreadStoreError.make({
+        operation: "prepare canonical append",
+        message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
+      }),
+    );
+  const first = encodings[0]!;
+
+  const batch = Object.freeze(
+    new CanonicalBatch(
+      {
+        batchId: header.success.batchId,
+        producerId: header.success.producerId,
+        records: Object.freeze([
+          first.canonical,
+          ...encodings.slice(1).map(({ canonical }) => canonical),
+        ]),
+      },
+      { disableChecks: true },
+    ),
+  );
+
+  const request = new FencedAppendRequest(
+    {
+      threadId: header.success.threadId,
+      expectedTailSequence: header.success.expectedTailSequence,
+      expectedTailDigest: header.success.expectedTailDigest,
+      producerEpoch: header.success.producerEpoch,
+      batch,
+    },
+    { disableChecks: true },
+  );
+
+  const records = Object.freeze(
+    encodings.map(({ canonical, json, wire, bytes }) =>
+      Object.freeze({
+        recordId: canonical.recordId,
+        recordJson: json,
+        recordBytes: bytes,
+        wire,
+        canonical,
+      }),
+    ),
+  );
+
+  const progress = Object.freeze(encodings.map(({ progress }) => progress));
+
+  const captured = Object.freeze(
+    Object.assign(request, {
+      batchJson,
+      batchBytes,
+      records,
+      progress,
+      digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
+    }),
+  );
+
+  capturedAppends.set(captured, captured);
+
+  return Result.succeed(captured);
+};
+
 export const PreparedAppend = {
   capture: (input: FencedAppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
     Effect.suspend(() => {
       const existing = capturedAppends.get(input);
 
-      if (existing !== undefined) return Effect.succeed(existing);
-
-      return Effect.try({
-        try: () => {
-          const header = validateHeader({
-            ...input,
-            batchId: input.batch.batchId,
-            producerId: input.batch.producerId,
-          });
-
-          validateRecordCount(input.batch.records);
-          // Visit sparse slots too: capture owns each record's validation boundary.
-          const encodings = Array.from(input.batch.records, captureRecord);
-          const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
-          const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
-
-          const batchBytes = encodings.reduce(
-            (total, record) => total + record.bytes,
-            utf8ByteLength(prefix) + encodings.length + 1,
-          );
-
-          if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
-            throw ThreadStoreError.make({
-              operation: "prepare canonical append",
-              message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
-            });
-          const first = encodings[0]!;
-
-          const batch = Object.freeze(
-            new CanonicalBatch(
-              {
-                batchId: header.batchId,
-                producerId: header.producerId,
-                records: Object.freeze([
-                  first.canonical,
-                  ...encodings.slice(1).map(({ canonical }) => canonical),
-                ]),
-              },
-              { disableChecks: true },
-            ),
-          );
-
-          const request = new FencedAppendRequest(
-            {
-              threadId: header.threadId,
-              expectedTailSequence: header.expectedTailSequence,
-              expectedTailDigest: header.expectedTailDigest,
-              producerEpoch: header.producerEpoch,
-              batch,
-            },
-            { disableChecks: true },
-          );
-
-          const records = Object.freeze(
-            encodings.map(({ canonical, json, wire, bytes }) =>
-              Object.freeze({
-                recordId: canonical.recordId,
-                recordJson: json,
-                recordBytes: bytes,
-                wire,
-                canonical,
-              }),
-            ),
-          );
-
-          const progress = Object.freeze(encodings.map(({ progress }) => progress));
-
-          const captured = Object.freeze(
-            Object.assign(request, {
-              batchJson,
-              batchBytes,
-              records,
-              progress,
-              digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
-            }),
-          );
-
-          capturedAppends.set(captured, captured);
-
-          return captured;
-        },
-        catch: (cause) =>
-          Schema.is(ThreadStoreError)(cause)
-            ? cause
-            : ThreadStoreError.make({
-                operation: "prepare canonical append",
-                message: Schema.isSchemaError(cause)
-                  ? cause.message
-                  : "Canonical append capture failed",
-                cause,
-              }),
-      });
+      return existing === undefined
+        ? Effect.fromResult(captureAppend(input))
+        : Effect.succeed(existing);
     }),
 };
 

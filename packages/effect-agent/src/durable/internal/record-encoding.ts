@@ -1,4 +1,4 @@
-import { DateTime, Predicate, Schema } from "effect";
+import { DateTime, Predicate, Result, Schema } from "effect";
 
 import type { RunId } from "../../core/Identifiers.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
@@ -13,7 +13,11 @@ import {
   type RecordJson,
   type RunContinuation,
 } from "../Records.ts";
-import { canonicalJson } from "./canonical-json.ts";
+import {
+  canonicalJson,
+  canonicalJsonResult,
+  type CanonicalJsonBoundsError,
+} from "./canonical-json.ts";
 import {
   executionRunIds,
   isPreContinuationFact,
@@ -21,7 +25,7 @@ import {
   terminalUsageCharge,
 } from "./record-ownership.ts";
 
-const encodeRecord = Schema.encodeSync(RecordEnvelope);
+const encodeRecord = Schema.encodeResult(RecordEnvelope);
 
 const recordLimits = {
   depth: MAX_PERSISTED_JSON_DEPTH + 4,
@@ -129,18 +133,28 @@ const ownWire = (wire: RecordJson, copies: WeakMap<object, object>): RecordJson 
 };
 
 /** Capture at the Schema boundary; only the privately owned result can reuse its encoding. */
-export const captureRecord = (input: RecordEnvelope): RecordEncoding => {
+export const captureRecordResult = (
+  input: RecordEnvelope,
+): Result.Result<RecordEncoding, Schema.SchemaError | CanonicalJsonBoundsError> => {
   const existing = captured.get(input);
 
-  if (existing !== undefined) return existing;
+  if (existing !== undefined) return Result.succeed(existing);
   const encoded = encodeRecord(input);
+
+  if (Result.isFailure(encoded)) return Result.fail(encoded.failure);
   const owned = capturePayload(input.payload);
-  const wire = ownWire(encoded, owned.copies);
-  const json = canonicalJson(wire, recordLimits);
+  const wire = ownWire(encoded.success, owned.copies);
+  const serialized = canonicalJsonResult(wire, recordLimits);
+
+  if (Result.isFailure(serialized)) return Result.fail(serialized.failure);
+  const json = serialized.success;
   const bytes = utf8ByteLength(json);
 
   if (bytes > MAX_CANONICAL_RECORD_BYTES)
-    throw new RangeError("Canonical JSON exceeds its byte bound");
+    return Result.fail({
+      _tag: "CanonicalJsonBoundsError",
+      message: "Canonical JSON exceeds its byte bound",
+    });
   const createdAt = DateTime.makeUnsafe(DateTime.toEpochMillis(input.createdAt));
 
   // DateTime fills this cache lazily; populate it before freezing our private copy.
@@ -168,27 +182,35 @@ export const captureRecord = (input: RecordEnvelope): RecordEncoding => {
 
   captured.set(canonical, encoding);
 
-  return encoding;
+  return Result.succeed(encoding);
 };
 
+export const captureRecord = (input: RecordEnvelope): RecordEncoding =>
+  Result.getOrThrow(captureRecordResult(input));
+
 /** Read evidence retains its original wire; fresh writes use the captured Schema encoding. */
-export const recordEncoding = (record: RecordEnvelope): RecordEncoding => {
+export const recordEncodingResult = (
+  record: RecordEnvelope,
+): Result.Result<RecordEncoding, Schema.SchemaError | CanonicalJsonBoundsError> => {
   const existing = captured.get(record);
 
-  if (existing !== undefined) return existing;
+  if (existing !== undefined) return Result.succeed(existing);
   if (record instanceof ExportedRecord) {
     const json = canonicalJson(record.wire);
 
     const bytes = utf8ByteLength(json);
 
-    return {
+    return Result.succeed({
       canonical: record,
       wire: record.wire,
       json,
       bytes,
       progress: progressRecord(record, bytes),
-    };
+    });
   }
 
-  return captureRecord(record);
+  return captureRecordResult(record);
 };
+
+export const recordEncoding = (record: RecordEnvelope): RecordEncoding =>
+  Result.getOrThrow(recordEncodingResult(record));

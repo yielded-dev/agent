@@ -20,7 +20,7 @@ import {
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { ThreadStoreDiagnostic, ThreadStoreError } from "@yielded/agent/thread-store";
-import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
+import { Cause, Clock, Effect, Option, Result, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
 
@@ -436,21 +436,25 @@ const makeJournal = (
     const recordJson = canonicalRecordJson(sql);
 
     /** Typed pre-write refusal for any single value over the configured byte bound. */
-    const checkValueBound = (
+    const valueBoundError = (
       operation: string,
       value: string,
       actualBytes = storedTextBytes(value),
-    ): Effect.Effect<void, DoValueBoundExceeded> => {
-      return actualBytes > maxStoredValueBytes
-        ? Effect.fail(
-            DoValueBoundExceeded.make({
-              actualBytes,
-              maxBytes: maxStoredValueBytes,
-              operation,
-            }),
-          )
-        : Effect.void;
-    };
+    ): DoValueBoundExceeded | undefined =>
+      actualBytes > maxStoredValueBytes
+        ? DoValueBoundExceeded.make({ actualBytes, maxBytes: maxStoredValueBytes, operation })
+        : undefined;
+
+    const checkValueBound = (
+      operation: string,
+      value: string,
+      actualBytes?: number,
+    ): Effect.Effect<void, DoValueBoundExceeded> =>
+      Effect.suspend(() => {
+        const error = valueBoundError(operation, value, actualBytes);
+
+        return error === undefined ? Effect.void : Effect.fail(error);
+      });
 
     /**
      * Runs one journal write transaction on the Durable Object storage-backed
@@ -643,50 +647,61 @@ const makeJournal = (
       return rows.length > 0;
     });
 
-    const prepareAppend = Effect.fnUntraced(function* (request: RawAppendRequest) {
+    const prepareAppendResult = (
+      request: RawAppendRequest,
+    ): Result.Result<
+      RawAppendRequest,
+      DoStorageError | DoValueBoundExceeded | DoAppendConflict
+    > => {
       if (
         request.threadId.length > MAX_IDENTIFIER_LENGTH ||
         request.batchId.length > MAX_IDENTIFIER_LENGTH ||
         request.records.some((record) => record.recordId.length > MAX_IDENTIFIER_LENGTH)
-      ) {
-        return yield* DoStorageError.make({
-          operation: "append canonical batch",
-          message: "Canonical identifiers exceed the Durable Object storage bounds.",
-        });
-      }
+      )
+        return Result.fail(
+          DoStorageError.make({
+            operation: "append canonical batch",
+            message: "Canonical identifiers exceed the Durable Object storage bounds.",
+          }),
+        );
+
       // Archives store the full batch as one value, so their ceiling also bounds hot appends.
       // The trusted append SPI pairs captured JSON with its exact UTF-8 width. Digests are ASCII.
-      yield* checkValueBound("append canonical batch", request.batchJson, request.batchBytes);
-      yield* checkValueBound(
-        "append canonical batch",
-        request.batchDigest,
-        request.batchDigest.length,
-      );
-      yield* checkValueBound(
-        "append canonical batch",
-        request.tailDigest,
-        request.tailDigest.length,
-      );
+      const boundError =
+        valueBoundError("append canonical batch", request.batchJson, request.batchBytes) ??
+        valueBoundError(
+          "append canonical batch",
+          request.batchDigest,
+          request.batchDigest.length,
+        ) ??
+        valueBoundError("append canonical batch", request.tailDigest, request.tailDigest.length);
+
+      if (boundError !== undefined) return Result.fail(boundError);
       for (const record of request.records) {
         if (record.recordBytes > maxStoredValueBytes)
-          return yield* DoValueBoundExceeded.make({
-            actualBytes: record.recordBytes,
-            maxBytes: maxStoredValueBytes,
-            operation: "append canonical record",
-          });
+          return Result.fail(
+            DoValueBoundExceeded.make({
+              actualBytes: record.recordBytes,
+              maxBytes: maxStoredValueBytes,
+              operation: "append canonical record",
+            }),
+          );
       }
+      const recordIds = request.records.map((record) => record.recordId);
 
-      const recordIds: Array<string> = request.records.map((record) => record.recordId);
+      if (new Set(recordIds).size !== recordIds.length)
+        return Result.fail(
+          DoAppendConflict.make({
+            message: `Batch ${request.batchId} contains duplicate canonical record IDs.`,
+            reason: "record-identity",
+          }),
+        );
 
-      if (new Set(recordIds).size !== recordIds.length) {
-        return yield* DoAppendConflict.make({
-          message: `Batch ${request.batchId} contains duplicate canonical record IDs.`,
-          reason: "record-identity",
-        });
-      }
+      return Result.succeed(request);
+    };
 
-      return request;
-    });
+    const prepareAppend = (request: RawAppendRequest) =>
+      Effect.suspend(() => Effect.fromResult(prepareAppendResult(request)));
 
     const appendPrepared = Effect.fnUntraced(function* (
       request: RawAppendRequest,

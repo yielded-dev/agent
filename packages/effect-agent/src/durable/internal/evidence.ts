@@ -1,10 +1,10 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Result } from "effect";
 
 import type { ThreadId } from "../../core/Identifiers.ts";
 import { digestCanonicalJson } from "../Digest.ts";
 import { EvidenceReference, type RecordEnvelope } from "../Records.ts";
 import { getRecord, ThreadStoreError } from "../ThreadStore.ts";
-import { recordEncoding, type RecordEncoding } from "./record-encoding.ts";
+import { recordEncodingResult, type RecordEncoding } from "./record-encoding.ts";
 
 const failure = (message: string, cause?: unknown) =>
   ThreadStoreError.make({
@@ -16,10 +16,11 @@ const failure = (message: string, cause?: unknown) =>
 const evidenceDigests = new WeakMap<RecordEncoding, EvidenceReference>();
 
 export const reference = Effect.fnUntraced(function* (record: RecordEnvelope) {
-  const wire = yield* Effect.try({
-    try: () => recordEncoding(record),
-    catch: (cause) => failure("Cannot encode canonical evidence", cause),
-  });
+  const captured = recordEncodingResult(record);
+
+  if (Result.isFailure(captured))
+    return yield* failure("Cannot encode canonical evidence", captured.failure);
+  const wire = captured.success;
 
   const retained = evidenceDigests.get(wire);
 
