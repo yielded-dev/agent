@@ -33,7 +33,12 @@ const api = (route, body) => fetch(`https://api.cloudflare.com/client/v4/account
 });
 const apiJson = async (route, body) => {
   const response = await api(route, body);
-  if (!response.ok) throw new Error(clean(`Cloudflare ${route.split("?")[0]}: ${response.status} ${await response.text()}`));
+  if (!response.ok) {
+    const detail = response.headers.get("content-type")?.includes("json")
+      ? JSON.stringify((await response.json()).errors ?? []).slice(0, 2000)
+      : `non-JSON gateway response; ray ${response.headers.get("cf-ray") ?? "unavailable"}`;
+    throw new Error(clean(`Cloudflare ${route.split("?")[0]}: ${response.status} ${detail}`));
+  }
   const result = await response.json();
   if (!result.success) throw new Error(clean(JSON.stringify(result.errors)));
   return result;
@@ -126,8 +131,11 @@ const verifyUpload = async (target) => {
   if (version.id !== target.expectedVersion) throw new Error("Startup metadata does not match the active version");
   target.startupTimeMs = typeof version.startup_time_ms === "number" ? version.startup_time_ms : null;
   target.startupEvidence = { version: version.id, number: version.number, startupTimeMs: target.startupTimeMs,
-    compatibilityDate: version.compatibility_date, limits: version.limits, capturedAt: Date.now() };
+    compatibilityDate: version.compatibility_date, limits: version.limits,
+    uploadRevision: version.bindings?.find((binding) => binding.type === "plain_text" && binding.name === "UPLOAD_REVISION")?.text ?? null,
+    capturedAt: Date.now() };
   target.uploadedModuleSha256 = target.build.bundleSha256;
+  target.observedUploadRevision = target.startupEvidence.uploadRevision;
   target.settings = { limits: settings.limits, compatibilityDate: settings.compatibility_date, compatibilityFlags: settings.compatibility_flags, observability: settings.observability };
   target.namespaces = (await listNamespaces()).filter((item) => item.script === target.name).map(({ name, script }) => ({ name, script }));
   save(join(here, "resources.json"), resources);
@@ -547,14 +555,14 @@ const measureInstrumentation = async () => {
     }
   }
 };
-const measureMinification = async () => {
+const measureMinification = async (resume = false) => {
   await open();
   const main = load(join(here, "network-plan.json"));
   if (load(join(here, "network-completed.json")).length !== main.cohorts.length ||
       load(join(here, "instrumentation-completed.json")).length !== load(join(here, "instrumentation-plan.json")).cohorts.length)
     throw new Error("Finish both native measurement phases before changing their deployed bytes");
   const file = join(here, "minification.json");
-  if (existsSync(file)) throw new Error("Minification already attempted; never replay a measured canonical turn");
+  if (existsSync(file) !== resume) throw new Error("Use minification-resume only for a recorded, incomplete plan");
   const builds = load(join(here, "build-identities/all.json"));
   const plain = builds.find((build) => build.name === "network");
   const minified = builds.find((build) => build.name === "network-min");
@@ -562,7 +570,7 @@ const measureMinification = async () => {
       plain.repositoryCommit !== minified.repositoryCommit || plain.minify || !minified.minify ||
       ["esbuildVersion", "effectVersion", "target"].some((key) => plain[key] !== minified[key]))
     throw new Error("Minification must compare the same source/fixture with only the build flag changed");
-  const plan = {
+  const plan = resume ? load(file) : {
     purpose: "Combined native bundle minification: eight upload rounds, same-Object cold requests, unchanged-code temporal control",
     startedAt: Date.now(), complete: false,
     // ABBA BAAB balances linear progression; the control uploads plain bytes throughout.
@@ -571,11 +579,47 @@ const measureMinification = async () => {
       .map((c) => ({ ...c, ttftMs: 0 })),
     builds: { plain, minified }, deployments: [], completed: [],
   };
+  if (plan.complete) throw new Error("Minification is already complete");
+  if (JSON.stringify(plan.builds) !== JSON.stringify({ plain, minified })) throw new Error("Frozen minification builds changed");
+  const journal = (name) => readFileSync(join(here, name), "utf8").trim().split("\n").filter(Boolean).map(JSON.parse);
+  const canonicalAttempts = (cohort, sample) => journal("attempted.jsonl").filter((row) =>
+    row.worker === target(cohort.role).name && row.framework === cohort.framework && row.object === cohort.object && row.sample === sample &&
+    new URL(row.path, "https://cf-latency").pathname === "/run");
+  if (resume) {
+    const rows = journal("requests.jsonl");
+    // A returned HTTP response alone cannot authorize replay. Every attempted
+    // input must already have its unique validated receipt and completion.
+    for (const cohort of plan.cohorts) {
+      for (let n = 6; n < 16; n++) {
+        const sample = `m${n}`;
+        const attempts = canonicalAttempts(cohort, sample);
+        const completions = plan.completed.filter((done) => done.key === cohortKey(cohort) && done.sample === sample && done.round === n - 8);
+        if (n >= 8 && attempts.length === 0 && completions.length === 0) continue;
+        const received = rows.filter((row) => row.worker === target(cohort.role).name && row.framework === cohort.framework && row.object === cohort.object &&
+          row.sample === sample && row.startedAt === attempts[0]?.startedAt && new URL(row.path, "https://cf-latency").pathname === "/run");
+        const row = received[0];
+        const r = row && receipt(row);
+        if (attempts.length !== 1 || received.length !== 1 || row.status !== 200 || !r.ok || r.seedFingerprint !== expectedFingerprint[50] || r.calls?.length !== 9 ||
+            (n >= 8 && (completions.length !== 1 || completions[0].version !== r.version || completions[0].incarnation !== r.incarnation)))
+          throw new Error(`Unacknowledged canonical input; never replay ${cohortKey(cohort)}/${sample}`);
+        if (n >= 8 || n === 7) {
+          const releaseSample = n === 7 ? "minify-prelude-release" : `minify-release-${sample}`;
+          const releases = rows.filter((prior) => prior.phase === "minification-release" && prior.worker === row.worker && prior.framework === row.framework &&
+            prior.object === row.object && prior.sample === releaseSample && prior.startedAt >= row.endedAt && prior.response?.before?.incarnation === r.incarnation);
+          if (releases.length !== 1 || !releases[0].response.ok || !releases[0].response.coldRequested)
+            throw new Error("Minification resume requires an acknowledged release for every completed input");
+        }
+      }
+    }
+    plan.resumptions ??= [];
+    plan.resumptions.push({ at: Date.now(), completedInputs: plan.completed.length,
+      reason: "Version preparation stopped before the next canonical input; completed inputs and releases verified, no input replayed" });
+  }
   save(file, plan);
   try {
     // These Objects ended the main matrix at m5 in both Workers. Preserve that
     // history and append m6/m7 before comparison (lookup #97 is in m7).
-    for (const cohort of shuffle(plan.cohorts, 771)) {
+    for (const cohort of resume ? [] : shuffle(plan.cohorts, 771)) {
       const item = target(cohort.role);
       for (const sample of ["m6", "m7"]) {
         const row = await request(item, networkUrl("/run", cohort, sample), {}, "minification-prelude", cohort.object);
@@ -587,20 +631,38 @@ const measureMinification = async () => {
       if (!released.response.ok || !released.response.coldRequested) throw new Error("Minification prelude release not acknowledged");
     }
     for (const [round, enabled] of plan.rounds.entries()) {
+      if (plan.cohorts.every((cohort) => plan.completed.some((done) => done.round === round && done.key === cohortKey(cohort)))) continue;
       for (const role of shuffle(["primary", "control"], 401 + round * 23)) {
         const item = target(role);
         const build = role === "primary" && enabled ? minified : plain;
-        item.deployments ??= [];
-        item.deployments.push({ build: item.build, phase: item.phase, version: item.version, startupEvidence: item.startupEvidence, uploadRevision: item.uploadRevision, replacedAt: Date.now() });
-        item.build = build;
-        item.bundle = join(build.output, "worker.mjs");
-        if (hash(readFileSync(item.bundle)) !== build.bundleSha256) throw new Error("Minification bundle digest mismatch");
-        item.uploadRevision = `cf-latency-minify-${round}`;
-        const previousVersion = item.expectedVersion;
-        save(join(here, "resources.json"), resources);
-        await alchemy(item, "deploy");
-        await verifyUpload(item);
-        if (item.expectedVersion === previousVersion) throw new Error("Repeated startup round did not create a new active version");
+        const recorded = plan.deployments.filter((deployment) => deployment.round === round && deployment.role === role);
+        if (recorded.length) {
+          if (recorded.length !== 1 || item.build.bundleSha256 !== build.bundleSha256 || item.version !== recorded[0].version || recorded[0].bundleSha256 !== build.bundleSha256)
+            throw new Error("Cannot resume a replaced or ambiguous upload round");
+          await verifyUpload(item);
+          if (item.expectedVersion !== recorded[0].version) throw new Error("Active version differs from the interrupted upload round");
+          continue;
+        }
+        const revision = `cf-latency-minify-${round}`;
+        const previousVersion = item.version;
+        if (item.uploadRevision !== revision) {
+          item.deployments ??= [];
+          item.deployments.push({ build: item.build, phase: item.phase, version: item.version, startupEvidence: item.startupEvidence, uploadRevision: item.uploadRevision, replacedAt: Date.now() });
+          item.build = build;
+          item.bundle = join(build.output, "worker.mjs");
+          if (hash(readFileSync(item.bundle)) !== build.bundleSha256) throw new Error("Minification bundle digest mismatch");
+          item.uploadRevision = revision;
+          save(join(here, "resources.json"), resources);
+          await alchemy(item, "deploy");
+        } else if (item.build.bundleSha256 !== build.bundleSha256) throw new Error("Interrupted upload build changed");
+        // The active-deployment listing may briefly lag a successful upload.
+        // Resume reconciles the recorded revision instead of uploading again.
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await verifyUpload(item);
+          if (item.expectedVersion !== previousVersion && item.observedUploadRevision === revision) break;
+          if (attempt === 19) throw new Error("Uploaded revision did not become a distinct active version");
+          await sleep(2000);
+        }
         const ready = await readiness(item, networkUrl("/identity", { framework: "yielded", history: 50, ttftMs: 0 }, "minify-ready"),
           (attempt) => `cf-latency-minify-ready-${role}-${round}-${attempt}`,
           (row) => receipt(row).generation === "measure" && receipt(row).version === item.expectedVersion);
@@ -614,20 +676,32 @@ const measureMinification = async () => {
       for (const cohort of shuffle(plan.cohorts, 977 + round * 53)) {
         const item = target(cohort.role);
         const sample = `m${8 + round}`;
-        const cold = await request(item, networkUrl("/cold", cohort, `minify-reset-${sample}`), {}, "minification-reset", cohort.object);
-        if (!cold.response.ok || !cold.response.coldRequested || cold.response.before?.version !== item.version)
-          throw new Error("Minification cold reset or current-version identity not acknowledged");
+        if (plan.completed.some((done) => done.round === round && done.key === cohortKey(cohort))) continue;
+        if (canonicalAttempts(cohort, sample).length) throw new Error("Canonical input already attempted; never replay it");
+        let cold;
+        for (let attempt = 0; attempt < 20; attempt++) {
+          // Preparation may be repeated; it never submits a canonical input.
+          // Bind the accepted reset explicitly so a retained stale reset cannot
+          // be mistaken for proof that the measured incarnation is fresh.
+          cold = await request(item, networkUrl("/cold", cohort, `minify-reset-${sample}-${Date.now()}-${attempt}`), {}, "minification-reset", cohort.object);
+          if (!cold.response.ok || !cold.response.coldRequested) throw new Error("Minification reset not acknowledged");
+          if (cold.response.before?.version === item.version) break;
+          if (attempt === 19) throw new Error("Existing Object deployment did not converge before measurement");
+          await sleep(2000);
+        }
         const row = await request(item, networkUrl("/run", cohort, sample, {
           minificationRound: String(round), minified: String(item.build.minify),
+          minificationReset: cold.sample,
         }), {}, "minification", cohort.object);
         const r = receipt(row);
         if (!r.ok || r.seedFingerprint !== expectedFingerprint[50] || r.calls?.length !== 9 || r.version !== item.version ||
             r.objectId !== cold.response.before.objectId || r.incarnation === cold.response.before.incarnation)
           throw new Error("Minification cold/provider/identity failure");
         const release = await request(item, networkUrl("/cold", cohort, `minify-release-${sample}`), {}, "minification-release", cohort.object);
-        if (!release.response.ok || !release.response.coldRequested) throw new Error("Minification release not acknowledged");
+        if (!release.response.ok || !release.response.coldRequested || release.response.before?.incarnation !== r.incarnation)
+          throw new Error("Minification release or final identity not acknowledged");
         plan.completed.push({ round, key: cohortKey(cohort), sample, version: r.version, incarnation: r.incarnation,
-          firstEntry: r.entry, completedAt: Date.now() });
+          firstEntry: r.entry, acceptedReset: cold.sample, completedAt: Date.now() });
         save(file, plan);
       }
       console.log(`Minification round ${round + 1}/${plan.rounds.length}: primary ${enabled ? "minified" : "plain"}, control plain`);
@@ -636,14 +710,40 @@ const measureMinification = async () => {
     plan.finishedAt = Date.now();
     save(file, plan);
   } catch (cause) {
-    plan.failure = { at: Date.now(), error: clean(String(cause)), noRetry: true };
+    const failure = { at: Date.now(), error: clean(String(cause)), noRetry: true };
+    if (plan.failure) { plan.interruptions ??= []; plan.interruptions.push(failure); }
+    else plan.failure = failure;
     save(file, plan);
     throw cause;
   }
 };
-const telemetry = async () => {
+const auditMinificationMetadata = async () => {
   await open();
-  for (const item of resources.targets) {
+  const plan = load(join(here, "minification.json"));
+  if (!plan.complete || plan.deployments.length !== 16) throw new Error("Finish all minification uploads before the metadata audit");
+  const scripts = (await apiJson("workers/scripts")).result;
+  const checks = [];
+  for (const deployment of plan.deployments) {
+    const script = scripts.find((item) => item.id === target(deployment.role).name);
+    if (!script?.tag) throw new Error("Recorded Worker metadata missing");
+    const version = (await apiJson(`workers/workers/${script.tag}/versions/${deployment.version}`)).result;
+    const revision = version.bindings?.find((binding) => binding.type === "plain_text" && binding.name === "UPLOAD_REVISION")?.text ?? null;
+    checks.push({ round: deployment.round, role: deployment.role, version: deployment.version,
+      expectedRevision: deployment.uploadRevision, observedRevision: revision,
+      recordedStartupTimeMs: deployment.startupTimeMs, observedStartupTimeMs: version.startup_time_ms,
+      passed: version.id === deployment.version && revision === deployment.uploadRevision && version.startup_time_ms === deployment.startupTimeMs });
+  }
+  const passed = checks.every((check) => check.passed);
+  save(join(here, "minification-metadata.json"), { accountName: resources.accountName, checkedAt: new Date().toISOString(),
+    scope: "Upload revision and startup metric read together from each exact recorded Worker version; no current-settings join", checks, passed });
+  if (!passed) throw new Error("Minification version/revision/startup association failed");
+  console.log(`Minification metadata verified: ${checks.length} exact upload versions`);
+};
+const telemetry = async (onlyRole, tailOnly = false) => {
+  await open();
+  const selected = resources.targets.filter((item) => onlyRole === undefined || item.role === onlyRole);
+  if (!selected.length) throw new Error("No recorded Worker for telemetry selection");
+  for (const item of selected) {
     const existing = join(here, `telemetry-${item.role}.json`);
     const previous = existsSync(existing) ? load(existing) : { events: [], polls: [] };
     const scrub = (event) => {
@@ -654,7 +754,8 @@ const telemetry = async () => {
       }
       return event;
     };
-    const all = new Map(previous.events.map(scrub).map((event) => [event.$metadata?.id ?? JSON.stringify(event), event]));
+    const eventIdentity = (event) => event.$metadata?.id ? `${event.$workers?.scriptName}/${event.$metadata.id}` : JSON.stringify(event);
+    const all = new Map(previous.events.map(scrub).map((event) => [eventIdentity(event), event]));
     const queryWindow = async (from, to) => {
       const query = { queryId: item.name, dry: true, view: "events", limit: 2000, timeframe: { from, to },
         parameters: { filterCombination: "and", filters: [{ key: "$workers.scriptName", operation: "eq", type: "string", value: item.name }] } };
@@ -668,12 +769,15 @@ const telemetry = async () => {
         return;
       }
       const sanitized = JSON.parse(clean(JSON.stringify(events.events))).map(scrub);
-      for (const event of sanitized) all.set(event.$metadata?.id ?? JSON.stringify(event), event);
+      for (const event of sanitized) all.set(eventIdentity(event), event);
       previous.polls.push({ at: Date.now(), from, to, count: events.count, rows: sanitized.length,
         statistics: data.result.statistics, sampleIntervals: [...new Set((events.series ?? []).flatMap((row) => row.data.map((value) => value.sampleInterval)))] });
     };
-    // Re-query the complete bounded run: ingestion can arrive late or out of order.
-    await queryWindow(item.deployedAt - 60_000, Date.now() + 1000);
+    // Regular collection re-queries the complete run. After deletion, retain
+    // the final invocation tail with a minute of overlap for late ingestion.
+    const previousUpper = Math.max(0, ...previous.polls.map((poll) => poll.to));
+    const from = tailOnly && previousUpper ? Math.max(item.deployedAt - 60_000, previousUpper - 60_000) : item.deployedAt - 60_000;
+    await queryWindow(from, Date.now() + 1000);
     save(existing, { worker: item.name, accountName: resources.accountName, events: [...all.values()], polls: previous.polls });
     console.log(`Telemetry ${item.role}: ${all.size} distinct events`);
   }
@@ -693,9 +797,13 @@ const cleanup = async () => {
   }
   const remaining = await prefixedResources();
   if (remaining.workers.length || remaining.namespaces.length) throw new Error("cf-latency prefix resources remain in recorded account");
+  await telemetry(undefined, true);
+  // Include the destroy logs while the exact private token is still available
+  // for comparison. Nothing in this scan records credential values.
+  await scanSecrets();
   rmSync(resources.privateDirectory, { recursive: true });
   save(join(here, "cleanup.json"), { complete: true, accountName: resources.accountName, accountDigest: resources.accountDigest,
-    checkedAt: new Date().toISOString(), checks, remaining, secretStateRemoved: true });
+    checkedAt: new Date().toISOString(), checks, remaining, finalTelemetryTailCollected: true, secretStateRemoved: true });
 };
 const scanSecrets = async () => {
   await open();
@@ -730,7 +838,7 @@ export const run = Effect.tryPromise({
     if (action === "dry-run") {
       console.log(JSON.stringify({ stack: "cf-latency", timing: "deployed Cloudflare only", locationHint: "wnam", cpuLimitMs: 300000,
         calibration: { bytes: [0, 1024, 16384, 65536, 131072, 524288], transactions: [1, 4, 12], modes: ["return", "fetch", "sync-end", "sync-each"], objects: 8, repetitions: 5 },
-        actions: ["init", "deploy-probe", "probe-pilot", "calibrate", "alarms2", "transport", "deploy-network", "seed-pilot", "seed", "activate", "measure-pilot", "measure", "metadata", "refresh-network-measure", "instrumentation", "minification", "telemetry", "cleanup"] }, null, 2));
+        actions: ["init", "deploy-probe", "probe-pilot", "calibrate", "alarms2", "transport", "deploy-network", "seed-pilot", "seed", "activate", "measure-pilot", "measure", "metadata", "refresh-network-measure", "instrumentation", "minification", "minification-resume", "audit-minification-metadata", "telemetry", "secret-scan", "cleanup"] }, null, 2));
       return;
     }
     if (!account || !token) throw new Error("Cloudflare credentials missing; use checkout direnv");
@@ -760,6 +868,8 @@ export const run = Effect.tryPromise({
     else if (action === "measure") await measureNetwork(false);
     else if (action === "instrumentation") await measureInstrumentation();
     else if (action === "minification") await measureMinification();
+    else if (action === "minification-resume") await measureMinification(true);
+    else if (action === "audit-minification-metadata") await auditMinificationMetadata();
     else if (action === "metadata") {
       await open();
       for (const item of resources.targets) {
@@ -767,7 +877,7 @@ export const run = Effect.tryPromise({
         console.log(`Verified ${item.role} startup metadata: ${item.startupTimeMs ?? "missing"} ms`);
       }
     }
-    else if (action === "telemetry") await telemetry();
+    else if (action === "telemetry") await telemetry(process.argv.slice(2).filter((arg) => arg !== "--")[1]);
     else if (action === "secret-scan") await scanSecrets();
     else if (action === "cleanup") await cleanup();
     else throw new Error(`Unknown action: ${action}`);

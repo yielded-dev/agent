@@ -36,8 +36,10 @@ const digest = (deployment) => deployment.bundleSha256 ?? deployment.hash;
  * coldVerified and round-specific reset evidence already evaluated by the parent.
  * minificationRound/minified accept their exact URL strings or decoded values.
  * Completion firstEntry is the returned lifetime-counter object, not a boolean.
+ * The optional metadataAudit must be present and pass exact-version association
+ * before any request or startup estimates are admitted.
  */
-export function analyzeMinification(records, plan, metricNames) {
+export function analyzeMinification(records, plan, metricNames, metadataAudit) {
   const metrics = [...new Set(metricNames)];
   const rows = records.filter((row) => row.phase === "minification");
   const cohorts = plan?.cohorts ?? [];
@@ -53,6 +55,30 @@ export function analyzeMinification(records, plan, metricNames) {
     }
     if (plain?.minify !== false || minified?.minify !== true) issues.push("build_flag_mismatch");
   }
+  const auditChecks = Array.isArray(metadataAudit?.checks) ? metadataAudit.checks : [];
+  const metadataIssues = [];
+  if (metadataAudit?.passed !== true) metadataIssues.push("audit_not_passed");
+  if (auditChecks.length !== 16) metadataIssues.push("expected_sixteen_checks");
+  if (deployments.length !== 16) metadataIssues.push("expected_sixteen_deployments");
+  for (const role of ROLES) for (let round = 0; round < ROUNDS.length; round++) {
+    const ds = deployments.filter((d) => d.role === role && d.round === round);
+    const checks = auditChecks.filter((check) => check?.role === role && check.round === round);
+    const label = `${role}/${round}`;
+    if (ds.length !== 1 || checks.length !== 1) {
+      metadataIssues.push(`${label}:expected_one_deployment_and_check`);
+      continue;
+    }
+    const d = ds[0];
+    const check = checks[0];
+    const revision = `cf-latency-minify-${round}`;
+    if (check.passed !== true) metadataIssues.push(`${label}:check_not_passed`);
+    if (!nonempty(d.version) || check.version !== d.version) metadataIssues.push(`${label}:version_mismatch`);
+    if (check.expectedRevision !== revision || check.observedRevision !== revision || d.uploadRevision !== revision)
+      metadataIssues.push(`${label}:revision_mismatch`);
+    if (!finite(d.startupTimeMs) || d.startupTimeMs < 0 || check.recordedStartupTimeMs !== d.startupTimeMs || check.observedStartupTimeMs !== d.startupTimeMs)
+      metadataIssues.push(`${label}:startup_mismatch`);
+  }
+  issues.push(...metadataIssues.map((issue) => `metadata_audit:${issue}`));
   const estimatesEnabled = issues.length === 0;
   const byDeployment = group(deployments, deploymentKey);
   const byVersion = group(deployments, (d) => `${d.role}/${d.version}`);
@@ -173,6 +199,7 @@ export function analyzeMinification(records, plan, metricNames) {
     unit: "Eight valid cold requests per Object; mean of four plain positions minus mean of four minified positions, then median [Q1–Q3] across Objects. Control uses the same positions while all its uploads remain plain.",
     positiveMeans: "Lower values in primary minified positions; adjusted contrast subtracts the paired control position contrast.",
     schedule: ROUNDS, issues,
+    metadataAudit: { passed: metadataIssues.length === 0, expectedChecks: 16, observedChecks: auditChecks.length, issues: metadataIssues },
     coverage: { expectedObjectsPerRole: 7, expectedRequests: 112, observedRequests: rows.length, parentEligible: rows.filter((r) => r.eligible === true).length, coldVerified: rows.filter((r) => r.coldVerified === true).length, admittedRequests: admitted.length * 8, roles: ROLES.map((role) => ({ role, plannedObjects: cohorts.filter((c) => c.role === role).length, admittedObjects: admitted.filter((c) => c.role === role).length, excludedObjects: exclusions.filter((c) => c.role === role).length })) },
     perObject, roundSummaries, contrasts,
     adjusted: { pairs: adjustedUnits.length, units: adjustedUnits, metrics: Object.fromEntries(metrics.map((metric) => [metric, stats(adjustedUnits.map((unit) => unit.metrics[metric]))])), unpaired },

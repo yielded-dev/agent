@@ -1,0 +1,7 @@
+{"action": "refresh-network-seed", "at": 1791481777430, "message": "Error: Readiness payload has not propagated"}
+{"action": "seed", "at": 1791482052860, "message": "Error: Seeding stopped after 1 failed/unknown cohort(s); all other in-flight seed chunks settled"}
+{"action": "seed", "at": 1791482504621, "message": "Error: Seeding stopped after 1 failed/unknown cohort(s); all other in-flight seed chunks settled"}
+{"action": "seed", "at": 1791482809398, "message": "Error: Seeding stopped after 1 failed/unknown cohort(s); all other in-flight seed chunks settled"}
+{"action": "telemetry", "at": 1791486871855, "message": "Error: Cloudflare workers/observability/telemetry/query: 504 non-JSON gateway response", "redaction": "HTML gateway error page omitted; status and timestamp retained"}
+{"action": "minification", "at": 1791487512853, "message": "Error: Minification cold reset or current-version identity not acknowledged"}
+{"action":"minification-resume","at":1791488047512,"message":"Error: Repeated startup round did not create a new active version"}

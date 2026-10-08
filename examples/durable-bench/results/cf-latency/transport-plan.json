@@ -1,0 +1,23 @@
+{
+  "objects": 8,
+  "repetitions": 5,
+  "cases": [
+    {
+      "bytes": 0,
+      "transport": "rpc"
+    },
+    {
+      "bytes": 0,
+      "transport": "fetch"
+    },
+    {
+      "bytes": 131072,
+      "transport": "rpc"
+    },
+    {
+      "bytes": 131072,
+      "transport": "fetch"
+    }
+  ],
+  "purpose": "same-Object native fetch versus RPC invocation-span calibration"
+}

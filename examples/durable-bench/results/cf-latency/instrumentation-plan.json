@@ -1,0 +1,122 @@
+{
+  "purpose": "Same-Object Tardie directory observation on/off; native operations unchanged",
+  "warmupSamples": [
+    "m6",
+    "m7"
+  ],
+  "repetitions": 3,
+  "cohorts": [
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0-fresh1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    }
+  ]
+}

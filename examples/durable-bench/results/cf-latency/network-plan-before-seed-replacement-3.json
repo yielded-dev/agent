@@ -1,0 +1,946 @@
+{
+  "objectsPerRole": 7,
+  "turns": 6,
+  "coldTurn": 0,
+  "settlingTurn": 1,
+  "warmTurns": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "variantSettlingTurns": [
+    6,
+    7
+  ],
+  "variantTurns": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "realisticProvider": {
+    "ttftMs": 400,
+    "chunkDelayMs": 10
+  },
+  "locationHint": "wnam",
+  "cohorts": [
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0-fresh1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4-fresh1"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    }
+  ],
+  "cohortReplacements": [
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "oldObject": "cf-latency-net-h250-d0-o0",
+      "newObject": "cf-latency-net-h250-d0-o0-fresh1",
+      "reason": "seed-70-80 transport ECONNRESET; outcome unknown, no replay",
+      "at": 1791482101671
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "oldObject": "cf-latency-net-h250-d400-o4",
+      "newObject": "cf-latency-net-h250-d400-o4-fresh1",
+      "reason": "seed-220-230 HTTP500 isolate memory limit reset during concurrent seeding; no replay",
+      "at": 1791482594331
+    }
+  ],
+  "releaseCompletedRuntime": true
+}

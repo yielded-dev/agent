@@ -76,7 +76,7 @@ const queryOf = (event) => {
 };
 const invocation = (event) => event.$metadata?.type === "cf-worker-event";
 const worker = (event) => event.$workers?.scriptName;
-const eventKey = (event) => event.$metadata?.id;
+const eventKey = (event) => worker(event) && event.$metadata?.id ? `${worker(event)}/${event.$metadata.id}` : undefined;
 const requestKey = (row) => `${row.worker}/${row.framework}/${row.object}/${row.sample}`;
 const metricNames = ["clientMs", "clientMinusScriptedMs", "clientMinusProviderMs", "providerMs", "configuredProviderMs", "firstModelArrivalMs", "stepGapMs", "stepGapTotalMs", "tailFromProviderMs", "doWallMs", "outerWallMs", "clientMinusDoMs", "mainWallMinusFetchCpuMs", "fetchCpuMs", "attributedDoCpuMs", "observedDoCpuMs", "alarmCpuMs", "alarmOverlapCount", "boundaryCpuMs", "sqlBindingBytes", "kvJsonBytes", "transactions", "transactionSync", "writeTransactions", "writeTransactionSync", "overlappingTransactionCallbacks", "transactionRollbacks", "transactionWindowCrossings", "nativeSyncCalls", "nativeSyncWaitMs", "explicitProbeSyncMs", "logicalMutationStatements", "setAlarmCalls", "deleteAlarmCalls", "requestBytes", "responseBytes", "clientReceiptBytes"];
 const objectSummaries = (turns) => Object.fromEntries(metricNames.map((metric) => [metric, stats([...group(turns, (t) => t.object).values()].map((object) => median(object.map((t) => t[metric]))))]));
@@ -223,7 +223,8 @@ const run = Effect.try({
         : (finite(r.constructorSql?.[key]) ? r.constructorSql[key] : null);
       const add = (key) => finite(addRun(key)) && finite(addConstructor(key)) ? addRun(key) + addConstructor(key) : null;
       const coldCandidates = rows.filter((prior) => prior.phase === (row.phase === "minification" ? "minification-reset" : "cold-reset") &&
-        (row.phase !== "minification" || prior.sample === `minify-reset-${row.sample}`) &&
+        (row.phase !== "minification" || (prior.sample === (query.get("minificationReset") ?? `minify-reset-${row.sample}`) &&
+          prior.endedAt <= row.startedAt && prior.response?.before?.version === r.version)) &&
         prior.worker === row.worker && prior.framework === row.framework && prior.object === row.object);
       const cold = coldCandidates.length === 1 ? coldCandidates[0] : undefined;
       const freshIncarnation = isCold && cold?.response?.before?.objectId === r.objectId && cold.response.before.incarnation !== r.incarnation &&
@@ -373,10 +374,13 @@ const run = Effect.try({
       reference: expected, groups, variants, pairedVariants, controls, coldPremiums, clocks, outcomes,
       missing, fingerprintFailures,
       excluded: records.filter((r) => !r.eligible || (r.mode === "cold" && !r.coldVerified) || (r.phase === "network" && !completeMainCohorts.has(`${r.role}/${r.framework}/${r.object}`)) || (r.phase === "network-variant" && !completeVariantCohorts.has(`${r.role}/${r.framework}/${r.object}`))).map((r) => ({ key: r.key, phase: r.phase, reasons: [...r.reasons, ...(r.phase === "network" && !completeMainCohorts.has(`${r.role}/${r.framework}/${r.object}`) ? ["incomplete or changed-incarnation/version six-turn cohort"] : []), ...(r.phase === "network-variant" && !completeVariantCohorts.has(`${r.role}/${r.framework}/${r.object}`) ? ["incomplete or changed-incarnation/version variant cohort"] : [])], coldVerified: r.coldVerified, requestConstructed: r.requestConstructed, actorRequestConstructed: r.actorRequestConstructed })),
-      coverage: { requests: rows.length, telemetry: unique.length, measuredTurns: measured.length, providerRequests: provider.size, validColdResets: measured.filter((r) => r.mode === "cold" && r.coldVerified).length },
+      coverage: { requests: rows.length, telemetry: unique.length, measuredTurns: measured.length,
+        uniqueProviderLogReceipts: provider.size,
+        mainReturnedProviderReceipts: sum(records.filter((r) => r.phase === "network" && r.eligible).map((r) => r.providerStreamReceipts)),
+        validColdResets: measured.filter((r) => r.mode === "cold" && r.coldVerified).length },
       probe: analyzeProbe(rows, unique),
       instrumentation: analyzeInstrumentation(rows, expected, load("instrumentation-completed.json", [])),
-      minification: analyzeMinification(records, load("minification.json", null), metricNames),
+      minification: analyzeMinification(records, load("minification.json", null), metricNames, load("minification-metadata.json", null)),
     };
     save("summary.json", summary);
     save("failed-outcomes.json", { outcomes, failedOutcomes, failedRequests });
@@ -384,7 +388,7 @@ const run = Effect.try({
     const fmt = (value) => value?.median === null || !value ? "—" : `${value.median.toFixed(0)} [${value.q1.toFixed(0)}–${value.q3.toFixed(0)}]`;
     const table = ["| Target | History | Provider TTFT | State | Objects | Client ms | Client − scripted ms | DO wall ms† | Observed DO CPU ms† | Boundary CPU ms† | Step gap ms* | First request ms* |", "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|"];
     for (const g of groups) table.push(`| ${g.role === "control" ? "control " : ""}${g.framework} | ${g.history} | ${g.ttftMs} | ${g.mode} | ${g.objects} | ${fmt(g.metrics.clientMs)} | ${fmt(g.metrics.clientMinusScriptedMs)} | ${fmt(g.metrics.doWallMs)} | ${fmt(g.metrics.attributedDoCpuMs)} | ${fmt(g.metrics.boundaryCpuMs)} | ${fmt(g.metrics.stepGapMs)} | ${fmt(g.metrics.firstModelArrivalMs)} |`);
-    table.push("", "† Available invocation telemetry only; CPU excludes boundary traces shown separately and can omit sampled descendants. Neither column is an exact critical-path allocation. See summary.json telemetryCoverage and per-metric n.", "", "* Timestamp differences across I/O clocks, not CPU-independent synchronized wall clocks. Client totals use the controller's monotonic clock. Scripted provider time is 0 or 4,130 ms per turn.");
+    table.push("", "† Available invocation telemetry only; CPU excludes boundary traces shown separately and can omit sampled descendants. Neither column is an exact critical-path allocation. See the accompanying summary’s coverage, missing and per-metric n.", "", "* Timestamp differences across I/O clocks, not CPU-independent synchronized wall clocks. Client totals use the controller's monotonic clock. Scripted provider time is 0 or 4,130 ms per turn.");
     writeFileSync(join(here, "network-table.md"), table.join("\n") + "\n");
     console.log(JSON.stringify({ groups: groups.length, coverage: summary.coverage, missing: missing.length, fingerprintFailures: fingerprintFailures.length, failures: failedRequests.length }));
   },

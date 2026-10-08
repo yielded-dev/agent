@@ -1,0 +1,562 @@
+[
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o0",
+    "incarnation": "6f13965d-d4d9-48dd-b220-1c16c1b4bcf8",
+    "completedAt": 1791483349104
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o0",
+    "incarnation": "9ef060a5-976a-48db-832b-f384ce31daff",
+    "completedAt": 1791483383753
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o0",
+    "incarnation": "2334a6d4-acb1-4dc2-8b31-b87ab3805e1c",
+    "completedAt": 1791483389241
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o0",
+    "incarnation": "541069de-85b4-45c6-b70e-b563e01f9fa3",
+    "completedAt": 1791483402846
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o1",
+    "incarnation": "78b7c4ae-3e22-4bae-8a06-01aab43ee0fa",
+    "completedAt": 1791483418514
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o1",
+    "incarnation": "f6eebb4b-b631-482d-8adf-3f56977c12d6",
+    "completedAt": 1791483446246
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o1",
+    "incarnation": "e977169c-569a-4f80-949b-76138cb3471a",
+    "completedAt": 1791483454487
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o1",
+    "incarnation": "9d44fc03-bfab-4c69-972c-dbb880951d5f",
+    "completedAt": 1791483481347
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o2",
+    "incarnation": "f791324e-1b5e-42e0-8a6e-4f023b9aa7b8",
+    "completedAt": 1791483498779
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o2",
+    "incarnation": "f3aef191-288d-43fe-8564-2161a97588af",
+    "completedAt": 1791483522520
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o2",
+    "incarnation": "aca33627-0b14-459d-a657-485cc3741ce1",
+    "completedAt": 1791483555615
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o2",
+    "incarnation": "dbc8519d-71ce-450f-9eee-d8246d60e5de",
+    "completedAt": 1791483562989
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o3",
+    "incarnation": "08a6a815-fef3-499b-a1f4-921b71220f98",
+    "completedAt": 1791483612130
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o3",
+    "incarnation": "9d31fd3e-c208-4527-b13e-32d283c8e721",
+    "completedAt": 1791483619260
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o3",
+    "incarnation": "f4b74de5-b698-4f45-83c8-2f5b82c17922",
+    "completedAt": 1791483640924
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o3",
+    "incarnation": "18acb816-5a56-4d2a-ab66-5c0a3b351774",
+    "completedAt": 1791483660379
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o4",
+    "incarnation": "a93fbb7e-e0bb-4ca0-a69b-9667fd6c1748",
+    "completedAt": 1791483684045
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o4",
+    "incarnation": "4cb0b498-9a2b-41c7-a1ef-20e9238b649e",
+    "completedAt": 1791483710435
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o4",
+    "incarnation": "37d2c9f6-d0f4-4b20-b0d7-e770c953cef2",
+    "completedAt": 1791483717961
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o4",
+    "incarnation": "33a34747-383e-4233-bc47-54703980b8fe",
+    "completedAt": 1791483734447
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o5",
+    "incarnation": "016af50d-a60b-4111-aeeb-873c07c35237",
+    "completedAt": 1791483744371
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o5",
+    "incarnation": "84306aa4-9fb2-4c6d-8b24-8eeec8461479",
+    "completedAt": 1791483766498
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o5",
+    "incarnation": "22ae5177-c361-42b1-b077-80947effb61f",
+    "completedAt": 1791483773880
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o5",
+    "incarnation": "dd39bad1-8d47-467e-9f47-639bfce63e04",
+    "completedAt": 1791483818977
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o6",
+    "incarnation": "45967c68-2dfe-4bd5-83c6-985140644203",
+    "completedAt": 1791483861707
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o6",
+    "incarnation": "37d82ccd-e1aa-45c6-b9d9-23c0e6c2ec91",
+    "completedAt": 1791483871612
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o6",
+    "incarnation": "65b97222-435d-4dd9-9aa3-e181df5f3a24",
+    "completedAt": 1791483887473
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o6",
+    "incarnation": "13c93a0a-c4c7-40f6-a5cc-0a5fe2ef7ef4",
+    "completedAt": 1791483901488
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+    "incarnation": "ce10a518-ad54-47e1-a864-e83f44169f06",
+    "completedAt": 1791483945489
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o0",
+    "incarnation": "ac951177-fa1a-4701-b14b-c62b16d47a49",
+    "completedAt": 1791483985628
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o0",
+    "incarnation": "867d13c1-a53e-4a5a-be58-580350fa19d5",
+    "completedAt": 1791484017021
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o0",
+    "incarnation": "a5583045-4838-4261-9533-32979c8eaeff",
+    "completedAt": 1791484056956
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+    "incarnation": "f3143d33-1f88-4a4f-a16e-7b39641bfb86",
+    "completedAt": 1791484094657
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o1",
+    "incarnation": "5228ac19-924a-4b5d-b86e-8f9fc44480f5",
+    "completedAt": 1791484134143
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o1",
+    "incarnation": "fde25e2c-1e20-4c44-bb3c-1b84ea08c920",
+    "completedAt": 1791484173631
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o1",
+    "incarnation": "da38806d-6795-4ee3-ba4a-0bc626d83b1f",
+    "completedAt": 1791484204456
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o2",
+    "incarnation": "593fed77-dd75-42b5-93be-9d15266f916c",
+    "completedAt": 1791484234634
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o2",
+    "incarnation": "4d35d613-5277-4310-88c1-2cb4f192fa78",
+    "completedAt": 1791484273478
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o2",
+    "incarnation": "58bbe5be-50d0-4e8a-a751-db396581f247",
+    "completedAt": 1791484308650
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+    "incarnation": "f53763ed-5a3d-4fb3-a4c3-cbfdc4f9ff4b",
+    "completedAt": 1791484352687
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o3",
+    "incarnation": "b107a9f4-887e-4cde-a2d8-60ea21849418",
+    "completedAt": 1791484384734
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+    "incarnation": "094d31ae-cea0-45bb-9041-864708d614d9",
+    "completedAt": 1791484427494
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o3",
+    "incarnation": "9e91686e-e4ca-4b83-ba36-09db839b7cd2",
+    "completedAt": 1791484470313
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o3",
+    "incarnation": "a04f5e39-a85a-458d-b563-cccb2ce78a88",
+    "completedAt": 1791484504456
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+    "incarnation": "9f54f839-0cf8-4aa8-a205-72d98b5252ea",
+    "completedAt": 1791484549373
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o4",
+    "incarnation": "25b7507b-6637-4d90-899c-ce1613ee94ec",
+    "completedAt": 1791484578401
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o4",
+    "incarnation": "182d8ec9-c7f8-433a-97ae-9d74d7c0681d",
+    "completedAt": 1791484627276
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o4",
+    "incarnation": "2fd362a5-d76d-4a1b-857a-73e3958b3e17",
+    "completedAt": 1791484675084
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+    "incarnation": "a2503909-686c-48b1-a785-8e3be4286a86",
+    "completedAt": 1791484716536
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o5",
+    "incarnation": "dd5572ad-38ab-4777-8ca4-64619ec5f0fd",
+    "completedAt": 1791484757108
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o5",
+    "incarnation": "58d64fe8-3d24-4d61-93bd-19292573b097",
+    "completedAt": 1791484795894
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o5",
+    "incarnation": "aaf7bcfc-d2e0-4597-81ac-859e6c0c1462",
+    "completedAt": 1791484831492
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o6",
+    "incarnation": "4f1e42a3-e3b8-4902-ab25-25465e3ef4c8",
+    "completedAt": 1791484871412
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o6",
+    "incarnation": "2c574c4d-a629-4e82-b2e6-7796a5808ce5",
+    "completedAt": 1791484909607
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+    "incarnation": "a10ec6f3-5f2a-4f78-adcf-1ea3102423ad",
+    "completedAt": 1791484945389
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o6",
+    "incarnation": "770a6683-48e6-4c31-a687-87c772dec514",
+    "completedAt": 1791484974978
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o0",
+    "incarnation": "d622dd91-c847-44f9-a44a-5d6ff27be158",
+    "completedAt": 1791484990611
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o0",
+    "incarnation": "3ca2b7c4-dea3-4697-bb53-9f9ba595a537",
+    "completedAt": 1791485021185
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o0",
+    "incarnation": "f34cfaa3-d958-40d4-8d69-9ee3d716b747",
+    "completedAt": 1791485027395
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o0-fresh1",
+    "incarnation": "a8ca37c6-fa0e-4a13-81a9-9da4c5e4a5a0",
+    "completedAt": 1791485048758
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o1",
+    "incarnation": "dc12f004-fb6a-4260-ad41-c1e696cc40dd",
+    "completedAt": 1791485067961
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o1",
+    "incarnation": "8466fd38-3b20-4db9-9cb6-30d9db61662c",
+    "completedAt": 1791485083996
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o1",
+    "incarnation": "005bf08c-34a3-4d3b-9af4-877aabb70308",
+    "completedAt": 1791485119333
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o1",
+    "incarnation": "6882d174-f46f-4bf7-81cd-a422744cac21",
+    "completedAt": 1791485124745
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o2",
+    "incarnation": "64d7024e-36aa-491a-9360-5ee19eec0730",
+    "completedAt": 1791485131577
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o2",
+    "incarnation": "9a11780b-23d3-4898-96d9-3d88d95b23d0",
+    "completedAt": 1791485148643
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o2",
+    "incarnation": "2b75569b-e04f-49da-b9e1-37b13c4dc192",
+    "completedAt": 1791485165211
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o2",
+    "incarnation": "7f3ead11-4d14-4bfb-9b94-3be861f7f637",
+    "completedAt": 1791485213338
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o3",
+    "incarnation": "a0fb97e0-54f7-4cf8-9615-f65cb0598918",
+    "completedAt": 1791485220282
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o3",
+    "incarnation": "e47d146e-6758-45b3-8309-bb847a1e8cd4",
+    "completedAt": 1791485232723
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o3",
+    "incarnation": "59898e2c-c809-449a-84a5-52c1264c9af9",
+    "completedAt": 1791485284190
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o3",
+    "incarnation": "6ce540f1-23b9-4679-a192-2134e52d74fb",
+    "completedAt": 1791485297479
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o4",
+    "incarnation": "a783e73e-544c-415f-aae9-6af98f9e793c",
+    "completedAt": 1791485304687
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o4",
+    "incarnation": "8387de80-a894-4d1a-9a38-c4445b2b1c5b",
+    "completedAt": 1791485345920
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o4",
+    "incarnation": "03e3256a-5fca-4751-9bc5-f4ad44d0b726",
+    "completedAt": 1791485367208
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o4",
+    "incarnation": "0aee6e9b-34a3-4b4d-8d6a-daa0c8555f0f",
+    "completedAt": 1791485387688
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o5",
+    "incarnation": "09aee193-3a86-4e5e-8741-22175139ffca",
+    "completedAt": 1791485410891
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o5",
+    "incarnation": "c4100189-3227-4ace-b2da-6ff69582544f",
+    "completedAt": 1791485417555
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o5",
+    "incarnation": "0f53deb4-1c25-4d3d-813d-8a00b4ca9635",
+    "completedAt": 1791485439014
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o5",
+    "incarnation": "f2f518a9-9699-47da-9021-6001998e3bcb",
+    "completedAt": 1791485468604
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o6",
+    "incarnation": "acc59ddb-517e-4fb8-b395-f507b2dc54c6",
+    "completedAt": 1791485482424
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o6",
+    "incarnation": "4db8462b-65e1-4711-a76b-d1baf9e14b7b",
+    "completedAt": 1791485506679
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o6",
+    "incarnation": "7136842c-291f-439a-bb14-e1b17441dc5b",
+    "completedAt": 1791485534285
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o6",
+    "incarnation": "de71c0d8-8f04-4fff-82df-07aa32caaedc",
+    "completedAt": 1791485539280
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o0",
+    "incarnation": "197e0234-1b28-45ab-b282-681d6cf31899",
+    "completedAt": 1791485578402
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o0",
+    "incarnation": "234589db-ae3e-4d67-8578-44c98ff035bf",
+    "completedAt": 1791485622591
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o0",
+    "incarnation": "fb02494a-4373-496a-b834-cfb746d2966a",
+    "completedAt": 1791485663359
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o0",
+    "incarnation": "fd24ae93-5e83-4b5e-bbf8-c430fd7bb402",
+    "completedAt": 1791485696424
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o1",
+    "incarnation": "ef9c8da3-fbac-45d1-90ee-b024a2fab1be",
+    "completedAt": 1791485736174
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o1",
+    "incarnation": "2c976713-344f-4d7d-a635-b7a51ed3f65a",
+    "completedAt": 1791485776677
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o1",
+    "incarnation": "1efa54ea-489f-48bc-9751-8cc28838dc77",
+    "completedAt": 1791485815284
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o1",
+    "incarnation": "6b9ff405-3dfd-453a-b44f-6e21213bc01a",
+    "completedAt": 1791485859879
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o2",
+    "incarnation": "eac0a51c-fca2-4892-b797-b46aa0448047",
+    "completedAt": 1791485890341
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o2",
+    "incarnation": "975bd988-fdff-40e8-bf10-fb5b96b0c70e",
+    "completedAt": 1791485932884
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o2",
+    "incarnation": "b28b18f9-e824-4909-9aa5-ff1be7ea9c04",
+    "completedAt": 1791485974464
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o2",
+    "incarnation": "d4361ef8-e509-4d31-91bc-78668d509b5d",
+    "completedAt": 1791486021771
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o3",
+    "incarnation": "d159727d-0618-4e25-9c86-5163cddc7d95",
+    "completedAt": 1791486052667
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o3",
+    "incarnation": "9c504480-9501-4a98-9624-438df796f2d7",
+    "completedAt": 1791486092125
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o3",
+    "incarnation": "1aeca828-fefa-400c-ad5c-cdc1916ea1d5",
+    "completedAt": 1791486131558
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o3",
+    "incarnation": "63cf59da-aac2-46af-a6f4-b2d0c58184f5",
+    "completedAt": 1791486176843
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o4",
+    "incarnation": "bb231732-941e-4c6b-86a5-80570eb12068",
+    "completedAt": 1791486225362
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o4",
+    "incarnation": "ea6ae581-6ba0-4071-b7df-0a67fdc5b499",
+    "completedAt": 1791486259983
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o4",
+    "incarnation": "13c5775e-6804-4183-bf5f-e7abaea83c6a",
+    "completedAt": 1791486303876
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o4-fresh2",
+    "incarnation": "5b3c51b1-590f-4f46-aba2-4d771cf14566",
+    "completedAt": 1791486353177
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o5",
+    "incarnation": "3a359355-c4f1-4427-97d3-a745a113ab2b",
+    "completedAt": 1791486392173
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o5",
+    "incarnation": "dfbb8429-3d91-4867-a342-ff6709a33d5c",
+    "completedAt": 1791486433567
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o5",
+    "incarnation": "e49ba66b-2cd4-46bd-8b71-4791c61acb38",
+    "completedAt": 1791486474686
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o5",
+    "incarnation": "6a62112b-7094-466f-a96f-167ea5779ed1",
+    "completedAt": 1791486505024
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o6",
+    "incarnation": "6060f6f5-d877-4a66-a5bd-02fc925775a3",
+    "completedAt": 1791486545138
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o6",
+    "incarnation": "ebcd80db-b06b-4e7a-9314-39d946d99183",
+    "completedAt": 1791486586144
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o6",
+    "incarnation": "578ef24b-c5a0-4388-bd27-4987c8a0a65d",
+    "completedAt": 1791486618514
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o6",
+    "incarnation": "f5a12e91-0bb2-4b6d-82ff-b46b29ce15b9",
+    "completedAt": 1791486669444
+  }
+]

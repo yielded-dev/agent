@@ -1,0 +1,210 @@
+{
+  "createdAt": "2026-10-08T19:48:21.135Z",
+  "format": "gzip; byte-identical decompression verified before removing the uncompressed copies",
+  "files": [
+    {
+      "file": "telemetry-control.json.gz",
+      "originalBytes": 18557325,
+      "originalSha256": "adcbb9355c02070574233cb3dbbe057778aaf86eb11b9fc64f25da72ed241689",
+      "compressedBytes": 946451,
+      "compressedSha256": "a687331239507f2f38c9b64f4dbc4b03814d1ed4077e19e2f842b887f7aeb478"
+    },
+    {
+      "file": "telemetry-echo.json.gz",
+      "originalBytes": 1256211,
+      "originalSha256": "5724bf73e8e1e94da3fbb5c875c3bffec37e659cc97726b797c5ce5205bf1010",
+      "compressedBytes": 60991,
+      "compressedSha256": "a278f247bfdf53f9befe7973eb55c2e68496952e94181f80da2a8c9d124e4c27"
+    },
+    {
+      "file": "telemetry-primary.json.gz",
+      "originalBytes": 55335043,
+      "originalSha256": "80491fca46ee0998449f76d89f62d303c695cade3d90e4c91dd04d6e93253518",
+      "compressedBytes": 3107226,
+      "compressedSha256": "c88eefdbcda4f2f2b6508b83cdb397650cc168ba4ad84150e2906e77182eb320"
+    },
+    {
+      "file": "telemetry-probe.json.gz",
+      "originalBytes": 17048692,
+      "originalSha256": "ec246d7ac5c0fe6efd38539ef585d93dc835a1acd192a58c5015b944ce2f5224",
+      "compressedBytes": 783109,
+      "compressedSha256": "822bdf4e96cfce184b297f96a12aee5ca675fd928f78e17d09953ad396ff3576"
+    },
+    {
+      "file": "telemetry-provider.json.gz",
+      "originalBytes": 43504956,
+      "originalSha256": "20d7b8dbf0075cbe17357d450797f079622779bf552e4b408b2522d67e84e5f5",
+      "compressedBytes": 1953701,
+      "compressedSha256": "8384fb27175089df09928f3a7bd83218a22b248d17fd9fad2307ac0409c032d7"
+    },
+    {
+      "file": "requests.jsonl.gz",
+      "originalBytes": 34085138,
+      "originalSha256": "3e4cd16f3982a061f06b6e3dab39da83c1aafd5cb213776ad778d1bdb9943bbe",
+      "compressedBytes": 2369060,
+      "compressedSha256": "bd642802d4b00db9922c7e93728c8f7463191d539ff6e8529d92d1883f7a16d3"
+    },
+    {
+      "file": "attempted.jsonl.gz",
+      "originalBytes": 2550805,
+      "originalSha256": "ad5dcda038c625c3b5a94af981aa527c9b0c69683f556f5b392fbd2859ec2854",
+      "compressedBytes": 106515,
+      "compressedSha256": "3dc6f3155364afce0d640056a577a89c4b486415b79521694bcd1dc42304b75c"
+    },
+    {
+      "file": "turns.jsonl.gz",
+      "originalBytes": 11782106,
+      "originalSha256": "605c638c19485ae4a9cdd7ed8c99f4eddbc9b8fcc8818bc97b767dc1ca98fc1e",
+      "compressedBytes": 742814,
+      "compressedSha256": "160af79615521fab3c4c0bc706571bafff1f7f5f3537d092b738546304172181"
+    },
+    {
+      "file": "summary.json.gz",
+      "originalBytes": 13926712,
+      "originalSha256": "f2e1063381225c52eedccbc2cc37594ce256d664964b287e4ca62bd25109a2f4",
+      "compressedBytes": 955059,
+      "compressedSha256": "a9cdf09604081ee4bd2b390e1e8e3d0c113c208fe44e072f11ec0275336aae2b"
+    },
+    {
+      "file": "failed-outcomes.json.gz",
+      "originalBytes": 5077063,
+      "originalSha256": "e5ddcf94de703bafc7e3c8bf3c5d34ec9f5c34021ffd227d9a8842860b012273",
+      "compressedBytes": 527528,
+      "compressedSha256": "ce5f008b75c6c498414972bf263825cc5029106d6f4540dc4a8fb3771006f90d"
+    },
+    {
+      "file": "env-doctor.log.gz",
+      "originalBytes": 2352,
+      "originalSha256": "36ca50848d6488b25f7c5a0dc97b827b8c0fb737827666c83199889ec732972c",
+      "compressedBytes": 692,
+      "compressedSha256": "7aba4639fd00c746d24e8f01a31227b3d3d2257b0690c48e98b1ac28ce99d47f"
+    },
+    {
+      "file": "ready-final.log.gz",
+      "originalBytes": 215855,
+      "originalSha256": "cfbd4182b1e7039680809889e71a509c5bc7a8585dc48a0a5ef91a8cd6694efa",
+      "compressedBytes": 38306,
+      "compressedSha256": "97c44130c3be16f2d5c280a65a18edd66655ab4aab49632d7398790b0f618611"
+    },
+    {
+      "file": "ready-one-worker-interrupted.log.gz",
+      "originalBytes": 116477,
+      "originalSha256": "534874cc6968405e30c8e0e443dc4deb75a94babbc19a681577df53a7bcbf9d6",
+      "compressedBytes": 20260,
+      "compressedSha256": "b73c590382737b24a6fec5a8b0c6b92aba1324c7edc2ad3c39fda0f9e668153f"
+    },
+    {
+      "file": "ready-sandbox-blocked.log.gz",
+      "originalBytes": 82028,
+      "originalSha256": "afd4d46cd2df6d2580c8cc72dd6ef24e39527134b9119f75317c9d1c410f1009",
+      "compressedBytes": 12677,
+      "compressedSha256": "7b4c97646a8fddb1b82a2570a653fc9b603d34bb24fef560952bbaca1970a0cd"
+    },
+    {
+      "file": "ready-toolchain-timeout-2.log.gz",
+      "originalBytes": 121996,
+      "originalSha256": "d4b127a738ce6519496d4434f69be819b03ba3e476cb777474284881589bd32b",
+      "compressedBytes": 21536,
+      "compressedSha256": "b7aae1fc9252a5304d7322022a5a3ae7598d535558be6fcdcf5f9dc5758ad68a"
+    },
+    {
+      "file": "ready-toolchain-timeout.log.gz",
+      "originalBytes": 121138,
+      "originalSha256": "e9dfc3f311c5d9dfc4d89ede159369c7d4e3dffc00e44a1a4f1d7454bae7612e",
+      "compressedBytes": 21549,
+      "compressedSha256": "e739b614030581925a987d67db960f415e6328e0367bee6ed1445d6e445bb164"
+    },
+    {
+      "file": "ready.log.gz",
+      "originalBytes": 213014,
+      "originalSha256": "3205b3149c72a408ff02f83a4ddf4559015c1f33ddfe17c1d25705ac48980095",
+      "compressedBytes": 37675,
+      "compressedSha256": "f7c121c2c3011c57bbb4a6b64baf914ef2b1607a5e9df151408fe4264a08a4d6"
+    },
+    {
+      "file": "toolchain-focused.log.gz",
+      "originalBytes": 4101,
+      "originalSha256": "db4b4413cd69edd62b90904765ef89eddf10cb27022519251433c66276224b21",
+      "compressedBytes": 1200,
+      "compressedSha256": "cbac3a39757d84d1ec3f7aeb71ee3736ff1ed2ca2a511cdd8ea81141b7202584"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-control-deploy.log.gz",
+      "originalBytes": 66066,
+      "originalSha256": "d28e750dba9acfc30a5aa8ffa0be0b9b613642aba10fb5020add31018d2cb135",
+      "compressedBytes": 4612,
+      "compressedSha256": "c05d4b5d17eb77e24de3971c2cdf4a389b68b30bc769e75d1eac3d806880dc45"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-control-destroy.log.gz",
+      "originalBytes": 1531,
+      "originalSha256": "ecf6b854f53d50b15ce2049ee31c18212887a83bffae13b317d7061abb73b9cd",
+      "compressedBytes": 514,
+      "compressedSha256": "78eb24e26ce5cd7ee45985e074e43ec9289d7e23fe33453db424ed91e78e6a39"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-echo-deploy.log.gz",
+      "originalBytes": 2491,
+      "originalSha256": "32bb99183297daaef859cc955dd1c48d284c68898157b7e622d5c853cc17b884",
+      "compressedBytes": 782,
+      "compressedSha256": "e52de5d63ac73e338dca517d82f02748355d5f42b989ec361ba9af571fe70fa3"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-echo-destroy.log.gz",
+      "originalBytes": 1219,
+      "originalSha256": "7da5e94395028ecfc97b201b1a2c7f24609c71ad4919aed6965e7237c6ebcf33",
+      "compressedBytes": 476,
+      "compressedSha256": "fa6756689d828623e7c9ef233a995ae32e4b11f9eef69f1eae53c33d18e000e0"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-primary-deploy.log.gz",
+      "originalBytes": 74088,
+      "originalSha256": "8ee695c6580575dcdb04de0599b7fd6856374eeefb58e987211d4913bfd622b4",
+      "compressedBytes": 5094,
+      "compressedSha256": "e55d7b877e28a681a021b66d4e3a333d662a0967c899cfc0d44d18f6f597a333"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-primary-destroy.log.gz",
+      "originalBytes": 1532,
+      "originalSha256": "70e9dfd6162e81c0ded95539ab1d3161d1b98396ff5fcf0ceabe09638637c43e",
+      "compressedBytes": 518,
+      "compressedSha256": "dd4c6a393bd1f59ad71beabd239d311734579098818053a1aa29aebf54e1e1fa"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-probe-deploy.log.gz",
+      "originalBytes": 7588,
+      "originalSha256": "b44d6b3236477bf737617bfdf21f3e2cfa5462e22f0dae750dd77916d963f549",
+      "compressedBytes": 1275,
+      "compressedSha256": "b3a3e9793074f6335a8b1491ea069cac491beced3c2a9f624fd586a7c04577f7"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-probe-destroy.log.gz",
+      "originalBytes": 1281,
+      "originalSha256": "26c192ebf5ba98de61f5e904edc181b01624d2ba11fe371db80ec4550ae5135d",
+      "compressedBytes": 484,
+      "compressedSha256": "f6f88f5083073cc727905ec0a90d34963c7441aef4777aa610b29bf85a095083"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-provider-deploy.log.gz",
+      "originalBytes": 9043,
+      "originalSha256": "484f23633e8d59f7ca317c0489ce4f5a6e2d7c5285cf93edcc85b9046987fbcf",
+      "compressedBytes": 1342,
+      "compressedSha256": "20a0fdf0286f3a550e8fde011bc937e7df18ab30f9af8fbcba28b7ffbfc817ad"
+    },
+    {
+      "file": "alchemy/cf-latency-2db665d3-provider-destroy.log.gz",
+      "originalBytes": 1227,
+      "originalSha256": "335631ebaeb80b4e1e1960282dcaa09418efafd546289d9e4310052e7028663f",
+      "compressedBytes": 477,
+      "compressedSha256": "93b560004a2ed368addca61ba6ca59c537279c99b5d213bdf53a20ac30f99c7f"
+    },
+    {
+      "file": "calibration-plan.json.gz",
+      "originalBytes": 676021,
+      "originalSha256": "cae2ddabf0dfd9c96942a215b57c75d2de2b7f159d47ee8908d12fe457ab1a31",
+      "compressedBytes": 19702,
+      "compressedSha256": "7a989877a72e2cb5411d3f8515a0d7ee2eff355bc22d64aa0b69fc07093af70d"
+    }
+  ],
+  "updatedAt": "2026-10-08T19:50:15.367Z"
+}

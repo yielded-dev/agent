@@ -1,0 +1,2114 @@
+{
+  "purpose": "Combined native bundle minification: eight upload rounds, same-Object cold requests, unchanged-code temporal control",
+  "startedAt": 1791487223549,
+  "complete": true,
+  "rounds": [
+    false,
+    true,
+    true,
+    false,
+    true,
+    false,
+    false,
+    true
+  ],
+  "cohorts": [
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    }
+  ],
+  "builds": {
+    "plain": {
+      "name": "network",
+      "repositoryCommit": "7a5bec91a32e3747151bd5c0457f92defe1eb724",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "fixtureSha256": "e740ba932fdcd3253d84f1bcfd1f20693a3bf0116a0b29f7d53e66b86eed442f",
+      "fixtureFiles": [
+        {
+          "path": "src/plan.ts",
+          "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+        },
+        {
+          "path": "src/yielded.ts",
+          "sha256": "31a887d112bf75a8dfa10c2cdf62d88431e7d07233abb511ff77bc67ddc2159a"
+        },
+        {
+          "path": "third-party/src/pi.ts",
+          "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+        },
+        {
+          "path": "third-party/src/tardie.ts",
+          "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+        }
+      ],
+      "inputsSha256": "11c4d21f5cd3a0794866e7c5c9282224d050441526556487547ab1f17de362c9",
+      "esbuildVersion": "0.28.1",
+      "minify": false,
+      "target": "es2024",
+      "output": "/private/tmp/cf-latency-pRfVE5/bundles/network",
+      "effectVersion": "4.0.0"
+    },
+    "minified": {
+      "name": "network-min",
+      "repositoryCommit": "7a5bec91a32e3747151bd5c0457f92defe1eb724",
+      "bundleSha256": "922ff360d0cc12df976e8aa277c27cb6f94870f4acb6c4e341ef78df72f5931b",
+      "bundleBytes": 3319078,
+      "gzipBytes": 948291,
+      "fixtureSha256": "e740ba932fdcd3253d84f1bcfd1f20693a3bf0116a0b29f7d53e66b86eed442f",
+      "fixtureFiles": [
+        {
+          "path": "src/plan.ts",
+          "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+        },
+        {
+          "path": "src/yielded.ts",
+          "sha256": "31a887d112bf75a8dfa10c2cdf62d88431e7d07233abb511ff77bc67ddc2159a"
+        },
+        {
+          "path": "third-party/src/pi.ts",
+          "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+        },
+        {
+          "path": "third-party/src/tardie.ts",
+          "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+        }
+      ],
+      "inputsSha256": "11c4d21f5cd3a0794866e7c5c9282224d050441526556487547ab1f17de362c9",
+      "esbuildVersion": "0.28.1",
+      "minify": true,
+      "target": "es2024",
+      "output": "/private/tmp/cf-latency-pRfVE5/bundles/network-min",
+      "effectVersion": "4.0.0"
+    }
+  },
+  "deployments": [
+    {
+      "round": 0,
+      "role": "control",
+      "minify": false,
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 329,
+      "startupEvidence": {
+        "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+        "number": 14,
+        "startupTimeMs": 329,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487323486
+      },
+      "uploadRevision": "cf-latency-minify-0",
+      "observedAt": 1791487329883
+    },
+    {
+      "round": 0,
+      "role": "primary",
+      "minify": false,
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 168,
+      "startupEvidence": {
+        "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+        "number": 16,
+        "startupTimeMs": 168,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487340131
+      },
+      "uploadRevision": "cf-latency-minify-0",
+      "observedAt": 1791487341838
+    },
+    {
+      "round": 1,
+      "role": "control",
+      "minify": false,
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 200,
+      "startupEvidence": {
+        "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+        "number": 15,
+        "startupTimeMs": 200,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487411688
+      },
+      "uploadRevision": "cf-latency-minify-1",
+      "observedAt": 1791487413565
+    },
+    {
+      "round": 1,
+      "role": "primary",
+      "minify": true,
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "bundleSha256": "922ff360d0cc12df976e8aa277c27cb6f94870f4acb6c4e341ef78df72f5931b",
+      "bundleBytes": 3319078,
+      "gzipBytes": 948291,
+      "startupTimeMs": 198,
+      "startupEvidence": {
+        "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+        "number": 17,
+        "startupTimeMs": 198,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487419864
+      },
+      "uploadRevision": "cf-latency-minify-1",
+      "observedAt": 1791487421869
+    },
+    {
+      "round": 2,
+      "role": "control",
+      "minify": false,
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 178,
+      "startupEvidence": {
+        "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+        "number": 16,
+        "startupTimeMs": 178,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487488873
+      },
+      "uploadRevision": "cf-latency-minify-2",
+      "observedAt": 1791487490284
+    },
+    {
+      "round": 2,
+      "role": "primary",
+      "minify": true,
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "bundleSha256": "922ff360d0cc12df976e8aa277c27cb6f94870f4acb6c4e341ef78df72f5931b",
+      "bundleBytes": 3319078,
+      "gzipBytes": 948291,
+      "startupTimeMs": 151,
+      "startupEvidence": {
+        "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+        "number": 18,
+        "startupTimeMs": 151,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487496552
+      },
+      "uploadRevision": "cf-latency-minify-2",
+      "observedAt": 1791487505604
+    },
+    {
+      "round": 3,
+      "role": "primary",
+      "minify": false,
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 163,
+      "startupEvidence": {
+        "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+        "number": 19,
+        "startupTimeMs": 163,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487841365
+      },
+      "uploadRevision": "cf-latency-minify-3",
+      "observedAt": 1791487846667
+    },
+    {
+      "round": 3,
+      "role": "control",
+      "minify": false,
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 169,
+      "startupEvidence": {
+        "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+        "number": 17,
+        "startupTimeMs": 169,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487855492
+      },
+      "uploadRevision": "cf-latency-minify-3",
+      "observedAt": 1791487865416
+    },
+    {
+      "round": 4,
+      "role": "primary",
+      "minify": true,
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "bundleSha256": "922ff360d0cc12df976e8aa277c27cb6f94870f4acb6c4e341ef78df72f5931b",
+      "bundleBytes": 3319078,
+      "gzipBytes": 948291,
+      "startupTimeMs": 402,
+      "startupEvidence": {
+        "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+        "number": 20,
+        "startupTimeMs": 402,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487963976
+      },
+      "uploadRevision": "cf-latency-minify-4",
+      "observedAt": 1791487966204
+    },
+    {
+      "round": 4,
+      "role": "control",
+      "minify": false,
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 177,
+      "startupEvidence": {
+        "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+        "number": 18,
+        "startupTimeMs": 177,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791487977666
+      },
+      "uploadRevision": "cf-latency-minify-4",
+      "observedAt": 1791487980198
+    },
+    {
+      "round": 5,
+      "role": "control",
+      "minify": false,
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 285,
+      "startupEvidence": {
+        "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+        "number": 19,
+        "startupTimeMs": 285,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488108340
+      },
+      "uploadRevision": "cf-latency-minify-5",
+      "observedAt": 1791488109641
+    },
+    {
+      "round": 5,
+      "role": "primary",
+      "minify": false,
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 187,
+      "startupEvidence": {
+        "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+        "number": 21,
+        "startupTimeMs": 187,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488119321
+      },
+      "uploadRevision": "cf-latency-minify-5",
+      "observedAt": 1791488121821
+    },
+    {
+      "round": 6,
+      "role": "control",
+      "minify": false,
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 279,
+      "startupEvidence": {
+        "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+        "number": 20,
+        "startupTimeMs": 279,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488191498
+      },
+      "uploadRevision": "cf-latency-minify-6",
+      "observedAt": 1791488196371
+    },
+    {
+      "round": 6,
+      "role": "primary",
+      "minify": false,
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 152,
+      "startupEvidence": {
+        "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+        "number": 22,
+        "startupTimeMs": 152,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488205142
+      },
+      "uploadRevision": "cf-latency-minify-6",
+      "observedAt": 1791488206703
+    },
+    {
+      "round": 7,
+      "role": "primary",
+      "minify": true,
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "bundleSha256": "922ff360d0cc12df976e8aa277c27cb6f94870f4acb6c4e341ef78df72f5931b",
+      "bundleBytes": 3319078,
+      "gzipBytes": 948291,
+      "startupTimeMs": 170,
+      "startupEvidence": {
+        "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+        "number": 23,
+        "startupTimeMs": 170,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488273838
+      },
+      "uploadRevision": "cf-latency-minify-7",
+      "observedAt": 1791488275264
+    },
+    {
+      "round": 7,
+      "role": "control",
+      "minify": false,
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "bundleSha256": "4dc513fb84b6830b5476ecb5de36970cd311f6e645950c79932b51526a438050",
+      "bundleBytes": 7298737,
+      "gzipBytes": 1403605,
+      "startupTimeMs": 152,
+      "startupEvidence": {
+        "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+        "number": 21,
+        "startupTimeMs": 152,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "capturedAt": 1791488282201
+      },
+      "uploadRevision": "cf-latency-minify-7",
+      "observedAt": 1791488286973
+    }
+  ],
+  "completed": [
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "eb13241e-0830-4ce1-b12f-d9b5dc49ef62",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487346347
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "6f8b17ea-bc06-439f-8d09-494e4d68e212",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487349699
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "459574e5-4c39-4a31-8fa1-0cfeffcce4fd",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487352360
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "12b39199-b947-4766-af7a-d3081c65721e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487356324
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "94c87873-9b39-4227-93c3-5c4f67d0f0b0",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487359553
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "98b8e143-6d03-4efa-ba28-4db569de6957",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487363719
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "ce9b7944-f02a-4605-adfb-c03fbd00e289",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487368153
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "ec39c781-9df6-4014-95ad-4876a664d97d",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487371428
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "528772e0-fc68-4747-bb36-d086dbda52b8",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487377817
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "aca75aa9-34b6-46ec-a523-8e1593d6b363",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487380454
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "b86b2810-df6c-423f-ae4c-97bd61710cb9",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487384323
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "753e0e7b-df8f-47f0-bcfc-d4c66afa93f3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487390219
+    },
+    {
+      "round": 0,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m8",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "incarnation": "943e18b4-ae9d-4cb9-8868-6cd7c43df3c2",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487395202
+    },
+    {
+      "round": 0,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m8",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "incarnation": "f7baf8d4-f3ab-44f2-8739-b2ef918c29f3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487402008
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "00b8d838-da4f-49fd-bbab-6a5576129a52",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487425560
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "140e0220-061a-49a0-8ff2-63949239fe97",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487429638
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "78dcbda3-caee-4a70-8a8f-ca8cc3845ba6",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487433703
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "1660d2cd-b569-44d3-b44e-140126b54a51",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487437980
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "1374bb62-5d3a-4036-b7ab-1a77ef72953e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487444380
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "b335ab96-16ae-4934-962f-a336645704e7",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487449469
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "3508d7f2-2301-4520-b014-4d7d2928a7f5",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487453215
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "fb6e9896-a94f-4612-9e31-433f2a84823e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487459273
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "b1fb5c45-beeb-4761-83be-a910294b7aca",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487464581
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "206d57f3-c286-48d1-ba4f-0ccaf097a0ab",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487468180
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "24eb4fb2-3874-4f25-8d65-d3cbebc40667",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487471358
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "b54bc9d4-d853-4d2f-8ccf-c4f23fbeb75f",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487473911
+    },
+    {
+      "round": 1,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m9",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "incarnation": "e0d541c4-1abd-4bb8-b007-aa8ed4664f3c",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487476439
+    },
+    {
+      "round": 1,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m9",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "incarnation": "5b8a6aec-c57b-4bf0-87e9-3e210fb0175d",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487479971
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "0887b1ad-cbeb-410c-ace8-284aa35ffca1",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487509625
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "6065e27b-9f75-4b25-ba29-139af51b659b",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "completedAt": 1791487512647
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "3bcacd21-ef85-4133-bf2a-e2535efefe69",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487779835-0",
+      "completedAt": 1791487784500
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "ec812b6e-1048-4baf-bcab-535d078ea56f",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487784505-0",
+      "completedAt": 1791487790346
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "ca9f3a35-e512-41d9-9ebf-cdb5e5d8f97f",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487790351-0",
+      "completedAt": 1791487796130
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "60a0c856-ff02-4cbd-9bfd-f22ee72afeb5",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487796135-0",
+      "completedAt": 1791487799655
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "3284b4c2-44ff-4d31-b1d3-30072af9b296",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487799660-0",
+      "completedAt": 1791487802941
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "69ec319c-1e42-4935-8f74-222b0315b1af",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487802945-0",
+      "completedAt": 1791487809168
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "7602dcc1-ed91-44e6-b3c6-0920d25812a3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487809173-0",
+      "completedAt": 1791487812434
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "6c7dcfb7-6029-4244-afcb-a5faa8f2c0b9",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487812439-0",
+      "completedAt": 1791487816597
+    },
+    {
+      "round": 2,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m10",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "incarnation": "5203db9c-38b6-47be-82a7-6599ad523a62",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487816602-0",
+      "completedAt": 1791487820554
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "c055d0cd-4e62-4c44-ac2d-6f1b2e202d70",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487820559-0",
+      "completedAt": 1791487822937
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "b6f9490d-c26b-482c-b5b7-e1355dc117bb",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487822943-0",
+      "completedAt": 1791487828360
+    },
+    {
+      "round": 2,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m10",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "incarnation": "1e949148-f4ad-4393-a5b2-97d20e983ebe",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m10-1791487828365-0",
+      "completedAt": 1791487831484
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "d400a5be-e2e8-438d-a251-0732fe09eeab",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487895433-13",
+      "completedAt": 1791487899546
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "4212f829-1c06-468a-9b78-87aeae30dbd3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487899552-0",
+      "completedAt": 1791487903751
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "655522be-3471-45c4-b9af-b1a5af0e7bf6",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487903757-0",
+      "completedAt": 1791487909285
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "596c9cdb-2bb9-43d6-8fd1-53ebd293d38d",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487909290-0",
+      "completedAt": 1791487912641
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "346d2417-2f04-4002-8ea2-d9520ec29814",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487912647-0",
+      "completedAt": 1791487917196
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "dfc049b2-f96a-496e-ac38-33fd090c7ece",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487917202-0",
+      "completedAt": 1791487921092
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "aea077a9-1c77-47b7-a651-d6043af393b6",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487921098-0",
+      "completedAt": 1791487924805
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "3f270d2a-be03-4ff6-83aa-c0d23c11de04",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487924811-0",
+      "completedAt": 1791487929109
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "46276d14-0920-4d3d-9712-1d924aaf120f",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487929115-0",
+      "completedAt": 1791487933600
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "94a13b2f-9acd-4727-b7be-e7fb0fefd65a",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487933606-0",
+      "completedAt": 1791487936133
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "137bb4a4-d758-4764-a686-b89af21c6f7e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487936139-0",
+      "completedAt": 1791487939202
+    },
+    {
+      "round": 3,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m11",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "incarnation": "50eb8841-8927-45d4-b444-64e7af96db6d",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487939207-0",
+      "completedAt": 1791487943535
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "fb852942-e0dd-4383-b920-ddb031035ee4",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487943540-0",
+      "completedAt": 1791487948219
+    },
+    {
+      "round": 3,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m11",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "incarnation": "b0c3c38e-d6d8-4105-9793-29aae6392b23",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m11-1791487948227-0",
+      "completedAt": 1791487952133
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "e4678cc5-ac62-47a0-83a3-d515dacbf7f7",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487980206-0",
+      "completedAt": 1791487982884
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "a53a70d6-884b-4b3a-853d-6b6773a3bab0",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487982891-0",
+      "completedAt": 1791487986290
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "3bb37546-c770-4080-9c5a-4d8e70f2fffd",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487986308-0",
+      "completedAt": 1791487990585
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "3d57592b-7af3-4483-b66a-8df88dbc4087",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487990591-0",
+      "completedAt": 1791487993461
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "e37d52e7-0d04-47db-8a3f-32d3ba67d1ca",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487993466-0",
+      "completedAt": 1791487997856
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "54ba5c8c-f489-4586-bad3-3a6cd4aeb567",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791487997861-0",
+      "completedAt": 1791488003217
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "7607f569-5e44-4779-aeb7-df2dccdf801f",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488003223-0",
+      "completedAt": 1791488006923
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "5a78858b-f5cb-44f0-b6a2-128fbb348454",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488006928-0",
+      "completedAt": 1791488010942
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "2f3dd45a-534f-4317-b7f6-1530fec736e2",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488010947-0",
+      "completedAt": 1791488016017
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "a2ad03b5-af1b-4eaf-8361-76b5e312fa86",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488016022-0",
+      "completedAt": 1791488021620
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "aebd7cbe-5986-4580-abea-3c2aa6f5bb79",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488021625-0",
+      "completedAt": 1791488024990
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "3fc4f217-1e2e-4a16-87b4-3f0dd8529265",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488024996-0",
+      "completedAt": 1791488027412
+    },
+    {
+      "round": 4,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m12",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "incarnation": "f7a1a35c-85ea-4c81-afe8-fb71a5b2441a",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488027417-0",
+      "completedAt": 1791488031078
+    },
+    {
+      "round": 4,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m12",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "incarnation": "4b23f2d4-5737-44ef-af91-9a161a249f53",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m12-1791488031092-0",
+      "completedAt": 1791488037316
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "b88bf596-7d6e-48d0-b87f-52c14c4154fa",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488121827-0",
+      "completedAt": 1791488126889
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "7d83df93-df26-4df9-8327-e80b0029e260",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488126897-0",
+      "completedAt": 1791488132661
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "de4e03ea-0f53-4937-8106-3ee569270ebd",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488132667-0",
+      "completedAt": 1791488135367
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "5cf7636d-b222-475f-9f1b-7374935578f0",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488135372-0",
+      "completedAt": 1791488140196
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "17758640-f973-4260-b6cd-e489f8c6b358",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488140201-0",
+      "completedAt": 1791488146767
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "4359e9a7-f3f3-4fd4-a1a6-1eb7e6eceab5",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488146772-0",
+      "completedAt": 1791488150567
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "27e0828c-4354-4de5-8a00-b7ac04f1e795",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488150573-0",
+      "completedAt": 1791488153430
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "2cb06bdc-cc61-47fe-bac7-1cdf15f0aa55",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488153437-0",
+      "completedAt": 1791488156415
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "1326c789-ecf7-48d3-b47e-a8035381e4e7",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488156420-0",
+      "completedAt": 1791488159989
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "e9c4ddb2-4a8a-4c84-8309-7b7414677b4b",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488159994-0",
+      "completedAt": 1791488163395
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "48f9761d-3181-4220-bd81-dc8c18b47ed3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488163404-0",
+      "completedAt": 1791488167577
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "6d4d6f10-aaf7-4fbe-bb99-5d089b40f161",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488167583-0",
+      "completedAt": 1791488172074
+    },
+    {
+      "round": 5,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m13",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "incarnation": "f3e4cc24-45b3-48db-b130-d7f61cb42f26",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488172083-0",
+      "completedAt": 1791488176575
+    },
+    {
+      "round": 5,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m13",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "incarnation": "593e18d6-3d18-4ff4-b597-3c9de28476c3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m13-1791488176580-0",
+      "completedAt": 1791488180801
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "63305e38-b676-4c06-aa03-675a3893884e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488206709-0",
+      "completedAt": 1791488210825
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "56ea2421-c1bc-4493-8127-4466bc8c657c",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488210832-0",
+      "completedAt": 1791488213762
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "2efd8d49-714d-4f86-bc7f-2073b6d47a01",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488213767-0",
+      "completedAt": 1791488217105
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "1ea6e572-fce0-40a8-99e2-6adee236f133",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488217111-0",
+      "completedAt": 1791488223521
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "aece6336-600d-4988-bb59-f3ff2274ce53",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488223527-0",
+      "completedAt": 1791488226243
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "ee116af5-2af6-4eb6-ad04-8839a2c1fc0e",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488226248-0",
+      "completedAt": 1791488231890
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "6c1eb04d-8997-4554-85a2-7c84d065cefb",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488231895-0",
+      "completedAt": 1791488236483
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "061d6fe9-0c22-469f-ae62-a8727cbacb20",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488236494-0",
+      "completedAt": 1791488244296
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "594519bf-3d8b-4c3d-afcc-aa73281998a0",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488244301-0",
+      "completedAt": 1791488247288
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "82c1795e-a035-457f-8800-12f9538da18b",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488247293-0",
+      "completedAt": 1791488250586
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "781e5238-4fc1-41f4-9fc4-fd061bdb0cad",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488250591-0",
+      "completedAt": 1791488255533
+    },
+    {
+      "round": 6,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m14",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "incarnation": "d6f4f638-2869-4000-b30a-c38c97bb2636",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488255543-0",
+      "completedAt": 1791488259069
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "d2a2fefd-c6fc-4a74-a659-abf3e66713bb",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488259074-0",
+      "completedAt": 1791488262272
+    },
+    {
+      "round": 6,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m14",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "incarnation": "0b19532c-8ab1-4737-bd33-de7be96f3e15",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m14-1791488262277-0",
+      "completedAt": 1791488265435
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "fd7e9bde-317d-4a8c-9a06-d5dd5d4ad0d2",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488286979-0",
+      "completedAt": 1791488290550
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "7ee32fb2-b494-4e5c-86b5-167b69490a52",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488290556-0",
+      "completedAt": 1791488293821
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "7130efc7-4e2e-48b3-838b-b9738cc71ad3",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488293826-0",
+      "completedAt": 1791488297549
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "66e6b600-ff57-4a79-8ebe-02795c707955",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488297554-0",
+      "completedAt": 1791488302056
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "42adca2a-9503-4532-95ef-8d198bfeb253",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488302061-0",
+      "completedAt": 1791488304554
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "9f6de225-549f-4ab1-8bdf-4c445ad5cadd",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488304559-0",
+      "completedAt": 1791488310276
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "0dfb3bdc-6efb-4fda-a2c1-aacec9ae537a",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488310281-0",
+      "completedAt": 1791488315712
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "abd3f024-8c9e-496b-b079-0be82dab5e28",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488315721-0",
+      "completedAt": 1791488319077
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o3",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "84eb8e03-1e7c-4575-95dc-8bd86bf5663b",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488319082-0",
+      "completedAt": 1791488321725
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "d658d2f2-40b0-403a-82a6-051b72bb127a",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488321737-0",
+      "completedAt": 1791488326274
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "88208d44-388b-43cb-a2a7-9825c327a145",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488326280-0",
+      "completedAt": 1791488330422
+    },
+    {
+      "round": 7,
+      "key": "control/yielded/cf-latency-net-h50-d400-o5",
+      "sample": "m15",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "incarnation": "899e148f-e03e-46f1-be17-ad7c0349a0ff",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488330427-0",
+      "completedAt": 1791488334611
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "ef21deca-f172-419b-b82a-442f0bef0900",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488334616-0",
+      "completedAt": 1791488338945
+    },
+    {
+      "round": 7,
+      "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+      "sample": "m15",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "incarnation": "25c2eca2-bd9f-467a-90ba-f247c3f6c398",
+      "firstEntry": {
+        "firstHarnessRequest": true,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "acceptedReset": "minify-reset-m15-1791488338951-0",
+      "completedAt": 1791488343401
+    }
+  ],
+  "failure": {
+    "at": 1791487512852,
+    "error": "Error: Minification cold reset or current-version identity not acknowledged",
+    "noRetry": true
+  },
+  "resumptions": [
+    {
+      "at": 1791487776375,
+      "completedInputs": 30,
+      "reason": "Version preparation stopped before the next canonical input; completed inputs and releases verified, no input replayed"
+    },
+    {
+      "at": 1791488105057,
+      "completedInputs": 70,
+      "reason": "Version preparation stopped before the next canonical input; completed inputs and releases verified, no input replayed"
+    }
+  ],
+  "interruptions": [
+    {
+      "at": 1791488047511,
+      "error": "Error: Repeated startup round did not create a new active version",
+      "noRetry": true
+    }
+  ],
+  "finishedAt": 1791488343402
+}

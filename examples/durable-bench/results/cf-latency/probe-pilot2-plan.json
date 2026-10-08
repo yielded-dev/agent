@@ -1,0 +1,488 @@
+{
+  "objects": 2,
+  "repetitions": 1,
+  "locationHint": "wnam",
+  "bytesMeaning": "total blob payload bytes per request, divided across transactionSync calls",
+  "schedule": [
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b16384-t12-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b131072-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b0-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b0-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b0-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b16384-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b0-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b131072-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b0-t12-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b0-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b16384-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b0-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b131072-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o0-r0-b16384-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b131072-t12-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b131072-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b16384-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b16384-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o0-r0-b131072-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b0-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b131072-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b16384-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o0-r0-b131072-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-0",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o0-r0-b16384-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b16384-t12-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b16384-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b0-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b131072-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b131072-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b0-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b16384-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b0-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b131072-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b131072-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b131072-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b16384-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b0-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b131072-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b0-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b16384-t12-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b0-t12-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b0-t1-sync-end"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 12,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b16384-t12-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 0,
+        "transactions": 1,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b0-t1-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "fetch",
+        "sample": "probe-pilot2-o1-r0-b131072-t12-fetch"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "return",
+        "sample": "probe-pilot2-o1-r0-b16384-t1-return"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 16384,
+        "transactions": 1,
+        "mode": "sync-each",
+        "sample": "probe-pilot2-o1-r0-b16384-t1-sync-each"
+      }
+    },
+    {
+      "object": "cf-latency-probe-pilot2-1",
+      "repeat": 0,
+      "input": {
+        "bytes": 131072,
+        "transactions": 12,
+        "mode": "sync-end",
+        "sample": "probe-pilot2-o1-r0-b131072-t12-sync-end"
+      }
+    }
+  ]
+}

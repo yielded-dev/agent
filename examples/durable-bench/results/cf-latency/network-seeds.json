@@ -1,0 +1,4034 @@
+[
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "b5c85148336b1cc92bf8d2d7987764c03c8de91a3890b30cbde4cdcea245301c",
+      "incarnation": "b7325e62-693e-49de-b25f-7ec96e7f8ad8",
+      "constructedMs": 1791481925174,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "b83a410c2897a87bf9192a07c6a6d021466f0f90c9f033ab84aea9492f133745",
+      "incarnation": "7c8a8ebf-a033-4dc1-91cd-2b00b0479411",
+      "constructedMs": 1791481925440,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "cd7deefbc0e37fed7378a156451d80fd42b8606750ffa6fccce8a169a5336f09",
+      "incarnation": "07994394-a87c-4983-bbc2-c52858d2abc4",
+      "constructedMs": 1791481925553,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "673c71e4fe491e12b1191b8f86b2dba2e035ae839fc31c64ed2d41daa60d399b",
+      "incarnation": "549f34cf-385f-42fa-9ae5-b3739783f903",
+      "constructedMs": 1791481925768,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "d080283ace3735a625b18fa6c8ab34e4e710c51f20421cc64c54f986cb730263",
+      "incarnation": "a898e873-91e9-4f97-bd39-e3648694f233",
+      "constructedMs": 1791481928687,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "020b3676dccfe1c93fde0bb87f897f4c1a563bafd26196a38db374f9e6c7dc25",
+      "incarnation": "e49fea3c-6b61-4d85-892e-89b40e81b871",
+      "constructedMs": 1791481927631,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2691072
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o0",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "0118f72da604f16dc1ba23948ff9ee871c375f9f8b904ef63e0948a0462d2bb7",
+      "incarnation": "414f6f88-2582-452d-8021-e420a44785da",
+      "constructedMs": 1791481925841,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o2",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "711a272a9849ee8cec9012ab0094c1e7176795c51e6cf1a7f2a741da7027e033",
+      "incarnation": "74ca579d-df7b-4066-ad65-4ef6cd72f72e",
+      "constructedMs": 1791481925269,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "0f791a8455717ce265b4bdb8243f0f2b43ea680350c7b3b638efea30054cea79",
+      "incarnation": "e108fec7-7015-4507-9c2e-7948f37a4b49",
+      "constructedMs": 1791481925516,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2707456
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o3",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "bc0af784edea47c80a04f811947a13de5855170ca3b341f30f0ca28bc7396fa1",
+      "incarnation": "effa9d67-b7cb-48ab-83a1-b78659c4547a",
+      "constructedMs": 1791481929709,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2695168
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o1",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "a3823fe5d98bbb7056f008dbe3067814b3c787ba356afb6b0110526cbf2c6e8a",
+      "incarnation": "f7f29d4f-bf05-405d-8708-f36c172289c0",
+      "constructedMs": 1791481925899,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "7803c38590e3edd3ab8279b71ef8eb01333df46e634fb37d393e32a7e83f4af5",
+      "incarnation": "00d0c48c-cef7-46a7-b5d6-0f193b7c399e",
+      "constructedMs": 1791481926524,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "5adf926faf03c919f4921701deffe0b7e5cb5190509da68866d09fc01f863d68",
+      "incarnation": "615e30f1-66c5-4415-a85c-d5effd11d583",
+      "constructedMs": 1791481936803,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "eee5b8d268cb3f64c7933a0ae684af2dbe214d68c7d5839cd4f6fa4d6dc162eb",
+      "incarnation": "84dff260-2c2e-48d9-8968-517fda03e5b1",
+      "constructedMs": 1791481938395,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "10e3f9eb8c1fe36ac83fdfbe99be8515149bc81e721d21d60896cf45d6137c64",
+      "incarnation": "c72bb4b4-9db2-4b28-af06-d782154d5af1",
+      "constructedMs": 1791481934617,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "bdcb066e5b29a76e2ea7fbe470e28907e3f32883696145c241236a5de4b3adab",
+      "incarnation": "e9f99091-81b8-4646-9e40-068acf00df35",
+      "constructedMs": 1791481937887,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o4",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "35d34513f000d7a32ec2cfa0ae572306c1ad21f5c3ae9b0ed3c3836742cdc01e",
+      "incarnation": "4f465ff3-f2df-4500-9e02-693c5b0ef3b4",
+      "constructedMs": 1791481937189,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o5",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "a26f313d81e3cf668a8f3481f62892c5600b03913396fdca8bcad5355872f2d5",
+      "incarnation": "7a1c48e1-5fa6-4d21-b115-a56ee4f519ee",
+      "constructedMs": 1791481937079,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2707456
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "6dd83df2cddbb6bca2a568f79ee136a50be2b790d51cb2d8690152e87b61a488",
+      "incarnation": "4d80425d-9822-407a-9a58-24f9c5f803e1",
+      "constructedMs": 1791481942340,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "f858414331f84673e6e30809be6c58de2bc8b01d5047a87e9e8d18956d47bd1e",
+      "incarnation": "29b3a9f6-903e-4889-971e-aefb1620dce6",
+      "constructedMs": 1791481946524,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "1d48ed38b80bee9c3ff173d1b5864a0f9304fcd2b039e5d1bafbf0bd45066993",
+      "incarnation": "a7b81c6b-4186-4ba6-bf9b-77d76ee440a2",
+      "constructedMs": 1791481939964,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "778a1dd8b0ddf046c6db8bf54f30904a10fb1e7934f5af1bade55f31d039ba61",
+      "incarnation": "3c49278a-ee8b-4fa8-b658-a5cd0f9a70c2",
+      "constructedMs": 1791481944323,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2732032
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 48,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "574d16febeb10a23bb1d4796f920a289b393a19a0005fa199601f319ac50379c",
+      "incarnation": "7e88a1f9-76d5-4cdd-85ef-13b88d0de91d",
+      "constructedMs": 1791481925735,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o0",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "bec5d33b5ead9248ed8d8feec17a27cb0e7844535bb053857c2de96fe20b9ff6",
+      "incarnation": "02755c3c-2698-42bd-91f2-95cbd1581bc4",
+      "constructedMs": 1791481945394,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2732032
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d0-o6",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "b6014f9d364c2142852a2bccecd32d326423adf711fb023f387cb352994eecbe",
+      "incarnation": "7a06118f-778a-4144-a67e-83d64f6f44fd",
+      "constructedMs": 1791481945062,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2699264
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h50-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 47,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "2eef314740235e97111c16ed34787a506468f13d4a0f64ba6b501cc98a6616d2",
+      "incarnation": "08c6f1aa-8109-4cbd-80d0-a6d848857147",
+      "constructedMs": 1791481933120,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "02e2f6af58a0497f6f7014dc44610c627ada55b17f5ba8eb25c7a7fd656ac44a",
+      "incarnation": "884b1e36-a05e-463c-9f3a-d6e4839e5b63",
+      "constructedMs": 1791481955316,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h50-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 51,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "ba88b3aefce51b5af798370a8ebc592374679ca0e7e73fe26c32d2051f3c9971",
+      "incarnation": "f8607671-12b1-4111-936d-d7d132b3ac06",
+      "constructedMs": 1791481925913,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o1",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "0152cd3b029d6b5408e4a30f78ede56a88dd2588d44694912f8e785f97cb7581",
+      "incarnation": "581c3080-e8a0-49c9-bb41-63938f15592e",
+      "constructedMs": 1791481953288,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2752512
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "4902a4ddaf01fddd019890cc7463ce78bf09e50b1907e4b183714dc65164810e",
+      "incarnation": "5eed22c3-606a-484f-b8f8-c73ae600e4eb",
+      "constructedMs": 1791481958459,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "e99b8e595afd90fb2c537c073a87e6e6ee7a53d051c726ee7759726e6f45baa1",
+      "incarnation": "1c19688b-e23a-4ce8-841a-2234c5d313f6",
+      "constructedMs": 1791481951342,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2723840
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "0975b1954f8239b0fe625fd191e4707c8c9941e2a053a5aa33e2cf15a1e1ade4",
+      "incarnation": "d1e7fb40-63bb-46a0-a4b5-29ab60060d65",
+      "constructedMs": 1791481960875,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h50-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 44,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "e952b2c4f953d51024553671fcd126632ca931490b3cf258f6cabd54579762d8",
+      "incarnation": "9887176e-aca9-4da5-b35e-2d5633415035",
+      "constructedMs": 1791481944931,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h50-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 56,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "1a02dda4746e7abb2b2e7bad7b1203eb395a6ccf5b1697d782b153da3a70c7fd",
+      "incarnation": "91ed9791-3a9e-41c1-b53e-4f7a1a02101b",
+      "constructedMs": 1791481933642,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o2",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "594c8878913a431226b4197dbda505c27fbb3649ec4cf3bf2df833aaeb36aa14",
+      "incarnation": "19e13a36-fc93-4ae0-a43e-3d7de2f2489d",
+      "constructedMs": 1791481959213,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2752512
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h50-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 49,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "a51021e90ae989758d8275c8a21e12e1b158cb8e376357a078085bc5f9cf0ce7",
+      "incarnation": "7dbbd87a-b070-46ab-933e-8cfd14fc6e8c",
+      "constructedMs": 1791481938158,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "760cc13c0727e5b4b598f756669e4c7b2c80e932c45d9e78678a1a1941cb9b8b",
+      "incarnation": "d665842c-146d-438d-8073-22b15f48935b",
+      "constructedMs": 1791481965774,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o3",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "c6a39f40de18bd59bb923cfe1ea4357da037b02880a26e756b342151ab6e924d",
+      "incarnation": "90820861-dc8b-4581-a4c6-6a4fb33138fd",
+      "constructedMs": 1791481963856,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2740224
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "00adbf41f0429a23e3940a6645e9ac0d08c52ca6923c74552f7cfb92e0ef2b09",
+      "incarnation": "5e785aa4-b9fa-40c7-91b3-9b93bdad8f96",
+      "constructedMs": 1791481961781,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2736128
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "da555b49d60cb202cad324b24678a4e7d59daba81ad2b59a9053a45bb72ddda0",
+      "incarnation": "ed87dd71-a333-4bb1-9b41-6601884efb3a",
+      "constructedMs": 1791481962278,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2732032
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "5d1fb0a9f09abe6925b796187be210bfd667019019589a7769feeb929ed6c973",
+      "incarnation": "b120ce96-978b-4e3b-8e6f-3fed55fb8d90",
+      "constructedMs": 1791481965423,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2727936
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o4",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "6be13585c9c31ac0b5b899d6e41c9fa8904629e0d472385d60ab47c13531d823",
+      "incarnation": "7b6119b1-d52e-454a-8ba6-9ead532996b1",
+      "constructedMs": 1791481966335,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2740224
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "236e407c51bcffdc00fdee1ab4e08d51a4999ec78edeebd275b364349ef8ceb8",
+      "incarnation": "a4660bae-fdba-4311-9214-6d3868d7128f",
+      "constructedMs": 1791481974145,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a800aa37bc318eebf154fedb7b21f3272ae8cf99d0c51189ab47b96b0ca8e1ef",
+      "incarnation": "fd8c19be-70e4-40fb-864c-a54f3fde5eff",
+      "constructedMs": 1791481968813,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2736128
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h50-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 67,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "43e93f60bc67c8ef10eb011108c6b3f02eeb614808478ad3fab4d22107f618e9",
+      "incarnation": "609fe23b-165a-4070-86ec-d350173b9f37",
+      "constructedMs": 1791481952834,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h50-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "f60c80c41bf194530c07b8fba2a4ca07717dc4a3a22f42db59a83b7a9d2bc66c",
+      "incarnation": "c6e8403e-9da0-401e-819b-645f77384223",
+      "constructedMs": 1791481980661,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h50-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 57,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o2",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "43c28b2c6a1995b43c593587ac96f23c48281d607d339cf766b7315792f647ce",
+      "incarnation": "4575dabc-0bd8-453a-a11d-7a27285fc8e3",
+      "constructedMs": 1791481959497,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o5",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "ad2612a38e2946db303bd6d0b6e15a23f20bfafd01542bffc1fdaf0f95709ed5",
+      "incarnation": "68098c8f-e5f2-44cd-abca-71f8f3fcb2dd",
+      "constructedMs": 1791481974320,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2732032
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h50-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "9e6aecc866f7193ebd68800ba5b52eb662e9152ea3f139347a9fcd440a7c7d5e",
+      "incarnation": "a2e85482-43e4-420e-a643-f9d85c3732d8",
+      "constructedMs": 1791481979019,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2727936
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h50-d400-o6",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 4,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "3e37da54e1d9f5d619c29f8623305df256b71cc6fba0f4e44bea48a9f89fad7c",
+      "incarnation": "99004572-4a34-4aab-ac2a-de5a29d91334",
+      "constructedMs": 1791481977791,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2732032
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h50-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 63,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d0-o1",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "cab171b90130e56d325a1db2db6b03a6de05ca667adcd4b964e0852243cdef4c",
+      "incarnation": "aaa3aa76-1e55-4555-9848-07d1bca9ca6d",
+      "constructedMs": 1791481926974,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "dd8e17f43d7e0c061182e5307b3755e112acc29bc4dc8c308ea2a134ea95b554",
+      "incarnation": "4b726833-cb95-497c-9878-b4a5a1e96ad5",
+      "constructedMs": 1791481984431,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h50-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 61,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o4",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "b3ebbc9bc6fe64b2ac3e4eeefe24a0794fa3240d24421823fc5ae98d36650d65",
+      "incarnation": "b64a05f1-1915-4bae-9239-1cec20c5d433",
+      "constructedMs": 1791481969022,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h50-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 45,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o3",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a7fcf02e99528a8e8f8132255f6e9e733e441a2b9f8ecf2259be539c94f75162",
+      "incarnation": "3408370f-161c-4659-83f6-231ef5102255",
+      "constructedMs": 1791481963830,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h50-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 37,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o5",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "905ee5c1083f53a1fa2ed260f89b4057f21d46a2091a1033b856a2cd6b363ba8",
+      "incarnation": "70b7ef58-fce7-4ff5-aa1a-5a5bbc0ca6c7",
+      "constructedMs": 1791481972804,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h50-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 52,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o6",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "0c340adbc75d67499b2bb5f8f6e2cce337f7b6fedf35721b7f6445b5f8624e7d",
+      "incarnation": "7888352c-9d15-4fba-9f71-1cf173110ecf",
+      "constructedMs": 1791481978382,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 52,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-net-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "80bc50570c59a6cccd8a6ec3ff69da28fcb0bbda97d5f5d9129920f30c4591c6",
+      "incarnation": "dc867a0b-98c8-4b7b-b057-e2dd6fb6a606",
+      "constructedMs": 1791481951353,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "12e0f09b1e810f89e7e5515008384db4b670539de66799be69453edc5f5bd501",
+      "incarnation": "39bdc8ac-2695-4f32-95a2-9655bb94cc51",
+      "constructedMs": 1791482000160,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "c13edd2a35c301e9d8807b926427c49f1f4ab844a27a52d78d04287b56c23618",
+      "incarnation": "4ce9005c-5bdb-4f15-a2e1-e69b766f96a9",
+      "constructedMs": 1791482001094,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "3345f909697282e7e94946ddee74171bd86a60f61e95dbff1fb32f98d8466539",
+      "incarnation": "28610759-4f20-457f-b057-7dca3aca7a4e",
+      "constructedMs": 1791481983668,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10579968
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "1d8a9d0f446eb1f854cf8225d5709a8c3bcf7dfbb6dfd13af598a8cac573cb8c",
+      "incarnation": "05c4792c-5553-4638-a74c-d832119b4fdd",
+      "constructedMs": 1791482010894,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o1",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "722caffe9a7b2cb8cbb5a706efde1cbfd354e6b2cc87928365a5504d5e1f5f4e",
+      "incarnation": "099e071c-b94e-4e44-9aa5-7ac6f3ef9d46",
+      "constructedMs": 1791481988496,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10588160
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "fdf369182818050d99fa40397310ba3e4cae5f2d5885fad44708a477d107b4a5",
+      "incarnation": "442b1d9f-9ace-4686-93bc-16b678fb85b3",
+      "constructedMs": 1791482109468,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o2",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 2,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "256875b56dd7d5d4d373e113c67c9d9fa970e3d484f12ea8e46f618ac8e265ab",
+      "incarnation": "2fd2621e-bdba-4840-8d56-0d831f96b9e9",
+      "constructedMs": 1791482110315,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10584064
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o0",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 2,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "2952ff8c601db16111f7d7af9755f9514e0c38df6bb7ec2895e5893bb162aa15",
+      "incarnation": "f50df5c7-a0a1-41a1-a2ad-80870e6477f8",
+      "constructedMs": 1791482109364,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10559488
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o3",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 8,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "6cf73ae3504de1713e1e237dae2cd02f661e854694b923d0d72fdb4f512f052b",
+      "incarnation": "818cb754-adfb-47d2-abb4-7c2ca27c3a75",
+      "constructedMs": 1791482109100,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10563584
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 10,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "94fee2316ca87f34bdbc74f777af6f75d199163502f86064c66e9e8bd8fe05ec",
+      "incarnation": "1d9e20d8-30ae-41b9-95ff-986edc9e6c20",
+      "constructedMs": 1791482109324,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10584064
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 7,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "cd9d838eea2634ccab625789cb051c2c3bf024c7329f5ea9f165ff0a1ce4876f",
+      "incarnation": "a805e9ae-ce7a-4bb0-9f08-6875baa952c6",
+      "constructedMs": 1791482110429,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10575872
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "a070ecaa2fdc551691fac4e134e0b48c7a93fc2520cf1b08f7c9093cd76d0aa0",
+      "incarnation": "38a77ceb-b6e4-43e5-b530-1ba63f6fd6b1",
+      "constructedMs": 1791482127927,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 17,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "a572002cdb35e905736f66c435d1cd754e30c29e43f39d1bc10ccfd7112c1366",
+      "incarnation": "1dc852f1-b22e-4e67-8813-57c745b89ef4",
+      "constructedMs": 1791482109398,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10575872
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o5",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "9386b66efda16d222afd7b392eef1bc7da4098ef6da2211908c67bba8fbf1a5c",
+      "incarnation": "71f59af6-b84b-4c93-8ec3-d2f532c8ecf6",
+      "constructedMs": 1791482119686,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10584064
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 11,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "3dff3bd3ea7f08f99e90f35e2522e4fc7eba15705ed83208fe3136ca9f155371",
+      "incarnation": "c590cf43-45ba-4fd0-8059-b12f6f23630a",
+      "constructedMs": 1791482111002,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10559488
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "febb114d296e340326d3a66be5648055293c2c39f64de5be6322ce2de34d6553",
+      "incarnation": "f2bc3faa-0bc3-46a6-b0ce-db29597d928e",
+      "constructedMs": 1791482163675,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 1,
+      "object": "cf-latency-net-h250-d0-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 157,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "d1f1bac4380f72a1c3c3b9f5a0b0e1a770da5920d65de31a941df9b7ab5675e1",
+      "incarnation": "5420f027-a4f8-4660-a2a3-8551cf24df41",
+      "constructedMs": 1791482109653,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o6",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "0dafae3f962b2131b2ca852339a021f6ac8c9cd46f292deb563055bdd7885f72",
+      "incarnation": "d1d51103-140b-46b2-8a46-ba25c5849408",
+      "constructedMs": 1791482141121,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10563584
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d0-o4",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "64137f2693785b42255ceef2741b4643e2cfab789f7b5b9d82e8ca02ff85b5da",
+      "incarnation": "51779ee0-b7bb-4810-b1d0-d5bf07332298",
+      "constructedMs": 1791482118615,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10571776
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 2,
+      "object": "cf-latency-net-h250-d0-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 212,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "30ae5ba3585cd90daba13e4f7d13dfac304fddbb716e5ab1746f4f1fb4ec897a",
+      "incarnation": "0cb6fb34-2c79-440a-97c6-fee416d30a38",
+      "constructedMs": 1791482109278,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "39e2e23919d8a353120f2de1e741a041e79d8fa0717b01c9666fe1beb5be28c5",
+      "incarnation": "af1ca617-a1ef-4a8c-9200-981ad919f3a3",
+      "constructedMs": 1791482140170,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10547200
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "94fffcf556b299fa3232f6b3cf321d93a67ded38104ca5aa2d2fbee83fcd707c",
+      "incarnation": "7ad3b68e-aff9-4f10-b912-75f9a642fd68",
+      "constructedMs": 1791482197130,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o0",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "f31070c9579981a8c2409c894d14a55c2443911af8e3e409a057df89694e4684",
+      "incarnation": "418aaad3-8820-4dc8-a541-ceac67203e76",
+      "constructedMs": 1791482180720,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10661888
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "f801550d11c28f938b51c1350a8790083039c024bf9aff239a9ee82ac001c862",
+      "incarnation": "ac89d43a-0370-4fbd-8905-0e80279bb5c8",
+      "constructedMs": 1791482211796,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 3,
+      "object": "cf-latency-net-h250-d0-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 270,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "87c9eb5f046494414bc989aeb1763ac451884fba2b95f5d3b8a36b44e58b1912",
+      "incarnation": "28fd2b43-10d8-4de4-ae05-dfd8f671537c",
+      "constructedMs": 1791482109475,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "df65d3b13d001b10ac60b4950027916e546aa1358c3c9ca221beba03c36cbbd1",
+      "incarnation": "7b48abdc-57de-4d96-b111-f09a660bf27e",
+      "constructedMs": 1791482161365,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10579968
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "55f4fc4232f6180b93bbe5ae1e95d3b7d569a2a1e15cc3acb0c1a531a58d4ef2",
+      "incarnation": "634e97dc-ff4f-47e6-a309-5f75c42aa97f",
+      "constructedMs": 1791482235247,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "fadfcb852c80efe32f4d67637c20539713709ebffc6569b6cb68587e5ceb4300",
+      "incarnation": "d147ead7-8f11-4581-955e-8664f053960d",
+      "constructedMs": 1791482181526,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10674176
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o1",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "4cbaa907acda28fe54dd2a73fef1873e602d5899dc46d04aa919486f4ac9786f",
+      "incarnation": "b6baef61-dd03-4962-a70d-6f34d5abf106",
+      "constructedMs": 1791482214322,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10665984
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "ba1e52d14a3d87cf9da7d64a2c50f5424674d530bf9d34cb530ce476157c30ad",
+      "incarnation": "81f19994-cbb8-420d-a165-a7599c0f12a1",
+      "constructedMs": 1791482252167,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a4cb8062242dd2e566ce5789c1f48ee836553fe4d39f85a132641f7eb6835754",
+      "incarnation": "e33348bd-f8c0-4f5f-9c12-9cf0043999bd",
+      "constructedMs": 1791482215691,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10678272
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "440b70fc1c3814a34cd3764ff85ecda4021a034bf8ce134a708836524dada73e",
+      "incarnation": "83bfc824-2159-4add-b0be-87db5885653d",
+      "constructedMs": 1791482237725,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10657792
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o3",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "2cd0bec7e0ec3c3a6b2d55bf902c13f251c54be5b01c9c571dabd6a597e6702e",
+      "incarnation": "ead4d4f8-9116-4a67-938d-e850c6b9a1a6",
+      "constructedMs": 1791482276305,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10665984
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "0dcbb9d5238b1a3dbaaeabcc5b6fa7369907655f798bb90a1237704d5f905c86",
+      "incarnation": "95f9fa83-7f11-48e9-8d2a-adf64ffaafec",
+      "constructedMs": 1791482254392,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10674176
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o2",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "99b7c9c78d935fddbcfdfa31da5de19853b077aeaa4efb8d05b088b0a74348b0",
+      "incarnation": "ebeffb9e-a53c-4f7d-bcad-86ec4e17a9e7",
+      "constructedMs": 1791482252947,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10670080
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 4,
+      "object": "cf-latency-net-h250-d0-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 311,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "20f83c64dad0e14af98e310bb28ce98401643af99f779cdba2600ce8912b699d",
+      "incarnation": "c611edc9-4d9c-41b7-a70c-0529fad26c43",
+      "constructedMs": 1791482118859,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "986930e34c200ae379954e6f10eea6878a117beb95984cdac4f09dfce9f4f073",
+      "incarnation": "ff59211f-c49f-4cc7-a010-fbb25e50e6b2",
+      "constructedMs": 1791482314477,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o4",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "cd27a0a8903d69933d33c2433f3d299cfbf51edf57431aafadd48e47b84b49aa",
+      "incarnation": "eec13512-d6fb-469a-99fe-630fb79f9332",
+      "constructedMs": 1791482278177,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10657792
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o4",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o4",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "b4a98f877b3020c55ba73c9546598d2d6d86c9960bd98548f2b040e93ad37159",
+      "incarnation": "864c81c0-1ac5-4b74-bda9-50df0f45fe64",
+      "constructedMs": 1791482314103,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10661888
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o0-fresh1",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-net-h250-d0-o0-fresh1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 395,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o0-fresh1",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "20616f44445d00b2f5f5418901658590470252fb77cafa660c5214b046959725",
+      "incarnation": "8696723a-5d4c-4f2e-bdf9-3768c70861dd",
+      "constructedMs": 1791482111207,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 5,
+      "object": "cf-latency-net-h250-d0-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 353,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "5ee3cacc1f32f528abdb30b602aa5c67a7a77ad4050c13d1df65d4d879b8a98b",
+      "incarnation": "a32d0fce-d974-4d0d-8ed7-1015fb56df20",
+      "constructedMs": 1791482133344,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o5",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "cb92afb7e69c35302d1fa20087ddb4de76289e9ae161fab44dd29847aeecdfdd",
+      "incarnation": "7e12a611-795c-41e4-bfdf-6a5787a7173c",
+      "constructedMs": 1791482345529,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10661888
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "15a227312d556bae8b609547bb8102197b396c458ebe1a5de662f915297d6e57",
+      "incarnation": "e6c91ae8-adeb-4332-b62b-cfc05d093d3f",
+      "constructedMs": 1791482374160,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o2",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 2,
+      "object": "cf-latency-net-h250-d400-o2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 285,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o2",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "93d9e5f33b70fd797c52c70b576d5097d532b9d5ed84fe741b3d5f82a9aff272",
+      "incarnation": "4bbcfb1f-40ee-4413-9ecc-ca8b2f913a97",
+      "constructedMs": 1791482239131,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/pi/cf-latency-net-h250-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 0,
+        "activeAlarmIds": []
+      },
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a051c2b9eafda8ba1e5518f0ed442208a1944a66a959a29737389f8c7c5dd9e9",
+      "incarnation": "391f5c0f-2b8b-4dee-8f8d-9e29a34e2158",
+      "constructedMs": 1791482382527,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 761856
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "956d139d980cc634446db0b6d89e0c89214f196bc718a2cc028aa8bdbaecbd3b",
+      "incarnation": "7a9b83bc-0418-4762-85db-6780fbfc9d1d",
+      "constructedMs": 1791482335745,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10665984
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d0-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 0,
+      "index": 6,
+      "object": "cf-latency-net-h250-d0-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 350,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d0-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "50ee1e779d04767ce091e50c820460ebdb9d1d370212fc9f2096efb08ad14131",
+      "incarnation": "5aec98d2-c486-490a-8226-0850fb132791",
+      "constructedMs": 1791482141644,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "control/yielded/cf-latency-net-h250-d400-o6",
+    "cohort": {
+      "role": "control",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "ef98286607d2b6c9416c0dabdb52f4c329609832deb7b33a727ffbf7106d3a96",
+      "incarnation": "b118e4ef-163c-498d-a10b-308abacd142e",
+      "constructedMs": 1791482375675,
+      "version": "908514ad-152d-4105-b7db-24e363e4cbbb",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10670080
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o1",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 1,
+      "object": "cf-latency-net-h250-d400-o1"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 354,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o1",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a849bba425f7422728796d9e8e380d68f93433831a682fa7724421c210972403",
+      "incarnation": "cac3944c-8b35-4655-a879-b7a309225b5c",
+      "constructedMs": 1791482221829,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-net-h250-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 297,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o0",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "a61ebbeb7ad7e04a017ebf6e3f4128f311240cba12c5c09d551cb30769d7c676",
+      "incarnation": "c9091cf7-7e48-4481-8fea-32158293c430",
+      "constructedMs": 1791482181029,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-net-h250-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 24,
+        "activeAlarmIds": []
+      },
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "ccc5af85db757f34ae0e7b6d9e76943538dabb5c6d7b48ae4eae06380c93b116",
+      "incarnation": "6e59d80c-8aed-49ab-98a2-503c0bd49787",
+      "constructedMs": 1791482390721,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 10661888
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o5",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 5,
+      "object": "cf-latency-net-h250-d400-o5"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 253,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o5",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "98436650200f3d502e37e8b811eb8dab97e1ad9f3eb681b757c4da2a61d8a17e",
+      "incarnation": "d6f52b46-459d-4f52-b2ef-eccdbf532531",
+      "constructedMs": 1791482330042,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o3",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 3,
+      "object": "cf-latency-net-h250-d400-o3"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 277,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o3",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "20fbd8e5f0fd6834a54e76b9aa9f328983f90046b43ba3f86e5dd1cd3e5c3e28",
+      "incarnation": "2c7e60ca-7033-4c2b-8982-69d8be1700ce",
+      "constructedMs": 1791482268267,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o6",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 6,
+      "object": "cf-latency-net-h250-d400-o6"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 101,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o6",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "5d1155440b2d9a4c71d9f747cef90b695b384640e62b40e18b2b63694d0e3051",
+      "incarnation": "665891a3-a9a5-4305-9e8d-6b4ab90576c5",
+      "constructedMs": 1791482600335,
+      "version": "c8143dae-8078-426e-910a-0d3aae767744",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-net-h250-d400-o4-fresh2",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 250,
+      "ttftMs": 400,
+      "index": 4,
+      "object": "cf-latency-net-h250-d400-o4-fresh2"
+    },
+    "receipt": {
+      "ok": true,
+      "entry": {
+        "firstHarnessRequest": false,
+        "priorAlarmStarts": 343,
+        "activeAlarmIds": []
+      },
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 250,
+      "object": "cf-latency-net-h250-d400-o4-fresh2",
+      "sample": "seed-240-250",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "72d7d1a1027bb87a73aaf304e2d11402a30d1d8dba8ad5be1320923856c74b41",
+      "incarnation": "de0fd073-8b7b-4d59-87ff-dbf294875fd3",
+      "constructedMs": 1791482961910,
+      "version": "df5a0a3b-7c21-405b-807a-963610748543",
+      "generation": "seed",
+      "from": 240,
+      "to": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "databaseBytes": 1941504
+    }
+  }
+]

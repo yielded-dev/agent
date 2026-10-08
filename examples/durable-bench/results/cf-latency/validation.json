@@ -1,0 +1,33 @@
+{
+  "command": "NODE_OPTIONS=--require=<repository>/examples/durable-bench/results/cf-latency/validation-env.cjs vp run ready",
+  "exitCode": 0,
+  "completedAt": "2026-10-08T19:44:07.120Z",
+  "scope": "Full repository static checks, existing tests and build. Correctness evidence only; no local latency benchmark.",
+  "concurrency": "Only packages/testing receives VITEST_MAX_WORKERS=1; Cloudflare pool settings, tests and timeouts are unchanged.",
+  "earlierAttempts": [
+    "ready-sandbox-blocked.log.gz",
+    "ready-toolchain-timeout.log.gz",
+    "ready-toolchain-timeout-2.log.gz",
+    "ready-one-worker-interrupted.log.gz"
+  ],
+  "focusedExistingCheck": "toolchain-focused.log.gz",
+  "doctor": "env-doctor.log.gz",
+  "previousGate": {
+    "command": "NODE_OPTIONS=--require=<repository>/examples/durable-bench/results/cf-latency/validation-env.cjs vp run ready",
+    "exitCode": 0,
+    "completedAt": "2026-10-08T18:11:25.764174+00:00",
+    "scope": "Full repository static checks, existing tests and build. Correctness evidence only; no local latency benchmark.",
+    "concurrency": "Only packages/testing receives VITEST_MAX_WORKERS=1; Cloudflare pool settings, tests and timeouts are unchanged.",
+    "earlierAttempts": [
+      "ready-sandbox-blocked.log.gz",
+      "ready-toolchain-timeout.log.gz",
+      "ready-toolchain-timeout-2.log.gz",
+      "ready-one-worker-interrupted.log.gz"
+    ],
+    "focusedExistingCheck": "toolchain-focused.log.gz",
+    "doctor": "env-doctor.log.gz"
+  },
+  "log": "ready-final.log.gz",
+  "cache": "51/71 cache hits; final command exited 0",
+  "harnessProof": "Deployed exact-byte measurements, returned stream/identity receipts, exact-version metadata audit and offline reduction; generated result files are outside the repository static-check scope."
+}

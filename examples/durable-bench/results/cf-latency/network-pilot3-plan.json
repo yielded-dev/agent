@@ -1,0 +1,63 @@
+{
+  "objectsPerRole": 7,
+  "turns": 2,
+  "coldTurn": 0,
+  "settlingTurn": 1,
+  "warmTurns": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "variantSettlingTurns": [
+    6,
+    7
+  ],
+  "variantTurns": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "realisticProvider": {
+    "ttftMs": 400,
+    "chunkDelayMs": 10
+  },
+  "locationHint": "wnam",
+  "cohorts": [
+    {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d0-o0"
+    }
+  ]
+}

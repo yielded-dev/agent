@@ -1,0 +1,43 @@
+{
+  "objects": 8,
+  "repetitions": 4,
+  "leadMs": 200,
+  "cases": [
+    {
+      "iterations": 0,
+      "afterArmMs": 0
+    },
+    {
+      "iterations": 0,
+      "afterArmMs": 110
+    },
+    {
+      "iterations": 0,
+      "afterArmMs": 230
+    },
+    {
+      "iterations": 20000000,
+      "afterArmMs": 0
+    },
+    {
+      "iterations": 20000000,
+      "afterArmMs": 110
+    },
+    {
+      "iterations": 20000000,
+      "afterArmMs": 230
+    },
+    {
+      "iterations": 80000000,
+      "afterArmMs": 0
+    },
+    {
+      "iterations": 80000000,
+      "afterArmMs": 110
+    },
+    {
+      "iterations": 80000000,
+      "afterArmMs": 230
+    }
+  ]
+}

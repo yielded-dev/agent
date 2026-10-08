@@ -1,0 +1,168 @@
+{
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "checkedAt": "2026-10-08T19:40:14.734Z",
+  "scope": "Upload revision and startup metric read together from each exact recorded Worker version; no current-settings join",
+  "checks": [
+    {
+      "round": 0,
+      "role": "control",
+      "version": "bb162627-6791-4201-bdfe-5761b56e9446",
+      "expectedRevision": "cf-latency-minify-0",
+      "observedRevision": "cf-latency-minify-0",
+      "recordedStartupTimeMs": 329,
+      "observedStartupTimeMs": 329,
+      "passed": true
+    },
+    {
+      "round": 0,
+      "role": "primary",
+      "version": "996e55cc-c82c-44c1-b1ed-101ccfb15ddf",
+      "expectedRevision": "cf-latency-minify-0",
+      "observedRevision": "cf-latency-minify-0",
+      "recordedStartupTimeMs": 168,
+      "observedStartupTimeMs": 168,
+      "passed": true
+    },
+    {
+      "round": 1,
+      "role": "control",
+      "version": "3271aebc-d005-4dbc-b63e-8967d0b0cb1c",
+      "expectedRevision": "cf-latency-minify-1",
+      "observedRevision": "cf-latency-minify-1",
+      "recordedStartupTimeMs": 200,
+      "observedStartupTimeMs": 200,
+      "passed": true
+    },
+    {
+      "round": 1,
+      "role": "primary",
+      "version": "9fae6e1a-236c-4b11-82b1-2a36e77411d6",
+      "expectedRevision": "cf-latency-minify-1",
+      "observedRevision": "cf-latency-minify-1",
+      "recordedStartupTimeMs": 198,
+      "observedStartupTimeMs": 198,
+      "passed": true
+    },
+    {
+      "round": 2,
+      "role": "control",
+      "version": "7be0865e-7c9d-4d09-910b-2cb2f6ba64d0",
+      "expectedRevision": "cf-latency-minify-2",
+      "observedRevision": "cf-latency-minify-2",
+      "recordedStartupTimeMs": 178,
+      "observedStartupTimeMs": 178,
+      "passed": true
+    },
+    {
+      "round": 2,
+      "role": "primary",
+      "version": "a6f87b6e-960b-42ea-a6ba-a4c08fb0911f",
+      "expectedRevision": "cf-latency-minify-2",
+      "observedRevision": "cf-latency-minify-2",
+      "recordedStartupTimeMs": 151,
+      "observedStartupTimeMs": 151,
+      "passed": true
+    },
+    {
+      "round": 3,
+      "role": "primary",
+      "version": "eeb83238-a142-488a-a0a1-84c5880d785d",
+      "expectedRevision": "cf-latency-minify-3",
+      "observedRevision": "cf-latency-minify-3",
+      "recordedStartupTimeMs": 163,
+      "observedStartupTimeMs": 163,
+      "passed": true
+    },
+    {
+      "round": 3,
+      "role": "control",
+      "version": "cc046341-beca-4e09-bc32-cad38d62fb86",
+      "expectedRevision": "cf-latency-minify-3",
+      "observedRevision": "cf-latency-minify-3",
+      "recordedStartupTimeMs": 169,
+      "observedStartupTimeMs": 169,
+      "passed": true
+    },
+    {
+      "round": 4,
+      "role": "primary",
+      "version": "ace16a54-310f-4e8b-91b4-b56ea2060955",
+      "expectedRevision": "cf-latency-minify-4",
+      "observedRevision": "cf-latency-minify-4",
+      "recordedStartupTimeMs": 402,
+      "observedStartupTimeMs": 402,
+      "passed": true
+    },
+    {
+      "round": 4,
+      "role": "control",
+      "version": "39bfc127-86b8-4d5f-8c3d-2b8fdb96f254",
+      "expectedRevision": "cf-latency-minify-4",
+      "observedRevision": "cf-latency-minify-4",
+      "recordedStartupTimeMs": 177,
+      "observedStartupTimeMs": 177,
+      "passed": true
+    },
+    {
+      "round": 5,
+      "role": "control",
+      "version": "a653fed4-8406-4d3b-b5d1-f2df6e99e5f3",
+      "expectedRevision": "cf-latency-minify-5",
+      "observedRevision": "cf-latency-minify-5",
+      "recordedStartupTimeMs": 285,
+      "observedStartupTimeMs": 285,
+      "passed": true
+    },
+    {
+      "round": 5,
+      "role": "primary",
+      "version": "18686871-5915-441e-9c2b-2c60ad7dcde3",
+      "expectedRevision": "cf-latency-minify-5",
+      "observedRevision": "cf-latency-minify-5",
+      "recordedStartupTimeMs": 187,
+      "observedStartupTimeMs": 187,
+      "passed": true
+    },
+    {
+      "round": 6,
+      "role": "control",
+      "version": "617c17c4-f285-41c3-bcd5-30dfdea99384",
+      "expectedRevision": "cf-latency-minify-6",
+      "observedRevision": "cf-latency-minify-6",
+      "recordedStartupTimeMs": 279,
+      "observedStartupTimeMs": 279,
+      "passed": true
+    },
+    {
+      "round": 6,
+      "role": "primary",
+      "version": "55f19b11-d34f-41d6-ad01-2708a6bbf325",
+      "expectedRevision": "cf-latency-minify-6",
+      "observedRevision": "cf-latency-minify-6",
+      "recordedStartupTimeMs": 152,
+      "observedStartupTimeMs": 152,
+      "passed": true
+    },
+    {
+      "round": 7,
+      "role": "primary",
+      "version": "fcde190b-76d6-4d14-8607-c6dd2d14ff2d",
+      "expectedRevision": "cf-latency-minify-7",
+      "observedRevision": "cf-latency-minify-7",
+      "recordedStartupTimeMs": 170,
+      "observedStartupTimeMs": 170,
+      "passed": true
+    },
+    {
+      "round": 7,
+      "role": "control",
+      "version": "f0060c46-d22f-4ee9-8234-6f67fea94617",
+      "expectedRevision": "cf-latency-minify-7",
+      "observedRevision": "cf-latency-minify-7",
+      "recordedStartupTimeMs": 152,
+      "observedStartupTimeMs": 152,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

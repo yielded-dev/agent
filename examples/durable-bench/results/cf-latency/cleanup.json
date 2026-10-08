@@ -1,0 +1,44 @@
+{
+  "complete": true,
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "checkedAt": "2026-10-08T19:44:25.619Z",
+  "checks": [
+    {
+      "worker": "cf-latency-2db665d3-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T19:44:11.097Z"
+    },
+    {
+      "worker": "cf-latency-2db665d3-primary",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T19:44:14.492Z"
+    },
+    {
+      "worker": "cf-latency-2db665d3-provider",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T19:44:17.139Z"
+    },
+    {
+      "worker": "cf-latency-2db665d3-probe",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T19:44:19.667Z"
+    },
+    {
+      "worker": "cf-latency-2db665d3-echo",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T19:44:22.229Z"
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "finalTelemetryTailCollected": true,
+  "secretStateRemoved": true
+}

@@ -1,0 +1,126 @@
+[
+  {
+    "key": "primary/pi/cf-latency-network-pilot3-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot3-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "8af4c1689a9c8a44d080c3455f0e54ece0f221cd4edc93c75c0029ca5c74e4f2",
+      "incarnation": "c7835500-8470-4556-8473-8ac585d183f0",
+      "constructedMs": 1791480981757,
+      "version": "8543e701-65b8-407d-afc5-7cbf9358738b",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-network-pilot3-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot3-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "fa448393aaf440f8f8d616039b8615fece031410f73420839df721966aeecb24",
+      "incarnation": "2842a51f-f084-4050-9be5-760ec81108f5",
+      "constructedMs": 1791480982078,
+      "version": "8543e701-65b8-407d-afc5-7cbf9358738b",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2875392
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-network-pilot3-h50-d400-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d400-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot3-h50-d400-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 400,
+      "chunkDelayMs": 10,
+      "objectId": "075ad9ab92efb7c9923b1aeb30e687c1b2057f8bbbcb4bc2e34f661a704417ad",
+      "incarnation": "b22d88a6-5454-4d72-8768-5eb53a988755",
+      "constructedMs": 1791480982554,
+      "version": "8543e701-65b8-407d-afc5-7cbf9358738b",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-network-pilot3-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-network-pilot3-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot3-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "30b90c913e4e094a9d253b8cd94c0e94c35a5b195d3137ad55988f7798ccb163",
+      "incarnation": "c8cfee10-1cef-401d-8291-6c191788b8e5",
+      "constructedMs": 1791480986451,
+      "version": "8543e701-65b8-407d-afc5-7cbf9358738b",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  }
+]

@@ -1,0 +1,95 @@
+[
+  {
+    "key": "primary/pi/cf-latency-network-pilot2-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-network-pilot2-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "pi",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot2-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "70040708cee718d1b49554224aaeafafd4a0294add26a33d73e10ec25baf7c2a",
+      "incarnation": "53c0130f-1b99-47ce-877e-b28cb46b49e2",
+      "constructedMs": 1791480397180,
+      "version": "bbaf85a4-3e58-4fe9-9a2a-d61fc239b569",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 245760
+    }
+  },
+  {
+    "key": "primary/yielded/cf-latency-network-pilot2-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-network-pilot2-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "yielded",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot2-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "456173d3a101da8e07eb3022207a4587861c15b9f6cc9ba43e016852b496fe97",
+      "incarnation": "bf820902-6835-4a3a-b4fa-b74db4602e43",
+      "constructedMs": 1791480397740,
+      "version": "bbaf85a4-3e58-4fe9-9a2a-d61fc239b569",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 2850816
+    }
+  },
+  {
+    "key": "primary/tardie/cf-latency-network-pilot2-h50-d0-o0",
+    "cohort": {
+      "role": "primary",
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "cf-latency-network-pilot2-h50-d0-o0"
+    },
+    "receipt": {
+      "ok": true,
+      "target": "tardie",
+      "syncBeforeFetch": false,
+      "variant": "baseline",
+      "history": 50,
+      "object": "cf-latency-network-pilot2-h50-d0-o0",
+      "sample": "seed-40-50",
+      "ttftMs": 0,
+      "chunkDelayMs": 0,
+      "objectId": "eb7b321ea51b60265808801fc8f09cfb85b8cc3798b8b3c01cbcf38d90d0e220",
+      "incarnation": "5fe27f69-f9c9-4fd1-b10a-3f5dfe197794",
+      "constructedMs": 1791480397545,
+      "version": "bbaf85a4-3e58-4fe9-9a2a-d61fc239b569",
+      "generation": "seed",
+      "from": 40,
+      "to": 50,
+      "fingerprint": "b017b487524e44a4",
+      "databaseBytes": 401408
+    }
+  }
+]
