@@ -62,6 +62,10 @@ verification evidence in the task or PR artifacts. Explain change rationale in t
 Do not commit separate specifications, planning documents, decision registers, ADRs, roadmaps,
 or investigation logs to the product repository.
 
+The one exception is `docs/architecture/`: self-contained HTML technical documents that show how
+a subsystem works and where its cost goes, with diagrams and dated measurements. Update them when
+the code they describe changes, and keep plans, status and roadmaps out of them.
+
 ## Documentation
 
 Documentation is for humans learning the library. Guides must be terse and explain

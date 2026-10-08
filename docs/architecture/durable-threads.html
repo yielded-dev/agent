@@ -1,0 +1,3251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Durable Threads</title>
+    <meta
+      name="description"
+      content="How Yielded Agent's durable Thread is built, what one turn costs as a Thread ages, and which layer owns each millisecond."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <style>
+      /* One 1080px column. Prose keeps a 72ch measure; figures run full width.
+     Diagram vocabulary: the log is a tape of records, cobalt is a continuation and its exact
+     reads, plum is what the model sees, amber is work that grows with history.
+     Charts use one hue per measured target: pi teal, main amber, spike cobalt. */
+      :root {
+        color-scheme: light;
+        --bg: #f4f5f8;
+        --surface: #ffffff;
+        --fg: #151922;
+        --muted: #586073;
+        --faint: #8a91a2;
+        --rule: #dce0e8;
+        --grid: #e9ecf2;
+        --tape: #e7eaf0;
+        --rec: #cdd2dc;
+        --sealed: #eceef3;
+        --hatch: #c5cbd6;
+        --accent: #2c47d1;
+        --accent-soft: #e8ecfd;
+        --on-accent: #ffffff;
+        --ctx: #9b2c86;
+        --ctx-soft: #f8e8f4;
+        --cost: #ad5807;
+        --cost-soft: #fcf0e2;
+        --s-pi: #1a9e6e;
+        --s-main: #ad5807;
+        --s-spike: #2c47d1;
+        --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+        --body: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          color-scheme: dark;
+          --bg: #0e1117;
+          --surface: #151a22;
+          --fg: #e6e8ee;
+          --muted: #9ba2b2;
+          --faint: #6c7385;
+          --rule: #262c37;
+          --grid: #1f252f;
+          --tape: #1c212b;
+          --rec: #2d3440;
+          --sealed: #191d25;
+          --hatch: #343b48;
+          --accent: #8fa0ff;
+          --accent-soft: #1b2247;
+          --on-accent: #0e1117;
+          --ctx: #e690d6;
+          --ctx-soft: #2f1a2c;
+          --cost: #f2a552;
+          --cost-soft: #2b1f12;
+          --s-pi: #199e70;
+          --s-main: #cc7216;
+          --s-spike: #7385f0;
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #0e1117;
+        --surface: #151a22;
+        --fg: #e6e8ee;
+        --muted: #9ba2b2;
+        --faint: #6c7385;
+        --rule: #262c37;
+        --grid: #1f252f;
+        --tape: #1c212b;
+        --rec: #2d3440;
+        --sealed: #191d25;
+        --hatch: #343b48;
+        --accent: #8fa0ff;
+        --accent-soft: #1b2247;
+        --on-accent: #0e1117;
+        --ctx: #e690d6;
+        --ctx-soft: #2f1a2c;
+        --cost: #f2a552;
+        --cost-soft: #2b1f12;
+        --s-pi: #199e70;
+        --s-main: #cc7216;
+        --s-spike: #7385f0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-padding-top: 16px;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--body);
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 20px 80px;
+      }
+      a {
+        color: inherit;
+      }
+      a:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 3px;
+      }
+      h1,
+      h2,
+      h3 {
+        text-wrap: balance;
+      }
+      p {
+        margin: 0;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        background: var(--tape);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+
+      /* Hero */
+      .hero {
+        padding-block: 56px 28px;
+        display: grid;
+        gap: 14px;
+      }
+      .kicker,
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      h1 {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: clamp(36px, 6vw, 64px);
+        line-height: 1;
+        letter-spacing: -0.025em;
+        margin: 0;
+        font-variation-settings: "opsz" 96;
+      }
+      .lede {
+        font-size: 19px;
+        color: var(--muted);
+        max-width: 62ch;
+      }
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-top: 10px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+      }
+      .toc a {
+        color: var(--muted);
+        text-decoration: none;
+        border-bottom: 1px solid var(--rule);
+        padding-bottom: 2px;
+      }
+      .toc a:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .toc .part {
+        color: var(--faint);
+      }
+
+      .plate {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        margin: 0;
+        padding: 24px 24px 18px;
+        display: grid;
+        gap: 16px;
+        min-width: 0;
+      }
+      .hero-copy {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: 12px 32px;
+        align-items: end;
+      }
+      .thesis {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: clamp(24px, 3.2vw, 32px);
+        line-height: 1.12;
+        letter-spacing: -0.015em;
+        text-wrap: balance;
+      }
+      .thesis-sub {
+        color: var(--muted);
+        max-width: 58ch;
+      }
+      figcaption {
+        font-size: 14px;
+        color: var(--muted);
+        max-width: 80ch;
+      }
+      figcaption b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 22px;
+        font-size: 13.5px;
+        color: var(--muted);
+        padding-block: 18px 0;
+      }
+      .sw {
+        display: inline-block;
+        width: 22px;
+        height: 12px;
+        border-radius: 2px;
+        vertical-align: -1px;
+        margin-right: 8px;
+        flex: none;
+      }
+      .sw-tape {
+        background: repeating-linear-gradient(90deg, var(--tape) 0 5px, var(--rec) 5px 6px);
+        box-shadow: inset 0 0 0 1px var(--rule);
+      }
+      .sw-sealed {
+        background: repeating-linear-gradient(45deg, var(--sealed) 0 3px, var(--hatch) 3px 5px);
+        box-shadow: inset 0 0 0 1px var(--rule);
+      }
+      .sw-acc {
+        background: var(--accent);
+      }
+      .sw-ctx {
+        background: var(--ctx);
+      }
+      .sw-cost {
+        background: var(--cost);
+      }
+      .sw-faint {
+        background: var(--faint);
+      }
+      .sw-pi {
+        background: var(--s-pi);
+      }
+      .sw-main {
+        background: var(--s-main);
+      }
+      .sw-spike {
+        background: var(--s-spike);
+      }
+
+      /* Parts and sections */
+      .part-head {
+        margin-top: 96px;
+        padding-top: 18px;
+        border-top: 2px solid var(--fg);
+        display: grid;
+        gap: 6px;
+      }
+      .part-head h2 {
+        font-size: clamp(30px, 4.2vw, 44px);
+      }
+      section {
+        margin-top: 64px;
+        display: grid;
+        gap: 20px;
+        scroll-margin-top: 20px;
+      }
+      .part-head + section {
+        margin-top: 40px;
+      }
+      .sec-head {
+        display: grid;
+        gap: 8px;
+        max-width: 74ch;
+      }
+      h2 {
+        font-family: var(--display);
+        font-weight: 650;
+        font-size: clamp(26px, 3.4vw, 34px);
+        line-height: 1.1;
+        letter-spacing: -0.018em;
+        margin: 0;
+      }
+      h3 {
+        font-family: var(--body);
+        font-weight: 600;
+        font-size: 17.5px;
+        margin: 0;
+        line-height: 1.3;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 17px;
+      }
+      .note {
+        font-size: 15px;
+        color: var(--muted);
+        max-width: 74ch;
+      }
+      .note b,
+      .sub b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+
+      /* Hand-drawn diagrams */
+      .scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .scroll > svg {
+        min-width: 740px;
+      }
+      .scroll-hint {
+        display: none;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--faint);
+      }
+      @media (max-width: 760px) {
+        .scroll-hint {
+          display: block;
+        }
+      }
+      .dg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+      .dg text {
+        font-family: var(--mono);
+        font-size: 11px;
+        fill: var(--muted);
+      }
+      .dg path,
+      .dg line,
+      .dg polyline {
+        fill: none;
+      }
+      .dg .mf {
+        fill: var(--fg);
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .dg .tl {
+        font-family: var(--body);
+        font-size: 14px;
+        font-weight: 600;
+        fill: var(--fg);
+      }
+      .dg .tlb {
+        font-family: var(--body);
+        font-size: 12.5px;
+        font-weight: 600;
+        fill: var(--fg);
+      }
+      .dg .ts {
+        font-family: var(--body);
+        font-size: 12px;
+        fill: var(--muted);
+      }
+      .dg .num {
+        font-family: var(--body);
+        font-size: 11px;
+        font-weight: 700;
+        fill: var(--on-accent);
+      }
+      .dg .x-fg {
+        fill: var(--fg);
+      }
+      .dg .x-acc {
+        fill: var(--accent);
+      }
+      .dg .x-ctx {
+        fill: var(--ctx);
+      }
+      .dg .x-cost {
+        fill: var(--cost);
+      }
+      .dg .x-on {
+        fill: var(--on-accent);
+      }
+      .dg .halo {
+        paint-order: stroke;
+        stroke: var(--tape);
+        stroke-width: 5px;
+        stroke-linejoin: round;
+      }
+      .dg .halo-s {
+        paint-order: stroke;
+        stroke: var(--surface);
+        stroke-width: 5px;
+        stroke-linejoin: round;
+      }
+      .dg .f-surface {
+        fill: var(--surface);
+      }
+      .dg .f-tape {
+        fill: var(--tape);
+      }
+      .dg .f-sealed {
+        fill: var(--sealed);
+      }
+      .dg .f-fg {
+        fill: var(--fg);
+      }
+      .dg .f-acc {
+        fill: var(--accent);
+      }
+      .dg .f-acc-soft {
+        fill: var(--accent-soft);
+      }
+      .dg .f-ctx {
+        fill: var(--ctx);
+      }
+      .dg .f-cost {
+        fill: var(--cost);
+      }
+      .dg .f-cost-soft {
+        fill: var(--cost-soft);
+      }
+      .dg .s-fg {
+        stroke: var(--fg);
+      }
+      .dg .s-muted {
+        stroke: var(--muted);
+      }
+      .dg .s-faint {
+        stroke: var(--faint);
+      }
+      .dg .s-rule {
+        stroke: var(--rule);
+      }
+      .dg .s-rec {
+        stroke: var(--rec);
+      }
+      .dg .s-hatch {
+        stroke: var(--hatch);
+      }
+      .dg .s-acc {
+        stroke: var(--accent);
+      }
+      .dg .s-ctx {
+        stroke: var(--ctx);
+      }
+      .dg .s-cost {
+        stroke: var(--cost);
+      }
+      .dg .dash {
+        stroke-dasharray: 5 4;
+      }
+      .dg .dim {
+        opacity: 0.45;
+      }
+
+      /* Four jobs map */
+      .map {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1.35fr);
+      }
+      .map-h {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding-bottom: 10px;
+      }
+      .old {
+        background: var(--tape);
+        border-inline: 1px solid var(--rule);
+        border-top: 1px dashed var(--hatch);
+        padding: 14px 18px;
+        display: grid;
+        gap: 2px;
+        align-content: center;
+        min-width: 0;
+      }
+      .old.first {
+        border-top: 1px solid var(--rule);
+        border-radius: 10px 10px 0 0;
+      }
+      .old.last {
+        border-bottom: 1px solid var(--rule);
+        border-radius: 0 0 10px 10px;
+      }
+      .old b,
+      .new b {
+        font-weight: 600;
+        font-size: 15.5px;
+      }
+      .old span,
+      .new span {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .old.limit b,
+      .old.limit span {
+        color: var(--cost);
+      }
+      .link {
+        display: flex;
+        align-items: center;
+        padding-inline: 8px;
+        color: var(--faint);
+      }
+      .link::before {
+        content: "";
+        flex: 1;
+        height: 2px;
+        background: currentColor;
+      }
+      .link::after {
+        content: "";
+        border-left: 8px solid currentColor;
+        border-block: 5px solid transparent;
+      }
+      .link.ctx {
+        color: var(--ctx);
+      }
+      .link.fg {
+        color: var(--fg);
+      }
+      .link.acc {
+        color: var(--accent);
+      }
+      .new {
+        padding-block: 6px;
+        min-width: 0;
+        display: grid;
+      }
+      .new > div {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 12px 16px;
+        display: grid;
+        gap: 2px;
+        align-content: center;
+      }
+      .new.acc > div {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .new b {
+        display: flex;
+        align-items: center;
+      }
+      .new .sw {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* Recovery */
+      .pair {
+        display: grid;
+        gap: 16px;
+      }
+      .panel-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 14px;
+      }
+      .stat {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 21px;
+        letter-spacing: -0.01em;
+      }
+      .stat.cost {
+        color: var(--cost);
+      }
+      .stat.acc {
+        color: var(--accent);
+      }
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 14px 0 0;
+        border-top: 1px solid var(--rule);
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .steps li {
+        font-size: 14.5px;
+        color: var(--muted);
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+      }
+      .steps b {
+        color: var(--fg);
+        font-weight: 600;
+        display: block;
+      }
+      .n {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--on-accent);
+        font-size: 12px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+      }
+
+      /* Tables */
+      .tablewrap {
+        overflow-x: auto;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 15px;
+        min-width: 560px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: top;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      th {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      td:first-child {
+        font-weight: 600;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      td .sw {
+        width: 12px;
+        height: 12px;
+      }
+      td small {
+        display: block;
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .tag {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        padding: 1px 7px;
+        border-radius: 999px;
+        border: 1px solid var(--rule);
+        color: var(--muted);
+        white-space: nowrap;
+        font-weight: 500;
+      }
+      .tag.done {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .tag.est {
+        border-style: dashed;
+      }
+
+      /* Formats */
+      .fmt {
+        display: grid;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr);
+        gap: 16px;
+      }
+      .fmt .plate {
+        align-content: start;
+      }
+      .gate {
+        font-family: var(--mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--cost);
+        border: 2px solid var(--cost);
+        background: var(--cost-soft);
+        border-radius: 8px;
+        padding: 10px 14px;
+        justify-self: start;
+      }
+      .small {
+        font-size: 14.5px;
+        color: var(--muted);
+      }
+      .small em {
+        font-style: normal;
+        font-weight: 600;
+        color: var(--fg);
+      }
+      .branches {
+        list-style: none;
+        margin: 0;
+        padding: 0 0 0 14px;
+        border-left: 2px solid var(--cost);
+        display: grid;
+        gap: 10px;
+      }
+      .branches li {
+        font-size: 14.5px;
+        position: relative;
+        padding-left: 14px;
+      }
+      .branches li::before {
+        content: "";
+        position: absolute;
+        left: -14px;
+        top: 0.8em;
+        width: 20px;
+        height: 2px;
+        background: var(--cost);
+      }
+      .lane {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 16px;
+        padding-block: 14px;
+        border-top: 1px solid var(--rule);
+        align-items: center;
+      }
+      .lane-name {
+        display: grid;
+      }
+      .lane-name b {
+        font-weight: 600;
+      }
+      .lane-name span {
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .flows {
+        display: grid;
+        gap: 10px;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .chip {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        border: 1px solid var(--fg);
+        border-radius: 6px;
+        padding: 5px 10px;
+        background: var(--surface);
+        white-space: nowrap;
+      }
+      .chip.ghost {
+        border-style: dashed;
+        border-color: var(--faint);
+        color: var(--muted);
+      }
+      .chip.acc {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+      .arr {
+        color: var(--faint);
+        font-family: var(--mono);
+      }
+      .free {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .aside {
+        font-size: 13.5px;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+      .aside.acc {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      /* Stat tiles */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .tile {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: grid;
+        gap: 4px;
+        align-content: start;
+      }
+      .tile .label {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .tile .value {
+        font-family: var(--body);
+        font-weight: 600;
+        font-size: 40px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+      }
+      .tile .value small {
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--muted);
+        margin-left: 4px;
+      }
+      .tile .vs {
+        font-size: 14px;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 14px;
+      }
+      .tile .vs .sw {
+        width: 10px;
+        height: 10px;
+        margin-right: 6px;
+      }
+
+      /* Charts */
+      .chart {
+        position: relative;
+      }
+      .chart svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+        touch-action: pan-y;
+      }
+      .ch text {
+        font-family: var(--mono);
+        font-size: 11px;
+        fill: var(--muted);
+      }
+      .ch .val {
+        font-family: var(--body);
+        font-size: 12.5px;
+        font-weight: 600;
+        fill: var(--fg);
+      }
+      .ch .lab {
+        font-family: var(--body);
+        font-size: 13px;
+        font-weight: 600;
+        fill: var(--fg);
+      }
+      .ch .lab-sub {
+        font-family: var(--body);
+        font-size: 12px;
+        fill: var(--muted);
+      }
+      .ch .in-solid {
+        font-family: var(--body);
+        font-size: 12px;
+        font-weight: 600;
+        fill: var(--on-accent);
+      }
+      .ch .in-tint {
+        font-family: var(--body);
+        font-size: 12px;
+        font-weight: 600;
+        fill: var(--fg);
+      }
+      .ch .grid {
+        stroke: var(--grid);
+        stroke-width: 1;
+      }
+      .ch .axis {
+        stroke: var(--faint);
+        stroke-width: 1;
+      }
+      .ch .cross {
+        stroke: var(--faint);
+        stroke-width: 1;
+      }
+      .ch .halo-s {
+        paint-order: stroke;
+        stroke: var(--surface);
+        stroke-width: 4px;
+        stroke-linejoin: round;
+      }
+      .ch .s-pi {
+        stroke: var(--s-pi);
+      }
+      .ch .f-pi {
+        fill: var(--s-pi);
+      }
+      .ch .s-main {
+        stroke: var(--s-main);
+      }
+      .ch .f-main {
+        fill: var(--s-main);
+      }
+      .ch .s-spike {
+        stroke: var(--s-spike);
+      }
+      .ch .f-spike {
+        fill: var(--s-spike);
+      }
+      .ch .f-surface {
+        fill: var(--surface);
+      }
+      .ch .s-cost {
+        stroke: var(--cost);
+      }
+      .ch .x-cost {
+        fill: var(--cost);
+      }
+      .ch .line {
+        fill: none;
+        stroke-width: 2;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+      }
+      .ch .dot {
+        stroke: var(--surface);
+        stroke-width: 2;
+      }
+      .ch .hit {
+        fill: transparent;
+      }
+      .ch .seg:hover,
+      .ch .bar:hover {
+        filter: brightness(1.08);
+      }
+      .tip {
+        position: absolute;
+        pointer-events: none;
+        z-index: 2;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+        min-width: 150px;
+        opacity: 0;
+        transition: opacity 80ms;
+      }
+      .tip.on {
+        opacity: 1;
+      }
+      .tip b {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 2px;
+      }
+      .tip .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: space-between;
+      }
+      .tip .row span:first-child {
+        display: flex;
+        align-items: center;
+        color: var(--muted);
+      }
+      .tip .sw {
+        width: 10px;
+        height: 10px;
+        margin-right: 6px;
+      }
+      .chart-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 20px;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .chart-legend .sw {
+        width: 12px;
+        height: 12px;
+      }
+      .shade {
+        display: inline-block;
+        width: 22px;
+        height: 12px;
+        border-radius: 2px;
+        margin-right: 8px;
+        vertical-align: -1px;
+        background: var(--fg);
+      }
+      .shade.s2 {
+        opacity: 0.45;
+      }
+      .shade.s3 {
+        opacity: 0.2;
+      }
+      details.data {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      details.data summary {
+        cursor: pointer;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        width: fit-content;
+      }
+      details.data .tablewrap {
+        margin-top: 10px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px 28px;
+      }
+      .chart-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      /* Ownership */
+      .own {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+        gap: 16px;
+      }
+      .own .plate {
+        align-content: start;
+        gap: 10px;
+      }
+      .own .big {
+        font-family: var(--body);
+        font-weight: 600;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .own ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+      }
+      .own li {
+        font-size: 14.5px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        border-top: 1px solid var(--rule);
+        padding-top: 8px;
+      }
+      .own li span:last-child {
+        font-variant-numeric: tabular-nums;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .own li small {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .own code,
+      td code {
+        white-space: nowrap;
+      }
+      .callout {
+        border-left: 3px solid var(--accent);
+        padding: 4px 0 4px 16px;
+        display: grid;
+        gap: 6px;
+        max-width: 74ch;
+      }
+      .callout p {
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .callout b {
+        color: var(--fg);
+      }
+
+      pre {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.6;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 14px 16px;
+        overflow-x: auto;
+      }
+      .method {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px 32px;
+      }
+      .method ul {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .method ul b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+
+      /* Rules */
+      .rules {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0 28px;
+      }
+      .rules li {
+        border-top: 2px solid var(--fg);
+        padding-block: 12px 22px;
+        font-size: 15.5px;
+      }
+      .rules li.key {
+        border-top-color: var(--accent);
+      }
+      .rules li span {
+        display: block;
+        font-size: 14px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      footer {
+        margin-top: 48px;
+        padding-top: 14px;
+        border-top: 1px solid var(--rule);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 860px) {
+        .hero-copy,
+        .fmt,
+        .own,
+        .method,
+        .two {
+          grid-template-columns: 1fr;
+        }
+        .steps {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .rules {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .tiles {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 640px) {
+        .wrap {
+          padding-inline: 16px;
+        }
+        .hero {
+          padding-block: 36px 20px;
+        }
+        .plate {
+          padding: 18px 16px 14px;
+        }
+        .map {
+          grid-template-columns: 1fr;
+        }
+        .map-h.mid,
+        .map-h.right {
+          display: none;
+        }
+        .old,
+        .old.first,
+        .old.last {
+          border: 1px solid var(--rule);
+          border-radius: 10px;
+        }
+        .link {
+          height: 26px;
+          flex-direction: column;
+          padding: 4px 0;
+        }
+        .link::before {
+          flex: 1;
+          width: 2px;
+          height: auto;
+        }
+        .link::after {
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 8px solid currentColor;
+          border-bottom: 0;
+        }
+        .new {
+          padding-block: 0 14px;
+        }
+        .steps,
+        .rules {
+          grid-template-columns: 1fr;
+        }
+        .lane {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .chart.wide {
+          overflow-x: auto;
+        }
+        .chart.wide svg {
+          min-width: 680px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="kicker">Yielded Agent · durable runtime</p>
+        <h1>Durable Threads</h1>
+        <p class="lede">
+          How a durable Thread is built, what one turn costs as the Thread ages, and which layer
+          owns each millisecond of that cost.
+        </p>
+        <nav class="toc" aria-label="Sections">
+          <span class="part">I</span>
+          <a href="#jobs">Four jobs</a>
+          <a href="#recovery">Recovery</a>
+          <a href="#readers">Three readers</a>
+          <a href="#formats">Formats</a>
+          <span class="part">II</span>
+          <a href="#aging">Cost as a Thread ages</a>
+          <a href="#anatomy">Anatomy of a turn</a>
+          <a href="#layers">Who owns the CPU</a>
+          <a href="#saved-context">Saved context</a>
+          <a href="#levers">Gaps and levers</a>
+          <a href="#tradeoffs">Tradeoffs</a>
+          <a href="#method">Method</a>
+          <a href="#rules">Rules</a>
+        </nav>
+      </header>
+
+      <figure class="plate">
+        <div class="hero-copy">
+          <div>
+            <p class="eyebrow">The target</p>
+            <p class="thesis">Per-turn cost stays flat as a Thread ages.</p>
+          </div>
+          <p class="thesis-sub">
+            A Thread with ten million records admits, runs, recovers and settles a turn in the same
+            time as a Thread with ten. History grows in storage. The runtime loads a bounded working
+            set.
+          </p>
+        </div>
+        <div class="scroll">
+          <svg
+            class="dg"
+            viewBox="0 0 960 300"
+            role="img"
+            aria-label="Schematic chart of cost per turn against Thread age on a log scale from 10 to 10 million records. The old curve rises with history and stops at a wall at 131,072 records where Runs were refused. The target line stays flat through acceptance probes at 100, 10 thousand and 1 million records."
+          >
+            <rect x="660.2" y="26" width="269.8" height="224" class="f-cost-soft" />
+            <g class="s-rule" stroke-width="1">
+              <line x1="70" y1="26" x2="70" y2="250" />
+              <line x1="213.3" y1="26" x2="213.3" y2="250" />
+              <line x1="356.7" y1="26" x2="356.7" y2="250" />
+              <line x1="500" y1="26" x2="500" y2="250" />
+              <line x1="643.3" y1="26" x2="643.3" y2="250" />
+              <line x1="786.7" y1="26" x2="786.7" y2="250" />
+              <line x1="930" y1="26" x2="930" y2="250" />
+            </g>
+            <line x1="70" y1="250" x2="930" y2="250" class="s-faint" stroke-width="1.5" />
+            <g text-anchor="middle">
+              <text x="70" y="270">10</text>
+              <text x="213.3" y="270">100</text>
+              <text x="356.7" y="270">1k</text>
+              <text x="500" y="270">10k</text>
+              <text x="643.3" y="270">100k</text>
+              <text x="786.7" y="270">1M</text>
+              <text x="930" y="270">10M</text>
+            </g>
+            <text x="70" y="16">cost per turn (schematic)</text>
+            <text x="930" y="292" text-anchor="end">Thread age in records, log scale</text>
+
+            <line x1="660.2" y1="26" x2="660.2" y2="250" class="s-cost" stroke-width="2" />
+            <text x="672" y="46" class="mf x-cost">131,072 records</text>
+            <text x="672" y="63" class="ts x-cost">old cap: “use a new Thread”</text>
+
+            <polyline
+              points="70,210 213.3,209.9 356.7,208.7 500,196.6 543.1,183.3 568.4,170 586.3,156.6 600.2,143.2 611.5,129.9 621.1,116.5 629.4,103.2 636.8,89.8 643.3,76.5 649.3,63.1 654.7,49.8 660.2,35"
+              class="s-cost"
+              stroke-width="2.5"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M653,28 l14,14 M667,28 l-14,14"
+              class="s-cost"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            />
+            <text x="588" y="128" text-anchor="end" class="tl x-cost">
+              old · recovery walked history
+            </text>
+
+            <line x1="70" y1="210" x2="930" y2="210" class="s-acc" stroke-width="3" />
+            <circle cx="213.3" cy="210" r="5.5" class="f-surface s-acc" stroke-width="2.5" />
+            <circle cx="500" cy="210" r="5.5" class="f-surface s-acc" stroke-width="2.5" />
+            <circle cx="786.7" cy="210" r="5.5" class="f-surface s-acc" stroke-width="2.5" />
+            <g text-anchor="middle">
+              <text x="213.3" y="234" class="x-acc">probe</text>
+              <text x="500" y="234" class="x-acc">probe</text>
+              <text x="786.7" y="234" class="x-acc">probe</text>
+            </g>
+            <text x="925" y="194" text-anchor="end" class="tl x-acc">
+              target · bounded working set
+            </text>
+          </svg>
+        </div>
+        <p class="scroll-hint">Scroll sideways for the full diagram →</p>
+        <figcaption>
+          The y-axis is schematic. Recovery used to walk the whole history, and a Thread stopped at
+          131,072 records. The acceptance test runs one tool-rounds operation at 100, 10k and 1M
+          records and expects the same milliseconds at each. <a href="#aging">Part II</a> shows
+          where the runtime measures today.
+        </figcaption>
+      </figure>
+
+      <div class="legend" aria-label="Diagram key">
+        <span><i class="sw sw-tape"></i>the canonical log, one tick per record</span>
+        <span><i class="sw sw-sealed"></i>sealed range</span>
+        <span><i class="sw sw-acc"></i>continuation and its exact reads</span>
+        <span><i class="sw sw-ctx"></i>what the model sees</span>
+        <span><i class="sw sw-cost"></i>work that grows with history</span>
+      </div>
+
+      <!-- ============================== PART I ============================== -->
+      <div class="part-head">
+        <p class="eyebrow">Part I</p>
+        <h2>How a Thread is built</h2>
+      </div>
+
+      <section id="jobs">
+        <div class="sec-head">
+          <p class="eyebrow">Ownership</p>
+          <h2>One object used to do four jobs</h2>
+          <p class="sub">
+            The old Thread was the conversation, the execution log, the recovery state and the
+            resource counters at once. Every bound came from those being the same object. Now each
+            job has one owner.
+          </p>
+        </div>
+
+        <div class="map" role="list" aria-label="Each job of the old Thread and its new owner">
+          <p class="map-h">Before · one Thread</p>
+          <p class="map-h mid" aria-hidden="true"></p>
+          <p class="map-h right">Now · one owner per job</p>
+
+          <div class="old first" role="listitem">
+            <b>Conversation history</b><span>what the model saw, stored as log records</span>
+          </div>
+          <div class="link ctx" aria-hidden="true"></div>
+          <div class="new">
+            <div>
+              <b><i class="sw sw-ctx"></i>Context window</b
+              ><span
+                >What the model sees. Bounded by tokens and owned by compaction, which never touches
+                the log.</span
+              >
+            </div>
+          </div>
+
+          <div class="old" role="listitem">
+            <b>Execution log</b><span>the same records, in one digest chain</span>
+          </div>
+          <div class="link fg" aria-hidden="true"></div>
+          <div class="new">
+            <div>
+              <b><i class="sw sw-tape"></i>Thread log</b
+              ><span
+                >One continuous append-only log with no record cap. The Thread owns identity,
+                admission, fencing and idempotency.</span
+              >
+            </div>
+          </div>
+
+          <div class="old" role="listitem">
+            <b>Recovery state</b
+            ><span>rebuilt by walking the log, from a checkpoint if its format still matched</span>
+          </div>
+          <div class="link acc" aria-hidden="true"></div>
+          <div class="new acc">
+            <div>
+              <b><i class="sw sw-acc"></i>Continuation</b
+              ><span
+                >One per Run, versioned, written with each transition. It says where execution can
+                safely resume and references the exact facts it needs.</span
+              >
+            </div>
+          </div>
+
+          <div class="old" role="listitem">
+            <b>Counters</b
+            ><span
+              >peer messages, workers, deliveries: counted for the Thread’s lifetime, never released
+              by finished subagents</span
+            >
+          </div>
+          <div class="link" aria-hidden="true"></div>
+          <div class="new">
+            <div>
+              <b><i class="sw sw-faint"></i>Counters by purpose</b
+              ><span>Concurrency is counted Thread-wide. Retention is counted over a window.</span>
+            </div>
+          </div>
+
+          <div class="old last limit" role="listitem">
+            <b>Growth limit</b
+            ><span>131,072 records, then the Run is refused: “use a new Thread”</span>
+          </div>
+          <div class="link" aria-hidden="true"></div>
+          <div class="new">
+            <div>
+              <b><i class="sw sw-sealed"></i>Storage partitions</b
+              ><span
+                >Sealed ranges of the log, archivable and read by reference. The interpreter never
+                sees them.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="recovery">
+        <div class="sec-head">
+          <p class="eyebrow">Recovery</p>
+          <h2>Resuming a Run after a crash</h2>
+          <p class="sub">
+            The cost moves from the age of the conversation to the size of the open work. Both
+            diagrams show the same Thread of 81,250 records.
+          </p>
+        </div>
+
+        <div class="pair">
+          <figure class="plate">
+            <div class="panel-head">
+              <p class="eyebrow">Before</p>
+              <p class="stat cost">Reads grow with Thread age</p>
+            </div>
+            <div class="scroll">
+              <svg
+                class="dg"
+                viewBox="0 0 960 250"
+                role="img"
+                aria-label="Before: recovery starts at sequence 1, or at a checkpoint if its format still matches, and replays every record through projection. A changed checkpoint format sends it back to sequence 1."
+              >
+                <defs>
+                  <pattern id="rb-rec" width="6" height="40" patternUnits="userSpaceOnUse">
+                    <rect width="6" height="40" class="f-tape" />
+                    <line x1="5.5" y1="0" x2="5.5" y2="40" class="s-rec" stroke-width="1" />
+                  </pattern>
+                  <marker
+                    id="rb-ac"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="10"
+                    markerHeight="10"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L9,5 L0,9 z" class="f-cost" />
+                  </marker>
+                </defs>
+                <rect
+                  x="40"
+                  y="20"
+                  width="170"
+                  height="36"
+                  rx="6"
+                  class="f-surface s-fg"
+                  stroke-width="1.5"
+                />
+                <text x="125" y="43" text-anchor="middle" class="mf">recover(Thread)</text>
+                <path d="M60,56 V136" class="s-cost" stroke-width="2" marker-end="url(#rb-ac)" />
+
+                <rect x="40" y="140" width="460" height="28" fill="url(#rb-rec)" />
+                <rect x="516" y="140" width="384" height="28" fill="url(#rb-rec)" />
+                <path d="M502,174 L510,134 M510,174 L518,134" class="s-faint" stroke-width="1.5" />
+                <text x="34" y="158" text-anchor="end">1</text>
+                <text x="906" y="158">81,250</text>
+                <text x="270" y="158" text-anchor="middle" class="x-fg halo">seq 1 – 80,999</text>
+                <text x="708" y="158" text-anchor="middle" class="x-fg halo">81,000 – 81,250</text>
+
+                <line
+                  x1="380.7"
+                  y1="112"
+                  x2="380.7"
+                  y2="174"
+                  class="s-fg dash"
+                  stroke-width="1.5"
+                />
+                <text x="380.7" y="190" text-anchor="middle">checkpoint @60,000</text>
+                <path
+                  d="M380.7,104 H896"
+                  class="s-cost dash"
+                  stroke-width="2"
+                  marker-end="url(#rb-ac)"
+                />
+                <text x="390" y="96" class="ts x-cost">
+                  or from a checkpoint, if its format still matches
+                </text>
+                <path
+                  d="M374,116 Q220,70 68,126"
+                  class="s-cost"
+                  stroke-width="1.5"
+                  marker-end="url(#rb-ac)"
+                />
+                <text x="220" y="84" text-anchor="middle" class="ts x-cost">
+                  format changed: back to seq 1
+                </text>
+
+                <path d="M40,212 H896" class="s-cost" stroke-width="3" marker-end="url(#rb-ac)" />
+                <text x="470" y="238" text-anchor="middle" class="tl x-cost">
+                  read and replay every record through projection
+                </text>
+                <text x="900" y="190" text-anchor="end" class="ts">
+                  then rebuild declared, settled and unknown tools
+                </text>
+              </svg>
+            </div>
+          </figure>
+
+          <figure class="plate">
+            <div class="panel-head">
+              <p class="eyebrow">Now</p>
+              <p class="stat acc">Reads grow with open work</p>
+            </div>
+            <div class="scroll">
+              <svg
+                class="dg"
+                viewBox="0 0 960 212"
+                role="img"
+                aria-label="Now: recovery makes one indexed lookup for Run R's latest continuation at sequence 81,230, then reads only the records it references: a context range, a declaration, a result and an approval. Ownership is reacquired through the ledger. The first 80,999 records are not read."
+              >
+                <defs>
+                  <pattern id="ra-rec" width="6" height="40" patternUnits="userSpaceOnUse">
+                    <rect width="6" height="40" class="f-tape" />
+                    <line x1="5.5" y1="0" x2="5.5" y2="40" class="s-rec" stroke-width="1" />
+                  </pattern>
+                  <marker
+                    id="ra-aa"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="10"
+                    markerHeight="10"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L9,5 L0,9 z" class="f-acc" />
+                  </marker>
+                  <marker
+                    id="ra-af"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="10"
+                    markerHeight="10"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L9,5 L0,9 z" class="f-fg" />
+                  </marker>
+                </defs>
+                <rect
+                  x="40"
+                  y="24"
+                  width="170"
+                  height="36"
+                  rx="6"
+                  class="f-surface s-fg"
+                  stroke-width="1.5"
+                />
+                <text x="125" y="47" text-anchor="middle" class="mf">recover(Run R)</text>
+
+                <path d="M210,42 H794" class="s-acc" stroke-width="2" marker-end="url(#ra-aa)" />
+                <circle cx="390" cy="17" r="8" class="f-acc" />
+                <text x="390" y="21" text-anchor="middle" class="num">1</text>
+                <text x="405" y="21" class="ts x-acc">
+                  one indexed lookup, skipping all history
+                </text>
+
+                <rect x="800" y="24" width="140" height="36" rx="6" class="f-acc" />
+                <text x="870" y="39" text-anchor="middle" class="tlb x-on">continuation</text>
+                <text x="870" y="53" text-anchor="middle" class="x-on">@81,230</text>
+
+                <path d="M90,60 V80" class="s-fg" stroke-width="1.5" marker-end="url(#ra-af)" />
+                <rect
+                  x="40"
+                  y="82"
+                  width="330"
+                  height="40"
+                  rx="6"
+                  class="f-surface s-fg"
+                  stroke-width="1.5"
+                />
+                <circle cx="58" cy="102" r="8" class="f-acc" />
+                <text x="58" y="106" text-anchor="middle" class="num">3</text>
+                <text x="74" y="98" class="tlb">Ledger: reacquire ownership</text>
+                <text x="74" y="113" class="ts">fenced; the continuation grants no authority</text>
+
+                <rect x="40" y="140" width="460" height="28" fill="url(#ra-rec)" class="dim" />
+                <rect x="516" y="140" width="384" height="28" fill="url(#ra-rec)" />
+                <path d="M502,174 L510,134 M510,174 L518,134" class="s-faint" stroke-width="1.5" />
+                <text x="34" y="158" text-anchor="end">1</text>
+                <text x="906" y="158">81,250</text>
+                <text x="270" y="158" text-anchor="middle" class="halo">
+                  seq 1 – 80,999 · not read
+                </text>
+
+                <rect
+                  x="531.4"
+                  y="140"
+                  width="92.1"
+                  height="28"
+                  class="f-acc-soft s-acc"
+                  stroke-width="1.5"
+                />
+                <rect x="667.1" y="140" width="5" height="28" class="f-acc" />
+                <rect x="759.3" y="140" width="5" height="28" class="f-acc" />
+                <rect x="820.7" y="140" width="5" height="28" class="f-acc" />
+                <rect x="866.8" y="140" width="5" height="28" class="f-acc" />
+
+                <path
+                  d="M810,60 Q650,68 577.4,137"
+                  class="s-acc"
+                  stroke-width="1.5"
+                  marker-end="url(#ra-aa)"
+                />
+                <path
+                  d="M825,60 Q715,76 669.6,137"
+                  class="s-acc"
+                  stroke-width="1.5"
+                  marker-end="url(#ra-aa)"
+                />
+                <path
+                  d="M840,60 Q790,88 761.8,137"
+                  class="s-acc"
+                  stroke-width="1.5"
+                  marker-end="url(#ra-aa)"
+                />
+                <path
+                  d="M852,60 Q832,98 823.2,137"
+                  class="s-acc"
+                  stroke-width="1.5"
+                  marker-end="url(#ra-aa)"
+                />
+                <line x1="869.3" y1="60" x2="869.3" y2="140" class="s-acc" stroke-width="2" />
+                <circle cx="556" cy="100" r="8" class="f-acc" />
+                <text x="556" y="104" text-anchor="middle" class="num">2</text>
+                <text x="541" y="104" text-anchor="end" class="ts x-acc">
+                  a handful of exact reads
+                </text>
+
+                <g text-anchor="middle">
+                  <text x="577.4" y="187" class="tlb">context</text>
+                  <text x="577.4" y="202">81,010–81,070</text>
+                  <text x="669.6" y="187" class="tlb">declaration</text>
+                  <text x="669.6" y="202">81,100</text>
+                  <text x="761.8" y="187" class="tlb">result</text>
+                  <text x="761.8" y="202">81,160</text>
+                  <text x="823.2" y="187" class="tlb">approval</text>
+                  <text x="823.2" y="202">81,200</text>
+                </g>
+              </svg>
+            </div>
+            <ol class="steps">
+              <li>
+                <span class="n">1</span
+                ><span><b>Read the latest continuation.</b>One indexed lookup.</span>
+              </li>
+              <li>
+                <span class="n">2</span
+                ><span
+                  ><b>Resolve its references.</b>Declarations, results, approvals and the saved
+                  context, in a handful of exact reads.</span
+                >
+              </li>
+              <li>
+                <span class="n">3</span
+                ><span
+                  ><b>Reacquire ownership through the ledger.</b>The continuation grants no
+                  authority.</span
+                >
+              </li>
+              <li>
+                <span class="n">4</span
+                ><span
+                  ><b>Resume.</b>Unknown stays Unknown. Durable tools resume only under a compatible
+                  contract.</span
+                >
+              </li>
+            </ol>
+          </figure>
+        </div>
+        <p class="note">
+          Recovery of one Run is bounded by its open work. A <b>new</b> Run is different: before its
+          first model call it assembles the model’s view of the conversation from the log. Without
+          compaction, that view is the whole conversation. <a href="#anatomy">Part II</a> measures
+          that step.
+        </p>
+      </section>
+
+      <section id="readers">
+        <div class="sec-head">
+          <p class="eyebrow">Reads</p>
+          <h2>One log, three readers</h2>
+          <p class="sub">
+            The log stays one sequence. Storage can seal old ranges into partitions, and nothing
+            above the storage adapter notices. Each reader loads only what bounds it.
+          </p>
+        </div>
+
+        <figure class="plate">
+          <div class="scroll">
+            <svg
+              class="dg"
+              viewBox="0 0 960 300"
+              role="img"
+              aria-label="One log in three ranges: two sealed archivable ranges and a hot range. Run R's continuation reads three records in the hot range by reference. An old Unknown Run reads records in an archived range by reference. The next model request reads a compaction summary and the recent turns. The history UI reads ranges across every partition, newest first."
+            >
+              <defs>
+                <pattern id="rd-rec" width="6" height="40" patternUnits="userSpaceOnUse">
+                  <rect width="6" height="40" class="f-tape" />
+                  <line x1="5.5" y1="0" x2="5.5" y2="40" class="s-rec" stroke-width="1" />
+                </pattern>
+                <pattern
+                  id="rd-hatch"
+                  width="7"
+                  height="7"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform="rotate(45)"
+                >
+                  <rect width="7" height="7" class="f-sealed" />
+                  <line x1="0" y1="0" x2="0" y2="7" class="s-hatch" stroke-width="2.5" />
+                </pattern>
+                <marker
+                  id="rd-aa"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="10"
+                  markerHeight="10"
+                  markerUnits="userSpaceOnUse"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" class="f-acc" />
+                </marker>
+                <marker
+                  id="rd-ac"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="10"
+                  markerHeight="10"
+                  markerUnits="userSpaceOnUse"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" class="f-ctx" />
+                </marker>
+                <marker
+                  id="rd-af"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="10"
+                  markerHeight="10"
+                  markerUnits="userSpaceOnUse"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" class="f-fg" />
+                </marker>
+              </defs>
+
+              <rect
+                x="60"
+                y="20"
+                width="200"
+                height="36"
+                rx="6"
+                class="f-surface s-acc dash"
+                stroke-width="1.5"
+              />
+              <text x="160" y="35" text-anchor="middle" class="tlb x-acc">old Unknown Run</text>
+              <text x="160" y="49" text-anchor="middle" class="x-acc">refs into an archive</text>
+              <path
+                d="M130,56 Q118,80 110,107"
+                class="s-acc dash"
+                stroke-width="1.5"
+                marker-end="url(#rd-aa)"
+              />
+              <path
+                d="M190,56 Q206,80 220,107"
+                class="s-acc dash"
+                stroke-width="1.5"
+                marker-end="url(#rd-aa)"
+              />
+
+              <line x1="304" y1="66" x2="304" y2="110" class="s-fg" stroke-width="1" />
+              <circle cx="304" cy="66" r="2.5" class="f-fg" />
+              <text x="314" y="74" class="ts x-fg">
+                A partition boundary is a storage decision.
+              </text>
+              <text x="314" y="90" class="ts">Runs span it. The interpreter never sees it.</text>
+
+              <rect x="730" y="20" width="180" height="36" rx="6" class="f-acc" />
+              <text x="820" y="35" text-anchor="middle" class="tlb x-on">Run R continuation</text>
+              <text x="820" y="49" text-anchor="middle" class="ts x-on">
+                exact reads by reference
+              </text>
+              <path d="M790,56 V107" class="s-acc" stroke-width="1.5" marker-end="url(#rd-aa)" />
+              <path d="M830,56 V107" class="s-acc" stroke-width="1.5" marker-end="url(#rd-aa)" />
+              <path d="M870,56 V107" class="s-acc" stroke-width="1.5" marker-end="url(#rd-aa)" />
+
+              <rect
+                x="40"
+                y="110"
+                width="260"
+                height="36"
+                fill="url(#rd-hatch)"
+                class="s-rule"
+                stroke-width="1"
+              />
+              <rect
+                x="308"
+                y="110"
+                width="260"
+                height="36"
+                fill="url(#rd-hatch)"
+                class="s-rule"
+                stroke-width="1"
+              />
+              <rect
+                x="576"
+                y="110"
+                width="344"
+                height="36"
+                fill="url(#rd-rec)"
+                class="s-rule"
+                stroke-width="1"
+              />
+              <rect x="107.5" y="110" width="5" height="36" class="f-acc" />
+              <rect x="217.5" y="110" width="5" height="36" class="f-acc" />
+              <rect x="757.5" y="110" width="5" height="36" class="f-ctx" />
+              <rect x="787.5" y="110" width="5" height="36" class="f-acc" />
+              <rect x="827.5" y="110" width="5" height="36" class="f-acc" />
+              <rect x="867.5" y="110" width="5" height="36" class="f-acc" />
+              <text x="590" y="132" class="x-fg halo">hot</text>
+
+              <g text-anchor="middle">
+                <text x="170" y="166" class="x-fg">1 – 40,000</text>
+                <text x="170" y="181" class="ts">sealed · archivable</text>
+                <text x="438" y="166" class="x-fg">40,001 – 80,000</text>
+                <text x="438" y="181" class="ts">sealed · archivable</text>
+              </g>
+              <text x="580" y="166" class="x-fg">80,001 – 81,250</text>
+              <text x="580" y="181" class="ts">hot storage</text>
+
+              <path d="M760,210 V150" class="s-ctx" stroke-width="1.5" marker-end="url(#rd-ac)" />
+              <path d="M840,150 v8 H920 v-8" class="s-ctx" stroke-width="1.5" />
+              <path d="M880,210 V162" class="s-ctx" stroke-width="1.5" marker-end="url(#rd-ac)" />
+              <rect x="700" y="210" width="220" height="36" rx="6" class="f-ctx" />
+              <text x="810" y="225" text-anchor="middle" class="tlb x-on">next model request</text>
+              <text x="810" y="239" text-anchor="middle" class="ts x-on">
+                summary @80,900 + recent turns
+              </text>
+
+              <text x="480" y="272" text-anchor="middle" class="tlb">
+                History UI: range reads across every partition, newest first
+              </text>
+              <path d="M920,286 H44" class="s-fg" stroke-width="1.5" marker-end="url(#rd-af)" />
+              <path d="M920,280 V292 M40,280 V292" class="s-fg" stroke-width="1.5" />
+            </svg>
+          </div>
+          <p class="scroll-hint">Scroll sideways for the full diagram →</p>
+          <figcaption>
+            Ranges are not drawn to scale. Resuming a Run does not depend on what compaction kept
+            for the model or on where the partition boundaries fall.
+          </figcaption>
+        </figure>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Bounded view</th>
+                <th>Bounded by</th>
+                <th>Owner</th>
+                <th>Changes when</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><i class="sw sw-ctx"></i>Context window</td>
+                <td>tokens</td>
+                <td>compaction</td>
+                <td>every turn</td>
+              </tr>
+              <tr>
+                <td><i class="sw sw-acc"></i>Live state</td>
+                <td>open work since the continuation</td>
+                <td>recovery, projection</td>
+                <td>every commit</td>
+              </tr>
+              <tr>
+                <td><i class="sw sw-sealed"></i>Storage partition</td>
+                <td>records, storage policy</td>
+                <td>storage adapter</td>
+                <td>at rotation</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="formats">
+        <div class="sec-head">
+          <p class="eyebrow">Formats</p>
+          <h2>Changing a format</h2>
+          <p class="sub">
+            One version number used to cover the table layout and the meaning of every record. Now
+            three kinds of data follow three rules.
+          </p>
+        </div>
+
+        <div class="fmt">
+          <div class="plate">
+            <p class="eyebrow">Before · one gate</p>
+            <div class="gate">user_version N → N+1</div>
+            <p class="small">
+              One number covers the table layout <em>and</em> every record’s meaning. A change takes
+              one of two paths.
+            </p>
+            <ul class="branches">
+              <li>Adapter-owned SQL rewrites of payloads, ledger rows and checkpoints</li>
+              <li>Refuse the store and start fresh</li>
+            </ul>
+          </div>
+
+          <div class="plate">
+            <p class="eyebrow">Now · three rules</p>
+            <div>
+              <div class="lane">
+                <div class="lane-name"><b>Layout</b><span>table shape</span></div>
+                <div class="flow">
+                  <span class="chip">ordered SQL steps</span><span class="arr">→</span
+                  ><span class="chip">one transaction</span
+                  ><span class="aside">store newer than the code: refused</span>
+                </div>
+              </div>
+              <div class="lane">
+                <div class="lane-name"><b>History</b><span>records in the log</span></div>
+                <div class="flows">
+                  <div class="flow">
+                    <span class="chip ghost">additive change</span><span class="arr">→</span
+                    ><span class="free">free, nothing to do</span>
+                  </div>
+                  <div class="flow">
+                    <span class="chip ghost">semantic change</span><span class="arr">→</span
+                    ><span class="chip">export</span><span class="arr">→</span
+                    ><span class="chip">re-encode</span><span class="arr">→</span
+                    ><span class="chip">import</span>
+                  </div>
+                </div>
+              </div>
+              <div class="lane">
+                <div class="lane-name">
+                  <b>Live state</b><span>continuations, operation state</span>
+                </div>
+                <div class="flow">
+                  <span class="chip">versioned</span><span class="arr">→</span
+                  ><span class="chip acc">narrow conversion</span
+                  ><span class="aside acc">the only mandatory conversion</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== PART II ============================== -->
+      <div class="part-head">
+        <p class="eyebrow">Part II</p>
+        <h2>What a turn costs, measured</h2>
+        <p class="sub">
+          One workload, one machine, one platform. The <code>examples/durable-bench</code> bake-off
+          runs the same scripted conversation in a SQLite Durable Object for Yielded Agent and for
+          <a href="https://www.npmjs.com/package/@earendil-works/pi-durable">pi-durable</a> 1.0.4.
+          Because the platform is held constant, the differences belong to the libraries.
+        </p>
+      </div>
+
+      <section id="aging">
+        <div class="sec-head">
+          <p class="eyebrow">Cost as a Thread ages</p>
+          <h2>Every line grows. Ours grew fastest.</h2>
+          <p class="sub">
+            Compaction is off for every target, so each model call sees the whole conversation and
+            no line can be flat. <b>main</b> also stored a list of every prior record with each Run,
+            so its log grew quadratically and Runs were refused past about 1,230 turns. The
+            <b>spike</b> stores a fixed-size boundary instead.
+          </p>
+        </div>
+
+        <div class="tiles" aria-label="Headline numbers at 1,000 turns">
+          <div class="tile">
+            <span class="label">Warm turn at 1,000 turns, spike</span>
+            <span class="value">292<small>ms</small></span>
+            <span class="vs"
+              ><span><i class="sw sw-main"></i>main 647</span
+              ><span><i class="sw sw-pi"></i>pi 110</span></span
+            >
+          </div>
+          <div class="tile">
+            <span class="label">Storage at 1,000 turns, spike</span>
+            <span class="value">50<small>MB</small></span>
+            <span class="vs"
+              ><span><i class="sw sw-main"></i>main 842</span
+              ><span><i class="sw sw-pi"></i>pi 2.9</span></span
+            >
+          </div>
+          <div class="tile">
+            <span class="label">Share of our CPU spent in the platform</span>
+            <span class="value">7<small>%</small></span>
+            <span class="vs"
+              ><span
+                >SQLite, the Cloudflare adapter and crypto; the rest is our runtime and Effect</span
+              ></span
+            >
+          </div>
+        </div>
+
+        <figure class="plate">
+          <div class="chart-legend" aria-label="Series">
+            <span><i class="sw sw-pi"></i>pi-durable 1.0.4</span>
+            <span><i class="sw sw-main"></i>Yielded main</span>
+            <span><i class="sw sw-spike"></i>Yielded spike</span>
+          </div>
+          <div class="two">
+            <div>
+              <p class="chart-title">Warm turn, ms</p>
+              <div class="chart" id="chart-warm"></div>
+            </div>
+            <div>
+              <p class="chart-title">Database size, MB, log scale</p>
+              <div class="chart" id="chart-storage"></div>
+            </div>
+          </div>
+          <figcaption>
+            <b>Warm turn:</b> median of the ten measured turns of eight tool calls each, first
+            excluded. <b>Database size:</b> after the measured turns, log scale. The amber rule
+            marks where <b>main</b> rejects new Runs: its saved context listed every earlier record,
+            capped at 4,096 references. Hover a chart for values.
+          </figcaption>
+          <details class="data">
+            <summary>Show the numbers</summary>
+            <div class="tablewrap" id="table-aging"></div>
+          </details>
+        </figure>
+      </section>
+
+      <section id="anatomy">
+        <div class="sec-head">
+          <p class="eyebrow">Anatomy of a warm turn</p>
+          <h2>Both rebuild the conversation. pi’s rebuild is far cheaper.</h2>
+          <p class="sub">
+            Each turn makes nine model calls and eight tool calls. Before the first model call, our
+            runtime reads the conversation from the log, decodes and projects it, and commits the
+            Run’s start. pi starts almost immediately, then re-reads its conversation from SQLite on
+            every model request: at least nine full rebuilds per turn. It still spends less, so the
+            gap is <b>our cost per record</b>, not how often we rebuild. Once the model calls begin,
+            <b>our steps are cheaper than pi’s</b>.
+          </p>
+        </div>
+
+        <figure class="plate">
+          <div class="chart-legend" aria-label="Phases">
+            <span
+              ><i class="shade"></i>before the first model call: assemble context, commit
+              start</span
+            >
+            <span><i class="shade s2"></i>9 model calls and 8 tool settlements</span>
+            <span><i class="shade s3"></i>settle the turn</span>
+          </div>
+          <div
+            class="chart wide"
+            id="chart-anatomy"
+            aria-label="Milliseconds per phase of a warm turn, by target and Thread age"
+          ></div>
+          <figcaption>
+            CPU-profiled warm turns, split by the benchmark’s entry and scripted-model frames;
+            median of six turns. Profiling adds 15–20% over the unprofiled medians above.
+            <b>main</b> has no 3,500-turn bar because it rejects that Thread.
+          </figcaption>
+          <details class="data">
+            <summary>Show the numbers</summary>
+            <div class="tablewrap" id="table-anatomy"></div>
+          </details>
+        </figure>
+
+        <div class="callout">
+          <p>
+            <b>What grows inside our steps.</b> The engine estimates the prompt’s tokens on every
+            model call even when no <code>contextTokenLimit</code> is set: about 11 ms per turn at
+            1,000 turns and 44 ms at 3,500. The rest of a step (encode, hash and append the batch,
+            write the continuation) is about 5–6 ms and does not grow.
+          </p>
+          <p>
+            <b>What grows inside pi’s steps.</b> Each model request scans the conversation’s entries
+            from SQLite between its latest head marker and the tail, parses them and derives the
+            context. Its benchmark harness then converts the transcript again; the harness alone is
+            24–30% of pi’s turn. Outside the harness pi spends about 98 ms per turn at 1,000 turns
+            on at least nine rebuilds of 3,335 entries: under 3.3 µs per entry. Our one rebuild
+            reads about 6,300 records in 280 ms: about 44 µs per record.
+          </p>
+        </div>
+      </section>
+
+      <section id="layers">
+        <div class="sec-head">
+          <p class="eyebrow">Who owns the CPU</p>
+          <h2>The platform is 7% of our turn</h2>
+          <p class="sub">
+            The same profiles, grouped by the module each sample ran in. Durable Object SQLite, the
+            Cloudflare adapter and native crypto are the only platform-specific rows. The gap is in
+            our runtime and in how it uses Effect: decoding every stored record through Schema, and
+            wrapping per-record work in fibers.
+          </p>
+        </div>
+
+        <figure class="plate">
+          <div class="chart-legend" aria-label="Series">
+            <span><i class="sw sw-pi"></i>pi-durable 1.0.4 · 130 ms</span>
+            <span><i class="sw sw-main"></i>Yielded main · 812 ms</span>
+            <span><i class="sw sw-spike"></i>Yielded spike · 351 ms</span>
+          </div>
+          <div
+            class="chart wide"
+            id="chart-layers"
+            aria-label="Profiled milliseconds per warm turn at 1,000 turns, by layer and target"
+          ></div>
+          <figcaption>
+            Self time per warm turn at 1,000 turns, profiled. A row counts the samples whose
+            innermost frame ran in that layer, so Schema work started by the durable runtime is
+            counted under Schema. pi does not use Effect, so its Effect rows are empty.
+          </figcaption>
+          <details class="data">
+            <summary>Show the numbers</summary>
+            <div class="tablewrap" id="table-layers"></div>
+          </details>
+        </figure>
+
+        <div class="own">
+          <div class="plate">
+            <p class="eyebrow">Platform-specific · spike</p>
+            <span class="big">25 ms</span>
+            <ul>
+              <li>
+                <span
+                  >Durable Object SQLite<small>native <code>exec</code></small></span
+                ><span>14.7 ms</span>
+              </li>
+              <li>
+                <span
+                  >Cloudflare adapter and host<small
+                    ><code>storage-cloudflare</code>, <code>platform-cloudflare</code>,
+                    <code>@effect/sql-sqlite-do</code></small
+                  ></span
+                ><span>10.3 ms</span>
+              </li>
+              <li>
+                <span>Native crypto<small>SHA-256</small></span
+                ><span>0.2 ms</span>
+              </li>
+            </ul>
+            <p class="small">
+              On Node, <code>storage-sqlite</code> and <code>platform-node</code> fill these rows.
+              Everything else runs unchanged.
+            </p>
+          </div>
+          <div class="plate">
+            <p class="eyebrow">Platform-neutral · spike</p>
+            <span class="big">326 ms</span>
+            <ul>
+              <li>
+                <span
+                  >Durable runtime<small
+                    >journal, context assembly, projection, continuations, digests ·
+                    <code>@yielded/agent</code> durable</small
+                  ></span
+                ><span>71.1 ms</span>
+              </li>
+              <li>
+                <span
+                  >Effect Schema<small
+                    >decoding stored record envelopes and Prompts, encoding new records</small
+                  ></span
+                ><span>89.5 ms</span>
+              </li>
+              <li>
+                <span
+                  >Effect fibers, data and AI<small
+                    >generators around per-record work, structural equality,
+                    <code>LanguageModel</code></small
+                  ></span
+                ><span>71.8 ms</span>
+              </li>
+              <li>
+                <span
+                  >Engine and core<small>interpreter, token estimate, instruction view</small></span
+                ><span>25.9 ms</span>
+              </li>
+              <li>
+                <span
+                  >GC, JS built-ins and other native<small
+                    >V8 collector, JSON, strings, arrays</small
+                  ></span
+                ><span>60.7 ms</span>
+              </li>
+              <li>
+                <span
+                  >Shared SQL adapter and harness<small
+                    ><code>storage-sql</code>, the scripted model</small
+                  ></span
+                ><span>6.6 ms</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout">
+          <p>
+            <b>“Warm isolate” is about memory, not Cloudflare.</b> In the bench, warm means later
+            turns in the same Durable Object instance; cold means a fresh process, open and first
+            turn. Node has the same split: a resident host process versus a restart.
+          </p>
+          <p>
+            Today the runtime reuses nothing between Runs on either platform, so our warm and cold
+            turns differ only by JIT and codec warm-up (292 vs 389 ms at 1,000 turns). pi reuses no
+            context either: its Durable Object keeps a conversation handle, not the context. The
+            platform decides how often a cache would hit: Cloudflare evicts idle objects, so a turn
+            after a pause often starts cold, while a Node host keeps memory until it restarts.
+          </p>
+        </div>
+      </section>
+
+      <section id="saved-context">
+        <div class="sec-head">
+          <p class="eyebrow">Saved context</p>
+          <h2>Why main’s log grew quadratically</h2>
+          <p class="sub">
+            Each Run writes a <code>RunContextRecorded</code> with its start, so recovery can
+            rebuild the exact prompt the Run began with. On main that record named every earlier
+            history record by id, sequence and digest. Every new Run copied the list and added to
+            it.
+          </p>
+        </div>
+
+        <figure class="plate">
+          <div class="panel-head">
+            <p class="eyebrow">main</p>
+            <p class="stat cost">Run k saves k − 1 Runs of references</p>
+          </div>
+          <div class="scroll">
+            <svg
+              class="dg"
+              viewBox="0 0 960 236"
+              role="img"
+              aria-label="main: a log of six Runs. Each Run's saved context, drawn as an amber bar under the log, spans every record before it, so the bars form a staircase whose area grows quadratically. At 1,000 turns one saved context holds 3,330 references and is 778 KB."
+            >
+              <defs>
+                <pattern id="sc-rec" width="6" height="40" patternUnits="userSpaceOnUse">
+                  <rect width="6" height="40" class="f-tape" />
+                  <line x1="5.5" y1="0" x2="5.5" y2="40" class="s-rec" stroke-width="1" />
+                </pattern>
+              </defs>
+              <rect x="40" y="18" width="640" height="28" fill="url(#sc-rec)" />
+              <g class="s-fg" stroke-width="1.5">
+                <line x1="40" y1="14" x2="40" y2="50" />
+                <line x1="146.7" y1="14" x2="146.7" y2="50" />
+                <line x1="253.3" y1="14" x2="253.3" y2="50" />
+                <line x1="360" y1="14" x2="360" y2="50" />
+                <line x1="466.7" y1="14" x2="466.7" y2="50" />
+                <line x1="573.3" y1="14" x2="573.3" y2="50" />
+                <line x1="680" y1="14" x2="680" y2="50" />
+              </g>
+              <g text-anchor="middle">
+                <text x="93.3" y="36" class="x-fg halo">Run 1</text>
+                <text x="200" y="36" class="x-fg halo">Run 2</text>
+                <text x="306.7" y="36" class="x-fg halo">Run 3</text>
+                <text x="413.3" y="36" class="x-fg halo">Run 4</text>
+                <text x="520" y="36" class="x-fg halo">Run 5</text>
+                <text x="626.7" y="36" class="x-fg halo">Run 6</text>
+              </g>
+              <g class="f-cost">
+                <rect x="146.7" y="20" width="6" height="24" />
+                <rect x="253.3" y="20" width="6" height="24" />
+                <rect x="360" y="20" width="6" height="24" />
+                <rect x="466.7" y="20" width="6" height="24" />
+                <rect x="573.3" y="20" width="6" height="24" />
+              </g>
+              <g class="f-cost-soft s-cost" stroke-width="1.5">
+                <rect x="40" y="64" width="106.7" height="16" rx="3" />
+                <rect x="40" y="88" width="213.3" height="16" rx="3" />
+                <rect x="40" y="112" width="320" height="16" rx="3" />
+                <rect x="40" y="136" width="426.7" height="16" rx="3" />
+                <rect x="40" y="160" width="533.3" height="16" rx="3" />
+              </g>
+              <g class="ts">
+                <text x="156" y="76">Run 2’s saved context</text>
+                <text x="263" y="100">Run 3’s</text>
+                <text x="370" y="124">Run 4’s</text>
+                <text x="477" y="148">Run 5’s</text>
+                <text x="583" y="172">Run 6’s</text>
+              </g>
+              <text x="40" y="204" class="tl x-cost">
+                one reference per earlier record: id, sequence, digest
+              </text>
+              <text x="40" y="224" class="ts">
+                and each new Run resolves and re-hashes every reference in the previous Run’s list
+              </text>
+              <g text-anchor="end">
+                <text x="930" y="80" class="tlb">at 1,000 turns</text>
+                <text x="930" y="100" class="ts">3,330 references per Run</text>
+                <text x="930" y="118" class="ts">778 KB per saved context</text>
+                <text x="930" y="136" class="ts">389 MB of saved contexts</text>
+                <text x="930" y="154" class="ts">× 2 with the batch copy = 824 MB</text>
+                <text x="930" y="180" class="tlb x-cost">cap: 4,096 references</text>
+                <text x="930" y="198" class="ts x-cost">≈ 1,230 turns of this workload</text>
+              </g>
+            </svg>
+          </div>
+        </figure>
+
+        <figure class="plate">
+          <div class="panel-head">
+            <p class="eyebrow">spike</p>
+            <p class="stat acc">Run k saves two sequence numbers and a digest</p>
+          </div>
+          <div class="scroll">
+            <svg
+              class="dg"
+              viewBox="0 0 960 196"
+              role="img"
+              aria-label="spike: the same log of six Runs. Each Run's saved context is a small fixed-size record holding the range start and end and a digest of the projected history, drawn as thin cobalt range lines. Facts older than the latest compaction that are still used are named individually."
+            >
+              <defs>
+                <pattern id="sc-rec2" width="6" height="40" patternUnits="userSpaceOnUse">
+                  <rect width="6" height="40" class="f-tape" />
+                  <line x1="5.5" y1="0" x2="5.5" y2="40" class="s-rec" stroke-width="1" />
+                </pattern>
+              </defs>
+              <rect x="40" y="18" width="640" height="28" fill="url(#sc-rec2)" />
+              <g class="s-fg" stroke-width="1.5">
+                <line x1="40" y1="14" x2="40" y2="50" />
+                <line x1="146.7" y1="14" x2="146.7" y2="50" />
+                <line x1="253.3" y1="14" x2="253.3" y2="50" />
+                <line x1="360" y1="14" x2="360" y2="50" />
+                <line x1="466.7" y1="14" x2="466.7" y2="50" />
+                <line x1="573.3" y1="14" x2="573.3" y2="50" />
+                <line x1="680" y1="14" x2="680" y2="50" />
+              </g>
+              <g text-anchor="middle">
+                <text x="93.3" y="36" class="x-fg halo">Run 1</text>
+                <text x="200" y="36" class="x-fg halo">Run 2</text>
+                <text x="306.7" y="36" class="x-fg halo">Run 3</text>
+                <text x="413.3" y="36" class="x-fg halo">Run 4</text>
+                <text x="520" y="36" class="x-fg halo">Run 5</text>
+                <text x="626.7" y="36" class="x-fg halo">Run 6</text>
+              </g>
+              <g class="f-acc">
+                <rect x="146.7" y="20" width="6" height="24" />
+                <rect x="253.3" y="20" width="6" height="24" />
+                <rect x="360" y="20" width="6" height="24" />
+                <rect x="466.7" y="20" width="6" height="24" />
+                <rect x="573.3" y="20" width="6" height="24" />
+              </g>
+              <g class="s-acc" stroke-width="1.5">
+                <path d="M40,66 V74 H146.7 V66" />
+                <path d="M40,82 V90 H253.3 V82" />
+                <path d="M40,98 V106 H360 V98" />
+                <path d="M40,114 V122 H466.7 V114" />
+                <path d="M40,130 V138 H573.3 V130" />
+              </g>
+              <text x="40" y="164" class="tl x-acc">
+                historyFrom · historyThrough · retained · historyDigest
+              </text>
+              <text x="40" y="184" class="ts">
+                ≤ 666 bytes per Run at every Thread age. A new Run re-reads the range; recovery
+                re-projects it and must reproduce the digest.
+              </text>
+              <g text-anchor="end">
+                <text x="930" y="80" class="tlb">at 1,000 turns</text>
+                <text x="930" y="100" class="ts">0 references per Run</text>
+                <text x="930" y="118" class="ts">0.2 MB of saved contexts</text>
+                <text x="930" y="136" class="ts">50 MB database</text>
+                <text x="930" y="162" class="tlb x-acc">no cap from Thread age</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption>
+            With compaction on, <code>historyFrom</code> moves past history retired by a summarize
+            or rollover, and <code>retained</code> names the few older facts the summary still uses.
+            The range is immutable once written: sequences below the admission never change.
+          </figcaption>
+        </figure>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Work per warm turn at 1,000 turns</th>
+                <th class="num">main</th>
+                <th class="num">spike</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Saved-context references resolved one by one</td>
+                <td class="num">3,334</td>
+                <td class="num">0</td>
+              </tr>
+              <tr>
+                <td>
+                  Point reads for tool declarations and terminals<small
+                    >skipped when the declaration is already in the range</small
+                  >
+                </td>
+                <td class="num">4,021</td>
+                <td class="num">0</td>
+              </tr>
+              <tr>
+                <td>SHA-256 digests</td>
+                <td class="num">7,460 · 8.2 MB</td>
+                <td class="num">54 · 0.6 MB</td>
+              </tr>
+              <tr>
+                <td>
+                  Canonical record encodings<small>stored records now cache their encoding</small>
+                </td>
+                <td class="num">23,172</td>
+                <td class="num">10,034</td>
+              </tr>
+              <tr>
+                <td>Bytes added to the database</td>
+                <td class="num">1.7 MB</td>
+                <td class="num">0.15 MB</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="levers">
+        <div class="sec-head">
+          <p class="eyebrow">Gaps and levers</p>
+          <h2>Where the remaining time goes</h2>
+          <p class="sub">
+            Sizes are profiled milliseconds per warm turn at 1,000 and 3,500 turns, except database
+            size. Every gap is in platform-neutral code.
+          </p>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Gap</th>
+                <th>Owner</th>
+                <th class="num">1,000</th>
+                <th class="num">3,500</th>
+                <th>Lever</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Context rebuilt at every Run start<small
+                    >pi: about 12 and 35 ms before its first model call; it rebuilds on every call
+                    instead, at under 3.3 µs per entry</small
+                  >
+                </td>
+                <td>durable runtime, Effect Schema</td>
+                <td class="num">280 ms</td>
+                <td class="num">899 ms</td>
+                <td>
+                  <b>Per record, every turn:</b> read only record types that can enter the history,
+                  decode payloads without the full envelope Schema, project in one pass, and check
+                  immutable history once instead of on every Run. pi shows this is enough without a
+                  cache. <span class="tag est">estimate: tens of ms at 1,000 turns</span><br /><b
+                    >Warm turns only:</b
+                  >
+                  keep the previous Run’s checked history in memory and extend it. This hides the
+                  rebuild on warm turns but not on cold ones, which Cloudflare’s eviction makes
+                  common. <span class="tag est">estimate: warm turn ≈ steps + settle</span>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Token estimate on every model call<small
+                    >runs without <code>contextTokenLimit</code></small
+                  >
+                </td>
+                <td>engine · <code>compaction.ts</code></td>
+                <td class="num">11 ms</td>
+                <td class="num">44 ms</td>
+                <td>Skip it when compaction is off, or estimate incrementally.</td>
+              </tr>
+              <tr>
+                <td>
+                  Fixed durability work in the steps<small>about 5–6 ms per model step</small>
+                </td>
+                <td>durable runtime append path</td>
+                <td class="num">≈ 50 ms</td>
+                <td class="num">≈ 50 ms</td>
+                <td>
+                  Profile encode, batch digest and continuation on their own; nine steps per turn
+                  multiply every millisecond.
+                </td>
+              </tr>
+              <tr>
+                <td>Database size<small>pi: 2.9 and 9.4 MB</small></td>
+                <td>storage adapters</td>
+                <td class="num">50 MB</td>
+                <td class="num">168 MB</td>
+                <td>
+                  Drop the hot <code>batch_json</code> copy (half the bytes); shrink the ~4.7
+                  continuations written per Run.
+                </td>
+              </tr>
+              <tr>
+                <td>Saved context lists every record</td>
+                <td>durable runtime</td>
+                <td class="num">—</td>
+                <td class="num">—</td>
+                <td>
+                  Range boundary with a prompt digest.
+                  <span class="tag done">measured on the spike branch</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Stored records re-encoded about 7× per turn</td>
+                <td>durable runtime</td>
+                <td class="num">—</td>
+                <td class="num">—</td>
+                <td>
+                  Cache the canonical encoding of read records.
+                  <span class="tag done">measured on the spike branch: ≈ 5%</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Declarations re-read for every tool result</td>
+                <td>durable runtime</td>
+                <td class="num">—</td>
+                <td class="num">—</td>
+                <td>
+                  Skip results whose declaration is already in the range.
+                  <span class="tag done">measured on the spike branch: −34% at 1,000</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          Estimates are inferred from the phase split, not measured. At pi’s cost per entry, our
+          rebuild of about 6,300 records would take about 20 ms, leaving a warm turn near 90 ms at
+          1,000 turns (profiled), against pi’s 130 ms profiled. That would help cold and warm turns
+          alike. A cache would only remove the rebuild from warm turns.
+        </p>
+      </section>
+
+      <section id="tradeoffs">
+        <div class="sec-head">
+          <p class="eyebrow">Tradeoffs</p>
+          <h2>Verify history at the edges, not on every Run</h2>
+          <p class="sub">
+            Main re-proves the whole history whenever a Run starts: it resolves every earlier
+            record, checks its digest, re-checks old tool declarations and projects the prompt
+            again. pi trusts its stored entries and reads them. The cheaper design checks history
+            when it is written, sealed, imported or used for cold recovery. That shift is what the
+            remaining speed costs.
+          </p>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Change</th>
+                <th>Gain</th>
+                <th>Give up</th>
+                <th>What still holds</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Saved context as a range<small>measured on the spike branch</small></td>
+                <td>Fixed-size record per Run; no reference cap; 842 → 50 MB at 1,000 turns</td>
+                <td>
+                  Per-record digest checks when a new Run reads history; import checks the boundary
+                  but no longer re-projects the range
+                </td>
+                <td>
+                  Cold recovery rebuilds the prompt and must match the saved digest; the append-only
+                  batch hash chain covers every record
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Skip checks for in-range declarations<small>measured on the spike branch</small>
+                </td>
+                <td>−34% warm turn at 1,000 turns</td>
+                <td>Re-hashing those declarations on every Run</td>
+                <td>Late results whose declaration lies outside the range keep the full check</td>
+              </tr>
+              <tr>
+                <td>Cache encodings of read records<small>measured on the spike branch</small></td>
+                <td>≈ 5% CPU</td>
+                <td>Memory for each record’s JSON while the record lives</td>
+                <td>Freed with the record; bounded by one assembly</td>
+              </tr>
+              <tr>
+                <td>Read only record types that enter history</td>
+                <td>About half the rows</td>
+                <td>A second statement of what the projection needs</td>
+                <td>Derive both from one list; the recovery digest catches drift</td>
+              </tr>
+              <tr>
+                <td>Decode only the fields projection uses</td>
+                <td>Most of the Schema cost</td>
+                <td>Full validation on read; records were validated when written</td>
+                <td>A narrower Schema, never a type assertion</td>
+              </tr>
+              <tr>
+                <td>One projection pass</td>
+                <td>Less CPU and GC</td>
+                <td>Risk in the runtime’s hardest code</td>
+                <td>Compaction and recovery suites, transcript fingerprints</td>
+              </tr>
+              <tr>
+                <td>Drop the hot <code>batch_json</code> copy</td>
+                <td>Half the stored bytes</td>
+                <td>Archive and export must rebuild batch JSON byte for byte</td>
+                <td>Canonical JSON is deterministic; prove it before relying on it</td>
+              </tr>
+              <tr>
+                <td>Skip the token estimate without a limit or budget</td>
+                <td>11–44 ms per turn</td>
+                <td>Nothing: it serves compaction and <code>tokenBudget</code> admission</td>
+                <td>Both still estimate when configured</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          Unchanged: the append-only log, fencing, ownership, continuations, Unknown staying
+          Unknown, and what the model sees. Without compaction a turn still grows with the
+          conversation, for pi too; these changes shrink the cost per record, they do not make the
+          line flat.
+        </p>
+      </section>
+
+      <section id="method">
+        <div class="sec-head">
+          <p class="eyebrow">Method</p>
+          <h2>How this was measured</h2>
+        </div>
+        <div class="method">
+          <ul>
+            <li>
+              <b>Workload.</b> The shared
+              <a href="https://github.com/clavia-labs/durable-bench">durable-bench</a> conversation:
+              history repeats a one-tool, one-tool, zero-tool cycle; each measured turn makes eight
+              <code>lookup</code> calls. Tool results are 256 bytes, every 97th is 8 KiB. The model
+              is scripted; nothing calls a provider.
+            </li>
+            <li>
+              <b>Samples.</b> Three samples per size, ten turns each. Warm is the median of turns
+              two to ten; cold is open plus the first turn. The harness waits for CPU below 8%
+              before each sample; the comparison runs averaged about 6%.
+            </li>
+            <li>
+              <b>Transcripts match.</b> The model-visible transcript fingerprints are identical for
+              pi, main and the spike at every size.
+            </li>
+            <li>
+              <b>Profiles.</b> V8 sampling through the workerd inspector at 100 µs. Phases are split
+              at the benchmark’s entry and scripted-model frames; layers by the bundled module of
+              each sample’s innermost frame.
+            </li>
+          </ul>
+          <ul>
+            <li>
+              <b>Revisions.</b> main at <code>8ec0b4dc</code>; the spike on branch
+              <code>dan/spike-saved-context-range</code>; pi-durable 1.0.4 with compaction disabled.
+            </li>
+            <li>
+              <b>Machine.</b> Apple Silicon Mac, local Miniflare (workerd), compatibility date
+              2026-08-18, Bun 1.4.2. Local timings are not Cloudflare CPU billing.
+            </li>
+            <li>
+              <b>Not measured here.</b> Node. The <code>tooling/runtime-benchmark</code> suite
+              (<code>vp run perf:compare</code>) covers Node and file-backed SQLite and is the
+              release gate.
+            </li>
+            <li>
+              <b>Fairness.</b> Our scripted model receives the in-memory <code>Prompt</code>; a real
+              provider would add request encoding to our steps too. pi’s harness converts the
+              transcript on every call, which inflates pi’s steps.
+            </li>
+          </ul>
+        </div>
+        <pre><code>vp run -F @yielded/agent-example-durable-bench vendor
+vp run -F @yielded/agent-example-durable-bench seed -- yielded
+vp run -F @yielded/agent-example-durable-bench seed -- pi
+vp run -F @yielded/agent-example-durable-bench bench -- yielded --samples 3
+vp run -F @yielded/agent-example-durable-bench bench -- pi --samples 3
+vp run -F @yielded/agent-example-durable-bench report</code></pre>
+      </section>
+
+      <section id="rules">
+        <div class="sec-head">
+          <p class="eyebrow">Invariants</p>
+          <h2>Rules that do not change</h2>
+          <p class="sub">Every optimization above has to keep these.</p>
+        </div>
+        <ul class="rules">
+          <li>The log is append-only.</li>
+          <li>Expected failures stay typed.</li>
+          <li>Every resource lives in a Scope.</li>
+          <li>No code claims exactly-once execution.</li>
+          <li>An unresolved ordinary tool call is never replayed automatically.</li>
+          <li class="key">
+            A continuation must be recomputable from the facts it references.<span
+              >Disagreement is corruption and fails closed.</span
+            >
+          </li>
+        </ul>
+      </section>
+
+      <footer>
+        Part I sequence numbers are illustrative. Part II was measured on 6 October 2026; rerun the
+        commands above before quoting it against a later revision.
+      </footer>
+    </div>
+
+    <script>
+      // Measured medians. Warm and cold: benchmark, unprofiled. Phases and layers: CPU-profiled.
+      const DATA = {
+        sizes: [50, 250, 1000, 3500],
+        warm: { pi: [27, 45, 110, 370], main: [86, 216, 647, null], spike: [65, 113, 292, 896] },
+        cold: { pi: [53, 67, 142, 442], main: [156, 310, 770, null], spike: [134, 193, 389, 1024] },
+        storage: {
+          pi: [0.41, 0.93, 2.88, 9.44],
+          main: [7.56, 66.29, 841.68, null],
+          spike: [4.46, 14.05, 49.69, 168.47],
+        },
+        mainCap: 1230,
+        phases: [
+          {
+            size: "1,000 turns",
+            rows: { pi: [12, 112, 2], main: [688, 59, 9], spike: [280, 61, 10] },
+          },
+          { size: "3,500 turns", rows: { pi: [35, 373, 4], spike: [899, 112, 9] } },
+        ],
+        layers: [
+          {
+            name: "Agent library",
+            note: "ours: durable runtime, engine · pi: pi-durable",
+            scope: "platform-neutral",
+            v: { pi: 66.8, main: 258.4, spike: 100.5 },
+          },
+          {
+            name: "Effect Schema",
+            note: "decode and encode",
+            scope: "platform-neutral",
+            v: { pi: 0, main: 167.1, spike: 89.5 },
+          },
+          {
+            name: "Effect fibers, data and AI",
+            note: "fiber runtime, Data, LanguageModel",
+            scope: "platform-neutral",
+            v: { pi: 0, main: 173.7, spike: 71.8 },
+          },
+          {
+            name: "Garbage collection",
+            note: "V8",
+            scope: "platform-neutral",
+            v: { pi: 9.9, main: 67.3, spike: 35.5 },
+          },
+          {
+            name: "JS built-ins and other native",
+            note: "JSON, strings, arrays",
+            scope: "platform-neutral",
+            v: { pi: 13.6, main: 48.3, spike: 25.2 },
+          },
+          {
+            name: "Platform (Cloudflare-specific)",
+            note: "DO SQLite, Cloudflare adapter, crypto",
+            scope: "platform-specific",
+            v: { pi: 7.6, main: 92.0, spike: 25.2 },
+          },
+          {
+            name: "Benchmark harness",
+            note: "scripted model",
+            scope: "benchmark",
+            v: { pi: 31.8, main: 4.7, spike: 3.1 },
+          },
+        ],
+      };
+      const SERIES = [
+        { key: "pi", name: "pi-durable 1.0.4" },
+        { key: "main", name: "Yielded main" },
+        { key: "spike", name: "Yielded spike" },
+      ];
+      const NS = "http://www.w3.org/2000/svg";
+      const fmt = (v, d = 0) =>
+        v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+      const el = (name, attrs = {}, parent) => {
+        const node = document.createElementNS(NS, name);
+        for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+        if (parent) parent.appendChild(node);
+        return node;
+      };
+      const text = (parent, x, y, body, attrs = {}) => {
+        const node = el("text", { x, y, ...attrs }, parent);
+        node.textContent = body;
+        return node;
+      };
+      const tipFor = (host) => {
+        const tip = document.createElement("div");
+        tip.className = "tip";
+        tip.setAttribute("role", "status");
+        host.appendChild(tip);
+        return {
+          show(html, x, y) {
+            tip.innerHTML = html;
+            tip.classList.add("on");
+            const box = host.getBoundingClientRect();
+            const w = tip.offsetWidth,
+              h = tip.offsetHeight;
+            let left = x + 14,
+              top = y - h - 10;
+            if (left + w > box.width) left = x - w - 14;
+            if (top < 0) top = y + 14;
+            tip.style.left = `${Math.max(0, left)}px`;
+            tip.style.top = `${top}px`;
+          },
+          hide() {
+            tip.classList.remove("on");
+          },
+        };
+      };
+      const local = (host, event) => {
+        const box = host.getBoundingClientRect();
+        return [event.clientX - box.left, event.clientY - box.top];
+      };
+
+      function lineChart(host, { values, title, unit, log, ticks, digits = 0, cap }) {
+        const W = 460,
+          H = 290,
+          L = 54,
+          R = 16,
+          T = 20,
+          B = 40;
+        const svg = el(
+          "svg",
+          { viewBox: `0 0 ${W} ${H}`, class: "ch", role: "img", "aria-label": title },
+          host,
+        );
+        const sizes = DATA.sizes;
+        const xs = (n) => L + (n / 3500) * (W - L - R);
+        const lo = log ? Math.log10(ticks[0]) : 0;
+        const hi = log ? Math.log10(ticks.at(-1)) : ticks.at(-1);
+        const ys = (v) => T + (1 - ((log ? Math.log10(v) : v) - lo) / (hi - lo)) * (H - T - B);
+        for (const t of ticks) {
+          el("line", { x1: L, x2: W - R, y1: ys(t), y2: ys(t), class: "grid" }, svg);
+          text(svg, L - 8, ys(t) + 4, fmt(t, t > 0 && t < 1 ? 1 : 0), { "text-anchor": "end" });
+        }
+        el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }, svg);
+        for (const n of [0, 1000, 2000, 3500])
+          text(svg, xs(n), H - B + 18, fmt(n), { "text-anchor": n === 3500 ? "end" : "middle" });
+        text(svg, W - R, H - 6, "turns in the Thread", { "text-anchor": "end" });
+        if (cap) {
+          el(
+            "line",
+            { x1: xs(cap), x2: xs(cap), y1: T, y2: H - B, class: "s-cost", "stroke-width": 1.5 },
+            svg,
+          );
+          text(svg, xs(cap) + 6, T + 12, "main rejects Runs", { class: "x-cost" });
+        }
+        const cross = el(
+          "line",
+          { x1: 0, x2: 0, y1: T, y2: H - B, class: "cross", visibility: "hidden" },
+          svg,
+        );
+        for (const s of SERIES) {
+          const pts = sizes.map((n, i) => [n, values[s.key][i]]).filter(([, v]) => v !== null);
+          el(
+            "polyline",
+            {
+              points: pts.map(([n, v]) => `${xs(n)},${ys(v)}`).join(" "),
+              class: `line s-${s.key}`,
+            },
+            svg,
+          );
+          for (const [n, v] of pts)
+            el("circle", { cx: xs(n), cy: ys(v), r: 4.5, class: `dot f-${s.key}` }, svg);
+          const [ln, lv] = pts.at(-1);
+          const label = `${fmt(lv, digits)} ${unit}`;
+          text(svg, xs(ln) - 8, ys(lv) + (s.key === "spike" && log ? 18 : -10), label, {
+            class: "val halo-s",
+            "text-anchor": "end",
+          });
+        }
+        const tip = tipFor(host);
+        const hit = el(
+          "rect",
+          { x: L, y: T, width: W - L - R, height: H - T - B, class: "hit" },
+          svg,
+        );
+        const move = (event) => {
+          const [px, py] = local(host, event);
+          const scale = svg.getBoundingClientRect().width / W;
+          const vx = px / scale;
+          let best = 0;
+          sizes.forEach((n, i) => {
+            if (Math.abs(xs(n) - vx) < Math.abs(xs(sizes[best]) - vx)) best = i;
+          });
+          cross.setAttribute("x1", xs(sizes[best]));
+          cross.setAttribute("x2", xs(sizes[best]));
+          cross.setAttribute("visibility", "visible");
+          const rows = SERIES.map((s) => {
+            const v = values[s.key][best];
+            return `<div class="row"><span><i class="sw sw-${s.key}"></i>${s.name}</span><span>${v === null ? "rejected" : `${fmt(v, digits)} ${unit}`}</span></div>`;
+          }).join("");
+          tip.show(`<b>${fmt(sizes[best])} turns</b>${rows}`, px, py);
+        };
+        hit.addEventListener("pointermove", move);
+        hit.addEventListener("pointerdown", move);
+        hit.addEventListener("pointerleave", () => {
+          tip.hide();
+          cross.setAttribute("visibility", "hidden");
+        });
+      }
+
+      function anatomyChart(host) {
+        const W = 960,
+          L = 150,
+          R = 70,
+          barH = 22,
+          gap = 10,
+          groupGap = 34,
+          T = 18;
+        const max = 1050;
+        const rows = DATA.phases.reduce((n, g) => n + Object.keys(g.rows).length, 0);
+        const H =
+          T +
+          DATA.phases.length * 26 +
+          rows * (barH + gap) +
+          (DATA.phases.length - 1) * groupGap +
+          40;
+        const svg = el(
+          "svg",
+          {
+            viewBox: `0 0 ${W} ${H}`,
+            class: "ch",
+            role: "img",
+            "aria-label": "Phases of a warm turn",
+          },
+          host,
+        );
+        const xs = (v) => L + (v / max) * (W - L - R);
+        for (const t of [0, 250, 500, 750, 1000]) {
+          el("line", { x1: xs(t), x2: xs(t), y1: T, y2: H - 30, class: "grid" }, svg);
+          text(svg, xs(t), H - 12, `${fmt(t)} ms`, { "text-anchor": t === 0 ? "start" : "middle" });
+        }
+        const tip = tipFor(host);
+        const phaseNames = [
+          "before the first model call",
+          "9 model calls and 8 tool settlements",
+          "settle",
+        ];
+        const opacity = [1, 0.45, 0.2];
+        let y = T;
+        for (const group of DATA.phases) {
+          text(svg, 0, y + 14, group.size, { class: "lab" });
+          y += 26;
+          for (const s of SERIES) {
+            const v = group.rows[s.key];
+            if (!v) continue;
+            text(svg, L - 12, y + barH / 2 + 4, s.name, { "text-anchor": "end", class: "lab-sub" });
+            let x = xs(0);
+            v.forEach((ms, i) => {
+              const w = Math.max(1, (ms / max) * (W - L - R) - (i < 2 ? 2 : 0));
+              const seg = el(
+                "rect",
+                {
+                  x,
+                  y,
+                  width: w,
+                  height: barH,
+                  rx: i === v.length - 1 ? 3 : 0,
+                  class: `seg f-${s.key}`,
+                  "fill-opacity": opacity[i],
+                },
+                svg,
+              );
+              const label = i === 0 ? `${fmt(ms)} ms` : i === 1 ? `steps ${fmt(ms)} ms` : "";
+              if (label && label.length * 7 + 16 < w)
+                text(svg, x + 8, y + barH / 2 + 4, label, {
+                  class: i === 0 ? "in-solid" : "in-tint",
+                });
+              const show = (event) => {
+                const [px, py] = local(host, event);
+                tip.show(
+                  `<b>${s.name} · ${group.size}</b><div class="row"><span>${phaseNames[i]}</span><span>${fmt(ms)} ms</span></div>`,
+                  px,
+                  py,
+                );
+              };
+              seg.addEventListener("pointermove", show);
+              seg.addEventListener("pointerdown", show);
+              seg.addEventListener("pointerleave", () => tip.hide());
+              x += w + (i < 2 ? 2 : 0);
+            });
+            const total = v.reduce((a, b) => a + b, 0);
+            text(svg, x + 8, y + barH / 2 + 4, `${fmt(total)} ms`, { class: "val" });
+            y += barH + gap;
+          }
+          if (!group.rows.main) {
+            text(svg, L - 12, y + barH / 2 + 4, "Yielded main", {
+              "text-anchor": "end",
+              class: "lab-sub",
+            });
+            text(
+              svg,
+              xs(0) + 2,
+              y + barH / 2 + 4,
+              "rejected: saved context exceeds 4,096 references",
+              { class: "x-cost" },
+            );
+            y += barH + gap;
+          }
+          y += groupGap - gap;
+        }
+      }
+
+      function layersChart(host) {
+        const W = 960,
+          L = 330,
+          R = 70,
+          barH = 9,
+          inner = 3,
+          rowGap = 18,
+          T = 8;
+        const max = 270;
+        const rowH = SERIES.length * barH + (SERIES.length - 1) * inner;
+        const H = T + DATA.layers.length * (rowH + rowGap) + 30;
+        const svg = el(
+          "svg",
+          {
+            viewBox: `0 0 ${W} ${H}`,
+            class: "ch",
+            role: "img",
+            "aria-label": "CPU per warm turn by layer",
+          },
+          host,
+        );
+        const xs = (v) => L + (v / max) * (W - L - R);
+        for (const t of [0, 50, 100, 150, 200, 250]) {
+          el("line", { x1: xs(t), x2: xs(t), y1: T, y2: H - 26, class: "grid" }, svg);
+          text(svg, xs(t), H - 8, `${t} ms`, { "text-anchor": t === 0 ? "start" : "middle" });
+        }
+        const tip = tipFor(host);
+        let y = T;
+        for (const layer of DATA.layers) {
+          text(svg, 0, y + 10, layer.name, { class: "lab" });
+          text(svg, 0, y + 27, layer.note, { class: "lab-sub" });
+          SERIES.forEach((s, i) => {
+            const v = layer.v[s.key];
+            const by = y + i * (barH + inner);
+            const w = (v / max) * (W - L - R);
+            if (v > 0) {
+              const bar = el(
+                "path",
+                {
+                  d: `M${xs(0)},${by} h${Math.max(0, w - 3)} a3,3 0 0 1 3,3 v${barH - 6} a3,3 0 0 1 -3,3 h${-Math.max(0, w - 3)} z`,
+                  class: `bar f-${s.key}`,
+                },
+                svg,
+              );
+              const show = (event) => {
+                const [px, py] = local(host, event);
+                tip.show(
+                  `<b>${layer.name}</b><div class="row"><span><i class="sw sw-${s.key}"></i>${s.name}</span><span>${fmt(v, 1)} ms</span></div>`,
+                  px,
+                  py,
+                );
+              };
+              bar.addEventListener("pointermove", show);
+              bar.addEventListener("pointerdown", show);
+              bar.addEventListener("pointerleave", () => tip.hide());
+            }
+            text(svg, xs(0) + Math.max(w, 0) + 6, by + barH - 1, v > 0 ? fmt(v) : "—", {
+              class: v > 0 ? "" : "lab-sub",
+            });
+          });
+          y += rowH + rowGap;
+        }
+      }
+
+      function table(host, head, rows) {
+        host.innerHTML = `<table><thead><tr>${head.map((h, i) => `<th${i ? ' class="num"' : ""}>${h}</th>`).join("")}</tr></thead><tbody>${rows
+          .map(
+            (r) =>
+              `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ""}>${c}</td>`).join("")}</tr>`,
+          )
+          .join("")}</tbody></table>`;
+      }
+
+      const or = (v, d = 0) => (v === null ? "rejected" : fmt(v, d));
+      lineChart(document.getElementById("chart-warm"), {
+        values: DATA.warm,
+        title: "Warm turn in milliseconds by Thread age",
+        unit: "ms",
+        ticks: [0, 250, 500, 750, 1000],
+        cap: DATA.mainCap,
+      });
+      lineChart(document.getElementById("chart-storage"), {
+        values: DATA.storage,
+        title: "Database size in megabytes by Thread age, log scale",
+        unit: "MB",
+        log: true,
+        ticks: [0.1, 1, 10, 100, 1000],
+        digits: 1,
+        cap: DATA.mainCap,
+      });
+      anatomyChart(document.getElementById("chart-anatomy"));
+      layersChart(document.getElementById("chart-layers"));
+      table(
+        document.getElementById("table-aging"),
+        [
+          "Turns",
+          "pi warm",
+          "main warm",
+          "spike warm",
+          "pi cold",
+          "main cold",
+          "spike cold",
+          "pi MB",
+          "main MB",
+          "spike MB",
+        ],
+        DATA.sizes.map((n, i) => [
+          fmt(n),
+          or(DATA.warm.pi[i]),
+          or(DATA.warm.main[i]),
+          or(DATA.warm.spike[i]),
+          or(DATA.cold.pi[i]),
+          or(DATA.cold.main[i]),
+          or(DATA.cold.spike[i]),
+          or(DATA.storage.pi[i], 2),
+          or(DATA.storage.main[i], 2),
+          or(DATA.storage.spike[i], 2),
+        ]),
+      );
+      table(
+        document.getElementById("table-anatomy"),
+        ["Target", "Before first model call", "Model steps", "Settle", "Total"],
+        DATA.phases.flatMap((g) =>
+          SERIES.filter((s) => g.rows[s.key]).map((s) => [
+            `${s.name} · ${g.size}`,
+            ...g.rows[s.key].map((v) => fmt(v)),
+            fmt(g.rows[s.key].reduce((a, b) => a + b, 0)),
+          ]),
+        ),
+      );
+      table(
+        document.getElementById("table-layers"),
+        ["Layer", ...SERIES.map((s) => s.name)],
+        DATA.layers.map((l) => [l.name, ...SERIES.map((s) => fmt(l.v[s.key], 1))]),
+      );
+    </script>
+  </body>
+</html>
