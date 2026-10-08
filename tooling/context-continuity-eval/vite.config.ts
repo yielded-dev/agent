@@ -8,16 +8,27 @@ export default defineConfig({
       // Like the neighboring workerd examples, drive Miniflare through a Vite task.
       test: {
         command: "vitest run",
-        input: [
-          { auto: true },
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
-        output: [],
+        cache: {
+          input: [
+            { auto: true },
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+          output: [],
+        },
       },
     },
   },
-  test: { cache: false, silent: "passed-only", maxWorkers: 1 },
+  test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
+    cache: false,
+    silent: "passed-only",
+    maxWorkers: 1,
+  },
 });

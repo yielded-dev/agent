@@ -2,26 +2,30 @@ import cloudflare from "@alchemy.run/cloudflare-runtime/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite-plus";
+import { defineConfig, lazyPlugins } from "vite-plus";
 
 export default defineConfig({
   base: "/travel/",
-  plugins: process.env.VITEST
-    ? [react()]
-    : [
-        process.env.ALCHEMY_CLOUDFLARE_VITE_INJECTED === "1"
-          ? null
-          : cloudflare({
-              main: "src/worker.ts",
-              compatibilityDate: "2026-07-01",
-              compatibilityFlags: ["nodejs_compat"],
-            }),
-        tanstackStart({ router: { basepath: "/travel" } }),
-        tailwindcss(),
-        react(),
-      ],
+  plugins: lazyPlugins(() =>
+    process.env.VITEST
+      ? [react()]
+      : [
+          process.env.ALCHEMY_CLOUDFLARE_VITE_INJECTED === "1"
+            ? null
+            : cloudflare({
+                main: "src/worker.ts",
+                compatibilityDate: "2026-07-01",
+                compatibilityFlags: ["nodejs_compat"],
+              }),
+          tanstackStart({ router: { basepath: "/travel" } }),
+          tailwindcss(),
+          react(),
+        ],
+  ),
   resolve: { tsconfigPaths: true },
   test: {
+    // Preserve existing mock call history when upgrading from Vitest 4.
+    clearMocks: false,
     cache: false,
     silent: "passed-only",
     deps: {
@@ -49,45 +53,51 @@ export default defineConfig({
       },
       build: {
         command: "vp build",
-        input: [
-          { auto: true },
-          // Track root inputs individually so a missing generated dist
-          // directory does not invalidate the package directory listing.
-          "*",
-          { pattern: "!examples/travel-planner", base: "workspace" },
-          "!dist",
-          "!dist/**",
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
+        cache: {
+          input: [
+            { auto: true },
+            // Track root inputs individually so a missing generated dist
+            // directory does not invalidate the package directory listing.
+            "*",
+            { pattern: "!examples/travel-planner", base: "workspace" },
+            "!dist",
+            "!dist/**",
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+        },
       },
       test: {
         command: "vp test",
-        // Fresh runners do not have Vite's generated directories. Keep
-        // dependency file hashes and the lockfile, but ignore directory listings.
-        input: [
-          { auto: true },
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
-        output: [],
+        cache: {
+          // Fresh runners do not have Vite's generated directories. Keep
+          // dependency file hashes and the lockfile, but ignore directory listings.
+          input: [
+            { auto: true },
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+          output: [],
+        },
       },
       check: {
         command: "tsc --noEmit",
-        input: [
-          { auto: true },
-          "src/**",
-          "test/**",
-          "preview/**",
-          "tsconfig.json",
-          "alchemy.run.ts",
-          "!*.tsbuildinfo",
-        ],
-        output: [{ auto: true }, "!*.tsbuildinfo"],
+        cache: {
+          input: [
+            { auto: true },
+            "src/**",
+            "test/**",
+            "preview/**",
+            "tsconfig.json",
+            "alchemy.run.ts",
+            "!*.tsbuildinfo",
+          ],
+          output: [{ auto: true }, "!*.tsbuildinfo"],
+        },
       },
     },
   },

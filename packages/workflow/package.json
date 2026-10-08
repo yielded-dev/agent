@@ -38,7 +38,9 @@
     "@yielded/agent-storage-memory": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "effect": "^4.0.0"

@@ -248,8 +248,8 @@ Use `layerWithServices` to supply your own service layers. It requires
 Here is the default authorization policy; replace it with your application's implementation:
 
 ```ts twoslash
-import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
+import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { Layer } from "effect";
 
 export const RuntimeLive = DurableAgentRuntime.layerWithServices.pipe(

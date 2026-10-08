@@ -111,8 +111,8 @@ sends no alerts.
 After authorization, abort a submission with:
 
 ```ts twoslash
-import { AbortCommand } from "@yielded/agent/submission-ledger";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
+import { AbortCommand } from "@yielded/agent/submission-ledger";
 import { Effect } from "effect";
 
 const abortSubmission = Effect.fn("abortSubmission")(function* (command: AbortCommand) {

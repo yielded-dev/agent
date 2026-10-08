@@ -36,8 +36,8 @@ For provider-native routing with stored keys or Unified Billing, pass the upstre
 `layer` factory and your resolved gateway configuration:
 
 ```ts twoslash
-import * as Gateway from "@yielded/agent-platform-cloudflare/cloudflare-ai-gateway";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import * as Gateway from "@yielded/agent-platform-cloudflare/cloudflare-ai-gateway";
 import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 
@@ -99,11 +99,11 @@ Compose agent registrations and application services as a layer, then pass it to
 Object namespace in the generated `Cloudflare.Env`.
 
 ```ts twoslash
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 // @types: @cloudflare/workers-types
 import { Agent } from "@yielded/agent";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { Config, Layer, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
@@ -198,9 +198,9 @@ for Workers using the older `migrations` array.
 ## Connect from your Worker
 
 ```ts twoslash
+import { type ThreadObjectRpc } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 // @types: @cloudflare/workers-types
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
-import { type ThreadObjectRpc } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 
 export const threadClientLayer = (env: { THREADS: DurableObjectNamespace<ThreadObjectRpc> }) =>
   CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS });
@@ -554,8 +554,8 @@ import {
   DurableObjectContext,
   ThreadObjectIdentity,
 } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import { ThreadStore } from "@yielded/agent/thread-store";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { ThreadStore } from "@yielded/agent/thread-store";
 
 // `makePublication` is an application Effect yielding ThreadPublicationService.
 // It yields the raw LOCAL ThreadStore and SubmissionLedger, native DurableObjectContext,
@@ -646,13 +646,13 @@ Bind the namespace and principal in authenticated host code. Never accept them f
 ```ts twoslash
 // @types: @cloudflare/workers-types
 import { MemoryNamespace } from "@yielded/agent";
-import { MemoryAccess } from "@yielded/agent/memory-revalidation";
-import { MemoryLookup, MemoryRecallLimits } from "@yielded/agent/memory-reference";
-import { MemoryScope } from "@yielded/agent/memory-store";
 import {
   CloudflareMemoryClient,
   type MemoryObjectRpc,
 } from "@yielded/agent-platform-cloudflare/cloudflare-memory";
+import { MemoryLookup, MemoryRecallLimits } from "@yielded/agent/memory-reference";
+import { MemoryAccess } from "@yielded/agent/memory-revalidation";
+import { MemoryScope } from "@yielded/agent/memory-store";
 import { Principal } from "@yielded/agent/submission-ledger";
 import { Effect, Schema } from "effect";
 

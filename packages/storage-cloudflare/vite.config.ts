@@ -1,4 +1,4 @@
-import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig, type UserConfig } from "vite-plus";
 
 // Ignore generated Vite files and node_modules directory listings, while
@@ -7,30 +7,35 @@ const run: NonNullable<UserConfig["run"]> = {
   tasks: {
     test: {
       command: "vitest run",
-      input: [
-        { auto: true },
-        { pattern: "bun.lock", base: "workspace" },
-        { pattern: "!**/node_modules", base: "workspace" },
-        { pattern: "!**/node_modules/.vite*", base: "workspace" },
-        { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-      ],
-      output: [],
+      cache: {
+        input: [
+          { auto: true },
+          { pattern: "bun.lock", base: "workspace" },
+          { pattern: "!**/node_modules", base: "workspace" },
+          { pattern: "!**/node_modules/.vite*", base: "workspace" },
+          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+        ],
+        output: [],
+      },
     },
   },
 };
 
 // Run this package's tests inside workerd with real SQLite-backed Durable Object namespaces.
-// `@cloudflare/vitest-pool-workers` 0.21.x (the vitest 4 line) replaced `defineWorkersConfig`
-// with the `cloudflareTest` Vite plugin, which installs the workers pool runner on the
-// project during `configureVitest`. Note the 0.21.x pool has no `isolatedStorage`: Durable
-// Object storage is SHARED across tests within a run, so every suite mints a unique Durable
-// Object name per case.
+// `cloudflareTest` installs the Workers runner. Durable Object storage is shared
+// across tests within a run, so every suite mints a unique Durable Object name per case.
 export default defineConfig({
   run,
   // A package-level Vite config suppresses `vp pack`'s zero-config library
   // defaults, so the published artifact's declarations and sourcemap are
   // pinned explicitly here.
   pack: {
+    deps: {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true,
+    },
     entry: [
       "src/index.ts",
       "src/DoMessageDeliveryStore.ts",
@@ -52,11 +57,33 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
+    // Vitest v4 compatibility: keep separate Vite servers for inline projects.
+    // Remove when plugins and config hooks can run once for shared projects.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
+    sharedViteServer: false,
     // Leave result caching to Vite Task, without a mutable results.json input.
     cache: false,
     silent: "passed-only",
     projects: [
       {
+        // Vitest v4 compatibility: keep this inline project independent of the root config.
+        // Remove to inherit root options, including plugins and setup files.
+        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
+        extends: false,
+        test: {
+          // Vitest v4 compatibility: preserve mock call history.
+          // Remove after tests no longer rely on calls from setup or earlier tests.
+          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+          clearMocks: false,
+        },
         plugins: [
           cloudflareTest({
             main: "./test/worker.ts",

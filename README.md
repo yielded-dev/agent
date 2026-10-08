@@ -45,8 +45,8 @@ before adopting a new release.
 ## A basic agent
 
 ```ts
-import { Effect, Schema } from "effect";
 import { Agent, AgentRuntime } from "@yielded/agent";
+import { Effect, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 
 const planner = Agent.make("travel-planner", {
@@ -71,9 +71,9 @@ The output is schema-validated. Supply your model and runtime services to run it
 Save the code above and the setup below as `agent.ts`.
 
 ```ts
-import { InMemory } from "@yielded/agent";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { BunRuntime } from "@effect/platform-bun";
+import { InMemory } from "@yielded/agent";
 import { Config, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 

@@ -5,8 +5,8 @@ that choice, while each child thread selects independently. The upstream `Decisi
 service evaluates the application-approved catalog.
 
 ```ts
-import { AutoModel } from "@yielded/agent-ai-decision";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
+import { AutoModel } from "@yielded/agent-ai-decision";
 
 const ThreadModels = AutoModel.make({
   version: "profiles-v1",

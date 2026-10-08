@@ -8,11 +8,12 @@ description: Retain completed agent runs in a Node.js SQLite database.
 Provide `PersistentHistory.layer` with a SQLite store to retain completed runs across Node.js restarts:
 
 ```ts twoslash
-import { planner } from "./node-agent.ts";
+import { AgentRuntime, PersistentHistory } from "@yielded/agent";
 // ---cut---
 import { SqliteThreadStore } from "@yielded/agent-storage-sqlite";
-import { AgentRuntime, PersistentHistory } from "@yielded/agent";
 import { Effect, Layer } from "effect";
+
+import { planner } from "./node-agent.ts";
 
 const History = PersistentHistory.layer.pipe(
   Layer.provide(SqliteThreadStore.layer({ filename: "./history.sqlite" })),

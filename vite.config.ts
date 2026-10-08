@@ -157,11 +157,22 @@ export default defineConfig({
     ],
   },
   pack: {
+    deps: {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true,
+    },
     dts: true,
     format: ["esm"],
     sourcemap: true,
   },
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
     // Vite Task caches successful suites. Vitest's mutable results.json
     // otherwise becomes a task input and prevents reuse on fresh runners.
     cache: false,
@@ -200,16 +211,18 @@ export default defineConfig({
       },
       "action:build": {
         command: "bun scripts/build-action.ts",
-        input: [
-          { auto: true },
-          "!action/dist",
-          "!action/dist/**",
-          "bun.lock",
-          "!**/node_modules",
-          "!**/node_modules/.vite*",
-          "!**/node_modules/.vite*/**",
-        ],
-        output: ["action/dist/index.mjs"],
+        cache: {
+          input: [
+            { auto: true },
+            "!action/dist",
+            "!action/dist/**",
+            "bun.lock",
+            "!**/node_modules",
+            "!**/node_modules/.vite*",
+            "!**/node_modules/.vite*/**",
+          ],
+          output: ["action/dist/index.mjs"],
+        },
       },
       "perf:compare": {
         cache: false,

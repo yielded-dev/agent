@@ -11,8 +11,8 @@ the real interpreter without network access, credentials, provider latency, or m
 ## Provide a scripted model layer
 
 ```ts
-import { Model } from "effect/ai";
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
+import { Model } from "effect/ai";
 
 const TestModel = Model.make("scripted", "test-model", ScriptedModel.layer(turns));
 ```
@@ -50,10 +50,10 @@ Provide the same layers as the application. Override the default `IdGenerator` r
 a deterministic counter when assertions depend on stable IDs.
 
 ```ts
-import { Effect, Layer, Ref, Schema } from "effect";
 import { InMemory } from "@yielded/agent";
-import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { IdGenerator } from "@yielded/agent/id-generator";
+import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
+import { Effect, Layer, Ref, Schema } from "effect";
 
 const DeterministicIdGeneratorLive = Layer.effect(
   IdGenerator,
