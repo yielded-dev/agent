@@ -18,9 +18,16 @@ Cloudflare keeps that data. Keep all three identities unchanged: changing one de
 The lab binds `PlannerAuth` on script `effect-agent-travel-planner`, instance
 `auth-v1`; `/_internal/session` and `/_internal/funding/<id>` remain private.
 
-At deployment, manually change the GitHub OAuth app's Authorization callback URL
-to `https://agent.yielded.dev/travel/auth/github/callback`. Set `AUTH_ORIGIN` to
-`https://agent.yielded.dev` and retain `auth@effect-agent.com` as the email sender.
+Shared sign-in uses `https://auth.yielded.dev` as its OpenID issuer. Register client
+`yielded-agent` there with callback
+`https://agent.yielded.dev/travel/auth/yielded/callback`. Set `AUTH_YIELDED_ISSUER`
+to that issuer and `AUTH_YIELDED_CLIENT_SECRET` to its separate client secret.
+The central GitHub app's callback stays at Auth. Direct GitHub sign-in remains
+with email and account switching under **Other sign-in options**, with callback
+`https://agent.yielded.dev/travel/auth/github/callback`. If it shares a GitHub OAuth
+app with Auth, register both exact callback entries and retain those needed by
+other consumers; see [GitHub's callback rules](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls). Set `AUTH_ORIGIN` to `https://agent.yielded.dev` and retain
+`auth@effect-agent.com` as the email sender.
 This stack owns only `agent.yielded.dev/travel*` on `yielded.dev`; the existing DNS
 record and the browser lab's root and `/browser-use*` routes stay externally managed.
 
@@ -70,8 +77,37 @@ Drizzle persistence companions. The app owns its SQLite tables and provides the 
 `SqliteDo.Database` through `databaseLayer`. It supplies session claims through each strategy's
 `SessionClaims` service. The Atom client uses Fetch transport with
 a 30-second request and response-body deadline; timed-out mutations are not retried automatically.
-GitHub sign-in creates flow IDs on the server; the browser retains the returned ID for the
-callback. Email verification keys are supplied through `ProofKeys` using `AUTH_PROOF_KEY`.
+Provider sign-in creates flow IDs on the server; the browser retains only the
+provider, returned flow ID and return target for callback completion. Effect Atom
+owns this workflow, registration and query invalidation; React dispatches and renders.
+**Continue with Yielded** reuses the current Auth account automatically, then
+verifies issuer, audience, nonce, PKCE and the signed identity before establishing
+an Agent session. Agent requests `max_age=240` so authentication stays within its
+five-minute evidence policy, including time to complete the callback. Auth starts
+GitHub sign-in automatically when its session is absent or older than that limit;
+the original `auth_time` is preserved. The initial screen shows one sign-in button;
+**Other sign-in options** contains account switching and the existing direct GitHub/email
+methods. **Use another Yielded account** explicitly requests account selection; new permissions require
+consent. Cancelling returns to login with a retry action. Auth
+and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
+The browser lab already consumes this Agent session, so the same login covers it;
+Sync and docs are not connected by this change.
+
+For a new Yielded identity, registration creates a new Agent account. Existing
+accounts are never matched by email or display name. To preserve an existing
+GitHub-owned account, an operator may set `AUTH_YIELDED_ACCOUNT_LINKS` before its
+first Yielded sign-in, as a JSON array of `{ "yieldedSubject": "<Auth subject>",
+"githubSubject": "<numeric GitHub ID>" }`. Independently verify both identities.
+The migration requires exactly one active GitHub owner and rejects pre-existing
+Yielded ownership, reservations or removed identities. It adds the credential to
+that owner without changing their security revision, accounts, funding or threads.
+An atomic receipt prevents later startup from restoring a subsequently removed
+link; conflicting mappings fail closed and require explicit reconciliation.
+Omit the mapping to keep registrations separate.
+
+Auth storage format 2 adds only that receipt table to format 1. Older hosts reject
+format 2; retain this migration when rolling back application code rather than
+resetting deployed storage. Email verification keys are supplied through `ProofKeys` using `AUTH_PROOF_KEY`.
 
 Keep the existing database, namespaces, and key IDs when upgrading this demo from Auth beta.7
 to beta.11; its account and stateful-session formats are retained. Users upgrading from beta.5
@@ -91,7 +127,8 @@ vp install
 vp run -F @yielded/agent-example-travel-planner preview
 ```
 
-Open `https://127.0.0.1:4173/travel/` and accept the local certificate. Create an email account;
+Open `https://127.0.0.1:4173/travel/` and accept the local certificate. Expand
+**Other sign-in options** and create an email account;
 the terminal prints the file paths of locally delivered verification emails. After
 registration, sign in with a fresh email code. Connect the synthetic key
 `sk-preview-local` in Settings and send `complete travel cards fixture` to display
@@ -100,7 +137,7 @@ sample travel cards. Set `PREVIEW_PORT` to use another port.
 This command builds the UI and supplies local SQLite auth and planner bindings.
 It uses the real email authentication and session checks, an offline planner, and
 fresh state that is removed when stopped. Outbound provider requests are blocked;
-GitHub sign-in, live research, voice, and published trip sites require the full app.
+GitHub and Yielded sign-in, live research, voice, and published trip sites require the full app.
 A raw `vp preview` does not provision these bindings and its session endpoint returns
 503 when `AUTH` is missing.
 
@@ -109,7 +146,11 @@ credentials and use `vp run -F @yielded/agent-example-travel-planner dev` from t
 root. Alchemy supplies the resources declared in [alchemy.run.ts](alchemy.run.ts), including
 `AUTH` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
 GitHub OAuth callback at `${AUTH_ORIGIN}/travel/auth/github/callback`, a verified email sender, and
-three independent persistent base64url-encoded 32-byte auth keys.
+three independent persistent base64url-encoded 32-byte auth keys. Shared sign-in also
+requires the issuer, registered callback and matching OpenID client secret above.
+The deployment workflow reads `TRAVEL_PLANNER_YIELDED_CLIENT_SECRET` from GitHub
+Actions secrets and optional `TRAVEL_PLANNER_YIELDED_ACCOUNT_LINKS` from repository
+variables. Store the shared secret in the deployment secret manager too.
 
 The conversation loads in stages. `GetPlanner` returns messages, trips, and the latest
 source-record overview for up to eight scouts and the trip's editor without reading child

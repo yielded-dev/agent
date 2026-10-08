@@ -13,7 +13,7 @@ import {
   loginTarget,
   leaveLogin,
   consumeCallback,
-  githubLogin,
+  oauthLogin,
   loginView,
   requestEmailCode,
   verifyEmailCode,
@@ -37,11 +37,12 @@ const destinations = {
 export function Login({ callback = false }: { readonly callback?: boolean }) {
   const view = useAtomValue(loginView(callback));
   const returnTarget = useAtomValue(loginTarget(callback));
-  const startGithub = useAtomSet(githubLogin);
+  const startOAuth = useAtomSet(oauthLogin);
   const consume = useAtomSet(consumeCallback);
   const leave = useAtomSet(leaveLogin);
   const requestCode = useAtomSet(requestEmailCode);
   const verifyCode = useAtomSet(verifyEmailCode);
+  const [otherOptions, setOtherOptions] = useState(false);
   const [mode, setMode] = useState<"register" | "signin">("signin");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -74,54 +75,81 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
             <button
               className="login-primary"
               disabled={busy}
-              onClick={() => startGithub(returnTarget)}
+              onClick={() => startOAuth({ provider: "yielded", returnTarget })}
             >
-              <GithubMark /> Continue with GitHub
+              Continue with Yielded →
             </button>
-            <div className="login-divider">
-              <span>or use email</span>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                requestCode({ mode, email, returnTarget });
-              }}
+            <p className="login-hint">Uses your GitHub account.</p>
+            <details
+              className="login-options"
+              open={otherOptions}
+              onToggle={(event) => setOtherOptions(event.currentTarget.open)}
             >
-              <div className="login-modes" aria-label="Email account action">
-                <button
-                  type="button"
-                  aria-pressed={mode === "signin"}
-                  onClick={() => setMode("signin")}
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mode === "register"}
-                  onClick={() => setMode("register")}
-                >
-                  Create account
-                </button>
-              </div>
-              <label htmlFor="login-email">Email address</label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+              <summary>Other sign-in options</summary>
+              <button
+                className="login-quiet login-switch"
                 disabled={busy}
-              />
-              <button className="login-secondary" disabled={busy}>
-                {busy
-                  ? "Sending…"
-                  : mode === "register"
-                    ? "Create account with email"
-                    : "Send sign-in code"}
+                onClick={() =>
+                  startOAuth({ provider: "yielded", returnTarget, selectAccount: true })
+                }
+              >
+                Use another Yielded account
               </button>
-            </form>
+              <p className="login-note">
+                For an older Agent account, use the same method you used before.
+              </p>
+              <button
+                className="login-secondary"
+                disabled={busy}
+                onClick={() => startOAuth({ provider: "github", returnTarget })}
+              >
+                <GithubMark /> Continue with GitHub
+              </button>
+              <div className="login-divider">
+                <span>or use email</span>
+              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  requestCode({ mode, email, returnTarget });
+                }}
+              >
+                <div className="login-modes" aria-label="Email account action">
+                  <button
+                    type="button"
+                    aria-pressed={mode === "signin"}
+                    onClick={() => setMode("signin")}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={mode === "register"}
+                    onClick={() => setMode("register")}
+                  >
+                    Create account
+                  </button>
+                </div>
+                <label htmlFor="login-email">Email address</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={busy}
+                />
+                <button className="login-secondary" disabled={busy}>
+                  {busy
+                    ? "Sending…"
+                    : mode === "register"
+                      ? "Create account with email"
+                      : "Send sign-in code"}
+                </button>
+              </form>
+            </details>
           </>
         ) : (
           <form
@@ -179,8 +207,8 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
         )}
         {view.error && (
           <p className="login-alert" role="alert">
-            {view.error === "github"
-              ? "We couldn’t finish signing in with GitHub. Please start a new attempt."
+            {view.error === "provider"
+              ? "We couldn’t finish the provider sign-in. Please start a new attempt."
               : view.error === "email"
                 ? "We couldn’t complete that step. Check your code or request a new one."
                 : "We couldn’t check your sign-in. Please try again."}
@@ -188,12 +216,9 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
         )}
         {view.cancelled && (
           <p className="login-notice" role="status">
-            GitHub sign-in was cancelled. You can start again when you’re ready.
+            Sign-in was cancelled. You can start again when you’re ready.
           </p>
         )}
-        <p className="login-note">
-          Email and GitHub create separate accounts. Use the same method when you return.
-        </p>
       </section>
     </LoginShell>
   );
@@ -211,18 +236,22 @@ export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
             </picture>
           </div>
           <h1 id="login-loading-title">
-            {step === "github"
-              ? "Connecting to GitHub"
-              : step === "callback"
-                ? "Signing you in"
-                : "Getting things ready"}
+            {step === "yielded"
+              ? "Connecting to Yielded"
+              : step === "github"
+                ? "Connecting to GitHub"
+                : step === "callback"
+                  ? "Signing you in"
+                  : "Getting things ready"}
           </h1>
           <p>
-            {step === "github"
-              ? "Taking you to GitHub to continue."
-              : step === "callback"
-                ? "Finishing up. You’ll be on your way in a moment."
-                : "One moment while we check your sign-in."}
+            {step === "yielded"
+              ? "Using your Yielded account, or taking you to GitHub to sign in."
+              : step === "github"
+                ? "Taking you to GitHub to continue."
+                : step === "callback"
+                  ? "Finishing up. You’ll be on your way in a moment."
+                  : "One moment while we check your sign-in."}
           </p>
         </div>
       </section>
@@ -254,7 +283,7 @@ function LoginShell({
       </header>
       <main className="login-main">{children}</main>
       <footer className="login-foot">
-        One account for agent.yielded.dev: the travel planner and the browser lab.
+        Your account works in the travel planner and browser lab.
       </footer>
     </div>
   );

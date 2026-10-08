@@ -81,7 +81,7 @@ export const makeGithubDiagnostics = Effect.fn("Auth.makeGithubDiagnostics")(fun
   AppAuth: AppAuth,
 ) {
   const reason = yield* Ref.make<GithubRejectionReason>("callback-invalid");
-  const binding = AppAuth.strategies.github.binding;
+  const binding = AppAuth.strategies.oauth.binding;
 
   const bindingLayer = Layer.effect(
     binding.RequestBinding,

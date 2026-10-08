@@ -9,7 +9,10 @@ export const AuthStorageFailpoint = Context.Reference<{
   readonly hit: (point: "schema:before" | "schema:after") => Effect.Effect<void, AuthStorageError>;
 }>("travel-planner/AuthStorageFailpoint", { defaultValue: () => ({ hit: () => Effect.void }) });
 
-// This fresh-start database has one format. Unknown versions fail without writes.
+// Format 2 adds one-time operator mapping receipts without rewriting accounts.
+const yieldedLinks =
+  "create table auth_yielded_account_link (issuer text not null, externalSubject text not null, githubSubject text not null, subjectId text not null, primary key (issuer, externalSubject), unique (subjectId))";
+
 const statements = [
   'create table "auth_subject" ("id" text primary key, "active" integer not null, "revision" text not null, "displayName" text not null)',
   'create table "auth_identifier" ("namespace" text not null, "value" text not null, "subjectId" text not null, "verifiedAt" integer not null, "revision" text not null, constraint "auth_identifier_unique" unique ("namespace", "value"))',
@@ -50,12 +53,19 @@ export const initializeAuthStorage = (storage: DurableObjectStorage) =>
               Schema.Array(Schema.Struct({ version: Schema.Int })),
             )(storage.sql.exec("select version from auth_format").toArray());
 
-            if (version.length === 1 && version[0]?.version === 1) return;
+            if (version.length === 1 && version[0]?.version === 2) return;
+            if (version.length === 1 && version[0]?.version === 1) {
+              storage.sql.exec(yieldedLinks);
+              storage.sql.exec("update auth_format set version = 2");
+
+              return;
+            }
             throw new AuthStorageError({ cause: "Unsupported auth format" });
           }
           for (const statement of statements) storage.sql.exec(statement);
+          storage.sql.exec(yieldedLinks);
           storage.sql.exec("create table auth_format (version integer not null)");
-          storage.sql.exec("insert into auth_format values (1)");
+          storage.sql.exec("insert into auth_format values (2)");
         }),
       catch: (cause) => new AuthStorageError({ cause }),
     });

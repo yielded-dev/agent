@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ConversationsConversationIdRouteImport } from './routes/conversations.$conversationId'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth.github.callback'
+import { Route as AuthYieldedCallbackRouteImport } from './routes/auth.yielded.callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,18 +36,25 @@ const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
   path: '/auth/github/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthYieldedCallbackRoute = AuthYieldedCallbackRouteImport.update({
+  id: '/auth/yielded/callback',
+  path: '/auth/yielded/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/conversations/$conversationId': typeof ConversationsConversationIdRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/conversations/$conversationId': typeof ConversationsConversationIdRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -54,20 +62,30 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/conversations/$conversationId': typeof ConversationsConversationIdRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/conversations/$conversationId' | '/auth/github/callback'
+    | '/'
+    | '/login'
+    | '/conversations/$conversationId'
+    | '/auth/github/callback'
+    | '/auth/yielded/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/login' | '/conversations/$conversationId' | '/auth/github/callback'
+    | '/'
+    | '/login'
+    | '/conversations/$conversationId'
+    | '/auth/github/callback'
+    | '/auth/yielded/callback'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/conversations/$conversationId'
     | '/auth/github/callback'
+    | '/auth/yielded/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -75,6 +93,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ConversationsConversationIdRoute: typeof ConversationsConversationIdRoute
   AuthGithubCallbackRoute: typeof AuthGithubCallbackRoute
+  AuthYieldedCallbackRoute: typeof AuthYieldedCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -107,6 +126,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGithubCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/yielded/callback': {
+      id: '/auth/yielded/callback'
+      path: '/auth/yielded/callback'
+      fullPath: '/auth/yielded/callback'
+      preLoaderRoute: typeof AuthYieldedCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -115,6 +141,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ConversationsConversationIdRoute: ConversationsConversationIdRoute,
   AuthGithubCallbackRoute: AuthGithubCallbackRoute,
+  AuthYieldedCallbackRoute: AuthYieldedCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -14,6 +14,7 @@ import { makeGithubDiagnostics } from "./oauth-diagnostics";
 import { persistenceLayer } from "./persistence";
 import { makeAuth, type AuthConfiguration } from "./server";
 import { initializeAuthStorage } from "./storage";
+import { connectYieldedAccounts } from "./yielded-accounts";
 
 const rejectedCallback = Schema.decodeOption(
   Schema.fromJsonString(
@@ -34,7 +35,13 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
   serverKeyConfigured = false,
 ) {
   yield* initializeAuthStorage(storage);
-  const { AppAuth, http, security, github } = makeAuth(config);
+  if (config.AUTH_YIELDED_ACCOUNT_LINKS !== undefined)
+    yield* connectYieldedAccounts(
+      storage,
+      config.AUTH_YIELDED_ISSUER,
+      config.AUTH_YIELDED_ACCOUNT_LINKS,
+    );
+  const { AppAuth, http, security, providers } = makeAuth(config);
   const diagnostics = yield* makeGithubDiagnostics(AppAuth);
 
   const database = persistenceLayer(AppAuth).pipe(
@@ -47,7 +54,7 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
     Layer.provide([
       diagnostics.persistenceLayer.pipe(Layer.provideMerge(database)),
       security,
-      protocol ?? github,
+      protocol ?? providers,
       delivery,
       diagnostics.bindingLayer.pipe(Layer.provide(security)),
     ]),

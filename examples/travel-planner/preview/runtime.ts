@@ -63,6 +63,8 @@ export const localPreview = Effect.fn("localPreview")(function* (
     AUTH_TRANSACTION_KEY: key(),
     AUTH_GITHUB_CLIENT_ID: "local-preview",
     AUTH_GITHUB_CLIENT_SECRET: "local-preview",
+    AUTH_YIELDED_ISSUER: "https://auth.yielded.dev",
+    AUTH_YIELDED_CLIENT_SECRET: "local-preview",
     AUTH_EMAIL_FROM: "signin@preview.invalid",
     BYOK_ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"),
   };
