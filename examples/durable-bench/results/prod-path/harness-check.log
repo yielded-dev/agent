@@ -1,0 +1,15 @@
+vp lint --fix run.mjs build.mjs stack.ts analyze.mjs analyze-attribution.mjs validation-env.cjs network/host.ts network/mock.ts network/observe.ts network/pi.ts network/protocol.ts network/provider.ts network/worker.ts network/yielded.ts
+
+vp fmt run.mjs build.mjs stack.ts analyze.mjs analyze-attribution.mjs validation-env.cjs network/host.ts network/mock.ts network/observe.ts network/pi.ts network/protocol.ts network/provider.ts network/worker.ts network/yielded.ts
+Finished in 112ms on 14 files using 16 threads.
+
+vp node --check /private/tmp/prod-path-source-check-POKa2r/run.mjs
+
+vp node --check /private/tmp/prod-path-source-check-POKa2r/build.mjs
+
+vp node --check /private/tmp/prod-path-source-check-POKa2r/analyze.mjs
+
+vp node --check /private/tmp/prod-path-source-check-POKa2r/analyze-attribution.mjs
+
+vp node --check /private/tmp/prod-path-source-check-POKa2r/validation-env.cjs
+

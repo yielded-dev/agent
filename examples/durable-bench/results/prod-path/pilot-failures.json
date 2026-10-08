@@ -1,0 +1,15 @@
+[
+  {
+    "framework": "yielded",
+    "history": 50,
+    "ttftMs": 0,
+    "index": 0,
+    "object": "prod-path-pilot-h50-d0-o0",
+    "sample": "m0",
+    "variant": "production",
+    "state": "cold",
+    "at": 1791491509120,
+    "error": "Error: Worker primary /run returned 500",
+    "noRetry": true
+  }
+]

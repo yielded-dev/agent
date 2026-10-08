@@ -1,0 +1,10 @@
+{"time":"2026-10-08T20:54:34.867Z","node":"v24.21.0","dyldInserted":null}
+{"command":"/opt/homebrew/bin/git","sample":0,"milliseconds":255.767375,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/opt/homebrew/bin/git","sample":1,"milliseconds":254.095208,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/opt/homebrew/bin/git","sample":2,"milliseconds":254.59329100000002,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/usr/bin/git","sample":0,"milliseconds":178.926959,"status":0,"signal":null,"stdout":"git version 2.54.0 (Apple Git-157)\n","stderr":""}
+{"command":"/usr/bin/git","sample":1,"milliseconds":278.92420800000014,"status":0,"signal":null,"stdout":"git version 2.54.0 (Apple Git-157)\n","stderr":""}
+{"command":"/usr/bin/git","sample":2,"milliseconds":47.9837500000001,"status":0,"signal":null,"stdout":"git version 2.54.0 (Apple Git-157)\n","stderr":""}
+{"command":"/usr/bin/true","sample":0,"milliseconds":252.59008299999982,"status":0,"signal":null,"stdout":"","stderr":""}
+{"command":"/usr/bin/true","sample":1,"milliseconds":253.97424999999998,"status":0,"signal":null,"stdout":"","stderr":""}
+{"command":"/usr/bin/true","sample":2,"milliseconds":254.47345799999994,"status":0,"signal":null,"stdout":"","stderr":""}

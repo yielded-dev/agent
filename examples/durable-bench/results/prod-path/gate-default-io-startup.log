@@ -1,0 +1,10 @@
+{"time":"2026-10-08T20:55:31.924Z","node":"v24.21.0","policy":"current diagnostic shell out of Darwin background; child disk I/O default"}
+{"command":"git","sample":0,"milliseconds":262.34024999999997,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":1,"milliseconds":260.76916700000004,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":2,"milliseconds":257.5875000000001,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/usr/bin/true","sample":0,"milliseconds":254.95687500000008,"status":0,"signal":null,"stdout":"","stderr":""}
+{"command":"/usr/bin/true","sample":1,"milliseconds":254.43120900000008,"status":0,"signal":null,"stdout":"","stderr":""}
+{"command":"/usr/bin/true","sample":2,"milliseconds":257.1709169999999,"status":0,"signal":null,"stdout":"","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":0,"milliseconds":277.88920899999994,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":1,"milliseconds":277.8002499999998,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":2,"milliseconds":274.96633299999985,"status":0,"signal":null,"stdout":"started","stderr":""}

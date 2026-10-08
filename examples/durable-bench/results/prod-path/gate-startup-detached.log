@@ -1,0 +1,9 @@
+{"time":"2026-10-08T20:47:46.327Z","version":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","kind":"sequential asynchronous startup"}
+{"detached":false,"sample":0,"startupMs":277.90029200000004,"totalMs":279.251125,"status":null,"signal":"SIGTERM"}
+{"detached":false,"sample":1,"startupMs":278.05275000000006,"totalMs":279.053625,"status":null,"signal":"SIGTERM"}
+{"detached":false,"sample":2,"startupMs":278.011791,"totalMs":279.121125,"status":null,"signal":"SIGTERM"}
+{"detached":false,"sample":3,"startupMs":278.48316699999987,"totalMs":279.5470419999999,"status":null,"signal":"SIGTERM"}
+{"detached":true,"sample":0,"startupMs":276.878958,"totalMs":277.9320829999999,"status":null,"signal":"SIGTERM"}
+{"detached":true,"sample":1,"startupMs":277.5285409999999,"totalMs":278.78483299999994,"status":null,"signal":"SIGTERM"}
+{"detached":true,"sample":2,"startupMs":279.768959,"totalMs":281.00454200000013,"status":null,"signal":"SIGTERM"}
+{"detached":true,"sample":3,"startupMs":276.0223340000002,"totalMs":276.9637090000001,"status":null,"signal":"SIGTERM"}

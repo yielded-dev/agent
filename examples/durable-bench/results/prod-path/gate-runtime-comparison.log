@@ -1,0 +1,14 @@
+{"time":"2026-10-08T20:53:57.298Z","node":"v24.16.0","uv":"1.52.1","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.16.0/bin/node"}
+{"command":"git","sample":0,"milliseconds":256.253583,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":1,"milliseconds":255.16391699999997,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":2,"milliseconds":257.051875,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.16.0/bin/node","sample":0,"milliseconds":273.9803330000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.16.0/bin/node","sample":1,"milliseconds":276.99258299999997,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.16.0/bin/node","sample":2,"milliseconds":275.5020830000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"time":"2026-10-08T20:53:59.488Z","node":"v22.22.1","uv":"1.51.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/22.22.1/bin/node"}
+{"command":"git","sample":0,"milliseconds":260.943375,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":1,"milliseconds":259.179083,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":2,"milliseconds":258.43220799999995,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/22.22.1/bin/node","sample":0,"milliseconds":273.6577920000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/22.22.1/bin/node","sample":1,"milliseconds":274.8175840000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/22.22.1/bin/node","sample":2,"milliseconds":271.760166,"status":0,"signal":null,"stdout":"started","stderr":""}

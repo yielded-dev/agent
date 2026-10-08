@@ -1,0 +1,334 @@
+{
+  "run": "1b0a1de4",
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/private/tmp/prod-path-pCQR2l",
+  "startedAt": 1791490765383,
+  "targets": [
+    {
+      "role": "provider",
+      "kind": "provider",
+      "name": "prod-path-1b0a1de4-provider",
+      "bundle": "/private/tmp/prod-path-pCQR2l/bundles/provider/worker.mjs",
+      "build": {
+        "name": "provider",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "dirty": true,
+        "bundleSha256": "bdd1c364a83bd996c30b46fee81f79ad9ca18a641709f81ece29d8ff3e4fd2ae",
+        "bundleBytes": 558450,
+        "gzipBytes": 113824,
+        "fixtureSha256": "0237546f250a53492b7ae019c58aa267e9f5288e1427a1ba914f0bf5309c65dd",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "2b3eb85c6d1c93e6025beb95480008bee52ba5006b57dab7210f4dadcaea8bd9"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "0e66492add3848baa6d240b4bd8208c2749b6c84a1af5787bacb952101e86f25",
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/prod-path-pCQR2l/bundles/provider",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "seed",
+      "provider": "",
+      "url": "https://prod-path-1b0a1de4-provider.danieljmerwe.workers.dev",
+      "deployedAt": 1791491147512,
+      "cleanupRequired": true,
+      "cleanupComplete": false,
+      "expectedVersion": "000c947d-6568-4bf4-a03d-c53b4ce01325",
+      "startupTimeMs": 24,
+      "startupEvidence": {
+        "version": "000c947d-6568-4bf4-a03d-c53b4ce01325",
+        "number": 2,
+        "startupTimeMs": 24,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "uploadRevision": "",
+        "capturedAt": 1791491304229
+      },
+      "uploadedModuleSha256": "bdd1c364a83bd996c30b46fee81f79ad9ca18a641709f81ece29d8ff3e4fd2ae",
+      "observedUploadRevision": "",
+      "settings": {
+        "placement": {},
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": []
+    },
+    {
+      "role": "primary",
+      "kind": "network",
+      "name": "prod-path-1b0a1de4-primary",
+      "bundle": "/private/tmp/prod-path-pCQR2l/bundles/network/worker.mjs",
+      "build": {
+        "name": "network",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "dirty": true,
+        "bundleSha256": "7fd3fdb53317a96f7afa7217d247f03a1449e73490f211ac320cc209095c068a",
+        "bundleBytes": 5298499,
+        "gzipBytes": 997644,
+        "fixtureSha256": "0237546f250a53492b7ae019c58aa267e9f5288e1427a1ba914f0bf5309c65dd",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "2b3eb85c6d1c93e6025beb95480008bee52ba5006b57dab7210f4dadcaea8bd9"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "1bf3c9df50352e5a0f74800ec20bffd3f7c742c47361b93cb8782954c52f7c9d",
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/prod-path-pCQR2l/bundles/network",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "measure",
+      "provider": "https://prod-path-1b0a1de4-provider.danieljmerwe.workers.dev/v1",
+      "url": "https://prod-path-1b0a1de4-primary.danieljmerwe.workers.dev",
+      "deployedAt": 1791491159423,
+      "cleanupRequired": true,
+      "cleanupComplete": false,
+      "expectedVersion": "33cc50e5-ac30-44ae-838f-47ade5c3fdb1",
+      "startupMetadataFailure": "Error: Cloudflare workers/workers/[redacted-worker-id]/versions/33cc50e5-ac30-44ae-838f-47ade5c3fdb1: 500 non-JSON gateway response; ray a477f9907da8354e-SJC",
+      "startupTimeMs": null,
+      "startupEvidence": {
+        "version": "33cc50e5-ac30-44ae-838f-47ade5c3fdb1",
+        "number": 5,
+        "startupTimeMs": null,
+        "uploadRevision": null,
+        "capturedAt": 1791492176006
+      },
+      "uploadedModuleSha256": "7fd3fdb53317a96f7afa7217d247f03a1449e73490f211ac320cc209095c068a",
+      "observedUploadRevision": null,
+      "settings": {
+        "placement": {
+          "mode": "targeted",
+          "target": [
+            50
+          ]
+        },
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "name": "prod-path-1b0a1de4-primary_NetworkYieldedDO",
+          "script": "prod-path-1b0a1de4-primary"
+        },
+        {
+          "name": "prod-path-1b0a1de4-primary_NetworkPiDO",
+          "script": "prod-path-1b0a1de4-primary"
+        }
+      ],
+      "deployments": [
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+            "dirty": true,
+            "bundleSha256": "913d2616d7c337841447ae4e5fb9167e69b7faf152311cec79ddfde8ca47b7b0",
+            "bundleBytes": 5298176,
+            "gzipBytes": 997561,
+            "fixtureSha256": "0237546f250a53492b7ae019c58aa267e9f5288e1427a1ba914f0bf5309c65dd",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "2b3eb85c6d1c93e6025beb95480008bee52ba5006b57dab7210f4dadcaea8bd9"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "bb770b70c43d185025d7a70ba2c3f4a85ed23756c0d06cb7b21f9d65d06eb892",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-path-pCQR2l/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "0c1aa109-5fdc-4094-9e43-50f16ef4bd38",
+          "startupEvidence": {
+            "version": "0c1aa109-5fdc-4094-9e43-50f16ef4bd38",
+            "number": 2,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791491305461
+          },
+          "replacedAt": 1791491420622
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+            "dirty": true,
+            "bundleSha256": "913d2616d7c337841447ae4e5fb9167e69b7faf152311cec79ddfde8ca47b7b0",
+            "bundleBytes": 5298176,
+            "gzipBytes": 997561,
+            "fixtureSha256": "0237546f250a53492b7ae019c58aa267e9f5288e1427a1ba914f0bf5309c65dd",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "2b3eb85c6d1c93e6025beb95480008bee52ba5006b57dab7210f4dadcaea8bd9"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "bb770b70c43d185025d7a70ba2c3f4a85ed23756c0d06cb7b21f9d65d06eb892",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-path-pCQR2l/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "30f6c6c9-5da8-491a-9fb4-71e80abfb9b7",
+          "startupEvidence": {
+            "version": "30f6c6c9-5da8-491a-9fb4-71e80abfb9b7",
+            "number": 3,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791491430637
+          },
+          "replacedAt": 1791491629813
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+            "dirty": true,
+            "bundleSha256": "7fd3fdb53317a96f7afa7217d247f03a1449e73490f211ac320cc209095c068a",
+            "bundleBytes": 5298499,
+            "gzipBytes": 997644,
+            "fixtureSha256": "0237546f250a53492b7ae019c58aa267e9f5288e1427a1ba914f0bf5309c65dd",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "2b3eb85c6d1c93e6025beb95480008bee52ba5006b57dab7210f4dadcaea8bd9"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "1bf3c9df50352e5a0f74800ec20bffd3f7c742c47361b93cb8782954c52f7c9d",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-path-pCQR2l/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "85523b9e-1eba-4910-bec6-efee220d99c8",
+          "startupEvidence": {
+            "version": "85523b9e-1eba-4910-bec6-efee220d99c8",
+            "number": 4,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791491640799
+          },
+          "replacedAt": 1791492165446
+        }
+      ]
+    }
+  ],
+  "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "sourceHarness": "origin/dan/cf-latency-breakdown:examples/durable-bench/results/cf-latency"
+}

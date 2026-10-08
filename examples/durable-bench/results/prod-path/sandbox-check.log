@@ -1,0 +1,65 @@
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/sandbox-local
+
+stdout | test/local-sandbox.test.ts > unisolated local Sandbox > fails wall-clock timeout through the typed channel and finalizes the process scope
+[13:43:45.014] ERROR (#23): Error: ENOENT: no such file or directory, open '/var/folders/8p/p34jzpn978v2szrghvpvf5_00000gn/T/effect-agent-sandbox-AmVMHY/pid'
+    at Proxy.readFileSync (node:fs:483:20) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/var/folders/8p/p34jzpn978v2szrghvpvf5_00000gn/T/effect-agent-sandbox-AmVMHY/pid',
+  [cause]: undefined
+}
+
+ ❯ test/local-sandbox.test.ts (9 tests | 1 failed) 1639ms
+     × fails wall-clock timeout through the typed channel and finalizes the process scope 505ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/local-sandbox.test.ts > unisolated local Sandbox > fails wall-clock timeout through the typed channel and finalizes the process scope
+Error: ENOENT: no such file or directory, open '/var/folders/8p/p34jzpn978v2szrghvpvf5_00000gn/T/effect-agent-sandbox-AmVMHY/pid'
+ ❯ PrimitiveImpl.~effect/Effect/args test/local-sandbox.test.ts:85:40
+     83|
+     84| const readRecordedPid = (pidFile: string): Effect.Effect<number> =>
+     85|   Effect.sync(() => Number.parseInt(fs.readFileSync(pidFile, "utf8"), …
+       |                                        ^
+     86|
+     87| const isProcessAlive = (pid: number): Effect.Effect<boolean> =>
+ ❯ PrimitiveImpl.~effect/Effect/evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:984:28
+ ❯ FiberImpl.runLoop ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:670:39
+ ❯ FiberImpl.evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:613:22
+ ❯ ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1172:16
+ ❯ Array.<anonymous> ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:819:43
+ ❯ FiberImpl.evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:635:21
+ ❯ ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1172:16
+ ❯ ChildProcess.poll ../../node_modules/.bun/@effect+platform-node-shared@4.0.0+a594d97e083afb95/node_modules/@effect/platform-node-shared/src/NodeChildProcessSpawner.ts:462:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  13:43:43
+   Duration  2.22s (transform 28ms, setup 0ms, import 262ms, tests 1.64s, environment 0ms)
+
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/sandbox-local
+
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox > enforces a bounded stderr limit and terminates the owned process 285ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox > applies the output limit across stdout and stderr together 278ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox > copies only explicitly allowed environment variables 281ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox > fails wall-clock timeout through the typed channel and finalizes the process scope 505ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox > propagates consumer interruption while scope finalization owns process cleanup 279ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox with an injected spawner double > times out pending configuration setup without emitting process events 1ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox with an injected spawner double > times out pending spawn setup without emitting process events 1ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox with an injected spawner double > shares the setup deadline with active output and finalizes the child once 2ms
+ ✓ test/local-sandbox.test.ts > unisolated local Sandbox with an injected spawner double > decodes UTF-8 sequences split across chunk boundaries and flushes the tail 1ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  13:48:11
+   Duration  2.38s (transform 35ms, setup 0ms, import 412ms, tests 1.64s, environment 0ms)
+
+sandbox-check continued: vp test --reporter=verbose exit=0

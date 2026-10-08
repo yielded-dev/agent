@@ -1,0 +1,3 @@
+{"started":"2026-10-08T21:41:14.681Z","endpoint":"localhost:5432/postgres","authentication":"unchanged repository default","readOnly":true}
+psql: error: connection to server at "localhost" (::1), port 5432 failed: FATAL:  role "postgres" does not exist
+{"finished":"2026-10-08T21:41:14.788Z","exitCode":2,"signal":null}

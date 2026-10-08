@@ -1,0 +1,4 @@
+{"time":"2026-10-08T21:02:04.325Z","node":"v24.21.0","policy":"taskpolicy -a -t 0 -l 0"}
+{"sample":0,"milliseconds":262.842666,"status":0,"signal":null,"stderr":""}
+{"sample":1,"milliseconds":268.254,"status":0,"signal":null,"stderr":""}
+{"sample":2,"milliseconds":261.12183300000004,"status":0,"signal":null,"stderr":""}

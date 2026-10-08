@@ -1,0 +1,7 @@
+{"time":"2026-10-08T20:57:42.316Z","node":"v24.21.0","launch":"PTY"}
+{"command":"git","sample":0,"milliseconds":256.732542,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":1,"milliseconds":257.34325,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"git","sample":2,"milliseconds":260.9499159999999,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":0,"milliseconds":280.513458,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":1,"milliseconds":277.0027500000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","sample":2,"milliseconds":275.1381250000002,"status":0,"signal":null,"stdout":"started","stderr":""}

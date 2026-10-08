@@ -1,0 +1,5 @@
+{"cwd":"/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","maxWorkers":null}
+{"cwd":"/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/effect-agent","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","maxWorkers":"1"}
+{"cwd":"/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/testing","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","maxWorkers":"1"}
+{"cwd":"/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/platform-cloudflare","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","maxWorkers":null}
+{"cwd":"/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-cloudflare","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","maxWorkers":null}

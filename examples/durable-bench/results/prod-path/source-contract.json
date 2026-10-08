@@ -1,0 +1,1865 @@
+{
+  "checkedAt": "2026-10-08T21:49:52.487Z",
+  "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "allMatch": true,
+  "builds": [
+    {
+      "bundleSha256": "7fd3fdb53317a96f7afa7217d247f03a1449e73490f211ac320cc209095c068a",
+      "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "compiledFrameworkFiles": 184,
+      "bundleArchiveMatches": true,
+      "passed": true,
+      "checked": [
+        {
+          "path": "packages/effect-agent/src/capabilities/BrowserUse.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/capabilities/Messaging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/capabilities/internal/utf8.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Agent.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentError.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentPolicy.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentUpdates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/FailureDiagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/IdGenerator.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Identifiers.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Memory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryNamespace.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryReference.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryRevalidation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Messaging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Receipt.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/RunEvent.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/RunPolicyUsage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SemanticMemoryIndex.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SemanticMemoryRevalidation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SubagentContract.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Thread.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/ToolExposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/ToolResult.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Usage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Worker.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/agent-updates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/message-status.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/strict-schema.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/utf8.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Admin.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/AgentRegistration.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Digest.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/DurableFailpoint.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/EventSource.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/LifecyclePublication.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/MessageDelivery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/OperationAuthorizer.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/PreparedInputAdmission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RecordFormat.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Records.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Recovery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunContinuation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunJournal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunStorage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Schedule.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ScheduleTransition.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Scheduling.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SettlementPublisher.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SqlMemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubmissionLedger.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubmissionStatus.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Subscription.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubscriptionInput.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubscriptionTransition.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Subscriptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadArchiveRange.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadImport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadInvariants.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadProjectionMaintenance.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadTransfer.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadWork.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ToolReconciler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WakeScheduler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WorkerAdmission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WorkerHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/agent-registration.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/agent-updates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/evidence.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/foreign-diagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/initial-context.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/journal-metadata.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/message-status.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/messaging-host.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/record-encoding.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/record-ownership.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/run-context-reader.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/run-context.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/schedule-time.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/thread-import-reader.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/thread-initialization.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/tool-operations.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/transfer-dependencies.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/worker-host.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/worker-runtime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/AgentRuntime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/Compaction.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ContextCompactor.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ContextWindow.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/DurableStep.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/MessagingHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/Output.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/RunEventSink.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/RunOptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/SubagentHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ThreadHistory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ToolBroker.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ToolExposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/bounded-value.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/compaction.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/error-diagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/output-contract.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/primitive-delta.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/provider-result-staging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-derivative.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-exposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-telemetry.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/CodeExecutor.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/InteractiveBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/PageCapture.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/PageScreenshot.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/Sandbox.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/Alarm.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserCredentials.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserSession.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserUse.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareAiGateway.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareBindings.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareCodeMode.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareConfig.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareMemory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareScheduling.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareSubscriptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/InteractiveBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/ThreadObject.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/WakeScheduler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/index.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/boundary.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-binding.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-credentials.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-dom.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-failure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-file-selection.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-jev-dom.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-quick-action.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-readonly-live-view.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-session-lifecycle.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/crypto.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/due-queue.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/layers.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/message-delivery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/page-function.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/prepared-admission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/progress-wait.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/transport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoMemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoMessageDeliveryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoScheduleStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageConfig.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageError.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageFailpoint.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoSubscriptionStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoThreadStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/MemoryProtocol.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/PortProtocol.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/PortRouting.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/canonical-append.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/migrations.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/owned-state.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/storage-span.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlAdmissionFacts.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlJournal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlLifecyclePublication.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlMessageDeliveryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlStorage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlStorageProgress.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlSubscriptionStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadArchiveRange.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadImport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadWork.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/internal/settlement-intervals.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/internal/sql-json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        }
+      ]
+    },
+    {
+      "bundleSha256": "d05e101f9297bc61eacc10926f05ff2ba38579fd31a6b9e3359bbc4128c898ea",
+      "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+      "compiledFrameworkFiles": 184,
+      "bundleArchiveMatches": true,
+      "passed": true,
+      "checked": [
+        {
+          "path": "packages/effect-agent/src/capabilities/BrowserUse.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/capabilities/Messaging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/capabilities/internal/utf8.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Agent.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentError.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentPolicy.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/AgentUpdates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/FailureDiagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/IdGenerator.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Identifiers.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Memory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryNamespace.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryReference.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryRevalidation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/MemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Messaging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Receipt.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/RunEvent.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/RunPolicyUsage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SemanticMemoryIndex.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SemanticMemoryRevalidation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/SubagentContract.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Thread.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/ToolExposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/ToolResult.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Usage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/Worker.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/agent-updates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/message-status.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/strict-schema.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/core/internal/utf8.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Admin.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/AgentRegistration.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Digest.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/DurableFailpoint.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/EventSource.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/LifecyclePublication.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/MessageDelivery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/OperationAuthorizer.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/PreparedInputAdmission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RecordFormat.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Records.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Recovery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunContinuation.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunJournal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/RunStorage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Schedule.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ScheduleTransition.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Scheduling.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SettlementPublisher.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SqlMemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubmissionLedger.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubmissionStatus.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Subscription.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubscriptionInput.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/SubscriptionTransition.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/Subscriptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadArchiveRange.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadImport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadInvariants.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadProjectionMaintenance.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadTransfer.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ThreadWork.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/ToolReconciler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WakeScheduler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WorkerAdmission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/WorkerHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/agent-registration.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/agent-updates.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/evidence.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/foreign-diagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/initial-context.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/journal-metadata.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/message-status.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/messaging-host.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/record-encoding.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/record-ownership.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/run-context-reader.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/run-context.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/schedule-time.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/thread-import-reader.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/thread-initialization.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/tool-operations.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/transfer-dependencies.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/worker-host.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/durable/internal/worker-runtime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/AgentRuntime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/Compaction.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ContextCompactor.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ContextWindow.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/DurableStep.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/MessagingHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/Output.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/RunEventSink.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/RunOptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/SubagentHost.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ThreadHistory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ToolBroker.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/ToolExposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/bounded-value.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/compaction.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/error-diagnostic.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/output-contract.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/primitive-delta.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/provider-result-staging.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-derivative.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-exposure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/engine/internal/tool-telemetry.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/CodeExecutor.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/InteractiveBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/PageCapture.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/PageScreenshot.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/effect-agent/src/sandbox/Sandbox.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/Alarm.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserCredentials.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserSession.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/BrowserUse.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareAiGateway.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareBindings.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareCodeMode.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareConfig.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareMemory.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareScheduling.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareSubscriptions.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/InteractiveBrowser.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/ThreadObject.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/WakeScheduler.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/index.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/boundary.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-binding.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-credentials.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-dom.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-failure.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-file-selection.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-jev-dom.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-quick-action.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-readonly-live-view.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/browser-session-lifecycle.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/crypto.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/due-queue.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/layers.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/message-delivery.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/page-function.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/prepared-admission.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/progress-wait.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/platform-cloudflare/src/internal/transport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoMemoryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoMessageDeliveryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoScheduleStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageConfig.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageError.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoStorageFailpoint.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoSubscriptionStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/DoThreadStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/MemoryProtocol.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/PortProtocol.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/PortRouting.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/canonical-append.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/migrations.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/owned-state.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-cloudflare/src/internal/storage-span.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlAdmissionFacts.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlJournal.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlLifecyclePublication.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlMessageDeliveryStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlStorage.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlStorageProgress.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlSubscriptionStore.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadArchiveRange.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadImport.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqlThreadWork.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/internal/settlement-intervals.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        },
+        {
+          "path": "packages/storage-sql/src/internal/sql-json.ts",
+          "archiveHashMatches": true,
+          "baselineBlobMatches": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "checkedAt": "2026-10-08T22:06:21.710Z",
+  "scope": "Task harness syntax, ordinary lint rules and formatting in a temporary copy with repository rules; type-aware checking disabled for this generated directory and third-party resolution. Deployed workflows supply integration evidence.",
+  "passed": true,
+  "finalSourceCheckComplete": true,
+  "commands": [
+    "vp lint --fix <copied files>",
+    "vp fmt <copied files>",
+    "vp node --check <controller, reducers, build and validation shim>"
+  ],
+  "files": [
+    {
+      "path": "run.mjs",
+      "sha256": "07334b2d7da8ea63c3a48464eb17647a9421860d534e1dcccd2c74478e87e81e"
+    },
+    {
+      "path": "build.mjs",
+      "sha256": "ee15bb970323169692cca5c3f67f1cc6dcfc793ac50b98bd1c284d62b0af9bd8"
+    },
+    {
+      "path": "stack.ts",
+      "sha256": "6a4dfa7921ad824e61384ff95ca651c388140303c74ee50580cbbdc3c3cce8d2"
+    },
+    {
+      "path": "analyze.mjs",
+      "sha256": "f31994b3cc75d7da85b8c464c0811af44820159b38abde66e5ccb5588017f3f9"
+    },
+    {
+      "path": "analyze-attribution.mjs",
+      "sha256": "2948022a98010ee599e8a4c1b4b5402ca139396e4a29e2cee0f0eb24818ebe71"
+    },
+    {
+      "path": "validation-env.cjs",
+      "sha256": "fc4c40415a07751a73143cc09da2d081264ed15027717811edcec1a2d4ed9e1f"
+    },
+    {
+      "path": "network/host.ts",
+      "sha256": "1e627b86f49333c53408507fbf4c24629edb0d6fca302f3c0eaf59c571fd650b"
+    },
+    {
+      "path": "network/mock.ts",
+      "sha256": "26e30d98cbbc26cb34c1980cc22618431bb724c2e8539e13fa833558bec01674"
+    },
+    {
+      "path": "network/observe.ts",
+      "sha256": "7828f80845e24dceadce31085a0b6525040e3a7cbbe54be4e1b4e3395eb54baf"
+    },
+    {
+      "path": "network/pi.ts",
+      "sha256": "90582d5deeea0ef9936f152541c3cc3e00c05b10c05796918b52496d5c94c7f4"
+    },
+    {
+      "path": "network/protocol.ts",
+      "sha256": "c6df1567325bfd3e09a65044756bb074874aeba926fedf9fdbbea6d09083040f"
+    },
+    {
+      "path": "network/provider.ts",
+      "sha256": "05703c00b9d7a1976fa04b18a2ae475edaaa64ec1afb41f9c299f08668dda7f1"
+    },
+    {
+      "path": "network/worker.ts",
+      "sha256": "e4668f7da60c49b74d4ab20480c3543d6a443f8ae05d7976dd12b752830ba9f9"
+    },
+    {
+      "path": "network/yielded.ts",
+      "sha256": "e25d665ffe8762aa9345402a469f3eaca2ac66bc42357f90a9b02610def68a03"
+    }
+  ],
+  "amendments": [
+    {
+      "checkedAt": "2026-10-08T22:12:10.714Z",
+      "path": "analyze-attribution.mjs",
+      "change": "Add direct receipt-to-process marker bracket, derived from the existing deployed receipts.",
+      "commands": [
+        "vp lint <scoped copy>",
+        "vp fmt <scoped copy>",
+        "vp node --check analyze-attribution.mjs"
+      ],
+      "passed": true,
+      "sha256": "2948022a98010ee599e8a4c1b4b5402ca139396e4a29e2cee0f0eb24818ebe71"
+    },
+    {
+      "checkedAt": "2026-10-08T22:18:04.547Z",
+      "path": "run.mjs",
+      "change": "Redact namespace identifiers from Alchemy diagnostic output; actual captured logs audited separately.",
+      "commands": [
+        "vp lint --fix <scoped copy>",
+        "vp fmt <scoped copy>",
+        "vp node --check run.mjs"
+      ],
+      "passed": true,
+      "sha256": "07334b2d7da8ea63c3a48464eb17647a9421860d534e1dcccd2c74478e87e81e"
+    }
+  ]
+}

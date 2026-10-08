@@ -1,0 +1,1531 @@
+Gate: vp run --no-cache ready
+Context: host restarted; existing validation-env.cjs worker cap; tests and timeouts unchanged.
+Started: 2026-10-08T21:33:39Z
+{"node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","validationEnvSha256":"354a5212a291bc26c87fd9f5e56e74cf26c97071178083ec1302907bc8ecb0a8"}
+$ vp check ⊘ cache disabled
+pass: All 1471 files are correctly formatted (1039ms, 16 threads)
+warn: Lint or type warnings found
+! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadStore.ts:392:25]
+ 391 |             });
+ 392 |           const first = encodings[0]!;
+     :                         ^^^^^^^^^^^^^
+ 393 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! eslint(no-unused-vars): Parameter '_' is declared but never used.
+     ,-[packages/platform-cloudflare/src/CloudflareSubscriptions.ts:219:73]
+ 218 |   expectedRevision: Schema.Int.check(Schema.isGreaterThan(0)),
+ 219 |   options: SubscribeRequest.fields.options.mapFields(({ subscriptionId: _, ...fields }) => fields),
+     :                                                                         |
+     :                                                                         `-- '_' is declared here
+ 220 | });
+     `----
+  help: Consider removing this parameter.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/src/internal/layers.ts:780:33]
+ 779 |                               .withMutation(
+ 780 |                                 store.lifecyclePublications!.retryParked(ownerThreadId, nowMillis),
+     :                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 781 |                                 { invalidatesRecovery: false, lanes: [DueQueue.Lifecycle] },
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:180:19]
+ 179 |       return yield* failure("A transfer page must contain a complete bounded canonical batch");
+ 180 |     const batch = canonical.batches[0]!;
+     :                   ^^^^^^^^^^^^^^^^^^^^^
+ 181 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:209:23]
+ 208 |     while (position.section < transferSections.length) {
+ 209 |       const section = transferSections[position.section]!;
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 210 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:251:45]
+ 250 |     position.section < transferSections.length &&
+ 251 |     position.consumed === manifest.snapshot[transferSections[position.section]!]
+     :                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 252 |   ) {
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:253:21]
+ 252 |   ) {
+ 253 |     const section = transferSections[position.section]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 254 |     const probe = yield* reader.facts(request.threadId, section, position.after);
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:236:21]
+ 235 |   if (payload._tag === "WorkerInputRefused") {
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:237:18]
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     :                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 |     const retained = yield* reader.delivery(payload.messageId);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:461:21]
+ 460 |     while (archive.records[index]?.batchId === batch.batchId) {
+ 461 |       const entry = archive.records[index]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^
+ 462 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1033:17]
+ 1032 |       yield* ensure(
+ 1033 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 0,
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1034 |         "Conversation history does not count as peer sends",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1052:17]
+ 1051 |       yield* ensure(
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1053:19]
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      :                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1054 |         "Peer count saturates at the requested capacity without returning payloads",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/test/worker.ts:326:35]
+ 325 |             : maintenanceBindings.has(threadId)
+ 326 |               ? layerFromBindings(maintenanceBindings.get(threadId)!.bindings).pipe(
+     :                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 327 |                   Layer.provide(
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/test/worker.ts:330:23]
+ 329 |                       CurrentBindingSelection,
+ 330 |                       maintenanceBindings.get(threadId)!.selection,
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 331 |                     ),
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:86:18]
+ 85 |   while (pending.length > 0) {
+ 86 |     const next = pending.pop()!;
+    :                  ^^^^^^^^^^^^^^
+ 87 | 
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:116:18]
+ 115 |   while (pending.length > 0) {
+ 116 |     const next = pending.pop()!;
+     :                  ^^^^^^^^^^^^^^
+ 117 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:453:7]
+ 452 |       indexed.length !== 1 ||
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+     :       ^^^^^^^^^^^
+ 454 |       indexed[0]!.state !== "ready" ||
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:454:7]
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+ 454 |       indexed[0]!.state !== "ready" ||
+     :       ^^^^^^^^^^^
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:455:7]
+ 454 |       indexed[0]!.state !== "ready" ||
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     :       ^^^^^^^^^^^
+ 456 |     )
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:511:23]
+ 510 |         headers.length > 1 ||
+ 511 |         Object.values(state[0]!).some((v) => !Number.isSafeInteger(v) || v < 0)
+     :                       ^^^^^^^^^
+ 512 |       )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:556:19]
+ 555 |         tailDigest: headers[0]?.tail_digest ?? EMPTY_TAIL_DIGEST,
+ 556 |         snapshot: state[0]!,
+     :                   ^^^^^^^^^
+ 557 |         ...(seals[0] === undefined
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:662:27]
+ 661 |           canonicalJson(yield* json(RecordJson, item.record_json)) !==
+ 662 |             canonicalJson(batch.records[index]!)
+     :                           ^^^^^^^^^^^^^^^^^^^^^
+ 663 |         )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1207:51]
+ 1206 |                       recordId: record.recordId,
+ 1207 |                       recordBytes: utf8ByteLength(batch.recordJson[index]!),
+      :                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1208 |                       canonical: record,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1210:35]
+ 1209 |                       wire: record.wire,
+ 1210 |                       recordJson: batch.recordJson[index]!,
+      :                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1211 |                       readMetadata: metadata,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1875:31]
+ 1874 |                 staged.length !== 1 ||
+ 1875 |                 canonicalJson(staged[0]!) !== canonicalJson(progress.counts)
+      :                               ^^^^^^^^^^
+ 1876 |               )
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:8989:71]
+ 8988 | 
+ 8989 |                       const value = yield* Schema.encodeUnknownEffect(agent.definition.updates!)(
+      :                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+ 8990 |                         decoded.value,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:137:34]
+ 136 |         new CanonicalBatch(
+ 137 |           { ...header, records: [records[0]!, ...records.slice(1)] },
+     :                                  ^^^^^^^^^^^
+ 138 |           { disableChecks: true },
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:843:19]
+ 842 |   while (start < records.length) {
+ 843 |     const first = records[start]!;
+     :                   ^^^^^^^^^^^^^^^
+ 844 |     let end = start + 1;
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:846:36]
+ 845 | 
+ 846 |     while (end < records.length && records[end]!.batchId === first.batchId) end++;
+     :                                    ^^^^^^^^^^^^^
+ 847 |     const batch = records.slice(start, end);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:905:60]
+ 904 |         const originalEntry = byId.get(
+ 905 |           previous?.continuation.originalInput.recordId ?? original!.recordId,
+     :                                                            ^^^^^^^^^
+ 906 |         );
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:955:82]
+ 954 |         terminalUsageBytes: next.terminalUsageBytes,
+ 955 |         originalInput: previous?.continuation.originalInput ?? (yield* reference(original!)),
+     :                                                                                  ^^^^^^^^^
+ 956 |         ...(next.savedContext === undefined ? {} : { savedContext: next.savedContext }),
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/RunContinuation.ts:1514:19]
+ 1513 |         ...batch,
+ 1514 |         records: [ownedRecords[0]!, ...ownedRecords.slice(1), ...continuations],
+      :                   ^^^^^^^^^^^^^^^^
+ 1515 |       },
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:71:25]
+ 70 | 
+ 71 |     const concurrency = selected.parameters.workerConcurrency!;
+    :                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 72 |     const warmArrival = selected.parameters.warmArrival === 1;
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:302:22]
+ 301 |       const submit = Effect.fn("diagnostic.fairnessSubmit")(function* (index: number) {
+ 302 |         const lane = lanes[index]!;
+     :                      ^^^^^^^^^^^^^
+ 303 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:309:43]
+ 308 |         }
+ 309 |         lane.receipt = yield* host.submit(registrations[index]!.agent, lane.input, {
+     :                                           ^^^^^^^^^^^^^^^^^^^^^
+ 310 |           threadId: lane.threadId,
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:313:24]
+ 312 |           idempotencyKey: IdempotencyKey.make(`input-${lane.label}`),
+ 313 |           definitions: digests[index]!,
+     :                        ^^^^^^^^^^^^^^^
+ 314 |         });
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:340:66]
+ 339 |                 Effect.gen(function* () {
+ 340 |                   const settlement = yield* host.awaitSettlement(lane.receipt!);
+     :                                                                  ^^^^^^^^^^^^^
+ 341 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:406:56]
+ 405 |         const snapshot = yield* ledger.loadRecoverySnapshot(
+ 406 |           RecoverySnapshotRequest.make({ submissionId: lane.receipt!.submissionId }),
+     :                                                        ^^^^^^^^^^^^^
+ 407 |         );
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:418:41]
+ 417 |             inputs.length === 1 &&
+ 418 |             inputs[0]?.submissionId === lane.receipt!.submissionId &&
+     :                                         ^^^^^^^^^^^^^
+ 419 |             inputs[0]?.runId === runStarted.runId &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:425:42]
+ 424 |             settledOutput.answer === lane.label &&
+ 425 |             lane.claimedSubmissionId === lane.receipt!.submissionId &&
+     :                                          ^^^^^^^^^^^^^
+ 426 |             settlement.submissionId === lane.receipt!.submissionId &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:426:41]
+ 425 |             lane.claimedSubmissionId === lane.receipt!.submissionId &&
+ 426 |             settlement.submissionId === lane.receipt!.submissionId &&
+     :                                         ^^^^^^^^^^^^^
+ 427 |             snapshot.ownership === undefined &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:465:20]
+ 464 |             name: `${lane.label}.queueSequence`,
+ 465 |             value: lane.receipt!.queueSequence,
+     :                    ^^^^^^^^^^^^^
+ 466 |           })),
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/voice/state.ts:201:39]
+ 200 |                 if (seenCaptions.size > 128)
+ 201 |                   seenCaptions.delete(seenCaptions.values().next().value!);
+     :                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 202 |                 const typedId = get(conversationRequestAtom)?.requestId;
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:236:13]
+ 235 | export const toRunThreadOptions = Effect.fnUntraced(function* (
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+     :             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:237:10]
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     :          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 | ): Effect.fn.Return<
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[examples/travel-planner/src/conversation.ts:16:31]
+ 15 |     if (existing !== -1) {
+ 16 |       result[existing] = { ...result[existing]!, text: row.text };
+    :                               ^^^^^^^^^^^^^^^^^
+ 17 |       continue;
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+    ,-[examples/travel-planner/src/worker.ts:51:26]
+ 50 |     interface GlobalProps {
+ 51 |       mainModule: typeof import("./worker.ts");
+    :                          ^^^^^^^^^^^^^^^^^^^^^
+ 52 |     }
+    `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/worker.ts:211:42]
+ 210 |     if ((url.pathname.startsWith("/assets/") || url.pathname === "/favicon.svg") && env.ASSETS)
+ 211 |       return yield* Effect.promise(() => env.ASSETS!.fetch(pageRequest));
+     :                                          ^^^^^^^^^^^
+ 212 | 
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/auth/funding.ts:188:34]
+ 187 |         }),
+ 188 |         next: rows.length > 25 ? rows[24]!.subjectId : null,
+     :                                  ^^^^^^^^^
+ 189 |       };
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[examples/travel-planner/src/auth/persistence.ts:55:16]
+ 54 | 
+ 55 |         return rows[0]!;
+    :                ^^^^^^^^
+ 56 |       });
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/auth/email-schema.ts:180:11]
+ 179 |     encodeSubjectInsert: (input, values) => ({
+ 180 |       id: values.nativeSubjectId!,
+     :           ^^^^^^^^^^^^^^^^^^^^^^^
+ 181 |       active: true,
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! unicorn(no-useless-length-check): Found a useless array length check
+     ,-[examples/travel-planner/src/auth/proof-schema.ts:226:15]
+ 225 |             ? rows.length === 0
+ 226 |             : rows.length === 0 || rows.every((r) => r.subjectId === input.nativeSubjectId),
+     :               ^^^^^^^^^^^^^^^^^
+ 227 |     },
+     `----
+  help: The empty check is useless as `Array#every()` returns `true` for an empty array.
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:196:7]
+ 195 |     if (explained._tag === "ExplainedRecovery") {
+ 196 |       expect(explained.explanations).toHaveLength(1);
+     :       ^^^^^^
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:197:7]
+ 196 |       expect(explained.explanations).toHaveLength(1);
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+     :       ^^^^^^
+ 198 |       expect(explained.explanations[0]?.disposition).toBe("deferred");
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:198:7]
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+ 198 |       expect(explained.explanations[0]?.disposition).toBe("deferred");
+     :       ^^^^^^
+ 199 |     }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:309:9]
+ 308 |       if (abortPayload?._tag === "AbortRequested") {
+ 309 |         expect(abortPayload.author).toBe("subagent-parent-abort");
+     :         ^^^^^^
+ 310 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:314:9]
+ 313 |       if (childSettled?._tag === "SubmissionSettled") {
+ 314 |         expect(childSettled.outcome).toBe("aborted");
+     :         ^^^^^^
+ 315 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:331:9]
+ 330 |       if (settledEnvelope !== undefined && joined[0] !== undefined) {
+ 331 |         expect(Number(joined[0].sequence)).toBeLessThan(Number(settledEnvelope.sequence));
+     :         ^^^^^^
+ 332 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:123:3]
+ 122 | describe("Cross-Object child admission, wake, and abort ownership", () => {
+ 123 |   it("eviction at subagent:after-admit: the routed admission committed in the child's Object survives and resolveAdmission reattaches to it", async () => {
+     :   ^^
+ 124 |     await coordinatorEvictionRow("subagent:after-admit");
+     `----
+  help: Add assertion(s) in this Test
+
+  ! eslint(no-unsafe-finally): Unsafe `finally` block.
+      ,-[packages/platform-cloudflare/test/background-workers.test.ts:1093:48]
+ 1092 | 
+ 1093 |           if (rejected?.status === "rejected") throw rejected.reason;
+      :                                                ^^^^^^^^^^^^^^^^^^^^^^
+ 1094 |         }
+      `----
+  help: Control flow inside `try` or `catch` blocks will be overwritten by this statement.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:252:21]
+ 251 | 
+ 252 |                     expect(report?.decision._tag, row.location).toBe(row.decision);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 253 |                     expect(report?.disposition, row.location).toBe(row.disposition);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:253:21]
+ 252 |                     expect(report?.decision._tag, row.location).toBe(row.decision);
+ 253 |                     expect(report?.disposition, row.location).toBe(row.disposition);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 254 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:259:21]
+ 258 |                     // settling, the child lane settles, the woken parent joins.
+ 259 |                     expect(yield* drive(thread), row.location).toHaveLength(0);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 260 |                     const childSettlements = yield* drive(childThread);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:262:21]
+ 261 |     
+ 262 | ,->                     expect(
+ 263 | |                         childSettlements.map((settlement) => settlement.outcome),
+ 264 | |                         row.location,
+ 265 | `->                     ).toEqual(["completed"]);
+ 266 |                         const settlements = yield* drive(thread);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:268:21]
+ 267 |     
+ 268 | ,->                     expect(
+ 269 | |                         settlements.map((settlement) => settlement.outcome),
+ 270 | |                         row.location,
+ 271 | `->                     ).toEqual(["completed"]);
+ 272 |     
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:279:21]
+ 278 |                     });
+ 279 |                     expect(yield* reservationStatuses(parent.submissionId), row.location).toEqual([
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 280 |                       "released",
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:283:21]
+ 282 |                     // The one child model invocation across the kill and every replay.
+ 283 |                     expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 284 |                     yield* assertConvergence(thread, [parent.submissionId], {
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:504:17]
+ 503 |                 // The child ran exactly once BEFORE the kill; everything after is replay.
+ 504 |                 expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 505 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:519:23]
+ 518 | 
+ 519 |                       expect(report?.decision._tag, row.location).toBe(row.decision);
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 520 |                       expect(report?.disposition, row.location).toBe("repaired");
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:520:23]
+ 519 |                       expect(report?.decision._tag, row.location).toBe(row.decision);
+ 520 |                       expect(report?.disposition, row.location).toBe("repaired");
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 521 |                     }
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:522:21]
+ 521 |                     }
+ 522 |                     expect(yield* reservationStatuses(parent.submissionId), row.location).toEqual([
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 523 |                       "released",
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:528:21]
+ 527 |     
+ 528 | ,->                     expect(
+ 529 | |                         settlements.map((settlement) => settlement.outcome),
+ 530 | |                         row.location,
+ 531 | `->                     ).toEqual(["completed"]);
+ 532 |     
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:542:21]
+ 541 |                     // join acknowledgment was lost — the file-backed count stays at ONE.
+ 542 |                     expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 543 |                     yield* assertConvergence(thread, [parent.submissionId], {
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/join-restart.test.ts:298:13]
+ 297 |     if (evicts) {
+ 298 |       await expect(initialAttempt).rejects.toThrow("joined-input replacement eviction");
+     :             ^^^^^^
+ 299 |     } else {
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemorySubmissionLedger.ts:3601:29]
+ 3600 |             }),
+ 3601 |           runOwner: (runId: import("@yielded/agent/identifiers").RunId) =>
+      :                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 3602 |             Effect.sync(() => {
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! eslint(require-yield): This generator function does not have `yield`
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:1648:26]
+ 1647 |                 (cursor) =>
+ 1648 | ,->               Effect.gen(function* () {
+ 1649 | |                   const page = storedPage(
+ 1650 | |                     thread,
+ 1651 | |                     cursor.after,
+ 1652 | |                     Math.min(READ_PAGE_SIZE, request.limit - cursor.count),
+ 1653 | |                   );
+ 1654 | |   
+ 1655 | |                   const next = {
+ 1656 | |                     after: page.at(-1)?.sequence ?? cursor.after,
+ 1657 | |                     count: cursor.count + page.length,
+ 1658 | |                   };
+ 1659 | |   
+ 1660 | |                   return [
+ 1661 | |                     page,
+ 1662 | |                     page.length === 0 || next.count >= request.limit
+ 1663 | |                       ? Option.none<typeof next>()
+ 1664 | |                       : Option.some(next),
+ 1665 | |                   ] as const;
+ 1666 | `->               }),
+ 1667 |               );
+      `----
+  help: Add a `yield` expression inside the generator body, or convert it to a regular function if iteration behavior is not needed.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2285:21]
+ 2284 |                     id,
+ 2285 |                     staged.batches.get(batch.batch.batchId)!,
+      :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2286 |                     batch.previousTailDigest,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2657:14]
+ 2656 |   const archiveTarget = Effect.fnUntraced(function* (
+ 2657 |     request: import("@yielded/agent/thread-archive-range").ThreadArchiveRangeSeal,
+      :              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2658 |   ) {
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2803:27]
+ 2802 |   const verification = {
+ 2803 |     verify: (unvalidated: import("@yielded/agent/thread-store").ThreadVerificationRequest) =>
+      :                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2804 |       withMutation(
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/eviction.test.ts:150:3]
+ 149 | describe("Durable Object retirement — submit path (abort mid-submitEncoded, alarm-only convergence)", () => {
+ 150 |   it(
+     :   ^^
+ 151 |     "eviction at ledger:admit:after: the accepted admission settles by alarm alone; the same key returns the original Receipt",
+     `----
+  help: Add assertion(s) in this Test
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/eviction.test.ts:156:3]
+ 155 | 
+ 156 |   it(
+     :   ^^
+ 157 |     "eviction at append:after-record-insert: the partial records roll back with the incarnation",
+     `----
+  help: Add assertion(s) in this Test
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:10:19]
+  9 | const setup = () => {
+ 10 |   const stop = vi.fn();
+    :                   ^^
+ 11 |   const media = { getTracks: () => [{ stop }], getAudioTracks: () => [{ stop }] };
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:14:15]
+ 13 |   const channel = Object.assign(new EventTarget(), {
+ 14 |     close: vi.fn(),
+    :               ^^
+ 15 |     readyState: "open",
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:17:14]
+ 16 |     bufferedAmount: 0,
+ 17 |     send: vi.fn(),
+    :              ^^
+ 18 |   });
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:20:20]
+ 19 | 
+ 20 |   const close = vi.fn();
+    :                    ^^
+ 21 | 
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:25:18]
+ 24 |     iceGatheringState: "complete",
+ 25 |     addTrack: vi.fn(),
+    :                  ^^
+ 26 |     createDataChannel: () => channel,
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:30:30]
+ 29 |     setLocalDescription: async () => {},
+ 30 |     setRemoteDescription: vi.fn(async () => {}),
+    :                              ^^
+ 31 |   });
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:51:14]
+ 50 |     muted: false,
+ 51 |     play: vi.fn(async () => {}),
+    :              ^^
+ 52 |     pause: vi.fn(),
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:52:15]
+ 51 |     play: vi.fn(async () => {}),
+ 52 |     pause: vi.fn(),
+    :               ^^
+ 53 |   } as unknown as HTMLAudioElement;
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[tooling/semantic-memory-eval/src/native-embedding.ts:97:71]
+ 96 |             Effect.gen(function* () {
+ 97 |               if ((options.delayMillis ?? 0) > 0) yield* Effect.sleep(options.delayMillis!);
+    :                                                                       ^^^^^^^^^^^^^^^^^^^^
+ 98 |               if (options.fail === true) return yield* aiError("embedMany", "injected failure");
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! eslint(require-yield): This generator function does not have `yield`
+    ,-[packages/effect-agent/test/engine/join-restart.test.ts:36:28]
+ 35 |                   Stream.unwrap(
+ 36 | ,->                 Effect.gen(function* () {
+ 37 | |                     const index = prompts.length;
+ 38 | |   
+ 39 | |                     prompts.push(JSON.stringify(options.prompt));
+ 40 | |   
+ 41 | |                     const parts: ReadonlyArray<Response.StreamPartEncoded> = [
+ 42 | |                       { type: "text-start", id: "draft" },
+ 43 | |                       { type: "text-delta", id: "draft", delta: `"answer-${index}"` },
+ 44 | |                       { type: "text-end", id: "draft" },
+ 45 | |                       {
+ 46 | |                         type: "finish",
+ 47 | |                         reason: "stop",
+ 48 | |                         usage: { inputTokens: { total: 10 }, outputTokens: { total: 2 } },
+ 49 | |                       },
+ 50 | |                     ];
+ 51 | |   
+ 52 | |                     return Stream.fromIterable(parts).pipe(
+ 53 | |                       Stream.concat(
+ 54 | |                         Stream.fromEffect(
+ 55 | |                           Effect.gen(function* () {
+ 56 | |                             yield* Deferred.succeed(requests[index]!, undefined);
+ 57 | |                             if (index < 3) yield* Deferred.await(releases[index]!);
+ 58 | |                           }),
+ 59 | |                         ).pipe(Stream.drain),
+ 60 | |                       ),
+ 61 | |                       Stream.onExit((exit) =>
+ 62 | |                         Effect.sync(() => {
+ 63 | |                           if (exit._tag === "Failure") cancelled.push(index);
+ 64 | |                         }),
+ 65 | |                       ),
+ 66 | |                     );
+ 67 | `->                 }),
+ 68 |                   ),
+    `----
+  help: Add a `yield` expression inside the generator body, or convert it to a regular function if iteration behavior is not needed.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/semantic-memory-eval/src/evaluate.ts:495:66]
+ 494 |       Effect.gen(function* () {
+ 495 |         if ((provider.delayMillis ?? 0) > 0) yield* Effect.sleep(provider.delayMillis!);
+     :                                                                  ^^^^^^^^^^^^^^^^^^^^^
+ 496 |         if (provider.fail === true) return yield* injectedAiError("injected failure");
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/preview/runtime.ts:111:25]
+ 110 |                 modules: true,
+ 111 |                 script: bundle.outputFiles[0]!.text,
+     :                         ^^^^^^^^^^^^^^^^^^^^^^
+ 112 |                 modulesRoot: "/",
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[examples/travel-planner/test/auth.test.ts:130:5]
+ 129 | 
+ 130 |     expect(response.status, JSON.stringify(response.body)).toBe(200);
+     :     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 131 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/pr-review-action/src/review-openai.ts:542:6]
+ 541 |     return { payload: { ...payload, max_output_tokens: outputTokens }, reservation };
+ 542 |   }, admissions.withPermit);
+     :      ^^^^^^^^^^^^^^^^^^^^^|
+     :                |          `-- This reference may be unbound and lose `this` context
+ 543 | 
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AgentApprovalDenied" | "AgentApprovalPending" | "AgentChildPending" | "AgentInputDecodeError" | "AgentInputError" | "AgentOutputError" | "AgentPersistenceCapacityError" | "AgentPolicyError" | "AgentToolAuthorizationCheckError" | "AgentToolAuthorizationDenied" | "AiError" | "BudgetAdapterError" |
+  | "CompactionError" | "ConfigError" | "ContextBudgetError" | "ContextOverflowError" | "MemoryRecallError" | "ModelProtocolError" | "PlatformError" | "ReviewVerificationError" | "ThreadHistoryError"
+      ,-[packages/pr-review-action/src/action.ts:1308:17]
+ 1307 | 
+ 1308 |         switch (failure._tag) {
+      :                 ^^^^^^^^^^^^
+ 1309 |           case "BudgetExceeded":
+      `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:27:37]
+ 26 |     
+ 27 | ,-> const arrayBufferByteLengthGetter = Object.getOwnPropertyDescriptor(
+ 28 | |     ArrayBuffer.prototype,
+ 29 | |     "byteLength",
+ 30 | `-> )?.get;
+    : `---   ^|^
+    : `---    `-- This reference may be unbound and lose `this` context
+ 31 |     
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:33:32]
+ 32 | const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:34:32]
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:35:30]
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    :                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                               |                                `-- This reference may be unbound and lose `this` context
+ 36 | const urlConstructor = Reflect.get(globalThis, "URL");
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:48:7]
+ 47 |   typeof urlPrototypeDescriptor.value === "object"
+ 48 |     ? Object.getOwnPropertyDescriptor(urlPrototypeDescriptor.value, "href")?.get
+    :       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                            |                                    `-- This reference may be unbound and lose `this` context
+ 49 |     : undefined;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "file" | "tool-approval-request" | "tool-approval-response"
+     ,-[packages/effect-agent/src/engine/internal/compaction.ts:476:11]
+ 475 |   if (typeof part === "string") return part;
+ 476 |   switch (part.type) {
+     :           ^^^^^^^^^
+ 477 |     case "text": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CodeExecutionProtocolError" | "CodeExecutorStartError" | "CodeExecutorTerminatedError" | "CodeExecutorUnsupportedError" | "CodeProgramFailedError" | "CodeSourceError"
+     ,-[packages/effect-agent/src/capabilities/CodeMode.ts:521:11]
+ 520 | const executionFailureMessage = (error: CodeExecutionError): string => {
+ 521 |   switch (error._tag) {
+     :           ^^^^^^^^^^
+ 522 |     case "CodeExecutionTimeoutError": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "reasoning" | "text" | "tool-call" | "tool-result"
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:4131:23]
+ 4130 |             yield* Effect.gen(function* () {
+ 4131 |               switch (ownedPart.type) {
+      :                       ^^^^^^^^^^^^^^
+ 4132 |                 case "text-start":
+      `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "ApplyInput" | "ApplyJoinAccounting" | "ApplyUnknownResolutions" | "CompleteChildAdmission" | "CompleteMaterialization" | "EnsureWaitingForChild" | "FinalizeLedgerFromHistory" | "PropagateChildAbort" | "ReleaseOrphanChildReservation" | "RepairInputMarker" | "RepairJoinMarker" | "RepairReadiness" |
+  | "RepairSubagentStartLink" | "ResumeWaitingParent" | "RevertJoining" | "SettleAborted" | "SettleJoinedWithHost"
+     ,-[packages/effect-agent/src/durable/Admin.ts:223:11]
+ 222 | ): RecoveryDisposition => {
+ 223 |   switch (decision._tag) {
+     :           ^^^^^^^^^^^^^
+ 224 |     case "NoAction":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunContinuation" | "RunDurationExhausted" | "SubagentJoined" | "SubagentLineageRecorded" | "SubtreeBudgetReserved" | "ThreadCreated" |
+  | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:596:13]
+ 595 | 
+ 596 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 597 |       case "RunStarted":
+     `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+      ,-[packages/effect-agent/src/durable/ThreadStore.ts:1019:63]
+ 1018 |   static layer() {
+ 1019 |     return Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore));
+      :                                                               ^^^^^^^^^^^^^^^^^^^^^^|
+      :                                                                          |          `-- This reference may be unbound and lose `this` context
+ 1020 |   }
+      `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentLineageRecorded" |
+  | "SubagentStarted" | "ThreadCreated" | "ToolStepSettled" | "UserInputRecorded"
+     ,-[packages/effect-agent/src/durable/ThreadWork.ts:581:11]
+ 580 | 
+ 581 |   switch (payload._tag) {
+     :           ^^^^^^^^^^^^
+ 582 |     case "ModelResponseRecorded":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "ModelResponseRecorded" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentJoined" | "SubagentRequested" |
+  | "SubagentStarted" | "SubmissionSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+    ,-[packages/effect-agent/src/durable/internal/tool-operations.ts:32:13]
+ 31 |     if (!("runId" in payload) || (runId !== undefined && payload.runId !== runId)) continue;
+ 32 |     switch (payload._tag) {
+    :             ^^^^^^^^^^^^
+ 33 |       case "ToolCallSettled":
+    `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved"
+  | | "RunStarted" | "SubagentLineageRecorded" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolApprovalDecided" | "ToolApprovalRequested" | "ToolCallResolved" | "ToolCallSettled" | "ToolCallUnknown" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" |
+  | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:548:13]
+ 547 | 
+ 548 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 549 |       case "SubagentRequested": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" |
+  | "RunStarted" | "SubagentJoined" | "SubagentRequested" | "SubagentStarted" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolCallResolved" | "ToolCallSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+  | | "WorkerStopRequested"
+      ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:2000:15]
+ 1999 |       }
+ 2000 |       switch (payload._tag) {
+      :               ^^^^^^^^^^^^
+ 2001 |         case "ToolCallUnknown": {
+      `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:483:18]
+ 482 |       Effect.mapError(() => invalid("Empty or oversized canonical batch", threadId)),
+ 483 |       Effect.map(CanonicalBatch.make),
+     :                  ^^^^^^^^^^^^^^^^^^^|
+     :                           |         `-- This reference may be unbound and lose `this` context
+ 484 |     );
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "input-applied" | "joined" | "joining" | "running" | "settled"
+       ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:11937:15]
+ 11936 | 
+ 11937 |       switch (submission.state) {
+       :               ^^^^^^^^^^^^^^^^
+ 11938 |         case "unknown": {
+       `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/platform-cloudflare/src/BrowserSession.ts:460:61]
+ 459 |               try {
+ 460 |                 const result: unknown = await Reflect.apply(cdp.send, cdp, [method, parameters]);
+     :                                                             ^^^^^^^^|
+     :                                                                 |   `-- This reference may be unbound and lose `this` context
+ 461 | 
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+Found 0 errors and 115 warnings in 913 files (16.7s, 16 threads)
+
+~/docs$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/ai-decision$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/effect-agent$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-sql$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-memory$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/sandbox-local$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/pr-review$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-postgres$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-sqlite$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/workflow$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/pr-review-action$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/semantic-memory-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/platform-node$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/testing$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/pr-review-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/runtime-benchmark$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-cloudflare$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/platform-cloudflare$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/browser-run-worker-proof$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/examples/travel-planner$ tsc --noEmit ⊘ cache disabled
+
+~/tooling/cloudflare-memory$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/context-continuity-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/examples/browser-speed$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+$ tsc --noEmit -p scripts/tsconfig.json ⊘ cache disabled
+
+$ bun scripts/verify-package-exports.ts ⊘ cache disabled
+Package exports check passed: 13 public packages, 221 entries.
+
+$ bun scripts/verify-record-format.ts ⊘ cache disabled
+Record format compatibility verified
+
+$ bun scripts/check-deployment.ts ⊘ cache disabled
+$ vp exec alchemy deploy alchemy.run.ts --stage prod --help ⊘ cache disabled
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+USAGE
+  alchemy deploy [flags] [<config>]
+
+ARGUMENTS
+  config file    Alchemy entrypoint file (default: alchemy.run.ts) (optional)
+
+FLAGS
+  --dry-run            Dry run the deployment, do not actually deploy
+  --force              Force updates for resources that would otherwise no-op
+  --include string Include exact FQNs, unique logical IDs, or FQN globs and
+    their dependencies (repeatable, one pattern per flag). Quote globs:
+    --include 'App/**'. Other rows and stack outputs are preserved; the whole
+    declaration still runs.
+  --exclude string Exclude exact FQNs, unique logical IDs, or FQN globs
+    (repeatable, one pattern per flag). Quote globs: --exclude 'App/Legacy/**'.
+    Required excluded dependencies fail planning, even when unchanged.
+  --config, -c file    Alchemy entrypoint file (default: alchemy.run.ts)
+  --env-file file      File to load environment variables from, defaults to .env
+  --stage string Stage to deploy to. Defaults to $ALCHEMY_STAGE or live_${USER}
+  --yes, -y            Yes to all prompts
+  --profile string Auth profile to use. Defaults to $ALCHEMY_PROFILE or
+    'default'.
+  --adopt Adopt pre-existing cloud resources that conflict with this stack
+    instead of failing. Useful for re-importing infrastructure into a fresh
+    state store.
+  --detailed           Show declared resource properties as YAML
+  --detect-drift Detect infrastructure drift and offer to repair it before
+    deploying
+
+GLOBAL FLAGS
+  --help, -h                          Show help information
+  --version, -v                       Show version information
+  --completions <bash|zsh|fish|sh> Print shell completion script (choices: bash,
+    zsh, fish, sh)
+  --log-level <all|trace|…> Sets the minimum log level (choices: all, trace,
+    debug, info, warn, warning, error, fatal, none)
+  --no-input Disable prompts and the interactive TUI (plain output; commands
+    needing input fail)
+
+~/examples/travel-planner$ vp exec alchemy deploy alchemy.run.ts --stage production --help ⊘ cache disabled
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+USAGE
+  alchemy deploy [flags] [<config>]
+
+ARGUMENTS
+  config file    Alchemy entrypoint file (default: alchemy.run.ts) (optional)
+
+FLAGS
+  --dry-run            Dry run the deployment, do not actually deploy
+  --force              Force updates for resources that would otherwise no-op
+  --include string Include exact FQNs, unique logical IDs, or FQN globs and
+    their dependencies (repeatable, one pattern per flag). Quote globs:
+    --include 'App/**'. Other rows and stack outputs are preserved; the whole
+    declaration still runs.
+  --exclude string Exclude exact FQNs, unique logical IDs, or FQN globs
+    (repeatable, one pattern per flag). Quote globs: --exclude 'App/Legacy/**'.
+    Required excluded dependencies fail planning, even when unchanged.
+  --config, -c file    Alchemy entrypoint file (default: alchemy.run.ts)
+  --env-file file      File to load environment variables from, defaults to .env
+  --stage string Stage to deploy to. Defaults to $ALCHEMY_STAGE or live_${USER}
+  --yes, -y            Yes to all prompts
+  --profile string Auth profile to use. Defaults to $ALCHEMY_PROFILE or
+    'default'.
+  --adopt Adopt pre-existing cloud resources that conflict with this stack
+    instead of failing. Useful for re-importing infrastructure into a fresh
+    state store.
+  --detailed           Show declared resource properties as YAML
+  --detect-drift Detect infrastructure drift and offer to repair it before
+    deploying
+
+GLOBAL FLAGS
+  --help, -h                          Show help information
+  --version, -v                       Show version information
+  --completions <bash|zsh|fish|sh> Print shell completion script (choices: bash,
+    zsh, fish, sh)
+  --log-level <all|trace|…> Sets the minimum log level (choices: all, trace,
+    debug, info, warn, warning, error, fatal, none)
+  --no-input Disable prompts and the interactive TUI (plain output; commands
+    needing input fail)
+
+
+$ bun scripts/verify-package-purity.ts ⊘ cache disabled
+Package purity check passed: 205 production entrypoints, 7784 bundled modules, 84863952 bytes; no test-only dependency path found.
+
+~/packages/storage-cloudflare$ vitest run ⊘ cache disabled
+~/packages/storage-sqlite$ vp test --passWithNoTests ⊘ cache disabled
+~/packages/storage-sql$ vp test --passWithNoTests ⊘ cache disabled
+~/packages/sandbox-local$ vp test --passWithNoTests ⊘ cache disabled
+
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/sandbox-local
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-sql
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-sqlite
+
+No test files found, exiting with code 0
+
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/.git/**
+
+
+~/packages/pr-review-action$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/pr-review-action
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-cloudflare
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  14:34:47
+   Duration  1.08s (transform 28ms, setup 0ms, import 288ms, tests 702ms, environment 0ms)
+
+
+~/packages/effect-agent$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/effect-agent
+
+
+ Test Files  3 passed (3)
+      Tests  43 passed (43)
+   Start at  14:34:47
+   Duration  1.87s (transform 365ms, setup 0ms, import 1.37s, tests 302ms, environment 0ms)
+
+
+~/packages/storage-memory$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-memory
+
+
+ Test Files  8 passed (8)
+      Tests  139 passed (139)
+   Start at  14:34:47
+   Duration  8.84s (transform 1.09s, setup 0ms, import 4.37s, tests 3.90s, environment 0ms)
+
+
+~/tooling/cloudflare-memory$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/cloudflare-memory
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:34:56
+   Duration  2.23s (transform 63ms, setup 0ms, import 496ms, tests 1.64s, environment 0ms)
+
+
+~/tooling/runtime-benchmark$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/runtime-benchmark
+
+
+ Test Files  9 passed (9)
+      Tests  111 passed (111)
+   Start at  14:34:48
+   Duration  14.14s (transform 24.97s, setup 0ms, import 90.38s, tests 6.50s, environment 0ms)
+
+
+~/packages/platform-node$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/platform-node
+
+
+ Test Files  14 passed (14)
+      Tests  158 passed (158)
+   Start at  14:34:49
+   Duration  16.61s (transform 3.53s, setup 0ms, import 9.25s, tests 5.92s, environment 1ms)
+
+
+~/packages/platform-cloudflare$ vitest run ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/platform-cloudflare
+
+
+ Test Files  42 passed (42)
+      Tests  156 passed (156)
+   Start at  14:34:48
+   Duration  20.36s (transform 4.74s, setup 0ms, import 15.35s, tests 1.56s, environment 2ms)
+
+
+~/tooling/pr-review-eval$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/pr-review-eval
+
+
+ Test Files  5 passed (5)
+      Tests  14 passed (14)
+   Start at  14:34:59
+   Duration  10.45s (transform 6.24s, setup 0ms, import 8.79s, tests 1.27s, environment 0ms)
+
+
+~/tooling/context-continuity-eval$ vitest run ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/context-continuity-eval
+
+
+ Test Files  4 passed (4)
+      Tests  19 passed (19)
+   Start at  14:35:09
+   Duration  5.43s (transform 799ms, setup 0ms, import 2.72s, tests 2.38s, environment 0ms)
+
+
+~/packages/testing$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/testing
+
+NOSENTRY SQLite alarm handler canceled with requestScheduledAlarm.; scheduledTime = 1791495328.188s; localAlarmState.orDefault(kj::UNIX_EPOCH) = 1791495328.197s; actorId = e4455bb790521fb8b4a3f01e8392ce1fe135685070eedc068fa7ea0429e74faf
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: external reply lost
+stack: 1050b2e8c 1050bbca8
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: external reply lost
+stack: 1050b2e8c 1050bbca8
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1035b5797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1035b5797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed runtime eviction failpoint
+stack: 105211797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1035b5797
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1035b5797
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+stdout | test/certification-postgres.test.ts > certifies PostgreSQL contracts and recovery without claiming process-kill coverage
+[14:35:36.713] ERROR (#2): Error [effect/sql/SqlError]: PgConnection: Failed to connect
+    at fail (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1424:24)
+    at handleMessage (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:16)
+    at Socket.onData (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1566:7)
+    ... 4 lines matching cause stack trace ...
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  _tag: 'SqlError',
+  reason: {
+    _tag: 'UnknownError',
+    cause: Error: database "effect_agent" does not exist
+        at classifyFields (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1835:31)
+        at handleMessage (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:21)
+        at Socket.onData (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1566:7)
+        at Socket.emit (node:events:514:28)
+        at addChunk (node:internal/streams/readable:568:12)
+        at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+        at Socket.Readable.push (node:internal/streams/readable:399:5)
+        at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+      severity: 'FATAL',
+      severityUnlocalized: 'FATAL',
+      code: '3D000',
+      file: 'postinit.c',
+      line: '1016',
+      routine: 'InitPostgres'
+    },
+    message: 'PgConnection: Failed to connect',
+    operation: 'connect',
+    '~effect/sql/SqlError/Reason': '~effect/sql/SqlError/Reason'
+  },
+  '~effect/sql/SqlError': '~effect/sql/SqlError',
+  [cause]: Error [effect/sql/SqlError/UnknownError]: PgConnection: Failed to connect
+      at classifySqlState (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/internal/sqlError.js:55:10)
+      at classifyFields (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1836:10)
+      at handleMessage (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:21)
+      ... 5 lines matching cause stack trace ...
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+    _tag: 'UnknownError',
+    operation: 'connect',
+    '~effect/sql/SqlError/Reason': '~effect/sql/SqlError/Reason',
+    [cause]: Error: database "effect_agent" does not exist
+        at classifyFields (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1835:31)
+        at handleMessage (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:21)
+        at Socket.onData (file:///Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1566:7)
+        at Socket.emit (node:events:514:28)
+        at addChunk (node:internal/streams/readable:568:12)
+        at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+        at Socket.Readable.push (node:internal/streams/readable:399:5)
+        at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+      severity: 'FATAL',
+      severityUnlocalized: 'FATAL',
+      code: '3D000',
+      file: 'postinit.c',
+      line: '1016',
+      routine: 'InitPostgres',
+      [cause]: undefined
+    }
+  }
+}
+
+ ❯ test/certification-postgres.test.ts (1 test | 1 failed) 17ms
+   × certifies PostgreSQL contracts and recovery without claiming process-kill coverage 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/certification-postgres.test.ts > certifies PostgreSQL contracts and recovery without claiming process-kill coverage
+effect/sql/SqlError: PgConnection: Failed to connect
+ ❯ fail ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/src/PgConnection.ts:1942:25
+ ❯ handleMessage ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/src/PgConnection.ts:2040:17
+ ❯ Socket.onData ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/src/PgConnection.ts:2072:8
+
+Caused by: effect/sql/SqlError/UnknownError: PgConnection: Failed to connect
+ ❯ classifySqlState ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/internal/sqlError.js:55:10
+ ❯ classifyFields ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1836:10
+ ❯ handleMessage ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:21
+ ❯ Socket.onData ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1566:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { _tag: 'UnknownError', operation: 'connect', '~effect/sql/SqlError/Reason': '~effect/sql/SqlError/Reason' }
+Caused by: Error: database "effect_agent" does not exist
+ ❯ classifyFields ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1835:31
+ ❯ handleMessage ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1535:21
+ ❯ Socket.onData ../../node_modules/.bun/@effect+sql-pg@4.0.0+a594d97e083afb95/node_modules/@effect/sql-pg/dist/PgConnection.js:1566:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity: 'FATAL', severityUnlocalized: 'FATAL', code: '3D000', file: 'postinit.c', routine: 'InitPostgres' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 19 passed (20)
+      Tests  1 failed | 127 passed (128)
+   Start at  14:35:15
+   Duration  22.01s (transform 1.87s, setup 0ms, import 9.89s, tests 10.62s, environment 1ms)
+
+
+
+
+
+---
+vp run: 0/43 cache hit (0%), 4 failed. (Run `vp run --last-details` for full details)
+Finished: 2026-10-08T21:35:37Z
+Gate exit: 1

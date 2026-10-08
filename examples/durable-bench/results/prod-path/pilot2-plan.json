@@ -1,0 +1,262 @@
+{
+  "phase": "pilot2",
+  "baselineRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "objectsPerRole": 1,
+  "measuredTurns": 4,
+  "locationHint": "wnam",
+  "driverPlacement": "aws:us-west-1",
+  "cold": "Acknowledged storage.sync and ctx.abort before each of m0 and m1; new incarnation of existing Object, not guaranteed fresh isolate",
+  "cohorts": [
+    {
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "prod-path-pilot2-h50-d0-o0"
+    },
+    {
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "prod-path-pilot2-h50-d0-o0"
+    },
+    {
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "prod-path-pilot2-h50-d400-o0"
+    },
+    {
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "prod-path-pilot2-h50-d400-o0"
+    }
+  ],
+  "groups": [
+    {
+      "object": "prod-path-pilot2-h50-d0-o0",
+      "schedule": [
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m0",
+          "variant": "production",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m3",
+          "variant": "production",
+          "state": "warm"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d0-o0",
+          "sample": "m3",
+          "variant": "inline",
+          "state": "warm"
+        }
+      ]
+    },
+    {
+      "object": "prod-path-pilot2-h50-d400-o0",
+      "schedule": [
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m1",
+          "variant": "production",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m3",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "prod-path-pilot2-h50-d400-o0",
+          "sample": "m3",
+          "variant": "production",
+          "state": "warm"
+        }
+      ]
+    }
+  ],
+  "references": {
+    "50": {
+      "seedFingerprint": "b017b487524e44a4",
+      "turns": {
+        "m0": [
+          "a334d85a6e65c3b7",
+          "480d1858e7a9eca2",
+          "c4c053026da88571",
+          "3d0c56dd05667f87",
+          "b7621f90e8a077a6",
+          "51712cb585edbc6a",
+          "4c6848010cb939df",
+          "f63e157f104feaae",
+          "52565bb0cbcb2b9b"
+        ],
+        "m1": [
+          "a6e6cdc0c1b29b7d",
+          "ddc299ffe3cc47fd",
+          "2099164d9a58f5c1",
+          "82447b2eb9f4bee0",
+          "c0408989a174613e",
+          "d3e3d8d259ec0d29",
+          "23d22b41e391029c",
+          "036de2133010f890",
+          "f79ad53c81104fa1"
+        ],
+        "m2": [
+          "74e91baa79e2ac39",
+          "19bd8f9557a687ab",
+          "852e8bbd58cacaf6",
+          "955e9a8b6f2ed423",
+          "435654b8e5ae6800",
+          "62d729a6fa6117f0",
+          "09238395514e75b6",
+          "c197bdad3cb7c529",
+          "32d7984050287c0c"
+        ],
+        "m3": [
+          "22e115ff9776adde",
+          "f0fd55ce3f9aa4db",
+          "1d8cdc6f3d8aa55d",
+          "7be52f011483b3bc",
+          "18bb0cdcbd1b2518",
+          "3c74416deb888134",
+          "984bae80fb84b855",
+          "353df481c4f308bd",
+          "a066ec8d55d43392"
+        ]
+      }
+    }
+  }
+}

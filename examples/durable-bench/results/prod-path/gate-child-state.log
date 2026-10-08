@@ -1,0 +1,10 @@
+{"time": "2026-10-08T20:59:15.503932+00:00", "kind": "read-only state of diagnostic child", "flavor": "PROC_PIDT_SHORTBSDINFO=13"}
+{"sample": 0, "pid": 97486, "phase": "spawn-returned", "ms": 1.6482499777339399}
+{"sample": 0, "ms": 1.756999990902841, "status": 2, "flags": "0x21404010", "comm": "true"}
+{"sample": 0, "phase": "exit", "ms": 257.7807499910705, "returncode": 0}
+{"sample": 1, "pid": 97487, "phase": "spawn-returned", "ms": 1.1266670189797878}
+{"sample": 1, "ms": 1.1899580131284893, "status": 2, "flags": "0x21404010", "comm": "true"}
+{"sample": 1, "phase": "exit", "ms": 254.163250036072, "returncode": 0}
+{"sample": 2, "pid": 97488, "phase": "spawn-returned", "ms": 1.4721250045113266}
+{"sample": 2, "ms": 1.5457079862244427, "status": 2, "flags": "0x21404010", "comm": "true"}
+{"sample": 2, "phase": "exit", "ms": 256.09429099131376, "returncode": 0}

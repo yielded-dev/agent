@@ -1,0 +1,26 @@
+{"checked":"2026-10-08T21:40:25.014Z","endpoint":"localhost:55432/postgres","readOnly":true}
+Read-only connection:
+psql: error: connection to server at "localhost" (::1), port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+{"exitCode":2,"signal":null}
+TCP 55432 listener:
+{"exitCode":1,"signal":null}
+PostgreSQL processes:
+834 /opt/homebrew/opt/postgresql@18/bin/postgres -D /opt/homebrew/var/postgresql@18
+1279 postgres: io worker 0 XPC_FLAGS=1 LOGNAME=dan
+1280 postgres: io worker 1 XPC_FLAGS=1 LOGNAME=dan
+1281 postgres: io worker 2 XPC_FLAGS=1 LOGNAME=dan
+1282 postgres: checkpointer  XPC_FLAGS=1 LOGNAME=dan
+1283 postgres: background writer  XPC_FLAGS=1 LOGNAME=dan
+1294 postgres: walwriter  XPC_FLAGS=1 LOGNAME=dan
+1296 postgres: autovacuum launcher  XPC_FLAGS=1 LOGNAME=dan
+1297 postgres: logical replication launcher  XPC_FLAGS=1 LOGNAME=dan
+{"exitCode":0,"signal":null}
+{"initialFailureSha256":"d96f7bec19e5346ff030c9c46a608361a62c7315be38811d3ebba230eff8b5d8","validationEnvSha256":"354a5212a291bc26c87fd9f5e56e74cf26c97071178083ec1302907bc8ecb0a8"}
+Existing Homebrew PostgreSQL listener (PID 834):
+COMMAND  PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+postgres 834  dan    7u  IPv6 0xaf5527bc4c9b9267      0t0  TCP [::1]:5432 (LISTEN)
+postgres 834  dan    8u  IPv4 0x21e249f6c3111abc      0t0  TCP 127.0.0.1:5432 (LISTEN)
+{"checked":"2026-10-08T21:40:47.328Z","exitCode":0,"signal":null}

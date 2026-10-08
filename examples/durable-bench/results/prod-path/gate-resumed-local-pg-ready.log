@@ -1,0 +1,2725 @@
+Gate: vp run --no-cache ready
+Environment: EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres; NODE_OPTIONS requires existing validation-env.cjs.
+Context: existing local admin connection verified read-only; no database/role/service changes; tests, timeouts, and worker cap unchanged; earlier failures preserved.
+Started: 2026-10-08T21:45:55Z
+{"node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","validationEnvSha256":"354a5212a291bc26c87fd9f5e56e74cf26c97071178083ec1302907bc8ecb0a8","initialFailureSha256":"d96f7bec19e5346ff030c9c46a608361a62c7315be38811d3ebba230eff8b5d8","previousGateSha256":"ed710bd427d6e9614f073cc0c0395142b29d727148189a9bfceca182aa516605"}
+$ vp check ⊘ cache disabled
+pass: All 1471 files are correctly formatted (1038ms, 16 threads)
+warn: Lint or type warnings found
+! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadStore.ts:392:25]
+ 391 |             });
+ 392 |           const first = encodings[0]!;
+     :                         ^^^^^^^^^^^^^
+ 393 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! eslint(no-unused-vars): Parameter '_' is declared but never used.
+     ,-[packages/platform-cloudflare/src/CloudflareSubscriptions.ts:219:73]
+ 218 |   expectedRevision: Schema.Int.check(Schema.isGreaterThan(0)),
+ 219 |   options: SubscribeRequest.fields.options.mapFields(({ subscriptionId: _, ...fields }) => fields),
+     :                                                                         |
+     :                                                                         `-- '_' is declared here
+ 220 | });
+     `----
+  help: Consider removing this parameter.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/src/internal/layers.ts:780:33]
+ 779 |                               .withMutation(
+ 780 |                                 store.lifecyclePublications!.retryParked(ownerThreadId, nowMillis),
+     :                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 781 |                                 { invalidatesRecovery: false, lanes: [DueQueue.Lifecycle] },
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1033:17]
+ 1032 |       yield* ensure(
+ 1033 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 0,
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1034 |         "Conversation history does not count as peer sends",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1052:17]
+ 1051 |       yield* ensure(
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1053:19]
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      :                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1054 |         "Peer count saturates at the requested capacity without returning payloads",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:180:19]
+ 179 |       return yield* failure("A transfer page must contain a complete bounded canonical batch");
+ 180 |     const batch = canonical.batches[0]!;
+     :                   ^^^^^^^^^^^^^^^^^^^^^
+ 181 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:209:23]
+ 208 |     while (position.section < transferSections.length) {
+ 209 |       const section = transferSections[position.section]!;
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 210 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:251:45]
+ 250 |     position.section < transferSections.length &&
+ 251 |     position.consumed === manifest.snapshot[transferSections[position.section]!]
+     :                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 252 |   ) {
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:253:21]
+ 252 |   ) {
+ 253 |     const section = transferSections[position.section]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 254 |     const probe = yield* reader.facts(request.threadId, section, position.after);
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:236:21]
+ 235 |   if (payload._tag === "WorkerInputRefused") {
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:237:18]
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     :                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 |     const retained = yield* reader.delivery(payload.messageId);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:461:21]
+ 460 |     while (archive.records[index]?.batchId === batch.batchId) {
+ 461 |       const entry = archive.records[index]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^
+ 462 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/test/worker.ts:326:35]
+ 325 |             : maintenanceBindings.has(threadId)
+ 326 |               ? layerFromBindings(maintenanceBindings.get(threadId)!.bindings).pipe(
+     :                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 327 |                   Layer.provide(
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/test/worker.ts:330:23]
+ 329 |                       CurrentBindingSelection,
+ 330 |                       maintenanceBindings.get(threadId)!.selection,
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 331 |                     ),
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:86:18]
+ 85 |   while (pending.length > 0) {
+ 86 |     const next = pending.pop()!;
+    :                  ^^^^^^^^^^^^^^
+ 87 | 
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:116:18]
+ 115 |   while (pending.length > 0) {
+ 116 |     const next = pending.pop()!;
+     :                  ^^^^^^^^^^^^^^
+ 117 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:453:7]
+ 452 |       indexed.length !== 1 ||
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+     :       ^^^^^^^^^^^
+ 454 |       indexed[0]!.state !== "ready" ||
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:454:7]
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+ 454 |       indexed[0]!.state !== "ready" ||
+     :       ^^^^^^^^^^^
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:455:7]
+ 454 |       indexed[0]!.state !== "ready" ||
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     :       ^^^^^^^^^^^
+ 456 |     )
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:511:23]
+ 510 |         headers.length > 1 ||
+ 511 |         Object.values(state[0]!).some((v) => !Number.isSafeInteger(v) || v < 0)
+     :                       ^^^^^^^^^
+ 512 |       )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:556:19]
+ 555 |         tailDigest: headers[0]?.tail_digest ?? EMPTY_TAIL_DIGEST,
+ 556 |         snapshot: state[0]!,
+     :                   ^^^^^^^^^
+ 557 |         ...(seals[0] === undefined
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:662:27]
+ 661 |           canonicalJson(yield* json(RecordJson, item.record_json)) !==
+ 662 |             canonicalJson(batch.records[index]!)
+     :                           ^^^^^^^^^^^^^^^^^^^^^
+ 663 |         )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1207:51]
+ 1206 |                       recordId: record.recordId,
+ 1207 |                       recordBytes: utf8ByteLength(batch.recordJson[index]!),
+      :                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1208 |                       canonical: record,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1210:35]
+ 1209 |                       wire: record.wire,
+ 1210 |                       recordJson: batch.recordJson[index]!,
+      :                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1211 |                       readMetadata: metadata,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1875:31]
+ 1874 |                 staged.length !== 1 ||
+ 1875 |                 canonicalJson(staged[0]!) !== canonicalJson(progress.counts)
+      :                               ^^^^^^^^^^
+ 1876 |               )
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:8989:71]
+ 8988 | 
+ 8989 |                       const value = yield* Schema.encodeUnknownEffect(agent.definition.updates!)(
+      :                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+ 8990 |                         decoded.value,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:137:34]
+ 136 |         new CanonicalBatch(
+ 137 |           { ...header, records: [records[0]!, ...records.slice(1)] },
+     :                                  ^^^^^^^^^^^
+ 138 |           { disableChecks: true },
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:843:19]
+ 842 |   while (start < records.length) {
+ 843 |     const first = records[start]!;
+     :                   ^^^^^^^^^^^^^^^
+ 844 |     let end = start + 1;
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:846:36]
+ 845 | 
+ 846 |     while (end < records.length && records[end]!.batchId === first.batchId) end++;
+     :                                    ^^^^^^^^^^^^^
+ 847 |     const batch = records.slice(start, end);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:905:60]
+ 904 |         const originalEntry = byId.get(
+ 905 |           previous?.continuation.originalInput.recordId ?? original!.recordId,
+     :                                                            ^^^^^^^^^
+ 906 |         );
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:955:82]
+ 954 |         terminalUsageBytes: next.terminalUsageBytes,
+ 955 |         originalInput: previous?.continuation.originalInput ?? (yield* reference(original!)),
+     :                                                                                  ^^^^^^^^^
+ 956 |         ...(next.savedContext === undefined ? {} : { savedContext: next.savedContext }),
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/RunContinuation.ts:1514:19]
+ 1513 |         ...batch,
+ 1514 |         records: [ownedRecords[0]!, ...ownedRecords.slice(1), ...continuations],
+      :                   ^^^^^^^^^^^^^^^^
+ 1515 |       },
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:71:25]
+ 70 | 
+ 71 |     const concurrency = selected.parameters.workerConcurrency!;
+    :                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 72 |     const warmArrival = selected.parameters.warmArrival === 1;
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:302:22]
+ 301 |       const submit = Effect.fn("diagnostic.fairnessSubmit")(function* (index: number) {
+ 302 |         const lane = lanes[index]!;
+     :                      ^^^^^^^^^^^^^
+ 303 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:309:43]
+ 308 |         }
+ 309 |         lane.receipt = yield* host.submit(registrations[index]!.agent, lane.input, {
+     :                                           ^^^^^^^^^^^^^^^^^^^^^
+ 310 |           threadId: lane.threadId,
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:313:24]
+ 312 |           idempotencyKey: IdempotencyKey.make(`input-${lane.label}`),
+ 313 |           definitions: digests[index]!,
+     :                        ^^^^^^^^^^^^^^^
+ 314 |         });
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:340:66]
+ 339 |                 Effect.gen(function* () {
+ 340 |                   const settlement = yield* host.awaitSettlement(lane.receipt!);
+     :                                                                  ^^^^^^^^^^^^^
+ 341 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:406:56]
+ 405 |         const snapshot = yield* ledger.loadRecoverySnapshot(
+ 406 |           RecoverySnapshotRequest.make({ submissionId: lane.receipt!.submissionId }),
+     :                                                        ^^^^^^^^^^^^^
+ 407 |         );
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:418:41]
+ 417 |             inputs.length === 1 &&
+ 418 |             inputs[0]?.submissionId === lane.receipt!.submissionId &&
+     :                                         ^^^^^^^^^^^^^
+ 419 |             inputs[0]?.runId === runStarted.runId &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:425:42]
+ 424 |             settledOutput.answer === lane.label &&
+ 425 |             lane.claimedSubmissionId === lane.receipt!.submissionId &&
+     :                                          ^^^^^^^^^^^^^
+ 426 |             settlement.submissionId === lane.receipt!.submissionId &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:426:41]
+ 425 |             lane.claimedSubmissionId === lane.receipt!.submissionId &&
+ 426 |             settlement.submissionId === lane.receipt!.submissionId &&
+     :                                         ^^^^^^^^^^^^^
+ 427 |             snapshot.ownership === undefined &&
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/runtime-benchmark/src/diagnostic-fairness.ts:465:20]
+ 464 |             name: `${lane.label}.queueSequence`,
+ 465 |             value: lane.receipt!.queueSequence,
+     :                    ^^^^^^^^^^^^^
+ 466 |           })),
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:236:13]
+ 235 | export const toRunThreadOptions = Effect.fnUntraced(function* (
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+     :             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:237:10]
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     :          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 | ): Effect.fn.Return<
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/voice/state.ts:201:39]
+ 200 |                 if (seenCaptions.size > 128)
+ 201 |                   seenCaptions.delete(seenCaptions.values().next().value!);
+     :                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 202 |                 const typedId = get(conversationRequestAtom)?.requestId;
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[examples/travel-planner/src/conversation.ts:16:31]
+ 15 |     if (existing !== -1) {
+ 16 |       result[existing] = { ...result[existing]!, text: row.text };
+    :                               ^^^^^^^^^^^^^^^^^
+ 17 |       continue;
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+    ,-[examples/travel-planner/src/worker.ts:51:26]
+ 50 |     interface GlobalProps {
+ 51 |       mainModule: typeof import("./worker.ts");
+    :                          ^^^^^^^^^^^^^^^^^^^^^
+ 52 |     }
+    `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/worker.ts:211:42]
+ 210 |     if ((url.pathname.startsWith("/assets/") || url.pathname === "/favicon.svg") && env.ASSETS)
+ 211 |       return yield* Effect.promise(() => env.ASSETS!.fetch(pageRequest));
+     :                                          ^^^^^^^^^^^
+ 212 | 
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/auth/funding.ts:188:34]
+ 187 |         }),
+ 188 |         next: rows.length > 25 ? rows[24]!.subjectId : null,
+     :                                  ^^^^^^^^^
+ 189 |       };
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[examples/travel-planner/src/auth/persistence.ts:55:16]
+ 54 | 
+ 55 |         return rows[0]!;
+    :                ^^^^^^^^
+ 56 |       });
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/src/auth/email-schema.ts:180:11]
+ 179 |     encodeSubjectInsert: (input, values) => ({
+ 180 |       id: values.nativeSubjectId!,
+     :           ^^^^^^^^^^^^^^^^^^^^^^^
+ 181 |       active: true,
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! unicorn(no-useless-length-check): Found a useless array length check
+     ,-[examples/travel-planner/src/auth/proof-schema.ts:226:15]
+ 225 |             ? rows.length === 0
+ 226 |             : rows.length === 0 || rows.every((r) => r.subjectId === input.nativeSubjectId),
+     :               ^^^^^^^^^^^^^^^^^
+ 227 |     },
+     `----
+  help: The empty check is useless as `Array#every()` returns `true` for an empty array.
+
+  ! eslint(no-unsafe-finally): Unsafe `finally` block.
+      ,-[packages/platform-cloudflare/test/background-workers.test.ts:1093:48]
+ 1092 | 
+ 1093 |           if (rejected?.status === "rejected") throw rejected.reason;
+      :                                                ^^^^^^^^^^^^^^^^^^^^^^
+ 1094 |         }
+      `----
+  help: Control flow inside `try` or `catch` blocks will be overwritten by this statement.
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:196:7]
+ 195 |     if (explained._tag === "ExplainedRecovery") {
+ 196 |       expect(explained.explanations).toHaveLength(1);
+     :       ^^^^^^
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:197:7]
+ 196 |       expect(explained.explanations).toHaveLength(1);
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+     :       ^^^^^^
+ 198 |       expect(explained.explanations[0]?.disposition).toBe("deferred");
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:198:7]
+ 197 |       expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+ 198 |       expect(explained.explanations[0]?.disposition).toBe("deferred");
+     :       ^^^^^^
+ 199 |     }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:309:9]
+ 308 |       if (abortPayload?._tag === "AbortRequested") {
+ 309 |         expect(abortPayload.author).toBe("subagent-parent-abort");
+     :         ^^^^^^
+ 310 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:314:9]
+ 313 |       if (childSettled?._tag === "SubmissionSettled") {
+ 314 |         expect(childSettled.outcome).toBe("aborted");
+     :         ^^^^^^
+ 315 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:331:9]
+ 330 |       if (settledEnvelope !== undefined && joined[0] !== undefined) {
+ 331 |         expect(Number(joined[0].sequence)).toBeLessThan(Number(settledEnvelope.sequence));
+     :         ^^^^^^
+ 332 |       }
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/subagents-cross-do.test.ts:123:3]
+ 122 | describe("Cross-Object child admission, wake, and abort ownership", () => {
+ 123 |   it("eviction at subagent:after-admit: the routed admission committed in the child's Object survives and resolveAdmission reattaches to it", async () => {
+     :   ^^
+ 124 |     await coordinatorEvictionRow("subagent:after-admit");
+     `----
+  help: Add assertion(s) in this Test
+
+  ! vitest(no-conditional-expect): Unexpected conditional expect
+     ,-[packages/platform-cloudflare/test/join-restart.test.ts:298:13]
+ 297 |     if (evicts) {
+ 298 |       await expect(initialAttempt).rejects.toThrow("joined-input replacement eviction");
+     :             ^^^^^^
+ 299 |     } else {
+     `----
+  help: Avoid calling `expect` conditionally
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:252:21]
+ 251 | 
+ 252 |                     expect(report?.decision._tag, row.location).toBe(row.decision);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 253 |                     expect(report?.disposition, row.location).toBe(row.disposition);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:253:21]
+ 252 |                     expect(report?.decision._tag, row.location).toBe(row.decision);
+ 253 |                     expect(report?.disposition, row.location).toBe(row.disposition);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 254 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:259:21]
+ 258 |                     // settling, the child lane settles, the woken parent joins.
+ 259 |                     expect(yield* drive(thread), row.location).toHaveLength(0);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 260 |                     const childSettlements = yield* drive(childThread);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:262:21]
+ 261 |     
+ 262 | ,->                     expect(
+ 263 | |                         childSettlements.map((settlement) => settlement.outcome),
+ 264 | |                         row.location,
+ 265 | `->                     ).toEqual(["completed"]);
+ 266 |                         const settlements = yield* drive(thread);
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:268:21]
+ 267 |     
+ 268 | ,->                     expect(
+ 269 | |                         settlements.map((settlement) => settlement.outcome),
+ 270 | |                         row.location,
+ 271 | `->                     ).toEqual(["completed"]);
+ 272 |     
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:279:21]
+ 278 |                     });
+ 279 |                     expect(yield* reservationStatuses(parent.submissionId), row.location).toEqual([
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 280 |                       "released",
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:283:21]
+ 282 |                     // The one child model invocation across the kill and every replay.
+ 283 |                     expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 284 |                     yield* assertConvergence(thread, [parent.submissionId], {
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:504:17]
+ 503 |                 // The child ran exactly once BEFORE the kill; everything after is replay.
+ 504 |                 expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 505 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:519:23]
+ 518 | 
+ 519 |                       expect(report?.decision._tag, row.location).toBe(row.decision);
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 520 |                       expect(report?.disposition, row.location).toBe("repaired");
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:520:23]
+ 519 |                       expect(report?.decision._tag, row.location).toBe(row.decision);
+ 520 |                       expect(report?.disposition, row.location).toBe("repaired");
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 521 |                     }
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:522:21]
+ 521 |                     }
+ 522 |                     expect(yield* reservationStatuses(parent.submissionId), row.location).toEqual([
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 523 |                       "released",
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:528:21]
+ 527 |     
+ 528 | ,->                     expect(
+ 529 | |                         settlements.map((settlement) => settlement.outcome),
+ 530 | |                         row.location,
+ 531 | `->                     ).toEqual(["completed"]);
+ 532 |     
+     `----
+  help: Remove the extra arguments.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[packages/platform-node/test/crash/crash-subagents.test.ts:542:21]
+ 541 |                     // join acknowledgment was lost — the file-backed count stays at ONE.
+ 542 |                     expect(childModelInvocations(site.supplier), row.location).toBe(1);
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 543 |                     yield* assertConvergence(thread, [parent.submissionId], {
+     `----
+  help: Remove the extra arguments.
+
+  ! eslint(require-yield): This generator function does not have `yield`
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:1648:26]
+ 1647 |                 (cursor) =>
+ 1648 | ,->               Effect.gen(function* () {
+ 1649 | |                   const page = storedPage(
+ 1650 | |                     thread,
+ 1651 | |                     cursor.after,
+ 1652 | |                     Math.min(READ_PAGE_SIZE, request.limit - cursor.count),
+ 1653 | |                   );
+ 1654 | |   
+ 1655 | |                   const next = {
+ 1656 | |                     after: page.at(-1)?.sequence ?? cursor.after,
+ 1657 | |                     count: cursor.count + page.length,
+ 1658 | |                   };
+ 1659 | |   
+ 1660 | |                   return [
+ 1661 | |                     page,
+ 1662 | |                     page.length === 0 || next.count >= request.limit
+ 1663 | |                       ? Option.none<typeof next>()
+ 1664 | |                       : Option.some(next),
+ 1665 | |                   ] as const;
+ 1666 | `->               }),
+ 1667 |               );
+      `----
+  help: Add a `yield` expression inside the generator body, or convert it to a regular function if iteration behavior is not needed.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2285:21]
+ 2284 |                     id,
+ 2285 |                     staged.batches.get(batch.batch.batchId)!,
+      :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2286 |                     batch.previousTailDigest,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2657:14]
+ 2656 |   const archiveTarget = Effect.fnUntraced(function* (
+ 2657 |     request: import("@yielded/agent/thread-archive-range").ThreadArchiveRangeSeal,
+      :              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2658 |   ) {
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemoryThreadStore.ts:2803:27]
+ 2802 |   const verification = {
+ 2803 |     verify: (unvalidated: import("@yielded/agent/thread-store").ThreadVerificationRequest) =>
+      :                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 2804 |       withMutation(
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+      ,-[packages/storage-memory/src/MemorySubmissionLedger.ts:3601:29]
+ 3600 |             }),
+ 3601 |           runOwner: (runId: import("@yielded/agent/identifiers").RunId) =>
+      :                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 3602 |             Effect.sync(() => {
+      `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/eviction.test.ts:150:3]
+ 149 | describe("Durable Object retirement — submit path (abort mid-submitEncoded, alarm-only convergence)", () => {
+ 150 |   it(
+     :   ^^
+ 151 |     "eviction at ledger:admit:after: the accepted admission settles by alarm alone; the same key returns the original Receipt",
+     `----
+  help: Add assertion(s) in this Test
+
+  ! vitest(expect-expect): Test has no assertions
+     ,-[packages/platform-cloudflare/test/eviction.test.ts:156:3]
+ 155 | 
+ 156 |   it(
+     :   ^^
+ 157 |     "eviction at append:after-record-insert: the partial records roll back with the incarnation",
+     `----
+  help: Add assertion(s) in this Test
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:10:19]
+  9 | const setup = () => {
+ 10 |   const stop = vi.fn();
+    :                   ^^
+ 11 |   const media = { getTracks: () => [{ stop }], getAudioTracks: () => [{ stop }] };
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:14:15]
+ 13 |   const channel = Object.assign(new EventTarget(), {
+ 14 |     close: vi.fn(),
+    :               ^^
+ 15 |     readyState: "open",
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:17:14]
+ 16 |     bufferedAmount: 0,
+ 17 |     send: vi.fn(),
+    :              ^^
+ 18 |   });
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:20:20]
+ 19 | 
+ 20 |   const close = vi.fn();
+    :                    ^^
+ 21 | 
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:25:18]
+ 24 |     iceGatheringState: "complete",
+ 25 |     addTrack: vi.fn(),
+    :                  ^^
+ 26 |     createDataChannel: () => channel,
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:30:30]
+ 29 |     setLocalDescription: async () => {},
+ 30 |     setRemoteDescription: vi.fn(async () => {}),
+    :                              ^^
+ 31 |   });
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:51:14]
+ 50 |     muted: false,
+ 51 |     play: vi.fn(async () => {}),
+    :              ^^
+ 52 |     pause: vi.fn(),
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! vitest(require-mock-type-parameters): Missing type parameters on mock function call
+    ,-[examples/travel-planner/test/voice-browser.test.ts:52:15]
+ 51 |     play: vi.fn(async () => {}),
+ 52 |     pause: vi.fn(),
+    :               ^^
+ 53 |   } as unknown as HTMLAudioElement;
+    `----
+  help: Add a type parameter to the mock function, e.g. `vi.fn<() => void>()`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[tooling/semantic-memory-eval/src/native-embedding.ts:97:71]
+ 96 |             Effect.gen(function* () {
+ 97 |               if ((options.delayMillis ?? 0) > 0) yield* Effect.sleep(options.delayMillis!);
+    :                                                                       ^^^^^^^^^^^^^^^^^^^^
+ 98 |               if (options.fail === true) return yield* aiError("embedMany", "injected failure");
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! eslint(require-yield): This generator function does not have `yield`
+    ,-[packages/effect-agent/test/engine/join-restart.test.ts:36:28]
+ 35 |                   Stream.unwrap(
+ 36 | ,->                 Effect.gen(function* () {
+ 37 | |                     const index = prompts.length;
+ 38 | |   
+ 39 | |                     prompts.push(JSON.stringify(options.prompt));
+ 40 | |   
+ 41 | |                     const parts: ReadonlyArray<Response.StreamPartEncoded> = [
+ 42 | |                       { type: "text-start", id: "draft" },
+ 43 | |                       { type: "text-delta", id: "draft", delta: `"answer-${index}"` },
+ 44 | |                       { type: "text-end", id: "draft" },
+ 45 | |                       {
+ 46 | |                         type: "finish",
+ 47 | |                         reason: "stop",
+ 48 | |                         usage: { inputTokens: { total: 10 }, outputTokens: { total: 2 } },
+ 49 | |                       },
+ 50 | |                     ];
+ 51 | |   
+ 52 | |                     return Stream.fromIterable(parts).pipe(
+ 53 | |                       Stream.concat(
+ 54 | |                         Stream.fromEffect(
+ 55 | |                           Effect.gen(function* () {
+ 56 | |                             yield* Deferred.succeed(requests[index]!, undefined);
+ 57 | |                             if (index < 3) yield* Deferred.await(releases[index]!);
+ 58 | |                           }),
+ 59 | |                         ).pipe(Stream.drain),
+ 60 | |                       ),
+ 61 | |                       Stream.onExit((exit) =>
+ 62 | |                         Effect.sync(() => {
+ 63 | |                           if (exit._tag === "Failure") cancelled.push(index);
+ 64 | |                         }),
+ 65 | |                       ),
+ 66 | |                     );
+ 67 | `->                 }),
+ 68 |                   ),
+    `----
+  help: Add a `yield` expression inside the generator body, or convert it to a regular function if iteration behavior is not needed.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[tooling/semantic-memory-eval/src/evaluate.ts:495:66]
+ 494 |       Effect.gen(function* () {
+ 495 |         if ((provider.delayMillis ?? 0) > 0) yield* Effect.sleep(provider.delayMillis!);
+     :                                                                  ^^^^^^^^^^^^^^^^^^^^^
+ 496 |         if (provider.fail === true) return yield* injectedAiError("injected failure");
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[examples/travel-planner/preview/runtime.ts:111:25]
+ 110 |                 modules: true,
+ 111 |                 script: bundle.outputFiles[0]!.text,
+     :                         ^^^^^^^^^^^^^^^^^^^^^^
+ 112 |                 modulesRoot: "/",
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! vitest(valid-expect): Expect takes at most 1 argument
+     ,-[examples/travel-planner/test/auth.test.ts:130:5]
+ 129 | 
+ 130 |     expect(response.status, JSON.stringify(response.body)).toBe(200);
+     :     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 131 | 
+     `----
+  help: Remove the extra arguments.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AgentApprovalDenied" | "AgentApprovalPending" | "AgentChildPending" | "AgentInputDecodeError" | "AgentInputError" | "AgentOutputError" | "AgentPersistenceCapacityError" | "AgentPolicyError" | "AgentToolAuthorizationCheckError" | "AgentToolAuthorizationDenied" | "AiError" | "BudgetAdapterError" |
+  | "CompactionError" | "ConfigError" | "ContextBudgetError" | "ContextOverflowError" | "MemoryRecallError" | "ModelProtocolError" | "PlatformError" | "ReviewVerificationError" | "ThreadHistoryError"
+      ,-[packages/pr-review-action/src/action.ts:1308:17]
+ 1307 | 
+ 1308 |         switch (failure._tag) {
+      :                 ^^^^^^^^^^^^
+ 1309 |           case "BudgetExceeded":
+      `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/pr-review-action/src/review-openai.ts:542:6]
+ 541 |     return { payload: { ...payload, max_output_tokens: outputTokens }, reservation };
+ 542 |   }, admissions.withPermit);
+     :      ^^^^^^^^^^^^^^^^^^^^^|
+     :                |          `-- This reference may be unbound and lose `this` context
+ 543 | 
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/platform-cloudflare/src/BrowserSession.ts:460:61]
+ 459 |               try {
+ 460 |                 const result: unknown = await Reflect.apply(cdp.send, cdp, [method, parameters]);
+     :                                                             ^^^^^^^^|
+     :                                                                 |   `-- This reference may be unbound and lose `this` context
+ 461 | 
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:27:37]
+ 26 |     
+ 27 | ,-> const arrayBufferByteLengthGetter = Object.getOwnPropertyDescriptor(
+ 28 | |     ArrayBuffer.prototype,
+ 29 | |     "byteLength",
+ 30 | `-> )?.get;
+    : `---   ^|^
+    : `---    `-- This reference may be unbound and lose `this` context
+ 31 |     
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:33:32]
+ 32 | const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:34:32]
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:35:30]
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    :                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                               |                                `-- This reference may be unbound and lose `this` context
+ 36 | const urlConstructor = Reflect.get(globalThis, "URL");
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:48:7]
+ 47 |   typeof urlPrototypeDescriptor.value === "object"
+ 48 |     ? Object.getOwnPropertyDescriptor(urlPrototypeDescriptor.value, "href")?.get
+    :       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                            |                                    `-- This reference may be unbound and lose `this` context
+ 49 |     : undefined;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "file" | "tool-approval-request" | "tool-approval-response"
+     ,-[packages/effect-agent/src/engine/internal/compaction.ts:476:11]
+ 475 |   if (typeof part === "string") return part;
+ 476 |   switch (part.type) {
+     :           ^^^^^^^^^
+ 477 |     case "text": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "reasoning" | "text" | "tool-call" | "tool-result"
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:4131:23]
+ 4130 |             yield* Effect.gen(function* () {
+ 4131 |               switch (ownedPart.type) {
+      :                       ^^^^^^^^^^^^^^
+ 4132 |                 case "text-start":
+      `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CodeExecutionProtocolError" | "CodeExecutorStartError" | "CodeExecutorTerminatedError" | "CodeExecutorUnsupportedError" | "CodeProgramFailedError" | "CodeSourceError"
+     ,-[packages/effect-agent/src/capabilities/CodeMode.ts:521:11]
+ 520 | const executionFailureMessage = (error: CodeExecutionError): string => {
+ 521 |   switch (error._tag) {
+     :           ^^^^^^^^^^
+ 522 |     case "CodeExecutionTimeoutError": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "ApplyInput" | "ApplyJoinAccounting" | "ApplyUnknownResolutions" | "CompleteChildAdmission" | "CompleteMaterialization" | "EnsureWaitingForChild" | "FinalizeLedgerFromHistory" | "PropagateChildAbort" | "ReleaseOrphanChildReservation" | "RepairInputMarker" | "RepairJoinMarker" | "RepairReadiness" |
+  | "RepairSubagentStartLink" | "ResumeWaitingParent" | "RevertJoining" | "SettleAborted" | "SettleJoinedWithHost"
+     ,-[packages/effect-agent/src/durable/Admin.ts:223:11]
+ 222 | ): RecoveryDisposition => {
+ 223 |   switch (decision._tag) {
+     :           ^^^^^^^^^^^^^
+ 224 |     case "NoAction":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunContinuation" | "RunDurationExhausted" | "SubagentJoined" | "SubagentLineageRecorded" | "SubtreeBudgetReserved" | "ThreadCreated" |
+  | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:596:13]
+ 595 | 
+ 596 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 597 |       case "RunStarted":
+     `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+      ,-[packages/effect-agent/src/durable/ThreadStore.ts:1019:63]
+ 1018 |   static layer() {
+ 1019 |     return Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore));
+      :                                                               ^^^^^^^^^^^^^^^^^^^^^^|
+      :                                                                          |          `-- This reference may be unbound and lose `this` context
+ 1020 |   }
+      `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentLineageRecorded" |
+  | "SubagentStarted" | "ThreadCreated" | "ToolStepSettled" | "UserInputRecorded"
+     ,-[packages/effect-agent/src/durable/ThreadWork.ts:581:11]
+ 580 | 
+ 581 |   switch (payload._tag) {
+     :           ^^^^^^^^^^^^
+ 582 |     case "ModelResponseRecorded":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "ModelResponseRecorded" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentJoined" | "SubagentRequested" |
+  | "SubagentStarted" | "SubmissionSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+    ,-[packages/effect-agent/src/durable/internal/tool-operations.ts:32:13]
+ 31 |     if (!("runId" in payload) || (runId !== undefined && payload.runId !== runId)) continue;
+ 32 |     switch (payload._tag) {
+    :             ^^^^^^^^^^^^
+ 33 |       case "ToolCallSettled":
+    `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved"
+  | | "RunStarted" | "SubagentLineageRecorded" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolApprovalDecided" | "ToolApprovalRequested" | "ToolCallResolved" | "ToolCallSettled" | "ToolCallUnknown" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" |
+  | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:548:13]
+ 547 | 
+ 548 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 549 |       case "SubagentRequested": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" |
+  | "RunStarted" | "SubagentJoined" | "SubagentRequested" | "SubagentStarted" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolCallResolved" | "ToolCallSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+  | | "WorkerStopRequested"
+      ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:2000:15]
+ 1999 |       }
+ 2000 |       switch (payload._tag) {
+      :               ^^^^^^^^^^^^
+ 2001 |         case "ToolCallUnknown": {
+      `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "input-applied" | "joined" | "joining" | "running" | "settled"
+       ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:11937:15]
+ 11936 | 
+ 11937 |       switch (submission.state) {
+       :               ^^^^^^^^^^^^^^^^
+ 11938 |         case "unknown": {
+       `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:483:18]
+ 482 |       Effect.mapError(() => invalid("Empty or oversized canonical batch", threadId)),
+ 483 |       Effect.map(CanonicalBatch.make),
+     :                  ^^^^^^^^^^^^^^^^^^^|
+     :                           |         `-- This reference may be unbound and lose `this` context
+ 484 |     );
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+Found 0 errors and 115 warnings in 913 files (15.8s, 16 threads)
+
+~/docs$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/ai-decision$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/effect-agent$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-sql$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-memory$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/sandbox-local$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/pr-review$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-postgres$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-sqlite$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/workflow$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/pr-review-action$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/semantic-memory-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/platform-node$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/testing$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/pr-review-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/runtime-benchmark$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/storage-cloudflare$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/packages/platform-cloudflare$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/browser-run-worker-proof$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/examples/travel-planner$ tsc --noEmit ⊘ cache disabled
+
+~/tooling/cloudflare-memory$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/tooling/context-continuity-eval$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+~/examples/browser-speed$ tsc --noEmit -p tsconfig.json ⊘ cache disabled
+
+$ tsc --noEmit -p scripts/tsconfig.json ⊘ cache disabled
+
+$ bun scripts/verify-package-exports.ts ⊘ cache disabled
+Package exports check passed: 13 public packages, 221 entries.
+
+$ bun scripts/verify-record-format.ts ⊘ cache disabled
+Record format compatibility verified
+
+$ bun scripts/check-deployment.ts ⊘ cache disabled
+$ vp exec alchemy deploy alchemy.run.ts --stage prod --help ⊘ cache disabled
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+USAGE
+  alchemy deploy [flags] [<config>]
+
+ARGUMENTS
+  config file    Alchemy entrypoint file (default: alchemy.run.ts) (optional)
+
+FLAGS
+  --dry-run            Dry run the deployment, do not actually deploy
+  --force              Force updates for resources that would otherwise no-op
+  --include string Include exact FQNs, unique logical IDs, or FQN globs and
+    their dependencies (repeatable, one pattern per flag). Quote globs:
+    --include 'App/**'. Other rows and stack outputs are preserved; the whole
+    declaration still runs.
+  --exclude string Exclude exact FQNs, unique logical IDs, or FQN globs
+    (repeatable, one pattern per flag). Quote globs: --exclude 'App/Legacy/**'.
+    Required excluded dependencies fail planning, even when unchanged.
+  --config, -c file    Alchemy entrypoint file (default: alchemy.run.ts)
+  --env-file file      File to load environment variables from, defaults to .env
+  --stage string Stage to deploy to. Defaults to $ALCHEMY_STAGE or live_${USER}
+  --yes, -y            Yes to all prompts
+  --profile string Auth profile to use. Defaults to $ALCHEMY_PROFILE or
+    'default'.
+  --adopt Adopt pre-existing cloud resources that conflict with this stack
+    instead of failing. Useful for re-importing infrastructure into a fresh
+    state store.
+  --detailed           Show declared resource properties as YAML
+  --detect-drift Detect infrastructure drift and offer to repair it before
+    deploying
+
+GLOBAL FLAGS
+  --help, -h                          Show help information
+  --version, -v                       Show version information
+  --completions <bash|zsh|fish|sh> Print shell completion script (choices: bash,
+    zsh, fish, sh)
+  --log-level <all|trace|…> Sets the minimum log level (choices: all, trace,
+    debug, info, warn, warning, error, fatal, none)
+  --no-input Disable prompts and the interactive TUI (plain output; commands
+    needing input fail)
+
+~/examples/travel-planner$ vp exec alchemy deploy alchemy.run.ts --stage production --help ⊘ cache disabled
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+USAGE
+  alchemy deploy [flags] [<config>]
+
+ARGUMENTS
+  config file    Alchemy entrypoint file (default: alchemy.run.ts) (optional)
+
+FLAGS
+  --dry-run            Dry run the deployment, do not actually deploy
+  --force              Force updates for resources that would otherwise no-op
+  --include string Include exact FQNs, unique logical IDs, or FQN globs and
+    their dependencies (repeatable, one pattern per flag). Quote globs:
+    --include 'App/**'. Other rows and stack outputs are preserved; the whole
+    declaration still runs.
+  --exclude string Exclude exact FQNs, unique logical IDs, or FQN globs
+    (repeatable, one pattern per flag). Quote globs: --exclude 'App/Legacy/**'.
+    Required excluded dependencies fail planning, even when unchanged.
+  --config, -c file    Alchemy entrypoint file (default: alchemy.run.ts)
+  --env-file file      File to load environment variables from, defaults to .env
+  --stage string Stage to deploy to. Defaults to $ALCHEMY_STAGE or live_${USER}
+  --yes, -y            Yes to all prompts
+  --profile string Auth profile to use. Defaults to $ALCHEMY_PROFILE or
+    'default'.
+  --adopt Adopt pre-existing cloud resources that conflict with this stack
+    instead of failing. Useful for re-importing infrastructure into a fresh
+    state store.
+  --detailed           Show declared resource properties as YAML
+  --detect-drift Detect infrastructure drift and offer to repair it before
+    deploying
+
+GLOBAL FLAGS
+  --help, -h                          Show help information
+  --version, -v                       Show version information
+  --completions <bash|zsh|fish|sh> Print shell completion script (choices: bash,
+    zsh, fish, sh)
+  --log-level <all|trace|…> Sets the minimum log level (choices: all, trace,
+    debug, info, warn, warning, error, fatal, none)
+  --no-input Disable prompts and the interactive TUI (plain output; commands
+    needing input fail)
+
+
+$ bun scripts/verify-package-purity.ts ⊘ cache disabled
+Package purity check passed: 205 production entrypoints, 7784 bundled modules, 84863952 bytes; no test-only dependency path found.
+
+~/packages/storage-cloudflare$ vitest run ⊘ cache disabled
+~/packages/storage-sqlite$ vp test --passWithNoTests ⊘ cache disabled
+~/packages/storage-sql$ vp test --passWithNoTests ⊘ cache disabled
+~/packages/sandbox-local$ vp test --passWithNoTests ⊘ cache disabled
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/sandbox-local
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-sqlite
+
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-sql
+
+No test files found, exiting with code 0
+
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/.git/**
+
+
+~/packages/pr-review-action$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/pr-review-action
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-cloudflare
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  14:47:02
+   Duration  1.02s (transform 30ms, setup 0ms, import 288ms, tests 648ms, environment 0ms)
+
+
+~/packages/effect-agent$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/effect-agent
+
+
+ Test Files  3 passed (3)
+      Tests  43 passed (43)
+   Start at  14:47:02
+   Duration  1.95s (transform 401ms, setup 0ms, import 1.44s, tests 306ms, environment 0ms)
+
+
+~/packages/storage-memory$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-memory
+
+
+ Test Files  8 passed (8)
+      Tests  139 passed (139)
+   Start at  14:47:02
+   Duration  8.34s (transform 1.01s, setup 0ms, import 4.04s, tests 3.72s, environment 0ms)
+
+
+~/tooling/cloudflare-memory$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/cloudflare-memory
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:47:11
+   Duration  1.15s (transform 49ms, setup 0ms, import 438ms, tests 650ms, environment 0ms)
+
+
+~/tooling/runtime-benchmark$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/runtime-benchmark
+
+
+ Test Files  9 passed (9)
+      Tests  111 passed (111)
+   Start at  14:47:03
+   Duration  11.40s (transform 17.32s, setup 0ms, import 75.56s, tests 3.69s, environment 0ms)
+
+
+~/packages/platform-node$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/platform-node
+
+
+ Test Files  14 passed (14)
+      Tests  158 passed (158)
+   Start at  14:47:04
+   Duration  11.86s (transform 1.03s, setup 0ms, import 5.78s, tests 5.18s, environment 1ms)
+
+
+~/packages/platform-cloudflare$ vitest run ⊘ cache disabled
+
+ Test Files  5 passed (5)
+      Tests  14 passed (14)
+   Start at  14:47:12
+   Duration  4.53s (transform 1.27s, setup 0ms, import 3.21s, tests 995ms, environment 0ms)
+
+
+~/tooling/pr-review-eval$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/pr-review-eval
+
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/platform-cloudflare
+
+
+ Test Files  42 passed (42)
+      Tests  156 passed (156)
+   Start at  14:47:03
+   Duration  14.41s (transform 1.21s, setup 0ms, import 10.12s, tests 1.41s, environment 2ms)
+
+
+~/tooling/context-continuity-eval$ vitest run ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/context-continuity-eval
+
+
+ Test Files  4 passed (4)
+      Tests  19 passed (19)
+   Start at  14:47:17
+   Duration  4.67s (transform 377ms, setup 0ms, import 2.21s, tests 2.16s, environment 0ms)
+
+
+~/packages/testing$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/testing
+
+NOSENTRY SQLite alarm handler canceled with requestScheduledAlarm.; scheduledTime = 1791496057.716s; localAlarmState.orDefault(kj::UNIX_EPOCH) = 1791496057.723s; actorId = 120d1efcec396861dcf756df505a5b74e22d2c5b432ec2ab73b533441ba766f1
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: external reply lost
+stack: 10333ae8c 103343ca8
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1015a9797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1015a9797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1015a9797
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: external reply lost
+stack: 10333ae8c 103343ca8
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed runtime eviction failpoint
+stack: 103499797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1015a9797
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+uncaught exception; source = Uncaught; stack = Error: Cannot perform I/O on behalf of a different Durable Object. I/O objects (such as streams, request/response bodies, and others) created in the context of one Durable Object cannot be accessed from a different Durable Object in the same isolate. This is a limitation of Cloudflare Workers which allows us to improve overall performance. (I/O type: RefcountedCanceler)
+    at abortContextSignal (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2346:19)
+    at abortIfTimeout (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2341:3)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1787:176
+    at rejectTimeoutError (Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2281:16)
+    at Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2275:5
+(node:91047) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Context continuity: update 1/13
+Context continuity: update 2/13
+Context continuity: update 3/13
+Context continuity: update 4/13
+Context continuity: update 5/13
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: external reply lost
+stack: 1054fae8c 105503ca8
+(node:91220) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Context continuity: update 5/13
+Context continuity: update 6/13
+Context continuity: update 7/13
+Context continuity: update 8/13
+Context continuity: update 9/13
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: background worker test eviction
+stack: 103a55797
+uncaught exception; source = Uncaught (in promise); stack = LedgerError: Destination acknowledgement remains pending
+    at Object.transform (/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/Schema.ts:14841:7)
+    at transform (/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/schema/interpreter.ts:42:43)
+    at /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1863:40
+    at Module.<anonymous> (/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/Function.ts:248:18)
+    at flatMapTransformation (/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/schema/interpreter.ts:22:60)
+    at /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/schema/interpreter.ts:43:35
+    at /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/schema/interpreter.ts:90:12
+    at /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/SchemaParser.ts:1134:48
+    at LedgerError.make (/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/node_modules/.bun/effect@4.0.0/node_modules/effect/src/Schema.ts:14785:60)
+    at /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/effect-agent/src/durable/DurableAgentRuntime.ts:3386:29
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1477: failed: jsg.Error: LedgerError: Destination acknowledgement remains pending
+stack: 1038f6e8c 1038ffca8
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: #94 forced wait eviction
+stack: 101e05797
+uncaught exception; exception = workerd/api/actor-state.c++:1187: failed: broken.outputGateBroken; jsg.Error: memory fault memory:change:after
+stack: 10594d797
+(node:91393) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Context continuity: update 9/13
+Context continuity: update 10/13
+Context continuity: update 11/13
+Context continuity: update 12/13
+Context continuity: update 13/13
+
+ Test Files  6 passed (6)
+      Tests  11 passed (11)
+   Start at  14:47:18
+   Duration  36.30s (transform 861ms, setup 0ms, import 3.19s, tests 32.69s, environment 0ms)
+
+
+~/packages/ai-decision$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/ai-decision
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  14:47:55
+   Duration  238ms (transform 23ms, setup 0ms, import 166ms, tests 7ms, environment 0ms)
+
+
+~/examples/travel-planner$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/examples/travel-planner
+
+
+ Test Files  14 passed (14)
+      Tests  38 passed (38)
+   Start at  14:47:56
+   Duration  12.75s (transform 269ms, setup 0ms, import 3.14s, tests 8.70s, environment 1ms)
+
+
+~/tooling/browser-run-worker-proof$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/browser-run-worker-proof
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:48:09
+   Duration  628ms (transform 34ms, setup 0ms, import 260ms, tests 295ms, environment 0ms)
+
+
+~/packages/workflow$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/workflow
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  14:48:10
+   Duration  1.25s (transform 631ms, setup 0ms, import 1.05s, tests 133ms, environment 0ms)
+
+
+~/packages/storage-postgres$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/storage-postgres
+
+
+ Test Files  22 passed (22)
+      Tests  76 passed (76)
+   Start at  14:47:14
+   Duration  83.85s (transform 1.23s, setup 0ms, import 12.56s, tests 69.52s, environment 1ms)
+
+
+~/examples/browser-speed$ vp test ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/examples/browser-speed
+
+
+ Test Files  36 passed (36)
+      Tests  141 passed | 6 skipped (147)
+   Start at  14:47:17
+   Duration  86.54s (transform 59.89s, setup 0ms, import 363.04s, tests 172.76s, environment 1ms)
+
+
+~/packages/pr-review$ vp test --passWithNoTests ⊘ cache disabled
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/packages/pr-review
+
+
+ Test Files  7 passed (7)
+      Tests  16 passed | 4 skipped (20)
+   Start at  14:48:39
+   Duration  7.83s (transform 2.58s, setup 0ms, import 6.53s, tests 664ms, environment 0ms)
+
+
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  14:48:44
+   Duration  2.38s (transform 694ms, setup 0ms, import 1.04s, tests 1.26s, environment 0ms)
+
+
+
+ Test Files  20 passed (20)
+      Tests  128 passed (128)
+   Start at  14:47:22
+   Duration  90.33s (transform 1.67s, setup 0ms, import 9.61s, tests 79.33s, environment 1ms)
+
+
+
+ Test Files  8 passed (8)
+      Tests  106 passed (106)
+   Start at  14:48:11
+   Duration  94.11s (transform 1.08s, setup 0ms, import 5.99s, tests 87.27s, environment 0ms)
+
+
+~/docs$ NODE_OPTIONS=--max-old-space-size=8192 astro build ⊘ cache disabled
+~/packages/ai-decision$ vp pack ⊘ cache disabled
+~/packages/effect-agent$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/AutoModel.ts, src/LanguageModelDecisionModel.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ entry: src/index.ts, src/durable/ThreadImport.ts, src/durable/ThreadArchiveRange.ts, src/durable/ThreadTransfer.ts, src/durable/RecordFormat.ts, src/core/Agent.ts, src/core/AgentError.ts, src/core/AgentPolicy.ts, src/engine/AgentRuntime.ts, src/core/AgentUpdates.ts, src/capabilities/Approval.ts, src/capabilities/Budget.ts, src/capabilities/BrowserUse.ts, src/sandbox/CodeExecutor.ts, src/capabilities/CodeMode.ts, src/capabilities/Commands.ts, src/engine/Compaction.ts, src/engine/ContextCompactor.ts, src/engine/ContextHistory.ts, src/capabilities/ContextTools.ts, src/engine/ContextWindow.ts, src/engine/DurableStep.ts, src/core/FailureDiagnostic.ts, src/InMemory.ts, src/core/Thread.ts, src/core/IdGenerator.ts, src/core/Identifiers.ts, src/sandbox/InteractiveBrowser.ts, src/capabilities/Mcp.ts, src/capabilities/McpClient.ts, src/core/Memory.ts, src/core/MemoryNamespace.ts, src/capabilities/MemoryNotes.ts, src/core/MemoryReference.ts, src/core/MemoryRevalidation.ts, src/core/MemoryStore.ts, src/capabilities/Messaging.ts, src/engine/MessagingHost.ts, src/capabilities/ModelContext.ts, src/engine/Output.ts, src/sandbox/PageCapture.ts, src/sandbox/PageCrawl.ts, src/sandbox/PageScreenshot.ts, src/core/Receipt.ts, src/capabilities/Redaction.ts, src/capabilities/Remembering.ts, src/core/RememberingStore.ts, src/core/RunEvent.ts, src/engine/RunEventSink.ts, src/capabilities/RunHooks.ts, src/engine/RunOptions.ts, src/core/RunPolicyUsage.ts, src/sandbox/Sandbox.ts, src/capabilities/SemanticMemory.ts, src/core/SemanticMemoryIndex.ts, src/core/SemanticMemoryRevalidation.ts, src/capabilities/Subagent.ts, src/core/SubagentContract.ts, src/engine/SubagentHost.ts, src/capabilities/SubagentReservations.ts, src/engine/ThreadHistory.ts, src/engine/ToolBroker.ts, src/capabilities/ToolDiscovery.ts, src/ToolExposure.ts, src/core/ToolResult.ts, src/core/Usage.ts, src/capabilities/WebCapture.ts, src/capabilities/WebSearch.ts, src/core/Worker.ts, src/durable/ActivityStore.ts, src/durable/Admin.ts, src/durable/AgentRegistration.ts, src/durable/CommittedActivity.ts, src/durable/Digest.ts, src/durable/DurableAgentRuntime.ts, src/durable/DurableFailpoint.ts, src/durable/EventSource.ts, src/durable/GitHubWorkflowSource.ts, src/durable/OperationAuthorizer.ts, src/durable/MessageDelivery.ts, src/durable/LifecyclePublication.ts, src/durable/PersistentHistory.ts, src/durable/PreparedInputAdmission.ts, src/durable/Records.ts, src/durable/Recovery.ts, src/durable/RunJournal.ts, src/durable/RunContinuation.ts, src/durable/ThreadWork.ts, src/durable/RunStorage.ts, src/durable/Schedule.ts, src/durable/ScheduleTransition.ts, src/durable/Scheduling.ts, src/durable/SqlMemoryStore.ts, src/durable/SubmissionLedger.ts, src/durable/SettlementPublisher.ts, src/durable/SubmissionStatus.ts, src/durable/Subscription.ts, src/durable/SubscriptionInput.ts, src/durable/Subscriptions.ts, src/durable/SubscriptionTools.ts, src/durable/SubscriptionTransition.ts, src/durable/Certification.ts, src/durable/DurableFailpointTestControl.ts, src/durable/ScheduleStoreConformance.ts, src/durable/SubmissionLedgerConformance.ts, src/durable/SubscriptionStoreConformance.ts, src/durable/ThreadStoreConformance.ts, src/durable/ThreadInvariants.ts, src/durable/ThreadProjectionMaintenance.ts, src/durable/ThreadProjection.ts, src/durable/ThreadStore.ts, src/durable/ThreadReader.ts, src/durable/ToolReconciler.ts, src/durable/WakeScheduler.ts, src/durable/WorkerHost.ts, src/durable/WorkerAdmission.ts, src/durable/ThreadContextHistory.ts, src/durable/ThreadContextHistoryProjection.ts, src/durable/MessageDeliveryStoreConformance.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/AutoModel.mjs                        9.93 kB │ gzip: 3.40 kB
+ℹ dist/LanguageModelDecisionModel.mjs       2.90 kB │ gzip: 1.23 kB
+ℹ dist/index.mjs                            0.26 kB │ gzip: 0.12 kB
+ℹ dist/AutoModel.mjs.map                   19.95 kB │ gzip: 5.97 kB
+ℹ dist/LanguageModelDecisionModel.mjs.map   4.67 kB │ gzip: 1.72 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip: 0.26 kB
+ℹ dist/AutoModel.d.mts                      7.25 kB │ gzip: 2.58 kB
+ℹ dist/LanguageModelDecisionModel.d.mts     0.85 kB │ gzip: 0.45 kB
+ℹ dist/index.d.mts                          0.27 kB │ gzip: 0.12 kB
+ℹ 9 files, total: 46.45 kB
+✔ Build complete in 806ms
+
+ℹ dist/durable/SubmissionLedgerConformance.mjs          145.56 kB │ gzip:  24.95 kB
+ℹ dist/durable/SubmissionLedger.mjs                      57.12 kB │ gzip:  14.88 kB
+ℹ dist/durable/Records.mjs                               55.63 kB │ gzip:  15.36 kB
+ℹ dist/durable/Recovery.mjs                              41.48 kB │ gzip:  10.51 kB
+ℹ dist/durable/Subscriptions.mjs                         32.75 kB │ gzip:   6.78 kB
+ℹ dist/durable/ThreadStoreConformance.mjs                31.12 kB │ gzip:   7.45 kB
+ℹ dist/durable/SqlMemoryStore.mjs                        30.91 kB │ gzip:   7.12 kB
+ℹ dist/capabilities/BrowserUse.mjs                       29.76 kB │ gzip:   8.80 kB
+ℹ dist/durable/MessageDelivery.mjs                       26.95 kB │ gzip:   6.39 kB
+ℹ dist/durable/SubscriptionStoreConformance.mjs          25.90 kB │ gzip:   5.73 kB
+ℹ dist/capabilities/CodeMode.mjs                         24.73 kB │ gzip:   7.86 kB
+ℹ dist/capabilities/McpClient.mjs                        23.95 kB │ gzip:   7.12 kB
+ℹ dist/sandbox/PageCapture.mjs                           23.27 kB │ gzip:   5.92 kB
+ℹ dist/durable/Admin.mjs                                 22.12 kB │ gzip:   7.00 kB
+ℹ dist/capabilities/SubagentReservations.mjs             21.58 kB │ gzip:   4.70 kB
+ℹ dist/durable/ThreadWork.mjs                            21.26 kB │ gzip:   5.70 kB
+ℹ dist/core/Usage.mjs                                    18.61 kB │ gzip:   4.21 kB
+ℹ dist/durable/ScheduleStoreConformance.mjs              17.10 kB │ gzip:   3.83 kB
+ℹ dist/capabilities/Remembering.mjs                      16.39 kB │ gzip:   4.34 kB
+ℹ dist/capabilities/WebCapture.mjs                       15.58 kB │ gzip:   4.28 kB
+ℹ dist/durable/Subscription.mjs                          14.71 kB │ gzip:   3.55 kB
+ℹ dist/durable/Schedule.mjs                              14.63 kB │ gzip:   3.28 kB
+ℹ dist/core/RunEvent.mjs                                 14.07 kB │ gzip:   3.79 kB
+ℹ dist/capabilities/SemanticMemory.mjs                   13.94 kB │ gzip:   3.95 kB
+ℹ dist/capabilities/Budget.mjs                           13.41 kB │ gzip:   3.75 kB
+ℹ dist/durable/GitHubWorkflowSource.mjs                  12.62 kB │ gzip:   3.61 kB
+ℹ dist/core/Thread.mjs                                   12.58 kB │ gzip:   3.36 kB
+ℹ dist/capabilities/Mcp.mjs                              12.48 kB │ gzip:   3.63 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.mjs       12.21 kB │ gzip:   3.15 kB
+ℹ dist/sandbox/InteractiveBrowser.mjs                    12.14 kB │ gzip:   2.92 kB
+ℹ dist/index.mjs                                         11.96 kB │ gzip:   2.04 kB
+ℹ dist/sandbox/CodeExecutor.mjs                          11.81 kB │ gzip:   3.49 kB
+ℹ dist/durable/RunStorage.mjs                            11.29 kB │ gzip:   2.90 kB
+ℹ dist/capabilities/ToolDiscovery.mjs                    11.10 kB │ gzip:   3.61 kB
+ℹ dist/capabilities/Approval.mjs                         10.93 kB │ gzip:   2.97 kB
+ℹ dist/capabilities/ModelContext.mjs                     10.53 kB │ gzip:   3.19 kB
+ℹ dist/durable/SubscriptionTransition.mjs                10.51 kB │ gzip:   2.49 kB
+ℹ dist/durable/LifecyclePublication.mjs                  10.43 kB │ gzip:   3.51 kB
+ℹ dist/sandbox/Sandbox.mjs                               10.21 kB │ gzip:   2.67 kB
+ℹ dist/core/MemoryStore.mjs                              10.10 kB │ gzip:   3.06 kB
+ℹ dist/durable/ThreadContextHistory.mjs                  10.04 kB │ gzip:   3.04 kB
+ℹ dist/durable/SubscriptionTools.mjs                      9.64 kB │ gzip:   2.53 kB
+ℹ dist/durable/ThreadInvariants.mjs                       9.05 kB │ gzip:   2.70 kB
+ℹ dist/durable/ScheduleTransition.mjs                     8.79 kB │ gzip:   2.18 kB
+ℹ dist/core/Memory.mjs                                    8.65 kB │ gzip:   2.99 kB
+ℹ dist/durable/ThreadTransfer.mjs                         8.54 kB │ gzip:   2.52 kB
+ℹ dist/durable/ThreadProjection.mjs                       8.46 kB │ gzip:   2.49 kB
+ℹ dist/core/SubagentContract.mjs                          8.27 kB │ gzip:   2.70 kB
+ℹ dist/durable/CommittedActivity.mjs                      8.20 kB │ gzip:   2.59 kB
+ℹ dist/capabilities/RunHooks.mjs                          8.12 kB │ gzip:   2.99 kB
+ℹ dist/engine/RunOptions.mjs                              8.03 kB │ gzip:   2.85 kB
+ℹ dist/durable/PersistentHistory.mjs                      7.93 kB │ gzip:   2.56 kB
+ℹ dist/durable/Certification.mjs                          7.81 kB │ gzip:   2.84 kB
+ℹ dist/core/SemanticMemoryRevalidation.mjs                7.72 kB │ gzip:   2.38 kB
+ℹ dist/core/SemanticMemoryIndex.mjs                       7.70 kB │ gzip:   2.46 kB
+ℹ dist/durable/ThreadContextHistoryProjection.mjs         7.57 kB │ gzip:   2.67 kB
+ℹ dist/capabilities/Messaging.mjs                         7.11 kB │ gzip:   2.26 kB
+ℹ dist/core/ToolResult.mjs                                6.84 kB │ gzip:   2.56 kB
+ℹ dist/engine/ContextCompactor.mjs                        6.69 kB │ gzip:   2.34 kB
+ℹ dist/core/AgentError.mjs                                6.58 kB │ gzip:   1.89 kB
+ℹ dist/core/RememberingStore.mjs                          6.58 kB │ gzip:   2.23 kB
+ℹ dist/capabilities/WebSearch.mjs                         6.51 kB │ gzip:   2.52 kB
+ℹ dist/durable/SettlementPublisher.mjs                    6.04 kB │ gzip:   1.95 kB
+ℹ dist/durable/ActivityStore.mjs                          5.91 kB │ gzip:   1.87 kB
+ℹ dist/capabilities/MemoryNotes.mjs                       5.82 kB │ gzip:   2.25 kB
+ℹ dist/core/MemoryNamespace.mjs                           5.78 kB │ gzip:   1.89 kB
+ℹ dist/core/MemoryRevalidation.mjs                        5.74 kB │ gzip:   2.11 kB
+ℹ dist/capabilities/ContextTools.mjs                      5.55 kB │ gzip:   1.96 kB
+ℹ dist/sandbox/PageCrawl.mjs                              5.43 kB │ gzip:   1.68 kB
+ℹ dist/core/MemoryReference.mjs                           5.15 kB │ gzip:   1.80 kB
+ℹ dist/durable/ToolReconciler.mjs                         4.92 kB │ gzip:   1.78 kB
+ℹ dist/capabilities/Redaction.mjs                         4.87 kB │ gzip:   1.95 kB
+ℹ dist/core/AgentPolicy.mjs                               4.76 kB │ gzip:   1.90 kB
+ℹ dist/durable/WorkerHost.mjs                             4.63 kB │ gzip:   1.70 kB
+ℹ dist/durable/DurableFailpoint.mjs                       4.25 kB │ gzip:   1.49 kB
+ℹ dist/durable/WakeScheduler.mjs                          3.96 kB │ gzip:   1.68 kB
+ℹ dist/engine/ContextHistory.mjs                          3.76 kB │ gzip:   1.45 kB
+ℹ dist/durable/RecordFormat.mjs                           3.69 kB │ gzip:   1.34 kB
+ℹ dist/durable/OperationAuthorizer.mjs                    3.63 kB │ gzip:   1.44 kB
+ℹ dist/engine/ContextWindow.mjs                           3.50 kB │ gzip:   1.45 kB
+ℹ dist/InMemory.mjs                                       3.46 kB │ gzip:   1.50 kB
+ℹ dist/engine/ThreadHistory.mjs                           3.45 kB │ gzip:   1.39 kB
+ℹ dist/core/AgentUpdates.mjs                              3.39 kB │ gzip:   1.25 kB
+ℹ dist/durable/SubscriptionInput.mjs                      3.37 kB │ gzip:   1.25 kB
+ℹ dist/durable/EventSource.mjs                            3.36 kB │ gzip:   1.13 kB
+ℹ dist/durable/ThreadArchiveRange.mjs                     3.17 kB │ gzip:   0.98 kB
+ℹ dist/engine/DurableStep.mjs                             2.99 kB │ gzip:   1.36 kB
+ℹ dist/sandbox/PageScreenshot.mjs                         2.90 kB │ gzip:   1.07 kB
+ℹ dist/capabilities/Commands.mjs                          2.85 kB │ gzip:   1.14 kB
+ℹ dist/engine/SubagentHost.mjs                            2.81 kB │ gzip:   1.00 kB
+ℹ dist/durable/ThreadStore.mjs                            2.65 kB │ gzip:   0.80 kB
+ℹ dist/durable/RunJournal.mjs                             2.63 kB │ gzip:   0.69 kB
+ℹ dist/core/Identifiers.mjs                               2.49 kB │ gzip:   0.81 kB
+ℹ dist/engine/ToolBroker.mjs                              2.01 kB │ gzip:   0.93 kB
+ℹ dist/core/Receipt.mjs                                   1.79 kB │ gzip:   0.79 kB
+ℹ dist/durable/PreparedInputAdmission.mjs                 1.73 kB │ gzip:   0.71 kB
+ℹ dist/core/IdGenerator.mjs                               1.63 kB │ gzip:   0.69 kB
+ℹ dist/durable/ThreadProjectionMaintenance.mjs            1.53 kB │ gzip:   0.70 kB
+ℹ dist/ToolExposure.mjs                                   1.17 kB │ gzip:   0.46 kB
+ℹ dist/durable/DurableFailpointTestControl.mjs            1.14 kB │ gzip:   0.52 kB
+ℹ dist/core/RunPolicyUsage.mjs                            1.13 kB │ gzip:   0.61 kB
+ℹ dist/engine/RunEventSink.mjs                            1.11 kB │ gzip:   0.57 kB
+ℹ dist/capabilities/Subagent.mjs                          1.10 kB │ gzip:   0.42 kB
+ℹ dist/durable/RunContinuation.mjs                        1.09 kB │ gzip:   0.41 kB
+ℹ dist/engine/Compaction.mjs                              1.01 kB │ gzip:   0.41 kB
+ℹ dist/durable/DurableAgentRuntime.mjs                    0.98 kB │ gzip:   0.35 kB
+ℹ dist/durable/SubmissionStatus.mjs                       0.97 kB │ gzip:   0.44 kB
+ℹ dist/durable/AgentRegistration.mjs                      0.96 kB │ gzip:   0.37 kB
+ℹ dist/engine/AgentRuntime.mjs                            0.93 kB │ gzip:   0.37 kB
+ℹ dist/core/Worker.mjs                                    0.86 kB │ gzip:   0.34 kB
+ℹ dist/durable/ThreadReader.mjs                           0.83 kB │ gzip:   0.29 kB
+ℹ dist/durable/ThreadImport.mjs                           0.83 kB │ gzip:   0.30 kB
+ℹ dist/durable/Digest.mjs                                 0.50 kB │ gzip:   0.23 kB
+ℹ dist/engine/Output.mjs                                  0.35 kB │ gzip:   0.23 kB
+ℹ dist/core/FailureDiagnostic.mjs                         0.27 kB │ gzip:   0.17 kB
+ℹ dist/engine/MessagingHost.mjs                           0.26 kB │ gzip:   0.16 kB
+ℹ dist/durable/WorkerAdmission.mjs                        0.24 kB │ gzip:   0.14 kB
+ℹ dist/core/Agent.mjs                                     0.20 kB │ gzip:   0.15 kB
+ℹ dist/durable/Scheduling.mjs                             0.16 kB │ gzip:   0.12 kB
+ℹ dist/DurableAgentRuntime-CXaEnhaA.mjs.map             953.71 kB │ gzip: 200.37 kB
+ℹ dist/AgentRuntime-FpegokIP.mjs.map                    622.74 kB │ gzip: 137.63 kB
+ℹ dist/DurableAgentRuntime-CXaEnhaA.mjs                 464.37 kB │ gzip:  98.11 kB
+ℹ dist/AgentRuntime-FpegokIP.mjs                        279.82 kB │ gzip:  64.47 kB
+ℹ dist/durable/SubmissionLedgerConformance.mjs.map      265.06 kB │ gzip:  43.77 kB
+ℹ dist/Subagent-CPX-Ev23.mjs.map                        193.77 kB │ gzip:  40.10 kB
+ℹ dist/RunJournal-y1w4GHfS.mjs.map                      115.73 kB │ gzip:  27.85 kB
+ℹ dist/RunContinuation-Bo3s2-ld.mjs.map                 104.73 kB │ gzip:  23.93 kB
+ℹ dist/durable/Records.mjs.map                           74.97 kB │ gzip:  19.57 kB
+ℹ dist/durable/SubmissionLedger.mjs.map                  73.22 kB │ gzip:  17.93 kB
+ℹ dist/Subagent-CPX-Ev23.mjs                             72.45 kB │ gzip:  15.92 kB
+ℹ dist/ThreadStore-uxF6KUWe.mjs.map                      68.35 kB │ gzip:  17.07 kB
+ℹ dist/Scheduling-DbUgsQZq.mjs.map                       67.92 kB │ gzip:  14.56 kB
+ℹ dist/durable/Subscriptions.mjs.map                     64.15 kB │ gzip:  13.33 kB
+ℹ dist/RunJournal-y1w4GHfS.mjs                           62.25 kB │ gzip:  14.77 kB
+ℹ dist/engine/RunOptions.mjs.map                         61.50 kB │ gzip:  18.00 kB
+ℹ dist/durable/Recovery.mjs.map                          59.19 kB │ gzip:  14.36 kB
+ℹ dist/ThreadImport-B7e0bXxC.mjs.map                     57.64 kB │ gzip:  14.03 kB
+ℹ dist/durable/ThreadStoreConformance.mjs.map            57.29 kB │ gzip:  12.84 kB
+ℹ dist/durable/SqlMemoryStore.mjs.map                    56.81 kB │ gzip:  13.55 kB
+ℹ dist/RunContinuation-Bo3s2-ld.mjs                      56.79 kB │ gzip:  13.20 kB
+ℹ dist/capabilities/CodeMode.mjs.map                     54.36 kB │ gzip:  15.62 kB
+ℹ dist/capabilities/BrowserUse.mjs.map                   52.96 kB │ gzip:  14.36 kB
+ℹ dist/capabilities/McpClient.mjs.map                    48.84 kB │ gzip:  13.43 kB
+ℹ dist/durable/SubscriptionStoreConformance.mjs.map      47.82 kB │ gzip:  10.13 kB
+ℹ dist/durable/MessageDelivery.mjs.map                   47.74 kB │ gzip:  10.88 kB
+ℹ dist/compaction-CgFMDiXL.mjs.map                       43.33 kB │ gzip:  12.42 kB
+ℹ dist/capabilities/SubagentReservations.mjs.map         42.02 kB │ gzip:   9.22 kB
+ℹ dist/ThreadStore-uxF6KUWe.mjs                          39.08 kB │ gzip:  10.41 kB
+ℹ dist/sandbox/PageCapture.mjs.map                       37.51 kB │ gzip:   8.83 kB
+ℹ dist/durable/ThreadWork.mjs.map                        37.01 kB │ gzip:   8.99 kB
+ℹ dist/capabilities/WebCapture.mjs.map                   33.40 kB │ gzip:   8.11 kB
+ℹ dist/agent-registration-dR0A0JX-.mjs.map               33.35 kB │ gzip:   9.65 kB
+ℹ dist/Scheduling-DbUgsQZq.mjs                           33.28 kB │ gzip:   7.45 kB
+ℹ dist/ThreadImport-B7e0bXxC.mjs                         32.43 kB │ gzip:   8.18 kB
+ℹ dist/durable/ScheduleStoreConformance.mjs.map          31.39 kB │ gzip:   6.67 kB
+ℹ dist/capabilities/Remembering.mjs.map                  30.77 kB │ gzip:   7.55 kB
+ℹ dist/core/Usage.mjs.map                                30.71 kB │ gzip:   6.99 kB
+ℹ dist/durable/Admin.mjs.map                             30.31 kB │ gzip:   9.06 kB
+ℹ dist/Agent-0WvBWWbM.mjs.map                            29.59 kB │ gzip:   7.21 kB
+ℹ dist/durable/RunStorage.mjs.map                        27.25 kB │ gzip:   6.41 kB
+ℹ dist/capabilities/Budget.mjs.map                       26.74 kB │ gzip:   7.21 kB
+ℹ dist/durable/Subscription.mjs.map                      26.66 kB │ gzip:   6.02 kB
+ℹ dist/durable/Schedule.mjs.map                          24.17 kB │ gzip:   5.26 kB
+ℹ dist/core/Thread.mjs.map                               24.02 kB │ gzip:   6.25 kB
+ℹ dist/compaction-CgFMDiXL.mjs                           23.97 kB │ gzip:   7.48 kB
+ℹ dist/durable/GitHubWorkflowSource.mjs.map              23.91 kB │ gzip:   6.50 kB
+ℹ dist/capabilities/SemanticMemory.mjs.map               23.13 kB │ gzip:   6.13 kB
+ℹ dist/capabilities/ToolDiscovery.mjs.map                21.78 kB │ gzip:   6.43 kB
+ℹ dist/capabilities/Mcp.mjs.map                          21.08 kB │ gzip:   5.86 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.mjs.map   20.94 kB │ gzip:   4.94 kB
+ℹ dist/FailureDiagnostic-D9oW23Cn.mjs.map                20.32 kB │ gzip:   5.90 kB
+ℹ dist/core/RunEvent.mjs.map                             19.15 kB │ gzip:   4.79 kB
+ℹ dist/durable/ThreadContextHistory.mjs.map              18.43 kB │ gzip:   4.91 kB
+ℹ dist/sandbox/InteractiveBrowser.mjs.map                18.39 kB │ gzip:   4.49 kB
+ℹ dist/core/MemoryStore.mjs.map                          17.96 kB │ gzip:   4.93 kB
+ℹ dist/capabilities/Approval.mjs.map                     17.86 kB │ gzip:   4.69 kB
+ℹ dist/capabilities/ModelContext.mjs.map                 17.77 kB │ gzip:   5.16 kB
+ℹ dist/durable/LifecyclePublication.mjs.map              17.63 kB │ gzip:   5.59 kB
+ℹ dist/durable/SubscriptionTransition.mjs.map            17.30 kB │ gzip:   4.21 kB
+ℹ dist/durable/SubscriptionTools.mjs.map                 16.78 kB │ gzip:   4.47 kB
+ℹ dist/sandbox/CodeExecutor.mjs.map                      16.70 kB │ gzip:   4.75 kB
+ℹ dist/durable/ThreadInvariants.mjs.map                  16.45 kB │ gzip:   4.67 kB
+ℹ dist/durable/PersistentHistory.mjs.map                 15.64 kB │ gzip:   4.52 kB
+ℹ dist/durable/CommittedActivity.mjs.map                 15.11 kB │ gzip:   4.53 kB
+ℹ dist/durable/ThreadTransfer.mjs.map                    14.99 kB │ gzip:   4.32 kB
+ℹ dist/core/Memory.mjs.map                               14.84 kB │ gzip:   4.75 kB
+ℹ dist/core/RememberingStore.mjs.map                     14.66 kB │ gzip:   4.56 kB
+ℹ dist/Worker-DZjdMjZn.mjs.map                           14.62 kB │ gzip:   4.16 kB
+ℹ dist/output-contract-CMIhu4Cw.mjs.map                  14.60 kB │ gzip:   4.95 kB
+ℹ dist/engine/ContextCompactor.mjs.map                   14.51 kB │ gzip:   4.62 kB
+ℹ dist/sandbox/Sandbox.mjs.map                           14.48 kB │ gzip:   3.69 kB
+ℹ dist/durable/ScheduleTransition.mjs.map                14.31 kB │ gzip:   3.45 kB
+ℹ dist/WorkerAdmission-D493rBiO.mjs.map                  14.17 kB │ gzip:   4.19 kB
+ℹ dist/capabilities/RunHooks.mjs.map                     14.07 kB │ gzip:   4.61 kB
+ℹ dist/core/SemanticMemoryIndex.mjs.map                  13.85 kB │ gzip:   3.69 kB
+ℹ dist/agent-registration-dR0A0JX-.mjs                   13.04 kB │ gzip:   3.98 kB
+ℹ dist/capabilities/Messaging.mjs.map                    13.02 kB │ gzip:   3.62 kB
+ℹ dist/durable/ThreadProjection.mjs.map                  13.00 kB │ gzip:   3.68 kB
+ℹ dist/core/SemanticMemoryRevalidation.mjs.map           12.69 kB │ gzip:   3.78 kB
+ℹ dist/engine/SubagentHost.mjs.map                       12.25 kB │ gzip:   3.55 kB
+ℹ dist/durable/ThreadContextHistoryProjection.mjs.map    11.61 kB │ gzip:   3.77 kB
+ℹ dist/durable/Certification.mjs.map                     11.55 kB │ gzip:   3.87 kB
+ℹ dist/capabilities/WebSearch.mjs.map                    11.12 kB │ gzip:   3.84 kB
+ℹ dist/FailureDiagnostic-D9oW23Cn.mjs                    10.86 kB │ gzip:   3.52 kB
+ℹ dist/core/SubagentContract.mjs.map                     10.71 kB │ gzip:   3.49 kB
+ℹ dist/core/MemoryNamespace.mjs.map                      10.57 kB │ gzip:   3.16 kB
+ℹ dist/durable/WorkerHost.mjs.map                        10.02 kB │ gzip:   3.20 kB
+ℹ dist/Worker-DZjdMjZn.mjs                                9.82 kB │ gzip:   3.16 kB
+ℹ dist/core/ToolResult.mjs.map                            9.77 kB │ gzip:   3.50 kB
+ℹ dist/durable/SettlementPublisher.mjs.map                9.68 kB │ gzip:   3.02 kB
+ℹ dist/core/MemoryRevalidation.mjs.map                    9.48 kB │ gzip:   3.19 kB
+ℹ dist/MessagingHost-DJZJZILu.mjs.map                     9.23 kB │ gzip:   2.89 kB
+ℹ dist/capabilities/MemoryNotes.mjs.map                   8.98 kB │ gzip:   3.17 kB
+ℹ dist/core/AgentPolicy.mjs.map                           8.87 kB │ gzip:   3.18 kB
+ℹ dist/core/AgentError.mjs.map                            8.75 kB │ gzip:   2.35 kB
+ℹ dist/output-contract-CMIhu4Cw.mjs                       8.56 kB │ gzip:   2.95 kB
+ℹ dist/WorkerAdmission-D493rBiO.mjs                       8.54 kB │ gzip:   2.76 kB
+ℹ dist/durable/ActivityStore.mjs.map                      8.44 kB │ gzip:   2.55 kB
+ℹ dist/Digest-HhQNzgqB.mjs.map                            8.23 kB │ gzip:   2.78 kB
+ℹ dist/durable/EventSource.mjs.map                        8.02 kB │ gzip:   2.30 kB
+ℹ dist/capabilities/Redaction.mjs.map                     7.91 kB │ gzip:   3.00 kB
+ℹ dist/sandbox/PageCrawl.mjs.map                          7.69 kB │ gzip:   2.29 kB
+ℹ dist/tool-operations-BXBmagY1.mjs.map                   7.53 kB │ gzip:   2.44 kB
+ℹ dist/capabilities/ContextTools.mjs.map                  7.49 kB │ gzip:   2.48 kB
+ℹ dist/engine/ToolBroker.mjs.map                          7.44 kB │ gzip:   2.93 kB
+ℹ dist/durable/WakeScheduler.mjs.map                      7.43 kB │ gzip:   2.79 kB
+ℹ dist/core/MemoryReference.mjs.map                       7.40 kB │ gzip:   2.42 kB
+ℹ dist/engine/ThreadHistory.mjs.map                       7.15 kB │ gzip:   2.53 kB
+ℹ dist/engine/DurableStep.mjs.map                         6.99 kB │ gzip:   2.75 kB
+ℹ dist/durable/SubscriptionInput.mjs.map                  6.92 kB │ gzip:   2.18 kB
+ℹ dist/durable/ToolReconciler.mjs.map                     5.92 kB │ gzip:   2.19 kB
+ℹ dist/core/AgentUpdates.mjs.map                          5.89 kB │ gzip:   1.89 kB
+ℹ dist/engine/RunEventSink.mjs.map                        5.73 kB │ gzip:   1.85 kB
+ℹ dist/durable/RecordFormat.mjs.map                       5.43 kB │ gzip:   1.93 kB
+ℹ dist/Digest-HhQNzgqB.mjs                                5.19 kB │ gzip:   1.84 kB
+ℹ dist/durable/DurableFailpoint.mjs.map                   5.17 kB │ gzip:   1.68 kB
+ℹ dist/durable/ThreadArchiveRange.mjs.map                 5.09 kB │ gzip:   1.56 kB
+ℹ dist/engine/ContextHistory.mjs.map                      4.98 kB │ gzip:   1.78 kB
+ℹ dist/Agent-0WvBWWbM.mjs                                 4.94 kB │ gzip:   1.89 kB
+ℹ dist/durable/OperationAuthorizer.mjs.map                4.66 kB │ gzip:   1.85 kB
+ℹ dist/MessagingHost-DJZJZILu.mjs                         4.57 kB │ gzip:   1.63 kB
+ℹ dist/capabilities/Commands.mjs.map                      4.50 kB │ gzip:   1.63 kB
+ℹ dist/InMemory.mjs.map                                   4.43 kB │ gzip:   1.84 kB
+ℹ dist/engine/ContextWindow.mjs.map                       4.34 kB │ gzip:   1.80 kB
+ℹ dist/tool-operations-BXBmagY1.mjs                       4.13 kB │ gzip:   1.42 kB
+ℹ dist/ToolExposure-hTJT2ekj.mjs.map                      4.10 kB │ gzip:   1.61 kB
+ℹ dist/sandbox/PageScreenshot.mjs.map                     3.81 kB │ gzip:   1.36 kB
+ℹ dist/durable/ThreadProjectionMaintenance.mjs.map        3.79 kB │ gzip:   1.68 kB
+ℹ dist/core/Identifiers.mjs.map                           3.26 kB │ gzip:   0.92 kB
+ℹ dist/durable/PreparedInputAdmission.mjs.map             3.13 kB │ gzip:   1.13 kB
+ℹ dist/ToolExposure-hTJT2ekj.mjs                          2.47 kB │ gzip:   1.02 kB
+ℹ dist/core/IdGenerator.mjs.map                           2.44 kB │ gzip:   0.96 kB
+ℹ dist/foreign-diagnostic-DBQ1XHKh.mjs.map                2.30 kB │ gzip:   0.99 kB
+ℹ dist/core/Receipt.mjs.map                               2.29 kB │ gzip:   0.97 kB
+ℹ dist/ToolExposure-DBATXxmL.mjs.map                      2.04 kB │ gzip:   0.91 kB
+ℹ dist/durable/DurableFailpointTestControl.mjs.map        2.04 kB │ gzip:   0.84 kB
+ℹ dist/utf8-B5pAmhTo.mjs.map                              1.34 kB │ gzip:   0.70 kB
+ℹ dist/core/RunPolicyUsage.mjs.map                        1.27 kB │ gzip:   0.69 kB
+ℹ dist/foreign-diagnostic-DBQ1XHKh.mjs                    1.26 kB │ gzip:   0.60 kB
+ℹ dist/json-BlJVQZxN.mjs.map                              1.04 kB │ gzip:   0.58 kB
+ℹ dist/durable/SubmissionStatus.mjs.map                   1.00 kB │ gzip:   0.47 kB
+ℹ dist/utf8-B5pAmhTo.mjs                                  0.81 kB │ gzip:   0.44 kB
+ℹ dist/utf8-B770uxC3.mjs.map                              0.69 kB │ gzip:   0.47 kB
+ℹ dist/ToolExposure-DBATXxmL.mjs                          0.65 kB │ gzip:   0.39 kB
+ℹ dist/durable/AgentRegistration.mjs.map                  0.63 kB │ gzip:   0.34 kB
+ℹ dist/json-BlJVQZxN.mjs                                  0.56 kB │ gzip:   0.37 kB
+ℹ dist/engine/Compaction.mjs.map                          0.46 kB │ gzip:   0.30 kB
+ℹ dist/utf8-B770uxC3.mjs                                  0.45 kB │ gzip:   0.33 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs                      0.36 kB │ gzip:   0.26 kB
+ℹ dist/engine/Output.mjs.map                              0.26 kB │ gzip:   0.20 kB
+ℹ dist/ToolExposure.mjs.map                               0.21 kB │ gzip:   0.15 kB
+ℹ dist/core/RememberingStore.d.mts                      100.59 kB │ gzip:   6.51 kB
+ℹ dist/capabilities/BrowserUse.d.mts                     95.25 kB │ gzip:   5.73 kB
+ℹ dist/core/SemanticMemoryIndex.d.mts                    52.34 kB │ gzip:   4.07 kB
+ℹ dist/durable/SqlMemoryStore.d.mts                      48.38 kB │ gzip:   3.55 kB
+ℹ dist/capabilities/Remembering.d.mts                    29.26 kB │ gzip:   3.92 kB
+ℹ dist/capabilities/SemanticMemory.d.mts                 27.91 kB │ gzip:   3.52 kB
+ℹ dist/capabilities/MemoryNotes.d.mts                    27.03 kB │ gzip:   2.87 kB
+ℹ dist/durable/MessageDeliveryStoreConformance.d.mts     22.35 kB │ gzip:   2.41 kB
+ℹ dist/sandbox/InteractiveBrowser.d.mts                  17.59 kB │ gzip:   2.92 kB
+ℹ dist/capabilities/SubagentReservations.d.mts           13.61 kB │ gzip:   3.13 kB
+ℹ dist/durable/SubscriptionTools.d.mts                   13.51 kB │ gzip:   1.83 kB
+ℹ dist/sandbox/CodeExecutor.d.mts                        12.93 kB │ gzip:   3.13 kB
+ℹ dist/index.d.mts                                       12.00 kB │ gzip:   2.38 kB
+ℹ dist/core/MemoryStore.d.mts                            11.68 kB │ gzip:   2.64 kB
+ℹ dist/durable/WorkerAdmission.d.mts                     11.55 kB │ gzip:   2.11 kB
+ℹ dist/capabilities/CodeMode.d.mts                        9.43 kB │ gzip:   2.99 kB
+ℹ dist/capabilities/WebCapture.d.mts                      9.15 kB │ gzip:   2.36 kB
+ℹ dist/durable/Certification.d.mts                        9.07 kB │ gzip:   2.83 kB
+ℹ dist/durable/GitHubWorkflowSource.d.mts                 8.62 kB │ gzip:   2.27 kB
+ℹ dist/durable/ActivityStore.d.mts                        8.41 kB │ gzip:   1.97 kB
+ℹ dist/capabilities/Approval.d.mts                        8.33 kB │ gzip:   1.85 kB
+ℹ dist/durable/WorkerHost.d.mts                           8.20 kB │ gzip:   2.64 kB
+ℹ dist/capabilities/ContextTools.d.mts                    8.07 kB │ gzip:   1.15 kB
+ℹ dist/capabilities/ToolDiscovery.d.mts                   7.57 kB │ gzip:   2.24 kB
+ℹ dist/capabilities/Budget.d.mts                          7.23 kB │ gzip:   1.99 kB
+ℹ dist/capabilities/RunHooks.d.mts                        7.05 kB │ gzip:   2.52 kB
+ℹ dist/capabilities/McpClient.d.mts                       6.57 kB │ gzip:   2.25 kB
+ℹ dist/capabilities/Mcp.d.mts                             6.41 kB │ gzip:   1.88 kB
+ℹ dist/capabilities/ModelContext.d.mts                    6.23 kB │ gzip:   1.83 kB
+ℹ dist/sandbox/PageCrawl.d.mts                            5.95 kB │ gzip:   1.51 kB
+ℹ dist/durable/Subscriptions.d.mts                        5.82 kB │ gzip:   1.42 kB
+ℹ dist/durable/ThreadProjection.d.mts                     5.30 kB │ gzip:   1.58 kB
+ℹ dist/durable/SubmissionLedger.d.mts                     5.00 kB │ gzip:   1.32 kB
+ℹ dist/durable/ThreadStoreConformance.d.mts               4.68 kB │ gzip:   1.45 kB
+ℹ dist/durable/Records.d.mts                              4.64 kB │ gzip:   1.33 kB
+ℹ dist/durable/CommittedActivity.d.mts                    4.59 kB │ gzip:   1.75 kB
+ℹ dist/durable/ThreadContextHistoryProjection.d.mts       4.47 kB │ gzip:   1.61 kB
+ℹ dist/capabilities/WebSearch.d.mts                       4.40 kB │ gzip:   1.60 kB
+ℹ dist/durable/Scheduling.d.mts                           4.39 kB │ gzip:   1.16 kB
+ℹ dist/engine/ContextHistory.d.mts                        4.05 kB │ gzip:   1.41 kB
+ℹ dist/sandbox/PageScreenshot.d.mts                       3.55 kB │ gzip:   1.11 kB
+ℹ dist/core/Memory.d.mts                                  3.41 kB │ gzip:   1.43 kB
+ℹ dist/capabilities/Commands.d.mts                        3.36 kB │ gzip:   1.03 kB
+ℹ dist/durable/ThreadProjectionMaintenance.d.mts          3.25 kB │ gzip:   1.36 kB
+ℹ dist/core/MemoryRevalidation.d.mts                      3.10 kB │ gzip:   1.25 kB
+ℹ dist/engine/RunOptions.d.mts                            3.07 kB │ gzip:   0.84 kB
+ℹ dist/InMemory.d.mts                                     3.04 kB │ gzip:   1.32 kB
+ℹ dist/core/SemanticMemoryRevalidation.d.mts              2.94 kB │ gzip:   1.05 kB
+ℹ dist/durable/RunJournal.d.mts                           2.89 kB │ gzip:   0.75 kB
+ℹ dist/durable/ThreadStore.d.mts                          2.86 kB │ gzip:   0.84 kB
+ℹ dist/durable/ThreadTransfer.d.mts                       2.82 kB │ gzip:   1.06 kB
+ℹ dist/capabilities/Redaction.d.mts                       2.42 kB │ gzip:   1.10 kB
+ℹ dist/durable/SubscriptionTransition.d.mts               2.36 kB │ gzip:   0.74 kB
+ℹ dist/durable/ThreadContextHistory.d.mts                 2.24 kB │ gzip:   1.07 kB
+ℹ dist/durable/SubmissionLedgerConformance.d.mts          2.14 kB │ gzip:   0.85 kB
+ℹ dist/durable/Schedule.d.mts                             2.08 kB │ gzip:   0.57 kB
+ℹ dist/capabilities/Subagent.d.mts                        1.98 kB │ gzip:   0.63 kB
+ℹ dist/sandbox/PageCapture.d.mts                          1.95 kB │ gzip:   0.54 kB
+ℹ dist/durable/Recovery.d.mts                             1.87 kB │ gzip:   0.63 kB
+ℹ dist/durable/DurableAgentRuntime.d.mts                  1.83 kB │ gzip:   0.54 kB
+ℹ dist/engine/AgentRuntime.d.mts                          1.74 kB │ gzip:   0.58 kB
+ℹ dist/durable/ScheduleTransition.d.mts                   1.70 kB │ gzip:   0.71 kB
+ℹ dist/durable/ThreadWork.d.mts                           1.63 kB │ gzip:   0.55 kB
+ℹ dist/durable/Subscription.d.mts                         1.57 kB │ gzip:   0.45 kB
+ℹ dist/durable/MessageDelivery.d.mts                      1.56 kB │ gzip:   0.40 kB
+ℹ dist/durable/ThreadInvariants.d.mts                     1.50 kB │ gzip:   0.68 kB
+ℹ dist/core/Agent.d.mts                                   1.32 kB │ gzip:   0.47 kB
+ℹ dist/core/IdGenerator.d.mts                             1.32 kB │ gzip:   0.62 kB
+ℹ dist/core/RunEvent.d.mts                                1.17 kB │ gzip:   0.42 kB
+ℹ dist/durable/RunContinuation.d.mts                      1.16 kB │ gzip:   0.43 kB
+ℹ dist/sandbox/Sandbox.d.mts                              1.15 kB │ gzip:   0.40 kB
+ℹ dist/ToolExposure.d.mts                                 1.11 kB │ gzip:   0.37 kB
+ℹ dist/durable/ScheduleStoreConformance.d.mts             1.09 kB │ gzip:   0.45 kB
+ℹ dist/durable/SubscriptionStoreConformance.d.mts         1.07 kB │ gzip:   0.41 kB
+ℹ dist/durable/Admin.d.mts                                1.07 kB │ gzip:   0.39 kB
+ℹ dist/durable/ThreadImport.d.mts                         1.05 kB │ gzip:   0.35 kB
+ℹ dist/durable/DurableFailpointTestControl.d.mts          0.98 kB │ gzip:   0.43 kB
+ℹ dist/core/Worker.d.mts                                  0.87 kB │ gzip:   0.35 kB
+ℹ dist/core/SubagentContract.d.mts                        0.86 kB │ gzip:   0.32 kB
+ℹ dist/durable/ThreadReader.d.mts                         0.84 kB │ gzip:   0.30 kB
+ℹ dist/core/AgentError.d.mts                              0.82 kB │ gzip:   0.31 kB
+ℹ dist/durable/PersistentHistory.d.mts                    0.81 kB │ gzip:   0.48 kB
+ℹ dist/engine/Compaction.d.mts                            0.79 kB │ gzip:   0.31 kB
+ℹ dist/durable/LifecyclePublication.d.mts                 0.73 kB │ gzip:   0.22 kB
+ℹ dist/durable/AgentRegistration.d.mts                    0.71 kB │ gzip:   0.30 kB
+ℹ dist/core/Usage.d.mts                                   0.70 kB │ gzip:   0.29 kB
+ℹ dist/engine/RunEventSink.d.mts                          0.68 kB │ gzip:   0.23 kB
+ℹ dist/engine/ToolBroker.d.mts                            0.66 kB │ gzip:   0.24 kB
+ℹ dist/capabilities/Messaging.d.mts                       0.66 kB │ gzip:   0.28 kB
+ℹ dist/durable/ThreadArchiveRange.d.mts                   0.66 kB │ gzip:   0.24 kB
+ℹ dist/engine/SubagentHost.d.mts                          0.65 kB │ gzip:   0.24 kB
+ℹ dist/core/Thread.d.mts                                  0.54 kB │ gzip:   0.25 kB
+ℹ dist/durable/SettlementPublisher.d.mts                  0.52 kB │ gzip:   0.20 kB
+ℹ dist/durable/ToolReconciler.d.mts                       0.48 kB │ gzip:   0.20 kB
+ℹ dist/durable/Digest.d.mts                               0.46 kB │ gzip:   0.21 kB
+ℹ dist/durable/OperationAuthorizer.d.mts                  0.45 kB │ gzip:   0.18 kB
+ℹ dist/engine/DurableStep.d.mts                           0.43 kB │ gzip:   0.20 kB
+ℹ dist/durable/RunStorage.d.mts                           0.41 kB │ gzip:   0.21 kB
+ℹ dist/engine/ContextCompactor.d.mts                      0.39 kB │ gzip:   0.18 kB
+ℹ dist/core/MemoryReference.d.mts                         0.38 kB │ gzip:   0.19 kB
+ℹ dist/engine/MessagingHost.d.mts                         0.38 kB │ gzip:   0.20 kB
+ℹ dist/engine/ContextWindow.d.mts                         0.38 kB │ gzip:   0.18 kB
+ℹ dist/core/ToolResult.d.mts                              0.36 kB │ gzip:   0.17 kB
+ℹ dist/core/Identifiers.d.mts                             0.36 kB │ gzip:   0.21 kB
+ℹ dist/durable/DurableFailpoint.d.mts                     0.32 kB │ gzip:   0.14 kB
+ℹ dist/durable/RecordFormat.d.mts                         0.31 kB │ gzip:   0.16 kB
+ℹ dist/durable/SubscriptionInput.d.mts                    0.30 kB │ gzip:   0.14 kB
+ℹ dist/core/FailureDiagnostic.d.mts                       0.26 kB │ gzip:   0.16 kB
+ℹ dist/core/MemoryNamespace.d.mts                         0.24 kB │ gzip:   0.16 kB
+ℹ dist/core/AgentPolicy.d.mts                             0.22 kB │ gzip:   0.12 kB
+ℹ dist/core/Receipt.d.mts                                 0.21 kB │ gzip:   0.15 kB
+ℹ dist/durable/EventSource.d.mts                          0.20 kB │ gzip:   0.13 kB
+ℹ dist/engine/ThreadHistory.d.mts                         0.20 kB │ gzip:   0.12 kB
+ℹ dist/durable/WakeScheduler.d.mts                        0.20 kB │ gzip:   0.12 kB
+ℹ dist/core/AgentUpdates.d.mts                            0.19 kB │ gzip:   0.14 kB
+ℹ dist/durable/SubmissionStatus.d.mts                     0.18 kB │ gzip:   0.13 kB
+ℹ dist/durable/PreparedInputAdmission.d.mts               0.17 kB │ gzip:   0.11 kB
+ℹ dist/core/RunPolicyUsage.d.mts                          0.10 kB │ gzip:   0.09 kB
+ℹ dist/engine/Output.d.mts                                0.09 kB │ gzip:   0.09 kB
+ℹ dist/Admin-CzLZWrzY.d.mts                             417.56 kB │ gzip:  69.98 kB
+ℹ dist/Subagent-C3T4-A8z.d.mts                          101.18 kB │ gzip:  14.51 kB
+ℹ dist/Records-DV9HkZqV.d.mts                            98.31 kB │ gzip:  14.86 kB
+ℹ dist/ThreadImport-M4_0q5JY.d.mts                       79.45 kB │ gzip:   7.59 kB
+ℹ dist/RunOptions-Ht8kH2RP.d.mts                         60.56 kB │ gzip:  17.79 kB
+ℹ dist/Subscription-CsF1cBcb.d.mts                       58.37 kB │ gzip:   6.12 kB
+ℹ dist/MessageDelivery-VgBMNWDS.d.mts                    57.48 kB │ gzip:   6.67 kB
+ℹ dist/Messaging-D0rE04ME.d.mts                          54.73 kB │ gzip:   2.56 kB
+ℹ dist/Schedule-CyOBzfM4.d.mts                           45.29 kB │ gzip:   4.77 kB
+ℹ dist/PageCapture-Df8Xwskw.d.mts                        33.68 kB │ gzip:   5.01 kB
+ℹ dist/RunEvent-C5jVQZ6K.d.mts                           33.47 kB │ gzip:   4.11 kB
+ℹ dist/AgentRuntime-CW5l0g_i.d.mts                       30.61 kB │ gzip:   7.89 kB
+ℹ dist/Worker-lFkFV-3A.d.mts                             27.84 kB │ gzip:   3.41 kB
+ℹ dist/Agent-DhOXNAyG.d.mts                              22.89 kB │ gzip:   5.50 kB
+ℹ dist/Messaging-DF_IWnxV.d.mts                          12.20 kB │ gzip:   1.77 kB
+ℹ dist/Sandbox-CEsDWBLq.d.mts                            11.54 kB │ gzip:   2.63 kB
+ℹ dist/SubagentHost-BpDoeaok.d.mts                       10.32 kB │ gzip:   3.19 kB
+ℹ dist/FailureDiagnostic-DvHruCSJ.d.mts                  10.01 kB │ gzip:   1.75 kB
+ℹ dist/AgentError-CBH7_MjG.d.mts                          9.73 kB │ gzip:   2.16 kB
+ℹ dist/ContextCompactor-CWyRLaa8.d.mts                    9.69 kB │ gzip:   3.59 kB
+ℹ dist/RunContinuation-DpzqsNp6.d.mts                     9.53 kB │ gzip:   2.80 kB
+ℹ dist/Usage-CzZJ6A2n.d.mts                               8.51 kB │ gzip:   2.08 kB
+ℹ dist/SubagentContract-DdPzxYQj.d.mts                    8.43 kB │ gzip:   2.45 kB
+ℹ dist/Thread-CkSX8UtZ.d.mts                              8.14 kB │ gzip:   2.28 kB
+ℹ dist/ToolBroker-P5t4ZN78.d.mts                          7.73 kB │ gzip:   2.87 kB
+ℹ dist/AgentPolicy-DFSPEKr8.d.mts                         6.75 kB │ gzip:   1.94 kB
+ℹ dist/DurableStep-DXGn7KQ4.d.mts                         6.70 kB │ gzip:   2.57 kB
+ℹ dist/DurableFailpoint-BugHZKvJ.d.mts                    6.44 kB │ gzip:   1.56 kB
+ℹ dist/RunEventSink-shh6Qf9E.d.mts                        6.13 kB │ gzip:   1.92 kB
+ℹ dist/ToolReconciler-SrOHkvF8.d.mts                      5.79 kB │ gzip:   1.85 kB
+ℹ dist/RecordFormat-BzFqFXRz.d.mts                        5.56 kB │ gzip:   1.67 kB
+ℹ dist/MemoryReference-B8Q3UJoJ.d.mts                     4.69 kB │ gzip:   1.50 kB
+ℹ dist/OperationAuthorizer-TzcQtpX5.d.mts                 4.68 kB │ gzip:   1.57 kB
+ℹ dist/ToolResult-5SdG8FE2.d.mts                          4.28 kB │ gzip:   1.66 kB
+ℹ dist/ThreadHistory-C8CjWsHL.d.mts                       4.15 kB │ gzip:   1.65 kB
+ℹ dist/MessagingHost-DoQOQ-jz.d.mts                       4.03 kB │ gzip:   1.40 kB
+ℹ dist/WakeScheduler-5qSuoFcH.d.mts                       3.72 kB │ gzip:   1.59 kB
+ℹ dist/ContextWindow-Cvv8N9Xy.d.mts                       3.64 kB │ gzip:   1.29 kB
+ℹ dist/SubscriptionInput-BH4Pe3LQ.d.mts                   3.32 kB │ gzip:   1.10 kB
+ℹ dist/AgentUpdates-DksV4D0A.d.mts                        3.31 kB │ gzip:   1.22 kB
+ℹ dist/EventSource-CLTAa0r8.d.mts                         3.19 kB │ gzip:   1.11 kB
+ℹ dist/Digest-BnodHfO0.d.mts                              2.93 kB │ gzip:   1.01 kB
+ℹ dist/Identifiers-CN2s30fF.d.mts                         2.72 kB │ gzip:   0.82 kB
+ℹ dist/ToolExposure-jTheYXrK.d.mts                        2.62 kB │ gzip:   1.05 kB
+ℹ dist/Receipt-BkM21Qiu.d.mts                             2.20 kB │ gzip:   0.77 kB
+ℹ dist/MemoryNamespace-BbRW5p71.d.mts                     2.13 kB │ gzip:   0.79 kB
+ℹ dist/PreparedInputAdmission-CmcZWB7x.d.mts              2.09 kB │ gzip:   0.85 kB
+ℹ dist/ToolExposure-DFQKf9ET.d.mts                        1.82 kB │ gzip:   0.82 kB
+ℹ dist/RunPolicyUsage-QmYVw9z8.d.mts                      1.09 kB │ gzip:   0.54 kB
+ℹ dist/Output-CEDrZQ3U.d.mts                              1.02 kB │ gzip:   0.60 kB
+ℹ dist/run-context-reader-BN0_VtXD.d.mts                  1.02 kB │ gzip:   0.52 kB
+ℹ 441 files, total: 9.01 MB
+✔ Build complete in 2563ms
+
+~/packages/storage-memory$ vp pack ⊘ cache disabled
+~/packages/sandbox-local$ vp pack ⊘ cache disabled
+~/packages/storage-sql$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/SqlThreadImport.ts, src/SqlStorage.ts, src/SqlRunStorage.ts, src/SqlStorageFailpoint.ts, src/SqlStorageProgress.ts, src/SqlJournal.ts, src/SqlThreadArchiveRange.ts, src/SqlThreadStore.ts, src/SqlThreadWork.ts, src/SqlSubmissionLedger.ts, src/SqlAdmissionFacts.ts, src/SqlActivityStore.ts, src/SqlScheduleStore.ts, src/SqliteLayoutInspection.ts, src/SqlThreadNativeReads.ts, src/SqlMessageDeliveryStore.ts, src/SqlLifecyclePublication.ts, src/SqlSubscriptionStore.ts
+ℹ entry: src/index.ts, src/LocalSandbox.ts
+ℹ tsconfig: tsconfig.json
+ℹ tsconfig: tsconfig.json
+ℹ entry: src/index.ts, src/MemoryScheduleStore.ts, src/MemorySemanticIndex.ts, src/MemorySubmissionLedger.ts, src/MemorySubscriptionStore.ts, src/MemoryMessageDeliveryStore.ts, src/MemoryThreadStore.ts
+ℹ Build start
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ Emit types with typescript@7.0.2
+ℹ dist/LocalSandbox.mjs                7.86 kB │ gzip: 2.57 kB
+ℹ dist/index.mjs                       0.11 kB │ gzip: 0.08 kB
+ℹ dist/LocalSandbox.mjs.map           14.33 kB │ gzip: 4.20 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs   0.36 kB │ gzip: 0.26 kB
+ℹ dist/LocalSandbox.d.mts              1.13 kB │ gzip: 0.53 kB
+ℹ dist/index.d.mts                     0.12 kB │ gzip: 0.09 kB
+ℹ 6 files, total: 23.90 kB
+✔ Build complete in 195ms
+
+~/packages/pr-review$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/Review.ts, src/ReviewRepository.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ dist/MemorySubmissionLedger.mjs               94.50 kB │ gzip: 18.22 kB
+ℹ dist/MemoryThreadStore.mjs                    81.56 kB │ gzip: 17.92 kB
+ℹ dist/MemorySubscriptionStore.mjs              45.33 kB │ gzip:  7.79 kB
+ℹ dist/MemoryMessageDeliveryStore.mjs           25.61 kB │ gzip:  6.09 kB
+ℹ dist/MemorySemanticIndex.mjs                  10.69 kB │ gzip:  3.00 kB
+ℹ dist/MemoryScheduleStore.mjs                   8.94 kB │ gzip:  2.10 kB
+ℹ dist/index.mjs                                 0.84 kB │ gzip:  0.20 kB
+ℹ dist/MemorySubmissionLedger.mjs.map          203.84 kB │ gzip: 37.30 kB
+ℹ dist/MemoryThreadStore.mjs.map               164.76 kB │ gzip: 35.25 kB
+ℹ dist/MemorySubscriptionStore.mjs.map          91.55 kB │ gzip: 15.68 kB
+ℹ dist/MemoryMessageDeliveryStore.mjs.map       51.47 kB │ gzip: 11.46 kB
+ℹ dist/MemorySemanticIndex.mjs.map              19.85 kB │ gzip:  5.28 kB
+ℹ dist/MemoryScheduleStore.mjs.map              17.27 kB │ gzip:  3.94 kB
+ℹ dist/WorkSelection-CmqTuws3.mjs.map            7.93 kB │ gzip:  2.31 kB
+ℹ dist/WorkSelection-CmqTuws3.mjs                1.18 kB │ gzip:  0.60 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs             0.36 kB │ gzip:  0.26 kB
+ℹ dist/MemorySubmissionLedger.d.mts              1.77 kB │ gzip:  0.78 kB
+ℹ dist/MemorySemanticIndex.d.mts                 1.29 kB │ gzip:  0.57 kB
+ℹ dist/MemoryMessageDeliveryStore.d.mts          1.28 kB │ gzip:  0.51 kB
+ℹ dist/MemoryThreadStore.d.mts                   1.20 kB │ gzip:  0.51 kB
+ℹ dist/index.d.mts                               0.86 kB │ gzip:  0.20 kB
+ℹ dist/MemorySubscriptionStore.d.mts             0.48 kB │ gzip:  0.24 kB
+ℹ dist/MemoryScheduleStore.d.mts                 0.47 kB │ gzip:  0.22 kB
+ℹ dist/MemoryThreadStoreKernel-ii96DH8c.d.mts    5.98 kB │ gzip:  1.60 kB
+ℹ 24 files, total: 839.00 kB
+✔ Build complete in 396ms
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+
+~/packages/workflow$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/AgentWorkflow.ts, src/WorkflowAgentHost.ts, src/WorkflowDispatch.ts, src/WorkflowExecution.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/Review.mjs                       50.52 kB │ gzip: 15.63 kB
+ℹ dist/ReviewRepository.mjs              0.81 kB │ gzip:  0.34 kB
+ℹ dist/index.mjs                         0.21 kB │ gzip:  0.10 kB
+ℹ dist/Review.mjs.map                   78.17 kB │ gzip: 22.50 kB
+ℹ dist/repository-Bm45jHXp.mjs.map       9.46 kB │ gzip:  3.04 kB
+ℹ dist/repository-Bm45jHXp.mjs           5.87 kB │ gzip:  2.11 kB
+ℹ dist/ReviewRepository.mjs.map          0.38 kB │ gzip:  0.24 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs     0.36 kB │ gzip:  0.26 kB
+ℹ dist/Review.d.mts                     19.84 kB │ gzip:  4.45 kB
+ℹ dist/ReviewRepository.d.mts            0.30 kB │ gzip:  0.16 kB
+ℹ dist/index.d.mts                       0.22 kB │ gzip:  0.11 kB
+ℹ dist/ReviewRepository-BWQBv0Xp.d.mts   3.71 kB │ gzip:  1.01 kB
+ℹ 12 files, total: 169.85 kB
+✔ Build complete in 265ms
+
+ℹ dist/SqlSubmissionLedger.mjs                 125.30 kB │ gzip: 20.02 kB
+ℹ dist/SqlThreadImport.mjs                      65.40 kB │ gzip: 13.75 kB
+ℹ dist/SqlSubscriptionStore.mjs                 50.52 kB │ gzip:  8.72 kB
+ℹ dist/SqlThreadNativeReads.mjs                 48.99 kB │ gzip:  9.41 kB
+ℹ dist/SqlThreadArchiveRange.mjs                28.40 kB │ gzip:  6.17 kB
+ℹ dist/SqlLifecyclePublication.mjs              28.37 kB │ gzip:  6.65 kB
+ℹ dist/SqlJournal.mjs                           26.07 kB │ gzip:  5.17 kB
+ℹ dist/SqlMessageDeliveryStore.mjs              23.26 kB │ gzip:  5.74 kB
+ℹ dist/SqlThreadStore.mjs                       22.98 kB │ gzip:  5.38 kB
+ℹ dist/SqlRunStorage.mjs                        22.36 kB │ gzip:  5.29 kB
+ℹ dist/SqlActivityStore.mjs                     16.82 kB │ gzip:  3.73 kB
+ℹ dist/SqlScheduleStore.mjs                     13.88 kB │ gzip:  2.99 kB
+ℹ dist/SqlStorage.mjs                            4.72 kB │ gzip:  1.87 kB
+ℹ dist/SqliteLayoutInspection.mjs                4.23 kB │ gzip:  1.55 kB
+ℹ dist/SqlAdmissionFacts.mjs                     3.54 kB │ gzip:  1.15 kB
+ℹ dist/index.mjs                                 2.23 kB │ gzip:  0.43 kB
+ℹ dist/SqlStorageFailpoint.mjs                   1.95 kB │ gzip:  0.57 kB
+ℹ dist/SqlStorageProgress.mjs                    1.26 kB │ gzip:  0.64 kB
+ℹ dist/SqlThreadWork.mjs                         0.16 kB │ gzip:  0.11 kB
+ℹ dist/SqlSubmissionLedger.mjs.map             231.09 kB │ gzip: 39.78 kB
+ℹ dist/SqlThreadImport.mjs.map                 127.62 kB │ gzip: 25.66 kB
+ℹ dist/SqlSubscriptionStore.mjs.map             90.71 kB │ gzip: 16.32 kB
+ℹ dist/SqlThreadNativeReads.mjs.map             85.26 kB │ gzip: 17.39 kB
+ℹ dist/SqlThreadWork-thH2rt7E.mjs.map           68.27 kB │ gzip: 15.67 kB
+ℹ dist/SqlLifecyclePublication.mjs.map          54.18 kB │ gzip: 12.80 kB
+ℹ dist/SqlThreadArchiveRange.mjs.map            47.47 kB │ gzip: 10.72 kB
+ℹ dist/SqlJournal.mjs.map                       45.38 kB │ gzip:  9.54 kB
+ℹ dist/SqlRunStorage.mjs.map                    44.75 kB │ gzip: 10.39 kB
+ℹ dist/SqlThreadStore.mjs.map                   43.50 kB │ gzip: 10.04 kB
+ℹ dist/SqlMessageDeliveryStore.mjs.map          42.17 kB │ gzip: 10.42 kB
+ℹ dist/SqlThreadWork-thH2rt7E.mjs               38.55 kB │ gzip:  8.64 kB
+ℹ dist/SqlActivityStore.mjs.map                 29.30 kB │ gzip:  6.62 kB
+ℹ dist/SqlScheduleStore.mjs.map                 23.95 kB │ gzip:  5.34 kB
+ℹ dist/SqlStorage.mjs.map                       10.34 kB │ gzip:  3.43 kB
+ℹ dist/SqliteLayoutInspection.mjs.map            8.10 kB │ gzip:  2.81 kB
+ℹ dist/SqlAdmissionFacts.mjs.map                 6.49 kB │ gzip:  1.82 kB
+ℹ dist/SqlStorageFailpoint.mjs.map               2.31 kB │ gzip:  0.56 kB
+ℹ dist/sql-json-e2wWH7rg.mjs.map                 2.16 kB │ gzip:  0.90 kB
+ℹ dist/SqlStorageProgress.mjs.map                1.57 kB │ gzip:  0.82 kB
+ℹ dist/sql-json-e2wWH7rg.mjs                     1.00 kB │ gzip:  0.51 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs             0.36 kB │ gzip:  0.26 kB
+ℹ dist/SqlRunStorage.d.mts                      21.39 kB │ gzip:  3.00 kB
+ℹ dist/SqlSubmissionLedger.d.mts                16.46 kB │ gzip:  2.82 kB
+ℹ dist/SqlThreadStore.d.mts                      9.34 kB │ gzip:  1.93 kB
+ℹ dist/SqlSubscriptionStore.d.mts                5.56 kB │ gzip:  1.32 kB
+ℹ dist/SqlThreadArchiveRange.d.mts               4.73 kB │ gzip:  1.16 kB
+ℹ dist/SqlMessageDeliveryStore.d.mts             3.11 kB │ gzip:  1.07 kB
+ℹ dist/SqlAdmissionFacts.d.mts                   2.56 kB │ gzip:  0.75 kB
+ℹ dist/index.d.mts                               2.28 kB │ gzip:  0.46 kB
+ℹ dist/SqlThreadImport.d.mts                     2.27 kB │ gzip:  0.76 kB
+ℹ dist/SqlActivityStore.d.mts                    1.99 kB │ gzip:  0.65 kB
+ℹ dist/SqlThreadWork.d.mts                       1.96 kB │ gzip:  0.69 kB
+ℹ dist/SqliteLayoutInspection.d.mts              1.85 kB │ gzip:  0.70 kB
+ℹ dist/SqlScheduleStore.d.mts                    1.53 kB │ gzip:  0.54 kB
+ℹ dist/SqlStorageProgress.d.mts                  1.41 kB │ gzip:  0.65 kB
+ℹ dist/SqlStorage.d.mts                          0.52 kB │ gzip:  0.24 kB
+ℹ dist/SqlJournal.d.mts                          0.44 kB │ gzip:  0.21 kB
+ℹ dist/SqlThreadNativeReads.d.mts                0.42 kB │ gzip:  0.21 kB
+ℹ dist/SqlLifecyclePublication.d.mts             0.34 kB │ gzip:  0.16 kB
+ℹ dist/SqlStorageFailpoint.d.mts                 0.13 kB │ gzip:  0.10 kB
+ℹ dist/SqlJournal-elKV36Uc.d.mts                32.12 kB │ gzip:  4.66 kB
+ℹ dist/SqlStorage-B8ivKu4F.d.mts                 4.38 kB │ gzip:  1.56 kB
+ℹ dist/SqlLifecyclePublication-DQm0xr5V.d.mts    3.25 kB │ gzip:  1.27 kB
+ℹ dist/SqlStorageFailpoint-C3KlhpkX.d.mts        1.87 kB │ gzip:  0.54 kB
+ℹ 64 files, total: 1.61 MB
+✔ Build complete in 727ms
+
+~/packages/storage-postgres$ vp pack ⊘ cache disabled
+~/packages/storage-sqlite$ vp pack ⊘ cache disabled
+ℹ dist/WorkflowDispatch.mjs                 4.58 kB │ gzip: 1.54 kB
+ℹ dist/AgentWorkflow.mjs                    2.46 kB │ gzip: 1.02 kB
+ℹ dist/WorkflowExecution.mjs                0.96 kB │ gzip: 0.49 kB
+ℹ dist/index.mjs                            0.49 kB │ gzip: 0.17 kB
+ℹ dist/WorkflowAgentHost.mjs                0.28 kB │ gzip: 0.16 kB
+ℹ dist/WorkflowAgentHost-DTcWCdU2.mjs.map  32.55 kB │ gzip: 8.41 kB
+ℹ dist/WorkflowAgentHost-DTcWCdU2.mjs      16.27 kB │ gzip: 4.37 kB
+ℹ dist/WorkflowDispatch.mjs.map             6.09 kB │ gzip: 2.00 kB
+ℹ dist/AgentWorkflow.mjs.map                2.90 kB │ gzip: 1.12 kB
+ℹ dist/WorkflowExecution.mjs.map            1.59 kB │ gzip: 0.77 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip: 0.26 kB
+ℹ dist/WorkflowExecution.d.mts              6.21 kB │ gzip: 0.99 kB
+ℹ dist/WorkflowDispatch.d.mts               5.71 kB │ gzip: 1.61 kB
+ℹ dist/WorkflowAgentHost.d.mts              4.65 kB │ gzip: 1.48 kB
+ℹ dist/AgentWorkflow.d.mts                  3.11 kB │ gzip: 1.10 kB
+ℹ dist/index.d.mts                          0.49 kB │ gzip: 0.15 kB
+ℹ 16 files, total: 88.70 kB
+✔ Build complete in 235ms
+
+ℹ entry: src/index.ts, src/SqliteMessageDeliveryStore.ts, src/SqliteActivityStore.ts, src/SqliteScheduleStore.ts, src/SqliteStorageConfig.ts, src/SqliteStorageError.ts, src/SqliteStorageFailpoint.ts, src/SqliteStorageVersion.ts, src/SqliteSubmissionLedger.ts, src/SqliteSubscriptionStore.ts, src/SqliteThreadStore.ts
+ℹ entry: src/index.ts, src/PostgresStorage.ts, src/PostgresStorageError.ts
+ℹ tsconfig: tsconfig.json
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/PostgresStorageError.mjs            2.65 kB │ gzip:  0.89 kB
+ℹ dist/PostgresStorage.mjs                 0.54 kB │ gzip:  0.24 kB
+ℹ dist/index.mjs                           0.27 kB │ gzip:  0.12 kB
+ℹ dist/PostgresStorage-BgpVkmjj.mjs.map  136.30 kB │ gzip: 25.62 kB
+ℹ dist/PostgresStorage-BgpVkmjj.mjs       90.95 kB │ gzip: 16.77 kB
+ℹ dist/PostgresStorageError.mjs.map        3.34 kB │ gzip:  1.14 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs       0.36 kB │ gzip:  0.26 kB
+ℹ dist/PostgresStorageError.d.mts          6.25 kB │ gzip:  1.25 kB
+ℹ dist/PostgresStorage.d.mts               0.62 kB │ gzip:  0.26 kB
+ℹ dist/index.d.mts                         0.28 kB │ gzip:  0.12 kB
+ℹ dist/PostgresStorage-UQP9PVNN.d.mts      6.59 kB │ gzip:  1.57 kB
+ℹ 11 files, total: 248.14 kB
+✔ Build complete in 627ms
+
+ℹ dist/SqliteStorageError.mjs                4.46 kB │ gzip: 1.41 kB
+ℹ dist/SqliteSubmissionLedger.mjs            2.56 kB │ gzip: 0.98 kB
+ℹ dist/SqliteStorageConfig.mjs               2.25 kB │ gzip: 1.07 kB
+ℹ dist/index.mjs                             1.38 kB │ gzip: 0.28 kB
+ℹ dist/SqliteActivityStore.mjs               1.37 kB │ gzip: 0.53 kB
+ℹ dist/SqliteSubscriptionStore.mjs           1.17 kB │ gzip: 0.52 kB
+ℹ dist/SqliteMessageDeliveryStore.mjs        0.96 kB │ gzip: 0.44 kB
+ℹ dist/SqliteScheduleStore.mjs               0.94 kB │ gzip: 0.45 kB
+ℹ dist/SqliteStorageFailpoint.mjs            0.76 kB │ gzip: 0.41 kB
+ℹ dist/SqliteStorageVersion.mjs              0.43 kB │ gzip: 0.24 kB
+ℹ dist/SqliteThreadStore.mjs                 0.41 kB │ gzip: 0.20 kB
+ℹ dist/migrations-BgO7Oi6D.mjs.map          35.99 kB │ gzip: 6.63 kB
+ℹ dist/migrations-BgO7Oi6D.mjs              31.85 kB │ gzip: 5.31 kB
+ℹ dist/SqliteThreadStore-BGXZUJcH.mjs.map   24.11 kB │ gzip: 7.04 kB
+ℹ dist/SqliteThreadStore-BGXZUJcH.mjs       14.07 kB │ gzip: 4.37 kB
+ℹ dist/sqlite-journal-D32BDyU_.mjs.map      11.78 kB │ gzip: 3.53 kB
+ℹ dist/sqlite-journal-D32BDyU_.mjs           6.79 kB │ gzip: 2.08 kB
+ℹ dist/SqliteStorageError.mjs.map            5.43 kB │ gzip: 1.67 kB
+ℹ dist/SqliteSubmissionLedger.mjs.map        3.68 kB │ gzip: 1.32 kB
+ℹ dist/SqliteStorageConfig.mjs.map           2.54 kB │ gzip: 1.20 kB
+ℹ dist/SqliteSubscriptionStore.mjs.map       1.83 kB │ gzip: 0.75 kB
+ℹ dist/SqliteActivityStore.mjs.map           1.68 kB │ gzip: 0.66 kB
+ℹ dist/SqliteScheduleStore.mjs.map           1.30 kB │ gzip: 0.56 kB
+ℹ dist/SqliteStorageFailpoint.mjs.map        1.11 kB │ gzip: 0.53 kB
+ℹ dist/SqliteMessageDeliveryStore.mjs.map    0.97 kB │ gzip: 0.49 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs         0.36 kB │ gzip: 0.26 kB
+ℹ dist/SqliteStorageVersion.mjs.map          0.30 kB │ gzip: 0.21 kB
+ℹ dist/SqliteThreadStore.d.mts               6.87 kB │ gzip: 2.35 kB
+ℹ dist/SqliteStorageConfig.d.mts             2.06 kB │ gzip: 0.97 kB
+ℹ dist/SqliteSubmissionLedger.d.mts          1.49 kB │ gzip: 0.57 kB
+ℹ dist/index.d.mts                           1.43 kB │ gzip: 0.29 kB
+ℹ dist/SqliteActivityStore.d.mts             1.12 kB │ gzip: 0.40 kB
+ℹ dist/SqliteMessageDeliveryStore.d.mts      1.12 kB │ gzip: 0.43 kB
+ℹ dist/SqliteStorageFailpoint.d.mts          1.03 kB │ gzip: 0.44 kB
+ℹ dist/SqliteSubscriptionStore.d.mts         0.85 kB │ gzip: 0.33 kB
+ℹ dist/SqliteScheduleStore.d.mts             0.78 kB │ gzip: 0.33 kB
+ℹ dist/SqliteStorageError.d.mts              0.62 kB │ gzip: 0.23 kB
+ℹ dist/SqliteStorageVersion.d.mts            0.13 kB │ gzip: 0.10 kB
+ℹ dist/SqliteStorageError-1jp6wcmW.d.mts     7.14 kB │ gzip: 1.78 kB
+ℹ dist/SqliteStorageVersion-PHs6hg_Q.d.mts   0.45 kB │ gzip: 0.25 kB
+ℹ 40 files, total: 185.57 kB
+✔ Build complete in 643ms
+
+~/packages/platform-node$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/NodeDurableAgentRuntime.ts, src/NodeDurableHost.ts, src/NodeScheduling.ts, src/NodeSubscriptions.ts, src/NodeWakeScheduler.ts, src/NodeWorkflow.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+14:49:51 [content] Syncing content
+ℹ dist/NodeWorkflow.mjs                           7.97 kB │ gzip:  2.28 kB
+ℹ dist/NodeSubscriptions.mjs                      4.24 kB │ gzip:  1.45 kB
+ℹ dist/NodeWakeScheduler.mjs                      3.27 kB │ gzip:  1.39 kB
+ℹ dist/NodeScheduling.mjs                         3.27 kB │ gzip:  1.33 kB
+ℹ dist/index.mjs                                  0.64 kB │ gzip:  0.20 kB
+ℹ dist/NodeDurableAgentRuntime.mjs                0.37 kB │ gzip:  0.17 kB
+ℹ dist/NodeDurableHost.mjs                        0.17 kB │ gzip:  0.13 kB
+ℹ dist/NodeDurableAgentRuntime-ZKrALTTe.mjs.map  36.35 kB │ gzip:  9.39 kB
+ℹ dist/NodeDurableHost-CvoSuWNr.mjs.map          35.82 kB │ gzip: 10.20 kB
+ℹ dist/NodeDurableAgentRuntime-ZKrALTTe.mjs      17.64 kB │ gzip:  4.98 kB
+ℹ dist/NodeDurableHost-CvoSuWNr.mjs              15.12 kB │ gzip:  4.92 kB
+ℹ dist/NodeWorkflow.mjs.map                      13.30 kB │ gzip:  3.65 kB
+ℹ dist/NodeSubscriptions.mjs.map                  7.55 kB │ gzip:  2.40 kB
+ℹ dist/NodeScheduling.mjs.map                     5.84 kB │ gzip:  2.12 kB
+ℹ dist/NodeWakeScheduler.mjs.map                  5.34 kB │ gzip:  2.10 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs              0.36 kB │ gzip:  0.26 kB
+ℹ dist/NodeDurableHost.d.mts                     20.05 kB │ gzip:  4.22 kB
+ℹ dist/NodeSubscriptions.d.mts                    1.74 kB │ gzip:  0.60 kB
+ℹ dist/NodeWakeScheduler.d.mts                    1.59 kB │ gzip:  0.73 kB
+ℹ dist/NodeWorkflow.d.mts                         1.50 kB │ gzip:  0.69 kB
+ℹ dist/NodeScheduling.d.mts                       1.13 kB │ gzip:  0.50 kB
+ℹ dist/index.d.mts                                0.65 kB │ gzip:  0.19 kB
+ℹ dist/NodeDurableAgentRuntime.d.mts              0.60 kB │ gzip:  0.20 kB
+ℹ dist/NodeDurableAgentRuntime-Dy-2Jlm9.d.mts    17.75 kB │ gzip:  4.18 kB
+ℹ 24 files, total: 202.28 kB
+✔ Build complete in 864ms
+
+~/packages/testing$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/Certification.ts, src/Chaos.ts, src/CodeExecutorConformance.ts, src/CodeExecutorSubstitute.ts, src/DocsResearcher.ts, src/ScriptedModel.ts, src/TravelPlanner.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/TravelPlanner.mjs                       88.45 kB │ gzip: 21.27 kB
+ℹ dist/Chaos.mjs                               33.55 kB │ gzip:  9.51 kB
+ℹ dist/Certification.mjs                       27.70 kB │ gzip:  8.26 kB
+ℹ dist/DocsResearcher.mjs                      23.91 kB │ gzip:  7.07 kB
+ℹ dist/CodeExecutorConformance.mjs             14.43 kB │ gzip:  3.66 kB
+ℹ dist/CodeExecutorSubstitute.mjs              13.69 kB │ gzip:  4.09 kB
+ℹ dist/ScriptedModel.mjs                        6.82 kB │ gzip:  2.14 kB
+ℹ dist/index.mjs                                0.12 kB │ gzip:  0.09 kB
+ℹ dist/TravelPlanner.mjs.map                  149.23 kB │ gzip: 32.46 kB
+ℹ dist/Chaos.mjs.map                           65.09 kB │ gzip: 17.21 kB
+ℹ dist/Certification.mjs.map                   58.47 kB │ gzip: 16.55 kB
+ℹ dist/DocsResearcher.mjs.map                  44.01 kB │ gzip: 12.11 kB
+ℹ dist/deterministic-layers-BmRxLIws.mjs.map   34.19 kB │ gzip:  8.18 kB
+ℹ dist/CodeExecutorConformance.mjs.map         27.08 kB │ gzip:  6.51 kB
+ℹ dist/CodeExecutorSubstitute.mjs.map          26.20 kB │ gzip:  7.57 kB
+ℹ dist/deterministic-layers-BmRxLIws.mjs       18.36 kB │ gzip:  4.88 kB
+ℹ dist/ScriptedModel.mjs.map                   13.97 kB │ gzip:  4.01 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs            0.36 kB │ gzip:  0.26 kB
+ℹ dist/TravelPlanner.d.mts                     94.75 kB │ gzip: 15.58 kB
+ℹ dist/DocsResearcher.d.mts                    18.35 kB │ gzip:  4.21 kB
+ℹ dist/Chaos.d.mts                             10.22 kB │ gzip:  3.34 kB
+ℹ dist/Certification.d.mts                      7.31 kB │ gzip:  2.96 kB
+ℹ dist/CodeExecutorConformance.d.mts            1.72 kB │ gzip:  0.76 kB
+ℹ dist/CodeExecutorSubstitute.d.mts             1.00 kB │ gzip:  0.52 kB
+ℹ dist/ScriptedModel.d.mts                      0.54 kB │ gzip:  0.20 kB
+ℹ dist/index.d.mts                              0.13 kB │ gzip:  0.10 kB
+ℹ dist/ScriptedModel-8VUrTtr7.d.mts            12.97 kB │ gzip:  1.98 kB
+ℹ 27 files, total: 792.58 kB
+✔ Build complete in 721ms
+
+~/packages/storage-cloudflare$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/DoMessageDeliveryStore.ts, src/DoMemoryStore.ts, src/DoScheduleStore.ts, src/DoStorageConfig.ts, src/DoStorageError.ts, src/DoStorageFailpoint.ts, src/DoStorageVersion.ts, src/DoSubmissionLedger.ts, src/DoSubscriptionStore.ts, src/DoThreadStore.ts, src/MemoryProtocol.ts, src/PortProtocol.ts, src/PortRouting.ts, src/DoStorageFailpointTesting.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/DoSubmissionLedger.mjs             118.87 kB │ gzip: 20.30 kB
+ℹ dist/PortRouting.mjs                     50.94 kB │ gzip: 10.40 kB
+ℹ dist/PortProtocol.mjs                    23.57 kB │ gzip:  5.03 kB
+ℹ dist/DoScheduleStore.mjs                 18.79 kB │ gzip:  3.90 kB
+ℹ dist/DoSubscriptionStore.mjs             11.62 kB │ gzip:  2.69 kB
+ℹ dist/MemoryProtocol.mjs                  10.37 kB │ gzip:  2.78 kB
+ℹ dist/DoStorageError.mjs                   6.79 kB │ gzip:  2.12 kB
+ℹ dist/DoMemoryStore.mjs                    3.32 kB │ gzip:  1.20 kB
+ℹ dist/DoStorageConfig.mjs                  2.89 kB │ gzip:  1.36 kB
+ℹ dist/DoMessageDeliveryStore.mjs           1.93 kB │ gzip:  0.78 kB
+ℹ dist/index.mjs                            1.52 kB │ gzip:  0.32 kB
+ℹ dist/DoStorageFailpointTesting.mjs        1.27 kB │ gzip:  0.71 kB
+ℹ dist/DoStorageFailpoint.mjs               0.75 kB │ gzip:  0.41 kB
+ℹ dist/DoStorageVersion.mjs                 0.40 kB │ gzip:  0.24 kB
+ℹ dist/DoThreadStore.mjs                    0.38 kB │ gzip:  0.19 kB
+ℹ dist/DoSubmissionLedger.mjs.map         222.12 kB │ gzip: 40.33 kB
+ℹ dist/PortRouting.mjs.map                 96.50 kB │ gzip: 18.06 kB
+ℹ dist/do-journal-Dc4l3A_L.mjs.map         77.61 kB │ gzip: 18.22 kB
+ℹ dist/DoThreadStore-CEjDpGZN.mjs.map      44.71 kB │ gzip: 10.97 kB
+ℹ dist/do-journal-Dc4l3A_L.mjs             41.31 kB │ gzip:  9.65 kB
+ℹ dist/migrations-BRSsG4zX.mjs.map         32.36 kB │ gzip:  6.15 kB
+ℹ dist/DoScheduleStore.mjs.map             31.66 kB │ gzip:  6.89 kB
+ℹ dist/PortProtocol.mjs.map                29.43 kB │ gzip:  6.11 kB
+ℹ dist/migrations-BRSsG4zX.mjs             28.42 kB │ gzip:  4.91 kB
+ℹ dist/DoThreadStore-CEjDpGZN.mjs          24.25 kB │ gzip:  6.17 kB
+ℹ dist/MemoryProtocol.mjs.map              17.58 kB │ gzip:  4.57 kB
+ℹ dist/DoSubscriptionStore.mjs.map         17.38 kB │ gzip:  4.26 kB
+ℹ dist/owned-state-DZgV9l10.mjs.map        11.69 kB │ gzip:  3.94 kB
+ℹ dist/DoStorageError.mjs.map               8.44 kB │ gzip:  2.53 kB
+ℹ dist/owned-state-DZgV9l10.mjs             5.54 kB │ gzip:  2.14 kB
+ℹ dist/DoMemoryStore.mjs.map                4.48 kB │ gzip:  1.58 kB
+ℹ dist/DoStorageConfig.mjs.map              3.15 kB │ gzip:  1.50 kB
+ℹ dist/DoStorageFailpointTesting.mjs.map    2.52 kB │ gzip:  1.16 kB
+ℹ dist/DoMessageDeliveryStore.mjs.map       2.38 kB │ gzip:  0.96 kB
+ℹ dist/DoStorageFailpoint.mjs.map           1.07 kB │ gzip:  0.54 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs        0.36 kB │ gzip:  0.26 kB
+ℹ dist/DoStorageVersion.mjs.map             0.29 kB │ gzip:  0.20 kB
+ℹ dist/MemoryProtocol.d.mts                 2.58 MB
+ℹ dist/PortProtocol.d.mts                 442.34 kB │ gzip: 38.15 kB
+ℹ dist/PortRouting.d.mts                    8.69 kB │ gzip:  2.88 kB
+ℹ dist/DoStorageConfig.d.mts                2.50 kB │ gzip:  1.20 kB
+ℹ dist/DoScheduleStore.d.mts                2.45 kB │ gzip:  0.92 kB
+ℹ dist/DoMemoryStore.d.mts                  2.44 kB │ gzip:  0.84 kB
+ℹ dist/DoSubscriptionStore.d.mts            1.98 kB │ gzip:  0.63 kB
+ℹ dist/index.d.mts                          1.59 kB │ gzip:  0.34 kB
+ℹ dist/DoStorageFailpointTesting.d.mts      1.54 kB │ gzip:  0.77 kB
+ℹ dist/DoSubmissionLedger.d.mts             1.49 kB │ gzip:  0.62 kB
+ℹ dist/DoMessageDeliveryStore.d.mts         1.16 kB │ gzip:  0.48 kB
+ℹ dist/DoStorageFailpoint.d.mts             0.98 kB │ gzip:  0.45 kB
+ℹ dist/DoStorageError.d.mts                 0.54 kB │ gzip:  0.23 kB
+ℹ dist/DoThreadStore.d.mts                  0.42 kB │ gzip:  0.21 kB
+ℹ dist/DoStorageVersion.d.mts               0.12 kB │ gzip:  0.09 kB
+ℹ dist/DoStorageError-MskZRxCC.d.mts        9.25 kB │ gzip:  2.16 kB
+ℹ dist/DoThreadStore-CHix3tIq.d.mts         5.02 kB │ gzip:  1.89 kB
+ℹ dist/DoStorageVersion-31lKFz3o.d.mts      0.42 kB │ gzip:  0.25 kB
+ℹ 55 files, total: 4.02 MB
+✔ Build complete in 2179ms
+
+~/packages/platform-cloudflare$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts, src/Alarm.ts, src/BrowserRestCapture.ts, src/BrowserRestCrawl.ts, src/CloudflareBindings.ts, src/CloudflareAiGateway.ts, src/CloudflareBrowser.ts, src/CloudflareCodeMode.ts, src/CloudflareConfig.ts, src/CloudflareMemory.ts, src/CloudflareScheduling.ts, src/CloudflareSubscriptions.ts, src/CloudflareThreadClient.ts, src/InteractiveBrowser.ts, src/BrowserSession.ts, src/BrowserUse.ts, src/BrowserCredentials.ts, src/ThreadObject.ts, src/WakeScheduler.ts
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
+ℹ dist/CloudflareSubscriptions.mjs               28.43 kB │ gzip:  6.04 kB
+ℹ dist/CloudflareCodeMode.mjs                    24.30 kB │ gzip:  6.80 kB
+ℹ dist/CloudflareScheduling.mjs                  19.44 kB │ gzip:  4.56 kB
+ℹ dist/BrowserRestCrawl.mjs                      13.13 kB │ gzip:  4.00 kB
+ℹ dist/BrowserRestCapture.mjs                    12.94 kB │ gzip:  3.71 kB
+ℹ dist/CloudflareMemory.mjs                      11.97 kB │ gzip:  3.42 kB
+ℹ dist/CloudflareConfig.mjs                       7.13 kB │ gzip:  2.52 kB
+ℹ dist/CloudflareBindings.mjs                     5.81 kB │ gzip:  2.13 kB
+ℹ dist/BrowserCredentials.mjs                     5.22 kB │ gzip:  1.82 kB
+ℹ dist/CloudflareAiGateway.mjs                    4.45 kB │ gzip:  1.89 kB
+ℹ dist/WakeScheduler.mjs                          3.64 kB │ gzip:  1.52 kB
+ℹ dist/CloudflareThreadClient.mjs                 1.95 kB │ gzip:  0.53 kB
+ℹ dist/index.mjs                                  1.84 kB │ gzip:  0.41 kB
+ℹ dist/InteractiveBrowser.mjs                     1.16 kB │ gzip:  0.34 kB
+ℹ dist/ThreadObject.mjs                           1.03 kB │ gzip:  0.39 kB
+ℹ dist/Alarm.mjs                                  0.69 kB │ gzip:  0.27 kB
+ℹ dist/BrowserSession.mjs                         0.62 kB │ gzip:  0.23 kB
+ℹ dist/CloudflareBrowser.mjs                      0.62 kB │ gzip:  0.21 kB
+ℹ dist/BrowserUse.mjs                             0.07 kB │ gzip:  0.08 kB
+ℹ dist/InteractiveBrowser-LdKzQeLR.mjs.map      208.96 kB │ gzip: 44.81 kB
+ℹ dist/Alarm-BFjyv3-O.mjs.map                   200.05 kB │ gzip: 46.62 kB
+ℹ dist/BrowserUse-AstK0jKX.mjs.map              144.48 kB │ gzip: 33.18 kB
+ℹ dist/ThreadObject-DNWAjD3Q.mjs.map            138.48 kB │ gzip: 30.76 kB
+ℹ dist/InteractiveBrowser-LdKzQeLR.mjs           99.11 kB │ gzip: 21.75 kB
+ℹ dist/Alarm-BFjyv3-O.mjs                        92.50 kB │ gzip: 21.52 kB
+ℹ dist/BrowserUse-AstK0jKX.mjs                   69.23 kB │ gzip: 16.32 kB
+ℹ dist/ThreadObject-DNWAjD3Q.mjs                 61.23 kB │ gzip: 14.65 kB
+ℹ dist/BrowserSession-BfNmyayH.mjs.map           60.20 kB │ gzip: 14.62 kB
+ℹ dist/CloudflareSubscriptions.mjs.map           53.43 kB │ gzip: 11.00 kB
+ℹ dist/CloudflareThreadClient-DF0Drn_j.mjs.map   44.60 kB │ gzip: 10.16 kB
+ℹ dist/CloudflareBrowser-Vt8qTdYW.mjs.map        43.80 kB │ gzip: 10.70 kB
+ℹ dist/CloudflareCodeMode.mjs.map                41.07 kB │ gzip: 10.83 kB
+ℹ dist/CloudflareScheduling.mjs.map              37.42 kB │ gzip:  8.37 kB
+ℹ dist/BrowserSession-BfNmyayH.mjs               28.08 kB │ gzip:  7.46 kB
+ℹ dist/BrowserRestCrawl.mjs.map                  27.52 kB │ gzip:  7.49 kB
+ℹ dist/CloudflareThreadClient-DF0Drn_j.mjs       25.09 kB │ gzip:  6.09 kB
+ℹ dist/BrowserRestCapture.mjs.map                24.43 kB │ gzip:  6.56 kB
+ℹ dist/CloudflareBrowser-Vt8qTdYW.mjs            24.27 kB │ gzip:  6.19 kB
+ℹ dist/CloudflareMemory.mjs.map                  20.98 kB │ gzip:  5.56 kB
+ℹ dist/CloudflareBindings.mjs.map                11.49 kB │ gzip:  3.90 kB
+ℹ dist/CloudflareAiGateway.mjs.map                8.65 kB │ gzip:  3.16 kB
+ℹ dist/CloudflareConfig.mjs.map                   8.28 kB │ gzip:  3.03 kB
+ℹ dist/BrowserCredentials.mjs.map                 7.42 kB │ gzip:  2.45 kB
+ℹ dist/prepared-admission-DLPJz5bd.mjs.map        7.39 kB │ gzip:  1.96 kB
+ℹ dist/WakeScheduler.mjs.map                      5.37 kB │ gzip:  2.09 kB
+ℹ dist/prepared-admission-DLPJz5bd.mjs            4.22 kB │ gzip:  1.19 kB
+ℹ dist/boundary-BguazVkh.mjs.map                  2.98 kB │ gzip:  1.16 kB
+ℹ dist/boundary-BguazVkh.mjs                      1.76 kB │ gzip:  0.73 kB
+ℹ dist/page-function-CmUCcyNP.mjs.map             0.88 kB │ gzip:  0.54 kB
+ℹ dist/page-function-CmUCcyNP.mjs                 0.62 kB │ gzip:  0.39 kB
+ℹ dist/rolldown-runtime-D7D4PA-g.mjs              0.36 kB │ gzip:  0.26 kB
+ℹ dist/CloudflareThreadClient.d.mts              91.65 kB │ gzip: 12.19 kB
+ℹ dist/Alarm.d.mts                               19.24 kB │ gzip:  6.14 kB
+ℹ dist/CloudflareMemory.d.mts                    11.90 kB │ gzip:  1.87 kB
+ℹ dist/CloudflareBindings.d.mts                   7.84 kB │ gzip:  2.62 kB
+ℹ dist/CloudflareSubscriptions.d.mts              7.74 kB │ gzip:  1.90 kB
+ℹ dist/BrowserUse.d.mts                           4.51 kB │ gzip:  1.55 kB
+ℹ dist/CloudflareScheduling.d.mts                 4.16 kB │ gzip:  1.27 kB
+ℹ dist/CloudflareAiGateway.d.mts                  3.25 kB │ gzip:  1.36 kB
+ℹ dist/CloudflareCodeMode.d.mts                   2.63 kB │ gzip:  1.14 kB
+ℹ dist/BrowserRestCapture.d.mts                   2.19 kB │ gzip:  0.85 kB
+ℹ dist/InteractiveBrowser.d.mts                   1.90 kB │ gzip:  0.46 kB
+ℹ dist/index.d.mts                                1.89 kB │ gzip:  0.40 kB
+ℹ dist/ThreadObject.d.mts                         1.62 kB │ gzip:  0.55 kB
+ℹ dist/WakeScheduler.d.mts                        1.27 kB │ gzip:  0.66 kB
+ℹ dist/BrowserRestCrawl.d.mts                     0.92 kB │ gzip:  0.46 kB
+ℹ dist/CloudflareBrowser.d.mts                    0.90 kB │ gzip:  0.26 kB
+ℹ dist/BrowserCredentials.d.mts                   0.72 kB │ gzip:  0.25 kB
+ℹ dist/BrowserSession.d.mts                       0.67 kB │ gzip:  0.23 kB
+ℹ dist/CloudflareConfig.d.mts                     0.64 kB │ gzip:  0.26 kB
+ℹ dist/ThreadObject-QRLn1xvD.d.mts               69.31 kB │ gzip: 12.26 kB
+ℹ dist/InteractiveBrowser-wV2Bti5e.d.mts         15.65 kB │ gzip:  3.92 kB
+ℹ dist/BrowserSession-Bx0V1-6_.d.mts             10.20 kB │ gzip:  3.08 kB
+ℹ dist/BrowserCredentials-C5IWfi7f.d.mts          6.53 kB │ gzip:  1.70 kB
+ℹ dist/CloudflareConfig-qDrRLofL.d.mts            6.47 kB │ gzip:  2.18 kB
+ℹ dist/CloudflareBrowser-gu7gma0Y.d.mts           6.35 kB │ gzip:  1.71 kB
+ℹ 76 files, total: 1.93 MB
+src/CloudflareCodeMode.ts (21:26) [33m[UNRESOLVED_IMPORT] [0mCould not resolve 'cloudflare:workers' in src/CloudflareCodeMode.ts
+    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/CloudflareCodeMode.ts:21:27 [38;5;246m][0m
+    [38;5;246m│[0m
+ [38;5;246m21 │[0m [38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mR[0m[38;5;249mp[0m[38;5;249mc[0m[38;5;249mT[0m[38;5;249ma[0m[38;5;249mr[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mm[0m[38;5;249m [0m"cloudflare:workers"[38;5;249m;[0m
+ [38;5;240m   │[0m                           ──────────┬─────────  
+ [38;5;240m   │[0m                                     ╰─────────── Module not found, treating it as an external dependency
+[38;5;246m────╯[0m
+
+✔ Build complete in 1248ms
+
+~/tooling/browser-run-worker-proof$ wrangler deploy --dry-run ⊘ cache disabled
+~/examples/travel-planner$ vp build ⊘ cache disabled
+~/tooling/cloudflare-memory$ wrangler deploy --dry-run ⊘ cache disabled
+
+ ⛅️ wrangler 4.123.0 (update available 4.149.0)
+───────────────────────────────────────────────
+
+ ⛅️ wrangler 4.123.0 (update available 4.149.0)
+───────────────────────────────────────────────
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+transforming...
+Total Upload: 3552.31 KiB / gzip: 671.65 KiB
+Total Upload: 3563.94 KiB / gzip: 666.55 KiB
+Your Worker has access to the following bindings:
+Binding                             Resource            
+env.MEMORIES (ProjectMemory)        Durable Object      
+env.THREADS (BenchmarkThread)       Durable Object      
+
+--dry-run: exiting now.
+Your Worker has access to the following bindings:
+Binding                          Resource            
+env.CHECKOUTS (CheckoutRun)      Durable Object      
+env.BROWSER                      Browser Run         
+
+--dry-run: exiting now.
+
+~/tooling/context-continuity-eval$ bun src/build-cloudflare.ts ⊘ cache disabled
+
+~/examples/browser-speed$ vp build ⊘ cache disabled
+✓ 2835 modules transformed.
+rendering chunks...
+transforming...
+computing gzip size...
+dist/client/assets/mark-ink-CBmPjGUD.svg                        7.94 kB │ gzip:   3.38 kB
+dist/client/assets/mark-paper-aZXfDCM7.svg                      7.94 kB │ gzip:   3.38 kB
+dist/client/assets/lockup-agent-ink-BTULrOFk.svg               12.86 kB │ gzip:   4.99 kB
+dist/client/assets/lockup-agent-paper-CjJfELS0.svg             12.86 kB │ gzip:   4.99 kB
+dist/client/assets/styles-4X03tepE.css                         68.56 kB │ gzip:  15.40 kB
+dist/client/assets/mermaid-GHXKKRXX-BreNRHRG.js                 0.08 kB │ gzip:   0.09 kB
+dist/client/assets/login-C1KhIM4n.js                            0.24 kB │ gzip:   0.19 kB
+dist/client/assets/auth.github.callback-7OQMZSRB.js             0.26 kB │ gzip:   0.19 kB
+dist/client/assets/auth.yielded.callback-7OQMZSRB.js            0.26 kB │ gzip:   0.19 kB
+dist/client/assets/highlighted-body-OFNGDK62-CS5u-bt6.js        0.54 kB │ gzip:   0.36 kB
+dist/client/assets/createLucideIcon-C2cojhec.js                 1.38 kB │ gzip:   0.77 kB
+dist/client/assets/preload-helper--jrEtEZY.js                   4.76 kB │ gzip:   1.93 kB
+dist/client/assets/login-H8jWS_Iq.js                            7.54 kB │ gzip:   2.94 kB
+dist/client/assets/jsx-runtime-B-hcVAMW.js                      8.55 kB │ gzip:   3.26 kB
+dist/client/assets/client-CAs3O-Ei.js                         258.07 kB │ gzip:  82.04 kB
+dist/client/assets/index-D-enBbdc.js                          310.03 kB │ gzip:  98.25 kB
+dist/client/assets/conversations._conversationId-z9PUZe66.js  678.67 kB │ gzip: 210.53 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 680ms
+transforming...
+✓ 2095 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/browser-use/index.html                                                      1.05 kB │ gzip:   0.59 kB
+dist/browser-use/assets/ibm-plex-mono-vietnamese-400-normal-DDuiU_S-.woff        5.62 kB
+dist/browser-use/assets/ibm-plex-mono-cyrillic-ext-400-normal-DMdlQ8Kv.woff      5.82 kB
+dist/browser-use/assets/ibm-plex-mono-vietnamese-400-normal-BulugwFq.woff2       5.86 kB
+dist/browser-use/assets/ibm-plex-mono-cyrillic-ext-400-normal-xuaO2J-f.woff2     6.91 kB
+dist/browser-use/assets/ibm-plex-mono-cyrillic-400-normal-CEL4l2ZJ.woff          7.20 kB
+dist/browser-use/assets/ibm-plex-mono-cyrillic-400-normal-BSMlKf0J.woff2         8.35 kB
+dist/browser-use/assets/ibm-plex-mono-latin-ext-400-normal-D3D2R8hC.woff        11.76 kB
+dist/browser-use/assets/ibm-plex-mono-latin-400-normal-CvHOgSBP.woff            13.14 kB
+dist/browser-use/assets/ibm-plex-sans-vietnamese-wght-normal-Dg1JeJN0.woff2     13.16 kB
+dist/browser-use/assets/ibm-plex-mono-latin-ext-400-normal-BmRBH3aV.woff2       13.34 kB
+dist/browser-use/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2           14.70 kB
+dist/browser-use/assets/ibm-plex-sans-greek-wght-normal-CmyJS8uq.woff2          19.50 kB
+dist/browser-use/assets/ibm-plex-sans-cyrillic-ext-wght-normal-d45eAU9y.woff2   23.56 kB
+dist/browser-use/assets/ibm-plex-sans-cyrillic-wght-normal-BAAhND-U.woff2       29.51 kB
+dist/browser-use/assets/ibm-plex-sans-latin-ext-wght-normal-CIII54If.woff2      30.96 kB
+dist/browser-use/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2          45.71 kB
+dist/browser-use/assets/index-CQhzGkFw.css                                      21.48 kB │ gzip:   5.27 kB
+dist/browser-use/assets/index-VCThBjxv.js                                      436.64 kB │ gzip: 139.28 kB
+
+✓ built in 287ms
+
+~/examples/browser-speed$ wrangler deploy --dry-run ⊘ cache disabled
+✓ 3426 modules transformed.
+rendering chunks...
+computing gzip size...
+
+ ⛅️ wrangler 4.123.0 (update available 4.149.0)
+───────────────────────────────────────────────
+dist/server/assets/mark-ink-CBmPjGUD.svg                          7.94 kB │ gzip:     3.38 kB
+dist/server/assets/mark-paper-aZXfDCM7.svg                        7.94 kB │ gzip:     3.38 kB
+dist/server/assets/lockup-agent-ink-BTULrOFk.svg                 12.86 kB │ gzip:     4.99 kB
+dist/server/assets/lockup-agent-paper-CjJfELS0.svg               12.86 kB │ gzip:     4.99 kB
+dist/server/assets/styles-4X03tepE.css                           68.56 kB │ gzip:    15.40 kB
+dist/server/assets/start-s5UpS6Bw.js                              0.21 kB │ gzip:     0.17 kB
+dist/server/assets/empty-plugin-adapters-CiDmhLOz.js              0.30 kB │ gzip:     0.20 kB
+dist/server/assets/login-BJDT5tMb.js                              0.47 kB │ gzip:     0.27 kB
+dist/server/assets/auth.github.callback-BMmOfuDr.js               0.48 kB │ gzip:     0.28 kB
+dist/server/assets/auth.yielded.callback-Dl9YCrxk.js              0.49 kB │ gzip:     0.28 kB
+dist/server/assets/conversations._conversationId-D7A5RmUl.js      0.85 kB │ gzip:     0.39 kB
+dist/server/assets/_tanstack-start-manifest_v-CaftlUQg.js         1.86 kB │ gzip:     0.56 kB
+dist/server/assets/login-BdoPV79G.js                              9.44 kB │ gzip:     2.37 kB
+dist/server/assets/ClientOnly-BPBSM1Az.js                        20.66 kB │ gzip:     5.77 kB
+dist/server/assets/router-BdCKDeKd.js                           152.03 kB │ gzip:    37.75 kB
+dist/server/assets/domain-BuUbjpBu.js                           173.96 kB │ gzip:    43.36 kB
+dist/server/assets/contract-5XUPP9zp.js                       1,339.33 kB │ gzip:   291.07 kB
+dist/server/worker.js                                         7,177.71 kB │ gzip: 1,566.91 kB
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mMultiple environments are defined in the Wrangler configuration file, but no target environment was specified for the deploy command.[0m
+
+  To avoid unintentional changes to the wrong environment, it is recommended to explicitly specify the target environment using the `-e|--env` flag or CLOUDFLARE_ENV env variable.
+  If your intention is to use the top-level environment of your configuration simply pass an empty string to the flag to target such environment. For example `--env=""`.
+
+
+✓ built in 842ms
+
+
+✨ Read 21 files from the assets directory /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/examples/browser-speed/dist
+Total Upload: 4052.04 KiB / gzip: 774.87 KiB
+Your Worker has access to the following bindings:
+Binding                       Resource            
+env.LAB (BrowserLab)          Durable Object      
+env.BROWSER                   Browser Run         
+env.ASSETS                    Assets              
+
+--dry-run: exiting now.
+
+14:50:42 [content] Synced content
+14:50:42 [types] Generated 52.13s
+14:50:42 [build] output: "static"
+14:50:42 [build] mode: "static"
+14:50:42 [build] directory: /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/docs/dist/
+14:50:42 [build] Collecting build info...
+14:50:42 [build] ✓ Completed in 52.33s.
+14:50:42 [build] Building static entrypoints...
+14:50:43 [vite] ✓ built in 680ms
+14:50:44 [WARN] [vite] [plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+14:50:44 [vite] ✓ built in 481ms
+14:50:44 [build] Rearranging server assets...
+
+ generating static routes 
+14:50:44 [WARN] [content] The collection "i18n" does not exist or is empty. Please check your content config file for errors.
+14:50:44   ├─ /404.html14:50:44 [WARN] [content] Entry docs → 404 was not found.
+ (+40ms) 
+14:50:44   ├─ /concepts/index.html (+4ms) 
+14:50:44   ├─ /concepts/budgets/index.html (+2ms) 
+14:50:44   ├─ /concepts/durability/index.html (+2ms) 
+14:50:44   ├─ /concepts/runtime-model/index.html (+2ms) 
+14:50:44   ├─ /guide/index.html (+2ms) 
+14:50:44   ├─ /guide/agents/index.html (+3ms) 
+14:50:44   ├─ /guide/browser/index.html (+6ms) 
+14:50:44   ├─ /guide/certify-adapters/index.html (+2ms) 
+14:50:44   ├─ /guide/code-mode/index.html (+4ms) 
+14:50:44   ├─ /guide/context-management/index.html (+6ms) 
+14:50:44   ├─ /guide/getting-started/index.html (+2ms) 
+14:50:44   ├─ /guide/introduction/index.html (+2ms) 
+14:50:44   ├─ /guide/messaging/index.html (+2ms) 
+14:50:44   ├─ /guide/migration/index.html (+2ms) 
+14:50:44   ├─ /guide/operations/index.html (+2ms) 
+14:50:44   ├─ /guide/run-agents/index.html (+2ms) 
+14:50:44   ├─ /guide/sandbox/index.html (+2ms) 
+14:50:44   ├─ /guide/subagents/index.html (+2ms) 
+14:50:44   ├─ /guide/subagents/background/index.html (+4ms) 
+14:50:44   ├─ /guide/subagents/durable-attached/index.html (+14ms) 
+14:50:44   ├─ /guide/subagents/in-memory-attached/index.html (+4ms) 
+14:50:44   ├─ /guide/testing/index.html (+2ms) 
+14:50:44   ├─ /guide/threads/index.html (+2ms) 
+14:50:44   ├─ /guide/tools/index.html (+6ms) 
+14:50:44   ├─ /guide/workflows/index.html (+3ms) 
+14:50:44   ├─ /index.html (+2ms) 
+14:50:44   ├─ /platforms/index.html (+1ms) 
+14:50:44   ├─ /platforms/cloudflare/index.html (+7ms) 
+14:50:44   ├─ /platforms/node/index.html (+3ms) 
+14:50:44   ├─ /reference/index.html (+2ms) 
+14:50:44   ├─ /reference/decision-models/index.html (+4ms) 
+14:50:44   ├─ /reference/packages/index.html (+3ms) 
+14:50:44   ├─ /reference/subagents/index.html (+4ms) 
+14:50:44   ├─ /storage/index.html (+5ms) 
+14:50:44   ├─ /storage/cloudflare/index.html (+3ms) 
+14:50:44   ├─ /storage/memory/index.html (+3ms) 
+14:50:44   ├─ /storage/postgres/index.html (+3ms) 
+14:50:44   ├─ /storage/sqlite/index.html (+3ms) 
+14:50:44 ✓ Completed in 412ms.
+
+14:50:44 [build] ✓ Completed in 1.63s.
+14:50:44 [starlight:pagefind] Building search index with Pagefind...
+14:50:45 [starlight:pagefind] Found 39 HTML files.
+14:50:45 [starlight:pagefind] Finished building search index in 1.45s.
+14:50:47 [@yielded/starlight-theme/link-previews] Rendered 1 link preview images.
+
+ validating links 
+
+╭─                             ─╮
+· All internal links are valid. ·
+╰─                             ─╯
+
+14:50:47 [@astrojs/sitemap] `sitemap-index.xml` created at `dist`
+14:50:48 [build] 39 page(s) built in 57.97s
+14:50:48 [build] Complete!
+
+$ bun scripts/build-action.ts ⊘ cache disabled
+Bundled packages/pr-review-action/src/action-entry.ts -> action/dist/index.mjs (2130714 bytes).
+
+---
+vp run: 0/71 cache hit (0%). (Run `vp run --last-details` for full details)
+Finished: 2026-10-08T21:50:50Z
+Gate exit: 0

@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-10-08T22:16:57.624Z",
+  "namespaceIdentityValuesRemoved": 2,
+  "filesScannedIncludingGzip": 112,
+  "changed": [
+    "alchemy/prod-path-1b0a1de4-primary-deploy.log"
+  ],
+  "rawValuesRetained": false,
+  "controlPlaneWorkerIdentityPathsRedacted": true,
+  "timingReceiptsChanged": false
+}

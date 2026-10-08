@@ -1,0 +1,23 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[15:07:10.995] INFO (#1): Destroy · prod-path-1b0a1de4-primary
+[15:07:10.996] INFO (#1): Importing stack module
+[15:07:12.875] INFO (#1): Resolving stack services
+[15:07:12.905] INFO (#1): Loading stack state
+[15:07:12.910] INFO (#1): Computing plan
+[15:07:12.913] INFO (#1): Plan ready (1.9s)
+[15:07:12.914] INFO (#1): Plan: 1 to delete, 7 binding changes
+[15:07:12.914] INFO (#1): [prod-path-worker] delete
+[15:07:12.914] INFO (#1): [prod-path-worker/PHASE] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/PI] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/PROVIDER_URL] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/TOKEN] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/UPLOAD_REVISION] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/VERSION] unbind
+[15:07:12.914] INFO (#1): [prod-path-worker/YIELDED] unbind
+[15:07:12.914] INFO (#1): 
+[15:07:12.916] INFO (#321): [prod-path-worker] deleting
+[15:07:12.917] INFO (#321): Cloudflare Worker delete: deleting prod-path-1b0a1de4-primary
+[15:07:12.918] INFO (#322): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[15:07:13.675] INFO (#321): [prod-path-worker] deleted (759ms)
+[15:07:13.676] INFO (#1): 
+[15:07:13.676] INFO (#1): Done: 1 succeeded (762ms)

@@ -1,0 +1,10 @@
+{"time":"2026-10-08T20:46:40.954Z","version":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","arch":"arm64","kind":"sandboxed diagnostics"}
+{"name":"empty","sample":0,"milliseconds":281.222625,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"empty","sample":1,"milliseconds":276.296958,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"empty","sample":2,"milliseconds":279.693583,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"allowlisted","sample":0,"milliseconds":279.43554200000005,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"allowlisted","sample":1,"milliseconds":282.6226670000001,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"allowlisted","sample":2,"milliseconds":276.911208,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"inherited","sample":0,"milliseconds":275.312416,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"inherited","sample":1,"milliseconds":275.714416,"status":0,"signal":null,"stdout":"started","stderr":""}
+{"name":"inherited","sample":2,"milliseconds":277.9262910000002,"status":0,"signal":null,"stdout":"started","stderr":""}

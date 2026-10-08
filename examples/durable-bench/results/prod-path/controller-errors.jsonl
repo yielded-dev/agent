@@ -1,0 +1,5 @@
+{"action":"deploy","at":1791491170994,"message":"Error: Cloudflare workers/workers/[redacted-worker-id]/versions/0c1aa109-5fdc-4094-9e43-50f16ef4bd38: 500 non-JSON gateway response; ray a477e108be9ced3b-SJC"}
+{"action":"metadata","at":1791491236294,"message":"Error: Cloudflare workers/workers/[redacted-worker-id]/versions/0c1aa109-5fdc-4094-9e43-50f16ef4bd38: 500 non-JSON gateway response; ray a477e2a0fc09d5f2-SJC"}
+{"action":"measure-pilot","at":1791491509120,"message":"Error: Worker primary /run returned 500"}
+{"action":"measure","at":1791492746572,"message":"Error: Warm incarnation changed"}
+{"action":"measure-resume","at":1791493569442,"message":"Error: Worker primary /run returned 500"}

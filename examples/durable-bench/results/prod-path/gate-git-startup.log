@@ -1,0 +1,5 @@
+{"time":"2026-10-08T20:53:03.295Z","node":"v24.21.0","execPath":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","kind":"isolated git startup, inherited environment"}
+{"sample":0,"milliseconds":257.201292,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"sample":1,"milliseconds":257.240667,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"sample":2,"milliseconds":260.412416,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}
+{"sample":3,"milliseconds":255.68174999999997,"status":0,"signal":null,"stdout":"git version 2.55.0\n","stderr":""}

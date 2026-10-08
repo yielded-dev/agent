@@ -1,0 +1,35 @@
+{
+  "startedAt": 1791495267963,
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "priorDirectory": "/private/tmp/prod-path-pCQR2l",
+  "priorDirectoryMissing": true,
+  "tokenRotated": true,
+  "interrupted": {
+    "framework": "yielded",
+    "history": 250,
+    "ttftMs": 400,
+    "index": 0,
+    "object": "prod-path-main-h250-d400-o0",
+    "sample": "m9",
+    "variant": "production",
+    "state": "warm"
+  },
+  "noRetry": true,
+  "stacks": [
+    {
+      "worker": "prod-path-1b0a1de4-provider",
+      "bundleSha256": "bdd1c364a83bd996c30b46fee81f79ad9ca18a641709f81ece29d8ff3e4fd2ae",
+      "namespaceIdentityDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "namespacesUnchanged": true,
+      "verifiedAt": 1791495282966
+    },
+    {
+      "worker": "prod-path-1b0a1de4-primary",
+      "bundleSha256": "7fd3fdb53317a96f7afa7217d247f03a1449e73490f211ac320cc209095c068a",
+      "namespaceIdentityDigest": "ff92abca84f6bb15f75a0a15154fc690c9398f183b9e31c3824ae79eb1400b5b",
+      "namespacesUnchanged": true,
+      "verifiedAt": 1791495290558
+    }
+  ],
+  "completedAt": 1791495291296
+}

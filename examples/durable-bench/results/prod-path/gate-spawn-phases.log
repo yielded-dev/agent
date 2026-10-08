@@ -1,0 +1,9 @@
+{"time":"2026-10-08T20:53:38.663Z","node":"v24.21.0","uv":"1.52.1"}
+{"command":"git","phase":"spawn-returned","milliseconds":2.4864169999999994}
+{"command":"git","phase":"spawn-event","milliseconds":2.6149590000000025}
+{"command":"git","phase":"stdout","milliseconds":257.727959,"now":1791492818922,"data":"git version 2.55.0\n"}
+{"command":"git","phase":"close","milliseconds":258.328417,"code":0,"signal":null}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","phase":"spawn-returned","milliseconds":0.5643340000000308}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","phase":"spawn-event","milliseconds":0.607167000000004}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","phase":"stdout","milliseconds":275.03658400000006,"now":1791492819198,"data":"1791492819197"}
+{"command":"/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node","phase":"close","milliseconds":277.10524999999996,"code":0,"signal":null}

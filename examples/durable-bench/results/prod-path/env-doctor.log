@@ -1,0 +1,51 @@
+Installation
+  ✓ Bin dir           ~/.vite-plus/bin
+  ✓ Data dir          ~/.vite-plus
+  ✓ Cache dir         ~/.vite-plus/cache
+  ✓ Config dir        ~/.vite-plus
+  ✓ State dir         ~/.vite-plus
+  ✓ Shims             node, npm, npx, pnpm, pnpx, pn, pnx, yarn, yarnpkg, bun, bunx, vpx, vpr
+
+Configuration
+  ✓ Node.js           managed mode
+  ✓ npm               system-first mode
+  ✓ pnpm              system-first mode
+  ✓ Yarn              managed mode
+  ✓ Bun               system-first mode
+  ✓ IDE integration   env sourced in ~/.zshenv
+
+PATH
+  ✓ vp                ~/.vite-plus/bin/vp
+  ✓ Shim dir          ~/.vite-plus/bin
+  ✓ node              ~/.vite-plus/bin/node (vp shim)
+  ✓ npm               ~/.nvm/versions/node/v24.16.0/bin/npm (system)
+  ✓ npx               ~/.nvm/versions/node/v24.16.0/bin/npx (system)
+  ✓ pnpm              ~/.nvm/versions/node/v24.16.0/bin/pnpm (system)
+  ✓ pnpx              ~/.nvm/versions/node/v24.16.0/bin/pnpx (system)
+  ✓ pn                /opt/homebrew/bin/pn (system)
+  ✓ pnx               /opt/homebrew/bin/pnx (system)
+  ✓ yarn              ~/.vite-plus/bin/yarn (vp shim)
+  ✓ yarnpkg           ~/.vite-plus/bin/yarnpkg (vp shim)
+  ✓ bun               /opt/homebrew/bin/bun (system)
+  ✓ bunx              /opt/homebrew/bin/bunx (system)
+  ✓ vpx               ~/.vite-plus/bin/vpx (vp shim)
+  ✓ vpr               ~/.vite-plus/bin/vpr (vp shim)
+
+Node.js Resolution
+    Directory         /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path
+    Source            /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/package.json (engines.node)
+    Version           24.21.0
+  ✓ Node binary       installed
+
+Package Manager Resolution
+    Source            system PATH
+    Version           bun@1.4.2
+  ✓ PM binary         /opt/homebrew/bin/bun
+
+Conflicts
+  ⚠ nvm               detected (NVM_DIR is set)
+  ⚠ volta             detected (VOLTA_HOME is set)
+  note: Consider removing other version managers from your PATH
+  note: to avoid version conflicts.
+
+✓ All checks passed

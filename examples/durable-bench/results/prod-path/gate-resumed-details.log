@@ -1,0 +1,139 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   43 tasks • 0 cache hits • 0 cache misses • 43 cache disabled • 4 failed
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] effect-agent-monorepo#check: $ vp check ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [2] @yielded/agent-docs#check: ~/docs$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [3] @yielded/agent-ai-decision#check: ~/packages/ai-decision$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [4] @yielded/agent#check: ~/packages/effect-agent$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [5] @yielded/agent-storage-sql#check: ~/packages/storage-sql$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [6] @yielded/agent-storage-memory#check: ~/packages/storage-memory$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [7] @yielded/agent-sandbox-local#check: ~/packages/sandbox-local$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [8] @yielded/agent-pr-review#check: ~/packages/pr-review$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [9] @yielded/agent-storage-postgres#check: ~/packages/storage-postgres$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [10] @yielded/agent-storage-sqlite#check: ~/packages/storage-sqlite$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [11] @yielded/agent-workflow#check: ~/packages/workflow$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [12] @yielded/agent-pr-review-action#check: ~/packages/pr-review-action$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [13] @yielded/agent-example-semantic-memory-eval#check: ~/tooling/semantic-memory-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [14] @yielded/agent-platform-node#check: ~/packages/platform-node$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [15] @yielded/agent-testing#check: ~/packages/testing$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [16] @yielded/agent-example-pr-review-eval#check: ~/tooling/pr-review-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [17] @yielded/agent-example-runtime-benchmark#check: ~/tooling/runtime-benchmark$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [18] @yielded/agent-storage-cloudflare#check: ~/packages/storage-cloudflare$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [19] @yielded/agent-platform-cloudflare#check: ~/packages/platform-cloudflare$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [20] @yielded/agent-example-browser-run-worker-proof#check: ~/tooling/browser-run-worker-proof$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [21] @yielded/agent-example-travel-planner#check: ~/examples/travel-planner$ tsc --noEmit ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [22] @yielded/agent-example-cloudflare-memory#check: ~/tooling/cloudflare-memory$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [23] @yielded/agent-example-context-continuity-eval#check: ~/tooling/context-continuity-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [24] @yielded/agent-example-browser-speed#check: ~/examples/browser-speed$ tsc --noEmit -p tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [25] effect-agent-monorepo#check: $ tsc --noEmit -p scripts/tsconfig.json ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [26] effect-agent-monorepo#check:exports: $ bun scripts/verify-package-exports.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [27] effect-agent-monorepo#check:record-format: $ bun scripts/verify-record-format.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [28] effect-agent-monorepo#check:deploy: $ bun scripts/check-deployment.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [29] effect-agent-monorepo#check: $ bun scripts/verify-package-purity.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [30] @yielded/agent-storage-sql#test: ~/packages/storage-sql$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [31] @yielded/agent-sandbox-local#test: ~/packages/sandbox-local$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [32] @yielded/agent-pr-review-action#test: ~/packages/pr-review-action$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [33] @yielded/agent-storage-sqlite#test: ~/packages/storage-sqlite$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [34] @yielded/agent-example-cloudflare-memory#test: ~/tooling/cloudflare-memory$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [35] @yielded/agent-storage-cloudflare#test: ~/packages/storage-cloudflare$ vitest run ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [36] @yielded/agent-storage-memory#test: ~/packages/storage-memory$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [37] @yielded/agent#test: ~/packages/effect-agent$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [38] @yielded/agent-example-runtime-benchmark#test: ~/tooling/runtime-benchmark$ vp test ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [39] @yielded/agent-example-pr-review-eval#test: ~/tooling/pr-review-eval$ vp test ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [40] @yielded/agent-testing#test: ~/packages/testing$ vp test --passWithNoTests ✗ (exit code: 1)
+      → Cache disabled in task configuration
+  ·······················································
+  [41] @yielded/agent-example-context-continuity-eval#test: ~/tooling/context-continuity-eval$ vitest run ✗ (exit code: 137)
+      → Cache disabled in task configuration
+  ·······················································
+  [42] @yielded/agent-platform-node#test: ~/packages/platform-node$ vp test --passWithNoTests ✗ (exit code: 137)
+      → Cache disabled in task configuration
+  ·······················································
+  [43] @yielded/agent-platform-cloudflare#test: ~/packages/platform-cloudflare$ vitest run ✗ (exit code: 137)
+      → Cache disabled in task configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

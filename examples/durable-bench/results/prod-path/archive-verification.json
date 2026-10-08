@@ -1,0 +1,123 @@
+{
+  "checkedAt": "2026-10-08T22:22:56.055Z",
+  "passed": true,
+  "scope": "Gzip inputs replayed through both reducers into private output directories; statistics, per-turn joins, tables and failure inventories equal the published reduction. Only generation time and input archive descriptors may change.",
+  "commands": [
+    "vp node examples/durable-bench/results/prod-path/analyze.mjs --out-dir <private-main>",
+    "vp node examples/durable-bench/results/prod-path/analyze-attribution.mjs --out-dir <private-attribution>"
+  ],
+  "checks": [
+    {
+      "file": "summary.json",
+      "equivalent": true,
+      "ignoredFields": [
+        "generatedAt",
+        "inputs"
+      ],
+      "priorSha256": "dbee17786c8c1e1540241ef69a28257ce38a15e6794101840a2e6d14efccb6d2",
+      "reproducedSha256": "b95b9f2feb41b74e5cbcd2027cec762dd626df7abee5fc915fac94bf96a665f1"
+    },
+    {
+      "file": "failed-outcomes.json",
+      "equivalent": true,
+      "ignoredFields": [],
+      "priorSha256": "676e5c919a779c902fe2d418d948976a3c19f11b87f59376270d4bdcc4f405a9",
+      "reproducedSha256": "676e5c919a779c902fe2d418d948976a3c19f11b87f59376270d4bdcc4f405a9"
+    },
+    {
+      "file": "turns.jsonl",
+      "equivalent": true,
+      "ignoredFields": [],
+      "priorSha256": "9e1501acb1797fca188a7010e9a222b993e2632589fe4cd070841934eebc71ba",
+      "reproducedSha256": "9e1501acb1797fca188a7010e9a222b993e2632589fe4cd070841934eebc71ba"
+    },
+    {
+      "file": "tables.md",
+      "equivalent": true,
+      "ignoredFields": [],
+      "priorSha256": "42aae706234250ccf3d521abaa9d4fb34ae6730018d200d8f3831f4712a03196",
+      "reproducedSha256": "42aae706234250ccf3d521abaa9d4fb34ae6730018d200d8f3831f4712a03196"
+    },
+    {
+      "file": "attribution/summary.json",
+      "equivalent": true,
+      "ignoredFields": [
+        "inputs"
+      ],
+      "priorSha256": "e19ac757b5082fb57499071ffbea2793aab70cd47b22560543a1c8d7fb39352c",
+      "reproducedSha256": "74c0e2e0308fc7cbae3644d28dd8c91c0dd2716b5f6e7238d3e7400508dfeeea"
+    },
+    {
+      "file": "attribution/turns.jsonl",
+      "equivalent": true,
+      "ignoredFields": [],
+      "priorSha256": "1556e1334d8fb00e38d50b1ebdce138875540234547a59025da22e870a4cedf1",
+      "reproducedSha256": "1556e1334d8fb00e38d50b1ebdce138875540234547a59025da22e870a4cedf1"
+    },
+    {
+      "file": "attribution/tables.md",
+      "equivalent": true,
+      "ignoredFields": [],
+      "priorSha256": "c00ae76ce03da68fe3a2b4361f8477859471ddab039485af8dc26443d73cd64c",
+      "reproducedSha256": "c00ae76ce03da68fe3a2b4361f8477859471ddab039485af8dc26443d73cd64c"
+    }
+  ],
+  "archives": [
+    {
+      "path": "telemetry-primary.json.gz",
+      "originalBytes": 39883540,
+      "compressedBytes": 2055647,
+      "originalSha256": "042946d50740665bcd41f9bd0b1c96b6f47c9955b834f2f8826566544cfcd1fe",
+      "sha256": "d2f1b7096a505b1502bac1add5bcff02c70481eedbfb2489d603166f424bc76b",
+      "roundTripVerified": true
+    },
+    {
+      "path": "telemetry-provider.json.gz",
+      "originalBytes": 37702794,
+      "compressedBytes": 1806859,
+      "originalSha256": "2bd44605ff0c14a19c2f5564631425e1af765b5b9870ba6fad99d055b632b7de",
+      "sha256": "b1b6b18d7710258abad149692bfb8c1746374374a2a05987970789273b5a442b",
+      "roundTripVerified": true
+    },
+    {
+      "path": "requests.jsonl.gz",
+      "originalBytes": 23652976,
+      "compressedBytes": 1811818,
+      "originalSha256": "228d4447b6d6e99a37ede7998aed01ef5840a0b8f656828af75ad6b5183e5d13",
+      "sha256": "c41a9cac3bb27706e9cb846e9dccea7f43d5651505c7d59c15cb153861b178a5",
+      "roundTripVerified": true
+    },
+    {
+      "path": "attempted.jsonl.gz",
+      "originalBytes": 1065463,
+      "compressedBytes": 35373,
+      "originalSha256": "2d0c0e5f8e888c9f56d016d1b0f594e8510f5b9c04be3b279cf8a093e89c0f59",
+      "sha256": "2220bfd5dc4b93579e41867dcd14d7a68b13dbb78644433add2549ba79d684e4",
+      "roundTripVerified": true
+    },
+    {
+      "path": "summary.json.gz",
+      "originalBytes": 12351237,
+      "compressedBytes": 721657,
+      "originalSha256": "b95b9f2feb41b74e5cbcd2027cec762dd626df7abee5fc915fac94bf96a665f1",
+      "sha256": "0d01d7b47ba6e898d7021ede472bfbda379c4a3abc2e17f20533f0bea850c304",
+      "roundTripVerified": true
+    },
+    {
+      "path": "failed-outcomes.json.gz",
+      "originalBytes": 2559365,
+      "compressedBytes": 229984,
+      "originalSha256": "676e5c919a779c902fe2d418d948976a3c19f11b87f59376270d4bdcc4f405a9",
+      "sha256": "467eb51f3807246ba88fc0fe3403282e82dc34307eedb626e1cf3035630a9b55",
+      "roundTripVerified": true
+    },
+    {
+      "path": "turns.jsonl.gz",
+      "originalBytes": 12372188,
+      "compressedBytes": 1306984,
+      "originalSha256": "9e1501acb1797fca188a7010e9a222b993e2632589fe4cd070841934eebc71ba",
+      "sha256": "2fa8f39347d1cab8ff30bd4133d485a87bb9ecb1ceefecfe2e730533aecb7633",
+      "roundTripVerified": true
+    }
+  ]
+}

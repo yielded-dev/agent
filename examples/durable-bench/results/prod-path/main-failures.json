@@ -1,0 +1,42 @@
+[
+  {
+    "framework": "pi",
+    "history": 50,
+    "ttftMs": 400,
+    "index": 0,
+    "object": "prod-path-main-h50-d400-o0",
+    "sample": "m4",
+    "variant": "inline",
+    "state": "warm",
+    "at": 1791492746571,
+    "error": "Error: Warm incarnation changed",
+    "noRetry": true
+  },
+  {
+    "framework": "pi",
+    "history": 50,
+    "ttftMs": 400,
+    "index": 3,
+    "object": "prod-path-main-h50-d400-o3",
+    "sample": "m0",
+    "variant": "inline",
+    "state": "cold",
+    "at": 1791493569439,
+    "error": "Error: Worker primary /run returned 500",
+    "noRetry": true
+  },
+  {
+    "framework": "yielded",
+    "history": 250,
+    "ttftMs": 400,
+    "index": 0,
+    "object": "prod-path-main-h250-d400-o0",
+    "sample": "m9",
+    "variant": "production",
+    "state": "warm",
+    "at": 1791495267937,
+    "startedAt": 1791494869575,
+    "error": "Controller interrupted by host shutdown; request outcome unknown",
+    "noRetry": true
+  }
+]

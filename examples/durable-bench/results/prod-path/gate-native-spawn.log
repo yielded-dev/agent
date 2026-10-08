@@ -1,0 +1,7 @@
+{"time": "2026-10-08T20:57:17.730465+00:00", "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]", "executable": "/opt/homebrew/opt/python@3.14/bin/python3.14"}
+{"command": ["git", "--version"], "sample": 0, "milliseconds": 256.04199996450916, "returncode": 0, "stdout": "git version 2.55.0\n", "stderr": ""}
+{"command": ["git", "--version"], "sample": 1, "milliseconds": 255.6949169957079, "returncode": 0, "stdout": "git version 2.55.0\n", "stderr": ""}
+{"command": ["git", "--version"], "sample": 2, "milliseconds": 255.6080420035869, "returncode": 0, "stdout": "git version 2.55.0\n", "stderr": ""}
+{"command": ["/usr/bin/true"], "sample": 0, "milliseconds": 256.48537499364465, "returncode": 0, "stdout": "", "stderr": ""}
+{"command": ["/usr/bin/true"], "sample": 1, "milliseconds": 257.5985000003129, "returncode": 0, "stdout": "", "stderr": ""}
+{"command": ["/usr/bin/true"], "sample": 2, "milliseconds": 254.44666703697294, "returncode": 0, "stdout": "", "stderr": ""}

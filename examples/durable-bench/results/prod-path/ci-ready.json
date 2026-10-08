@@ -1,0 +1,116 @@
+{
+  "checkedAt": "2026-10-08T21:24:09.923Z",
+  "pr": "https://github.com/yielded-dev/agent/pull/821",
+  "head": "ed48f9291ca3b129cb7eb38340c32c4b5fad52c1",
+  "localGatePassed": true,
+  "checks": [
+    {
+      "link": "https://github.com/yielded-dev/agent/runs/113547896369",
+      "name": "Effect Agent review",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113547712058",
+      "name": "ready",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113547713995",
+      "name": "Publish Action",
+      "state": "SKIPPED"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156819",
+      "name": "Tests (runtime-benchmark)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156652",
+      "name": "Tests (testing)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156706",
+      "name": "Tests (storage-cloudflare)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156728",
+      "name": "Tests (platform-node)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546157473",
+      "name": "Tests (storage-postgres-16)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156610",
+      "name": "Tests (context-continuity)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156301",
+      "name": "Static checks",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156787",
+      "name": "Tests (travel-planner)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156771",
+      "name": "Tests (workspace)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156715",
+      "name": "Tests (storage-postgres-18)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156798",
+      "name": "Tests (platform-cloudflare)",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156358",
+      "name": "Build",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546156969",
+      "name": "Release gates",
+      "state": "SKIPPED"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546157938",
+      "name": "Build docs",
+      "state": "SKIPPED"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546158041",
+      "name": "Verify release equivalence",
+      "state": "SKIPPED"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845760770/job/113546103978",
+      "name": "Compare consumer bundles",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yielded-dev/agent/actions/runs/37845761473/job/113546105600",
+      "name": "Select required checks",
+      "state": "SUCCESS"
+    }
+  ],
+  "localGateReceipt": "gate-resumed-receipt.json",
+  "localGateSummary": "Full uncached vp run ready: 71 tasks; 1187 tests passed, 10 skipped, zero failures. Existing local PostgreSQL admin database selected through documented environment variable; no framework/test changes.",
+  "priorLocalFailuresRetained": [
+    "ready-bounded-workers.log",
+    "gate-pr-review-isolated.log",
+    "ready-resumed.log",
+    "gate-resumed-pg-ready.log"
+  ]
+}

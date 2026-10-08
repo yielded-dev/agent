@@ -1,0 +1,74 @@
+[
+  {
+    "key": "yielded/prod-path-attribution-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496564729,
+    "databaseBytes": 2805760
+  },
+  {
+    "key": "yielded/prod-path-attribution-h50-d0-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496564924,
+    "databaseBytes": 2805760
+  },
+  {
+    "key": "yielded/prod-path-attribution-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496571095,
+    "databaseBytes": 2830336
+  },
+  {
+    "key": "yielded/prod-path-attribution-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496572229,
+    "databaseBytes": 2801664
+  },
+  {
+    "key": "yielded/prod-path-attribution-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496575480,
+    "databaseBytes": 2822144
+  },
+  {
+    "key": "yielded/prod-path-attribution-h50-d400-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791496577571,
+    "databaseBytes": 2822144
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496605543,
+    "databaseBytes": 11055104
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d0-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496612075,
+    "databaseBytes": 11067392
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496612237,
+    "databaseBytes": 11083776
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496650157,
+    "databaseBytes": 11190272
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496664094,
+    "databaseBytes": 11194368
+  },
+  {
+    "key": "yielded/prod-path-attribution-h250-d400-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791496669441,
+    "databaseBytes": 11218944
+  }
+]

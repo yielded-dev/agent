@@ -1,0 +1,7 @@
+{"time": "2026-10-08T21:00:24.547224+00:00", "diskPoliciesBefore": {"process": 0, "thread": 0, "darwinBackground": 4}}
+{"scope": 0, "setNormalResult": 0, "errno": 0, "policyAfter": 0}
+{"scope": 1, "setNormalResult": 0, "errno": 0, "policyAfter": 0}
+{"scope": 2, "setNormalResult": -1, "errno": 22, "policyAfter": 4}
+{"sample": 0, "milliseconds": 252.53241701284423, "returncode": 0}
+{"sample": 1, "milliseconds": 253.56841704342514, "returncode": 0}
+{"sample": 2, "milliseconds": 256.7949579679407, "returncode": 0}

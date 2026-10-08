@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "command": "vp run --no-cache ready",
+  "exitCode": 0,
+  "startedAt": "2026-10-08T21:45:55Z",
+  "finishedAt": "2026-10-08T21:50:50Z",
+  "durationSeconds": 295,
+  "environment": {
+    "EFFECT_AGENT_TEST_POSTGRES_URL": "postgres://dan@localhost:5432/postgres",
+    "NODE_OPTIONS": "--require=/Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/examples/durable-bench/results/prod-path/validation-env.cjs"
+  },
+  "runtime": {
+    "node": "v24.21.0",
+    "postgres": "18.6 (Homebrew)"
+  },
+  "validationEnvSha256": "354a5212a291bc26c87fd9f5e56e74cf26c97071178083ec1302907bc8ecb0a8",
+  "tasks": {
+    "passed": 71,
+    "failed": 0,
+    "cacheHits": 0,
+    "cacheDisabled": 71
+  },
+  "tests": {
+    "filesPassed": 204,
+    "passed": 1187,
+    "failed": 0,
+    "skipped": 10
+  },
+  "remainingTestFixtureDatabases": 0,
+  "scope": "Process-local test environment and gate artifacts only; no framework/test edits, filtering, timeout changes, or database/role/service provisioning.",
+  "evidenceDirectory": "examples/durable-bench/results/prod-path",
+  "logs": {
+    "ready": "gate-resumed-local-pg-ready.log",
+    "taskDetails": "gate-resumed-local-pg-details.log",
+    "postgresBefore": "gate-resumed-pg-local-admin-check.log",
+    "postgresAfter": "gate-resumed-pg-cleanup-check.log"
+  },
+  "readyLogSha256": "6f89e863131c375219bbadc302160af7599365cbbf492d730870aad9a73d00b0",
+  "preservedFailureLogs": {
+    "ready-resumed.log": "d96f7bec19e5346ff030c9c46a608361a62c7315be38811d3ebba230eff8b5d8",
+    "gate-resumed-pg-ready.log": "ed710bd427d6e9614f073cc0c0395142b29d727148189a9bfceca182aa516605"
+  }
+}

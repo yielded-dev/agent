@@ -1,0 +1,19 @@
+Recorded: 2026-10-08T21:04:53Z
+validation-env syntax exit: 0
+8310fef853c7c421fe9d6f74220b1c2c971bcc85a110a47a90df822e393ceea5  package.json
+47be8285c046f43c50e4374a5b4bd40cb82ea56d351d787060e9138aab6004ac  vite.config.ts
+cc3f07fea7e4a5848b7684aec68b87444c7ac553f458e17b5c4fea9db9680613  packages/sandbox-local/src/LocalSandbox.ts
+b1ac30031f3f1558738bce7f4a845e62cbef33c91daa3c518f5737b193a09798  packages/sandbox-local/test/local-sandbox.test.ts
+6eaa2cc37479e9ba04155e5d82fa2c0ad6ba8709e2c43cd315a06b7854778436  packages/sandbox-local/vite.config.ts
+e8caf90454e25e8ad407e0f8d5d0a303a2e1564559d1db7398afb0d8c5a1c461  examples/durable-bench/results/prod-path/ready-initial-failed.log
+d5d95c04be84f208a7790f561ebb80466403b0b94c5e27c8aa9b8cbc3eb489d7  examples/durable-bench/results/prod-path/ready.log
+354a5212a291bc26c87fd9f5e56e74cf26c97071178083ec1302907bc8ecb0a8  examples/durable-bench/results/prod-path/validation-env.cjs
+ M bun.lock
+ M examples/durable-bench/README.md
+ M examples/durable-bench/bench/chart.ts
+ M examples/durable-bench/bench/results.ts
+ M examples/durable-bench/bench/run.ts
+ M examples/durable-bench/bench/targets.ts
+ M examples/durable-bench/package.json
+ M examples/durable-bench/src/yielded.ts
+?? examples/durable-bench/src/yielded-inline.ts

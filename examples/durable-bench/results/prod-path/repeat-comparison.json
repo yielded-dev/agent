@@ -1,0 +1,422 @@
+{
+  "generatedAt": "2026-10-08T22:01:16.942Z",
+  "unit": "same-Object medians and untrimmed repeated-turn ranges",
+  "noise": [
+    {
+      "condition": "h50/d0/warm",
+      "pairedDelta": {
+        "n": 7,
+        "missing": 0,
+        "median": -732.5,
+        "q1": -839.25,
+        "q3": -475.75,
+        "min": -1371,
+        "max": -279.5,
+        "range": 1091.5
+      },
+      "productionRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 277,
+        "q1": 107,
+        "q3": 412.5,
+        "min": 10,
+        "max": 1265,
+        "range": 1255
+      },
+      "inlineRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 535,
+        "q1": 323.5,
+        "q3": 863.5,
+        "min": 79,
+        "max": 1317,
+        "range": 1238
+      },
+      "piRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 189,
+        "q1": 99.5,
+        "q3": 249.5,
+        "min": 86,
+        "max": 780,
+        "range": 694
+      },
+      "negativePairs": 7,
+      "exceedsBothRepeatRanges": 2,
+      "nonOverlappingRepeats": 2,
+      "rows": [
+        {
+          "object": "prod-path-main-h50-d0-o0",
+          "deltaMs": -732.5,
+          "productionRepeatRangeMs": 290,
+          "inlineRepeatRangeMs": 1075,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h50-d0-o1",
+          "deltaMs": -819.5,
+          "productionRepeatRangeMs": 21,
+          "inlineRepeatRangeMs": 1317,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h50-d0-o2",
+          "deltaMs": -279.5,
+          "productionRepeatRangeMs": 535,
+          "inlineRepeatRangeMs": 535,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h50-d0-o3",
+          "deltaMs": -1371,
+          "productionRepeatRangeMs": 10,
+          "inlineRepeatRangeMs": 79,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d0-o4",
+          "deltaMs": -357,
+          "productionRepeatRangeMs": 277,
+          "inlineRepeatRangeMs": 495,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h50-d0-o5",
+          "deltaMs": -594.5,
+          "productionRepeatRangeMs": 193,
+          "inlineRepeatRangeMs": 152,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d0-o6",
+          "deltaMs": -859,
+          "productionRepeatRangeMs": 1265,
+          "inlineRepeatRangeMs": 652,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        }
+      ]
+    },
+    {
+      "condition": "h50/d400/warm",
+      "pairedDelta": {
+        "n": 7,
+        "missing": 0,
+        "median": -773,
+        "q1": -1034,
+        "q3": -563.5,
+        "min": -1337,
+        "max": -253.5,
+        "range": 1083.5
+      },
+      "productionRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 209,
+        "q1": 170.5,
+        "q3": 492,
+        "min": 100,
+        "max": 3150,
+        "range": 3050
+      },
+      "inlineRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 400,
+        "q1": 301,
+        "q3": 526.5,
+        "min": 73,
+        "max": 953,
+        "range": 880
+      },
+      "piRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 129,
+        "q1": 61.5,
+        "q3": 169,
+        "min": 56,
+        "max": 185,
+        "range": 129
+      },
+      "negativePairs": 7,
+      "exceedsBothRepeatRanges": 6,
+      "nonOverlappingRepeats": 6,
+      "rows": [
+        {
+          "object": "prod-path-main-r1-h50-d400-o0",
+          "deltaMs": -1337,
+          "productionRepeatRangeMs": 485,
+          "inlineRepeatRangeMs": 953,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d400-o1",
+          "deltaMs": -571.5,
+          "productionRepeatRangeMs": 138,
+          "inlineRepeatRangeMs": 214,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d400-o2",
+          "deltaMs": -1045,
+          "productionRepeatRangeMs": 499,
+          "inlineRepeatRangeMs": 639,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-r2-h50-d400-o3",
+          "deltaMs": -555.5,
+          "productionRepeatRangeMs": 203,
+          "inlineRepeatRangeMs": 414,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d400-o4",
+          "deltaMs": -253.5,
+          "productionRepeatRangeMs": 3150,
+          "inlineRepeatRangeMs": 400,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h50-d400-o5",
+          "deltaMs": -773,
+          "productionRepeatRangeMs": 209,
+          "inlineRepeatRangeMs": 73,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h50-d400-o6",
+          "deltaMs": -1023,
+          "productionRepeatRangeMs": 100,
+          "inlineRepeatRangeMs": 388,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        }
+      ]
+    },
+    {
+      "condition": "h250/d0/warm",
+      "pairedDelta": {
+        "n": 7,
+        "missing": 0,
+        "median": -212.5,
+        "q1": -383.25,
+        "q3": -118.75,
+        "min": -756.5,
+        "max": -5,
+        "range": 751.5
+      },
+      "productionRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 142,
+        "q1": 114,
+        "q3": 253.5,
+        "min": 86,
+        "max": 263,
+        "range": 177
+      },
+      "inlineRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 814,
+        "q1": 554,
+        "q3": 865.5,
+        "min": 150,
+        "max": 941,
+        "range": 791
+      },
+      "piRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 154,
+        "q1": 105,
+        "q3": 175,
+        "min": 80,
+        "max": 378,
+        "range": 298
+      },
+      "negativePairs": 7,
+      "exceedsBothRepeatRanges": 0,
+      "nonOverlappingRepeats": 1,
+      "rows": [
+        {
+          "object": "prod-path-main-h250-d0-o0",
+          "deltaMs": -212.5,
+          "productionRepeatRangeMs": 261,
+          "inlineRepeatRangeMs": 539,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h250-d0-o1",
+          "deltaMs": -5,
+          "productionRepeatRangeMs": 106,
+          "inlineRepeatRangeMs": 941,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h250-d0-o2",
+          "deltaMs": -77,
+          "productionRepeatRangeMs": 142,
+          "inlineRepeatRangeMs": 857,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h250-d0-o3",
+          "deltaMs": -423.5,
+          "productionRepeatRangeMs": 122,
+          "inlineRepeatRangeMs": 569,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d0-o4",
+          "deltaMs": -160.5,
+          "productionRepeatRangeMs": 246,
+          "inlineRepeatRangeMs": 150,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h250-d0-o5",
+          "deltaMs": -343,
+          "productionRepeatRangeMs": 263,
+          "inlineRepeatRangeMs": 874,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        },
+        {
+          "object": "prod-path-main-h250-d0-o6",
+          "deltaMs": -756.5,
+          "productionRepeatRangeMs": 86,
+          "inlineRepeatRangeMs": 814,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": false
+        }
+      ]
+    },
+    {
+      "condition": "h250/d400/warm",
+      "pairedDelta": {
+        "n": 7,
+        "missing": 0,
+        "median": -866.5,
+        "q1": -964,
+        "q3": -781,
+        "min": -1022.5,
+        "max": -685.5,
+        "range": 337
+      },
+      "productionRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 116,
+        "q1": 101,
+        "q3": 194.5,
+        "min": 59,
+        "max": 238,
+        "range": 179
+      },
+      "inlineRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 116,
+        "q1": 95.5,
+        "q3": 254,
+        "min": 51,
+        "max": 1894,
+        "range": 1843
+      },
+      "piRepeatRange": {
+        "n": 7,
+        "missing": 0,
+        "median": 166,
+        "q1": 151,
+        "q3": 221,
+        "min": 87,
+        "max": 310,
+        "range": 223
+      },
+      "negativePairs": 7,
+      "exceedsBothRepeatRanges": 6,
+      "nonOverlappingRepeats": 7,
+      "rows": [
+        {
+          "object": "prod-path-main-r3-h250-d400-o0",
+          "deltaMs": -1022.5,
+          "productionRepeatRangeMs": 238,
+          "inlineRepeatRangeMs": 79,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o1",
+          "deltaMs": -685.5,
+          "productionRepeatRangeMs": 59,
+          "inlineRepeatRangeMs": 51,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o2",
+          "deltaMs": -866.5,
+          "productionRepeatRangeMs": 195,
+          "inlineRepeatRangeMs": 1894,
+          "deltaExceedsBothRepeatRanges": false,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o3",
+          "deltaMs": -735.5,
+          "productionRepeatRangeMs": 194,
+          "inlineRepeatRangeMs": 332,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o4",
+          "deltaMs": -908.5,
+          "productionRepeatRangeMs": 116,
+          "inlineRepeatRangeMs": 116,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o5",
+          "deltaMs": -826.5,
+          "productionRepeatRangeMs": 90,
+          "inlineRepeatRangeMs": 176,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        },
+        {
+          "object": "prod-path-main-h250-d400-o6",
+          "deltaMs": -1019.5,
+          "productionRepeatRangeMs": 112,
+          "inlineRepeatRangeMs": 112,
+          "deltaExceedsBothRepeatRanges": true,
+          "allProductionBelowAllInline": true
+        }
+      ]
+    }
+  ]
+}

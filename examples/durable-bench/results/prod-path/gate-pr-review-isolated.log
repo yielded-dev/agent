@@ -1,0 +1,126 @@
+Isolated package diagnostic: vp test --reporter=verbose, managed Node 24.21.0, existing worker cap, all package tests and timeouts unchanged.
+Started: 2026-10-08T20:56:07Z
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-bench-production-path/tooling/pr-review-eval
+
+ ✓ test/eval-runner.test.ts > PR-review model eval > records actionable AI error categories without provider payloads or credentials 29ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > flushes out-of-order completions and cancels active work after a write failure 16ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > scales each trial's provider allowance at 'default' tier: 10000 characters 36ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > scales each trial's provider allowance at 'default' tier: 30000 characters 28ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > scales each trial's provider allowance at 'fast' tier: 30000 characters 30ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > requires a complete, disjoint oracle for supplied follow-ups 1ms
+ ✓ test/eval-runner.test.ts > PR-review model eval > rejects resolution expectations when the request has no follow-ups 0ms
+ ✓ test/report.test.ts > PR-review eval quality report > rejects mixed repository sources across variants of one case 7ms
+ ✓ test/report.test.ts > PR-review eval quality report > rejects stale judgments after defect promotion or a changed resolution oracle 6ms
+ ✓ test/report.test.ts > PR-review eval quality report > scores first-pass resolutions and preserves unresolved feedback across retries 8ms
+ ✓ test/report.test.ts > PR-review eval quality report > keeps incomplete trials out of clean controls while retaining adjudicated findings 2ms
+ ✓ test/report.test.ts > PR-review eval quality report > counts missed important defects even when a later trial finds them all 1ms
+ × test/local-git-repository.test.ts > pinned local Git review source > validates an exact changed path beyond the 100-result file listing 5042ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × test/local-git-repository.test.ts > pinned local Git review source > accepts changed source searchable despite the read-file line bound 5008ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × test/local-git-repository.test.ts > pinned local Git review source > keeps capacity-excluded paths readable while honoring explicit source exclusions 5007ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × test/local-git-repository.test.ts > pinned local Git review source > fails closed when a pinned blob is missing from a partial clone 5486ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × test/local-git-repository.test.ts > pinned local Git review source > exposes committed callers and keeps the Action's ignore, binary, and symlink scope 5010ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × test/local-git-repository.test.ts > pinned local Git review source > stamps local source identity on observations without claiming frozen fixture source 5006ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ test/review-loop-fixtures.test.ts > reconstructs every public review-loop head from its frozen base and patch 12ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > validates an exact changed path beyond the 100-result file listing
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:156:6
+    154|
+    155| describe("pinned local Git review source", () => {
+    156|   it.effect("validates an exact changed path beyond the 100-result fil…
+       |      ^
+    157|     Effect.acquireUseRelease(
+    158|       Effect.sync(makeCrowdedGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > accepts changed source searchable despite the read-file line bound
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:184:6
+    182|   );
+    183|
+    184|   it.effect("accepts changed source searchable despite the read-file l…
+       |      ^
+    185|     Effect.acquireUseRelease(
+    186|       Effect.sync(makeLongLineGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > keeps capacity-excluded paths readable while honoring explicit source exclusions
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:210:6
+    208|   );
+    209|
+    210|   it.effect(
+       |      ^
+    211|     "keeps capacity-excluded paths readable while honoring explicit so…
+    212|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > fails closed when a pinned blob is missing from a partial clone
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:259:6
+    257|   );
+    258|
+    259|   it.effect("fails closed when a pinned blob is missing from a partial…
+       |      ^
+    260|     Effect.acquireUseRelease(
+    261|       Effect.sync(makePartialGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > exposes committed callers and keeps the Action's ignore, binary, and symlink scope
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:290:6
+    288|   );
+    289|
+    290|   it.effect(
+       |      ^
+    291|     "exposes committed callers and keeps the Action's ignore, binary, …
+    292|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > stamps local source identity on observations without claiming frozen fixture source
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:359:6
+    357|   );
+    358|
+    359|   it.effect(
+       |      ^
+    360|     "stamps local source identity on observations without claiming fro…
+    361|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  6 failed | 13 passed (19)
+   Start at  13:56:08
+   Duration  34.02s (transform 348ms, setup 0ms, import 1.99s, tests 30.74s, environment 0ms)
+
+Finished: 2026-10-08T20:56:42Z
+Package exit: 1
