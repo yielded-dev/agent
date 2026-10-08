@@ -30,12 +30,6 @@ export default defineConfig({
   // defaults, so the published artifact's declarations and sourcemap are
   // pinned explicitly here.
   pack: {
-    deps: {
-      // tsdown <0.23 compatibility: resolve external dependency subpaths.
-      // Remove to preserve subpath imports as written (the new default).
-      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
-      resolveDepSubpath: true,
-    },
     entry: [
       "src/index.ts",
       "src/DoMessageDeliveryStore.ts",
@@ -57,33 +51,11 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-    clearMocks: false,
-    // Vitest v4 compatibility: keep separate Vite servers for inline projects.
-    // Remove when plugins and config hooks can run once for shared projects.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
-    sharedViteServer: false,
     // Leave result caching to Vite Task, without a mutable results.json input.
     cache: false,
     silent: "passed-only",
     projects: [
       {
-        // Vitest v4 compatibility: keep this inline project independent of the root config.
-        // Remove to inherit root options, including plugins and setup files.
-        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
-        extends: false,
-        test: {
-          // Vitest v4 compatibility: preserve mock call history.
-          // Remove after tests no longer rely on calls from setup or earlier tests.
-          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-          clearMocks: false,
-        },
         plugins: [
           cloudflareTest({
             main: "./test/worker.ts",

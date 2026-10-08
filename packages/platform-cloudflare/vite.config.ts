@@ -36,12 +36,6 @@ export default defineConfig({
   // defaults, so the published artifact's declarations and sourcemap are
   // pinned explicitly here.
   pack: {
-    deps: {
-      // tsdown <0.23 compatibility: resolve external dependency subpaths.
-      // Remove to preserve subpath imports as written (the new default).
-      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
-      resolveDepSubpath: true,
-    },
     entry: [
       "src/index.ts",
       "src/Alarm.ts",
@@ -67,27 +61,12 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-    clearMocks: false,
-    // Vitest v4 compatibility: keep separate Vite servers for inline projects.
-    // Remove when plugins and config hooks can run once for shared projects.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
-    sharedViteServer: false,
     // Vite Task owns result caching; Vitest's results.json is read and
     // rewritten by every run, which makes the entire task uncacheable.
     cache: false,
     silent: "passed-only",
     projects: [
       {
-        // Vitest v4 compatibility: keep this inline project independent of the root config.
-        // Remove to inherit root options, including plugins and setup files.
-        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
-        extends: false,
         plugins: [
           cloudflareTest({
             main: "./test/worker.ts",
@@ -115,11 +94,6 @@ export default defineConfig({
           }),
         ],
         test: {
-          // Vitest v4 compatibility: preserve mock call history.
-          // Remove after tests no longer rely on calls from setup or earlier tests.
-          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-          clearMocks: false,
           name: "workerd",
           include: ["test/**/*.test.ts"],
           exclude: [
@@ -132,17 +106,7 @@ export default defineConfig({
         },
       },
       {
-        // Vitest v4 compatibility: keep this inline project independent of the root config.
-        // Remove to inherit root options, including plugins and setup files.
-        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
-        extends: false,
         test: {
-          // Vitest v4 compatibility: preserve mock call history.
-          // Remove after tests no longer rely on calls from setup or earlier tests.
-          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-          clearMocks: false,
           name: "browser-actions",
           include: [
             "test/interactive-browser-actions.test.ts",
@@ -152,37 +116,17 @@ export default defineConfig({
         },
       },
       {
-        // Vitest v4 compatibility: keep this inline project independent of the root config.
-        // Remove to inherit root options, including plugins and setup files.
-        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
-        extends: false,
         // The Code Mode Dynamic Worker executor lane runs the real adapter
         // inside a bundled worker under programmatic Miniflare (like the
         // restart lane) so Worker Loader and cross-event RPC ownership use a
         // real workerd process rather than a Node substitute.
         test: {
-          // Vitest v4 compatibility: preserve mock call history.
-          // Remove after tests no longer rely on calls from setup or earlier tests.
-          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-          clearMocks: false,
           name: "code-mode",
           include: ["test/code-mode/**/*.test.ts"],
         },
       },
       {
-        // Vitest v4 compatibility: keep this inline project independent of the root config.
-        // Remove to inherit root options, including plugins and setup files.
-        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-        // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
-        extends: false,
         test: {
-          // Vitest v4 compatibility: preserve mock call history.
-          // Remove after tests no longer rely on calls from setup or earlier tests.
-          // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-          // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-          clearMocks: false,
           name: "restart",
           include: ["test/restart/**/*.test.ts"],
         },

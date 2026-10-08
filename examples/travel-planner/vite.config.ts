@@ -24,8 +24,6 @@ export default defineConfig({
   ),
   resolve: { tsconfigPaths: true },
   test: {
-    // Preserve existing mock call history when upgrading from Vitest 4.
-    clearMocks: false,
     cache: false,
     silent: "passed-only",
     deps: {

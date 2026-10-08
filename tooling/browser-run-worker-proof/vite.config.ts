@@ -38,8 +38,6 @@ export default defineConfig({
     },
   },
   test: {
-    // Preserve existing mock call history when upgrading from Vitest 4.
-    clearMocks: false,
     include: ["test/**/*.test.ts"],
     cache: false,
     silent: "passed-only",
