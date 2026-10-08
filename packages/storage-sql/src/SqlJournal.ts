@@ -87,7 +87,7 @@ class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
 
 /**
  * Trusted adapter SPI produced by prepareSqlAppend, never a wire or caller-data boundary.
- * The prepared canonical values and exact strings must remain paired; ThreadStore owns capture
+ * Canonical values, encoded strings and UTF-8 sizes remain paired; ThreadStore owns capture
  * and validation before entering this journal, whose caller already holds SQL storage authority.
  */
 export interface RawAppendRequest {
@@ -364,13 +364,13 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     if (
       request.threadId.length > MAX_IDENTIFIER_LENGTH ||
       request.batchId.length > MAX_IDENTIFIER_LENGTH ||
-      storedTextBytes(request.batchJson) > MAX_STORED_TEXT_BYTES ||
+      request.batchBytes > MAX_STORED_TEXT_BYTES ||
       storedTextBytes(request.batchDigest) > MAX_STORED_TEXT_BYTES ||
       storedTextBytes(request.tailDigest) > MAX_STORED_TEXT_BYTES ||
       request.records.some(
         (record) =>
           record.recordId.length > MAX_IDENTIFIER_LENGTH ||
-          storedTextBytes(record.recordJson) > MAX_STORED_TEXT_BYTES,
+          record.recordBytes > MAX_STORED_TEXT_BYTES,
       )
     ) {
       return yield* options.errors.storage({
@@ -562,38 +562,31 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           Effect.mapError(storageError("index canonical Run membership")),
         );
 
-      yield* Effect.forEach(
-        records,
-        (record, index) =>
-          Effect.gen(function* () {
-            const canonical = record.canonical;
+      for (const [index, record] of records.entries()) {
+        const canonical = record.canonical;
 
-            if (lifecycle !== undefined) {
-              if (isLifecyclePublicationFact(canonical.payload))
-                yield* lifecycle
-                  .retain({
-                    id: JSON.stringify([request.threadId, "record", record.recordId]),
-                    ownerThreadId: request.threadId,
-                    canonicalSequence: yield* decodeCanonicalSequence(
-                      firstSequence + at + index,
-                    ).pipe(Effect.orDie),
-                    createdAt: canonical.createdAt,
-                    fact: canonical.payload,
-                  })
-                  .pipe(
-                    Effect.mapError((cause) =>
-                      options.errors.storage({
-                        operation: "retain lifecycle publication",
-                        message: "Native publication storage unavailable",
-                        cause,
-                      }),
-                    ),
-                  );
-            }
-            yield* failpoint("append:after-record-insert");
-          }),
-        { discard: true },
-      );
+        if (lifecycle !== undefined && isLifecyclePublicationFact(canonical.payload))
+          yield* lifecycle
+            .retain({
+              id: JSON.stringify([request.threadId, "record", record.recordId]),
+              ownerThreadId: request.threadId,
+              canonicalSequence: yield* decodeCanonicalSequence(firstSequence + at + index).pipe(
+                Effect.orDie,
+              ),
+              createdAt: canonical.createdAt,
+              fact: canonical.payload,
+            })
+            .pipe(
+              Effect.mapError((cause) =>
+                options.errors.storage({
+                  operation: "retain lifecycle publication",
+                  message: "Native publication storage unavailable",
+                  cause,
+                }),
+              ),
+            );
+        yield* failpoint("append:after-record-insert");
+      }
     }
 
     yield* sql`

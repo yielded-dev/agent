@@ -95,6 +95,7 @@ export const ownedRows = <A, I>(
     readonly bytes: number;
   };
   const caches = new WeakMap<OwnedState, Map<string, View>>();
+  const decodeRows = Schema.decodeUnknownEffect(Schema.Array(schema));
 
   return (state: OwnedState, sql: SqlClient) => {
     let cache = caches.get(state);
@@ -109,7 +110,7 @@ export const ownedRows = <A, I>(
     const current = cache;
 
     const decode = (rows: unknown) =>
-      Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(
+      decodeRows(rows).pipe(
         Effect.mapError(() =>
           DoStorageCorruptionError.make({
             table,

@@ -130,6 +130,10 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
   const decodeSequence = Schema.decodeEffect(CanonicalSequence);
   const decodeObservationOffset = Schema.decodeEffect(ObservationOffset);
+  const decodeReadRequest = Schema.decodeEffect(Schema.toType(ThreadReadRequest));
+  const decodeTailRequest = Schema.decodeEffect(Schema.toType(ThreadTailRequest));
+  const decodeDigest = Schema.decodeEffect(Digest);
+  const decodeAppendResult = Schema.decodeEffect(AppendResult);
 
   const storeError = (operation: string, error: { readonly message: string }) =>
     ThreadStoreError.make({
@@ -328,7 +332,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
           return storeError("append canonical batch", error);
         }),
         Effect.flatMap((result) =>
-          Schema.decodeEffect(AppendResult)(result).pipe(
+          decodeAppendResult(result).pipe(
             Effect.mapError((error) => schemaStoreError("decode append result", error)),
           ),
         ),
@@ -348,7 +352,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   });
 
   const readEffect = Effect.fnUntraced(function* (request: ThreadReadRequest) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadReadRequest))(request).pipe(
+    const validated = yield* decodeReadRequest(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate thread read", error)),
     );
 
@@ -678,13 +682,13 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
     request: ThreadTailRequest,
   ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadTailRequest))(request).pipe(
+    const validated = yield* decodeTailRequest(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate tail inspection", error)),
     );
 
     const thread = yield* requireThread(journal, validated.threadId);
 
-    const tailDigest = yield* Schema.decodeEffect(Digest)(thread.tail_digest).pipe(
+    const tailDigest = yield* decodeDigest(thread.tail_digest).pipe(
       Effect.mapError((error) => schemaStoreError("decode tail digest", error)),
     );
 

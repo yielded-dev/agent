@@ -148,12 +148,15 @@ const workerReportingMode = (reporting: typeof Header.Type.reporting): WorkerRep
 
 const Count = Schema.Struct({ count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) });
 const CountRow = Schema.Tuple([Count]);
+const decodeCountRow = Schema.decodeUnknownEffect(CountRow);
 const EntryRow = Schema.Struct({ id: Schema.String, entry_json: Schema.NullOr(Schema.String) });
 const EntryRows = Schema.Array(EntryRow);
 const WorkEntryJson = Schema.fromJsonString(CanonicalWorkEntry);
 const decodeWorkEntry = Schema.decodeEffect(WorkEntryJson);
 const encodeWorkEntry = Schema.encodeEffect(WorkEntryJson);
 const Tail = Schema.Struct({ tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)) });
+const decodeTailRows = Schema.decodeUnknownEffect(Schema.Array(Tail));
+const metadataFailure = (cause: Schema.SchemaError) => failure("decode work metadata", cause);
 
 const RebuildRow = Schema.Struct({
   sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
@@ -211,9 +214,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   })} <= ${MAX_WORK_ENTRY_BYTES} THEN entry_json ELSE NULL END AS entry_json`;
 
   const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown) =>
-    Schema.decodeUnknownEffect(schema)(value).pipe(
-      Effect.mapError((cause) => failure("decode work metadata", cause)),
-    );
+    Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(metadataFailure));
 
   const read =
     options.read ??
@@ -247,7 +248,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     );
 
     // Another storage writer can recreate missing derivatives; only retain successful probes.
-    tablesPresent = (yield* decode(CountRow, rows))[0].count === 2;
+    tablesPresent =
+      (yield* decodeCountRow(rows).pipe(Effect.mapError(metadataFailure)))[0].count === 2;
 
     return tablesPresent;
   });
@@ -274,12 +276,11 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   });
 
   const tail = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const rows = yield* decode(
-      Schema.Array(Tail),
+    const rows = yield* decodeTailRows(
       yield* query(
         sql`SELECT tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
       ),
-    );
+    ).pipe(Effect.mapError(metadataFailure));
 
     return rows[0]?.tail_sequence ?? CanonicalSequence.make(0);
   });
@@ -429,15 +430,14 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   ) {
     const reporting = workerMode === "standard" ? 1 : workerMode === "private" ? 2 : 0;
 
-    yield* decode(
-      CountRow,
+    yield* decodeCountRow(
       yield* query(sql`INSERT INTO ${table("effect_agent_work_index")} (thread_id, version, state, through_sequence, reporting, entry_count)
         VALUES (${threadId}, ${WORK_INDEX_VERSION}, ${state}, ${through}, ${reporting},
           (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}))
         ON CONFLICT (thread_id) DO UPDATE SET version=excluded.version, state=excluded.state,
           through_sequence=excluded.through_sequence, reporting=excluded.reporting, entry_count=excluded.entry_count
         RETURNING entry_count AS count`),
-    );
+    ).pipe(Effect.mapError(metadataFailure));
   });
 
   /** Only for newly materialized/imported Threads, inside their publication transaction. */

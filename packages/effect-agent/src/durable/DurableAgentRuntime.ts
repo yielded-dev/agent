@@ -459,6 +459,7 @@ const decodeBatchId = Schema.decodeSync(BatchId);
 const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const decodeRecordId = Schema.decodeSync(RecordId);
 const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
+const decodeUsageTotal = Schema.decodeEffect(Schema.Natural);
 const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
@@ -5154,7 +5155,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         field: string,
         value: number,
       ): Effect.Effect<number, RunJournalError> =>
-        Schema.decodeEffect(Schema.Natural)(value).pipe(
+        decodeUsageTotal(value).pipe(
           Effect.mapError((cause) =>
             RunJournalError.make({
               message: `Run usage summary exceeds safe-integer bounds at ${field}`,
