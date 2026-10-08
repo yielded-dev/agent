@@ -1,14 +1,21 @@
 import { readFileSync } from "node:fs";
 
-export interface Line {
-  readonly target: string;
-  readonly version: string;
-  readonly turns: number;
-  readonly open: number;
-  readonly turn: readonly number[];
-  readonly bytes: number;
-  readonly rss?: number;
-}
+import { Schema } from "effect";
+
+const Line = Schema.Struct({
+  target: Schema.String,
+  executionPath: Schema.optionalKey(Schema.Literals(["rpc-alarm", "direct-turn"])),
+  version: Schema.String,
+  turns: Schema.Number,
+  open: Schema.Number,
+  turn: Schema.Array(Schema.Number),
+  bytes: Schema.Number,
+  rss: Schema.optionalKey(Schema.Number),
+});
+
+export type Line = typeof Line.Type;
+
+const decodeLine = Schema.decodeSync(Schema.fromJsonString(Line));
 
 export interface Metric {
   readonly name: string;
@@ -31,7 +38,16 @@ export const median = (values: readonly number[]): number => {
 export const lines = readFileSync("results/results.jsonl", "utf8")
   .trim()
   .split("\n")
-  .map((line) => JSON.parse(line) as Line);
+  .map((line) => decodeLine(line))
+  .map((line) =>
+    line.target === "yielded" || line.target === "yielded-inline"
+      ? {
+          ...line,
+          // Unmarked Yielded rows predate the public RPC/alarm target.
+          target: line.executionPath === "rpc-alarm" ? "yielded" : "yielded-inline",
+        }
+      : line,
+  );
 
 export const label = (line: Line): string => `${line.target} ${line.version}`;
 

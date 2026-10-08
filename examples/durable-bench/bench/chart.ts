@@ -17,12 +17,14 @@ const INK = {
 
 const SERIES: Readonly<Record<string, string>> = {
   yielded: "#6b4fd8",
+  "yielded-inline": "#9985df",
   pi: "#2a78d6",
   tardie: "#eb6834",
 };
 
 const NAMES: Readonly<Record<string, string>> = {
   yielded: "yielded",
+  "yielded-inline": "yielded-inline",
   pi: "pi-durable",
   tardie: "tardie",
 };
