@@ -60,7 +60,7 @@ export const buildReplayCpu = Effect.fn("ReplayCpu.build")(function* (
   yield* fs.makeDirectory(directory, { recursive: true });
 
   const buildLog = yield* spawner.string(
-    ChildProcess.make("vp", ["run", "-F", "@effect-agent/platform-cloudflare...", "build"], {
+    ChildProcess.make("vp", ["run", "-F", "@yielded/agent-platform-cloudflare...", "build"], {
       cwd: sourceRoot,
     }),
   );
@@ -129,9 +129,9 @@ export const buildReplayCpu = Effect.fn("ReplayCpu.build")(function* (
                 if (args.path.startsWith("cloudflare:") || args.path.startsWith("node:"))
                   return { path: args.path, external: true };
                 if (
-                  args.path === "effect-agent" ||
-                  args.path.startsWith("effect-agent/") ||
-                  args.path.startsWith("@effect-agent/")
+                  args.path === "@yielded/agent" ||
+                  args.path.startsWith("@yielded/agent/") ||
+                  args.path.startsWith("@yielded/agent-")
                 ) {
                   const built = exports.get(args.path);
 
