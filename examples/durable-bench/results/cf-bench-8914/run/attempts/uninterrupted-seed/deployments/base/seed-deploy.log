@@ -1,0 +1,55 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:27:56.667] INFO (#1): Deploy · cf-bench-8914-b124507a-base
+[08:27:56.667] INFO (#1): Importing stack module
+[08:27:57.666] INFO (#1): Resolving stack services
+[08:27:57.693] INFO (#1): Loading stack state
+[08:27:57.694] INFO (#1): Computing plan
+[08:27:57.699] INFO (#318): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:27:57.699] INFO (#318): Cloudflare Worker read: checking cf-bench-8914-b124507a-base
+[08:27:57.967] INFO (#1): Plan ready (1.3s)
+[08:27:57.968] INFO (#1): Plan: 1 to create, 13 binding changes
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] create
+[08:27:57.968] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] create
+[08:27:57.968] INFO (#1): 
+[08:27:57.975] INFO (#558): [cf-bench-8914-worker] pre-creating
+[08:27:57.976] INFO (#558): Cloudflare Worker precreate: starting cf-bench-8914-b124507a-base
+[08:27:57.976] INFO (#558): Cloudflare Worker precreate: durable objects [{"logicalId":"THREADS_1000_0","bindingName":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","bindingName":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","bindingName":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","bindingName":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","bindingName":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","bindingName":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","bindingName":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","bindingName":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","bindingName":"THREADS_50_2","className":"C50_2"}]
+[08:27:59.231] INFO (#558): [cf-bench-8914-worker] creating
+[08:27:59.233] INFO (#558): Cloudflare Worker reconcile: starting cf-bench-8914-b124507a-base
+[08:27:59.233] INFO (#558): Cloudflare Worker reconcile: durable objects [{"logicalId":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","className":"C50_2"}]
+[08:27:59.424] INFO (#558): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[08:27:59.424] INFO (#558): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[08:27:59.425] INFO (#558): Cloudflare Worker create: preparing bundle for cf-bench-8914-b124507a-base
+[08:27:59.433] INFO (#558): Cloudflare Worker create: uploading script for cf-bench-8914-b124507a-base
+[08:27:59.433] INFO (#558): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2"},"currentDoClassNameByLogicalId":{"THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:28:02.548] INFO (#558): [cf-bench-8914-worker] created — Enabling workers.dev subdomain... (4.6s)
+[08:28:02.554] INFO (#770): [cf-bench-8914-worker] created — Enabling workers.dev subdomain... (4.6s)
+[08:28:02.557] INFO (#1): 
+[08:28:02.557] INFO (#1): Done: 1 succeeded (4.6s)
+{
+  workerName: 'cf-bench-8914-b124507a-base',
+  url: 'https://cf-bench-8914-b124507a-base.danieljmerwe.workers.dev',
+  namespaces: {
+    C1000_0: '46c6e36571a44f4dbf596ecd938e5393',
+    C1000_1: '4070ac7007b5424094795ef722ed6eed',
+    C1000_2: '9d93db152f664c31aeb858a3d655254a',
+    C250_0: 'bb62431c920e435d8251e9a30019b07a',
+    C250_1: '51983c5127ef4876ac937f30c6ce9f14',
+    C250_2: 'c51b067c9a6d40c8bd818ea580bbec35',
+    C50_0: 'a0990c162f9b43a199b14c71bcc6de59',
+    C50_1: 'e2fbe7d0ce234236a8ab87a92f1f2b83',
+    C50_2: '744ae1b2a85d4e898ebd519de43be68a'
+  }
+}

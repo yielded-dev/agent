@@ -1,0 +1,27 @@
+{
+  "name": "cf-bench-8914-b124507a-tardie",
+  "role": "tardie",
+  "workerStatus": 404,
+  "knownNamespaceIds": [
+    "03fe8dc52d5247e2a87476111b4095e8",
+    "a5a36a4ff7a64960a52d6abd5fe06293",
+    "aa02cbe54e0743058460cb96cbca839f",
+    "768efccc2fdd41b7ab7930181b6449a3",
+    "edde41e1240d4a069783e77a9bfb3767",
+    "fccb216a1c30485992675cb0f4cb619b",
+    "a7beaa0d616843e992837070c8a5cacf",
+    "053f01bcd9784cc5ab83e16c5bddaf66",
+    "ee8d468c480345b28f1d3fa9908fdf0b",
+    "0026ec81712048f68a14b30086cdd975",
+    "b25e91953509414d8c03de16ad9f6a21",
+    "fe9b537ee89a411cae9b40dc49562082",
+    "2ed40d0d55db4c5a9975ea5865a1542c",
+    "bd31ede0ef2d45fd82afdbd96d24202a",
+    "c5bce88599c546d69c9e3e0f23f22815",
+    "5461efb9eb984040bb014c94b8a507fc",
+    "0125f779e5f242a5b4aca866c5073fe9",
+    "ab22a01db67c4d538ae3ec6b172b0c66"
+  ],
+  "namespaceIdsRemaining": [],
+  "complete": true
+}

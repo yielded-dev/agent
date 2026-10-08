@@ -1,0 +1,70 @@
+{
+  "packageExports": {
+    "base": {
+      "concretePaths": 22,
+      "javascriptModulesWithDeclarations": 500,
+      "imports": {
+        "label": "base",
+        "root": "/private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/base/effect",
+        "runSync": "function",
+        "languageModelMake": "function",
+        "queueTake": "function"
+      }
+    },
+    "head": {
+      "concretePaths": 22,
+      "javascriptModulesWithDeclarations": 500,
+      "imports": {
+        "label": "head",
+        "root": "/private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/head/effect",
+        "runSync": "function",
+        "languageModelMake": "function",
+        "queueTake": "function"
+      }
+    }
+  },
+  "sourceDifferenceFiles": [
+    "src/Context.ts",
+    "src/MutableList.ts",
+    "src/Queue.ts",
+    "src/Scheduler.ts",
+    "src/internal/core.ts",
+    "src/internal/effect.ts"
+  ],
+  "packageDifferenceFiles": [
+    "dist/Context.d.ts.map",
+    "dist/Context.js",
+    "dist/Context.js.map",
+    "dist/MutableList.d.ts.map",
+    "dist/MutableList.js",
+    "dist/MutableList.js.map",
+    "dist/Queue.d.ts.map",
+    "dist/Queue.js",
+    "dist/Queue.js.map",
+    "dist/Scheduler.d.ts",
+    "dist/Scheduler.d.ts.map",
+    "dist/Scheduler.js",
+    "dist/Scheduler.js.map",
+    "dist/internal/core.js",
+    "dist/internal/core.js.map",
+    "dist/internal/effect.js",
+    "dist/internal/effect.js.map",
+    "src/Context.ts",
+    "src/MutableList.ts",
+    "src/Queue.ts",
+    "src/Scheduler.ts",
+    "src/internal/core.ts",
+    "src/internal/effect.ts"
+  ],
+  "timingsRun": false,
+  "countsRun": false,
+  "samePatchedLanguageModelSourceAndJs": true,
+  "privateTempDirectoryMode": "0o700",
+  "buildInputHashes": {
+    "build.mjs": "576b01bc92a9556ea108354ae3db21683f683023bdd089f8380ffa07901cc895",
+    "reproduce.sh": "4eec073d235719a9a6cdde0bcb4e5b06bbf154ce3ad4a35b78f53c7a5cc809a7",
+    "tooling.package.json": "591baf83a26f85ebe25a8b810d1e550d22e44c8e8b3514f5f517dd625871fe9f",
+    "tooling.bun.lock": "e00f3987e8cc88b4fd7ef47cd1cb4b507977808032ea9da137fcbbe46fdc394e",
+    "effect@4.0.0.patch": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229"
+  }
+}

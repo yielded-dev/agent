@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T17:44:04.510Z",
+  "role": "tardie",
+  "size": 250,
+  "sample": 2,
+  "phase": "referencePrime/actor",
+  "error": "HTTP 500 DO generation mismatch before reference",
+  "completedOtherRoleReceipts": 50,
+  "tardieWorkloadReceipts": 0,
+  "tardieWorkloadAttempts": 0,
+  "basis": "The Actor generation guard rejected reference preparation. No measured workload request was issued; retain the other five complete samples and resume only the untouched Tardie sample."
+}

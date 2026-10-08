@@ -1,0 +1,11 @@
+{
+  "role": "head",
+  "generation": "measure-1000-2",
+  "route": "/health",
+  "attempt": 1,
+  "started": 1791484539484,
+  "ended": 1791484539500,
+  "status": 412,
+  "cfRay": "a4773f240ce83023-SJC",
+  "workloadExecuted": false
+}

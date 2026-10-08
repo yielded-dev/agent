@@ -1,0 +1,28 @@
+[
+  {
+    "attempt": 0,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 1,
+    "health": {
+      "value": {
+        "generation": "measure-250-0",
+        "version": "a5c48ccc-bab3-4420-8d10-53c9e393dd90",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791480201728,
+      "ended": 1791480201856,
+      "clientWallMs": 128,
+      "cfRay": "a476d53d3d7fd000-KIX"
+    },
+    "identity": {
+      "objectId": "15822c223280686f3b317cccecb458326ac507e8cb4f47679439d48a8c9a6b83",
+      "moduleId": "33cbdead-8ef2-4410-b83b-03949f730182",
+      "runtimeId": "69bcef49-df25-428f-8a87-7074bd508998",
+      "version": "a5c48ccc-bab3-4420-8d10-53c9e393dd90",
+      "generation": "measure-250-0",
+      "protocol": "cold-v3-reference"
+    }
+  }
+]

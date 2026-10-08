@@ -1,0 +1,72 @@
+[
+  {
+    "role": "tardie",
+    "method": "identity",
+    "key": "1000_2",
+    "result": {
+      "value": {
+        "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+        "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+        "runtimeId": "1efb954b-8511-411f-9678-1974673a690e",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "generation": "measure-250-2",
+        "protocol": "cold-v3-reference",
+        "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282"
+      },
+      "started": 1791482584657,
+      "ended": 1791482585369,
+      "clientWallMs": 712,
+      "cfRay": "a4770f6b0f15ec27-SEA"
+    }
+  },
+  {
+    "role": "tardie",
+    "method": "stats",
+    "key": "1000_2",
+    "result": {
+      "value": {
+        "bytes": 3366912,
+        "tables": {
+          "experimental_events": 5633,
+          "experimental_messages": 433,
+          "checkpoint": 1,
+          "checkpoint_chunks": 3
+        },
+        "checkpoint": 5515
+      },
+      "started": 1791482585370,
+      "ended": 1791482585690,
+      "clientWallMs": 320,
+      "cfRay": "a4770f6ec9aaec27-SEA"
+    }
+  },
+  {
+    "role": "tardie",
+    "method": "diagnostic",
+    "key": "1000_2",
+    "result": {
+      "value": {
+        "alarm": 1791482588663,
+        "watchdog": {
+          "tardie:watchdog:[\"bench-agent\",\"main\",\"bench\"]": {
+            "target": {
+              "actor": "bench-agent",
+              "instance": "main",
+              "thread": "bench"
+            },
+            "generation": 1,
+            "progressCursor": 5631,
+            "attempts": 0,
+            "consecutiveNoProgress": 0,
+            "nextWakeAt": 1791482588663,
+            "status": "pending"
+          }
+        }
+      },
+      "started": 1791482585690,
+      "ended": 1791482585845,
+      "clientWallMs": 155,
+      "cfRay": "a4770f70bb8bec27-SEA"
+    }
+  }
+]

@@ -1,0 +1,51 @@
+{
+  "oldVersion": "a60be001-94b5-45ba-8387-30225301849c",
+  "identity": {
+    "objectId": "0f8a843a606cb734f9572376aa26e6d1691ddd30fa6bb48e5293b8d357cae8fe",
+    "moduleId": "2e160026-21cf-4643-bea1-388e90738e62",
+    "runtimeId": "fd497367-4a33-427f-903e-4089658176cd",
+    "version": "cca84877-0344-496b-b2d7-74b94306fb05",
+    "generation": "seed-resume-2",
+    "protocol": "cold-v2"
+  },
+  "stats": {
+    "bytes": 29106176,
+    "tables": {
+      "platform_cloudflare_due_queue": 4,
+      "effect_agent_threads": 1,
+      "effect_agent_canonical_batches": 4435,
+      "effect_agent_canonical_records": 11403,
+      "effect_agent_record_runs": 6968,
+      "effect_agent_tool_declarations": 634,
+      "effect_agent_record_refusals": 0,
+      "effect_agent_checkpoints": 0,
+      "effect_agent_submissions": 950,
+      "effect_agent_submission_ownership": 0,
+      "effect_agent_attempts": 950,
+      "effect_agent_abort_intents": 0,
+      "effect_agent_approval_decisions": 0,
+      "effect_agent_unknown_resolutions": 0,
+      "effect_agent_child_reservations": 0,
+      "effect_agent_child_settlements": 0,
+      "effect_agent_message_deliveries": 0,
+      "effect_agent_worker_stops": 0,
+      "effect_agent_meta": 1,
+      "effect_agent_journal_ranges": 12,
+      "effect_agent_archive_batches": 0,
+      "effect_agent_archive_records": 0,
+      "effect_agent_live_child_reservations": 0,
+      "effect_agent_transfer_commands": 0,
+      "effect_agent_input_intervals": 950,
+      "effect_agent_settlement_spans": 2850,
+      "effect_agent_import_fifo": 0,
+      "effect_agent_import_delivery_visits": 0,
+      "effect_agent_transfer_state": 1,
+      "effect_agent_work_index": 1,
+      "effect_agent_work_entries": 0,
+      "effect_agent_schema": 1
+    }
+  },
+  "resumeAt": 950,
+  "safe": true,
+  "basis": "All acknowledged seed turns completed before their responses. Fresh-version counters must prove that no later admission or attempt exists; otherwise refuse to resume."
+}

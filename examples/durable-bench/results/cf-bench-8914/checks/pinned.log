@@ -1,0 +1,481 @@
+note: You are running `vp check` as a Vite+ built-in command. If you meant to run the check npm script, use `vpr check` instead.
+warn: Lint or type warnings found
+! typescript(no-non-null-assertion): Forbidden non-null assertion.
+    ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:86:18]
+ 85 |   while (pending.length > 0) {
+ 86 |     const next = pending.pop()!;
+    :                  ^^^^^^^^^^^^^^
+ 87 | 
+    `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/internal/record-encoding.ts:116:18]
+ 115 |   while (pending.length > 0) {
+ 116 |     const next = pending.pop()!;
+     :                  ^^^^^^^^^^^^^^
+ 117 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1033:17]
+ 1032 |       yield* ensure(
+ 1033 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 0,
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1034 |         "Conversation history does not count as peer sends",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1052:17]
+ 1051 |       yield* ensure(
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+      :                 ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/ThreadStoreConformance.ts:1053:19]
+ 1052 |         (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
+ 1053 |           (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+      :                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1054 |         "Peer count saturates at the requested capacity without returning payloads",
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadStore.ts:392:25]
+ 391 |             });
+ 392 |           const first = encodings[0]!;
+     :                         ^^^^^^^^^^^^^
+ 393 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:137:34]
+ 136 |         new CanonicalBatch(
+ 137 |           { ...header, records: [records[0]!, ...records.slice(1)] },
+     :                                  ^^^^^^^^^^^
+ 138 |           { disableChecks: true },
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:843:19]
+ 842 |   while (start < records.length) {
+ 843 |     const first = records[start]!;
+     :                   ^^^^^^^^^^^^^^^
+ 844 |     let end = start + 1;
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:846:36]
+ 845 | 
+ 846 |     while (end < records.length && records[end]!.batchId === first.batchId) end++;
+     :                                    ^^^^^^^^^^^^^
+ 847 |     const batch = records.slice(start, end);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:905:60]
+ 904 |         const originalEntry = byId.get(
+ 905 |           previous?.continuation.originalInput.recordId ?? original!.recordId,
+     :                                                            ^^^^^^^^^
+ 906 |         );
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:955:82]
+ 954 |         terminalUsageBytes: next.terminalUsageBytes,
+ 955 |         originalInput: previous?.continuation.originalInput ?? (yield* reference(original!)),
+     :                                                                                  ^^^^^^^^^
+ 956 |         ...(next.savedContext === undefined ? {} : { savedContext: next.savedContext }),
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/durable/RunContinuation.ts:1514:19]
+ 1513 |         ...batch,
+ 1514 |         records: [ownedRecords[0]!, ...ownedRecords.slice(1), ...continuations],
+      :                   ^^^^^^^^^^^^^^^^
+ 1515 |       },
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! eslint(no-unused-vars): Parameter '_' is declared but never used.
+     ,-[packages/platform-cloudflare/src/CloudflareSubscriptions.ts:219:73]
+ 218 |   expectedRevision: Schema.Int.check(Schema.isGreaterThan(0)),
+ 219 |   options: SubscribeRequest.fields.options.mapFields(({ subscriptionId: _, ...fields }) => fields),
+     :                                                                         |
+     :                                                                         `-- '_' is declared here
+ 220 | });
+     `----
+  help: Consider removing this parameter.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:8989:71]
+ 8988 | 
+ 8989 |                       const value = yield* Schema.encodeUnknownEffect(agent.definition.updates!)(
+      :                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+ 8990 |                         decoded.value,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:236:21]
+ 235 |   if (payload._tag === "WorkerInputRefused") {
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:237:18]
+ 236 |     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
+ 237 |     const stop = (yield* resolve(payload.stop.recordId))!.record.payload;
+     :                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 |     const retained = yield* reader.delivery(payload.messageId);
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:461:21]
+ 460 |     while (archive.records[index]?.batchId === batch.batchId) {
+ 461 |       const entry = archive.records[index]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^
+ 462 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:180:19]
+ 179 |       return yield* failure("A transfer page must contain a complete bounded canonical batch");
+ 180 |     const batch = canonical.batches[0]!;
+     :                   ^^^^^^^^^^^^^^^^^^^^^
+ 181 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:209:23]
+ 208 |     while (position.section < transferSections.length) {
+ 209 |       const section = transferSections[position.section]!;
+     :                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 210 | 
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:251:45]
+ 250 |     position.section < transferSections.length &&
+ 251 |     position.consumed === manifest.snapshot[transferSections[position.section]!]
+     :                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 252 |   ) {
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/effect-agent/src/durable/ThreadTransfer.ts:253:21]
+ 252 |   ) {
+ 253 |     const section = transferSections[position.section]!;
+     :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 254 |     const probe = yield* reader.facts(request.threadId, section, position.after);
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:453:7]
+ 452 |       indexed.length !== 1 ||
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+     :       ^^^^^^^^^^^
+ 454 |       indexed[0]!.state !== "ready" ||
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:454:7]
+ 453 |       indexed[0]!.version !== WORK_INDEX_VERSION ||
+ 454 |       indexed[0]!.state !== "ready" ||
+     :       ^^^^^^^^^^^
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:455:7]
+ 454 |       indexed[0]!.state !== "ready" ||
+ 455 |       indexed[0]!.through_sequence !== (tail[0]?.tail_sequence ?? 0)
+     :       ^^^^^^^^^^^
+ 456 |     )
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:511:23]
+ 510 |         headers.length > 1 ||
+ 511 |         Object.values(state[0]!).some((v) => !Number.isSafeInteger(v) || v < 0)
+     :                       ^^^^^^^^^
+ 512 |       )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:556:19]
+ 555 |         tailDigest: headers[0]?.tail_digest ?? EMPTY_TAIL_DIGEST,
+ 556 |         snapshot: state[0]!,
+     :                   ^^^^^^^^^
+ 557 |         ...(seals[0] === undefined
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/storage-sql/src/SqlThreadImport.ts:662:27]
+ 661 |           canonicalJson(yield* json(RecordJson, item.record_json)) !==
+ 662 |             canonicalJson(batch.records[index]!)
+     :                           ^^^^^^^^^^^^^^^^^^^^^
+ 663 |         )
+     `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1207:51]
+ 1206 |                       recordId: record.recordId,
+ 1207 |                       recordBytes: utf8ByteLength(batch.recordJson[index]!),
+      :                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1208 |                       canonical: record,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1210:35]
+ 1209 |                       wire: record.wire,
+ 1210 |                       recordJson: batch.recordJson[index]!,
+      :                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 1211 |                       readMetadata: metadata,
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+      ,-[packages/storage-sql/src/SqlThreadImport.ts:1875:31]
+ 1874 |                 staged.length !== 1 ||
+ 1875 |                 canonicalJson(staged[0]!) !== canonicalJson(progress.counts)
+      :                               ^^^^^^^^^^
+ 1876 |               )
+      `----
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:236:13]
+ 235 | export const toRunThreadOptions = Effect.fnUntraced(function* (
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+     :             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(consistent-type-imports): `import()` type annotations are forbidden.
+     ,-[packages/effect-agent/src/capabilities/RunHooks.ts:237:10]
+ 236 |   threadId: import("../core/Identifiers.ts").ThreadId,
+ 237 |   runId: import("../core/Identifiers.ts").RunId,
+     :          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 238 | ): Effect.fn.Return<
+     `----
+  help: Replace `import()` type annotations with a regular type import. For example, change `type T = import('module').Type` to `import type { Type } from 'module'; type T = Type`.
+
+  ! typescript(no-non-null-assertion): Forbidden non-null assertion.
+     ,-[packages/platform-cloudflare/src/internal/layers.ts:780:33]
+ 779 |                               .withMutation(
+ 780 |                                 store.lifecyclePublications!.retryParked(ownerThreadId, nowMillis),
+     :                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 781 |                                 { invalidatesRecovery: false, lanes: [DueQueue.Lifecycle] },
+     `----
+  help: Consider using the optional chain operator `?.` instead. `x!.y` is equivalent to `x.y` at runtime and will throw if `x` is `null` or `undefined`, but `x?.y` will return `undefined`.
+  note: The non-null assertion operator (`!`) removes `null` and `undefined` from the type. For example, it changes `number | undefined` to `number`.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/platform-cloudflare/src/BrowserSession.ts:460:61]
+ 459 |               try {
+ 460 |                 const result: unknown = await Reflect.apply(cdp.send, cdp, [method, parameters]);
+     :                                                             ^^^^^^^^|
+     :                                                                 |   `-- This reference may be unbound and lose `this` context
+ 461 | 
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:27:37]
+ 26 |     
+ 27 | ,-> const arrayBufferByteLengthGetter = Object.getOwnPropertyDescriptor(
+ 28 | |     ArrayBuffer.prototype,
+ 29 | |     "byteLength",
+ 30 | `-> )?.get;
+    : `---   ^|^
+    : `---    `-- This reference may be unbound and lose `this` context
+ 31 |     
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:33:32]
+ 32 | const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:34:32]
+ 33 | const typedArrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+    :                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                                 |                                 `-- This reference may be unbound and lose `this` context
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:35:30]
+ 34 | const typedArrayLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
+ 35 | const dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+    :                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                                               |                                `-- This reference may be unbound and lose `this` context
+ 36 | const urlConstructor = Reflect.get(globalThis, "URL");
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+    ,-[packages/effect-agent/src/engine/internal/bounded-value.ts:48:7]
+ 47 |   typeof urlPrototypeDescriptor.value === "object"
+ 48 |     ? Object.getOwnPropertyDescriptor(urlPrototypeDescriptor.value, "href")?.get
+    :       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|
+    :                                            |                                    `-- This reference may be unbound and lose `this` context
+ 49 |     : undefined;
+    `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "file" | "tool-approval-request" | "tool-approval-response"
+     ,-[packages/effect-agent/src/engine/internal/compaction.ts:476:11]
+ 475 |   if (typeof part === "string") return part;
+ 476 |   switch (part.type) {
+     :           ^^^^^^^^^
+ 477 |     case "text": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "reasoning" | "text" | "tool-call" | "tool-result"
+      ,-[packages/effect-agent/src/engine/internal/agent-runtime.ts:4131:23]
+ 4130 |             yield* Effect.gen(function* () {
+ 4131 |               switch (ownedPart.type) {
+      :                       ^^^^^^^^^^^^^^
+ 4132 |                 case "text-start":
+      `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CodeExecutionProtocolError" | "CodeExecutorStartError" | "CodeExecutorTerminatedError" | "CodeExecutorUnsupportedError" | "CodeProgramFailedError" | "CodeSourceError"
+     ,-[packages/effect-agent/src/capabilities/CodeMode.ts:521:11]
+ 520 | const executionFailureMessage = (error: CodeExecutionError): string => {
+ 521 |   switch (error._tag) {
+     :           ^^^^^^^^^^
+ 522 |     case "CodeExecutionTimeoutError": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "ApplyInput" | "ApplyJoinAccounting" | "ApplyUnknownResolutions" | "CompleteChildAdmission" | "CompleteMaterialization" | "EnsureWaitingForChild" | "FinalizeLedgerFromHistory" | "PropagateChildAbort" | "ReleaseOrphanChildReservation" | "RepairInputMarker" | "RepairJoinMarker" | "RepairReadiness" |
+  | "RepairSubagentStartLink" | "ResumeWaitingParent" | "RevertJoining" | "SettleAborted" | "SettleJoinedWithHost"
+     ,-[packages/effect-agent/src/durable/Admin.ts:223:11]
+ 222 | ): RecoveryDisposition => {
+ 223 |   switch (decision._tag) {
+     :           ^^^^^^^^^^^^^
+ 224 |     case "NoAction":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunContinuation" | "RunDurationExhausted" | "SubagentJoined" | "SubagentLineageRecorded" | "SubtreeBudgetReserved" | "ThreadCreated" |
+  | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/RunContinuation.ts:596:13]
+ 595 | 
+ 596 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 597 |       case "RunStarted":
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentLineageRecorded" |
+  | "SubagentStarted" | "ThreadCreated" | "ToolStepSettled" | "UserInputRecorded"
+     ,-[packages/effect-agent/src/durable/ThreadWork.ts:581:11]
+ 580 | 
+ 581 |   switch (payload._tag) {
+     :           ^^^^^^^^^^^^
+ 582 |     case "ModelResponseRecorded":
+     `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+      ,-[packages/effect-agent/src/durable/ThreadStore.ts:1019:63]
+ 1018 |   static layer() {
+ 1019 |     return Layer.effect(ThreadReader, Effect.map(ThreadStore, ThreadReader.fromStore));
+      :                                                               ^^^^^^^^^^^^^^^^^^^^^^|
+      :                                                                          |          `-- This reference may be unbound and lose `this` context
+ 1020 |   }
+      `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "ModelResponseRecorded" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" | "RunStarted" | "SubagentJoined" | "SubagentRequested" |
+  | "SubagentStarted" | "SubmissionSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+    ,-[packages/effect-agent/src/durable/internal/tool-operations.ts:32:13]
+ 31 |     if (!("runId" in payload) || (runId !== undefined && payload.runId !== runId)) continue;
+ 32 |     switch (payload._tag) {
+    :             ^^^^^^^^^^^^
+ 33 |       case "ToolCallSettled":
+    `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved"
+  | | "RunStarted" | "SubagentLineageRecorded" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolApprovalDecided" | "ToolApprovalRequested" | "ToolCallResolved" | "ToolCallSettled" | "ToolCallUnknown" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" |
+  | "WorkerReportPrepared" | "WorkerReportRefused" | "WorkerStopRequested"
+     ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:548:13]
+ 547 | 
+ 548 |     switch (payload._tag) {
+     :             ^^^^^^^^^^^^
+ 549 |       case "SubagentRequested": {
+     `----
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "AbortRequested" | "AgentUpdateEmitted" | "CompactionCreated" | "ModelCallAborted" | "ModelCompleted" | "ModelResponseInterrupted" | "PeerMessagePrepared" | "RepairAnnotated" | "RunCompleted" | "RunContextRecorded" | "RunContinuation" | "RunDurationExhausted" | "RunFailed" | "RunPolicyUsageReserved" |
+  | "RunStarted" | "SubagentJoined" | "SubagentRequested" | "SubagentStarted" | "SubmissionSettled" | "SubtreeBudgetReserved" | "ThreadCreated" | "ToolCallResolved" | "ToolCallSettled" | "ToolStepSettled" | "UserInputRecorded" | "WorkHandoffCompleted" | "WorkerInputCompleted" | "WorkerInputRefused" | "WorkerInputRequested" | "WorkerOriginRecorded" | "WorkerReportPrepared" | "WorkerReportRefused"
+  | | "WorkerStopRequested"
+      ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:2000:15]
+ 1999 |       }
+ 2000 |       switch (payload._tag) {
+      :               ^^^^^^^^^^^^
+ 2001 |         case "ToolCallUnknown": {
+      `----
+
+  ! typescript(unbound-method): Avoid referencing unbound methods which may cause unintentional scoping of `this`.
+     ,-[packages/effect-agent/src/durable/ThreadImport.ts:483:18]
+ 482 |       Effect.mapError(() => invalid("Empty or oversized canonical batch", threadId)),
+ 483 |       Effect.map(CanonicalBatch.make),
+     :                  ^^^^^^^^^^^^^^^^^^^|
+     :                           |         `-- This reference may be unbound and lose `this` context
+ 484 |     );
+     `----
+  help: If your function does not access `this`, you can annotate it with `this: void`, or consider using an arrow function instead.
+
+  ! typescript(switch-exhaustiveness-check): Switch is not exhaustive. Cases not matched: "input-applied" | "joined" | "joining" | "running" | "settled"
+       ,-[packages/effect-agent/src/durable/DurableAgentRuntime.ts:11937:15]
+ 11936 | 
+ 11937 |       switch (submission.state) {
+       :               ^^^^^^^^^^^^^^^^
+ 11938 |         case "unknown": {
+       `----
+
+Found 0 errors and 51 warnings in 249 files (7.8s, 16 threads)

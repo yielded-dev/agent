@@ -1,0 +1,43 @@
+{
+  "result": {
+    "items": [
+      {
+        "id": "2e7e14ab-207a-4d8d-8882-f7ba278abc18",
+        "number": 2,
+        "metadata": {
+          "created_on": "2026-10-08T15:28:21.013938Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "1d7e1b7c-1189-4513-82c2-3a9b54184ab5",
+        "number": 1,
+        "metadata": {
+          "created_on": "2026-10-08T15:28:19.587982Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      }
+    ]
+  },
+  "success": true,
+  "errors": null,
+  "messages": null,
+  "result_info": {
+    "page": 1,
+    "per_page": 10,
+    "count": 2,
+    "total_count": 2
+  }
+}

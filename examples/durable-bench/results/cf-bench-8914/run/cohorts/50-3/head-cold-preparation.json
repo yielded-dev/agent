@@ -1,0 +1,52 @@
+[
+  {
+    "attempt": 0,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 1,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 2,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 3,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 4,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 5,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 6,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 7,
+    "health": {
+      "value": {
+        "generation": "measure-50-3",
+        "version": "661ef619-a0c5-47f8-82fa-9eb02ecd2e47",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791479925283,
+      "ended": 1791479925460,
+      "clientWallMs": 177,
+      "cfRay": "a476ce7d8eecc3b2-MAD"
+    },
+    "identity": {
+      "objectId": "e88c31788ae0ae02733b4722195aa6c1115094c8028dbc8cc7f0b4ebbac0deb7",
+      "moduleId": "979915c0-f826-45ee-b569-0bf9acfb1a57",
+      "runtimeId": "58d0a1df-3316-4084-84ae-9689c4f44143",
+      "version": "661ef619-a0c5-47f8-82fa-9eb02ecd2e47",
+      "generation": "measure-50-3",
+      "protocol": "cold-v3-reference"
+    }
+  }
+]

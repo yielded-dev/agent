@@ -1,0 +1,8 @@
+base: emitted 500 JavaScript modules; applying upstream pure annotations
+[BABEL] Note: The code generator has deoptimised the styling of /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/base/effect/dist/http-api/internal/httpApiScalar.js as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/base/effect/dist/http-api/internal/httpApiSwagger.js as it exceeds the max of 500KB.
+base: prepared /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/base/effect
+head: emitted 500 JavaScript modules; applying upstream pure annotations
+[BABEL] Note: The code generator has deoptimised the styling of /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/head/effect/dist/http-api/internal/httpApiScalar.js as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/head/effect/dist/http-api/internal/httpApiSwagger.js as it exceeds the max of 500KB.
+head: prepared /private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/head/effect

@@ -1,0 +1,111 @@
+[
+  {
+    "role": "base",
+    "complete": false,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm1",
+        "reason": "reference telemetry missing, zero, or invalid"
+      },
+      {
+        "phase": "warm3",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "head",
+    "complete": false,
+    "expected": 10,
+    "matched": 9,
+    "missing": [
+      {
+        "phase": "warm6",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "control",
+    "complete": false,
+    "expected": 10,
+    "matched": 3,
+    "missing": [
+      {
+        "phase": "cold",
+        "reason": "cold constructor evidence missing",
+        "ingress": 1,
+        "coldConstruction": false
+      },
+      {
+        "phase": "warm1",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm2",
+        "reason": "reference telemetry missing, zero, or invalid"
+      },
+      {
+        "phase": "warm3",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm4",
+        "reason": "reference telemetry missing, zero, or invalid"
+      },
+      {
+        "phase": "warm5",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm6",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm7",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm9",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "pinned",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "pi",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "tardie",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  }
+]

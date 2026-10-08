@@ -1,0 +1,43 @@
+[
+  {
+    "role": "tardie",
+    "method": "identity",
+    "key": "250_1",
+    "result": {
+      "value": {
+        "objectId": "4cbb3d5911be6a7f445c60ef6ea26944de58f760c00c5befae22ac0389be6bdb",
+        "moduleId": "63274eab-8839-4ce3-9e52-9a48806f2cae",
+        "runtimeId": "986a0c4e-61f4-4dc9-80a0-e0be164b987b",
+        "version": "6e5374bf-9fb2-46ce-af66-e790424b6954",
+        "generation": "seed-resume-3",
+        "protocol": "cold-v3-reference",
+        "actorObjectId": "9a7135fd321ff707d94d7419741eeba703e576d2f3b9e73bbe6f813b0467c928"
+      },
+      "started": 1791480529776,
+      "ended": 1791480530903,
+      "clientWallMs": 1127,
+      "cfRay": "a476dd41eee2218a-MAD"
+    }
+  },
+  {
+    "role": "tardie",
+    "method": "stats",
+    "key": "250_1",
+    "error": "BenchError: tardie/stats?key=250_1: HTTP 500 Error: cf-bench-8914 seed batch restart\n    at async Promise.all (index 1)\n    at async Object.stats (bench.mjs:44986:34)\n    at async Object.fetch (bench.mjs:44901:51)\n    at async Object.fetch (worker.mjs:444:16)"
+  },
+  {
+    "role": "tardie",
+    "method": "diagnostic",
+    "key": "250_1",
+    "result": {
+      "value": {
+        "alarm": null,
+        "watchdog": {}
+      },
+      "started": 1791480531638,
+      "ended": 1791480532135,
+      "clientWallMs": 497,
+      "cfRay": "a476dd4cafb1cffb-KIX"
+    }
+  }
+]

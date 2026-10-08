@@ -1,0 +1,99 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-tardie-250-0-constructors",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791480240631,
+      "to": 1791480318238
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-tardie"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791480539505,
+  "poll": 6,
+  "totalLogs": 120,
+  "rows": [
+    {
+      "timestamp": 1791480254633,
+      "id": "01M4E8PM590000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "29fe00f83308dc0c5c35db690b34577e",
+      "executionModel": "durableObject",
+      "durableObjectId": "9ad27b1eab86c297c9f18ea4a4f45f8fe2fde11974ec338df9ffcc269f50d065",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "f9662c59-7ec4-4dcd-a35a-30db98669f30"
+      },
+      "construction": {
+        "objectId": "9ad27b1eab86c297c9f18ea4a4f45f8fe2fde11974ec338df9ffcc269f50d065",
+        "moduleId": "d3017c02-a4d2-4883-906c-f115de97933c",
+        "runtimeId": "5a1fb7a3-b41a-437d-a80a-a26167c764e2",
+        "version": "f9662c59-7ec4-4dcd-a35a-30db98669f30",
+        "generation": "measure-250-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791480250448,
+      "id": "01M4E8PG2G0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "04f694b5bcebe7c42859bb66ca5e9565",
+      "executionModel": "durableObject",
+      "durableObjectId": "9ad27b1eab86c297c9f18ea4a4f45f8fe2fde11974ec338df9ffcc269f50d065",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "f9662c59-7ec4-4dcd-a35a-30db98669f30"
+      },
+      "construction": {
+        "objectId": "9ad27b1eab86c297c9f18ea4a4f45f8fe2fde11974ec338df9ffcc269f50d065",
+        "moduleId": "d3017c02-a4d2-4883-906c-f115de97933c",
+        "runtimeId": "eba912f1-a824-41d1-a5ff-99333bdf6d1b",
+        "version": "f9662c59-7ec4-4dcd-a35a-30db98669f30",
+        "generation": "measure-250-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791480249508,
+      "id": "01M4E8PF540000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "f8fa606e570ca672efbe747b3cea3d80",
+      "executionModel": "durableObject",
+      "durableObjectId": "f7d89ee938cc60e86c8ebbf156e4e6bb8e52ced043ed93841c4ed68c7cca9194",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "f9662c59-7ec4-4dcd-a35a-30db98669f30"
+      },
+      "construction": {
+        "objectId": "f7d89ee938cc60e86c8ebbf156e4e6bb8e52ced043ed93841c4ed68c7cca9194",
+        "moduleId": "e124adc5-f9a1-486b-b037-4cf8005f480f",
+        "runtimeId": "20777e71-5c17-46fb-bbce-8b6b799c034b",
+        "version": "f9662c59-7ec4-4dcd-a35a-30db98669f30",
+        "generation": "measure-250-0",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    }
+  ],
+  "shapes": [
+    "{\"type\":\"cf-worker\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"benchConstructor\",\"generation\",\"kind\",\"moduleId\",\"objectId\",\"runtimeId\",\"version\"]}",
+    "{\"type\":\"cf-worker\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"exception\",\"message\"]}",
+    "{\"type\":\"cf-worker-event\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"level\",\"message\"]}"
+  ]
+}

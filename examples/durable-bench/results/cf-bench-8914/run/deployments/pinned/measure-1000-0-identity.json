@@ -1,0 +1,32 @@
+{
+  "name": "cf-bench-8914-b124507a-pinned",
+  "role": "pinned",
+  "generation": "measure-1000-0",
+  "namespaces": [
+    "8ef47dbb17fd4dfd932abafa1f9ee61f",
+    "65be1f9fb4a94ac4acbccdd5b06a0b6d",
+    "ce29791440194ed18a4b281d1a2c7aa0",
+    "c80f6260aa2b49e2a63e17c8dca4faa2",
+    "966a03f1a5f94ab1961c37d963a5c59f",
+    "bbc3fe9130ff48e8a067db9384821aa6",
+    "ed7fef14926548cb8796a388af24d9bb",
+    "7338fc62574442c4b878bba32eb5b9ef",
+    "69eb104871674ef58484c9d68fa1e815",
+    "bf7b0a398cb747d682cb55e1749000ea"
+  ],
+  "modules": [
+    {
+      "name": "bench.mjs",
+      "bytes": 3432935,
+      "sha256": "c823d1745273673543621a777765ef3531a3392682dbc3bddea3981c5000defb"
+    },
+    {
+      "name": "worker.mjs",
+      "bytes": 12853,
+      "sha256": "6b2bef1521f8eecc8c2ea3161833ec95ba66a7f107ab89d5479a41938d25cf7c"
+    }
+  ],
+  "cpuLimitMs": 300000,
+  "compatibilityDate": "2026-08-18",
+  "locationHint": "wnam"
+}

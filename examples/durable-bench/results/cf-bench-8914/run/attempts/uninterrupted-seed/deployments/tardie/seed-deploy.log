@@ -1,0 +1,73 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:28:56.981] INFO (#1): Deploy · cf-bench-8914-b124507a-tardie
+[08:28:56.981] INFO (#1): Importing stack module
+[08:28:57.694] INFO (#1): Resolving stack services
+[08:28:57.704] INFO (#1): Loading stack state
+[08:28:57.709] INFO (#1): Computing plan
+[08:28:57.714] INFO (#315): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:28:57.714] INFO (#315): Cloudflare Worker read: checking cf-bench-8914-b124507a-tardie
+[08:28:57.883] INFO (#1): Plan ready (902ms)
+[08:28:57.884] INFO (#1): Plan: 1 to create, 22 binding changes
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_2] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_250_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_250_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_250_2] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_50_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_50_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/ACTORS_50_2] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] create
+[08:28:57.884] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] create
+[08:28:57.884] INFO (#1): 
+[08:28:57.887] INFO (#716): [cf-bench-8914-worker] pre-creating
+[08:28:57.888] INFO (#716): Cloudflare Worker precreate: starting cf-bench-8914-b124507a-tardie
+[08:28:57.888] INFO (#716): Cloudflare Worker precreate: durable objects [{"logicalId":"ACTORS_1000_0","bindingName":"ACTORS_1000_0","className":"A1000_0"},{"logicalId":"ACTORS_1000_1","bindingName":"ACTORS_1000_1","className":"A1000_1"},{"logicalId":"ACTORS_1000_2","bindingName":"ACTORS_1000_2","className":"A1000_2"},{"logicalId":"ACTORS_250_0","bindingName":"ACTORS_250_0","className":"A250_0"},{"logicalId":"ACTORS_250_1","bindingName":"ACTORS_250_1","className":"A250_1"},{"logicalId":"ACTORS_250_2","bindingName":"ACTORS_250_2","className":"A250_2"},{"logicalId":"ACTORS_50_0","bindingName":"ACTORS_50_0","className":"A50_0"},{"logicalId":"ACTORS_50_1","bindingName":"ACTORS_50_1","className":"A50_1"},{"logicalId":"ACTORS_50_2","bindingName":"ACTORS_50_2","className":"A50_2"},{"logicalId":"THREADS_1000_0","bindingName":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","bindingName":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","bindingName":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","bindingName":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","bindingName":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","bindingName":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","bindingName":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","bindingName":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","bindingName":"THREADS_50_2","className":"C50_2"}]
+[08:28:59.238] INFO (#716): [cf-bench-8914-worker] creating
+[08:28:59.241] INFO (#716): Cloudflare Worker reconcile: starting cf-bench-8914-b124507a-tardie
+[08:28:59.241] INFO (#716): Cloudflare Worker reconcile: durable objects [{"logicalId":"ACTORS_1000_0","className":"A1000_0"},{"logicalId":"ACTORS_1000_1","className":"A1000_1"},{"logicalId":"ACTORS_1000_2","className":"A1000_2"},{"logicalId":"ACTORS_250_0","className":"A250_0"},{"logicalId":"ACTORS_250_1","className":"A250_1"},{"logicalId":"ACTORS_250_2","className":"A250_2"},{"logicalId":"ACTORS_50_0","className":"A50_0"},{"logicalId":"ACTORS_50_1","className":"A50_1"},{"logicalId":"ACTORS_50_2","className":"A50_2"},{"logicalId":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","className":"C50_2"}]
+[08:28:59.393] INFO (#716): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:ACTORS_1000_0=A1000_0;ACTORS_1000_1=A1000_1;ACTORS_1000_2=A1000_2;ACTORS_250_0=A250_0;ACTORS_250_1=A250_1;ACTORS_250_2=A250_2;ACTORS_50_0=A50_0;ACTORS_50_1=A50_1;ACTORS_50_2=A50_2;THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[08:28:59.393] INFO (#716): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:ACTORS_1000_0=A1000_0;ACTORS_1000_1=A1000_1;ACTORS_1000_2=A1000_2;ACTORS_250_0=A250_0;ACTORS_250_1=A250_1;ACTORS_250_2=A250_2;ACTORS_50_0=A50_0;ACTORS_50_1=A50_1;ACTORS_50_2=A50_2;THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[08:28:59.394] INFO (#716): Cloudflare Worker create: preparing bundle for cf-bench-8914-b124507a-tardie
+[08:28:59.400] INFO (#716): Cloudflare Worker create: uploading script for cf-bench-8914-b124507a-tardie
+[08:28:59.401] INFO (#716): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"ACTORS_1000_0":"A1000_0","ACTORS_1000_1":"A1000_1","ACTORS_1000_2":"A1000_2","ACTORS_250_0":"A250_0","ACTORS_250_1":"A250_1","ACTORS_250_2":"A250_2","ACTORS_50_0":"A50_0","ACTORS_50_1":"A50_1","ACTORS_50_2":"A50_2","THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2"},"currentDoClassNameByLogicalId":{"ACTORS_1000_0":"A1000_0","ACTORS_1000_1":"A1000_1","ACTORS_1000_2":"A1000_2","ACTORS_250_0":"A250_0","ACTORS_250_1":"A250_1","ACTORS_250_2":"A250_2","ACTORS_50_0":"A50_0","ACTORS_50_1":"A50_1","ACTORS_50_2":"A50_2","THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:29:01.825] INFO (#716): [cf-bench-8914-worker] created — Enabling workers.dev subdomain... (3.9s)
+[08:29:01.830] INFO (#1039): [cf-bench-8914-worker] created — Enabling workers.dev subdomain... (3.9s)
+[08:29:01.831] INFO (#1): 
+[08:29:01.831] INFO (#1): Done: 1 succeeded (3.9s)
+{
+  workerName: 'cf-bench-8914-b124507a-tardie',
+  url: 'https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev',
+  namespaces: {
+    A1000_0: 'ab22a01db67c4d538ae3ec6b172b0c66',
+    A1000_1: '0125f779e5f242a5b4aca866c5073fe9',
+    A1000_2: '5461efb9eb984040bb014c94b8a507fc',
+    A250_0: 'c5bce88599c546d69c9e3e0f23f22815',
+    A250_1: 'bd31ede0ef2d45fd82afdbd96d24202a',
+    A250_2: '2ed40d0d55db4c5a9975ea5865a1542c',
+    A50_0: 'fe9b537ee89a411cae9b40dc49562082',
+    A50_1: 'b25e91953509414d8c03de16ad9f6a21',
+    A50_2: '0026ec81712048f68a14b30086cdd975',
+    C1000_0: 'ee8d468c480345b28f1d3fa9908fdf0b',
+    C1000_1: '053f01bcd9784cc5ab83e16c5bddaf66',
+    C1000_2: 'a7beaa0d616843e992837070c8a5cacf',
+    C250_0: 'fccb216a1c30485992675cb0f4cb619b',
+    C250_1: 'edde41e1240d4a069783e77a9bfb3767',
+    C250_2: '768efccc2fdd41b7ab7930181b6449a3',
+    C50_0: 'aa02cbe54e0743058460cb96cbca839f',
+    C50_1: 'a5a36a4ff7a64960a52d6abd5fe06293',
+    C50_2: '03fe8dc52d5247e2a87476111b4095e8'
+  }
+}

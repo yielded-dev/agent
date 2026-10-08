@@ -1,0 +1,51 @@
+{
+  "oldVersion": "fe94f57b-2f24-4cbe-9be9-db889f15bca8",
+  "identity": {
+    "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+    "moduleId": "495a38e7-7829-4118-ae78-403ed0f9d3ca",
+    "runtimeId": "98fe0e21-98fa-407d-934a-5885593d0cb3",
+    "version": "d2afe685-f4eb-4738-971c-a40f11b83576",
+    "generation": "seed-resume-2",
+    "protocol": "cold-v2"
+  },
+  "stats": {
+    "bytes": 13918208,
+    "tables": {
+      "platform_cloudflare_due_queue": 4,
+      "effect_agent_threads": 1,
+      "effect_agent_canonical_batches": 2055,
+      "effect_agent_canonical_records": 5283,
+      "effect_agent_record_runs": 3228,
+      "effect_agent_tool_declarations": 294,
+      "effect_agent_record_refusals": 0,
+      "effect_agent_checkpoints": 0,
+      "effect_agent_submissions": 440,
+      "effect_agent_submission_ownership": 0,
+      "effect_agent_attempts": 440,
+      "effect_agent_abort_intents": 0,
+      "effect_agent_approval_decisions": 0,
+      "effect_agent_unknown_resolutions": 0,
+      "effect_agent_child_reservations": 0,
+      "effect_agent_child_settlements": 0,
+      "effect_agent_message_deliveries": 0,
+      "effect_agent_worker_stops": 0,
+      "effect_agent_meta": 1,
+      "effect_agent_journal_ranges": 6,
+      "effect_agent_archive_batches": 0,
+      "effect_agent_archive_records": 0,
+      "effect_agent_live_child_reservations": 0,
+      "effect_agent_transfer_commands": 0,
+      "effect_agent_input_intervals": 440,
+      "effect_agent_settlement_spans": 1320,
+      "effect_agent_import_fifo": 0,
+      "effect_agent_import_delivery_visits": 0,
+      "effect_agent_transfer_state": 1,
+      "effect_agent_work_index": 1,
+      "effect_agent_work_entries": 0,
+      "effect_agent_schema": 1
+    }
+  },
+  "resumeAt": 440,
+  "safe": true,
+  "basis": "All acknowledged seed turns completed before their responses. Fresh-version counters must prove that no later admission or attempt exists; otherwise refuse to resume."
+}

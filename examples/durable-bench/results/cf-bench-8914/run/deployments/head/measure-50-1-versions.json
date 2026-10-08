@@ -1,0 +1,99 @@
+{
+  "result": {
+    "items": [
+      {
+        "id": "13317316-dbfc-4f52-8504-a6648f1475e5",
+        "number": 6,
+        "metadata": {
+          "created_on": "2026-10-08T16:58:03.995293Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "dfbc3ea8-5348-4d36-b0f3-cc95bc1bb5fe",
+        "number": 5,
+        "metadata": {
+          "created_on": "2026-10-08T16:25:19.93215Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+        "number": 4,
+        "metadata": {
+          "created_on": "2026-10-08T16:13:11.933896Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "a8d958f4-8f5f-4696-afbf-e065975194ab",
+        "number": 3,
+        "metadata": {
+          "created_on": "2026-10-08T16:09:13.085362Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "b8167c8a-9a44-41ae-9026-2c1f2aecfeb6",
+        "number": 2,
+        "metadata": {
+          "created_on": "2026-10-08T15:47:28.739719Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "b75d7060-d71b-426c-bf81-7fcf4e76aed6",
+        "number": 1,
+        "metadata": {
+          "created_on": "2026-10-08T15:47:26.100666Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      }
+    ]
+  },
+  "success": true,
+  "errors": null,
+  "messages": null,
+  "result_info": {
+    "page": 1,
+    "per_page": 10,
+    "count": 6,
+    "total_count": 6
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "started": 1791478853504,
+  "roles": [
+    "base",
+    "head",
+    "control",
+    "pinned",
+    "pi",
+    "tardie"
+  ],
+  "completedRoles": [
+    "base"
+  ],
+  "retainedReceipts": 10
+}

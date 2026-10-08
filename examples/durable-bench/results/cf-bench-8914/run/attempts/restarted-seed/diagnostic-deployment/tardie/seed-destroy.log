@@ -1,0 +1,38 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[09:01:54.435] INFO (#1): Destroy · cf-bench-8914-b124507a-tardie
+[09:01:54.436] INFO (#1): Importing stack module
+[09:01:55.894] INFO (#1): Resolving stack services
+[09:01:55.914] INFO (#1): Loading stack state
+[09:01:55.916] INFO (#1): Computing plan
+[09:01:55.918] INFO (#1): Plan ready (1.5s)
+[09:01:55.919] INFO (#1): Plan: 1 to delete, 22 binding changes
+[09:01:55.919] INFO (#1): [cf-bench-8914-worker] delete
+[09:01:55.919] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_0] unbind
+[09:01:55.919] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_1] unbind
+[09:01:55.919] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_2] unbind
+[09:01:55.919] INFO (#1): [cf-bench-8914-worker/ACTORS_250_0] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/ACTORS_250_1] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/ACTORS_250_2] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/ACTORS_50_0] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/ACTORS_50_1] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/ACTORS_50_2] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] unbind
+[09:01:55.920] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] unbind
+[09:01:55.920] INFO (#1): 
+[09:01:55.921] INFO (#321): [cf-bench-8914-worker] deleting
+[09:01:55.923] INFO (#321): Cloudflare Worker delete: deleting cf-bench-8914-b124507a-tardie
+[09:01:55.924] INFO (#322): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[09:01:57.117] INFO (#321): [cf-bench-8914-worker] deleted (1.2s)
+[09:01:57.119] INFO (#1): 
+[09:01:57.119] INFO (#1): Done: 1 succeeded (1.2s)

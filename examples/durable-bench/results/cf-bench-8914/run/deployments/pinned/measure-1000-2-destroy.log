@@ -1,0 +1,30 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[11:44:13.305] INFO (#1): Destroy · cf-bench-8914-b124507a-pinned
+[11:44:13.305] INFO (#1): Importing stack module
+[11:44:14.092] INFO (#1): Resolving stack services
+[11:44:14.103] INFO (#1): Loading stack state
+[11:44:14.105] INFO (#1): Computing plan
+[11:44:14.108] INFO (#1): Plan ready (803ms)
+[11:44:14.109] INFO (#1): Plan: 1 to delete, 14 binding changes
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker] delete
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] unbind
+[11:44:14.109] INFO (#1): [cf-bench-8914-worker/THREADS_50_3] unbind
+[11:44:14.109] INFO (#1): 
+[11:44:14.111] INFO (#318): [cf-bench-8914-worker] deleting
+[11:44:14.112] INFO (#318): Cloudflare Worker delete: deleting cf-bench-8914-b124507a-pinned
+[11:44:14.113] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[11:44:15.997] INFO (#318): [cf-bench-8914-worker] deleted (1.9s)
+[11:44:16.000] INFO (#1): 
+[11:44:16.000] INFO (#1): Done: 1 succeeded (1.9s)

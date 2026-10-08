@@ -1,0 +1,17 @@
+{
+  "includedInPrimaryResults": false,
+  "reason": "Deployment propagation checks rejected several roles; one successful pi response failed generation validation and its body was not retained. Head and control completed ten turns, but the control warm1 DO log was unavailable after repeated fresh queries.",
+  "consumedFixtures": [
+    "head/50_0",
+    "control/50_0"
+  ],
+  "possiblyConsumedFixtures": [
+    "pi/50_0"
+  ],
+  "replacementSamples": [
+    1,
+    2,
+    3
+  ],
+  "workloadRetried": false
+}

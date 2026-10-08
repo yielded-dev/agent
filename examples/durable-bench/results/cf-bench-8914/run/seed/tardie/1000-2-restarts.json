@@ -1,0 +1,779 @@
+[
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "ceeebc41-c548-4d15-be4b-208d1c82fcb7",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "49b3bd59-9d90-4af4-875e-444248304f3d",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791481732871,
+      "ended": 1791481733808,
+      "clientWallMs": 937,
+      "cfRay": "a476fa9ee8029eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 100,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "ada686a6-1ef5-4231-8e60-879b47afca97",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "2b6ed65b-fd61-4286-9b3c-357bf1971fe2",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791481895567,
+      "ended": 1791481896274,
+      "clientWallMs": 707,
+      "cfRay": "a476fe97cf199eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 150,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "d8328be7-ae74-4b9c-b53e-b83cd3335b61",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "b31a2210-daaf-46f5-905a-c508313298ea",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791481969138,
+      "ended": 1791481969839,
+      "clientWallMs": 701,
+      "cfRay": "a47700639f919eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 200,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "818ba617-0d65-4c7d-8f8b-f0908ec3762c",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "3784d0a9-9809-40b9-9b32-d7620e13dab8",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482142300,
+      "ended": 1791482143089,
+      "clientWallMs": 789,
+      "cfRay": "a477049dfe829eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 250,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "c462472e-90d1-43b7-b4d6-0eb11e999bfd",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "9861ab1c-322e-4260-819f-581acd22b940",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482218794,
+      "ended": 1791482219502,
+      "clientWallMs": 708,
+      "cfRay": "a477067c4c389eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 300,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "2fd850f5-4619-4c22-af8b-3dc600dd6d2d",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "6fd81242-cc44-4110-a661-84280e4a47cb",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482266752,
+      "ended": 1791482267401,
+      "clientWallMs": 649,
+      "cfRay": "a47707a7c9fa9eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 350,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "16992401-6bad-4727-9657-c743a2075f0c",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "21bb5d7f-3b8c-4809-8e01-1a376896c4a7",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482349469,
+      "ended": 1791482350284,
+      "clientWallMs": 815,
+      "cfRay": "a47709ad4ad79eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 400,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "8a3a8e91-23ef-4687-8aac-212c1ec8ad37",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "9c4f1c2c-e51d-4c34-87e2-5b62fceb67ba",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482403769,
+      "ended": 1791482404455,
+      "clientWallMs": 686,
+      "cfRay": "a4770b002ee19eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 450,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "1efb954b-8511-411f-9678-1974673a690e",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "01b6bd73-0df9-4a30-84c3-0bfb3700e7c8",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482635508,
+      "ended": 1791482636229,
+      "clientWallMs": 721,
+      "cfRay": "a47710a888729eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 500,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "2ce38b02-d854-4374-9437-f7ff356f550b",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "29d637c2-53b2-41e5-be83-64dcf92ee387",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482749679,
+      "ended": 1791482750372,
+      "clientWallMs": 693,
+      "cfRay": "a47713721b349eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 550,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "5d1635ec-effd-4b27-a3bb-29e88dd8542e",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "8268f7a5-4ee4-408c-99bb-6a58805f06a5",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482847305,
+      "ended": 1791482847979,
+      "clientWallMs": 674,
+      "cfRay": "a47715d438219eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 600,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "61d9c803-bd9a-483e-896b-3412cf3024e5",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "30a02656-abba-4b09-8e78-9b3b03382cd2",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791482991914,
+      "ended": 1791482992587,
+      "clientWallMs": 673,
+      "cfRay": "a477195c0f039eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 650,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "680d6b48-638f-4e94-ad32-3493685058fe",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "1ef357ec-74ba-46ce-8dc3-bd34143e7073",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483188065,
+      "ended": 1791483188812,
+      "clientWallMs": 747,
+      "cfRay": "a4771e260da79eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 700,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "df9ac069-4945-418c-bd19-045accfa5383",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "03ffb675-73dd-4554-a3cc-4a96e383704e",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483292458,
+      "ended": 1791483293146,
+      "clientWallMs": 688,
+      "cfRay": "a47720b27b669eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 750,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "f01d73e4-c9cb-42ab-bfa6-a8e53b80d989",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "dd4ed41f-4d2f-4876-ae13-28f1aa3c0685",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483386598,
+      "ended": 1791483387343,
+      "clientWallMs": 745,
+      "cfRay": "a47722fed9d89eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 800,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "75600ecb-9cf8-4ef2-b4b6-22c24743d716",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "acc4560b-8e35-4184-8848-c70ffb704448",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483541584,
+      "ended": 1791483542277,
+      "clientWallMs": 693,
+      "cfRay": "a47726c79cf09eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 850,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "15bbf47d-9be8-4146-95a2-dff1a7be1051",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "68427648-fb5e-4025-b327-969e42618ebb",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483678843,
+      "ended": 1791483679515,
+      "clientWallMs": 672,
+      "cfRay": "a4772a216e129eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 900,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "225cb74a-c551-47c4-a181-d0acee36de91",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "9a96688d-db25-4605-8f45-0a55cb828957",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483755860,
+      "ended": 1791483756515,
+      "clientWallMs": 655,
+      "cfRay": "a4772c02bc9f9eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 950,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "64b8e667-c520-451e-bd11-2998689aaa35",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "ce4ff825-b44e-4a0d-b1f1-9cdc6a2ddfcd",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483841121,
+      "ended": 1791483841791,
+      "clientWallMs": 670,
+      "cfRay": "a4772e179a1f9eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 1000,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "07eb2820-057e-4587-a060-07c0be4028e5",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "f0fbfce7-1d29-418b-9d49-ffb26044c345",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483967293,
+      "ended": 1791483967950,
+      "clientWallMs": 657,
+      "cfRay": "a477312c3b399eed-CDG"
+    }
+  },
+  {
+    "afterTurn": 1000,
+    "result": {
+      "value": {
+        "key": "1000_2",
+        "generation": "measure-250-2",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "objects": [
+          {
+            "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+            "moduleId": "ea4768ea-d41a-4609-a98e-ab205710ee76",
+            "runtimeId": "276441da-c5bc-4761-92d4-7c8ed2c18d45",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "actorObjectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "861ab423bf3ac32bf3e4d2cd8a902340cfcfa20c4f0f61cac7414125ca19c282",
+            "moduleId": "9f8f295a-a887-4dd6-b583-7a05b8c9e516",
+            "runtimeId": "b5096c7c-fc0e-41ee-97eb-768eae52d14a",
+            "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+            "generation": "measure-250-2",
+            "protocol": "cold-v3-reference",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791483968648,
+      "ended": 1791483969341,
+      "clientWallMs": 693,
+      "cfRay": "a4773134c8b49eed-CDG"
+    }
+  }
+]

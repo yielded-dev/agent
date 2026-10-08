@@ -1,0 +1,31 @@
+{
+  "name": "cf-bench-8914-b124507a-head",
+  "role": "head",
+  "generation": "measure-50-0",
+  "namespaces": [
+    "46d7ded8ca474dec816faa0df8d1112e",
+    "04adb687a87743f3b4dd4fcec09b3e87",
+    "63f0a5f09105475685767cb98171d5a6",
+    "ec6ee9f1e21846ff86de925dcc6e5633",
+    "21284b44a70a4dc595642bf57aaba99d",
+    "8323465d72fc43748030fff162602a8f",
+    "7c74ae8ce9e84cd490a46e97cb0e0136",
+    "1c7ef676c1974eba9268123eba3526a2",
+    "16ae742cb6b347898b871f22dab28cb9"
+  ],
+  "modules": [
+    {
+      "name": "bench.mjs",
+      "bytes": 3455241,
+      "sha256": "fc50f45a421a0792e153e3c91a344f38a51a9569cfd36b4d54b0a479ee2b23c8"
+    },
+    {
+      "name": "worker.mjs",
+      "bytes": 8235,
+      "sha256": "98dd2eb7da36fe669a975346d68e8801c35422ea159a4acdfab3d3adf68df56e"
+    }
+  ],
+  "cpuLimitMs": 300000,
+  "compatibilityDate": "2026-08-18",
+  "locationHint": "wnam"
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "attempt": 0,
+    "error": "BenchError: base/health: HTTP 412 generation mismatch"
+  },
+  {
+    "attempt": 1,
+    "error": "BenchError: base/health: HTTP 412 generation mismatch"
+  },
+  {
+    "attempt": 2,
+    "error": "BenchError: base/health: HTTP 412 generation mismatch"
+  },
+  {
+    "attempt": 3,
+    "health": {
+      "value": {
+        "generation": "measure-50-1",
+        "version": "f35e9a41-93ce-46dd-900e-814910510a1a",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791478663306,
+      "ended": 1791478663873,
+      "clientWallMs": 567,
+      "cfRay": "a476afae2bd6cbbe-MAD"
+    },
+    "identity": {
+      "objectId": "bd41f95388cdfd287b803f243c2c4e4e8468797a762d362e29e47e0e514302a8",
+      "moduleId": "c69ecdcd-4270-47fa-b30e-280ddcfa495d",
+      "runtimeId": "34ead146-934c-4a9f-9510-5621acc8d3f1",
+      "version": "f35e9a41-93ce-46dd-900e-814910510a1a",
+      "generation": "measure-50-1",
+      "protocol": "cold-v3-reference"
+    }
+  }
+]

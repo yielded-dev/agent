@@ -1,0 +1,2024 @@
+{
+  "value": {
+    "kind": "tardie",
+    "identity": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "8d2289a9-1810-442b-a649-4f1643751c8c",
+      "runtimeId": "2db9d2af-030e-4fd6-ba8c-e8ac5f8f2bf0",
+      "version": "9d27ce42-c0ef-4f79-8226-947a825e3fe3",
+      "generation": "seed-resume-4",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008"
+    },
+    "messages": [
+      {
+        "id": "h0",
+        "seq": 1
+      },
+      {
+        "id": "h1",
+        "seq": 17
+      },
+      {
+        "id": "h2",
+        "seq": 33
+      },
+      {
+        "id": "h3",
+        "seq": 40
+      },
+      {
+        "id": "h4",
+        "seq": 56
+      },
+      {
+        "id": "h5",
+        "seq": 72
+      },
+      {
+        "id": "h6",
+        "seq": 79
+      },
+      {
+        "id": "h7",
+        "seq": 95
+      },
+      {
+        "id": "h8",
+        "seq": 111
+      },
+      {
+        "id": "h9",
+        "seq": 118
+      },
+      {
+        "id": "h10",
+        "seq": 134
+      },
+      {
+        "id": "h11",
+        "seq": 150
+      },
+      {
+        "id": "h12",
+        "seq": 157
+      },
+      {
+        "id": "h13",
+        "seq": 173
+      },
+      {
+        "id": "h14",
+        "seq": 189
+      },
+      {
+        "id": "h15",
+        "seq": 196
+      },
+      {
+        "id": "h16",
+        "seq": 212
+      },
+      {
+        "id": "h17",
+        "seq": 228
+      },
+      {
+        "id": "h18",
+        "seq": 235
+      },
+      {
+        "id": "h19",
+        "seq": 251
+      },
+      {
+        "id": "h20",
+        "seq": 267
+      },
+      {
+        "id": "h21",
+        "seq": 274
+      },
+      {
+        "id": "h22",
+        "seq": 290
+      },
+      {
+        "id": "h23",
+        "seq": 306
+      },
+      {
+        "id": "h24",
+        "seq": 313
+      },
+      {
+        "id": "h25",
+        "seq": 329
+      },
+      {
+        "id": "h26",
+        "seq": 345
+      },
+      {
+        "id": "h27",
+        "seq": 352
+      },
+      {
+        "id": "h28",
+        "seq": 368
+      },
+      {
+        "id": "h29",
+        "seq": 384
+      },
+      {
+        "id": "h30",
+        "seq": 391
+      },
+      {
+        "id": "h31",
+        "seq": 407
+      },
+      {
+        "id": "h32",
+        "seq": 423
+      },
+      {
+        "id": "h33",
+        "seq": 430
+      },
+      {
+        "id": "h34",
+        "seq": 446
+      }
+    ],
+    "events": [
+      {
+        "seq": 0,
+        "event": "{\"recordedAt\":1791480557833,\"event\":{\"type\":\"ThreadCreated\",\"address\":{\"actor\":\"bench-agent\",\"instance\":\"main\",\"thread\":\"bench\"},\"parent\":null,\"depth\":0,\"placement\":\"independent\"}}"
+      },
+      {
+        "seq": 1,
+        "event": "{\"message\":{\"id\":\"h0\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h0 tools=1\"}}},\"recordedAt\":1791480558644,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h0\",\"text\":\"turn h0 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h0\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 2,
+        "event": "{\"recordedAt\":1791480558684,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":2,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":1,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"}]}}}}}"
+      },
+      {
+        "seq": 3,
+        "event": "{\"recordedAt\":1791480558684,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h0:0\",\"turnId\":\"h0\"}}"
+      },
+      {
+        "seq": 4,
+        "event": "{\"recordedAt\":1791480558695,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":2,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480618695}}}}"
+      },
+      {
+        "seq": 5,
+        "event": "{\"recordedAt\":1791480558707,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":2,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-1\",\"name\":\"lookup\",\"input\":{\"n\":1}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 6,
+        "event": "{\"recordedAt\":1791480558707,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h0:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]}}"
+      },
+      {
+        "seq": 7,
+        "event": "{\"recordedAt\":1791480558720,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":7,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":6,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 8,
+        "event": "{\"recordedAt\":1791480558720,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 9,
+        "event": "{\"recordedAt\":1791480558733,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":7,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 10,
+        "event": "{\"recordedAt\":1791480558733,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 11,
+        "event": "{\"recordedAt\":1791480558748,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":11,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":6,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]},{\"role\":\"tool\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-1\",\"name\":\"lookup\",\"text\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false}]}}}}}"
+      },
+      {
+        "seq": 12,
+        "event": "{\"recordedAt\":1791480558748,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h0:1\",\"turnId\":\"h0\"}}"
+      },
+      {
+        "seq": 13,
+        "event": "{\"recordedAt\":1791480558763,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":11,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[11,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480618763}}}}"
+      },
+      {
+        "seq": 14,
+        "event": "{\"recordedAt\":1791480558776,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":11,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 15,
+        "event": "{\"recordedAt\":1791480558776,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h0:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 16,
+        "event": "{\"recordedAt\":1791480558795,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h0\",\"outcome\":\"completed\",\"callId\":\"model:h0:1\"}}"
+      },
+      {
+        "seq": 17,
+        "event": "{\"message\":{\"id\":\"h1\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h1 tools=1\"}}},\"recordedAt\":1791480559201,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h1\",\"text\":\"turn h1 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h1\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 18,
+        "event": "{\"recordedAt\":1791480559285,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":18,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":17,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]},{\"role\":\"tool\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-1\",\"name\":\"lookup\",\"text\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h1 tools=1\"}]}}}}}"
+      },
+      {
+        "seq": 19,
+        "event": "{\"recordedAt\":1791480559285,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h1:0\",\"turnId\":\"h1\"}}"
+      },
+      {
+        "seq": 20,
+        "event": "{\"recordedAt\":1791480559300,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":18,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480619300}}}}"
+      },
+      {
+        "seq": 21,
+        "event": "{\"recordedAt\":1791480559300,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":18,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-2\",\"name\":\"lookup\",\"input\":{\"n\":2}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 22,
+        "event": "{\"recordedAt\":1791480559300,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h1:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":2},\"providerId\":\"call-2\"}]}}"
+      },
+      {
+        "seq": 23,
+        "event": "{\"recordedAt\":1791480559314,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":23,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":22,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":2},\"providerId\":\"call-2\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 24,
+        "event": "{\"recordedAt\":1791480559314,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 25,
+        "event": "{\"recordedAt\":1791480559327,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":23,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 26,
+        "event": "{\"recordedAt\":1791480559327,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 27,
+        "event": "{\"recordedAt\":1791480559346,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":27,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":22,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]},{\"role\":\"tool\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-1\",\"name\":\"lookup\",\"text\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h1 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":2},\"providerId\":\"call-2\"}]},{\"role\":\"tool\",\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-2\",\"name\":\"lookup\",\"text\":\"\\\"record 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false}]}}}}}"
+      },
+      {
+        "seq": 28,
+        "event": "{\"recordedAt\":1791480559346,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h1:1\",\"turnId\":\"h1\"}}"
+      },
+      {
+        "seq": 29,
+        "event": "{\"recordedAt\":1791480559360,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":27,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[27,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480619360}}}}"
+      },
+      {
+        "seq": 30,
+        "event": "{\"recordedAt\":1791480559374,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":27,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 31,
+        "event": "{\"recordedAt\":1791480559374,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h1:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 32,
+        "event": "{\"recordedAt\":1791480559388,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h1\",\"outcome\":\"completed\",\"callId\":\"model:h1:1\"}}"
+      },
+      {
+        "seq": 33,
+        "event": "{\"message\":{\"id\":\"h2\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h2 tools=0\"}}},\"recordedAt\":1791480559804,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h2\",\"text\":\"turn h2 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h2\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 34,
+        "event": "{\"recordedAt\":1791480559848,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":34,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":33,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]},{\"role\":\"tool\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-1\",\"name\":\"lookup\",\"text\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h1 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":2},\"providerId\":\"call-2\"}]},{\"role\":\"tool\",\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-2\",\"name\":\"lookup\",\"text\":\"\\\"record 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h2 tools=0\"}]}}}}}"
+      },
+      {
+        "seq": 35,
+        "event": "{\"recordedAt\":1791480559848,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h2:0\",\"turnId\":\"h2\"}}"
+      },
+      {
+        "seq": 36,
+        "event": "{\"recordedAt\":1791480559861,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":34,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[34,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480619861}}}}"
+      },
+      {
+        "seq": 37,
+        "event": "{\"recordedAt\":1791480559869,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":34,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 38,
+        "event": "{\"recordedAt\":1791480559869,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h2:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 39,
+        "event": "{\"recordedAt\":1791480559882,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h2\",\"outcome\":\"completed\",\"callId\":\"model:h2:0\"}}"
+      },
+      {
+        "seq": 40,
+        "event": "{\"message\":{\"id\":\"h3\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h3 tools=1\"}}},\"recordedAt\":1791480560291,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h3\",\"text\":\"turn h3 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h3\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 41,
+        "event": "{\"recordedAt\":1791480560338,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":41,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":40,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"system\":\"You are a benchmark agent. Call lookup as instructed, then answer briefly.\",\"tools\":[{\"name\":\"lookup\",\"description\":\"Record lookup\\nLook up record number n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}},\"required\":[\"n\"],\"additionalProperties\":false},\"outputSchema\":{\"type\":\"string\"},\"annotations\":{\"readOnlyHint\":true,\"openWorldHint\":false},\"execution\":\"foreground\"}],\"context\":[{\"role\":\"user\",\"text\":\"turn h0 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":1},\"providerId\":\"call-1\"}]},{\"role\":\"tool\",\"callId\":\"[2,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-1\",\"name\":\"lookup\",\"text\":\"\\\"record 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h1 tools=1\"},{\"role\":\"assistant\",\"text\":\"\",\"toolCalls\":[{\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":2},\"providerId\":\"call-2\"}]},{\"role\":\"tool\",\"callId\":\"[18,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"providerId\":\"call-2\",\"name\":\"lookup\",\"text\":\"\\\"record 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":false},{\"role\":\"assistant\",\"text\":\"done after 1 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h2 tools=0\"},{\"role\":\"assistant\",\"text\":\"done after 0 lookups\",\"toolCalls\":[]},{\"role\":\"user\",\"text\":\"turn h3 tools=1\"}]}}}}}"
+      },
+      {
+        "seq": 42,
+        "event": "{\"recordedAt\":1791480560338,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h3:0\",\"turnId\":\"h3\"}}"
+      },
+      {
+        "seq": 43,
+        "event": "{\"recordedAt\":1791480560351,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":41,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[41,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480620351}}}}"
+      },
+      {
+        "seq": 44,
+        "event": "{\"recordedAt\":1791480560361,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":41,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-3\",\"name\":\"lookup\",\"input\":{\"n\":3}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 45,
+        "event": "{\"recordedAt\":1791480560361,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h3:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[41,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":3},\"providerId\":\"call-3\"}]}}"
+      },
+      {
+        "seq": 46,
+        "event": "{\"recordedAt\":1791480560373,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":46,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":45,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[41,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":3},\"providerId\":\"call-3\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 47,
+        "event": "{\"recordedAt\":1791480560373,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[41,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 48,
+        "event": "{\"recordedAt\":1791480560386,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":46,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 3: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 49,
+        "event": "{\"recordedAt\":1791480560386,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[41,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 3: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 50,
+        "event": "{\"recordedAt\":1791480560399,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":50,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":45,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"13b2325130869a14e2ccde7df6b30fc8987733e3c7d596a64ffb9589485cf8da\",\"bytes\":2500}}}}"
+      },
+      {
+        "seq": 51,
+        "event": "{\"recordedAt\":1791480560399,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h3:1\",\"turnId\":\"h3\"}}"
+      },
+      {
+        "seq": 52,
+        "event": "{\"recordedAt\":1791480560416,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":50,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[50,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480620416}}}}"
+      },
+      {
+        "seq": 53,
+        "event": "{\"recordedAt\":1791480560432,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":50,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 54,
+        "event": "{\"recordedAt\":1791480560432,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h3:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 55,
+        "event": "{\"recordedAt\":1791480560450,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h3\",\"outcome\":\"completed\",\"callId\":\"model:h3:1\"}}"
+      },
+      {
+        "seq": 56,
+        "event": "{\"message\":{\"id\":\"h4\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h4 tools=1\"}}},\"recordedAt\":1791480560864,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h4\",\"text\":\"turn h4 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h4\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 57,
+        "event": "{\"recordedAt\":1791480560916,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":57,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":56,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"8c0b76ac905904cc196e2e5d0a0969d706fe6bfca4bd2108d049cb2b7d952419\",\"bytes\":2607}}}}"
+      },
+      {
+        "seq": 58,
+        "event": "{\"recordedAt\":1791480560916,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h4:0\",\"turnId\":\"h4\"}}"
+      },
+      {
+        "seq": 59,
+        "event": "{\"recordedAt\":1791480560930,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":57,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[57,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480620930}}}}"
+      },
+      {
+        "seq": 60,
+        "event": "{\"recordedAt\":1791480560944,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":57,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-4\",\"name\":\"lookup\",\"input\":{\"n\":4}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 61,
+        "event": "{\"recordedAt\":1791480560944,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h4:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[57,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":4},\"providerId\":\"call-4\"}]}}"
+      },
+      {
+        "seq": 62,
+        "event": "{\"recordedAt\":1791480560956,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":62,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":61,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[57,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":4},\"providerId\":\"call-4\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 63,
+        "event": "{\"recordedAt\":1791480560956,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[57,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 64,
+        "event": "{\"recordedAt\":1791480560971,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":62,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 4: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 65,
+        "event": "{\"recordedAt\":1791480560971,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[57,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 4: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 66,
+        "event": "{\"recordedAt\":1791480560999,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":66,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":61,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"601e5fe715cf49da70ede57811edcd2407f36bd839b7fe9812c73bc84e7a199f\",\"bytes\":3164}}}}"
+      },
+      {
+        "seq": 67,
+        "event": "{\"recordedAt\":1791480560999,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h4:1\",\"turnId\":\"h4\"}}"
+      },
+      {
+        "seq": 68,
+        "event": "{\"recordedAt\":1791480561015,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":66,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[66,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480621015}}}}"
+      },
+      {
+        "seq": 69,
+        "event": "{\"recordedAt\":1791480561028,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":66,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 70,
+        "event": "{\"recordedAt\":1791480561028,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h4:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 71,
+        "event": "{\"recordedAt\":1791480561043,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h4\",\"outcome\":\"completed\",\"callId\":\"model:h4:1\"}}"
+      },
+      {
+        "seq": 72,
+        "event": "{\"message\":{\"id\":\"h5\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h5 tools=0\"}}},\"recordedAt\":1791480561451,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h5\",\"text\":\"turn h5 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h5\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 73,
+        "event": "{\"recordedAt\":1791480561496,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":73,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":72,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"02750bc219919697a7b9a468c7f64436a773c203805ed350178b55cd3043ad94\",\"bytes\":3271}}}}"
+      },
+      {
+        "seq": 74,
+        "event": "{\"recordedAt\":1791480561496,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h5:0\",\"turnId\":\"h5\"}}"
+      },
+      {
+        "seq": 75,
+        "event": "{\"recordedAt\":1791480561509,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":73,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[73,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480621509}}}}"
+      },
+      {
+        "seq": 76,
+        "event": "{\"recordedAt\":1791480561514,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":73,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 77,
+        "event": "{\"recordedAt\":1791480561514,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h5:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 78,
+        "event": "{\"recordedAt\":1791480561526,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h5\",\"outcome\":\"completed\",\"callId\":\"model:h5:0\"}}"
+      },
+      {
+        "seq": 79,
+        "event": "{\"message\":{\"id\":\"h6\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h6 tools=1\"}}},\"recordedAt\":1791480561936,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h6\",\"text\":\"turn h6 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h6\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 80,
+        "event": "{\"recordedAt\":1791480561978,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":80,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":79,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"5ca2ea2b92fb09923b62517861d1fb8c2ad117ee6d8e0ee9d7fe8d97afa3c57f\",\"bytes\":3378}}}}"
+      },
+      {
+        "seq": 81,
+        "event": "{\"recordedAt\":1791480561978,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h6:0\",\"turnId\":\"h6\"}}"
+      },
+      {
+        "seq": 82,
+        "event": "{\"recordedAt\":1791480561991,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":80,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[80,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480621991}}}}"
+      },
+      {
+        "seq": 83,
+        "event": "{\"recordedAt\":1791480562000,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":80,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-5\",\"name\":\"lookup\",\"input\":{\"n\":5}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 84,
+        "event": "{\"recordedAt\":1791480562000,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h6:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[80,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":5},\"providerId\":\"call-5\"}]}}"
+      },
+      {
+        "seq": 85,
+        "event": "{\"recordedAt\":1791480562012,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":85,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":84,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[80,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":5},\"providerId\":\"call-5\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 86,
+        "event": "{\"recordedAt\":1791480562012,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[80,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 87,
+        "event": "{\"recordedAt\":1791480562026,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":85,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 5: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 88,
+        "event": "{\"recordedAt\":1791480562026,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[80,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 5: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 89,
+        "event": "{\"recordedAt\":1791480562040,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":89,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":84,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"e662f538b84e25a3819c70d936c3602c84f2c43d230dd52a35822213d41d50ca\",\"bytes\":3935}}}}"
+      },
+      {
+        "seq": 90,
+        "event": "{\"recordedAt\":1791480562040,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h6:1\",\"turnId\":\"h6\"}}"
+      },
+      {
+        "seq": 91,
+        "event": "{\"recordedAt\":1791480562055,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":89,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[89,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480622055}}}}"
+      },
+      {
+        "seq": 92,
+        "event": "{\"recordedAt\":1791480562069,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":89,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 93,
+        "event": "{\"recordedAt\":1791480562069,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h6:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 94,
+        "event": "{\"recordedAt\":1791480562083,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h6\",\"outcome\":\"completed\",\"callId\":\"model:h6:1\"}}"
+      },
+      {
+        "seq": 95,
+        "event": "{\"message\":{\"id\":\"h7\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h7 tools=1\"}}},\"recordedAt\":1791480562502,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h7\",\"text\":\"turn h7 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h7\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 96,
+        "event": "{\"recordedAt\":1791480562548,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":96,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":95,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"b92fd25f6336cc39f5f1ff30ea9091ece840cfd210454e4248850515ee4af30f\",\"bytes\":4042}}}}"
+      },
+      {
+        "seq": 97,
+        "event": "{\"recordedAt\":1791480562548,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h7:0\",\"turnId\":\"h7\"}}"
+      },
+      {
+        "seq": 98,
+        "event": "{\"recordedAt\":1791480562560,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":96,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[96,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480622560}}}}"
+      },
+      {
+        "seq": 99,
+        "event": "{\"recordedAt\":1791480562567,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":96,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-6\",\"name\":\"lookup\",\"input\":{\"n\":6}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 100,
+        "event": "{\"recordedAt\":1791480562567,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h7:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[96,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":6},\"providerId\":\"call-6\"}]}}"
+      },
+      {
+        "seq": 101,
+        "event": "{\"recordedAt\":1791480562578,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":101,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":100,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[96,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":6},\"providerId\":\"call-6\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 102,
+        "event": "{\"recordedAt\":1791480562578,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[96,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 103,
+        "event": "{\"recordedAt\":1791480562591,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":101,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 6: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 104,
+        "event": "{\"recordedAt\":1791480562591,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[96,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 6: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 105,
+        "event": "{\"recordedAt\":1791480562607,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":105,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":100,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"05679b878f38c0605287ce1dbcbfc04ec3245ff4cd62ed5768811fbb11b9b611\",\"bytes\":4599}}}}"
+      },
+      {
+        "seq": 106,
+        "event": "{\"recordedAt\":1791480562607,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h7:1\",\"turnId\":\"h7\"}}"
+      },
+      {
+        "seq": 107,
+        "event": "{\"recordedAt\":1791480562622,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":105,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[105,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480622622}}}}"
+      },
+      {
+        "seq": 108,
+        "event": "{\"recordedAt\":1791480562636,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":105,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 109,
+        "event": "{\"recordedAt\":1791480562636,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h7:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 110,
+        "event": "{\"recordedAt\":1791480562649,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h7\",\"outcome\":\"completed\",\"callId\":\"model:h7:1\"}}"
+      },
+      {
+        "seq": 111,
+        "event": "{\"message\":{\"id\":\"h8\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h8 tools=0\"}}},\"recordedAt\":1791480563076,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h8\",\"text\":\"turn h8 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h8\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 112,
+        "event": "{\"recordedAt\":1791480563128,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":112,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":111,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"a934548bab918ae289b905f48d255b9059ddc03cc0913d147ab5bf47fb96f093\",\"bytes\":4706}}}}"
+      },
+      {
+        "seq": 113,
+        "event": "{\"recordedAt\":1791480563128,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h8:0\",\"turnId\":\"h8\"}}"
+      },
+      {
+        "seq": 114,
+        "event": "{\"recordedAt\":1791480563140,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":112,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[112,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480623140}}}}"
+      },
+      {
+        "seq": 115,
+        "event": "{\"recordedAt\":1791480563148,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":112,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 116,
+        "event": "{\"recordedAt\":1791480563148,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h8:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 117,
+        "event": "{\"recordedAt\":1791480563160,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h8\",\"outcome\":\"completed\",\"callId\":\"model:h8:0\"}}"
+      },
+      {
+        "seq": 118,
+        "event": "{\"message\":{\"id\":\"h9\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h9 tools=1\"}}},\"recordedAt\":1791480563584,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h9\",\"text\":\"turn h9 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h9\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 119,
+        "event": "{\"recordedAt\":1791480563633,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":119,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":118,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"8551458b992ee5a7deabc5c664ce1a5319936161cea3094bacc9f09412fef900\",\"bytes\":4813}}}}"
+      },
+      {
+        "seq": 120,
+        "event": "{\"recordedAt\":1791480563633,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h9:0\",\"turnId\":\"h9\"}}"
+      },
+      {
+        "seq": 121,
+        "event": "{\"recordedAt\":1791480563647,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":119,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[119,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480623647}}}}"
+      },
+      {
+        "seq": 122,
+        "event": "{\"recordedAt\":1791480563659,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":119,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-7\",\"name\":\"lookup\",\"input\":{\"n\":7}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 123,
+        "event": "{\"recordedAt\":1791480563659,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h9:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[119,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":7},\"providerId\":\"call-7\"}]}}"
+      },
+      {
+        "seq": 124,
+        "event": "{\"recordedAt\":1791480563674,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":124,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":123,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[119,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":7},\"providerId\":\"call-7\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 125,
+        "event": "{\"recordedAt\":1791480563674,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[119,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 126,
+        "event": "{\"recordedAt\":1791480563687,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":124,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 7: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 127,
+        "event": "{\"recordedAt\":1791480563687,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[119,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 7: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 128,
+        "event": "{\"recordedAt\":1791480563703,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":128,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":123,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"1c45ae4ec6e53c97bd324d95b986ecea784fd2afa8dbfc22d8211b3283b6ed68\",\"bytes\":5372}}}}"
+      },
+      {
+        "seq": 129,
+        "event": "{\"recordedAt\":1791480563703,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h9:1\",\"turnId\":\"h9\"}}"
+      },
+      {
+        "seq": 130,
+        "event": "{\"recordedAt\":1791480563718,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":128,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[128,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480623718}}}}"
+      },
+      {
+        "seq": 131,
+        "event": "{\"recordedAt\":1791480563733,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":128,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 132,
+        "event": "{\"recordedAt\":1791480563733,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h9:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 133,
+        "event": "{\"recordedAt\":1791480563748,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h9\",\"outcome\":\"completed\",\"callId\":\"model:h9:1\"}}"
+      },
+      {
+        "seq": 134,
+        "event": "{\"message\":{\"id\":\"h10\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h10 tools=1\"}}},\"recordedAt\":1791480564965,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h10\",\"text\":\"turn h10 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h10\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 135,
+        "event": "{\"recordedAt\":1791480565009,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":135,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":134,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"e857fda0a0aac7be1ae23ff6b47fbff66116c2ab7336bb61a174e65e16d9246d\",\"bytes\":5480}}}}"
+      },
+      {
+        "seq": 136,
+        "event": "{\"recordedAt\":1791480565009,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h10:0\",\"turnId\":\"h10\"}}"
+      },
+      {
+        "seq": 137,
+        "event": "{\"recordedAt\":1791480565023,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":135,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[135,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480625023}}}}"
+      },
+      {
+        "seq": 138,
+        "event": "{\"recordedAt\":1791480565030,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":135,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-8\",\"name\":\"lookup\",\"input\":{\"n\":8}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 139,
+        "event": "{\"recordedAt\":1791480565030,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h10:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[135,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":8},\"providerId\":\"call-8\"}]}}"
+      },
+      {
+        "seq": 140,
+        "event": "{\"recordedAt\":1791480565043,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":140,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":139,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[135,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":8},\"providerId\":\"call-8\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 141,
+        "event": "{\"recordedAt\":1791480565043,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[135,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 142,
+        "event": "{\"recordedAt\":1791480565056,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":140,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 8: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 143,
+        "event": "{\"recordedAt\":1791480565056,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[135,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 8: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 144,
+        "event": "{\"recordedAt\":1791480565070,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":144,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":139,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"e27b513ff6c13cb48538091ca1195d4fbc834457c9fd1960b4597aeddea53540\",\"bytes\":6039}}}}"
+      },
+      {
+        "seq": 145,
+        "event": "{\"recordedAt\":1791480565070,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h10:1\",\"turnId\":\"h10\"}}"
+      },
+      {
+        "seq": 146,
+        "event": "{\"recordedAt\":1791480565084,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":144,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[144,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480625084}}}}"
+      },
+      {
+        "seq": 147,
+        "event": "{\"recordedAt\":1791480565099,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":144,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 148,
+        "event": "{\"recordedAt\":1791480565099,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h10:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 149,
+        "event": "{\"recordedAt\":1791480565114,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h10\",\"outcome\":\"completed\",\"callId\":\"model:h10:1\"}}"
+      },
+      {
+        "seq": 150,
+        "event": "{\"message\":{\"id\":\"h11\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h11 tools=0\"}}},\"recordedAt\":1791480565391,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h11\",\"text\":\"turn h11 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h11\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 151,
+        "event": "{\"recordedAt\":1791480565437,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":151,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":150,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"7c3b5fc0e531941137f47938c651408e4447c3a6d1f3971cc9632a38db64ae7a\",\"bytes\":6147}}}}"
+      },
+      {
+        "seq": 152,
+        "event": "{\"recordedAt\":1791480565437,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h11:0\",\"turnId\":\"h11\"}}"
+      },
+      {
+        "seq": 153,
+        "event": "{\"recordedAt\":1791480565450,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":151,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[151,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480625450}}}}"
+      },
+      {
+        "seq": 154,
+        "event": "{\"recordedAt\":1791480565460,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":151,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 155,
+        "event": "{\"recordedAt\":1791480565460,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h11:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 156,
+        "event": "{\"recordedAt\":1791480565473,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h11\",\"outcome\":\"completed\",\"callId\":\"model:h11:0\"}}"
+      },
+      {
+        "seq": 157,
+        "event": "{\"message\":{\"id\":\"h12\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h12 tools=1\"}}},\"recordedAt\":1791480565762,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h12\",\"text\":\"turn h12 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h12\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 158,
+        "event": "{\"recordedAt\":1791480565811,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":158,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":157,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"cf7219e5651baf1cef172a82a80c0bf9180219c9c50a52b287bbeec76714ffad\",\"bytes\":6255}}}}"
+      },
+      {
+        "seq": 159,
+        "event": "{\"recordedAt\":1791480565811,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h12:0\",\"turnId\":\"h12\"}}"
+      },
+      {
+        "seq": 160,
+        "event": "{\"recordedAt\":1791480565825,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":158,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[158,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480625825}}}}"
+      },
+      {
+        "seq": 161,
+        "event": "{\"recordedAt\":1791480565837,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":158,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-9\",\"name\":\"lookup\",\"input\":{\"n\":9}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 162,
+        "event": "{\"recordedAt\":1791480565837,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h12:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[158,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":9},\"providerId\":\"call-9\"}]}}"
+      },
+      {
+        "seq": 163,
+        "event": "{\"recordedAt\":1791480565852,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":163,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":162,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[158,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":9},\"providerId\":\"call-9\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 164,
+        "event": "{\"recordedAt\":1791480565852,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[158,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 165,
+        "event": "{\"recordedAt\":1791480565868,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":163,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 9: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 166,
+        "event": "{\"recordedAt\":1791480565868,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[158,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 9: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 167,
+        "event": "{\"recordedAt\":1791480565883,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":167,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":162,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"13524fc5a89401f84ee61d8e2d7b050c043bd265edeca1180714c70909658ad3\",\"bytes\":6814}}}}"
+      },
+      {
+        "seq": 168,
+        "event": "{\"recordedAt\":1791480565883,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h12:1\",\"turnId\":\"h12\"}}"
+      },
+      {
+        "seq": 169,
+        "event": "{\"recordedAt\":1791480565898,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":167,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[167,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480625898}}}}"
+      },
+      {
+        "seq": 170,
+        "event": "{\"recordedAt\":1791480565914,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":167,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 171,
+        "event": "{\"recordedAt\":1791480565914,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h12:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 172,
+        "event": "{\"recordedAt\":1791480565930,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h12\",\"outcome\":\"completed\",\"callId\":\"model:h12:1\"}}"
+      },
+      {
+        "seq": 173,
+        "event": "{\"message\":{\"id\":\"h13\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h13 tools=1\"}}},\"recordedAt\":1791480566226,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h13\",\"text\":\"turn h13 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h13\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 174,
+        "event": "{\"recordedAt\":1791480566277,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":174,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":173,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"27c504bcbb749f3976e618a65cb42ad9e47f0bb88840b2560ec605dd778c48a3\",\"bytes\":6922}}}}"
+      },
+      {
+        "seq": 175,
+        "event": "{\"recordedAt\":1791480566277,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h13:0\",\"turnId\":\"h13\"}}"
+      },
+      {
+        "seq": 176,
+        "event": "{\"recordedAt\":1791480566292,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":174,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[174,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480626292}}}}"
+      },
+      {
+        "seq": 177,
+        "event": "{\"recordedAt\":1791480566306,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":174,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-10\",\"name\":\"lookup\",\"input\":{\"n\":10}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 178,
+        "event": "{\"recordedAt\":1791480566306,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h13:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[174,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":10},\"providerId\":\"call-10\"}]}}"
+      },
+      {
+        "seq": 179,
+        "event": "{\"recordedAt\":1791480566319,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":179,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":178,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[174,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":10},\"providerId\":\"call-10\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 180,
+        "event": "{\"recordedAt\":1791480566319,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[174,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 181,
+        "event": "{\"recordedAt\":1791480566333,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":179,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 10: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 182,
+        "event": "{\"recordedAt\":1791480566333,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[174,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 10: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 183,
+        "event": "{\"recordedAt\":1791480566349,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":183,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":178,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"f394b977d2241993c86ab081511e3303a8871b72ae2e8cd3c64f2f2ecbf3e677\",\"bytes\":7484}}}}"
+      },
+      {
+        "seq": 184,
+        "event": "{\"recordedAt\":1791480566349,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h13:1\",\"turnId\":\"h13\"}}"
+      },
+      {
+        "seq": 185,
+        "event": "{\"recordedAt\":1791480566368,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":183,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[183,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480626368}}}}"
+      },
+      {
+        "seq": 186,
+        "event": "{\"recordedAt\":1791480566385,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":183,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 187,
+        "event": "{\"recordedAt\":1791480566385,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h13:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 188,
+        "event": "{\"recordedAt\":1791480566401,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h13\",\"outcome\":\"completed\",\"callId\":\"model:h13:1\"}}"
+      },
+      {
+        "seq": 189,
+        "event": "{\"message\":{\"id\":\"h14\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h14 tools=0\"}}},\"recordedAt\":1791480566701,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h14\",\"text\":\"turn h14 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h14\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 190,
+        "event": "{\"recordedAt\":1791480566796,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":190,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":189,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"5f3117e029bb2e11f189a8aa35b140cd3098678abdcaab7ea19bf11c0d6eb3e5\",\"bytes\":7592}}}}"
+      },
+      {
+        "seq": 191,
+        "event": "{\"recordedAt\":1791480566796,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h14:0\",\"turnId\":\"h14\"}}"
+      },
+      {
+        "seq": 192,
+        "event": "{\"recordedAt\":1791480566809,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":190,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[190,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480626809}}}}"
+      },
+      {
+        "seq": 193,
+        "event": "{\"recordedAt\":1791480566824,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":190,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 194,
+        "event": "{\"recordedAt\":1791480566824,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h14:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 195,
+        "event": "{\"recordedAt\":1791480566841,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h14\",\"outcome\":\"completed\",\"callId\":\"model:h14:0\"}}"
+      },
+      {
+        "seq": 196,
+        "event": "{\"message\":{\"id\":\"h15\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h15 tools=1\"}}},\"recordedAt\":1791480567136,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h15\",\"text\":\"turn h15 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h15\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 197,
+        "event": "{\"recordedAt\":1791480567184,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":197,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":196,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"2c4ff5ac8d31c9128c4fecb22dc77a9564308c338b3f403b935b353876d1371f\",\"bytes\":7700}}}}"
+      },
+      {
+        "seq": 198,
+        "event": "{\"recordedAt\":1791480567184,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h15:0\",\"turnId\":\"h15\"}}"
+      },
+      {
+        "seq": 199,
+        "event": "{\"recordedAt\":1791480567199,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":197,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[197,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480627199}}}}"
+      },
+      {
+        "seq": 200,
+        "event": "{\"recordedAt\":1791480567208,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":197,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-11\",\"name\":\"lookup\",\"input\":{\"n\":11}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 201,
+        "event": "{\"recordedAt\":1791480567208,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h15:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[197,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":11},\"providerId\":\"call-11\"}]}}"
+      },
+      {
+        "seq": 202,
+        "event": "{\"recordedAt\":1791480567223,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":202,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":201,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[197,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":11},\"providerId\":\"call-11\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 203,
+        "event": "{\"recordedAt\":1791480567223,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[197,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 204,
+        "event": "{\"recordedAt\":1791480567239,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":202,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 11: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 205,
+        "event": "{\"recordedAt\":1791480567239,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[197,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 11: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 206,
+        "event": "{\"recordedAt\":1791480567262,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":206,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":201,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"2b3f4c497b7e6919bc81465943dc91c6dfa37a4c6194bb49e71d54c5493fc2cb\",\"bytes\":8262}}}}"
+      },
+      {
+        "seq": 207,
+        "event": "{\"recordedAt\":1791480567262,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h15:1\",\"turnId\":\"h15\"}}"
+      },
+      {
+        "seq": 208,
+        "event": "{\"recordedAt\":1791480567278,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":206,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[206,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480627278}}}}"
+      },
+      {
+        "seq": 209,
+        "event": "{\"recordedAt\":1791480567293,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":206,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 210,
+        "event": "{\"recordedAt\":1791480567293,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h15:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 211,
+        "event": "{\"recordedAt\":1791480567308,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h15\",\"outcome\":\"completed\",\"callId\":\"model:h15:1\"}}"
+      },
+      {
+        "seq": 212,
+        "event": "{\"message\":{\"id\":\"h16\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h16 tools=1\"}}},\"recordedAt\":1791480567616,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h16\",\"text\":\"turn h16 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h16\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 213,
+        "event": "{\"recordedAt\":1791480567668,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":213,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":212,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"b784b4d88d0b5c2d8723a9cd0fed3bd1a96616af052b76178d0b5814fb0daeef\",\"bytes\":8370}}}}"
+      },
+      {
+        "seq": 214,
+        "event": "{\"recordedAt\":1791480567668,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h16:0\",\"turnId\":\"h16\"}}"
+      },
+      {
+        "seq": 215,
+        "event": "{\"recordedAt\":1791480567682,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":213,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[213,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480627682}}}}"
+      },
+      {
+        "seq": 216,
+        "event": "{\"recordedAt\":1791480567691,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":213,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-12\",\"name\":\"lookup\",\"input\":{\"n\":12}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 217,
+        "event": "{\"recordedAt\":1791480567691,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h16:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[213,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":12},\"providerId\":\"call-12\"}]}}"
+      },
+      {
+        "seq": 218,
+        "event": "{\"recordedAt\":1791480567706,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":218,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":217,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[213,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":12},\"providerId\":\"call-12\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 219,
+        "event": "{\"recordedAt\":1791480567706,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[213,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 220,
+        "event": "{\"recordedAt\":1791480567725,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":218,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 12: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 221,
+        "event": "{\"recordedAt\":1791480567725,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[213,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 12: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 222,
+        "event": "{\"recordedAt\":1791480567743,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":222,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":217,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"a2fcb6f2885a91e3f6a3a372e5bc8e6731bd356d0b2d3d3437c3e4ee310e0af9\",\"bytes\":8932}}}}"
+      },
+      {
+        "seq": 223,
+        "event": "{\"recordedAt\":1791480567743,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h16:1\",\"turnId\":\"h16\"}}"
+      },
+      {
+        "seq": 224,
+        "event": "{\"recordedAt\":1791480567760,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":222,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[222,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480627760}}}}"
+      },
+      {
+        "seq": 225,
+        "event": "{\"recordedAt\":1791480567779,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":222,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 226,
+        "event": "{\"recordedAt\":1791480567779,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h16:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 227,
+        "event": "{\"recordedAt\":1791480567797,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h16\",\"outcome\":\"completed\",\"callId\":\"model:h16:1\"}}"
+      },
+      {
+        "seq": 228,
+        "event": "{\"message\":{\"id\":\"h17\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h17 tools=0\"}}},\"recordedAt\":1791480568115,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h17\",\"text\":\"turn h17 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h17\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 229,
+        "event": "{\"recordedAt\":1791480568168,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":229,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":228,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"ac67af3856bf488482349e4529a94f6abadc0362dec9146e4c020ce82b0f07cb\",\"bytes\":9040}}}}"
+      },
+      {
+        "seq": 230,
+        "event": "{\"recordedAt\":1791480568168,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h17:0\",\"turnId\":\"h17\"}}"
+      },
+      {
+        "seq": 231,
+        "event": "{\"recordedAt\":1791480568187,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":229,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[229,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480628187}}}}"
+      },
+      {
+        "seq": 232,
+        "event": "{\"recordedAt\":1791480568189,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":229,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 233,
+        "event": "{\"recordedAt\":1791480568189,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h17:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 234,
+        "event": "{\"recordedAt\":1791480568204,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h17\",\"outcome\":\"completed\",\"callId\":\"model:h17:0\"}}"
+      },
+      {
+        "seq": 235,
+        "event": "{\"message\":{\"id\":\"h18\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h18 tools=1\"}}},\"recordedAt\":1791480568529,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h18\",\"text\":\"turn h18 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h18\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 236,
+        "event": "{\"recordedAt\":1791480568582,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":236,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":235,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"81ffd88be7a9380e644951c781605ae4bd8cd8358a04010604fcc326924aa7c1\",\"bytes\":9148}}}}"
+      },
+      {
+        "seq": 237,
+        "event": "{\"recordedAt\":1791480568582,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h18:0\",\"turnId\":\"h18\"}}"
+      },
+      {
+        "seq": 238,
+        "event": "{\"recordedAt\":1791480568597,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":236,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[236,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480628597}}}}"
+      },
+      {
+        "seq": 239,
+        "event": "{\"recordedAt\":1791480568609,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":236,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-13\",\"name\":\"lookup\",\"input\":{\"n\":13}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 240,
+        "event": "{\"recordedAt\":1791480568609,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h18:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[236,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":13},\"providerId\":\"call-13\"}]}}"
+      },
+      {
+        "seq": 241,
+        "event": "{\"recordedAt\":1791480568625,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":241,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":240,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[236,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":13},\"providerId\":\"call-13\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 242,
+        "event": "{\"recordedAt\":1791480568625,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[236,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 243,
+        "event": "{\"recordedAt\":1791480568640,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":241,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 13: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 244,
+        "event": "{\"recordedAt\":1791480568640,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[236,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 13: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 245,
+        "event": "{\"recordedAt\":1791480568657,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":245,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":240,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"67d4268d82430a5bd669c30c744a5f7d2e2268f27a6f2bffa3a08c05e6224d9b\",\"bytes\":9710}}}}"
+      },
+      {
+        "seq": 246,
+        "event": "{\"recordedAt\":1791480568657,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h18:1\",\"turnId\":\"h18\"}}"
+      },
+      {
+        "seq": 247,
+        "event": "{\"recordedAt\":1791480568677,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":245,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[245,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480628677}}}}"
+      },
+      {
+        "seq": 248,
+        "event": "{\"recordedAt\":1791480568694,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":245,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 249,
+        "event": "{\"recordedAt\":1791480568694,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h18:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 250,
+        "event": "{\"recordedAt\":1791480568712,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h18\",\"outcome\":\"completed\",\"callId\":\"model:h18:1\"}}"
+      },
+      {
+        "seq": 251,
+        "event": "{\"message\":{\"id\":\"h19\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h19 tools=1\"}}},\"recordedAt\":1791480569032,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h19\",\"text\":\"turn h19 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h19\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 252,
+        "event": "{\"recordedAt\":1791480569099,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":252,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":251,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"5b37cce9452415625dac9d79551ff174fae04dc385260236624820784ededfb8\",\"bytes\":9818}}}}"
+      },
+      {
+        "seq": 253,
+        "event": "{\"recordedAt\":1791480569099,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h19:0\",\"turnId\":\"h19\"}}"
+      },
+      {
+        "seq": 254,
+        "event": "{\"recordedAt\":1791480569114,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":252,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[252,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480629114}}}}"
+      },
+      {
+        "seq": 255,
+        "event": "{\"recordedAt\":1791480569131,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":252,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-14\",\"name\":\"lookup\",\"input\":{\"n\":14}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 256,
+        "event": "{\"recordedAt\":1791480569131,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h19:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[252,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":14},\"providerId\":\"call-14\"}]}}"
+      },
+      {
+        "seq": 257,
+        "event": "{\"recordedAt\":1791480569145,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":257,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":256,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[252,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":14},\"providerId\":\"call-14\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 258,
+        "event": "{\"recordedAt\":1791480569145,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[252,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 259,
+        "event": "{\"recordedAt\":1791480569160,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":257,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 14: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 260,
+        "event": "{\"recordedAt\":1791480569160,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[252,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 14: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 261,
+        "event": "{\"recordedAt\":1791480569194,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":261,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":256,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"17b4c726e3d41c3d9ffa9a776bee4eae8434c5a378bcd9388b3f16a31d3452be\",\"bytes\":10380}}}}"
+      },
+      {
+        "seq": 262,
+        "event": "{\"recordedAt\":1791480569194,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h19:1\",\"turnId\":\"h19\"}}"
+      },
+      {
+        "seq": 263,
+        "event": "{\"recordedAt\":1791480569210,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":261,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[261,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480629210}}}}"
+      },
+      {
+        "seq": 264,
+        "event": "{\"recordedAt\":1791480569224,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":261,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 265,
+        "event": "{\"recordedAt\":1791480569224,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h19:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 266,
+        "event": "{\"recordedAt\":1791480569240,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h19\",\"outcome\":\"completed\",\"callId\":\"model:h19:1\"}}"
+      },
+      {
+        "seq": 267,
+        "event": "{\"message\":{\"id\":\"h20\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h20 tools=0\"}}},\"recordedAt\":1791480570040,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h20\",\"text\":\"turn h20 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h20\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 268,
+        "event": "{\"recordedAt\":1791480570083,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":268,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":267,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"9158c6f59786100f0b1f371bef7fed9988adc8b40771fcd3682a359cf70371b0\",\"bytes\":10488}}}}"
+      },
+      {
+        "seq": 269,
+        "event": "{\"recordedAt\":1791480570083,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h20:0\",\"turnId\":\"h20\"}}"
+      },
+      {
+        "seq": 270,
+        "event": "{\"recordedAt\":1791480570096,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":268,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[268,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480630096}}}}"
+      },
+      {
+        "seq": 271,
+        "event": "{\"recordedAt\":1791480570108,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":268,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 272,
+        "event": "{\"recordedAt\":1791480570108,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h20:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 273,
+        "event": "{\"recordedAt\":1791480570123,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h20\",\"outcome\":\"completed\",\"callId\":\"model:h20:0\"}}"
+      },
+      {
+        "seq": 274,
+        "event": "{\"message\":{\"id\":\"h21\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h21 tools=1\"}}},\"recordedAt\":1791480570408,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h21\",\"text\":\"turn h21 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h21\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 275,
+        "event": "{\"recordedAt\":1791480570457,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":275,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":274,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"3640cd5640a31526441e8bd490ce5b6602bb1dcade8ed6712e981c92184e5498\",\"bytes\":10596}}}}"
+      },
+      {
+        "seq": 276,
+        "event": "{\"recordedAt\":1791480570457,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h21:0\",\"turnId\":\"h21\"}}"
+      },
+      {
+        "seq": 277,
+        "event": "{\"recordedAt\":1791480570471,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":275,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[275,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480630471}}}}"
+      },
+      {
+        "seq": 278,
+        "event": "{\"recordedAt\":1791480570482,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":275,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-15\",\"name\":\"lookup\",\"input\":{\"n\":15}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 279,
+        "event": "{\"recordedAt\":1791480570482,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h21:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[275,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":15},\"providerId\":\"call-15\"}]}}"
+      },
+      {
+        "seq": 280,
+        "event": "{\"recordedAt\":1791480570498,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":280,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":279,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[275,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":15},\"providerId\":\"call-15\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 281,
+        "event": "{\"recordedAt\":1791480570498,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[275,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 282,
+        "event": "{\"recordedAt\":1791480570512,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":280,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 15: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 283,
+        "event": "{\"recordedAt\":1791480570512,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[275,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 15: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 284,
+        "event": "{\"recordedAt\":1791480570529,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":284,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":279,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"a105fc4fea590c721ae9697950852ca615a94119266e4106ded7ff639253f81e\",\"bytes\":11158}}}}"
+      },
+      {
+        "seq": 285,
+        "event": "{\"recordedAt\":1791480570529,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h21:1\",\"turnId\":\"h21\"}}"
+      },
+      {
+        "seq": 286,
+        "event": "{\"recordedAt\":1791480570545,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":284,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[284,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480630545}}}}"
+      },
+      {
+        "seq": 287,
+        "event": "{\"recordedAt\":1791480570562,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":284,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 288,
+        "event": "{\"recordedAt\":1791480570562,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h21:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 289,
+        "event": "{\"recordedAt\":1791480570578,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h21\",\"outcome\":\"completed\",\"callId\":\"model:h21:1\"}}"
+      },
+      {
+        "seq": 290,
+        "event": "{\"message\":{\"id\":\"h22\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h22 tools=1\"}}},\"recordedAt\":1791480570878,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h22\",\"text\":\"turn h22 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h22\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 291,
+        "event": "{\"recordedAt\":1791480570929,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":291,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":290,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"7c46e784e87681d8662731e83a7086eaeb2f8b2108261fc229a1b8d77e1fc16d\",\"bytes\":11266}}}}"
+      },
+      {
+        "seq": 292,
+        "event": "{\"recordedAt\":1791480570929,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h22:0\",\"turnId\":\"h22\"}}"
+      },
+      {
+        "seq": 293,
+        "event": "{\"recordedAt\":1791480570943,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":291,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[291,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480630943}}}}"
+      },
+      {
+        "seq": 294,
+        "event": "{\"recordedAt\":1791480570954,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":291,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-16\",\"name\":\"lookup\",\"input\":{\"n\":16}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 295,
+        "event": "{\"recordedAt\":1791480570954,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h22:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[291,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":16},\"providerId\":\"call-16\"}]}}"
+      },
+      {
+        "seq": 296,
+        "event": "{\"recordedAt\":1791480570970,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":296,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":295,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[291,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":16},\"providerId\":\"call-16\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 297,
+        "event": "{\"recordedAt\":1791480570970,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[291,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 298,
+        "event": "{\"recordedAt\":1791480570985,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":296,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 16: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 299,
+        "event": "{\"recordedAt\":1791480570985,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[291,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 16: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 300,
+        "event": "{\"recordedAt\":1791480571001,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":300,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":295,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"2562424a5be773ed2e1d985186777c9aee62b74c5f04db1e059e3d48cb090caa\",\"bytes\":11828}}}}"
+      },
+      {
+        "seq": 301,
+        "event": "{\"recordedAt\":1791480571001,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h22:1\",\"turnId\":\"h22\"}}"
+      },
+      {
+        "seq": 302,
+        "event": "{\"recordedAt\":1791480571019,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":300,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[300,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480631019}}}}"
+      },
+      {
+        "seq": 303,
+        "event": "{\"recordedAt\":1791480571037,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":300,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 304,
+        "event": "{\"recordedAt\":1791480571037,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h22:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 305,
+        "event": "{\"recordedAt\":1791480571054,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h22\",\"outcome\":\"completed\",\"callId\":\"model:h22:1\"}}"
+      },
+      {
+        "seq": 306,
+        "event": "{\"message\":{\"id\":\"h23\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h23 tools=0\"}}},\"recordedAt\":1791480571358,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h23\",\"text\":\"turn h23 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h23\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 307,
+        "event": "{\"recordedAt\":1791480571406,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":307,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":306,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"ee9feb391cfa1c20f7232cf3c559a6fb34f084b0278ceb5fe1c1b1cb2a7f8b2a\",\"bytes\":11936}}}}"
+      },
+      {
+        "seq": 308,
+        "event": "{\"recordedAt\":1791480571406,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h23:0\",\"turnId\":\"h23\"}}"
+      },
+      {
+        "seq": 309,
+        "event": "{\"recordedAt\":1791480571419,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":307,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[307,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480631419}}}}"
+      },
+      {
+        "seq": 310,
+        "event": "{\"recordedAt\":1791480571433,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":307,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 311,
+        "event": "{\"recordedAt\":1791480571433,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h23:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 312,
+        "event": "{\"recordedAt\":1791480571450,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h23\",\"outcome\":\"completed\",\"callId\":\"model:h23:0\"}}"
+      },
+      {
+        "seq": 313,
+        "event": "{\"message\":{\"id\":\"h24\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h24 tools=1\"}}},\"recordedAt\":1791480571751,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h24\",\"text\":\"turn h24 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h24\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 314,
+        "event": "{\"recordedAt\":1791480571804,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":314,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":313,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"6052a730690f379733d6b064508dafffc84d12ae6aa62301b6a00ca0e5c8e509\",\"bytes\":12044}}}}"
+      },
+      {
+        "seq": 315,
+        "event": "{\"recordedAt\":1791480571804,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h24:0\",\"turnId\":\"h24\"}}"
+      },
+      {
+        "seq": 316,
+        "event": "{\"recordedAt\":1791480571821,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":314,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[314,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480631821}}}}"
+      },
+      {
+        "seq": 317,
+        "event": "{\"recordedAt\":1791480571836,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":314,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-17\",\"name\":\"lookup\",\"input\":{\"n\":17}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 318,
+        "event": "{\"recordedAt\":1791480571836,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h24:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[314,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":17},\"providerId\":\"call-17\"}]}}"
+      },
+      {
+        "seq": 319,
+        "event": "{\"recordedAt\":1791480571850,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":319,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":318,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[314,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":17},\"providerId\":\"call-17\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 320,
+        "event": "{\"recordedAt\":1791480571850,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[314,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 321,
+        "event": "{\"recordedAt\":1791480571864,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":319,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 17: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 322,
+        "event": "{\"recordedAt\":1791480571864,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[314,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 17: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 323,
+        "event": "{\"recordedAt\":1791480571895,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":323,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":318,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"c9252b06758fab477379a68944b2c29d9cd603c0d1d2f884134ff317ab2d3b06\",\"bytes\":12606}}}}"
+      },
+      {
+        "seq": 324,
+        "event": "{\"recordedAt\":1791480571895,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h24:1\",\"turnId\":\"h24\"}}"
+      },
+      {
+        "seq": 325,
+        "event": "{\"recordedAt\":1791480571910,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":323,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[323,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480631910}}}}"
+      },
+      {
+        "seq": 326,
+        "event": "{\"recordedAt\":1791480571924,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":323,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 327,
+        "event": "{\"recordedAt\":1791480571924,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h24:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 328,
+        "event": "{\"recordedAt\":1791480571939,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h24\",\"outcome\":\"completed\",\"callId\":\"model:h24:1\"}}"
+      },
+      {
+        "seq": 329,
+        "event": "{\"message\":{\"id\":\"h25\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h25 tools=1\"}}},\"recordedAt\":1791480572244,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h25\",\"text\":\"turn h25 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h25\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 330,
+        "event": "{\"recordedAt\":1791480572300,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":330,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":329,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"afa0077f0abcd0f988ee5794ab37cbd5495c053149e7c488b5e5f87d5b83a282\",\"bytes\":12714}}}}"
+      },
+      {
+        "seq": 331,
+        "event": "{\"recordedAt\":1791480572300,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h25:0\",\"turnId\":\"h25\"}}"
+      },
+      {
+        "seq": 332,
+        "event": "{\"recordedAt\":1791480572314,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":330,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[330,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480632314}}}}"
+      },
+      {
+        "seq": 333,
+        "event": "{\"recordedAt\":1791480572333,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":330,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-18\",\"name\":\"lookup\",\"input\":{\"n\":18}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 334,
+        "event": "{\"recordedAt\":1791480572333,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h25:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[330,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":18},\"providerId\":\"call-18\"}]}}"
+      },
+      {
+        "seq": 335,
+        "event": "{\"recordedAt\":1791480572347,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":335,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":334,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[330,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":18},\"providerId\":\"call-18\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 336,
+        "event": "{\"recordedAt\":1791480572347,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[330,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 337,
+        "event": "{\"recordedAt\":1791480572362,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":335,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 18: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 338,
+        "event": "{\"recordedAt\":1791480572362,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[330,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 18: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 339,
+        "event": "{\"recordedAt\":1791480572378,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":339,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":334,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"27fe8a5b63bf0504c4add1da6e5bd464a5184ae85f90c6ef9e666dbeb88cfe99\",\"bytes\":13276}}}}"
+      },
+      {
+        "seq": 340,
+        "event": "{\"recordedAt\":1791480572378,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h25:1\",\"turnId\":\"h25\"}}"
+      },
+      {
+        "seq": 341,
+        "event": "{\"recordedAt\":1791480572395,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":339,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[339,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480632395}}}}"
+      },
+      {
+        "seq": 342,
+        "event": "{\"recordedAt\":1791480572420,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":339,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 343,
+        "event": "{\"recordedAt\":1791480572420,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h25:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 344,
+        "event": "{\"recordedAt\":1791480572436,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h25\",\"outcome\":\"completed\",\"callId\":\"model:h25:1\"}}"
+      },
+      {
+        "seq": 345,
+        "event": "{\"message\":{\"id\":\"h26\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h26 tools=0\"}}},\"recordedAt\":1791480572749,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h26\",\"text\":\"turn h26 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h26\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 346,
+        "event": "{\"recordedAt\":1791480572803,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":346,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":345,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"4754666627862feb15361fb1d2bdba54268c53d250ea8a6cff94f49f495dea8e\",\"bytes\":13384}}}}"
+      },
+      {
+        "seq": 347,
+        "event": "{\"recordedAt\":1791480572803,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h26:0\",\"turnId\":\"h26\"}}"
+      },
+      {
+        "seq": 348,
+        "event": "{\"recordedAt\":1791480572817,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":346,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[346,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480632817}}}}"
+      },
+      {
+        "seq": 349,
+        "event": "{\"recordedAt\":1791480572833,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":346,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 350,
+        "event": "{\"recordedAt\":1791480572833,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h26:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 351,
+        "event": "{\"recordedAt\":1791480572852,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h26\",\"outcome\":\"completed\",\"callId\":\"model:h26:0\"}}"
+      },
+      {
+        "seq": 352,
+        "event": "{\"message\":{\"id\":\"h27\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h27 tools=1\"}}},\"recordedAt\":1791480573161,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h27\",\"text\":\"turn h27 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h27\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 353,
+        "event": "{\"recordedAt\":1791480573234,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":353,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":352,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"eb7400cd3460e989b80fa2e562d5d152f779c0dc4e876bd2623c6fe0bfea4a82\",\"bytes\":13492}}}}"
+      },
+      {
+        "seq": 354,
+        "event": "{\"recordedAt\":1791480573234,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h27:0\",\"turnId\":\"h27\"}}"
+      },
+      {
+        "seq": 355,
+        "event": "{\"recordedAt\":1791480573249,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":353,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[353,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480633249}}}}"
+      },
+      {
+        "seq": 356,
+        "event": "{\"recordedAt\":1791480573266,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":353,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-19\",\"name\":\"lookup\",\"input\":{\"n\":19}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 357,
+        "event": "{\"recordedAt\":1791480573266,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h27:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[353,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":19},\"providerId\":\"call-19\"}]}}"
+      },
+      {
+        "seq": 358,
+        "event": "{\"recordedAt\":1791480573281,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":358,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":357,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[353,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":19},\"providerId\":\"call-19\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 359,
+        "event": "{\"recordedAt\":1791480573281,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[353,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 360,
+        "event": "{\"recordedAt\":1791480573295,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":358,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 19: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 361,
+        "event": "{\"recordedAt\":1791480573295,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[353,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 19: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 362,
+        "event": "{\"recordedAt\":1791480573312,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":362,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":357,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"f884adad5e0ad54d0535fc4e5c13399ad667e8cb366263daee7f06cc38883bbe\",\"bytes\":14054}}}}"
+      },
+      {
+        "seq": 363,
+        "event": "{\"recordedAt\":1791480573312,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h27:1\",\"turnId\":\"h27\"}}"
+      },
+      {
+        "seq": 364,
+        "event": "{\"recordedAt\":1791480573330,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":362,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[362,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480633330}}}}"
+      },
+      {
+        "seq": 365,
+        "event": "{\"recordedAt\":1791480573347,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":362,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 366,
+        "event": "{\"recordedAt\":1791480573347,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h27:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 367,
+        "event": "{\"recordedAt\":1791480573364,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h27\",\"outcome\":\"completed\",\"callId\":\"model:h27:1\"}}"
+      },
+      {
+        "seq": 368,
+        "event": "{\"message\":{\"id\":\"h28\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h28 tools=1\"}}},\"recordedAt\":1791480573689,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h28\",\"text\":\"turn h28 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h28\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 369,
+        "event": "{\"recordedAt\":1791480573748,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":369,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":368,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"6a09da86f5b9cb2893eaa5958cd2e98f1838defb8b8fddc47797301d5c60db4f\",\"bytes\":14162}}}}"
+      },
+      {
+        "seq": 370,
+        "event": "{\"recordedAt\":1791480573748,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h28:0\",\"turnId\":\"h28\"}}"
+      },
+      {
+        "seq": 371,
+        "event": "{\"recordedAt\":1791480573765,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":369,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[369,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480633765}}}}"
+      },
+      {
+        "seq": 372,
+        "event": "{\"recordedAt\":1791480573781,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":369,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-20\",\"name\":\"lookup\",\"input\":{\"n\":20}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 373,
+        "event": "{\"recordedAt\":1791480573781,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h28:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[369,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":20},\"providerId\":\"call-20\"}]}}"
+      },
+      {
+        "seq": 374,
+        "event": "{\"recordedAt\":1791480573797,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":374,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":373,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[369,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":20},\"providerId\":\"call-20\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 375,
+        "event": "{\"recordedAt\":1791480573797,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[369,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 376,
+        "event": "{\"recordedAt\":1791480573814,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":374,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 20: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 377,
+        "event": "{\"recordedAt\":1791480573814,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[369,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 20: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 378,
+        "event": "{\"recordedAt\":1791480573832,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":378,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":373,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"16ab6ac1315c616a2c0e9960d6ce794554fdadcf768401245111be22cc77e166\",\"bytes\":14724}}}}"
+      },
+      {
+        "seq": 379,
+        "event": "{\"recordedAt\":1791480573832,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h28:1\",\"turnId\":\"h28\"}}"
+      },
+      {
+        "seq": 380,
+        "event": "{\"recordedAt\":1791480573853,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":378,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[378,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480633853}}}}"
+      },
+      {
+        "seq": 381,
+        "event": "{\"recordedAt\":1791480573871,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":378,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 382,
+        "event": "{\"recordedAt\":1791480573871,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h28:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 383,
+        "event": "{\"recordedAt\":1791480573890,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h28\",\"outcome\":\"completed\",\"callId\":\"model:h28:1\"}}"
+      },
+      {
+        "seq": 384,
+        "event": "{\"message\":{\"id\":\"h29\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h29 tools=0\"}}},\"recordedAt\":1791480574224,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h29\",\"text\":\"turn h29 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h29\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 385,
+        "event": "{\"recordedAt\":1791480574282,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":385,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":384,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"60f270ef5c37cb9ac81631955477dbd4b2721861d5b651259ffaefb93c04c818\",\"bytes\":14832}}}}"
+      },
+      {
+        "seq": 386,
+        "event": "{\"recordedAt\":1791480574282,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h29:0\",\"turnId\":\"h29\"}}"
+      },
+      {
+        "seq": 387,
+        "event": "{\"recordedAt\":1791480574298,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":385,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[385,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480634298}}}}"
+      },
+      {
+        "seq": 388,
+        "event": "{\"recordedAt\":1791480574316,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":385,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 389,
+        "event": "{\"recordedAt\":1791480574316,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h29:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 390,
+        "event": "{\"recordedAt\":1791480574331,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h29\",\"outcome\":\"completed\",\"callId\":\"model:h29:0\"}}"
+      },
+      {
+        "seq": 391,
+        "event": "{\"message\":{\"id\":\"h30\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h30 tools=1\"}}},\"recordedAt\":1791480575119,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h30\",\"text\":\"turn h30 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h30\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 392,
+        "event": "{\"recordedAt\":1791480575167,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":392,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":391,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"83d6eb5f9a178caa36d4868fa8bd5ae9e47dfb5cfb59ba49213ca56b2ac77364\",\"bytes\":14940}}}}"
+      },
+      {
+        "seq": 393,
+        "event": "{\"recordedAt\":1791480575167,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h30:0\",\"turnId\":\"h30\"}}"
+      },
+      {
+        "seq": 394,
+        "event": "{\"recordedAt\":1791480575181,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":392,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[392,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480635181}}}}"
+      },
+      {
+        "seq": 395,
+        "event": "{\"recordedAt\":1791480575200,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":392,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-21\",\"name\":\"lookup\",\"input\":{\"n\":21}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 396,
+        "event": "{\"recordedAt\":1791480575200,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h30:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[392,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":21},\"providerId\":\"call-21\"}]}}"
+      },
+      {
+        "seq": 397,
+        "event": "{\"recordedAt\":1791480575217,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":397,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":396,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[392,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":21},\"providerId\":\"call-21\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 398,
+        "event": "{\"recordedAt\":1791480575217,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[392,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 399,
+        "event": "{\"recordedAt\":1791480575234,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":397,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 21: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 400,
+        "event": "{\"recordedAt\":1791480575234,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[392,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 21: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 401,
+        "event": "{\"recordedAt\":1791480575250,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":401,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":396,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"d0eb3379a8ff1f3345e0b1b02b99b3c43d1b10260060bf91e18bbfc8cb6ded5b\",\"bytes\":15502}}}}"
+      },
+      {
+        "seq": 402,
+        "event": "{\"recordedAt\":1791480575250,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h30:1\",\"turnId\":\"h30\"}}"
+      },
+      {
+        "seq": 403,
+        "event": "{\"recordedAt\":1791480575269,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":401,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[401,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480635269}}}}"
+      },
+      {
+        "seq": 404,
+        "event": "{\"recordedAt\":1791480575285,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":401,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 405,
+        "event": "{\"recordedAt\":1791480575285,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h30:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 406,
+        "event": "{\"recordedAt\":1791480575301,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h30\",\"outcome\":\"completed\",\"callId\":\"model:h30:1\"}}"
+      },
+      {
+        "seq": 407,
+        "event": "{\"message\":{\"id\":\"h31\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h31 tools=1\"}}},\"recordedAt\":1791480575605,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h31\",\"text\":\"turn h31 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h31\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 408,
+        "event": "{\"recordedAt\":1791480575660,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":408,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":407,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"c99d6e4325447a287b205279a836b000cb6645c4121ded16822f22f9a9abebb6\",\"bytes\":15610}}}}"
+      },
+      {
+        "seq": 409,
+        "event": "{\"recordedAt\":1791480575660,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h31:0\",\"turnId\":\"h31\"}}"
+      },
+      {
+        "seq": 410,
+        "event": "{\"recordedAt\":1791480575674,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":408,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[408,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480635674}}}}"
+      },
+      {
+        "seq": 411,
+        "event": "{\"recordedAt\":1791480575699,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":408,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-22\",\"name\":\"lookup\",\"input\":{\"n\":22}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 412,
+        "event": "{\"recordedAt\":1791480575699,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h31:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[408,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":22},\"providerId\":\"call-22\"}]}}"
+      },
+      {
+        "seq": 413,
+        "event": "{\"recordedAt\":1791480575801,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":413,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":412,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[408,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":22},\"providerId\":\"call-22\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 414,
+        "event": "{\"recordedAt\":1791480575801,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[408,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 415,
+        "event": "{\"recordedAt\":1791480575818,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":413,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 22: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 416,
+        "event": "{\"recordedAt\":1791480575818,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[408,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 22: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 417,
+        "event": "{\"recordedAt\":1791480575838,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":417,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":412,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"fe23496758de8b02d5427b2d91e9d6b76277928cdd0ef1a32bd4ce95b29e7091\",\"bytes\":16172}}}}"
+      },
+      {
+        "seq": 418,
+        "event": "{\"recordedAt\":1791480575838,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h31:1\",\"turnId\":\"h31\"}}"
+      },
+      {
+        "seq": 419,
+        "event": "{\"recordedAt\":1791480575856,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":417,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[417,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480635856}}}}"
+      },
+      {
+        "seq": 420,
+        "event": "{\"recordedAt\":1791480575877,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":417,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 421,
+        "event": "{\"recordedAt\":1791480575877,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h31:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 422,
+        "event": "{\"recordedAt\":1791480575893,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h31\",\"outcome\":\"completed\",\"callId\":\"model:h31:1\"}}"
+      },
+      {
+        "seq": 423,
+        "event": "{\"message\":{\"id\":\"h32\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h32 tools=0\"}}},\"recordedAt\":1791480576206,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h32\",\"text\":\"turn h32 tools=0\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h32\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 424,
+        "event": "{\"recordedAt\":1791480576263,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":424,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":423,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"578c1650b18b10db9a82d5ffa436177bc64787bf09c32cc6674d38aaa6ffc2f0\",\"bytes\":16280}}}}"
+      },
+      {
+        "seq": 425,
+        "event": "{\"recordedAt\":1791480576263,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h32:0\",\"turnId\":\"h32\"}}"
+      },
+      {
+        "seq": 426,
+        "event": "{\"recordedAt\":1791480576278,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":424,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[424,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480636278}}}}"
+      },
+      {
+        "seq": 427,
+        "event": "{\"recordedAt\":1791480576297,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":424,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 0 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 428,
+        "event": "{\"recordedAt\":1791480576297,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h32:0\",\"text\":\"done after 0 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 429,
+        "event": "{\"recordedAt\":1791480576314,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h32\",\"outcome\":\"completed\",\"callId\":\"model:h32:0\"}}"
+      },
+      {
+        "seq": 430,
+        "event": "{\"message\":{\"id\":\"h33\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h33 tools=1\"}}},\"recordedAt\":1791480576646,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h33\",\"text\":\"turn h33 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h33\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 431,
+        "event": "{\"recordedAt\":1791480576701,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":431,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":430,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"072462d7a9c490709e9b80bcbff3f481a3fdc649ad74be61dec0a7dd0e76a12f\",\"bytes\":16388}}}}"
+      },
+      {
+        "seq": 432,
+        "event": "{\"recordedAt\":1791480576701,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h33:0\",\"turnId\":\"h33\"}}"
+      },
+      {
+        "seq": 433,
+        "event": "{\"recordedAt\":1791480576719,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":431,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[431,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480636719}}}}"
+      },
+      {
+        "seq": 434,
+        "event": "{\"recordedAt\":1791480576730,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":431,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-23\",\"name\":\"lookup\",\"input\":{\"n\":23}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 435,
+        "event": "{\"recordedAt\":1791480576730,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h33:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[431,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":23},\"providerId\":\"call-23\"}]}}"
+      },
+      {
+        "seq": 436,
+        "event": "{\"recordedAt\":1791480576746,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":436,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":435,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[431,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":23},\"providerId\":\"call-23\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 437,
+        "event": "{\"recordedAt\":1791480576746,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[431,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 438,
+        "event": "{\"recordedAt\":1791480576765,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":436,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 23: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 439,
+        "event": "{\"recordedAt\":1791480576765,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[431,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 23: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 440,
+        "event": "{\"recordedAt\":1791480576786,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":440,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":435,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"14a87a7ec8fe302a9e70f1bb59c720a36fbbb3f2fa6eccde255ac2b0b3112ebd\",\"bytes\":16950}}}}"
+      },
+      {
+        "seq": 441,
+        "event": "{\"recordedAt\":1791480576786,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h33:1\",\"turnId\":\"h33\"}}"
+      },
+      {
+        "seq": 442,
+        "event": "{\"recordedAt\":1791480576806,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":440,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[440,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480636806}}}}"
+      },
+      {
+        "seq": 443,
+        "event": "{\"recordedAt\":1791480576825,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":440,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 444,
+        "event": "{\"recordedAt\":1791480576825,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h33:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 445,
+        "event": "{\"recordedAt\":1791480576844,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h33\",\"outcome\":\"completed\",\"callId\":\"model:h33:1\"}}"
+      },
+      {
+        "seq": 446,
+        "event": "{\"message\":{\"id\":\"h34\",\"from\":{\"kind\":\"external\",\"id\":\"host\"},\"invocation\":{\"method\":\"message\",\"input\":{\"text\":\"turn h34 tools=1\"}}},\"recordedAt\":1791480577186,\"event\":{\"type\":\"MessageReceived\",\"body\":{\"turnId\":\"h34\",\"text\":\"turn h34 tools=1\",\"invocationRef\":{\"method\":\"message\",\"id\":\"h34\"},\"source\":\"user\",\"type\":\"TurnRequested\"}}}"
+      },
+      {
+        "seq": 447,
+        "event": "{\"recordedAt\":1791480577243,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":447,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":446,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"6705f9c3983dd3ebcb873241091e283886e566b9c9185266b711bf167bac530a\",\"bytes\":17058}}}}"
+      },
+      {
+        "seq": 448,
+        "event": "{\"recordedAt\":1791480577243,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h34:0\",\"turnId\":\"h34\"}}"
+      },
+      {
+        "seq": 449,
+        "event": "{\"recordedAt\":1791480577261,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":447,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[447,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480637261}}}}"
+      },
+      {
+        "seq": 450,
+        "event": "{\"recordedAt\":1791480577278,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":447,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"\",\"toolCalls\":[{\"callId\":\"call-24\",\"name\":\"lookup\",\"input\":{\"n\":24}}],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 451,
+        "event": "{\"recordedAt\":1791480577278,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h34:0\",\"text\":\"\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[{\"callId\":\"[447,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":24},\"providerId\":\"call-24\"}]}}"
+      },
+      {
+        "seq": 452,
+        "event": "{\"recordedAt\":1791480577295,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":452,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"origin\":451,\"request\":{\"act\":\"agent.tool.execute\",\"input\":{\"_tag\":\"InlineInput\",\"value\":{\"call\":{\"callId\":\"[447,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"name\":\"lookup\",\"input\":{\"n\":24},\"providerId\":\"call-24\"},\"counted\":true}}}}}"
+      },
+      {
+        "seq": 453,
+        "event": "{\"recordedAt\":1791480577295,\"event\":{\"type\":\"ToolCalled\",\"callId\":\"[447,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"counted\":true}}"
+      },
+      {
+        "seq": 454,
+        "event": "{\"recordedAt\":1791480577314,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":452,\"atom\":\"bench-agent\",\"act\":\"agent.tool.execute\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"value\",\"value\":\"record 24: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}}}"
+      },
+      {
+        "seq": 455,
+        "event": "{\"recordedAt\":1791480577314,\"event\":{\"type\":\"ToolReturned\",\"callId\":\"[447,\\\"bench-agent\\\",\\\"agent.model.generate\\\",0]\",\"output\":\"\\\"record 24: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"\",\"error\":null}}"
+      },
+      {
+        "seq": 456,
+        "event": "{\"recordedAt\":1791480577346,\"event\":{\"type\":\"EffectRequested\",\"ref\":{\"seq\":456,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"origin\":451,\"request\":{\"act\":\"agent.model.generate\",\"input\":{\"_tag\":\"InputDigest\",\"sha256\":\"1b9eb2de6fa1a1c15a591177467b03308bc69219d23560076d59500ddb3b6618\",\"bytes\":17620}}}}"
+      },
+      {
+        "seq": 457,
+        "event": "{\"recordedAt\":1791480577346,\"event\":{\"type\":\"ModelCalled\",\"purpose\":\"inference\",\"model\":{\"provider\":\"scripted\",\"model_id\":\"scripted-1\"},\"contextWindowTokens\":1000000000,\"callId\":\"model:h34:1\",\"turnId\":\"h34\"}}"
+      },
+      {
+        "seq": 458,
+        "event": "{\"recordedAt\":1791480577362,\"event\":{\"type\":\"EffectSettled\",\"ref\":{\"seq\":456,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"outcome\":{\"status\":\"fulfilled\",\"value\":{\"type\":\"promise\",\"handle\":{\"executor\":\"local\",\"id\":\"[456,\\\"bench-agent\\\",\\\"agent.model.generate\\\"]\"},\"deadlineAt\":1791480637362}}}}"
+      },
+      {
+        "seq": 459,
+        "event": "{\"recordedAt\":1791480577380,\"event\":{\"type\":\"PromiseSettled\",\"ref\":{\"seq\":456,\"atom\":\"bench-agent\",\"act\":\"agent.model.generate\"},\"result\":{\"status\":\"fulfilled\",\"value\":{\"text\":\"done after 1 lookups\",\"toolCalls\":[],\"usage\":{\"input\":0,\"output\":0,\"usd\":null}}}}}"
+      },
+      {
+        "seq": 460,
+        "event": "{\"recordedAt\":1791480577380,\"event\":{\"type\":\"ModelReturned\",\"purpose\":\"inference\",\"callId\":\"model:h34:1\",\"text\":\"done after 1 lookups\",\"usage\":{\"input\":0,\"output\":0,\"usd\":null},\"toolCalls\":[]}}"
+      },
+      {
+        "seq": 461,
+        "event": "{\"recordedAt\":1791480577405,\"event\":{\"type\":\"TurnSettled\",\"turnId\":\"h34\",\"outcome\":\"completed\",\"callId\":\"model:h34:1\"}}"
+      }
+    ],
+    "tailBefore": [
+      {
+        "n": 462,
+        "first_seq": 0,
+        "last_seq": 461
+      }
+    ],
+    "tailAfter": [
+      {
+        "n": 462,
+        "first_seq": 0,
+        "last_seq": 461
+      }
+    ]
+  },
+  "started": 1791480810568,
+  "ended": 1791480811411,
+  "clientWallMs": 843,
+  "cfRay": "a476e41a980e8ca3-MRS"
+}

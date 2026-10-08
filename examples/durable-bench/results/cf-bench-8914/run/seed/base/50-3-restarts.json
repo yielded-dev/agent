@@ -1,0 +1,54 @@
+[
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_3",
+        "generation": "seed-resume-2",
+        "version": "d2afe685-f4eb-4738-971c-a40f11b83576",
+        "objects": [
+          {
+            "objectId": "b84aa0a2df90eacc4051efcd9c7cf32d658a62ba51e2c9dd4b0574b5c74d47f6",
+            "moduleId": "656fdc90-2b0f-4b14-ac5a-e890c312d69c",
+            "runtimeId": "39502657-a21c-4c87-a39d-6e66599d7ed4",
+            "version": "d2afe685-f4eb-4738-971c-a40f11b83576",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "kind": "thread",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791476818548,
+      "ended": 1791476818902,
+      "clientWallMs": 354,
+      "cfRay": "a47682a44ddfd3fd-KIX"
+    }
+  },
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_3",
+        "generation": "seed-resume-2",
+        "version": "d2afe685-f4eb-4738-971c-a40f11b83576",
+        "objects": [
+          {
+            "objectId": "b84aa0a2df90eacc4051efcd9c7cf32d658a62ba51e2c9dd4b0574b5c74d47f6",
+            "moduleId": "656fdc90-2b0f-4b14-ac5a-e890c312d69c",
+            "runtimeId": "ae76e340-bdbc-4f77-a8f2-bac29c97f702",
+            "version": "d2afe685-f4eb-4738-971c-a40f11b83576",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "kind": "thread",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791476819620,
+      "ended": 1791476819986,
+      "clientWallMs": 366,
+      "cfRay": "a47682ab2e48d3fd-KIX"
+    }
+  }
+]

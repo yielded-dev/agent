@@ -1,0 +1,18 @@
+{
+  "name": "cf-bench-8914-b124507a-pinned",
+  "role": "pinned",
+  "workerStatus": 404,
+  "knownNamespaceIds": [
+    "66e8b61e594d40a9a3e4574f3e54bcdc",
+    "7c0edc09bbef450e8955e049b42a53b4",
+    "6295f4ae1ccc44c8a00bcc8285895e3d",
+    "a8970c1283dc441494e01faac0d1cf32",
+    "05d531cf4fb041c699f3fd458e3301c3",
+    "42152811bbd9481fb1ec85ee6df37200",
+    "76738008dd03451ea468610dbe234789",
+    "7f75aaa1620a41768ce90c885fbda527",
+    "af5df07ce6544a77907a9811fc94fee9"
+  ],
+  "namespaceIdsRemaining": [],
+  "complete": true
+}

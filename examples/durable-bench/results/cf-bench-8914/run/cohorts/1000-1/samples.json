@@ -1,0 +1,2602 @@
+[
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484290708,
+    "ended": 1791484292306,
+    "clientWallMs": 1598,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a477391179585370-MIA",
+    "reference": {
+      "started": 1791484290066,
+      "ended": 1791484290411,
+      "clientWallMs": 345,
+      "cfRay": "a477390d5b0b5370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "90a19ec0-3284-4188-876b-bd04658cd23d",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484292798,
+    "ended": 1791484294132,
+    "clientWallMs": 1334,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a477391e6a745370-MIA",
+    "reference": {
+      "started": 1791484292309,
+      "ended": 1791484292797,
+      "clientWallMs": 488,
+      "cfRay": "a477391b580d5370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484294609,
+    "ended": 1791484295834,
+    "clientWallMs": 1225,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4773929beb75370-MIA",
+    "reference": {
+      "started": 1791484294135,
+      "ended": 1791484294608,
+      "clientWallMs": 473,
+      "cfRay": "a4773926bdc45370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484296360,
+    "ended": 1791484297576,
+    "clientWallMs": 1216,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4773934afb65370-MIA",
+    "reference": {
+      "started": 1791484295836,
+      "ended": 1791484296359,
+      "clientWallMs": 523,
+      "cfRay": "a47739316d865370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484298039,
+    "ended": 1791484299195,
+    "clientWallMs": 1156,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a477393f28d75370-MIA",
+    "reference": {
+      "started": 1791484297583,
+      "ended": 1791484298038,
+      "clientWallMs": 455,
+      "cfRay": "a477393c48765370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484299666,
+    "ended": 1791484300850,
+    "clientWallMs": 1184,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a477394959bd5370-MIA",
+    "reference": {
+      "started": 1791484299196,
+      "ended": 1791484299665,
+      "clientWallMs": 469,
+      "cfRay": "a477394668505370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484301366,
+    "ended": 1791484302793,
+    "clientWallMs": 1427,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4773953fa765370-MIA",
+    "reference": {
+      "started": 1791484300851,
+      "ended": 1791484301365,
+      "clientWallMs": 514,
+      "cfRay": "a4773950be2a5370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484303305,
+    "ended": 1791484304502,
+    "clientWallMs": 1197,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a47739600bbe5370-MIA",
+    "reference": {
+      "started": 1791484302795,
+      "ended": 1791484303304,
+      "clientWallMs": 509,
+      "cfRay": "a477395cd86d5370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484305009,
+    "ended": 1791484306432,
+    "clientWallMs": 1423,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a477396abe1f5370-MIA",
+    "reference": {
+      "started": 1791484304505,
+      "ended": 1791484305007,
+      "clientWallMs": 502,
+      "cfRay": "a47739678cc95370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484306898,
+    "ended": 1791484308353,
+    "clientWallMs": 1455,
+    "receipt": {
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+      "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+      "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a47739768c915370-MIA",
+    "reference": {
+      "started": 1791484306435,
+      "ended": 1791484306897,
+      "clientWallMs": 462,
+      "cfRay": "a47739739b3f5370-MIA",
+      "value": {
+        "thread": {
+          "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+          "moduleId": "6e8a8e09-2124-4f62-a5e0-638ee9af4c81",
+          "runtimeId": "2549b9ec-9700-4e4b-9cf0-29a0ca4a0a09",
+          "version": "0548aaa6-dc9d-4a30-9c45-accee6e09030",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484317162,
+    "ended": 1791484318298,
+    "clientWallMs": 1136,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a47739b679a95907-SEA",
+    "reference": {
+      "started": 1791484316643,
+      "ended": 1791484316936,
+      "clientWallMs": 293,
+      "cfRay": "a47739b3485d5907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "f91fdfed-5eb3-4fd7-bf4d-62b3a5e89cf8",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484318743,
+    "ended": 1791484319642,
+    "clientWallMs": 899,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a47739c06f615907-SEA",
+    "reference": {
+      "started": 1791484318299,
+      "ended": 1791484318740,
+      "clientWallMs": 441,
+      "cfRay": "a47739bd9f335907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484319955,
+    "ended": 1791484320918,
+    "clientWallMs": 963,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a47739c7feb45907-SEA",
+    "reference": {
+      "started": 1791484319643,
+      "ended": 1791484319955,
+      "clientWallMs": 312,
+      "cfRay": "a47739c5f9615907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484321250,
+    "ended": 1791484322514,
+    "clientWallMs": 1264,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a47739d00d7b5907-SEA",
+    "reference": {
+      "started": 1791484320920,
+      "ended": 1791484321246,
+      "clientWallMs": 326,
+      "cfRay": "a47739cdffea5907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484322986,
+    "ended": 1791484323890,
+    "clientWallMs": 904,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a47739daed675907-SEA",
+    "reference": {
+      "started": 1791484322520,
+      "ended": 1791484322983,
+      "clientWallMs": 463,
+      "cfRay": "a47739d80d525907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484324360,
+    "ended": 1791484325640,
+    "clientWallMs": 1280,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a47739e37d9d5907-SEA",
+    "reference": {
+      "started": 1791484323894,
+      "ended": 1791484324356,
+      "clientWallMs": 462,
+      "cfRay": "a47739e09e045907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484325969,
+    "ended": 1791484326758,
+    "clientWallMs": 789,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a47739ed8bd35907-SEA",
+    "reference": {
+      "started": 1791484325642,
+      "ended": 1791484325967,
+      "clientWallMs": 325,
+      "cfRay": "a47739eb8da45907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484327079,
+    "ended": 1791484327908,
+    "clientWallMs": 829,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a47739f478ed5907-SEA",
+    "reference": {
+      "started": 1791484326763,
+      "ended": 1791484327077,
+      "clientWallMs": 314,
+      "cfRay": "a47739f28b445907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484328229,
+    "ended": 1791484329345,
+    "clientWallMs": 1116,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a47739fbaebe5907-SEA",
+    "reference": {
+      "started": 1791484327910,
+      "ended": 1791484328227,
+      "clientWallMs": 317,
+      "cfRay": "a47739f9d9385907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484329651,
+    "ended": 1791484330876,
+    "clientWallMs": 1225,
+    "receipt": {
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+      "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+      "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4773a048a705907-SEA",
+    "reference": {
+      "started": 1791484329348,
+      "ended": 1791484329649,
+      "clientWallMs": 301,
+      "cfRay": "a4773a02acc25907-SEA",
+      "value": {
+        "thread": {
+          "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+          "moduleId": "973ec3b1-c83a-45f1-9a2a-cda2b5502924",
+          "runtimeId": "7b50cd96-be83-425d-9e2d-c8c4ee80e7b4",
+          "version": "08f827ad-b2f4-4f0e-a4fd-b665495d85af",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484346660,
+    "ended": 1791484348071,
+    "clientWallMs": 1411,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a4773a6ef855bc84-DFW",
+    "reference": {
+      "started": 1791484343067,
+      "ended": 1791484343342,
+      "clientWallMs": 275,
+      "cfRay": "a4773a587c47bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "0aff7f5f-df17-4aad-8a37-eeec0097a6c3",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484348272,
+    "ended": 1791484349085,
+    "clientWallMs": 813,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a4773a790f91bc84-DFW",
+    "reference": {
+      "started": 1791484348073,
+      "ended": 1791484348270,
+      "clientWallMs": 197,
+      "cfRay": "a4773a77cc83bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484355352,
+    "ended": 1791484356173,
+    "clientWallMs": 821,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4773aa54ff7bc84-DFW",
+    "reference": {
+      "started": 1791484349088,
+      "ended": 1791484349227,
+      "clientWallMs": 139,
+      "cfRay": "a4773a7e2caabc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484356303,
+    "ended": 1791484357031,
+    "clientWallMs": 728,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4773aab3ee2bc84-DFW",
+    "reference": {
+      "started": 1791484356176,
+      "ended": 1791484356302,
+      "clientWallMs": 126,
+      "cfRay": "a4773aaa7c8fbc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484357164,
+    "ended": 1791484358210,
+    "clientWallMs": 1046,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a4773ab09befbc84-DFW",
+    "reference": {
+      "started": 1791484357035,
+      "ended": 1791484357161,
+      "clientWallMs": 126,
+      "cfRay": "a4773aafc9f7bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484358344,
+    "ended": 1791484359445,
+    "clientWallMs": 1101,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a4773ab7ffbebc84-DFW",
+    "reference": {
+      "started": 1791484358216,
+      "ended": 1791484358341,
+      "clientWallMs": 125,
+      "cfRay": "a4773ab72d87bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484359587,
+    "ended": 1791484360452,
+    "clientWallMs": 865,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4773abfcd1dbc84-DFW",
+    "reference": {
+      "started": 1791484359447,
+      "ended": 1791484359585,
+      "clientWallMs": 138,
+      "cfRay": "a4773abeda63bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484360577,
+    "ended": 1791484361550,
+    "clientWallMs": 973,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a4773ac5fc7dbc84-DFW",
+    "reference": {
+      "started": 1791484360457,
+      "ended": 1791484360576,
+      "clientWallMs": 119,
+      "cfRay": "a4773ac52af0bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484361678,
+    "ended": 1791484362414,
+    "clientWallMs": 736,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a4773accdd2bbc84-DFW",
+    "reference": {
+      "started": 1791484361556,
+      "ended": 1791484361676,
+      "clientWallMs": 120,
+      "cfRay": "a4773acc0b91bc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484362540,
+    "ended": 1791484363421,
+    "clientWallMs": 881,
+    "receipt": {
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+      "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+      "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4773ad23a05bc84-DFW",
+    "reference": {
+      "started": 1791484362417,
+      "ended": 1791484362538,
+      "clientWallMs": 121,
+      "cfRay": "a4773ad1784bbc84-DFW",
+      "value": {
+        "thread": {
+          "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+          "moduleId": "06611e44-e198-4f37-a4de-69d4a8982016",
+          "runtimeId": "f013f36b-974c-4ee2-8df9-85896c9a94cf",
+          "version": "ca153f46-9fb5-4335-8d08-3df9c2185281",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484373120,
+    "ended": 1791484377813,
+    "clientWallMs": 4693,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 4268,
+      "phase": "cold"
+    },
+    "cfRay": "a4773b144b9067a6-SJC",
+    "reference": {
+      "started": 1791484372808,
+      "ended": 1791484372978,
+      "clientWallMs": 170,
+      "cfRay": "a4773b1249fb67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "6dd58d02-aa6b-45c8-aaa8-20a5d242d200",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "c53fb829-8e1b-4dd5-bf25-5ffab2f8aac9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484372574,
+        "ended": 1791484372808,
+        "clientWallMs": 234,
+        "cfRay": "a4773b10c8a867a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484378168,
+    "ended": 1791484381341,
+    "clientWallMs": 3173,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3011,
+      "phase": "warm1"
+    },
+    "cfRay": "a4773b33cdb867a6-SJC",
+    "reference": {
+      "started": 1791484377907,
+      "ended": 1791484378166,
+      "clientWallMs": 259,
+      "cfRay": "a4773b322c4d67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484377816,
+        "ended": 1791484377907,
+        "clientWallMs": 91,
+        "cfRay": "a4773b319bd267a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484381721,
+    "ended": 1791484384745,
+    "clientWallMs": 3024,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3100,
+      "phase": "warm2"
+    },
+    "cfRay": "a4773b4a190767a6-SJC",
+    "reference": {
+      "started": 1791484381440,
+      "ended": 1791484381717,
+      "clientWallMs": 277,
+      "cfRay": "a4773b483f9467a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484381347,
+        "ended": 1791484381440,
+        "clientWallMs": 93,
+        "cfRay": "a4773b47af1c67a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484385112,
+    "ended": 1791484388057,
+    "clientWallMs": 2945,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 2932,
+      "phase": "warm3"
+    },
+    "cfRay": "a4773b5f2c4e67a6-SJC",
+    "reference": {
+      "started": 1791484384843,
+      "ended": 1791484385110,
+      "clientWallMs": 267,
+      "cfRay": "a4773b5d7ae967a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484384748,
+        "ended": 1791484384843,
+        "clientWallMs": 95,
+        "cfRay": "a4773b5cea5367a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484388488,
+    "ended": 1791484391527,
+    "clientWallMs": 3039,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3171,
+      "phase": "warm4"
+    },
+    "cfRay": "a4773b744e4c67a6-SJC",
+    "reference": {
+      "started": 1791484388156,
+      "ended": 1791484388485,
+      "clientWallMs": 329,
+      "cfRay": "a4773b723c8e67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484388063,
+        "ended": 1791484388156,
+        "clientWallMs": 93,
+        "cfRay": "a4773b719c2367a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484391875,
+    "ended": 1791484395764,
+    "clientWallMs": 3889,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3767,
+      "phase": "warm5"
+    },
+    "cfRay": "a4773b89789367a6-SJC",
+    "reference": {
+      "started": 1791484391620,
+      "ended": 1791484391873,
+      "clientWallMs": 253,
+      "cfRay": "a4773b87df4867a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484391535,
+        "ended": 1791484391620,
+        "clientWallMs": 85,
+        "cfRay": "a4773b875edc67a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484396189,
+    "ended": 1791484400487,
+    "clientWallMs": 4298,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 4652,
+      "phase": "warm6"
+    },
+    "cfRay": "a4773ba46f7367a6-SJC",
+    "reference": {
+      "started": 1791484395872,
+      "ended": 1791484396187,
+      "clientWallMs": 315,
+      "cfRay": "a4773ba26e1e67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484395769,
+        "ended": 1791484395872,
+        "clientWallMs": 103,
+        "cfRay": "a4773ba1cd9767a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484400912,
+    "ended": 1791484404321,
+    "clientWallMs": 3409,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3374,
+      "phase": "warm7"
+    },
+    "cfRay": "a4773bc1efe867a6-SJC",
+    "reference": {
+      "started": 1791484400582,
+      "ended": 1791484400909,
+      "clientWallMs": 327,
+      "cfRay": "a4773bbfde5a67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484400491,
+        "ended": 1791484400582,
+        "clientWallMs": 91,
+        "cfRay": "a4773bbf4de867a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484404772,
+    "ended": 1791484408406,
+    "clientWallMs": 3634,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 3421,
+      "phase": "warm8"
+    },
+    "cfRay": "a4773bda2ca567a6-SJC",
+    "reference": {
+      "started": 1791484404436,
+      "ended": 1791484404770,
+      "clientWallMs": 334,
+      "cfRay": "a4773bd7faaa67a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484404327,
+        "ended": 1791484404436,
+        "clientWallMs": 109,
+        "cfRay": "a4773bd74a1767a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484408767,
+    "ended": 1791484410739,
+    "clientWallMs": 1972,
+    "receipt": {
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+      "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+      "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+      "generation": "measure-1000-1",
+      "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 2306,
+      "phase": "warm9"
+    },
+    "cfRay": "a4773bf30cdf67a6-SJC",
+    "reference": {
+      "started": 1791484408510,
+      "ended": 1791484408764,
+      "clientWallMs": 254,
+      "cfRay": "a4773bf16b7067a6-SJC",
+      "value": {
+        "thread": {
+          "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+          "moduleId": "9c345132-ad0f-47a6-9d2e-8d0085d0a137",
+          "runtimeId": "b8693beb-9699-4860-8a60-115edce5b490",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "actorObjectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "9649ae6cd15070520e1d9ee14c82dfe83293becd4d7b54a54322860db315e01b",
+          "moduleId": "f807e3f1-83d0-4a75-9732-3e649b53c1a2",
+          "runtimeId": "e9477484-1f52-4b27-ba43-cd1bedf973d9",
+          "version": "f684e643-853d-4f8c-9b94-dc2700c93319",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484408412,
+        "ended": 1791484408510,
+        "clientWallMs": 98,
+        "cfRay": "a4773bf0cab567a6-SJC"
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484420402,
+    "ended": 1791484422151,
+    "clientWallMs": 1749,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a4773c3c4a09e1f0-MRS",
+    "reference": {
+      "started": 1791484419307,
+      "ended": 1791484419858,
+      "clientWallMs": 551,
+      "cfRay": "a4773c357d01e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "860742a5-d932-45b0-816a-a8e656d5ccdf",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484422560,
+    "ended": 1791484424158,
+    "clientWallMs": 1598,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a4773c49cb08e1f0-MRS",
+    "reference": {
+      "started": 1791484422153,
+      "ended": 1791484422559,
+      "clientWallMs": 406,
+      "cfRay": "a4773c473b0fe1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484424610,
+    "ended": 1791484426083,
+    "clientWallMs": 1473,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4773c56cf44e1f0-MRS",
+    "reference": {
+      "started": 1791484424160,
+      "ended": 1791484424606,
+      "clientWallMs": 446,
+      "cfRay": "a4773c53ef06e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484426487,
+    "ended": 1791484428290,
+    "clientWallMs": 1803,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4773c625dd7e1f0-MRS",
+    "reference": {
+      "started": 1791484426092,
+      "ended": 1791484426485,
+      "clientWallMs": 393,
+      "cfRay": "a4773c5fdf52e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484428720,
+    "ended": 1791484430054,
+    "clientWallMs": 1334,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a4773c704a57e1f0-MRS",
+    "reference": {
+      "started": 1791484428294,
+      "ended": 1791484428718,
+      "clientWallMs": 424,
+      "cfRay": "a4773c6dab0de1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484430474,
+    "ended": 1791484431796,
+    "clientWallMs": 1322,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a4773c7b49bae1f0-MRS",
+    "reference": {
+      "started": 1791484430061,
+      "ended": 1791484430471,
+      "clientWallMs": 410,
+      "cfRay": "a4773c78b999e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484432215,
+    "ended": 1791484433638,
+    "clientWallMs": 1423,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4773c86291ce1f0-MRS",
+    "reference": {
+      "started": 1791484431802,
+      "ended": 1791484432211,
+      "clientWallMs": 409,
+      "cfRay": "a4773c838993e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484434074,
+    "ended": 1791484435552,
+    "clientWallMs": 1478,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a4773c91ca42e1f0-MRS",
+    "reference": {
+      "started": 1791484433648,
+      "ended": 1791484434071,
+      "clientWallMs": 423,
+      "cfRay": "a4773c8f2b32e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484436005,
+    "ended": 1791484437394,
+    "clientWallMs": 1389,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a4773c9decace1f0-MRS",
+    "reference": {
+      "started": 1791484435558,
+      "ended": 1791484436002,
+      "clientWallMs": 444,
+      "cfRay": "a4773c9b2cbfe1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484437804,
+    "ended": 1791484439132,
+    "clientWallMs": 1328,
+    "receipt": {
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+      "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+      "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4773ca91c1fe1f0-MRS",
+    "reference": {
+      "started": 1791484437395,
+      "ended": 1791484437803,
+      "clientWallMs": 408,
+      "cfRay": "a4773ca68c81e1f0-MRS",
+      "value": {
+        "thread": {
+          "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+          "moduleId": "da83b4ca-7004-45ce-b708-2a714777aff8",
+          "runtimeId": "002c1257-a6de-44b1-9810-3c50961090e8",
+          "version": "5a36b1cf-1a73-4bcb-a198-3ef9d30726be",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "cold",
+    "started": 1791484455139,
+    "ended": 1791484457075,
+    "clientWallMs": 1936,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a4773d14d97c8ac8-SJC",
+    "reference": {
+      "started": 1791484454886,
+      "ended": 1791484455088,
+      "clientWallMs": 202,
+      "cfRay": "a4773d134cc98ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "377cdafe-03b6-4b36-96a1-c110ed225a4f",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm1",
+    "started": 1791484457159,
+    "ended": 1791484458262,
+    "clientWallMs": 1103,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a4773d2179028ac8-SJC",
+    "reference": {
+      "started": 1791484457077,
+      "ended": 1791484457158,
+      "clientWallMs": 81,
+      "cfRay": "a4773d20ff548ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm2",
+    "started": 1791484458330,
+    "ended": 1791484459783,
+    "clientWallMs": 1453,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4773d28c95a8ac8-SJC",
+    "reference": {
+      "started": 1791484458263,
+      "ended": 1791484458329,
+      "clientWallMs": 66,
+      "cfRay": "a4773d2858168ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm3",
+    "started": 1791484459856,
+    "ended": 1791484461157,
+    "clientWallMs": 1301,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4773d325f4b8ac8-SJC",
+    "reference": {
+      "started": 1791484459784,
+      "ended": 1791484459855,
+      "clientWallMs": 71,
+      "cfRay": "a4773d31ddf78ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm4",
+    "started": 1791484461290,
+    "ended": 1791484462779,
+    "clientWallMs": 1489,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a4773d3b6c1c8ac8-SJC",
+    "reference": {
+      "started": 1791484461162,
+      "ended": 1791484461288,
+      "clientWallMs": 126,
+      "cfRay": "a4773d3ada4a8ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm5",
+    "started": 1791484462879,
+    "ended": 1791484464251,
+    "clientWallMs": 1372,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a4773d454c638ac8-SJC",
+    "reference": {
+      "started": 1791484462787,
+      "ended": 1791484462876,
+      "clientWallMs": 89,
+      "cfRay": "a4773d44aaa78ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm6",
+    "started": 1791484464337,
+    "ended": 1791484465484,
+    "clientWallMs": 1147,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4773d4e58908ac8-SJC",
+    "reference": {
+      "started": 1791484464258,
+      "ended": 1791484464334,
+      "clientWallMs": 76,
+      "cfRay": "a4773d4ddf1e8ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm7",
+    "started": 1791484465561,
+    "ended": 1791484466818,
+    "clientWallMs": 1257,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a4773d55f9568ac8-SJC",
+    "reference": {
+      "started": 1791484465491,
+      "ended": 1791484465557,
+      "clientWallMs": 66,
+      "cfRay": "a4773d5588018ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm8",
+    "started": 1791484466918,
+    "ended": 1791484467912,
+    "clientWallMs": 994,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a4773d5e7c2b8ac8-SJC",
+    "reference": {
+      "started": 1791484466830,
+      "ended": 1791484466909,
+      "clientWallMs": 79,
+      "cfRay": "a4773d5dea848ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 1000,
+    "sample": 1,
+    "phase": "warm9",
+    "started": 1791484468015,
+    "ended": 1791484469076,
+    "clientWallMs": 1061,
+    "receipt": {
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+      "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+      "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+      "generation": "measure-1000-1",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4773d655b018ac8-SJC",
+    "reference": {
+      "started": 1791484467914,
+      "ended": 1791484468015,
+      "clientWallMs": 101,
+      "cfRay": "a4773d64d98f8ac8-SJC",
+      "value": {
+        "thread": {
+          "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+          "moduleId": "20c37b6c-dcce-430c-a20a-13e5df14d88f",
+          "runtimeId": "19d9f585-8c27-4e0f-b3b2-738dde1d8089",
+          "version": "81085c26-d0ce-4ed4-b73c-19ee37f986b9",
+          "generation": "measure-1000-1",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  }
+]

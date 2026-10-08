@@ -1,0 +1,209 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-tardie-1000-0-constructors",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791484176130,
+      "to": 1791484281019
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-tardie"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791484888228,
+  "poll": 1,
+  "totalLogs": 146,
+  "rows": [
+    {
+      "timestamp": 1791484198415,
+      "id": "01M4ECEZGF0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "e0402f97be98d6b82120737f8b040366",
+      "executionModel": "durableObject",
+      "durableObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+        "moduleId": "07accc69-d73b-472a-adb8-eae6084803d7",
+        "runtimeId": "e761627a-17a2-4331-8eb2-787efd0dc0ae",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791484193831,
+      "id": "01M4ECEV170000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "46467654fcdd98425e0fdd54bb70a55b",
+      "executionModel": "durableObject",
+      "durableObjectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+        "moduleId": "9840fa43-a130-4586-9146-62cd91cf8c58",
+        "runtimeId": "9715f92c-cf62-4483-9ff4-23896c13e5a6",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    },
+    {
+      "timestamp": 1791484192235,
+      "id": "01M4ECESFB0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "555bdb90e7bccdf41b0d46a6a439d38d",
+      "executionModel": "durableObject",
+      "durableObjectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+        "moduleId": "9840fa43-a130-4586-9146-62cd91cf8c58",
+        "runtimeId": "e312e918-1d5d-4b4d-a0fe-ada056f29f25",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    },
+    {
+      "timestamp": 1791484191590,
+      "id": "01M4ECERV60000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "7de8dfa29b8766cbd38e6f7d4b9b70a9",
+      "executionModel": "durableObject",
+      "durableObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+        "moduleId": "07accc69-d73b-472a-adb8-eae6084803d7",
+        "runtimeId": "45e9d23c-5641-4329-a659-75117ce00866",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791484191111,
+      "id": "01M4ECERC70000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "f8ece1246bca2c385d64e831b9debd24",
+      "executionModel": "durableObject",
+      "durableObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+        "moduleId": "07accc69-d73b-472a-adb8-eae6084803d7",
+        "runtimeId": "16a46a86-8a90-4506-a41e-b0e82280544a",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791484190583,
+      "id": "01M4ECEQVQ0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "0f3e3bd12ef1a35704de38999c326616",
+      "executionModel": "durableObject",
+      "durableObjectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+        "moduleId": "9840fa43-a130-4586-9146-62cd91cf8c58",
+        "runtimeId": "efde5011-54cd-463b-a166-2c4547382156",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    },
+    {
+      "timestamp": 1791484187041,
+      "id": "01M4ECEMD10000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "e05190aaca997b9a2d9cb49cdd0d6b70",
+      "executionModel": "durableObject",
+      "durableObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "2c6d12e1-db96-457a-b45f-c01fa8c5905f"
+      },
+      "construction": {
+        "objectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+        "moduleId": "07accc69-d73b-472a-adb8-eae6084803d7",
+        "runtimeId": "aa5ca564-331f-4ce3-b454-f1c4d7f9e73a",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "generation": "measure-1000-0",
+        "benchConstructor": true,
+        "kind": "actor"
+      }
+    },
+    {
+      "timestamp": 1791484186136,
+      "id": "01M4ECEKGR0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "824384379de52dcc596ee87c02ff5868",
+      "executionModel": "durableObject",
+      "durableObjectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "scriptVersion": {
+        "id": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd"
+      },
+      "construction": {
+        "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+        "moduleId": "c9c1660a-a129-40d8-bdaa-849ee915351e",
+        "runtimeId": "1ff262cb-e46c-468c-8979-d16c60d00d0d",
+        "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+        "generation": "measure-250-2",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    }
+  ],
+  "shapes": [
+    "{\"type\":\"cf-worker\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"benchConstructor\",\"generation\",\"kind\",\"moduleId\",\"objectId\",\"runtimeId\",\"version\"]}",
+    "{\"type\":\"cf-worker\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"exception\",\"message\"]}",
+    "{\"type\":\"cf-worker-event\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"level\",\"message\"]}"
+  ]
+}

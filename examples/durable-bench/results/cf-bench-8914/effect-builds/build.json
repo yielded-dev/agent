@@ -1,0 +1,50 @@
+{
+  "head": "01c6222ccf74390848595633ef23410cbfa6983b",
+  "fetchedMain": "13ace20e6c0501a0d01eb2b028672081c9780e42",
+  "mergeBase": "757821fe99b7179f907d6d1a34a4e86de4173112",
+  "mergeBaseMethod": "git merge-base --all <head> <fetched-main>; full non-shallow commit history; exactly one result",
+  "node": "v24.21.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "tools": {
+    "typescript": "6.0.3",
+    "babel": "8.0.6",
+    "purePlugin": "0.5.0"
+  },
+  "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+  "appliedSourcePatchSha256": "5a54bc2c90c923120f613a08fdd48707643c3d5e3ff3cb2108ba1ec096b7ca41",
+  "buildMethod": "TypeScript compiler API emit with upstream config, noCheck=true, stripInternal=true; Babel annotate-pure-calls; publishConfig.exports promoted",
+  "limitation": "TypeScript 6.0.3 API emits JS/declarations instead of upstream TypeScript 7.0.2 CLI; no semantic typecheck or upstream tests. Primary owns installed consumer validation and deployment.",
+  "packages": {
+    "base": {
+      "sha": "757821fe99b7179f907d6d1a34a4e86de4173112",
+      "gitTree": "211932d6b2733e30852fafd08c90910c95db6223",
+      "version": "4.0.1",
+      "root": "/private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/base/effect",
+      "files": 2581,
+      "javascriptModules": 500,
+      "languageModelBeforeSha256": "e95353a9604708998c9d111842986d6b0f1f2e12500a6b6cc58441da56c7c28a",
+      "languageModelAfterSha256": "5c04d84ee7a93c98aa75185282c5dd8361c2418b68d93bdfe7f4a4c8e458bb02",
+      "appliedDiffSha256": "6b4338fa24f246a3910ea5b80b58057925507a3a5b27929d56d01776b10e9bc3",
+      "fileManifestSha256": "141d0b8a65bfb4e80d70040752ad4bfc277cdf1132412b96efb860941366c143",
+      "coreJsSha256": "f53129cb329da5b055d029836e7e1051e01fb5e6122dcbd5cd96bd1386a669e7",
+      "effectJsSha256": "bb865ad688811534c76550f803f7472e0bbfa79497d8bafcf67cd41b6df8334f",
+      "languageModelJsSha256": "98924475a7653ccf62cadaabc28eaa2557b9aaadecfb4bf3e58089c1804382ea"
+    },
+    "head": {
+      "sha": "01c6222ccf74390848595633ef23410cbfa6983b",
+      "gitTree": "b15b02208157e78babc50928de1bc7837e865c9e",
+      "version": "4.0.1",
+      "root": "/private/tmp/cf-bench-8914-effect-Gv32WlqM/packages/head/effect",
+      "files": 2581,
+      "javascriptModules": 500,
+      "languageModelBeforeSha256": "e95353a9604708998c9d111842986d6b0f1f2e12500a6b6cc58441da56c7c28a",
+      "languageModelAfterSha256": "5c04d84ee7a93c98aa75185282c5dd8361c2418b68d93bdfe7f4a4c8e458bb02",
+      "appliedDiffSha256": "6b4338fa24f246a3910ea5b80b58057925507a3a5b27929d56d01776b10e9bc3",
+      "fileManifestSha256": "38458c207859d25d110bf28f79ebd5f7773760c1e31dab0281c67b8bb3379a4b",
+      "coreJsSha256": "7c59ade6567377d1bbcba1c5780a8e2c5c77679c3c4065480a13b236cf8ec61c",
+      "effectJsSha256": "a3ebf0a65db1bd1c4aa0bfae8781dc998d8cbde6fb7295128e48c8d87dac6cbe",
+      "languageModelJsSha256": "98924475a7653ccf62cadaabc28eaa2557b9aaadecfb4bf3e58089c1804382ea"
+    }
+  }
+}

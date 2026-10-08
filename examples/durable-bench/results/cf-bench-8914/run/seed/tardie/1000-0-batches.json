@@ -1,0 +1,6302 @@
+[
+  {
+    "from": 0,
+    "to": 10,
+    "value": {
+      "fingerprint": "48dbee7890676da8",
+      "steps": [
+        {
+          "id": "h0",
+          "fingerprint": "f2e148072d839749",
+          "polls": 1
+        },
+        {
+          "id": "h1",
+          "fingerprint": "a12fd6d35bbda6a9",
+          "polls": 1
+        },
+        {
+          "id": "h2",
+          "fingerprint": "b121b22a3c6039b6",
+          "polls": 1
+        },
+        {
+          "id": "h3",
+          "fingerprint": "e3b6a2f09a87064a",
+          "polls": 1
+        },
+        {
+          "id": "h4",
+          "fingerprint": "761c1c5e88a23e41",
+          "polls": 1
+        },
+        {
+          "id": "h5",
+          "fingerprint": "36c6017dc828337a",
+          "polls": 1
+        },
+        {
+          "id": "h6",
+          "fingerprint": "03eec275cce57043",
+          "polls": 1
+        },
+        {
+          "id": "h7",
+          "fingerprint": "ba58270d2ae0b069",
+          "polls": 1
+        },
+        {
+          "id": "h8",
+          "fingerprint": "2b5f51c7b1cba3b8",
+          "polls": 1
+        },
+        {
+          "id": "h9",
+          "fingerprint": "48dbee7890676da8",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481627250,
+    "ended": 1791481636514,
+    "clientWallMs": 9264,
+    "cfRay": "a476f80d2f010cb5-MRS"
+  },
+  {
+    "from": 10,
+    "to": 20,
+    "value": {
+      "fingerprint": "35df88a493e66370",
+      "steps": [
+        {
+          "id": "h10",
+          "fingerprint": "05089d51cc21dc98",
+          "polls": 1
+        },
+        {
+          "id": "h11",
+          "fingerprint": "d776508db4f4284d",
+          "polls": 1
+        },
+        {
+          "id": "h12",
+          "fingerprint": "d17f058cafe8a61c",
+          "polls": 1
+        },
+        {
+          "id": "h13",
+          "fingerprint": "4094a2cf70b97dd2",
+          "polls": 1
+        },
+        {
+          "id": "h14",
+          "fingerprint": "2c059de22f9c8c84",
+          "polls": 1
+        },
+        {
+          "id": "h15",
+          "fingerprint": "bc256541f3659923",
+          "polls": 1
+        },
+        {
+          "id": "h16",
+          "fingerprint": "6774bd776aa43c9e",
+          "polls": 1
+        },
+        {
+          "id": "h17",
+          "fingerprint": "c45e186ea054488b",
+          "polls": 1
+        },
+        {
+          "id": "h18",
+          "fingerprint": "7db0040a54d228ff",
+          "polls": 1
+        },
+        {
+          "id": "h19",
+          "fingerprint": "35df88a493e66370",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481637306,
+    "ended": 1791481644888,
+    "clientWallMs": 7582,
+    "cfRay": "a476f84959568fde-BOS"
+  },
+  {
+    "from": 20,
+    "to": 30,
+    "value": {
+      "fingerprint": "cc0fc81c52fbcd32",
+      "steps": [
+        {
+          "id": "h20",
+          "fingerprint": "fd6cac18f7d56f73",
+          "polls": 1
+        },
+        {
+          "id": "h21",
+          "fingerprint": "3b8e10ce76217c75",
+          "polls": 1
+        },
+        {
+          "id": "h22",
+          "fingerprint": "4a665fcaf0178d3b",
+          "polls": 1
+        },
+        {
+          "id": "h23",
+          "fingerprint": "ccb512791025acb3",
+          "polls": 1
+        },
+        {
+          "id": "h24",
+          "fingerprint": "661966cad9497f3c",
+          "polls": 1
+        },
+        {
+          "id": "h25",
+          "fingerprint": "0170eb7a63cdca52",
+          "polls": 1
+        },
+        {
+          "id": "h26",
+          "fingerprint": "ba566ec5f84aec15",
+          "polls": 1
+        },
+        {
+          "id": "h27",
+          "fingerprint": "2cfd86663432c731",
+          "polls": 1
+        },
+        {
+          "id": "h28",
+          "fingerprint": "bb2d98236c7ae916",
+          "polls": 1
+        },
+        {
+          "id": "h29",
+          "fingerprint": "cc0fc81c52fbcd32",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481645058,
+    "ended": 1791481652607,
+    "clientWallMs": 7549,
+    "cfRay": "a476f879d8c68fde-BOS"
+  },
+  {
+    "from": 30,
+    "to": 40,
+    "value": {
+      "fingerprint": "a926e50cd55421cc",
+      "steps": [
+        {
+          "id": "h30",
+          "fingerprint": "5de1c31c38581954",
+          "polls": 1
+        },
+        {
+          "id": "h31",
+          "fingerprint": "00f66c449549b9cd",
+          "polls": 1
+        },
+        {
+          "id": "h32",
+          "fingerprint": "788d6fd459f53660",
+          "polls": 1
+        },
+        {
+          "id": "h33",
+          "fingerprint": "b1786325d9231120",
+          "polls": 89
+        },
+        {
+          "id": "h34",
+          "fingerprint": "3fa9400c5c07fc6c",
+          "polls": 3
+        },
+        {
+          "id": "h35",
+          "fingerprint": "6135e854d8608611",
+          "polls": 1
+        },
+        {
+          "id": "h36",
+          "fingerprint": "d84ea3bc6fc1ec22",
+          "polls": 1
+        },
+        {
+          "id": "h37",
+          "fingerprint": "cfca93a6b4ffe3c2",
+          "polls": 1
+        },
+        {
+          "id": "h38",
+          "fingerprint": "560c96235910ba68",
+          "polls": 1
+        },
+        {
+          "id": "h39",
+          "fingerprint": "a926e50cd55421cc",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481652838,
+    "ended": 1791481691605,
+    "clientWallMs": 38767,
+    "cfRay": "a476f8aa7e478fde-BOS"
+  },
+  {
+    "from": 40,
+    "to": 50,
+    "value": {
+      "fingerprint": "b017b487524e44a4",
+      "steps": [
+        {
+          "id": "h40",
+          "fingerprint": "8d9a3b4ab187c618",
+          "polls": 1
+        },
+        {
+          "id": "h41",
+          "fingerprint": "9ace1f17ed9f682b",
+          "polls": 1
+        },
+        {
+          "id": "h42",
+          "fingerprint": "36053bc7cc555974",
+          "polls": 1
+        },
+        {
+          "id": "h43",
+          "fingerprint": "9086f9764b278c53",
+          "polls": 1
+        },
+        {
+          "id": "h44",
+          "fingerprint": "8b0af30bc49fabf9",
+          "polls": 1
+        },
+        {
+          "id": "h45",
+          "fingerprint": "347cbda4f96827a4",
+          "polls": 1
+        },
+        {
+          "id": "h46",
+          "fingerprint": "bbfd0b88e712b3fb",
+          "polls": 1
+        },
+        {
+          "id": "h47",
+          "fingerprint": "2b15cb693a8434a4",
+          "polls": 1
+        },
+        {
+          "id": "h48",
+          "fingerprint": "f82006e05dd41d16",
+          "polls": 1
+        },
+        {
+          "id": "h49",
+          "fingerprint": "b017b487524e44a4",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481691861,
+    "ended": 1791481700599,
+    "clientWallMs": 8738,
+    "cfRay": "a476f99e9a998fde-BOS"
+  },
+  {
+    "from": 50,
+    "to": 60,
+    "value": {
+      "fingerprint": "69edf79bdc6652d7",
+      "steps": [
+        {
+          "id": "h50",
+          "fingerprint": "18129138d5cac53f",
+          "polls": 2
+        },
+        {
+          "id": "h51",
+          "fingerprint": "cba3449842daf0b4",
+          "polls": 1
+        },
+        {
+          "id": "h52",
+          "fingerprint": "28212a64312fd53e",
+          "polls": 1
+        },
+        {
+          "id": "h53",
+          "fingerprint": "c797c6cee6f1acf2",
+          "polls": 2
+        },
+        {
+          "id": "h54",
+          "fingerprint": "dc185da11c1add37",
+          "polls": 1
+        },
+        {
+          "id": "h55",
+          "fingerprint": "348fb2b1cefb166f",
+          "polls": 1
+        },
+        {
+          "id": "h56",
+          "fingerprint": "9b2573d79b8d0461",
+          "polls": 1
+        },
+        {
+          "id": "h57",
+          "fingerprint": "ed6259e386b960ac",
+          "polls": 1
+        },
+        {
+          "id": "h58",
+          "fingerprint": "5488f442550687bc",
+          "polls": 1
+        },
+        {
+          "id": "h59",
+          "fingerprint": "69edf79bdc6652d7",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481701520,
+    "ended": 1791481711163,
+    "clientWallMs": 9643,
+    "cfRay": "a476f9dadf498fde-BOS"
+  },
+  {
+    "from": 60,
+    "to": 70,
+    "value": {
+      "fingerprint": "fafe0119d275d910",
+      "steps": [
+        {
+          "id": "h60",
+          "fingerprint": "270869ad9aa26cc9",
+          "polls": 1
+        },
+        {
+          "id": "h61",
+          "fingerprint": "8b64edd865ddc531",
+          "polls": 88
+        },
+        {
+          "id": "h62",
+          "fingerprint": "6c42c4863b179320",
+          "polls": 3
+        },
+        {
+          "id": "h63",
+          "fingerprint": "1614321458ee8b7d",
+          "polls": 1
+        },
+        {
+          "id": "h64",
+          "fingerprint": "5b7d9fc867dc289d",
+          "polls": 1
+        },
+        {
+          "id": "h65",
+          "fingerprint": "0d736e790f0d3ef3",
+          "polls": 2
+        },
+        {
+          "id": "h66",
+          "fingerprint": "03991c2f694bf5be",
+          "polls": 1
+        },
+        {
+          "id": "h67",
+          "fingerprint": "f93b1d248c207ba5",
+          "polls": 1
+        },
+        {
+          "id": "h68",
+          "fingerprint": "264e9e9c3851267d",
+          "polls": 1
+        },
+        {
+          "id": "h69",
+          "fingerprint": "fafe0119d275d910",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481711397,
+    "ended": 1791481751649,
+    "clientWallMs": 40252,
+    "cfRay": "a476fa187c408fde-BOS"
+  },
+  {
+    "from": 70,
+    "to": 80,
+    "value": {
+      "fingerprint": "337e702519f5e099",
+      "steps": [
+        {
+          "id": "h70",
+          "fingerprint": "8c1658244f720472",
+          "polls": 1
+        },
+        {
+          "id": "h71",
+          "fingerprint": "585c43840fb31374",
+          "polls": 1
+        },
+        {
+          "id": "h72",
+          "fingerprint": "e4331a52be3a22a3",
+          "polls": 2
+        },
+        {
+          "id": "h73",
+          "fingerprint": "a55e6c8af0dd0e7a",
+          "polls": 1
+        },
+        {
+          "id": "h74",
+          "fingerprint": "953f32cc4e212f50",
+          "polls": 2
+        },
+        {
+          "id": "h75",
+          "fingerprint": "2f4fb674628967aa",
+          "polls": 94
+        },
+        {
+          "id": "h76",
+          "fingerprint": "52eda23a13986e6e",
+          "polls": 1
+        },
+        {
+          "id": "h77",
+          "fingerprint": "fa7d318a05811a9e",
+          "polls": 3
+        },
+        {
+          "id": "h78",
+          "fingerprint": "4649071225902eaf",
+          "polls": 1
+        },
+        {
+          "id": "h79",
+          "fingerprint": "337e702519f5e099",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481751898,
+    "ended": 1791481792115,
+    "clientWallMs": 40217,
+    "cfRay": "a476fb159ed58fde-BOS"
+  },
+  {
+    "from": 80,
+    "to": 90,
+    "value": {
+      "fingerprint": "dcf02ce9e4bc2376",
+      "steps": [
+        {
+          "id": "h80",
+          "fingerprint": "d55c88552a889226",
+          "polls": 1
+        },
+        {
+          "id": "h81",
+          "fingerprint": "878c4fe3e4b211cf",
+          "polls": 1
+        },
+        {
+          "id": "h82",
+          "fingerprint": "70c4cd9d8b3aac81",
+          "polls": 1
+        },
+        {
+          "id": "h83",
+          "fingerprint": "f1d1bc5f366f6502",
+          "polls": 1
+        },
+        {
+          "id": "h84",
+          "fingerprint": "47c94207cc54a829",
+          "polls": 1
+        },
+        {
+          "id": "h85",
+          "fingerprint": "e701cfe18b2fbad1",
+          "polls": 1
+        },
+        {
+          "id": "h86",
+          "fingerprint": "5a12906a5d4b58d8",
+          "polls": 1
+        },
+        {
+          "id": "h87",
+          "fingerprint": "4c4ffd5f57281030",
+          "polls": 1
+        },
+        {
+          "id": "h88",
+          "fingerprint": "bf8819b4c481ac43",
+          "polls": 1
+        },
+        {
+          "id": "h89",
+          "fingerprint": "dcf02ce9e4bc2376",
+          "polls": 2
+        }
+      ]
+    },
+    "started": 1791481792307,
+    "ended": 1791481802760,
+    "clientWallMs": 10453,
+    "cfRay": "a476fc122c8b8fde-BOS"
+  },
+  {
+    "from": 90,
+    "to": 100,
+    "value": {
+      "fingerprint": "05f6a93c4a970e37",
+      "steps": [
+        {
+          "id": "h90",
+          "fingerprint": "bd14a32793fa1ea3",
+          "polls": 1
+        },
+        {
+          "id": "h91",
+          "fingerprint": "eeb8b69c46d7b64e",
+          "polls": 1
+        },
+        {
+          "id": "h92",
+          "fingerprint": "25500f20a436d4cd",
+          "polls": 1
+        },
+        {
+          "id": "h93",
+          "fingerprint": "3cce5c59e3cd4614",
+          "polls": 1
+        },
+        {
+          "id": "h94",
+          "fingerprint": "1be41b5947096775",
+          "polls": 1
+        },
+        {
+          "id": "h95",
+          "fingerprint": "61a2522598170b19",
+          "polls": 1
+        },
+        {
+          "id": "h96",
+          "fingerprint": "e6fac5fa92c3bb1f",
+          "polls": 1
+        },
+        {
+          "id": "h97",
+          "fingerprint": "052d71e81d6594ef",
+          "polls": 1
+        },
+        {
+          "id": "h98",
+          "fingerprint": "31cc901d09f218fd",
+          "polls": 1
+        },
+        {
+          "id": "h99",
+          "fingerprint": "05f6a93c4a970e37",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481802980,
+    "ended": 1791481813947,
+    "clientWallMs": 10967,
+    "cfRay": "a476fc54db5d8fde-BOS"
+  },
+  {
+    "from": 100,
+    "to": 110,
+    "value": {
+      "fingerprint": "d2aa09f7a3d35ee1",
+      "steps": [
+        {
+          "id": "h100",
+          "fingerprint": "880f9b31bb168289",
+          "polls": 2
+        },
+        {
+          "id": "h101",
+          "fingerprint": "7f33d32eb1963dae",
+          "polls": 1
+        },
+        {
+          "id": "h102",
+          "fingerprint": "222e0c57f41d841b",
+          "polls": 1
+        },
+        {
+          "id": "h103",
+          "fingerprint": "d30847b108807c68",
+          "polls": 1
+        },
+        {
+          "id": "h104",
+          "fingerprint": "c9806644e6520e93",
+          "polls": 1
+        },
+        {
+          "id": "h105",
+          "fingerprint": "2f3675eac884ab65",
+          "polls": 1
+        },
+        {
+          "id": "h106",
+          "fingerprint": "3caf30667208777c",
+          "polls": 1
+        },
+        {
+          "id": "h107",
+          "fingerprint": "665985cf52c58328",
+          "polls": 1
+        },
+        {
+          "id": "h108",
+          "fingerprint": "ca456948687c4c7c",
+          "polls": 1
+        },
+        {
+          "id": "h109",
+          "fingerprint": "d2aa09f7a3d35ee1",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481814641,
+    "ended": 1791481823911,
+    "clientWallMs": 9270,
+    "cfRay": "a476fc9dbe4a8fde-BOS"
+  },
+  {
+    "from": 110,
+    "to": 120,
+    "value": {
+      "fingerprint": "062d1ae1e3c6d1d7",
+      "steps": [
+        {
+          "id": "h110",
+          "fingerprint": "4a80f943c10e7c69",
+          "polls": 1
+        },
+        {
+          "id": "h111",
+          "fingerprint": "80524e600a018ee8",
+          "polls": 1
+        },
+        {
+          "id": "h112",
+          "fingerprint": "23cf400fc39769ed",
+          "polls": 1
+        },
+        {
+          "id": "h113",
+          "fingerprint": "472c37824556bb58",
+          "polls": 1
+        },
+        {
+          "id": "h114",
+          "fingerprint": "ca10ef987e832b27",
+          "polls": 89
+        },
+        {
+          "id": "h115",
+          "fingerprint": "01a24b8f91aeaea9",
+          "polls": 2
+        },
+        {
+          "id": "h116",
+          "fingerprint": "804bfa8c18bb4455",
+          "polls": 1
+        },
+        {
+          "id": "h117",
+          "fingerprint": "1c79f545be8a5d16",
+          "polls": 1
+        },
+        {
+          "id": "h118",
+          "fingerprint": "26253161204defa7",
+          "polls": 1
+        },
+        {
+          "id": "h119",
+          "fingerprint": "062d1ae1e3c6d1d7",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481824089,
+    "ended": 1791481863407,
+    "clientWallMs": 39318,
+    "cfRay": "a476fcd8c85f8fde-BOS"
+  },
+  {
+    "from": 120,
+    "to": 130,
+    "value": {
+      "fingerprint": "dda2204b3c567cb1",
+      "steps": [
+        {
+          "id": "h120",
+          "fingerprint": "d5a05bb23dd7531b",
+          "polls": 1
+        },
+        {
+          "id": "h121",
+          "fingerprint": "859b5445d0c35ee1",
+          "polls": 1
+        },
+        {
+          "id": "h122",
+          "fingerprint": "71d857a8297a42f4",
+          "polls": 1
+        },
+        {
+          "id": "h123",
+          "fingerprint": "8766b61282df7657",
+          "polls": 1
+        },
+        {
+          "id": "h124",
+          "fingerprint": "106b6be0f0c58830",
+          "polls": 1
+        },
+        {
+          "id": "h125",
+          "fingerprint": "ca30cd0435a69403",
+          "polls": 1
+        },
+        {
+          "id": "h126",
+          "fingerprint": "19430008d80d0211",
+          "polls": 1
+        },
+        {
+          "id": "h127",
+          "fingerprint": "0287d457fcde9259",
+          "polls": 1
+        },
+        {
+          "id": "h128",
+          "fingerprint": "f086e179c9eefbdf",
+          "polls": 1
+        },
+        {
+          "id": "h129",
+          "fingerprint": "dda2204b3c567cb1",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481863573,
+    "ended": 1791481873269,
+    "clientWallMs": 9696,
+    "cfRay": "a476fdcf88b78fde-BOS"
+  },
+  {
+    "from": 130,
+    "to": 140,
+    "value": {
+      "fingerprint": "e48c9c1ded38a254",
+      "steps": [
+        {
+          "id": "h130",
+          "fingerprint": "1caa85ad4bcc8ed3",
+          "polls": 1
+        },
+        {
+          "id": "h131",
+          "fingerprint": "f5074dccb85126b7",
+          "polls": 1
+        },
+        {
+          "id": "h132",
+          "fingerprint": "c68438fb709b1836",
+          "polls": 1
+        },
+        {
+          "id": "h133",
+          "fingerprint": "c254d49aeb2701be",
+          "polls": 1
+        },
+        {
+          "id": "h134",
+          "fingerprint": "688263fa9574a667",
+          "polls": 1
+        },
+        {
+          "id": "h135",
+          "fingerprint": "bc6982ab467786db",
+          "polls": 1
+        },
+        {
+          "id": "h136",
+          "fingerprint": "da306fd93da59683",
+          "polls": 1
+        },
+        {
+          "id": "h137",
+          "fingerprint": "3089d59e97371e88",
+          "polls": 1
+        },
+        {
+          "id": "h138",
+          "fingerprint": "d0b83d8593962740",
+          "polls": 1
+        },
+        {
+          "id": "h139",
+          "fingerprint": "e48c9c1ded38a254",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481873488,
+    "ended": 1791481882738,
+    "clientWallMs": 9250,
+    "cfRay": "a476fe0d8ceb8fde-BOS"
+  },
+  {
+    "from": 140,
+    "to": 150,
+    "value": {
+      "fingerprint": "2c911c83f18e43fa",
+      "steps": [
+        {
+          "id": "h140",
+          "fingerprint": "e0e43fed1fa04621",
+          "polls": 1
+        },
+        {
+          "id": "h141",
+          "fingerprint": "7eb2cebda0bab636",
+          "polls": 1
+        },
+        {
+          "id": "h142",
+          "fingerprint": "75c6f9c59b6d4288",
+          "polls": 1
+        },
+        {
+          "id": "h143",
+          "fingerprint": "3b21d9c8629e2b57",
+          "polls": 1
+        },
+        {
+          "id": "h144",
+          "fingerprint": "39f0fa58398783c6",
+          "polls": 1
+        },
+        {
+          "id": "h145",
+          "fingerprint": "d5d959de1db041d2",
+          "polls": 1
+        },
+        {
+          "id": "h146",
+          "fingerprint": "5643660d89ed85fc",
+          "polls": 1
+        },
+        {
+          "id": "h147",
+          "fingerprint": "6d20665bb296f611",
+          "polls": 1
+        },
+        {
+          "id": "h148",
+          "fingerprint": "5f997da2079887ea",
+          "polls": 1
+        },
+        {
+          "id": "h149",
+          "fingerprint": "2c911c83f18e43fa",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481882940,
+    "ended": 1791481891873,
+    "clientWallMs": 8933,
+    "cfRay": "a476fe489a7d8fde-BOS"
+  },
+  {
+    "from": 150,
+    "to": 160,
+    "value": {
+      "fingerprint": "fb60ff1b333e1462",
+      "steps": [
+        {
+          "id": "h150",
+          "fingerprint": "6bfe237faad00000",
+          "polls": 1
+        },
+        {
+          "id": "h151",
+          "fingerprint": "8590ceb8453b6500",
+          "polls": 1
+        },
+        {
+          "id": "h152",
+          "fingerprint": "e45123b56c2a9110",
+          "polls": 1
+        },
+        {
+          "id": "h153",
+          "fingerprint": "a5a0aaf37f0c0f0e",
+          "polls": 1
+        },
+        {
+          "id": "h154",
+          "fingerprint": "19033841a1d5222d",
+          "polls": 1
+        },
+        {
+          "id": "h155",
+          "fingerprint": "30e4fb5252672b35",
+          "polls": 1
+        },
+        {
+          "id": "h156",
+          "fingerprint": "652da23d5212fe35",
+          "polls": 1
+        },
+        {
+          "id": "h157",
+          "fingerprint": "cd454f0533f09dc2",
+          "polls": 1
+        },
+        {
+          "id": "h158",
+          "fingerprint": "1b421810312a7a66",
+          "polls": 1
+        },
+        {
+          "id": "h159",
+          "fingerprint": "fb60ff1b333e1462",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481892591,
+    "ended": 1791481901543,
+    "clientWallMs": 8952,
+    "cfRay": "a476fe84e8068fde-BOS"
+  },
+  {
+    "from": 160,
+    "to": 170,
+    "value": {
+      "fingerprint": "c7adc9eef4f3333f",
+      "steps": [
+        {
+          "id": "h160",
+          "fingerprint": "f26863e6a34c94b7",
+          "polls": 1
+        },
+        {
+          "id": "h161",
+          "fingerprint": "eed65fec27564eb2",
+          "polls": 1
+        },
+        {
+          "id": "h162",
+          "fingerprint": "f51221520b675b02",
+          "polls": 1
+        },
+        {
+          "id": "h163",
+          "fingerprint": "3035280aa439a6db",
+          "polls": 1
+        },
+        {
+          "id": "h164",
+          "fingerprint": "5c8c3ca7da709951",
+          "polls": 1
+        },
+        {
+          "id": "h165",
+          "fingerprint": "48e96f1bc54337d9",
+          "polls": 1
+        },
+        {
+          "id": "h166",
+          "fingerprint": "8f4fab70c6cfb44b",
+          "polls": 1
+        },
+        {
+          "id": "h167",
+          "fingerprint": "8e63a8af99f547bf",
+          "polls": 1
+        },
+        {
+          "id": "h168",
+          "fingerprint": "32c4144c91d03a70",
+          "polls": 1
+        },
+        {
+          "id": "h169",
+          "fingerprint": "c7adc9eef4f3333f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481901715,
+    "ended": 1791481911202,
+    "clientWallMs": 9487,
+    "cfRay": "a476febdefa38fde-BOS"
+  },
+  {
+    "from": 170,
+    "to": 180,
+    "value": {
+      "fingerprint": "9dd45537fd760a94",
+      "steps": [
+        {
+          "id": "h170",
+          "fingerprint": "aeeeb0cb796c7c85",
+          "polls": 1
+        },
+        {
+          "id": "h171",
+          "fingerprint": "f26570a273e1af30",
+          "polls": 1
+        },
+        {
+          "id": "h172",
+          "fingerprint": "8923625c40d3aadf",
+          "polls": 1
+        },
+        {
+          "id": "h173",
+          "fingerprint": "5163109da42db670",
+          "polls": 1
+        },
+        {
+          "id": "h174",
+          "fingerprint": "fe9752b28888ee4d",
+          "polls": 1
+        },
+        {
+          "id": "h175",
+          "fingerprint": "27d4fd7728452e3d",
+          "polls": 1
+        },
+        {
+          "id": "h176",
+          "fingerprint": "121adeb4ea4e39e1",
+          "polls": 1
+        },
+        {
+          "id": "h177",
+          "fingerprint": "f6f804567aa9d45f",
+          "polls": 1
+        },
+        {
+          "id": "h178",
+          "fingerprint": "0618fa572589a4e1",
+          "polls": 1
+        },
+        {
+          "id": "h179",
+          "fingerprint": "9dd45537fd760a94",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481911395,
+    "ended": 1791481921282,
+    "clientWallMs": 9887,
+    "cfRay": "a476fefa692a8fde-BOS"
+  },
+  {
+    "from": 180,
+    "to": 190,
+    "value": {
+      "fingerprint": "fe8d9e208bda6913",
+      "steps": [
+        {
+          "id": "h180",
+          "fingerprint": "17631dd79791fd81",
+          "polls": 1
+        },
+        {
+          "id": "h181",
+          "fingerprint": "c2777b19eb331369",
+          "polls": 1
+        },
+        {
+          "id": "h182",
+          "fingerprint": "2d263e061e57b349",
+          "polls": 1
+        },
+        {
+          "id": "h183",
+          "fingerprint": "1d20f9a48d9bb6d7",
+          "polls": 1
+        },
+        {
+          "id": "h184",
+          "fingerprint": "0842aa3c511abb45",
+          "polls": 1
+        },
+        {
+          "id": "h185",
+          "fingerprint": "b4bd8bff64bcdc4f",
+          "polls": 1
+        },
+        {
+          "id": "h186",
+          "fingerprint": "bc27dfc6095ab79a",
+          "polls": 1
+        },
+        {
+          "id": "h187",
+          "fingerprint": "fe82fd261cf4d829",
+          "polls": 1
+        },
+        {
+          "id": "h188",
+          "fingerprint": "108100deefd61d2c",
+          "polls": 1
+        },
+        {
+          "id": "h189",
+          "fingerprint": "fe8d9e208bda6913",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481921500,
+    "ended": 1791481931751,
+    "clientWallMs": 10251,
+    "cfRay": "a476ff399a5f8fde-BOS"
+  },
+  {
+    "from": 190,
+    "to": 200,
+    "value": {
+      "fingerprint": "04e8de786f801d8d",
+      "steps": [
+        {
+          "id": "h190",
+          "fingerprint": "4dc577060197bc13",
+          "polls": 1
+        },
+        {
+          "id": "h191",
+          "fingerprint": "b8c7d5f08249b7de",
+          "polls": 1
+        },
+        {
+          "id": "h192",
+          "fingerprint": "c47ce46d4b6f932c",
+          "polls": 1
+        },
+        {
+          "id": "h193",
+          "fingerprint": "562a3b0bb4bf857b",
+          "polls": 1
+        },
+        {
+          "id": "h194",
+          "fingerprint": "eae8f836dfddac60",
+          "polls": 1
+        },
+        {
+          "id": "h195",
+          "fingerprint": "89242bac20fb8865",
+          "polls": 1
+        },
+        {
+          "id": "h196",
+          "fingerprint": "2ec3b73cf1e0a3c5",
+          "polls": 1
+        },
+        {
+          "id": "h197",
+          "fingerprint": "e8b649373335b4b9",
+          "polls": 1
+        },
+        {
+          "id": "h198",
+          "fingerprint": "febdf54000c896e6",
+          "polls": 1
+        },
+        {
+          "id": "h199",
+          "fingerprint": "04e8de786f801d8d",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481931961,
+    "ended": 1791481942514,
+    "clientWallMs": 10553,
+    "cfRay": "a476ff7afed08fde-BOS"
+  },
+  {
+    "from": 200,
+    "to": 210,
+    "value": {
+      "fingerprint": "0afb2362a95485a4",
+      "steps": [
+        {
+          "id": "h200",
+          "fingerprint": "f1be18eb6f0d8f0d",
+          "polls": 1
+        },
+        {
+          "id": "h201",
+          "fingerprint": "5fbe5956da24d9a4",
+          "polls": 1
+        },
+        {
+          "id": "h202",
+          "fingerprint": "2a87c3841013f3c7",
+          "polls": 1
+        },
+        {
+          "id": "h203",
+          "fingerprint": "d5e1bf2e58524edd",
+          "polls": 1
+        },
+        {
+          "id": "h204",
+          "fingerprint": "9495e024b5c7a1ea",
+          "polls": 1
+        },
+        {
+          "id": "h205",
+          "fingerprint": "d2d938a567bf71ad",
+          "polls": 1
+        },
+        {
+          "id": "h206",
+          "fingerprint": "e3540820ade0f054",
+          "polls": 1
+        },
+        {
+          "id": "h207",
+          "fingerprint": "ac4a4e755b4dc648",
+          "polls": 1
+        },
+        {
+          "id": "h208",
+          "fingerprint": "0d499702d45acd8a",
+          "polls": 1
+        },
+        {
+          "id": "h209",
+          "fingerprint": "0afb2362a95485a4",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481943117,
+    "ended": 1791481951143,
+    "clientWallMs": 8026,
+    "cfRay": "a476ffc0bd1b8fde-BOS"
+  },
+  {
+    "from": 210,
+    "to": 220,
+    "value": {
+      "fingerprint": "06854b793d832ec8",
+      "steps": [
+        {
+          "id": "h210",
+          "fingerprint": "11eaf0a9c18ee040",
+          "polls": 1
+        },
+        {
+          "id": "h211",
+          "fingerprint": "cb172fb1e9550739",
+          "polls": 1
+        },
+        {
+          "id": "h212",
+          "fingerprint": "fc714fe3925314a0",
+          "polls": 1
+        },
+        {
+          "id": "h213",
+          "fingerprint": "36fb5f1b4293c399",
+          "polls": 1
+        },
+        {
+          "id": "h214",
+          "fingerprint": "b953d71a6df8e3e5",
+          "polls": 91
+        },
+        {
+          "id": "h215",
+          "fingerprint": "e44f7b5a1e350c26",
+          "polls": 2
+        },
+        {
+          "id": "h216",
+          "fingerprint": "1fb043556f2e7f3c",
+          "polls": 1
+        },
+        {
+          "id": "h217",
+          "fingerprint": "aa65209c3d3b0bbc",
+          "polls": 1
+        },
+        {
+          "id": "h218",
+          "fingerprint": "7bb7ef4de9f00ba2",
+          "polls": 1
+        },
+        {
+          "id": "h219",
+          "fingerprint": "06854b793d832ec8",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481951386,
+    "ended": 1791481990161,
+    "clientWallMs": 38775,
+    "cfRay": "a476fff49ef38fde-BOS"
+  },
+  {
+    "from": 220,
+    "to": 230,
+    "value": {
+      "fingerprint": "7dc1b209b02c858a",
+      "steps": [
+        {
+          "id": "h220",
+          "fingerprint": "c24f08a697d8eed4",
+          "polls": 1
+        },
+        {
+          "id": "h221",
+          "fingerprint": "258ef2efb9628d8f",
+          "polls": 1
+        },
+        {
+          "id": "h222",
+          "fingerprint": "dbbc6ee5904a5790",
+          "polls": 1
+        },
+        {
+          "id": "h223",
+          "fingerprint": "d8d888e6366e9b05",
+          "polls": 1
+        },
+        {
+          "id": "h224",
+          "fingerprint": "8f23f2a5b7576bdf",
+          "polls": 1
+        },
+        {
+          "id": "h225",
+          "fingerprint": "cef5ce3fb22b1329",
+          "polls": 1
+        },
+        {
+          "id": "h226",
+          "fingerprint": "3387f9bf27804d8a",
+          "polls": 1
+        },
+        {
+          "id": "h227",
+          "fingerprint": "688b8fd455beb16d",
+          "polls": 1
+        },
+        {
+          "id": "h228",
+          "fingerprint": "2ecd53afb8d727a5",
+          "polls": 1
+        },
+        {
+          "id": "h229",
+          "fingerprint": "7dc1b209b02c858a",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481990356,
+    "ended": 1791481998972,
+    "clientWallMs": 8616,
+    "cfRay": "a47700e7ee238fde-BOS"
+  },
+  {
+    "from": 230,
+    "to": 240,
+    "value": {
+      "fingerprint": "845fb79ca75ce927",
+      "steps": [
+        {
+          "id": "h230",
+          "fingerprint": "6d621548539ef73f",
+          "polls": 1
+        },
+        {
+          "id": "h231",
+          "fingerprint": "c2c34d6bb27fe0f7",
+          "polls": 1
+        },
+        {
+          "id": "h232",
+          "fingerprint": "6c9264fb0d6376cf",
+          "polls": 1
+        },
+        {
+          "id": "h233",
+          "fingerprint": "4a149752f76cfb30",
+          "polls": 1
+        },
+        {
+          "id": "h234",
+          "fingerprint": "f5f974a86978cbcc",
+          "polls": 1
+        },
+        {
+          "id": "h235",
+          "fingerprint": "32274194f00abfb8",
+          "polls": 1
+        },
+        {
+          "id": "h236",
+          "fingerprint": "d09775637eb69fb1",
+          "polls": 1
+        },
+        {
+          "id": "h237",
+          "fingerprint": "9e1f637a976b8ef2",
+          "polls": 1
+        },
+        {
+          "id": "h238",
+          "fingerprint": "6a034eee212e2b3a",
+          "polls": 1
+        },
+        {
+          "id": "h239",
+          "fingerprint": "845fb79ca75ce927",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791481999150,
+    "ended": 1791482008307,
+    "clientWallMs": 9157,
+    "cfRay": "a477011eef508fde-BOS"
+  },
+  {
+    "from": 240,
+    "to": 250,
+    "value": {
+      "fingerprint": "dcea9f30b0917245",
+      "steps": [
+        {
+          "id": "h240",
+          "fingerprint": "8895e5ab6a330545",
+          "polls": 1
+        },
+        {
+          "id": "h241",
+          "fingerprint": "f28df7d9b48c4a41",
+          "polls": 1
+        },
+        {
+          "id": "h242",
+          "fingerprint": "53106423e10d6fd5",
+          "polls": 1
+        },
+        {
+          "id": "h243",
+          "fingerprint": "d35cca8c845c14da",
+          "polls": 92
+        },
+        {
+          "id": "h244",
+          "fingerprint": "49025ef7b9d2fb28",
+          "polls": 2
+        },
+        {
+          "id": "h245",
+          "fingerprint": "14a7c47acf18c3e9",
+          "polls": 1
+        },
+        {
+          "id": "h246",
+          "fingerprint": "19e8101947c98e98",
+          "polls": 1
+        },
+        {
+          "id": "h247",
+          "fingerprint": "ec48d8a43e3e400e",
+          "polls": 1
+        },
+        {
+          "id": "h248",
+          "fingerprint": "2c00f8573a0c0b24",
+          "polls": 1
+        },
+        {
+          "id": "h249",
+          "fingerprint": "dcea9f30b0917245",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482008530,
+    "ended": 1791482048657,
+    "clientWallMs": 40127,
+    "cfRay": "a47701599b7a8fde-BOS"
+  },
+  {
+    "from": 250,
+    "to": 260,
+    "value": {
+      "fingerprint": "71c68458cf1eb6f4",
+      "steps": [
+        {
+          "id": "h250",
+          "fingerprint": "bf5f6942fbfd293f",
+          "polls": 1
+        },
+        {
+          "id": "h251",
+          "fingerprint": "a0cecf9d4bba1ebd",
+          "polls": 2
+        },
+        {
+          "id": "h252",
+          "fingerprint": "1ef1564e947e0a17",
+          "polls": 1
+        },
+        {
+          "id": "h253",
+          "fingerprint": "8a2024f016528353",
+          "polls": 1
+        },
+        {
+          "id": "h254",
+          "fingerprint": "33513e13fd0e6295",
+          "polls": 1
+        },
+        {
+          "id": "h255",
+          "fingerprint": "7f8aa452dacf2874",
+          "polls": 1
+        },
+        {
+          "id": "h256",
+          "fingerprint": "661958e0192cbfdb",
+          "polls": 1
+        },
+        {
+          "id": "h257",
+          "fingerprint": "d1171423d84337ad",
+          "polls": 1
+        },
+        {
+          "id": "h258",
+          "fingerprint": "2a8a28a1257755cf",
+          "polls": 1
+        },
+        {
+          "id": "h259",
+          "fingerprint": "71c68458cf1eb6f4",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482049244,
+    "ended": 1791482059989,
+    "clientWallMs": 10745,
+    "cfRay": "a4770257f92e8fde-BOS"
+  },
+  {
+    "from": 260,
+    "to": 270,
+    "value": {
+      "fingerprint": "8e33a9d995c6b113",
+      "steps": [
+        {
+          "id": "h260",
+          "fingerprint": "c19adb4fc70a70c9",
+          "polls": 1
+        },
+        {
+          "id": "h261",
+          "fingerprint": "18576b7c31c8c626",
+          "polls": 1
+        },
+        {
+          "id": "h262",
+          "fingerprint": "c06ce2c6f29f1ee2",
+          "polls": 1
+        },
+        {
+          "id": "h263",
+          "fingerprint": "c9d9056c1b9a89bf",
+          "polls": 1
+        },
+        {
+          "id": "h264",
+          "fingerprint": "c11ffa84eedba9ce",
+          "polls": 1
+        },
+        {
+          "id": "h265",
+          "fingerprint": "4d87798312c67dfe",
+          "polls": 91
+        },
+        {
+          "id": "h266",
+          "fingerprint": "21a1d0063fe753fa",
+          "polls": 2
+        },
+        {
+          "id": "h267",
+          "fingerprint": "4ff97c7e4c913aec",
+          "polls": 1
+        },
+        {
+          "id": "h268",
+          "fingerprint": "256113afd62d8d26",
+          "polls": 1
+        },
+        {
+          "id": "h269",
+          "fingerprint": "8e33a9d995c6b113",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482060148,
+    "ended": 1791482100929,
+    "clientWallMs": 40781,
+    "cfRay": "a477029c2c298fde-BOS"
+  },
+  {
+    "from": 270,
+    "to": 280,
+    "value": {
+      "fingerprint": "4d885f4cdf62f34c",
+      "steps": [
+        {
+          "id": "h270",
+          "fingerprint": "2a772af7a5769772",
+          "polls": 1
+        },
+        {
+          "id": "h271",
+          "fingerprint": "5560ede130c048ab",
+          "polls": 1
+        },
+        {
+          "id": "h272",
+          "fingerprint": "26b4481d6b0b50c8",
+          "polls": 1
+        },
+        {
+          "id": "h273",
+          "fingerprint": "b4bf69d17e94cbdb",
+          "polls": 1
+        },
+        {
+          "id": "h274",
+          "fingerprint": "ca03710243402a31",
+          "polls": 92
+        },
+        {
+          "id": "h275",
+          "fingerprint": "d8c62d37b58976b4",
+          "polls": 1
+        },
+        {
+          "id": "h276",
+          "fingerprint": "f9c47a486b5a71ef",
+          "polls": 2
+        },
+        {
+          "id": "h277",
+          "fingerprint": "a1f8b5e3ca048e82",
+          "polls": 93
+        },
+        {
+          "id": "h278",
+          "fingerprint": "58e53dda27fa891f",
+          "polls": 2
+        },
+        {
+          "id": "h279",
+          "fingerprint": "4d885f4cdf62f34c",
+          "polls": 2
+        }
+      ]
+    },
+    "started": 1791482101156,
+    "ended": 1791482171832,
+    "clientWallMs": 70676,
+    "cfRay": "a477039c7a9b8fde-BOS"
+  },
+  {
+    "from": 280,
+    "to": 290,
+    "value": {
+      "fingerprint": "75024b57868f0a46",
+      "steps": [
+        {
+          "id": "h280",
+          "fingerprint": "a7598271c7c9dd29",
+          "polls": 1
+        },
+        {
+          "id": "h281",
+          "fingerprint": "2801b56f9a807e3d",
+          "polls": 2
+        },
+        {
+          "id": "h282",
+          "fingerprint": "56fecc6e9be53019",
+          "polls": 1
+        },
+        {
+          "id": "h283",
+          "fingerprint": "1e8e3ebc6914b506",
+          "polls": 1
+        },
+        {
+          "id": "h284",
+          "fingerprint": "39c6d593965f6b92",
+          "polls": 1
+        },
+        {
+          "id": "h285",
+          "fingerprint": "defd387d43d58b85",
+          "polls": 1
+        },
+        {
+          "id": "h286",
+          "fingerprint": "b9deb649514ae73a",
+          "polls": 1
+        },
+        {
+          "id": "h287",
+          "fingerprint": "308769bbf2161097",
+          "polls": 1
+        },
+        {
+          "id": "h288",
+          "fingerprint": "2d5874273cb2959c",
+          "polls": 1
+        },
+        {
+          "id": "h289",
+          "fingerprint": "75024b57868f0a46",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482172045,
+    "ended": 1791482183094,
+    "clientWallMs": 11049,
+    "cfRay": "a47705579f908fde-BOS"
+  },
+  {
+    "from": 290,
+    "to": 300,
+    "value": {
+      "fingerprint": "be7e72d956182bca",
+      "steps": [
+        {
+          "id": "h290",
+          "fingerprint": "5bcb375b7cb4e24f",
+          "polls": 1
+        },
+        {
+          "id": "h291",
+          "fingerprint": "64a9a93161a86ba7",
+          "polls": 1
+        },
+        {
+          "id": "h292",
+          "fingerprint": "b6302d6cb4c073b4",
+          "polls": 1
+        },
+        {
+          "id": "h293",
+          "fingerprint": "b87ca4a676d647d2",
+          "polls": 1
+        },
+        {
+          "id": "h294",
+          "fingerprint": "06a276c6ab339ca5",
+          "polls": 1
+        },
+        {
+          "id": "h295",
+          "fingerprint": "8fa163b488e76e1b",
+          "polls": 1
+        },
+        {
+          "id": "h296",
+          "fingerprint": "bc2411bb24485828",
+          "polls": 1
+        },
+        {
+          "id": "h297",
+          "fingerprint": "18afd05a4f1d12d0",
+          "polls": 1
+        },
+        {
+          "id": "h298",
+          "fingerprint": "716edc69b0e2fe2b",
+          "polls": 1
+        },
+        {
+          "id": "h299",
+          "fingerprint": "be7e72d956182bca",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482183269,
+    "ended": 1791482195584,
+    "clientWallMs": 12315,
+    "cfRay": "a477059dbe538fde-BOS"
+  },
+  {
+    "from": 300,
+    "to": 310,
+    "value": {
+      "fingerprint": "787b5de3b6408cfd",
+      "steps": [
+        {
+          "id": "h300",
+          "fingerprint": "7ab4f3911f03d1cf",
+          "polls": 1
+        },
+        {
+          "id": "h301",
+          "fingerprint": "010a37c2401981b7",
+          "polls": 1
+        },
+        {
+          "id": "h302",
+          "fingerprint": "bbdd6a0864827a40",
+          "polls": 1
+        },
+        {
+          "id": "h303",
+          "fingerprint": "7ced6f1e6bd1f6d4",
+          "polls": 1
+        },
+        {
+          "id": "h304",
+          "fingerprint": "5db453a0f40b7906",
+          "polls": 1
+        },
+        {
+          "id": "h305",
+          "fingerprint": "b6ed69667c38dbbe",
+          "polls": 1
+        },
+        {
+          "id": "h306",
+          "fingerprint": "150bd770a5d08090",
+          "polls": 1
+        },
+        {
+          "id": "h307",
+          "fingerprint": "a719fa4683787c7c",
+          "polls": 1
+        },
+        {
+          "id": "h308",
+          "fingerprint": "d0400f69c2260145",
+          "polls": 1
+        },
+        {
+          "id": "h309",
+          "fingerprint": "787b5de3b6408cfd",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482196272,
+    "ended": 1791482207498,
+    "clientWallMs": 11226,
+    "cfRay": "a47705eefc158fde-BOS"
+  },
+  {
+    "from": 310,
+    "to": 320,
+    "value": {
+      "fingerprint": "71deed4d4e5ecd79",
+      "steps": [
+        {
+          "id": "h310",
+          "fingerprint": "72181708fd372301",
+          "polls": 1
+        },
+        {
+          "id": "h311",
+          "fingerprint": "15a3155c5158d536",
+          "polls": 1
+        },
+        {
+          "id": "h312",
+          "fingerprint": "5909ba51d0187d99",
+          "polls": 1
+        },
+        {
+          "id": "h313",
+          "fingerprint": "d9813a30e488a8a2",
+          "polls": 1
+        },
+        {
+          "id": "h314",
+          "fingerprint": "1b6230274a26bf3c",
+          "polls": 1
+        },
+        {
+          "id": "h315",
+          "fingerprint": "73556c376c8b16d8",
+          "polls": 1
+        },
+        {
+          "id": "h316",
+          "fingerprint": "0882424ad3f1e578",
+          "polls": 1
+        },
+        {
+          "id": "h317",
+          "fingerprint": "815bc5ae86ca1532",
+          "polls": 1
+        },
+        {
+          "id": "h318",
+          "fingerprint": "5189a62e4841ba50",
+          "polls": 1
+        },
+        {
+          "id": "h319",
+          "fingerprint": "71deed4d4e5ecd79",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482207749,
+    "ended": 1791482216134,
+    "clientWallMs": 8385,
+    "cfRay": "a4770636bf808fde-BOS"
+  },
+  {
+    "from": 320,
+    "to": 330,
+    "value": {
+      "fingerprint": "00f84651f2f58fb4",
+      "steps": [
+        {
+          "id": "h320",
+          "fingerprint": "da317b65328d61d7",
+          "polls": 1
+        },
+        {
+          "id": "h321",
+          "fingerprint": "53062751427bf0ef",
+          "polls": 1
+        },
+        {
+          "id": "h322",
+          "fingerprint": "4462cb4b4e97b702",
+          "polls": 1
+        },
+        {
+          "id": "h323",
+          "fingerprint": "a2c8ca3a1ba2d750",
+          "polls": 1
+        },
+        {
+          "id": "h324",
+          "fingerprint": "af3c4a3a78d6a9c4",
+          "polls": 1
+        },
+        {
+          "id": "h325",
+          "fingerprint": "99721c18a36a3a68",
+          "polls": 1
+        },
+        {
+          "id": "h326",
+          "fingerprint": "4b71bcb6baa86702",
+          "polls": 1
+        },
+        {
+          "id": "h327",
+          "fingerprint": "44bfa4184cf03da7",
+          "polls": 1
+        },
+        {
+          "id": "h328",
+          "fingerprint": "1c846769b824a779",
+          "polls": 1
+        },
+        {
+          "id": "h329",
+          "fingerprint": "00f84651f2f58fb4",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482216342,
+    "ended": 1791482226302,
+    "clientWallMs": 9960,
+    "cfRay": "a477066c6c068fde-BOS"
+  },
+  {
+    "from": 330,
+    "to": 340,
+    "value": {
+      "fingerprint": "bc17451bf26fa3a6",
+      "steps": [
+        {
+          "id": "h330",
+          "fingerprint": "eaeb0b6c96d32f17",
+          "polls": 1
+        },
+        {
+          "id": "h331",
+          "fingerprint": "13c0b4413b81fe00",
+          "polls": 1
+        },
+        {
+          "id": "h332",
+          "fingerprint": "3143311b1dd209f0",
+          "polls": 1
+        },
+        {
+          "id": "h333",
+          "fingerprint": "99fa516049a40d40",
+          "polls": 1
+        },
+        {
+          "id": "h334",
+          "fingerprint": "3fd250d79783630a",
+          "polls": 1
+        },
+        {
+          "id": "h335",
+          "fingerprint": "e189f3aedbe8fe83",
+          "polls": 1
+        },
+        {
+          "id": "h336",
+          "fingerprint": "6416ccbe4a96d9a3",
+          "polls": 1
+        },
+        {
+          "id": "h337",
+          "fingerprint": "1c5b8ccdeecd7149",
+          "polls": 1
+        },
+        {
+          "id": "h338",
+          "fingerprint": "bb3fba2db43d0926",
+          "polls": 1
+        },
+        {
+          "id": "h339",
+          "fingerprint": "bc17451bf26fa3a6",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482226476,
+    "ended": 1791482237870,
+    "clientWallMs": 11394,
+    "cfRay": "a47706abcd788fde-BOS"
+  },
+  {
+    "from": 340,
+    "to": 350,
+    "value": {
+      "fingerprint": "4a214ae222848162",
+      "steps": [
+        {
+          "id": "h340",
+          "fingerprint": "6cce4ec07a164d3d",
+          "polls": 1
+        },
+        {
+          "id": "h341",
+          "fingerprint": "a1901cf680a4356a",
+          "polls": 1
+        },
+        {
+          "id": "h342",
+          "fingerprint": "af5781965ee3a78d",
+          "polls": 1
+        },
+        {
+          "id": "h343",
+          "fingerprint": "06de43f0a74151a6",
+          "polls": 1
+        },
+        {
+          "id": "h344",
+          "fingerprint": "7857d5aebabd1f03",
+          "polls": 1
+        },
+        {
+          "id": "h345",
+          "fingerprint": "e637b894a6631f8f",
+          "polls": 1
+        },
+        {
+          "id": "h346",
+          "fingerprint": "92f334783b37de62",
+          "polls": 1
+        },
+        {
+          "id": "h347",
+          "fingerprint": "e9315ea609ba0836",
+          "polls": 1
+        },
+        {
+          "id": "h348",
+          "fingerprint": "6e4ab5f6692e08e4",
+          "polls": 1
+        },
+        {
+          "id": "h349",
+          "fingerprint": "4a214ae222848162",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482238086,
+    "ended": 1791482252352,
+    "clientWallMs": 14266,
+    "cfRay": "a47706f46a918fde-BOS"
+  },
+  {
+    "from": 350,
+    "to": 360,
+    "value": {
+      "fingerprint": "71bbc0c7058cec4e",
+      "steps": [
+        {
+          "id": "h350",
+          "fingerprint": "c3196a6a1d4cc73d",
+          "polls": 1
+        },
+        {
+          "id": "h351",
+          "fingerprint": "0bc5fa000b8f6b0c",
+          "polls": 2
+        },
+        {
+          "id": "h352",
+          "fingerprint": "159986105e9f4ead",
+          "polls": 1
+        },
+        {
+          "id": "h353",
+          "fingerprint": "15c426266bf2dc20",
+          "polls": 1
+        },
+        {
+          "id": "h354",
+          "fingerprint": "f4c1811196623237",
+          "polls": 1
+        },
+        {
+          "id": "h355",
+          "fingerprint": "6fbad5f087e63b71",
+          "polls": 1
+        },
+        {
+          "id": "h356",
+          "fingerprint": "8754d99f2d6195f6",
+          "polls": 1
+        },
+        {
+          "id": "h357",
+          "fingerprint": "ae8598d80b76162c",
+          "polls": 1
+        },
+        {
+          "id": "h358",
+          "fingerprint": "48d150766fe31b03",
+          "polls": 1
+        },
+        {
+          "id": "h359",
+          "fingerprint": "71bbc0c7058cec4e",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482252928,
+    "ended": 1791482261853,
+    "clientWallMs": 8925,
+    "cfRay": "a47707511cfa8fde-BOS"
+  },
+  {
+    "from": 360,
+    "to": 370,
+    "value": {
+      "fingerprint": "336367ecf70e8faf",
+      "steps": [
+        {
+          "id": "h360",
+          "fingerprint": "ed05eece3700c8de",
+          "polls": 1
+        },
+        {
+          "id": "h361",
+          "fingerprint": "03ea00947bbf977a",
+          "polls": 1
+        },
+        {
+          "id": "h362",
+          "fingerprint": "4991bcf048b2be49",
+          "polls": 1
+        },
+        {
+          "id": "h363",
+          "fingerprint": "8b05b961db7e8539",
+          "polls": 1
+        },
+        {
+          "id": "h364",
+          "fingerprint": "bb6d4d4d1bc03900",
+          "polls": 1
+        },
+        {
+          "id": "h365",
+          "fingerprint": "e7a479a8157aaa6d",
+          "polls": 1
+        },
+        {
+          "id": "h366",
+          "fingerprint": "282e9b8e32776525",
+          "polls": 1
+        },
+        {
+          "id": "h367",
+          "fingerprint": "5ae61802b5667641",
+          "polls": 1
+        },
+        {
+          "id": "h368",
+          "fingerprint": "f96431ae730ed50d",
+          "polls": 1
+        },
+        {
+          "id": "h369",
+          "fingerprint": "336367ecf70e8faf",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482262026,
+    "ended": 1791482271584,
+    "clientWallMs": 9558,
+    "cfRay": "a4770789fbf08fde-BOS"
+  },
+  {
+    "from": 370,
+    "to": 380,
+    "value": {
+      "fingerprint": "1f291a8838beb727",
+      "steps": [
+        {
+          "id": "h370",
+          "fingerprint": "f488e2c9f6ff4f95",
+          "polls": 1
+        },
+        {
+          "id": "h371",
+          "fingerprint": "a98f00adc261a9fb",
+          "polls": 1
+        },
+        {
+          "id": "h372",
+          "fingerprint": "7b713e802e9dc152",
+          "polls": 1
+        },
+        {
+          "id": "h373",
+          "fingerprint": "b74cc86ec9808acc",
+          "polls": 1
+        },
+        {
+          "id": "h374",
+          "fingerprint": "0cfc876bc5139694",
+          "polls": 1
+        },
+        {
+          "id": "h375",
+          "fingerprint": "8ad129738045af8a",
+          "polls": 1
+        },
+        {
+          "id": "h376",
+          "fingerprint": "cc440371ccdded32",
+          "polls": 92
+        },
+        {
+          "id": "h377",
+          "fingerprint": "6ad0faccdc0f760b",
+          "polls": 3
+        },
+        {
+          "id": "h378",
+          "fingerprint": "3aa9c66bdf13d099",
+          "polls": 1
+        },
+        {
+          "id": "h379",
+          "fingerprint": "1f291a8838beb727",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482271796,
+    "ended": 1791482312747,
+    "clientWallMs": 40951,
+    "cfRay": "a47707c70ebe8fde-BOS"
+  },
+  {
+    "from": 380,
+    "to": 390,
+    "value": {
+      "fingerprint": "948fbc206d0f5c9f",
+      "steps": [
+        {
+          "id": "h380",
+          "fingerprint": "23f925c9d66a8ac1",
+          "polls": 1
+        },
+        {
+          "id": "h381",
+          "fingerprint": "e2cd7770c917bd80",
+          "polls": 1
+        },
+        {
+          "id": "h382",
+          "fingerprint": "594e3ce8c86455d1",
+          "polls": 1
+        },
+        {
+          "id": "h383",
+          "fingerprint": "8536df2a39c48498",
+          "polls": 1
+        },
+        {
+          "id": "h384",
+          "fingerprint": "2f9535818e68b5f3",
+          "polls": 1
+        },
+        {
+          "id": "h385",
+          "fingerprint": "5d5fc85f1bdf645b",
+          "polls": 1
+        },
+        {
+          "id": "h386",
+          "fingerprint": "18484020a52a472a",
+          "polls": 1
+        },
+        {
+          "id": "h387",
+          "fingerprint": "535f41b1538d079e",
+          "polls": 1
+        },
+        {
+          "id": "h388",
+          "fingerprint": "d129bd2a74656e75",
+          "polls": 1
+        },
+        {
+          "id": "h389",
+          "fingerprint": "948fbc206d0f5c9f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482312953,
+    "ended": 1791482323579,
+    "clientWallMs": 10626,
+    "cfRay": "a47708c86bf18fde-BOS"
+  },
+  {
+    "from": 390,
+    "to": 400,
+    "value": {
+      "fingerprint": "95ccf6f57fce4eda",
+      "steps": [
+        {
+          "id": "h390",
+          "fingerprint": "a281ba9378f40636",
+          "polls": 2
+        },
+        {
+          "id": "h391",
+          "fingerprint": "2dc3984363ab1c95",
+          "polls": 1
+        },
+        {
+          "id": "h392",
+          "fingerprint": "366edab2a575b782",
+          "polls": 1
+        },
+        {
+          "id": "h393",
+          "fingerprint": "1e32041c2b32fe5d",
+          "polls": 1
+        },
+        {
+          "id": "h394",
+          "fingerprint": "73df7484bb3aae5f",
+          "polls": 1
+        },
+        {
+          "id": "h395",
+          "fingerprint": "bf6110725c07b25d",
+          "polls": 1
+        },
+        {
+          "id": "h396",
+          "fingerprint": "eb912a5659b3d409",
+          "polls": 89
+        },
+        {
+          "id": "h397",
+          "fingerprint": "91b8c796e07cd8ec",
+          "polls": 2
+        },
+        {
+          "id": "h398",
+          "fingerprint": "76a3f708ec6fe1d7",
+          "polls": 1
+        },
+        {
+          "id": "h399",
+          "fingerprint": "95ccf6f57fce4eda",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482323818,
+    "ended": 1791482365640,
+    "clientWallMs": 41822,
+    "cfRay": "a477090c2e0a8fde-BOS"
+  },
+  {
+    "from": 400,
+    "to": 410,
+    "value": {
+      "fingerprint": "182b408c8f173a71",
+      "steps": [
+        {
+          "id": "h400",
+          "fingerprint": "6d7f96eff43f8244",
+          "polls": 1
+        },
+        {
+          "id": "h401",
+          "fingerprint": "dd67a20fab652fd8",
+          "polls": 1
+        },
+        {
+          "id": "h402",
+          "fingerprint": "9290b7ea00e00ed3",
+          "polls": 1
+        },
+        {
+          "id": "h403",
+          "fingerprint": "7d28659ebb081edc",
+          "polls": 1
+        },
+        {
+          "id": "h404",
+          "fingerprint": "97c350869a661197",
+          "polls": 1
+        },
+        {
+          "id": "h405",
+          "fingerprint": "63227f0ec44817eb",
+          "polls": 1
+        },
+        {
+          "id": "h406",
+          "fingerprint": "75ed0b9e64c3dd70",
+          "polls": 1
+        },
+        {
+          "id": "h407",
+          "fingerprint": "54e63f803d39e5a5",
+          "polls": 1
+        },
+        {
+          "id": "h408",
+          "fingerprint": "7b559ca03e23b66c",
+          "polls": 1
+        },
+        {
+          "id": "h409",
+          "fingerprint": "182b408c8f173a71",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482366231,
+    "ended": 1791482375726,
+    "clientWallMs": 9495,
+    "cfRay": "a4770a153bdf8fde-BOS"
+  },
+  {
+    "from": 410,
+    "to": 420,
+    "value": {
+      "fingerprint": "0d07cbd741a9145a",
+      "steps": [
+        {
+          "id": "h410",
+          "fingerprint": "8dd0bd405f093708",
+          "polls": 1
+        },
+        {
+          "id": "h411",
+          "fingerprint": "cf559f0c71f6a171",
+          "polls": 1
+        },
+        {
+          "id": "h412",
+          "fingerprint": "590bb983703571cd",
+          "polls": 1
+        },
+        {
+          "id": "h413",
+          "fingerprint": "4baac7e18d68b4fe",
+          "polls": 1
+        },
+        {
+          "id": "h414",
+          "fingerprint": "af2e068f94e14e97",
+          "polls": 1
+        },
+        {
+          "id": "h415",
+          "fingerprint": "5bfd32155ea6f9a0",
+          "polls": 1
+        },
+        {
+          "id": "h416",
+          "fingerprint": "1266ad36a0820e87",
+          "polls": 1
+        },
+        {
+          "id": "h417",
+          "fingerprint": "011849bfb1a0c45b",
+          "polls": 1
+        },
+        {
+          "id": "h418",
+          "fingerprint": "99ad3f2140875fde",
+          "polls": 1
+        },
+        {
+          "id": "h419",
+          "fingerprint": "0d07cbd741a9145a",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482375908,
+    "ended": 1791482386470,
+    "clientWallMs": 10562,
+    "cfRay": "a4770a51bf0e8fde-BOS"
+  },
+  {
+    "from": 420,
+    "to": 430,
+    "value": {
+      "fingerprint": "2f169395aacb8211",
+      "steps": [
+        {
+          "id": "h420",
+          "fingerprint": "4719d323ab510097",
+          "polls": 1
+        },
+        {
+          "id": "h421",
+          "fingerprint": "7751361dd4735058",
+          "polls": 1
+        },
+        {
+          "id": "h422",
+          "fingerprint": "0f4fd3363f45a31b",
+          "polls": 1
+        },
+        {
+          "id": "h423",
+          "fingerprint": "9c1988a1816baaaf",
+          "polls": 1
+        },
+        {
+          "id": "h424",
+          "fingerprint": "1c3e325988cda295",
+          "polls": 1
+        },
+        {
+          "id": "h425",
+          "fingerprint": "d234cd1cec98dcfd",
+          "polls": 1
+        },
+        {
+          "id": "h426",
+          "fingerprint": "f8a87d7a6ac3dc70",
+          "polls": 1
+        },
+        {
+          "id": "h427",
+          "fingerprint": "dce6ae370c338278",
+          "polls": 1
+        },
+        {
+          "id": "h428",
+          "fingerprint": "0b81ced83753b5e8",
+          "polls": 1
+        },
+        {
+          "id": "h429",
+          "fingerprint": "2f169395aacb8211",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482386701,
+    "ended": 1791482398054,
+    "clientWallMs": 11353,
+    "cfRay": "a4770a9539d28fde-BOS"
+  },
+  {
+    "from": 430,
+    "to": 440,
+    "value": {
+      "fingerprint": "384f87cb0f3acda6",
+      "steps": [
+        {
+          "id": "h430",
+          "fingerprint": "b4a4d3164061aaec",
+          "polls": 1
+        },
+        {
+          "id": "h431",
+          "fingerprint": "708cfc8bdb4cf4de",
+          "polls": 1
+        },
+        {
+          "id": "h432",
+          "fingerprint": "31c94fd2c0fe3e2d",
+          "polls": 1
+        },
+        {
+          "id": "h433",
+          "fingerprint": "8989cbaac62a46ec",
+          "polls": 1
+        },
+        {
+          "id": "h434",
+          "fingerprint": "6b95c14962b5115a",
+          "polls": 1
+        },
+        {
+          "id": "h435",
+          "fingerprint": "878bd8e41f965688",
+          "polls": 1
+        },
+        {
+          "id": "h436",
+          "fingerprint": "daf44d34b367a766",
+          "polls": 1
+        },
+        {
+          "id": "h437",
+          "fingerprint": "a52c7425d913ce1e",
+          "polls": 1
+        },
+        {
+          "id": "h438",
+          "fingerprint": "145ca3cd3f398d43",
+          "polls": 1
+        },
+        {
+          "id": "h439",
+          "fingerprint": "384f87cb0f3acda6",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482398219,
+    "ended": 1791482410478,
+    "clientWallMs": 12259,
+    "cfRay": "a4770add2ca48fde-BOS"
+  },
+  {
+    "from": 440,
+    "to": 450,
+    "value": {
+      "fingerprint": "98f28d4505e1f229",
+      "steps": [
+        {
+          "id": "h440",
+          "fingerprint": "d622adff8a97fef1",
+          "polls": 1
+        },
+        {
+          "id": "h441",
+          "fingerprint": "0ffa2e54320bec29",
+          "polls": 1
+        },
+        {
+          "id": "h442",
+          "fingerprint": "085d1c4b084be579",
+          "polls": 1
+        },
+        {
+          "id": "h443",
+          "fingerprint": "f51b763dfb0e50b7",
+          "polls": 1
+        },
+        {
+          "id": "h444",
+          "fingerprint": "fc0d892b4520687a",
+          "polls": 1
+        },
+        {
+          "id": "h445",
+          "fingerprint": "ee62a63ca98642d3",
+          "polls": 1
+        },
+        {
+          "id": "h446",
+          "fingerprint": "4058d58fd403864e",
+          "polls": 1
+        },
+        {
+          "id": "h447",
+          "fingerprint": "e435602907aef2b7",
+          "polls": 1
+        },
+        {
+          "id": "h448",
+          "fingerprint": "0d2b690e5af0ffe1",
+          "polls": 1
+        },
+        {
+          "id": "h449",
+          "fingerprint": "98f28d4505e1f229",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482410660,
+    "ended": 1791482421948,
+    "clientWallMs": 11288,
+    "cfRay": "a4770b2b19278fde-BOS"
+  },
+  {
+    "from": 450,
+    "to": 460,
+    "value": {
+      "fingerprint": "46705ad74112a53c",
+      "steps": [
+        {
+          "id": "h450",
+          "fingerprint": "7859ba865373b587",
+          "polls": 1
+        },
+        {
+          "id": "h451",
+          "fingerprint": "dab13fd1af1017b2",
+          "polls": 1
+        },
+        {
+          "id": "h452",
+          "fingerprint": "66bd96e19b60c9fb",
+          "polls": 1
+        },
+        {
+          "id": "h453",
+          "fingerprint": "347b9ea3fc22960c",
+          "polls": 1
+        },
+        {
+          "id": "h454",
+          "fingerprint": "9dcf383b07f8d77e",
+          "polls": 1
+        },
+        {
+          "id": "h455",
+          "fingerprint": "fdf889fa4ec7c54e",
+          "polls": 1
+        },
+        {
+          "id": "h456",
+          "fingerprint": "16246fadbcafd037",
+          "polls": 1
+        },
+        {
+          "id": "h457",
+          "fingerprint": "70b29871800ac971",
+          "polls": 1
+        },
+        {
+          "id": "h458",
+          "fingerprint": "f2c5e4e54b84fc22",
+          "polls": 1
+        },
+        {
+          "id": "h459",
+          "fingerprint": "46705ad74112a53c",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482422694,
+    "ended": 1791482434352,
+    "clientWallMs": 11658,
+    "cfRay": "a4770b762ede8fde-BOS"
+  },
+  {
+    "from": 460,
+    "to": 470,
+    "value": {
+      "fingerprint": "a8d02629fb35f452",
+      "steps": [
+        {
+          "id": "h460",
+          "fingerprint": "6eaf2c018ef918e9",
+          "polls": 1
+        },
+        {
+          "id": "h461",
+          "fingerprint": "75d787b8158f34d1",
+          "polls": 1
+        },
+        {
+          "id": "h462",
+          "fingerprint": "12891e41ccad768f",
+          "polls": 1
+        },
+        {
+          "id": "h463",
+          "fingerprint": "c9c2756a4af89bd4",
+          "polls": 1
+        },
+        {
+          "id": "h464",
+          "fingerprint": "f8e7c957810d4a70",
+          "polls": 1
+        },
+        {
+          "id": "h465",
+          "fingerprint": "5ebdd44b1fe5caf2",
+          "polls": 1
+        },
+        {
+          "id": "h466",
+          "fingerprint": "d9b1c7bb09b905ca",
+          "polls": 1
+        },
+        {
+          "id": "h467",
+          "fingerprint": "0dde66bd224b658a",
+          "polls": 1
+        },
+        {
+          "id": "h468",
+          "fingerprint": "5ca340943a9f8148",
+          "polls": 1
+        },
+        {
+          "id": "h469",
+          "fingerprint": "a8d02629fb35f452",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482434563,
+    "ended": 1791482447163,
+    "clientWallMs": 12600,
+    "cfRay": "a4770bc05adc8fde-BOS"
+  },
+  {
+    "from": 470,
+    "to": 480,
+    "value": {
+      "fingerprint": "022c418f2351bb83",
+      "steps": [
+        {
+          "id": "h470",
+          "fingerprint": "29800e58c7857444",
+          "polls": 1
+        },
+        {
+          "id": "h471",
+          "fingerprint": "1270cd685f1a70ab",
+          "polls": 1
+        },
+        {
+          "id": "h472",
+          "fingerprint": "d0c4ac17c481625a",
+          "polls": 1
+        },
+        {
+          "id": "h473",
+          "fingerprint": "4de8bef27cba809b",
+          "polls": 1
+        },
+        {
+          "id": "h474",
+          "fingerprint": "5f48fb2b818bc0dc",
+          "polls": 1
+        },
+        {
+          "id": "h475",
+          "fingerprint": "3cbc91a4d42a943f",
+          "polls": 1
+        },
+        {
+          "id": "h476",
+          "fingerprint": "f5495e5151fc1015",
+          "polls": 1
+        },
+        {
+          "id": "h477",
+          "fingerprint": "98dbd7aa5e5bb3bc",
+          "polls": 1
+        },
+        {
+          "id": "h478",
+          "fingerprint": "6b49d27b41644493",
+          "polls": 1
+        },
+        {
+          "id": "h479",
+          "fingerprint": "022c418f2351bb83",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482447330,
+    "ended": 1791482456908,
+    "clientWallMs": 9578,
+    "cfRay": "a4770c1049a98fde-BOS"
+  },
+  {
+    "from": 480,
+    "to": 490,
+    "value": {
+      "fingerprint": "34a527223295412c",
+      "steps": [
+        {
+          "id": "h480",
+          "fingerprint": "f6028a01e4338a5a",
+          "polls": 1
+        },
+        {
+          "id": "h481",
+          "fingerprint": "6275921de84a7b71",
+          "polls": 1
+        },
+        {
+          "id": "h482",
+          "fingerprint": "08316c32d6854d39",
+          "polls": 1
+        },
+        {
+          "id": "h483",
+          "fingerprint": "a4342ab17b8ac8d9",
+          "polls": 1
+        },
+        {
+          "id": "h484",
+          "fingerprint": "a8d2e54811d984e3",
+          "polls": 1
+        },
+        {
+          "id": "h485",
+          "fingerprint": "b89d83a17b821630",
+          "polls": 1
+        },
+        {
+          "id": "h486",
+          "fingerprint": "4da8bcc7bd9308c6",
+          "polls": 1
+        },
+        {
+          "id": "h487",
+          "fingerprint": "c49450194f972416",
+          "polls": 1
+        },
+        {
+          "id": "h488",
+          "fingerprint": "8913d03f4b8775c8",
+          "polls": 1
+        },
+        {
+          "id": "h489",
+          "fingerprint": "34a527223295412c",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482457088,
+    "ended": 1791482470460,
+    "clientWallMs": 13372,
+    "cfRay": "a4770c4d1a318fde-BOS"
+  },
+  {
+    "from": 490,
+    "to": 500,
+    "value": {
+      "fingerprint": "0771d1ed83885a84",
+      "steps": [
+        {
+          "id": "h490",
+          "fingerprint": "dbb01c4306e606dc",
+          "polls": 1
+        },
+        {
+          "id": "h491",
+          "fingerprint": "ef5a8e5df5ea80c8",
+          "polls": 1
+        },
+        {
+          "id": "h492",
+          "fingerprint": "91414042a7a60835",
+          "polls": 1
+        },
+        {
+          "id": "h493",
+          "fingerprint": "a42a2473fb1e7465",
+          "polls": 1
+        },
+        {
+          "id": "h494",
+          "fingerprint": "a8af948ef092aede",
+          "polls": 1
+        },
+        {
+          "id": "h495",
+          "fingerprint": "a8188752f6197333",
+          "polls": 1
+        },
+        {
+          "id": "h496",
+          "fingerprint": "c0c4ff992c2e920e",
+          "polls": 1
+        },
+        {
+          "id": "h497",
+          "fingerprint": "b891877c79533c2c",
+          "polls": 1
+        },
+        {
+          "id": "h498",
+          "fingerprint": "50771f8efc0d7430",
+          "polls": 1
+        },
+        {
+          "id": "h499",
+          "fingerprint": "0771d1ed83885a84",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482470636,
+    "ended": 1791482479719,
+    "clientWallMs": 9083,
+    "cfRay": "a4770ca1cdd38fde-BOS"
+  },
+  {
+    "from": 500,
+    "to": 510,
+    "value": {
+      "fingerprint": "e7bae8074b5d16d7",
+      "steps": [
+        {
+          "id": "h500",
+          "fingerprint": "0b4b987822e5f02a",
+          "polls": 1
+        },
+        {
+          "id": "h501",
+          "fingerprint": "f0f326e523da752e",
+          "polls": 2
+        },
+        {
+          "id": "h502",
+          "fingerprint": "e7700306f91423be",
+          "polls": 1
+        },
+        {
+          "id": "h503",
+          "fingerprint": "05e00ca2d178248f",
+          "polls": 1
+        },
+        {
+          "id": "h504",
+          "fingerprint": "73cf465e9ae65e6a",
+          "polls": 1
+        },
+        {
+          "id": "h505",
+          "fingerprint": "59c8a0ba571c8128",
+          "polls": 1
+        },
+        {
+          "id": "h506",
+          "fingerprint": "c0805ca614b71bd9",
+          "polls": 1
+        },
+        {
+          "id": "h507",
+          "fingerprint": "e30183309369f7ae",
+          "polls": 1
+        },
+        {
+          "id": "h508",
+          "fingerprint": "5d24e3c51616f9fc",
+          "polls": 1
+        },
+        {
+          "id": "h509",
+          "fingerprint": "e7bae8074b5d16d7",
+          "polls": 2
+        }
+      ]
+    },
+    "started": 1791482480447,
+    "ended": 1791482496810,
+    "clientWallMs": 16363,
+    "cfRay": "a4770cdf18108fde-BOS"
+  },
+  {
+    "from": 510,
+    "to": 520,
+    "value": {
+      "fingerprint": "a04cde74d3ce1c82",
+      "steps": [
+        {
+          "id": "h510",
+          "fingerprint": "6f93e25abd5be454",
+          "polls": 1
+        },
+        {
+          "id": "h511",
+          "fingerprint": "d590e1e303b2d668",
+          "polls": 1
+        },
+        {
+          "id": "h512",
+          "fingerprint": "dfe2037f686bf6cb",
+          "polls": 1
+        },
+        {
+          "id": "h513",
+          "fingerprint": "5e8f6e171f1b4869",
+          "polls": 1
+        },
+        {
+          "id": "h514",
+          "fingerprint": "b8440c97c0f9c954",
+          "polls": 1
+        },
+        {
+          "id": "h515",
+          "fingerprint": "6d1394dc3c566a12",
+          "polls": 1
+        },
+        {
+          "id": "h516",
+          "fingerprint": "caf9b9a122fc22a8",
+          "polls": 1
+        },
+        {
+          "id": "h517",
+          "fingerprint": "49d2e2519abe03d7",
+          "polls": 1
+        },
+        {
+          "id": "h518",
+          "fingerprint": "c76d590a8409c077",
+          "polls": 1
+        },
+        {
+          "id": "h519",
+          "fingerprint": "a04cde74d3ce1c82",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482497018,
+    "ended": 1791482512506,
+    "clientWallMs": 15488,
+    "cfRay": "a4770d46a8808fde-BOS"
+  },
+  {
+    "from": 520,
+    "to": 530,
+    "value": {
+      "fingerprint": "2c0ce174b24770d2",
+      "steps": [
+        {
+          "id": "h520",
+          "fingerprint": "616bf916faa89ca4",
+          "polls": 1
+        },
+        {
+          "id": "h521",
+          "fingerprint": "2e997070bd47d25d",
+          "polls": 1
+        },
+        {
+          "id": "h522",
+          "fingerprint": "124cf34d8a574b12",
+          "polls": 1
+        },
+        {
+          "id": "h523",
+          "fingerprint": "696a088ae12a3ea5",
+          "polls": 1
+        },
+        {
+          "id": "h524",
+          "fingerprint": "ad0fa131b12794f8",
+          "polls": 1
+        },
+        {
+          "id": "h525",
+          "fingerprint": "bd3b21dff5729d06",
+          "polls": 1
+        },
+        {
+          "id": "h526",
+          "fingerprint": "b9e1fe9c35c4c6a7",
+          "polls": 1
+        },
+        {
+          "id": "h527",
+          "fingerprint": "a41832e1766c6d42",
+          "polls": 1
+        },
+        {
+          "id": "h528",
+          "fingerprint": "41b73eccca36112a",
+          "polls": 1
+        },
+        {
+          "id": "h529",
+          "fingerprint": "2c0ce174b24770d2",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482512682,
+    "ended": 1791482525604,
+    "clientWallMs": 12922,
+    "cfRay": "a4770da89eb38fde-BOS"
+  },
+  {
+    "from": 530,
+    "to": 540,
+    "value": {
+      "fingerprint": "500986cd6d129950",
+      "steps": [
+        {
+          "id": "h530",
+          "fingerprint": "aba5a2b631115b5d",
+          "polls": 1
+        },
+        {
+          "id": "h531",
+          "fingerprint": "eadb0f3c6d73f862",
+          "polls": 1
+        },
+        {
+          "id": "h532",
+          "fingerprint": "cb6ac5193e552d70",
+          "polls": 1
+        },
+        {
+          "id": "h533",
+          "fingerprint": "79c96f08938f06c8",
+          "polls": 1
+        },
+        {
+          "id": "h534",
+          "fingerprint": "e9e1d551bd4c5dbb",
+          "polls": 1
+        },
+        {
+          "id": "h535",
+          "fingerprint": "39bf4545f051175f",
+          "polls": 1
+        },
+        {
+          "id": "h536",
+          "fingerprint": "d86f11b5f127cba1",
+          "polls": 2
+        },
+        {
+          "id": "h537",
+          "fingerprint": "29d483c27239a4ec",
+          "polls": 1
+        },
+        {
+          "id": "h538",
+          "fingerprint": "dbd2e0612ebf1f9a",
+          "polls": 1
+        },
+        {
+          "id": "h539",
+          "fingerprint": "500986cd6d129950",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482525900,
+    "ended": 1791482546516,
+    "clientWallMs": 20616,
+    "cfRay": "a4770dfb3ad68fde-BOS"
+  },
+  {
+    "from": 540,
+    "to": 550,
+    "value": {
+      "fingerprint": "85aacedbfa0d315f",
+      "steps": [
+        {
+          "id": "h540",
+          "fingerprint": "db6bf23b76d01779",
+          "polls": 87
+        },
+        {
+          "id": "h541",
+          "fingerprint": "4ada2dd629c0a881",
+          "polls": 1
+        },
+        {
+          "id": "h542",
+          "fingerprint": "86e938982e5ad9e6",
+          "polls": 3
+        },
+        {
+          "id": "h543",
+          "fingerprint": "4ddfbbee828c3d5b",
+          "polls": 1
+        },
+        {
+          "id": "h544",
+          "fingerprint": "cf0eab529dc1c189",
+          "polls": 1
+        },
+        {
+          "id": "h545",
+          "fingerprint": "e4f83aebbd9106d5",
+          "polls": 1
+        },
+        {
+          "id": "h546",
+          "fingerprint": "6c1ccb66b4d6f816",
+          "polls": 1
+        },
+        {
+          "id": "h547",
+          "fingerprint": "f356af7905a918dd",
+          "polls": 1
+        },
+        {
+          "id": "h548",
+          "fingerprint": "f58b62a62da05e37",
+          "polls": 2
+        },
+        {
+          "id": "h549",
+          "fingerprint": "85aacedbfa0d315f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482546861,
+    "ended": 1791482594830,
+    "clientWallMs": 47969,
+    "cfRay": "a4770e7e3b278fde-BOS"
+  },
+  {
+    "from": 550,
+    "to": 560,
+    "value": {
+      "fingerprint": "032022e4ce08bc8e",
+      "steps": [
+        {
+          "id": "h550",
+          "fingerprint": "40e9f9789a4847a0",
+          "polls": 1
+        },
+        {
+          "id": "h551",
+          "fingerprint": "58dfd2f2f9270e30",
+          "polls": 1
+        },
+        {
+          "id": "h552",
+          "fingerprint": "d2c7e5e6604e5d92",
+          "polls": 1
+        },
+        {
+          "id": "h553",
+          "fingerprint": "9e367972adcf2316",
+          "polls": 1
+        },
+        {
+          "id": "h554",
+          "fingerprint": "8ced8a9c72cd4d3b",
+          "polls": 1
+        },
+        {
+          "id": "h555",
+          "fingerprint": "9b275bc5c6109348",
+          "polls": 1
+        },
+        {
+          "id": "h556",
+          "fingerprint": "5ffa35cce5a49534",
+          "polls": 1
+        },
+        {
+          "id": "h557",
+          "fingerprint": "b78b3200dece4e68",
+          "polls": 1
+        },
+        {
+          "id": "h558",
+          "fingerprint": "8b677a969fac2049",
+          "polls": 1
+        },
+        {
+          "id": "h559",
+          "fingerprint": "032022e4ce08bc8e",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482595458,
+    "ended": 1791482607490,
+    "clientWallMs": 12032,
+    "cfRay": "a4770fadfe078fde-BOS"
+  },
+  {
+    "from": 560,
+    "to": 570,
+    "value": {
+      "fingerprint": "95e422680244474f",
+      "steps": [
+        {
+          "id": "h560",
+          "fingerprint": "14c482dc03798501",
+          "polls": 1
+        },
+        {
+          "id": "h561",
+          "fingerprint": "22af8308ba5825a4",
+          "polls": 1
+        },
+        {
+          "id": "h562",
+          "fingerprint": "5cbe64fd485a48ec",
+          "polls": 1
+        },
+        {
+          "id": "h563",
+          "fingerprint": "2c4a38132d8859a9",
+          "polls": 1
+        },
+        {
+          "id": "h564",
+          "fingerprint": "56a9f9e30610e395",
+          "polls": 1
+        },
+        {
+          "id": "h565",
+          "fingerprint": "ff1f4cc55ffd6cb4",
+          "polls": 1
+        },
+        {
+          "id": "h566",
+          "fingerprint": "4c3620c4e3257d75",
+          "polls": 1
+        },
+        {
+          "id": "h567",
+          "fingerprint": "630c14279d5289b1",
+          "polls": 1
+        },
+        {
+          "id": "h568",
+          "fingerprint": "114387443012d438",
+          "polls": 1
+        },
+        {
+          "id": "h569",
+          "fingerprint": "95e422680244474f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482607677,
+    "ended": 1791482618513,
+    "clientWallMs": 10836,
+    "cfRay": "a4770ffa4b008fde-BOS"
+  },
+  {
+    "from": 570,
+    "to": 580,
+    "value": {
+      "fingerprint": "4ab03b9a0be98853",
+      "steps": [
+        {
+          "id": "h570",
+          "fingerprint": "b0eff701fe1e9c6a",
+          "polls": 1
+        },
+        {
+          "id": "h571",
+          "fingerprint": "e1b6822b3d602d29",
+          "polls": 1
+        },
+        {
+          "id": "h572",
+          "fingerprint": "c368de61eea9f453",
+          "polls": 1
+        },
+        {
+          "id": "h573",
+          "fingerprint": "700a6afee3c47949",
+          "polls": 68
+        },
+        {
+          "id": "h574",
+          "fingerprint": "b49d46e3a62ce222",
+          "polls": 2
+        },
+        {
+          "id": "h575",
+          "fingerprint": "7099f6cdf705442e",
+          "polls": 1
+        },
+        {
+          "id": "h576",
+          "fingerprint": "992bed1d685a7c6d",
+          "polls": 1
+        },
+        {
+          "id": "h577",
+          "fingerprint": "cac475b26939ec4d",
+          "polls": 1
+        },
+        {
+          "id": "h578",
+          "fingerprint": "c97d7abc58d43d25",
+          "polls": 1
+        },
+        {
+          "id": "h579",
+          "fingerprint": "4ab03b9a0be98853",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482938880,
+    "ended": 1791482983279,
+    "clientWallMs": 44399,
+    "cfRay": "a4771810a8058036-MRS"
+  },
+  {
+    "from": 580,
+    "to": 590,
+    "value": {
+      "fingerprint": "4d429b49d8ed1195",
+      "steps": [
+        {
+          "id": "h580",
+          "fingerprint": "8df4542369781766",
+          "polls": 1
+        },
+        {
+          "id": "h581",
+          "fingerprint": "04e68674ad936167",
+          "polls": 1
+        },
+        {
+          "id": "h582",
+          "fingerprint": "06da76fa411d52ad",
+          "polls": 1
+        },
+        {
+          "id": "h583",
+          "fingerprint": "c336899562f27cbd",
+          "polls": 1
+        },
+        {
+          "id": "h584",
+          "fingerprint": "d5cb55a4120d15d0",
+          "polls": 1
+        },
+        {
+          "id": "h585",
+          "fingerprint": "6d0a492986fc08a0",
+          "polls": 1
+        },
+        {
+          "id": "h586",
+          "fingerprint": "8ac327dff7339b44",
+          "polls": 1
+        },
+        {
+          "id": "h587",
+          "fingerprint": "05fcb1990ecbadd2",
+          "polls": 1
+        },
+        {
+          "id": "h588",
+          "fingerprint": "602cdab5e75509b8",
+          "polls": 1
+        },
+        {
+          "id": "h589",
+          "fingerprint": "4d429b49d8ed1195",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482983653,
+    "ended": 1791482998965,
+    "clientWallMs": 15312,
+    "cfRay": "a477192888418036-MRS"
+  },
+  {
+    "from": 590,
+    "to": 600,
+    "value": {
+      "fingerprint": "7833b41ba0668419",
+      "steps": [
+        {
+          "id": "h590",
+          "fingerprint": "f0e85f53a9ec21b3",
+          "polls": 1
+        },
+        {
+          "id": "h591",
+          "fingerprint": "e576e5bb3e69bed9",
+          "polls": 1
+        },
+        {
+          "id": "h592",
+          "fingerprint": "cfaa1c063634a1ac",
+          "polls": 69
+        },
+        {
+          "id": "h593",
+          "fingerprint": "fe4c5057e0128b01",
+          "polls": 2
+        },
+        {
+          "id": "h594",
+          "fingerprint": "f49b698d8babdc08",
+          "polls": 1
+        },
+        {
+          "id": "h595",
+          "fingerprint": "107a6b933f083033",
+          "polls": 1
+        },
+        {
+          "id": "h596",
+          "fingerprint": "c9728936ae1f0e9a",
+          "polls": 1
+        },
+        {
+          "id": "h597",
+          "fingerprint": "28b8a874b4b61eca",
+          "polls": 1
+        },
+        {
+          "id": "h598",
+          "fingerprint": "6c3ecc172461b013",
+          "polls": 1
+        },
+        {
+          "id": "h599",
+          "fingerprint": "7833b41ba0668419",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791482999354,
+    "ended": 1791483044159,
+    "clientWallMs": 44805,
+    "cfRay": "a477198acc4e8036-MRS"
+  },
+  {
+    "from": 600,
+    "to": 610,
+    "value": {
+      "fingerprint": "013b815a2e10399e",
+      "steps": [
+        {
+          "id": "h600",
+          "fingerprint": "a7c1ef5aec9fc8ab",
+          "polls": 1
+        },
+        {
+          "id": "h601",
+          "fingerprint": "a3ab3439302c169d",
+          "polls": 1
+        },
+        {
+          "id": "h602",
+          "fingerprint": "72cd58c2a9071b37",
+          "polls": 1
+        },
+        {
+          "id": "h603",
+          "fingerprint": "e89aeaa46bdd63a1",
+          "polls": 1
+        },
+        {
+          "id": "h604",
+          "fingerprint": "c147dd4ec4308e0a",
+          "polls": 1
+        },
+        {
+          "id": "h605",
+          "fingerprint": "a0a0457bdcdb396c",
+          "polls": 1
+        },
+        {
+          "id": "h606",
+          "fingerprint": "bda3c8a9d2cc33da",
+          "polls": 68
+        },
+        {
+          "id": "h607",
+          "fingerprint": "01bfe117a9658db4",
+          "polls": 3
+        },
+        {
+          "id": "h608",
+          "fingerprint": "1e120dc6bb2105a1",
+          "polls": 1
+        },
+        {
+          "id": "h609",
+          "fingerprint": "013b815a2e10399e",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483045543,
+    "ended": 1791483091808,
+    "clientWallMs": 46265,
+    "cfRay": "a4771aab5ac88036-MRS"
+  },
+  {
+    "from": 610,
+    "to": 620,
+    "value": {
+      "fingerprint": "acfbd3bf1b2fa4c2",
+      "steps": [
+        {
+          "id": "h610",
+          "fingerprint": "e9238b47315c4a6d",
+          "polls": 1
+        },
+        {
+          "id": "h611",
+          "fingerprint": "8551bd0a1c0bb9b8",
+          "polls": 1
+        },
+        {
+          "id": "h612",
+          "fingerprint": "666715f9a15a9df3",
+          "polls": 1
+        },
+        {
+          "id": "h613",
+          "fingerprint": "4646afac0a979378",
+          "polls": 1
+        },
+        {
+          "id": "h614",
+          "fingerprint": "daf9e04da96d2d8e",
+          "polls": 1
+        },
+        {
+          "id": "h615",
+          "fingerprint": "187ab015132709a0",
+          "polls": 1
+        },
+        {
+          "id": "h616",
+          "fingerprint": "6e8e903e71445865",
+          "polls": 1
+        },
+        {
+          "id": "h617",
+          "fingerprint": "0575053293c557fe",
+          "polls": 1
+        },
+        {
+          "id": "h618",
+          "fingerprint": "75e1710043cae020",
+          "polls": 1
+        },
+        {
+          "id": "h619",
+          "fingerprint": "acfbd3bf1b2fa4c2",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483092162,
+    "ended": 1791483105643,
+    "clientWallMs": 13481,
+    "cfRay": "a4771bcebc3f8036-MRS"
+  },
+  {
+    "from": 620,
+    "to": 630,
+    "value": {
+      "fingerprint": "6c5a21fbbde3a1e5",
+      "steps": [
+        {
+          "id": "h620",
+          "fingerprint": "649c0aebe6605df4",
+          "polls": 1
+        },
+        {
+          "id": "h621",
+          "fingerprint": "28493147a9592bd3",
+          "polls": 1
+        },
+        {
+          "id": "h622",
+          "fingerprint": "fe18ba0b0bc67267",
+          "polls": 1
+        },
+        {
+          "id": "h623",
+          "fingerprint": "31f389d91519d49b",
+          "polls": 1
+        },
+        {
+          "id": "h624",
+          "fingerprint": "3248c89ecb4d4f83",
+          "polls": 67
+        },
+        {
+          "id": "h625",
+          "fingerprint": "63b3226c0ea2bc0e",
+          "polls": 2
+        },
+        {
+          "id": "h626",
+          "fingerprint": "8de143aed18d1dad",
+          "polls": 1
+        },
+        {
+          "id": "h627",
+          "fingerprint": "9948f2da7bae4e01",
+          "polls": 1
+        },
+        {
+          "id": "h628",
+          "fingerprint": "07660a5bbdc08173",
+          "polls": 1
+        },
+        {
+          "id": "h629",
+          "fingerprint": "6c5a21fbbde3a1e5",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483106021,
+    "ended": 1791483151047,
+    "clientWallMs": 45026,
+    "cfRay": "a4771c255d278036-MRS"
+  },
+  {
+    "from": 630,
+    "to": 640,
+    "value": {
+      "fingerprint": "8794f1a8a34b85cc",
+      "steps": [
+        {
+          "id": "h630",
+          "fingerprint": "7974f8ac3a9c8164",
+          "polls": 1
+        },
+        {
+          "id": "h631",
+          "fingerprint": "508a5d836e465eec",
+          "polls": 1
+        },
+        {
+          "id": "h632",
+          "fingerprint": "86d5222f5300fb0a",
+          "polls": 1
+        },
+        {
+          "id": "h633",
+          "fingerprint": "7726d3fa9eb02693",
+          "polls": 1
+        },
+        {
+          "id": "h634",
+          "fingerprint": "adbbd82d163b4970",
+          "polls": 1
+        },
+        {
+          "id": "h635",
+          "fingerprint": "f26b860eee800d35",
+          "polls": 1
+        },
+        {
+          "id": "h636",
+          "fingerprint": "93a05a5ae0845156",
+          "polls": 1
+        },
+        {
+          "id": "h637",
+          "fingerprint": "66a0001d2ee5ad61",
+          "polls": 1
+        },
+        {
+          "id": "h638",
+          "fingerprint": "e86c39632d5f4227",
+          "polls": 1
+        },
+        {
+          "id": "h639",
+          "fingerprint": "8794f1a8a34b85cc",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483151402,
+    "ended": 1791483167264,
+    "clientWallMs": 15862,
+    "cfRay": "a4771d40fdb48036-MRS"
+  },
+  {
+    "from": 640,
+    "to": 650,
+    "value": {
+      "fingerprint": "338e1f323f2b4473",
+      "steps": [
+        {
+          "id": "h640",
+          "fingerprint": "077de472582ce2cb",
+          "polls": 1
+        },
+        {
+          "id": "h641",
+          "fingerprint": "899196b726b8d9c2",
+          "polls": 1
+        },
+        {
+          "id": "h642",
+          "fingerprint": "00d4d2b4438756a9",
+          "polls": 1
+        },
+        {
+          "id": "h643",
+          "fingerprint": "1a96e2ab356e7d25",
+          "polls": 1
+        },
+        {
+          "id": "h644",
+          "fingerprint": "38231a5e98405a46",
+          "polls": 1
+        },
+        {
+          "id": "h645",
+          "fingerprint": "0217c8bfe9181699",
+          "polls": 1
+        },
+        {
+          "id": "h646",
+          "fingerprint": "335d58bcfff8f29a",
+          "polls": 1
+        },
+        {
+          "id": "h647",
+          "fingerprint": "14d2e30d0f00a3ae",
+          "polls": 1
+        },
+        {
+          "id": "h648",
+          "fingerprint": "d6968b163fa8de7f",
+          "polls": 1
+        },
+        {
+          "id": "h649",
+          "fingerprint": "338e1f323f2b4473",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483167635,
+    "ended": 1791483179416,
+    "clientWallMs": 11781,
+    "cfRay": "a4771da66d308036-MRS"
+  },
+  {
+    "from": 650,
+    "to": 660,
+    "value": {
+      "fingerprint": "8efdf4c123db5907",
+      "steps": [
+        {
+          "id": "h650",
+          "fingerprint": "c6744ee798b6b3ce",
+          "polls": 1
+        },
+        {
+          "id": "h651",
+          "fingerprint": "596153a78c131820",
+          "polls": 2
+        },
+        {
+          "id": "h652",
+          "fingerprint": "698a84df3498e925",
+          "polls": 1
+        },
+        {
+          "id": "h653",
+          "fingerprint": "efc148b0b40d4ded",
+          "polls": 1
+        },
+        {
+          "id": "h654",
+          "fingerprint": "e3fb9e5130e9bf1e",
+          "polls": 1
+        },
+        {
+          "id": "h655",
+          "fingerprint": "a58829a82db34b6f",
+          "polls": 1
+        },
+        {
+          "id": "h656",
+          "fingerprint": "5ee3173a91ffb503",
+          "polls": 1
+        },
+        {
+          "id": "h657",
+          "fingerprint": "9fd46a23daa37df9",
+          "polls": 1
+        },
+        {
+          "id": "h658",
+          "fingerprint": "1cfca91f0a9df002",
+          "polls": 1
+        },
+        {
+          "id": "h659",
+          "fingerprint": "8efdf4c123db5907",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483180677,
+    "ended": 1791483200936,
+    "clientWallMs": 20259,
+    "cfRay": "a4771df7eb798036-MRS"
+  },
+  {
+    "from": 660,
+    "to": 670,
+    "value": {
+      "fingerprint": "62d7f8a2750a8f50",
+      "steps": [
+        {
+          "id": "h660",
+          "fingerprint": "ca341677de764b1f",
+          "polls": 1
+        },
+        {
+          "id": "h661",
+          "fingerprint": "4086e472454ba294",
+          "polls": 1
+        },
+        {
+          "id": "h662",
+          "fingerprint": "0869bb004dfe3166",
+          "polls": 1
+        },
+        {
+          "id": "h663",
+          "fingerprint": "37f9f4c9a32953e6",
+          "polls": 1
+        },
+        {
+          "id": "h664",
+          "fingerprint": "d07e0a67ebfa68aa",
+          "polls": 1
+        },
+        {
+          "id": "h665",
+          "fingerprint": "5a23ce361e61adf6",
+          "polls": 1
+        },
+        {
+          "id": "h666",
+          "fingerprint": "f6508cc69cf8cc21",
+          "polls": 1
+        },
+        {
+          "id": "h667",
+          "fingerprint": "3a3a378c356bec85",
+          "polls": 1
+        },
+        {
+          "id": "h668",
+          "fingerprint": "bf970827a5a00bf7",
+          "polls": 1
+        },
+        {
+          "id": "h669",
+          "fingerprint": "62d7f8a2750a8f50",
+          "polls": 67
+        }
+      ]
+    },
+    "started": 1791483201319,
+    "ended": 1791483245311,
+    "clientWallMs": 43992,
+    "cfRay": "a4771e78efce8036-MRS"
+  },
+  {
+    "from": 670,
+    "to": 680,
+    "value": {
+      "fingerprint": "df48640c90e323c5",
+      "steps": [
+        {
+          "id": "h670",
+          "fingerprint": "02dd6aaf49b4c501",
+          "polls": 1
+        },
+        {
+          "id": "h671",
+          "fingerprint": "9a54c8f280ad02a8",
+          "polls": 1
+        },
+        {
+          "id": "h672",
+          "fingerprint": "a6c65fd8598bfae5",
+          "polls": 1
+        },
+        {
+          "id": "h673",
+          "fingerprint": "7442a079aa726920",
+          "polls": 1
+        },
+        {
+          "id": "h674",
+          "fingerprint": "f5b70c25d62868ef",
+          "polls": 1
+        },
+        {
+          "id": "h675",
+          "fingerprint": "6d5e83faf65334e5",
+          "polls": 1
+        },
+        {
+          "id": "h676",
+          "fingerprint": "7d76be5f02ce6138",
+          "polls": 1
+        },
+        {
+          "id": "h677",
+          "fingerprint": "85d0e90766eaff62",
+          "polls": 1
+        },
+        {
+          "id": "h678",
+          "fingerprint": "28ad50e95107a71d",
+          "polls": 1
+        },
+        {
+          "id": "h679",
+          "fingerprint": "df48640c90e323c5",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483245727,
+    "ended": 1791483262579,
+    "clientWallMs": 16852,
+    "cfRay": "a4771f8e7d098036-MRS"
+  },
+  {
+    "from": 680,
+    "to": 690,
+    "value": {
+      "fingerprint": "2309810e7d6e6c5a",
+      "steps": [
+        {
+          "id": "h680",
+          "fingerprint": "a922d8f146d2bcd6",
+          "polls": 1
+        },
+        {
+          "id": "h681",
+          "fingerprint": "00c56c260dcf85c2",
+          "polls": 1
+        },
+        {
+          "id": "h682",
+          "fingerprint": "1fdf8b18dcd7dcc6",
+          "polls": 1
+        },
+        {
+          "id": "h683",
+          "fingerprint": "4c202a0d6136e929",
+          "polls": 1
+        },
+        {
+          "id": "h684",
+          "fingerprint": "9680899770c9bddd",
+          "polls": 1
+        },
+        {
+          "id": "h685",
+          "fingerprint": "a9266cd75ef89e2c",
+          "polls": 1
+        },
+        {
+          "id": "h686",
+          "fingerprint": "161d65c1e31a9292",
+          "polls": 1
+        },
+        {
+          "id": "h687",
+          "fingerprint": "b3e048c798459918",
+          "polls": 1
+        },
+        {
+          "id": "h688",
+          "fingerprint": "326e0bc13adaa09b",
+          "polls": 1
+        },
+        {
+          "id": "h689",
+          "fingerprint": "2309810e7d6e6c5a",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483262938,
+    "ended": 1791483283114,
+    "clientWallMs": 20176,
+    "cfRay": "a4771ffa9e1b8036-MRS"
+  },
+  {
+    "from": 690,
+    "to": 700,
+    "value": {
+      "fingerprint": "52a42fdcc02d294f",
+      "steps": [
+        {
+          "id": "h690",
+          "fingerprint": "6fcd1d5482437ca0",
+          "polls": 1
+        },
+        {
+          "id": "h691",
+          "fingerprint": "4af32cd7062a8b83",
+          "polls": 1
+        },
+        {
+          "id": "h692",
+          "fingerprint": "108b0645059b1b66",
+          "polls": 1
+        },
+        {
+          "id": "h693",
+          "fingerprint": "6b4ca5ac49d44644",
+          "polls": 1
+        },
+        {
+          "id": "h694",
+          "fingerprint": "59057ce31958649b",
+          "polls": 1
+        },
+        {
+          "id": "h695",
+          "fingerprint": "6337ada256e248d7",
+          "polls": 1
+        },
+        {
+          "id": "h696",
+          "fingerprint": "f66d043548a6d19b",
+          "polls": 1
+        },
+        {
+          "id": "h697",
+          "fingerprint": "fa9a98c02db8259b",
+          "polls": 1
+        },
+        {
+          "id": "h698",
+          "fingerprint": "f20f48b3f930dbee",
+          "polls": 1
+        },
+        {
+          "id": "h699",
+          "fingerprint": "52a42fdcc02d294f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483283507,
+    "ended": 1791483306613,
+    "clientWallMs": 23106,
+    "cfRay": "a477207aabaf8036-MRS"
+  },
+  {
+    "from": 700,
+    "to": 710,
+    "value": {
+      "fingerprint": "0d3034832cceb475",
+      "steps": [
+        {
+          "id": "h700",
+          "fingerprint": "0bd8c74ebbea086c",
+          "polls": 1
+        },
+        {
+          "id": "h701",
+          "fingerprint": "9f2c2e6e733cc784",
+          "polls": 1
+        },
+        {
+          "id": "h702",
+          "fingerprint": "4428ecaa4f94cef1",
+          "polls": 2
+        },
+        {
+          "id": "h703",
+          "fingerprint": "f1b588849477e5fa",
+          "polls": 68
+        },
+        {
+          "id": "h704",
+          "fingerprint": "c9c259391f623fb6",
+          "polls": 2
+        },
+        {
+          "id": "h705",
+          "fingerprint": "6aa77b3ff9f00e36",
+          "polls": 1
+        },
+        {
+          "id": "h706",
+          "fingerprint": "0ffbe1f9898e8303",
+          "polls": 1
+        },
+        {
+          "id": "h707",
+          "fingerprint": "e41fd42bca14498c",
+          "polls": 1
+        },
+        {
+          "id": "h708",
+          "fingerprint": "0d896816af0f6680",
+          "polls": 1
+        },
+        {
+          "id": "h709",
+          "fingerprint": "0d3034832cceb475",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483308190,
+    "ended": 1791483353789,
+    "clientWallMs": 45599,
+    "cfRay": "a4772114ec658036-MRS"
+  },
+  {
+    "from": 710,
+    "to": 720,
+    "value": {
+      "fingerprint": "fd1aac5cf4b3e533",
+      "steps": [
+        {
+          "id": "h710",
+          "fingerprint": "886882bf78232303",
+          "polls": 1
+        },
+        {
+          "id": "h711",
+          "fingerprint": "a4f07f3e65040a98",
+          "polls": 1
+        },
+        {
+          "id": "h712",
+          "fingerprint": "d51128fe83ba7755",
+          "polls": 1
+        },
+        {
+          "id": "h713",
+          "fingerprint": "007e3ec0be90af8b",
+          "polls": 1
+        },
+        {
+          "id": "h714",
+          "fingerprint": "3f6517e253517d51",
+          "polls": 1
+        },
+        {
+          "id": "h715",
+          "fingerprint": "3fe64f6f521a8699",
+          "polls": 1
+        },
+        {
+          "id": "h716",
+          "fingerprint": "19f9ac68987ffac1",
+          "polls": 1
+        },
+        {
+          "id": "h717",
+          "fingerprint": "ec9f43e6643d8cee",
+          "polls": 1
+        },
+        {
+          "id": "h718",
+          "fingerprint": "fb0fc52b329cd825",
+          "polls": 1
+        },
+        {
+          "id": "h719",
+          "fingerprint": "fd1aac5cf4b3e533",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483354148,
+    "ended": 1791483368874,
+    "clientWallMs": 14726,
+    "cfRay": "a47722342ff78036-MRS"
+  },
+  {
+    "from": 720,
+    "to": 730,
+    "value": {
+      "fingerprint": "1c4660dcc932cb4a",
+      "steps": [
+        {
+          "id": "h720",
+          "fingerprint": "826df937d9ce23ef",
+          "polls": 1
+        },
+        {
+          "id": "h721",
+          "fingerprint": "134bf1333d1dfc66",
+          "polls": 69
+        },
+        {
+          "id": "h722",
+          "fingerprint": "735711131be9282a",
+          "polls": 2
+        },
+        {
+          "id": "h723",
+          "fingerprint": "1e2f7edef6916511",
+          "polls": 1
+        },
+        {
+          "id": "h724",
+          "fingerprint": "95789efb3fce75d6",
+          "polls": 1
+        },
+        {
+          "id": "h725",
+          "fingerprint": "f3506448ab44cfff",
+          "polls": 1
+        },
+        {
+          "id": "h726",
+          "fingerprint": "c2e64a38a81c554b",
+          "polls": 1
+        },
+        {
+          "id": "h727",
+          "fingerprint": "883ed80b914e63c0",
+          "polls": 1
+        },
+        {
+          "id": "h728",
+          "fingerprint": "4e433a7669962163",
+          "polls": 1
+        },
+        {
+          "id": "h729",
+          "fingerprint": "1c4660dcc932cb4a",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483369238,
+    "ended": 1791483415184,
+    "clientWallMs": 45946,
+    "cfRay": "a47722927f208036-MRS"
+  },
+  {
+    "from": 730,
+    "to": 740,
+    "value": {
+      "fingerprint": "42f0b957e83b6b9d",
+      "steps": [
+        {
+          "id": "h730",
+          "fingerprint": "7aa4d277823bda8b",
+          "polls": 1
+        },
+        {
+          "id": "h731",
+          "fingerprint": "365b327382e73c62",
+          "polls": 1
+        },
+        {
+          "id": "h732",
+          "fingerprint": "4e5696713bd710b0",
+          "polls": 1
+        },
+        {
+          "id": "h733",
+          "fingerprint": "59fa76d3ecd4447a",
+          "polls": 1
+        },
+        {
+          "id": "h734",
+          "fingerprint": "9f77f47e8e01b31a",
+          "polls": 1
+        },
+        {
+          "id": "h735",
+          "fingerprint": "08144d7bc13c4add",
+          "polls": 1
+        },
+        {
+          "id": "h736",
+          "fingerprint": "de10f1d8ee777fb4",
+          "polls": 1
+        },
+        {
+          "id": "h737",
+          "fingerprint": "8142249d12b2be8b",
+          "polls": 1
+        },
+        {
+          "id": "h738",
+          "fingerprint": "23bb545656bd7647",
+          "polls": 1
+        },
+        {
+          "id": "h739",
+          "fingerprint": "42f0b957e83b6b9d",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483415551,
+    "ended": 1791483431974,
+    "clientWallMs": 16423,
+    "cfRay": "a47723b3ef0b8036-MRS"
+  },
+  {
+    "from": 740,
+    "to": 750,
+    "value": {
+      "fingerprint": "2c9af1c5a975ff08",
+      "steps": [
+        {
+          "id": "h740",
+          "fingerprint": "fe4e25e6aa98fb98",
+          "polls": 1
+        },
+        {
+          "id": "h741",
+          "fingerprint": "9bdeff200d3d007b",
+          "polls": 1
+        },
+        {
+          "id": "h742",
+          "fingerprint": "ac4af2b241ea09e7",
+          "polls": 1
+        },
+        {
+          "id": "h743",
+          "fingerprint": "0444a56aff0edfbe",
+          "polls": 1
+        },
+        {
+          "id": "h744",
+          "fingerprint": "bb893dd5037037eb",
+          "polls": 1
+        },
+        {
+          "id": "h745",
+          "fingerprint": "d0d673bbce17edd3",
+          "polls": 1
+        },
+        {
+          "id": "h746",
+          "fingerprint": "b4cc2ad94b452591",
+          "polls": 1
+        },
+        {
+          "id": "h747",
+          "fingerprint": "7d3bd2d4dbd91ce3",
+          "polls": 1
+        },
+        {
+          "id": "h748",
+          "fingerprint": "be0832c7d02a94ca",
+          "polls": 1
+        },
+        {
+          "id": "h749",
+          "fingerprint": "2c9af1c5a975ff08",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483432369,
+    "ended": 1791483449238,
+    "clientWallMs": 16869,
+    "cfRay": "a477241cf91d8036-MRS"
+  },
+  {
+    "from": 750,
+    "to": 760,
+    "value": {
+      "fingerprint": "c1786ae984ce725d",
+      "steps": [
+        {
+          "id": "h750",
+          "fingerprint": "4b2c4c13155b41de",
+          "polls": 1
+        },
+        {
+          "id": "h751",
+          "fingerprint": "6e12db4523f9ab5d",
+          "polls": 1
+        },
+        {
+          "id": "h752",
+          "fingerprint": "63386c56fbfceb91",
+          "polls": 1
+        },
+        {
+          "id": "h753",
+          "fingerprint": "b026b84bf913b9e0",
+          "polls": 1
+        },
+        {
+          "id": "h754",
+          "fingerprint": "f20427fc291c0357",
+          "polls": 1
+        },
+        {
+          "id": "h755",
+          "fingerprint": "b7b9f53606c9f51e",
+          "polls": 1
+        },
+        {
+          "id": "h756",
+          "fingerprint": "0d5b1838dcf6b230",
+          "polls": 1
+        },
+        {
+          "id": "h757",
+          "fingerprint": "9c5f98a580fbc14b",
+          "polls": 1
+        },
+        {
+          "id": "h758",
+          "fingerprint": "126cad035b85a970",
+          "polls": 1
+        },
+        {
+          "id": "h759",
+          "fingerprint": "c1786ae984ce725d",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483450519,
+    "ended": 1791483466892,
+    "clientWallMs": 16373,
+    "cfRay": "a477248e78c18036-MRS"
+  },
+  {
+    "from": 760,
+    "to": 770,
+    "value": {
+      "fingerprint": "6416c0b923b222a1",
+      "steps": [
+        {
+          "id": "h760",
+          "fingerprint": "2296652a4c9ffbe1",
+          "polls": 1
+        },
+        {
+          "id": "h761",
+          "fingerprint": "5a356e0a84deb324",
+          "polls": 1
+        },
+        {
+          "id": "h762",
+          "fingerprint": "54780ef2ba48e5ff",
+          "polls": 1
+        },
+        {
+          "id": "h763",
+          "fingerprint": "70126e84b014aa81",
+          "polls": 1
+        },
+        {
+          "id": "h764",
+          "fingerprint": "44eecae17e2ca3c0",
+          "polls": 1
+        },
+        {
+          "id": "h765",
+          "fingerprint": "8e345b4580705699",
+          "polls": 1
+        },
+        {
+          "id": "h766",
+          "fingerprint": "863c038984ad2566",
+          "polls": 1
+        },
+        {
+          "id": "h767",
+          "fingerprint": "8b74bd6eab90692f",
+          "polls": 1
+        },
+        {
+          "id": "h768",
+          "fingerprint": "96a1cf7f3707dda5",
+          "polls": 1
+        },
+        {
+          "id": "h769",
+          "fingerprint": "6416c0b923b222a1",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483467275,
+    "ended": 1791483482245,
+    "clientWallMs": 14970,
+    "cfRay": "a47724f72d2a8036-MRS"
+  },
+  {
+    "from": 770,
+    "to": 780,
+    "value": {
+      "fingerprint": "63ace74738e8975b",
+      "steps": [
+        {
+          "id": "h770",
+          "fingerprint": "a9f052008f34a77e",
+          "polls": 1
+        },
+        {
+          "id": "h771",
+          "fingerprint": "1ba14c6b53cf4416",
+          "polls": 1
+        },
+        {
+          "id": "h772",
+          "fingerprint": "b6dd7663e3d53cce",
+          "polls": 1
+        },
+        {
+          "id": "h773",
+          "fingerprint": "9751fe9ee4464907",
+          "polls": 1
+        },
+        {
+          "id": "h774",
+          "fingerprint": "64a82a89194645d6",
+          "polls": 1
+        },
+        {
+          "id": "h775",
+          "fingerprint": "903ea8698be33a1b",
+          "polls": 1
+        },
+        {
+          "id": "h776",
+          "fingerprint": "f45557c94566e1bd",
+          "polls": 1
+        },
+        {
+          "id": "h777",
+          "fingerprint": "d6b9e12de360431f",
+          "polls": 1
+        },
+        {
+          "id": "h778",
+          "fingerprint": "5c991ce375853c79",
+          "polls": 1
+        },
+        {
+          "id": "h779",
+          "fingerprint": "63ace74738e8975b",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483482778,
+    "ended": 1791483495878,
+    "clientWallMs": 13100,
+    "cfRay": "a47725581d138036-MRS"
+  },
+  {
+    "from": 780,
+    "to": 790,
+    "value": {
+      "fingerprint": "98d19ff4ad36f399",
+      "steps": [
+        {
+          "id": "h780",
+          "fingerprint": "61f88b8a389b8096",
+          "polls": 1
+        },
+        {
+          "id": "h781",
+          "fingerprint": "22e4a16bdd295df6",
+          "polls": 1
+        },
+        {
+          "id": "h782",
+          "fingerprint": "514bf36baa680e79",
+          "polls": 1
+        },
+        {
+          "id": "h783",
+          "fingerprint": "ae431235497aee71",
+          "polls": 1
+        },
+        {
+          "id": "h784",
+          "fingerprint": "857a5363f5f2b85d",
+          "polls": 1
+        },
+        {
+          "id": "h785",
+          "fingerprint": "326ac91729ff8f72",
+          "polls": 1
+        },
+        {
+          "id": "h786",
+          "fingerprint": "cb769b7c80dad2ce",
+          "polls": 1
+        },
+        {
+          "id": "h787",
+          "fingerprint": "3dc482061db02e6b",
+          "polls": 68
+        },
+        {
+          "id": "h788",
+          "fingerprint": "2888c308c1f79c4f",
+          "polls": 1
+        },
+        {
+          "id": "h789",
+          "fingerprint": "98d19ff4ad36f399",
+          "polls": 2
+        }
+      ]
+    },
+    "started": 1791483496336,
+    "ended": 1791483541128,
+    "clientWallMs": 44792,
+    "cfRay": "a47725acdd118036-MRS"
+  },
+  {
+    "from": 790,
+    "to": 800,
+    "value": {
+      "fingerprint": "ef4ac4c72243e5c2",
+      "steps": [
+        {
+          "id": "h790",
+          "fingerprint": "0b799d49b1a78ab5",
+          "polls": 1
+        },
+        {
+          "id": "h791",
+          "fingerprint": "e0ef43089c95c37e",
+          "polls": 1
+        },
+        {
+          "id": "h792",
+          "fingerprint": "98c64c72517376c3",
+          "polls": 1
+        },
+        {
+          "id": "h793",
+          "fingerprint": "ece009c61e33dbd9",
+          "polls": 1
+        },
+        {
+          "id": "h794",
+          "fingerprint": "294bfd49d39cb07e",
+          "polls": 1
+        },
+        {
+          "id": "h795",
+          "fingerprint": "72209df2df02e264",
+          "polls": 1
+        },
+        {
+          "id": "h796",
+          "fingerprint": "dc95f45dd18050eb",
+          "polls": 1
+        },
+        {
+          "id": "h797",
+          "fingerprint": "4d2a7ce3128fe507",
+          "polls": 1
+        },
+        {
+          "id": "h798",
+          "fingerprint": "abae3ebdc269ef9b",
+          "polls": 1
+        },
+        {
+          "id": "h799",
+          "fingerprint": "ef4ac4c72243e5c2",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483541541,
+    "ended": 1791483559159,
+    "clientWallMs": 17618,
+    "cfRay": "a47726c7bf468036-MRS"
+  },
+  {
+    "from": 800,
+    "to": 810,
+    "value": {
+      "fingerprint": "0219c9280970b12e",
+      "steps": [
+        {
+          "id": "h800",
+          "fingerprint": "9baa0d09d0b88e23",
+          "polls": 2
+        },
+        {
+          "id": "h801",
+          "fingerprint": "299e3356a4b0b0f2",
+          "polls": 1
+        },
+        {
+          "id": "h802",
+          "fingerprint": "38a739674c2947e7",
+          "polls": 1
+        },
+        {
+          "id": "h803",
+          "fingerprint": "6c702c4a5a83c1ea",
+          "polls": 1
+        },
+        {
+          "id": "h804",
+          "fingerprint": "e8885000b9f191d7",
+          "polls": 1
+        },
+        {
+          "id": "h805",
+          "fingerprint": "36c9b8845f1dabe1",
+          "polls": 1
+        },
+        {
+          "id": "h806",
+          "fingerprint": "c6db1fcf713abd29",
+          "polls": 1
+        },
+        {
+          "id": "h807",
+          "fingerprint": "68b6e3bb477e28ec",
+          "polls": 1
+        },
+        {
+          "id": "h808",
+          "fingerprint": "9f1f68820788419b",
+          "polls": 1
+        },
+        {
+          "id": "h809",
+          "fingerprint": "0219c9280970b12e",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483560426,
+    "ended": 1791483580877,
+    "clientWallMs": 20451,
+    "cfRay": "a477273d5d3b8036-MRS"
+  },
+  {
+    "from": 810,
+    "to": 820,
+    "value": {
+      "fingerprint": "fd62cff699623336",
+      "steps": [
+        {
+          "id": "h810",
+          "fingerprint": "2a66efff8b04a49e",
+          "polls": 1
+        },
+        {
+          "id": "h811",
+          "fingerprint": "dd856770637acf01",
+          "polls": 1
+        },
+        {
+          "id": "h812",
+          "fingerprint": "0baddd62886c3dd7",
+          "polls": 1
+        },
+        {
+          "id": "h813",
+          "fingerprint": "292b8159f75d6469",
+          "polls": 1
+        },
+        {
+          "id": "h814",
+          "fingerprint": "38f764fcd55fcbfe",
+          "polls": 1
+        },
+        {
+          "id": "h815",
+          "fingerprint": "10c9dda493eee408",
+          "polls": 1
+        },
+        {
+          "id": "h816",
+          "fingerprint": "54c5c360b7df458a",
+          "polls": 1
+        },
+        {
+          "id": "h817",
+          "fingerprint": "af5e73122ec0b843",
+          "polls": 1
+        },
+        {
+          "id": "h818",
+          "fingerprint": "e3eb04e2c95a10d5",
+          "polls": 1
+        },
+        {
+          "id": "h819",
+          "fingerprint": "fd62cff699623336",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483581403,
+    "ended": 1791483599291,
+    "clientWallMs": 17888,
+    "cfRay": "a47727c07dbb8036-MRS"
+  },
+  {
+    "from": 820,
+    "to": 830,
+    "value": {
+      "fingerprint": "8f55f0fb51a9296b",
+      "steps": [
+        {
+          "id": "h820",
+          "fingerprint": "aa6e5f52ebc108a9",
+          "polls": 1
+        },
+        {
+          "id": "h821",
+          "fingerprint": "98a2592a077f5dad",
+          "polls": 1
+        },
+        {
+          "id": "h822",
+          "fingerprint": "0cd7f3cc3cf2587d",
+          "polls": 1
+        },
+        {
+          "id": "h823",
+          "fingerprint": "74082cd9f7c3f5ca",
+          "polls": 1
+        },
+        {
+          "id": "h824",
+          "fingerprint": "205f4a34605315fd",
+          "polls": 1
+        },
+        {
+          "id": "h825",
+          "fingerprint": "bcab30fd3c271480",
+          "polls": 1
+        },
+        {
+          "id": "h826",
+          "fingerprint": "b6574d8c386895f9",
+          "polls": 1
+        },
+        {
+          "id": "h827",
+          "fingerprint": "4648f1f86986f78b",
+          "polls": 1
+        },
+        {
+          "id": "h828",
+          "fingerprint": "ecc21e688ec684c5",
+          "polls": 1
+        },
+        {
+          "id": "h829",
+          "fingerprint": "8f55f0fb51a9296b",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483599650,
+    "ended": 1791483622237,
+    "clientWallMs": 22587,
+    "cfRay": "a47728328d7b8036-MRS"
+  },
+  {
+    "from": 830,
+    "to": 840,
+    "value": {
+      "fingerprint": "ded90f4a01fbba7c",
+      "steps": [
+        {
+          "id": "h830",
+          "fingerprint": "f9ba45d018f8b2b6",
+          "polls": 1
+        },
+        {
+          "id": "h831",
+          "fingerprint": "0b570dbe55fde163",
+          "polls": 1
+        },
+        {
+          "id": "h832",
+          "fingerprint": "023be81ca592b500",
+          "polls": 1
+        },
+        {
+          "id": "h833",
+          "fingerprint": "06426772219176ec",
+          "polls": 1
+        },
+        {
+          "id": "h834",
+          "fingerprint": "5e88c030ea3032fc",
+          "polls": 1
+        },
+        {
+          "id": "h835",
+          "fingerprint": "7e316da60f99aad8",
+          "polls": 1
+        },
+        {
+          "id": "h836",
+          "fingerprint": "5982f497a91ff92a",
+          "polls": 1
+        },
+        {
+          "id": "h837",
+          "fingerprint": "846197e1d1f1a0aa",
+          "polls": 1
+        },
+        {
+          "id": "h838",
+          "fingerprint": "98a29a028e0698e1",
+          "polls": 1
+        },
+        {
+          "id": "h839",
+          "fingerprint": "ded90f4a01fbba7c",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483622641,
+    "ended": 1791483637392,
+    "clientWallMs": 14751,
+    "cfRay": "a47728c23de08036-MRS"
+  },
+  {
+    "from": 840,
+    "to": 850,
+    "value": {
+      "fingerprint": "df9564bf296b6488",
+      "steps": [
+        {
+          "id": "h840",
+          "fingerprint": "8986a2d9b4d3d2ee",
+          "polls": 1
+        },
+        {
+          "id": "h841",
+          "fingerprint": "1dcc28a078760ffc",
+          "polls": 64
+        },
+        {
+          "id": "h842",
+          "fingerprint": "dbfc11a9c2b390a2",
+          "polls": 3
+        },
+        {
+          "id": "h843",
+          "fingerprint": "8257342966ca03f1",
+          "polls": 1
+        },
+        {
+          "id": "h844",
+          "fingerprint": "4e2262596a7b4f0e",
+          "polls": 1
+        },
+        {
+          "id": "h845",
+          "fingerprint": "4d57bbf0d8d8e64a",
+          "polls": 1
+        },
+        {
+          "id": "h846",
+          "fingerprint": "5643342b75758f32",
+          "polls": 1
+        },
+        {
+          "id": "h847",
+          "fingerprint": "6ace072836138d11",
+          "polls": 1
+        },
+        {
+          "id": "h848",
+          "fingerprint": "866bb4fd3cd28da5",
+          "polls": 1
+        },
+        {
+          "id": "h849",
+          "fingerprint": "df9564bf296b6488",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483637776,
+    "ended": 1791483692801,
+    "clientWallMs": 55025,
+    "cfRay": "a4772920cee38036-MRS"
+  },
+  {
+    "from": 850,
+    "to": 860,
+    "value": {
+      "fingerprint": "6e6b71b8563eae3b",
+      "steps": [
+        {
+          "id": "h850",
+          "fingerprint": "f5a455ae2ae85f6d",
+          "polls": 1
+        },
+        {
+          "id": "h851",
+          "fingerprint": "c0a3b3c8bf2d4b7f",
+          "polls": 1
+        },
+        {
+          "id": "h852",
+          "fingerprint": "47e30a2c6eb06eed",
+          "polls": 1
+        },
+        {
+          "id": "h853",
+          "fingerprint": "947d3204548619af",
+          "polls": 1
+        },
+        {
+          "id": "h854",
+          "fingerprint": "c1057c3ac59d3918",
+          "polls": 1
+        },
+        {
+          "id": "h855",
+          "fingerprint": "729f30e36d0859a1",
+          "polls": 1
+        },
+        {
+          "id": "h856",
+          "fingerprint": "6bf0af872c0da9ae",
+          "polls": 1
+        },
+        {
+          "id": "h857",
+          "fingerprint": "16da9c45aca618a9",
+          "polls": 1
+        },
+        {
+          "id": "h858",
+          "fingerprint": "05a1b550bf31901c",
+          "polls": 1
+        },
+        {
+          "id": "h859",
+          "fingerprint": "6e6b71b8563eae3b",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483694061,
+    "ended": 1791483706380,
+    "clientWallMs": 12319,
+    "cfRay": "a4772a809b9d8036-MRS"
+  },
+  {
+    "from": 860,
+    "to": 870,
+    "value": {
+      "fingerprint": "5ab4c226fed05462",
+      "steps": [
+        {
+          "id": "h860",
+          "fingerprint": "03adfcffa39c43a2",
+          "polls": 1
+        },
+        {
+          "id": "h861",
+          "fingerprint": "e00480f669b4afbf",
+          "polls": 1
+        },
+        {
+          "id": "h862",
+          "fingerprint": "a5610212b04031dc",
+          "polls": 1
+        },
+        {
+          "id": "h863",
+          "fingerprint": "3d23a5c37808b95e",
+          "polls": 1
+        },
+        {
+          "id": "h864",
+          "fingerprint": "8e99d099f5b83ccb",
+          "polls": 1
+        },
+        {
+          "id": "h865",
+          "fingerprint": "56d937fba1dc1a7f",
+          "polls": 1
+        },
+        {
+          "id": "h866",
+          "fingerprint": "42d88906410e3d5f",
+          "polls": 1
+        },
+        {
+          "id": "h867",
+          "fingerprint": "74d1a13b5caa3934",
+          "polls": 1
+        },
+        {
+          "id": "h868",
+          "fingerprint": "615733137d44cf23",
+          "polls": 1
+        },
+        {
+          "id": "h869",
+          "fingerprint": "5ab4c226fed05462",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483706730,
+    "ended": 1791483717693,
+    "clientWallMs": 10963,
+    "cfRay": "a4772acfce188036-MRS"
+  },
+  {
+    "from": 870,
+    "to": 880,
+    "value": {
+      "fingerprint": "db00c917ab6b4771",
+      "steps": [
+        {
+          "id": "h870",
+          "fingerprint": "43c757dde05b0661",
+          "polls": 1
+        },
+        {
+          "id": "h871",
+          "fingerprint": "382c45aa30ce43d3",
+          "polls": 1
+        },
+        {
+          "id": "h872",
+          "fingerprint": "10e6801abcf9c5c9",
+          "polls": 1
+        },
+        {
+          "id": "h873",
+          "fingerprint": "93e398490a75f294",
+          "polls": 1
+        },
+        {
+          "id": "h874",
+          "fingerprint": "88b1e45d684c3946",
+          "polls": 1
+        },
+        {
+          "id": "h875",
+          "fingerprint": "fdb6b805e3fb69e8",
+          "polls": 1
+        },
+        {
+          "id": "h876",
+          "fingerprint": "65e0668f84a569cc",
+          "polls": 1
+        },
+        {
+          "id": "h877",
+          "fingerprint": "a744b840ad59153c",
+          "polls": 1
+        },
+        {
+          "id": "h878",
+          "fingerprint": "962f221878464976",
+          "polls": 1
+        },
+        {
+          "id": "h879",
+          "fingerprint": "db00c917ab6b4771",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483718050,
+    "ended": 1791483733383,
+    "clientWallMs": 15333,
+    "cfRay": "a4772b168c9c8036-MRS"
+  },
+  {
+    "from": 880,
+    "to": 890,
+    "value": {
+      "fingerprint": "d468f6a72dd4c429",
+      "steps": [
+        {
+          "id": "h880",
+          "fingerprint": "4ef0979bd091e2df",
+          "polls": 1
+        },
+        {
+          "id": "h881",
+          "fingerprint": "d2ba82967d351dfd",
+          "polls": 1
+        },
+        {
+          "id": "h882",
+          "fingerprint": "78859938e66f79c9",
+          "polls": 1
+        },
+        {
+          "id": "h883",
+          "fingerprint": "a059c765beaac03a",
+          "polls": 1
+        },
+        {
+          "id": "h884",
+          "fingerprint": "d67e103b85848d64",
+          "polls": 1
+        },
+        {
+          "id": "h885",
+          "fingerprint": "7f2fc353c63177bb",
+          "polls": 1
+        },
+        {
+          "id": "h886",
+          "fingerprint": "99e66c1f99cdfa80",
+          "polls": 1
+        },
+        {
+          "id": "h887",
+          "fingerprint": "e41881f353afc38b",
+          "polls": 1
+        },
+        {
+          "id": "h888",
+          "fingerprint": "7bfa282a09caa3af",
+          "polls": 69
+        },
+        {
+          "id": "h889",
+          "fingerprint": "d468f6a72dd4c429",
+          "polls": 2
+        }
+      ]
+    },
+    "started": 1791483733729,
+    "ended": 1791483780824,
+    "clientWallMs": 47095,
+    "cfRay": "a4772b7889ba8036-MRS"
+  },
+  {
+    "from": 890,
+    "to": 900,
+    "value": {
+      "fingerprint": "06ca76bda0958149",
+      "steps": [
+        {
+          "id": "h890",
+          "fingerprint": "76cc547e8c8c53ab",
+          "polls": 1
+        },
+        {
+          "id": "h891",
+          "fingerprint": "e3f7a061069b1875",
+          "polls": 1
+        },
+        {
+          "id": "h892",
+          "fingerprint": "3e8887f350ce5ce7",
+          "polls": 1
+        },
+        {
+          "id": "h893",
+          "fingerprint": "4782077fca43ef85",
+          "polls": 1
+        },
+        {
+          "id": "h894",
+          "fingerprint": "9697c81283582f05",
+          "polls": 1
+        },
+        {
+          "id": "h895",
+          "fingerprint": "d361ce7d92396ed8",
+          "polls": 1
+        },
+        {
+          "id": "h896",
+          "fingerprint": "280b7c1b4c61fdc0",
+          "polls": 1
+        },
+        {
+          "id": "h897",
+          "fingerprint": "e370246cded5b0d9",
+          "polls": 1
+        },
+        {
+          "id": "h898",
+          "fingerprint": "8e29c2dbd8315bde",
+          "polls": 1
+        },
+        {
+          "id": "h899",
+          "fingerprint": "06ca76bda0958149",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483781172,
+    "ended": 1791483801666,
+    "clientWallMs": 20494,
+    "cfRay": "a4772ca10a828036-MRS"
+  },
+  {
+    "from": 900,
+    "to": 910,
+    "value": {
+      "fingerprint": "d477ed8290035967",
+      "steps": [
+        {
+          "id": "h900",
+          "fingerprint": "dbce3d1c1ce11d9c",
+          "polls": 1
+        },
+        {
+          "id": "h901",
+          "fingerprint": "3447044bb4bc413e",
+          "polls": 1
+        },
+        {
+          "id": "h902",
+          "fingerprint": "061428da85832877",
+          "polls": 1
+        },
+        {
+          "id": "h903",
+          "fingerprint": "278eae2d569c750b",
+          "polls": 1
+        },
+        {
+          "id": "h904",
+          "fingerprint": "ceca1ff60235e2e8",
+          "polls": 1
+        },
+        {
+          "id": "h905",
+          "fingerprint": "8991721db100fbbc",
+          "polls": 1
+        },
+        {
+          "id": "h906",
+          "fingerprint": "bb61c57a4f617db7",
+          "polls": 1
+        },
+        {
+          "id": "h907",
+          "fingerprint": "4ef74889627de669",
+          "polls": 1
+        },
+        {
+          "id": "h908",
+          "fingerprint": "ebdaa7f3e09b0f91",
+          "polls": 1
+        },
+        {
+          "id": "h909",
+          "fingerprint": "d477ed8290035967",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483802929,
+    "ended": 1791483819525,
+    "clientWallMs": 16596,
+    "cfRay": "a4772d2918ac8036-MRS"
+  },
+  {
+    "from": 910,
+    "to": 920,
+    "value": {
+      "fingerprint": "7e119541e0dd1004",
+      "steps": [
+        {
+          "id": "h910",
+          "fingerprint": "5b3e01ef37c66bea",
+          "polls": 1
+        },
+        {
+          "id": "h911",
+          "fingerprint": "dde93a68eee22551",
+          "polls": 1
+        },
+        {
+          "id": "h912",
+          "fingerprint": "c4394f100d7262e3",
+          "polls": 1
+        },
+        {
+          "id": "h913",
+          "fingerprint": "ff569a8cb98f92ed",
+          "polls": 1
+        },
+        {
+          "id": "h914",
+          "fingerprint": "94e71e7ba134afb2",
+          "polls": 1
+        },
+        {
+          "id": "h915",
+          "fingerprint": "38c3f73448327fc1",
+          "polls": 1
+        },
+        {
+          "id": "h916",
+          "fingerprint": "6aad07038482dea8",
+          "polls": 1
+        },
+        {
+          "id": "h917",
+          "fingerprint": "9985b18235e720bf",
+          "polls": 1
+        },
+        {
+          "id": "h918",
+          "fingerprint": "df6089002ece759a",
+          "polls": 1
+        },
+        {
+          "id": "h919",
+          "fingerprint": "7e119541e0dd1004",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483819944,
+    "ended": 1791483834389,
+    "clientWallMs": 14445,
+    "cfRay": "a4772d9399b28036-MRS"
+  },
+  {
+    "from": 920,
+    "to": 930,
+    "value": {
+      "fingerprint": "2c357759c9149605",
+      "steps": [
+        {
+          "id": "h920",
+          "fingerprint": "253ff0eb82d6e68a",
+          "polls": 1
+        },
+        {
+          "id": "h921",
+          "fingerprint": "2c9fb8de8056d043",
+          "polls": 1
+        },
+        {
+          "id": "h922",
+          "fingerprint": "550085a9b23e7583",
+          "polls": 1
+        },
+        {
+          "id": "h923",
+          "fingerprint": "5851ac05ab75c0b6",
+          "polls": 1
+        },
+        {
+          "id": "h924",
+          "fingerprint": "df500b449d5d3dc6",
+          "polls": 1
+        },
+        {
+          "id": "h925",
+          "fingerprint": "0ca69703f62dca05",
+          "polls": 1
+        },
+        {
+          "id": "h926",
+          "fingerprint": "18be69db3900cb78",
+          "polls": 1
+        },
+        {
+          "id": "h927",
+          "fingerprint": "758473c56c589642",
+          "polls": 1
+        },
+        {
+          "id": "h928",
+          "fingerprint": "2e5e6998c58b725f",
+          "polls": 1
+        },
+        {
+          "id": "h929",
+          "fingerprint": "2c357759c9149605",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483834767,
+    "ended": 1791483851384,
+    "clientWallMs": 16617,
+    "cfRay": "a4772df008cf8036-MRS"
+  },
+  {
+    "from": 930,
+    "to": 940,
+    "value": {
+      "fingerprint": "0aeec25d1bcfd993",
+      "steps": [
+        {
+          "id": "h930",
+          "fingerprint": "2c88ecef282181d7",
+          "polls": 1
+        },
+        {
+          "id": "h931",
+          "fingerprint": "251bcd9077ffc0b7",
+          "polls": 64
+        },
+        {
+          "id": "h932",
+          "fingerprint": "ab4a624639067af0",
+          "polls": 2
+        },
+        {
+          "id": "h933",
+          "fingerprint": "ca171b69c93b8289",
+          "polls": 1
+        },
+        {
+          "id": "h934",
+          "fingerprint": "cd59131f8721ed98",
+          "polls": 1
+        },
+        {
+          "id": "h935",
+          "fingerprint": "34bc47f234d1f3b7",
+          "polls": 1
+        },
+        {
+          "id": "h936",
+          "fingerprint": "c15dfc95a9b8ad53",
+          "polls": 1
+        },
+        {
+          "id": "h937",
+          "fingerprint": "5f1033cb8055a8c8",
+          "polls": 1
+        },
+        {
+          "id": "h938",
+          "fingerprint": "fdd1935be83634dc",
+          "polls": 1
+        },
+        {
+          "id": "h939",
+          "fingerprint": "0aeec25d1bcfd993",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483851777,
+    "ended": 1791483898077,
+    "clientWallMs": 46300,
+    "cfRay": "a4772e5a59908036-MRS"
+  },
+  {
+    "from": 940,
+    "to": 950,
+    "value": {
+      "fingerprint": "99bacfbf41f5ec88",
+      "steps": [
+        {
+          "id": "h940",
+          "fingerprint": "d8c8c3faedfa3dd0",
+          "polls": 1
+        },
+        {
+          "id": "h941",
+          "fingerprint": "84766781308f9d67",
+          "polls": 1
+        },
+        {
+          "id": "h942",
+          "fingerprint": "5f95f974fa79a9b0",
+          "polls": 1
+        },
+        {
+          "id": "h943",
+          "fingerprint": "33b1845ef66ceb09",
+          "polls": 1
+        },
+        {
+          "id": "h944",
+          "fingerprint": "f4ebe70c6e907eb8",
+          "polls": 1
+        },
+        {
+          "id": "h945",
+          "fingerprint": "c845bd274db29dd2",
+          "polls": 1
+        },
+        {
+          "id": "h946",
+          "fingerprint": "340055141514f52d",
+          "polls": 1
+        },
+        {
+          "id": "h947",
+          "fingerprint": "485864487eff2d0b",
+          "polls": 1
+        },
+        {
+          "id": "h948",
+          "fingerprint": "eadfcc6591370d69",
+          "polls": 1
+        },
+        {
+          "id": "h949",
+          "fingerprint": "99bacfbf41f5ec88",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483898450,
+    "ended": 1791483914526,
+    "clientWallMs": 16076,
+    "cfRay": "a4772f7e0f058036-MRS"
+  },
+  {
+    "from": 950,
+    "to": 960,
+    "value": {
+      "fingerprint": "5cc8c4fce28a2747",
+      "steps": [
+        {
+          "id": "h950",
+          "fingerprint": "403ef292274d607d",
+          "polls": 1
+        },
+        {
+          "id": "h951",
+          "fingerprint": "ba5dc7a8c8fbaa86",
+          "polls": 1
+        },
+        {
+          "id": "h952",
+          "fingerprint": "94384705a0a0d3ab",
+          "polls": 2
+        },
+        {
+          "id": "h953",
+          "fingerprint": "55c0e7e60b763a76",
+          "polls": 1
+        },
+        {
+          "id": "h954",
+          "fingerprint": "ae493520c475f6f9",
+          "polls": 1
+        },
+        {
+          "id": "h955",
+          "fingerprint": "a0b018615f19abde",
+          "polls": 1
+        },
+        {
+          "id": "h956",
+          "fingerprint": "277aedbfbe1e565f",
+          "polls": 1
+        },
+        {
+          "id": "h957",
+          "fingerprint": "03ea3f89448bd328",
+          "polls": 1
+        },
+        {
+          "id": "h958",
+          "fingerprint": "f62470949109a78f",
+          "polls": 1
+        },
+        {
+          "id": "h959",
+          "fingerprint": "5cc8c4fce28a2747",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483915779,
+    "ended": 1791483935811,
+    "clientWallMs": 20032,
+    "cfRay": "a4772fea5c0a8036-MRS"
+  },
+  {
+    "from": 960,
+    "to": 970,
+    "value": {
+      "fingerprint": "af44db5b0e33aa2f",
+      "steps": [
+        {
+          "id": "h960",
+          "fingerprint": "5a88ef9f7efa8066",
+          "polls": 1
+        },
+        {
+          "id": "h961",
+          "fingerprint": "cf07a18de58a3ac2",
+          "polls": 1
+        },
+        {
+          "id": "h962",
+          "fingerprint": "2855ac4a816613d4",
+          "polls": 1
+        },
+        {
+          "id": "h963",
+          "fingerprint": "2c3bbd1823f17fdc",
+          "polls": 1
+        },
+        {
+          "id": "h964",
+          "fingerprint": "0e7c8c0ca43d8142",
+          "polls": 1
+        },
+        {
+          "id": "h965",
+          "fingerprint": "bbbb0fbe96208cba",
+          "polls": 1
+        },
+        {
+          "id": "h966",
+          "fingerprint": "ae89caf6b3f4e0e9",
+          "polls": 1
+        },
+        {
+          "id": "h967",
+          "fingerprint": "5977ff578c91860f",
+          "polls": 1
+        },
+        {
+          "id": "h968",
+          "fingerprint": "f3197e4b0c42c2a2",
+          "polls": 1
+        },
+        {
+          "id": "h969",
+          "fingerprint": "af44db5b0e33aa2f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483936173,
+    "ended": 1791483956912,
+    "clientWallMs": 20739,
+    "cfRay": "a4773069c9348036-MRS"
+  },
+  {
+    "from": 970,
+    "to": 980,
+    "value": {
+      "fingerprint": "3c35b851201196fb",
+      "steps": [
+        {
+          "id": "h970",
+          "fingerprint": "a89fe3d1bacfd327",
+          "polls": 1
+        },
+        {
+          "id": "h971",
+          "fingerprint": "53748117a8bb426f",
+          "polls": 1
+        },
+        {
+          "id": "h972",
+          "fingerprint": "703822bec01405a7",
+          "polls": 1
+        },
+        {
+          "id": "h973",
+          "fingerprint": "8ab318b61a26186e",
+          "polls": 1
+        },
+        {
+          "id": "h974",
+          "fingerprint": "88751a5914298eed",
+          "polls": 1
+        },
+        {
+          "id": "h975",
+          "fingerprint": "8ef7fd3d3a063336",
+          "polls": 1
+        },
+        {
+          "id": "h976",
+          "fingerprint": "21814ac84c1581bb",
+          "polls": 1
+        },
+        {
+          "id": "h977",
+          "fingerprint": "0bc75e3b8bb78b0b",
+          "polls": 1
+        },
+        {
+          "id": "h978",
+          "fingerprint": "ecce671a3f9064f8",
+          "polls": 1
+        },
+        {
+          "id": "h979",
+          "fingerprint": "3c35b851201196fb",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483957274,
+    "ended": 1791483978406,
+    "clientWallMs": 21132,
+    "cfRay": "a47730edaa268036-MRS"
+  },
+  {
+    "from": 980,
+    "to": 990,
+    "value": {
+      "fingerprint": "6ca84ede791d1342",
+      "steps": [
+        {
+          "id": "h980",
+          "fingerprint": "3a6b380b7c5721af",
+          "polls": 1
+        },
+        {
+          "id": "h981",
+          "fingerprint": "edef1beb514dcbb3",
+          "polls": 1
+        },
+        {
+          "id": "h982",
+          "fingerprint": "8d6fa2cf06d75a06",
+          "polls": 1
+        },
+        {
+          "id": "h983",
+          "fingerprint": "b6155715c6ce4cd6",
+          "polls": 1
+        },
+        {
+          "id": "h984",
+          "fingerprint": "8807821d6291ab40",
+          "polls": 1
+        },
+        {
+          "id": "h985",
+          "fingerprint": "fd25ae140b51c610",
+          "polls": 1
+        },
+        {
+          "id": "h986",
+          "fingerprint": "1b26071987ad6aa6",
+          "polls": 1
+        },
+        {
+          "id": "h987",
+          "fingerprint": "0941b86666e1cd22",
+          "polls": 1
+        },
+        {
+          "id": "h988",
+          "fingerprint": "bb9588165d21837e",
+          "polls": 1
+        },
+        {
+          "id": "h989",
+          "fingerprint": "6ca84ede791d1342",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791483978765,
+    "ended": 1791484006123,
+    "clientWallMs": 27358,
+    "cfRay": "a4773173f9288036-MRS"
+  },
+  {
+    "from": 990,
+    "to": 1000,
+    "value": {
+      "fingerprint": "ac520308146f2a8f",
+      "steps": [
+        {
+          "id": "h990",
+          "fingerprint": "1bd30cececde8b09",
+          "polls": 1
+        },
+        {
+          "id": "h991",
+          "fingerprint": "590577097e051f86",
+          "polls": 1
+        },
+        {
+          "id": "h992",
+          "fingerprint": "2847058de854e532",
+          "polls": 1
+        },
+        {
+          "id": "h993",
+          "fingerprint": "de8fe137783e8adc",
+          "polls": 1
+        },
+        {
+          "id": "h994",
+          "fingerprint": "fbde1500090e7913",
+          "polls": 1
+        },
+        {
+          "id": "h995",
+          "fingerprint": "6f3d5eb5979b3094",
+          "polls": 1
+        },
+        {
+          "id": "h996",
+          "fingerprint": "320cc8737887dc9b",
+          "polls": 1
+        },
+        {
+          "id": "h997",
+          "fingerprint": "553a768855935024",
+          "polls": 1
+        },
+        {
+          "id": "h998",
+          "fingerprint": "d87377097ce73b8f",
+          "polls": 1
+        },
+        {
+          "id": "h999",
+          "fingerprint": "ac520308146f2a8f",
+          "polls": 1
+        }
+      ]
+    },
+    "started": 1791484006483,
+    "ended": 1791484038474,
+    "clientWallMs": 31991,
+    "cfRay": "a47732213d838036-MRS"
+  }
+]

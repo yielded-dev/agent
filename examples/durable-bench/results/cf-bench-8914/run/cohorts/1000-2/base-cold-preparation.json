@@ -1,0 +1,48 @@
+[
+  {
+    "attempt": 0,
+    "health": {
+      "value": {
+        "generation": "measure-1000-2",
+        "version": "3e380a15-f4a7-495b-83a0-e18e87498d1c",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791484516329,
+      "ended": 1791484516757,
+      "clientWallMs": 428,
+      "cfRay": "a4773e949c284c19-ATL"
+    },
+    "identity": {
+      "objectId": "cce5061590d51651d9ef2b25646f5528ef21a8e377df930b9855038e936c8022",
+      "moduleId": "6bd032ac-e999-4a6f-867b-460b7a39eb90",
+      "runtimeId": "a18cfee8-1d03-4d69-805a-43c3ace364ec",
+      "version": "3e380a15-f4a7-495b-83a0-e18e87498d1c",
+      "generation": "measure-1000-2",
+      "protocol": "cold-v3-reference",
+      "phase": "referenceCold",
+      "algorithm": "mix32-v1",
+      "iterations": 10000000,
+      "checksum": 623056721
+    },
+    "reference": {
+      "started": 1791484517504,
+      "ended": 1791484517732,
+      "clientWallMs": 228,
+      "cfRay": "a4773e9ade314c19-ATL",
+      "value": {
+        "thread": {
+          "objectId": "cce5061590d51651d9ef2b25646f5528ef21a8e377df930b9855038e936c8022",
+          "moduleId": "6bd032ac-e999-4a6f-867b-460b7a39eb90",
+          "runtimeId": "a18cfee8-1d03-4d69-805a-43c3ace364ec",
+          "version": "3e380a15-f4a7-495b-83a0-e18e87498d1c",
+          "generation": "measure-1000-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "role": "base",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "error": "BenchError: base/cold?key=50_0: HTTP 412 generation mismatch"
+  },
+  {
+    "role": "pinned",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "error": "BenchError: pinned/cold?key=50_0: HTTP 412 generation mismatch"
+  },
+  {
+    "role": "pi",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "error": "BenchError: pi: wrong Object, phase, or deployment generation"
+  },
+  {
+    "role": "tardie",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "error": "BenchError: tardie/cold?key=50_0: HTTP 412 generation mismatch"
+  }
+]

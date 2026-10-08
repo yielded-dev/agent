@@ -1,0 +1,71 @@
+[
+  {
+    "role": "base",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "head",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "control",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm5",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      },
+      {
+        "phase": "warm8",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      }
+    ],
+    "poll": 1
+  },
+  {
+    "role": "pinned",
+    "complete": false,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm9",
+        "reason": "reference telemetry missing, zero, or invalid"
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "pi",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "tardie",
+    "complete": false,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm7",
+        "reason": "reference telemetry missing, zero, or invalid"
+      }
+    ],
+    "poll": 6
+  }
+]

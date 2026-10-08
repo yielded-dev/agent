@@ -1,0 +1,101 @@
+[
+  {
+    "role": "base",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "head",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "control",
+    "complete": false,
+    "expected": 10,
+    "matched": 8,
+    "missing": [
+      {
+        "phase": "warm2",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm4",
+        "reason": "reference telemetry missing, zero, or invalid"
+      },
+      {
+        "phase": "warm6",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm8",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "pinned",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "pi",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm3",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      },
+      {
+        "phase": "warm5",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      },
+      {
+        "phase": "warm6",
+        "reason": "supporting ingress telemetry missing or duplicated; unique versioned Object RPC retained",
+        "ingress": 0
+      }
+    ],
+    "poll": 1
+  },
+  {
+    "role": "tardie",
+    "complete": false,
+    "expected": 10,
+    "matched": 8,
+    "missing": [
+      {
+        "phase": "cold",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm1",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      },
+      {
+        "phase": "warm2",
+        "reason": "reference telemetry missing, zero, or invalid"
+      }
+    ],
+    "poll": 6
+  }
+]

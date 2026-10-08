@@ -1,0 +1,51 @@
+{
+  "oldVersion": "1271eaa5-276c-4a5a-9b4c-c1945beaf301",
+  "identity": {
+    "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+    "moduleId": "f701eef2-0ab3-44f5-9d9b-6edb8b5c9c54",
+    "runtimeId": "e35cb6c5-88c5-4856-a0d1-58340793ea9b",
+    "version": "6eabd61f-5ee2-4bb9-8370-f0683a5341a2",
+    "generation": "seed-resume-2",
+    "protocol": "cold-v2"
+  },
+  "stats": {
+    "bytes": 5525504,
+    "tables": {
+      "platform_cloudflare_due_queue": 4,
+      "effect_agent_threads": 1,
+      "effect_agent_canonical_batches": 748,
+      "effect_agent_canonical_records": 1922,
+      "effect_agent_record_runs": 1174,
+      "effect_agent_tool_declarations": 107,
+      "effect_agent_record_refusals": 0,
+      "effect_agent_checkpoints": 0,
+      "effect_agent_submissions": 160,
+      "effect_agent_submission_ownership": 0,
+      "effect_agent_attempts": 160,
+      "effect_agent_abort_intents": 0,
+      "effect_agent_approval_decisions": 0,
+      "effect_agent_unknown_resolutions": 0,
+      "effect_agent_child_reservations": 0,
+      "effect_agent_child_settlements": 0,
+      "effect_agent_message_deliveries": 0,
+      "effect_agent_worker_stops": 0,
+      "effect_agent_meta": 1,
+      "effect_agent_journal_ranges": 2,
+      "effect_agent_archive_batches": 0,
+      "effect_agent_archive_records": 0,
+      "effect_agent_live_child_reservations": 0,
+      "effect_agent_transfer_commands": 0,
+      "effect_agent_input_intervals": 160,
+      "effect_agent_settlement_spans": 480,
+      "effect_agent_import_fifo": 0,
+      "effect_agent_import_delivery_visits": 0,
+      "effect_agent_transfer_state": 1,
+      "effect_agent_work_index": 1,
+      "effect_agent_work_entries": 0,
+      "effect_agent_schema": 1
+    }
+  },
+  "resumeAt": 160,
+  "safe": true,
+  "basis": "All acknowledged seed turns completed before their responses. Fresh-version counters must prove that no later admission or attempt exists; otherwise refuse to resume."
+}

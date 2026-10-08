@@ -1,0 +1,8 @@
+{
+  "role": "tardie",
+  "size": 1000,
+  "sample": 1,
+  "from": 990,
+  "to": 1000,
+  "error": "BenchError: tardie/seedSerial?key=1000_1: HTTP 500 Durable Object's isolate exceeded its memory limit and was reset."
+}

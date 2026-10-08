@@ -1,0 +1,5 @@
+{
+  "time": 1791479011.3614342,
+  "reason": "Guarded preparation found stale DO identity; no control workload attempted",
+  "retainedReceipts": 20
+}

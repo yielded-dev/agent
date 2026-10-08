@@ -1,0 +1,156 @@
+{
+  "verifiedAt": "2026-10-08T18:27:30.454987+00:00",
+  "allSeedFingerprintsMatch": true,
+  "fixtures": [
+    {
+      "role": "base",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "e269a4cd9c083c487d006a8b0304826c52af7627068af39bd03211d5042dc121",
+      "storageBytes": 30609408
+    },
+    {
+      "role": "base",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "storageBytes": 30597120
+    },
+    {
+      "role": "base",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "cce5061590d51651d9ef2b25646f5528ef21a8e377df930b9855038e936c8022",
+      "storageBytes": 30601216
+    },
+    {
+      "role": "head",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "4833972521e77c3e59b660cdc01b0a74b0d114e4589982c74c0cba81d8fe7abd",
+      "storageBytes": 30593024
+    },
+    {
+      "role": "head",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "85273887e2e2533f4fed1c7fdcc3fcf5479ad1bfdc7f3dbf8d525ae50ecc0d67",
+      "storageBytes": 30601216
+    },
+    {
+      "role": "head",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "1d2eaf1dc9c0e1b6704f500b531ff07c441e75cb115a972a6378e4ea4ad1eea1",
+      "storageBytes": 30605312
+    },
+    {
+      "role": "control",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "0f8a843a606cb734f9572376aa26e6d1691ddd30fa6bb48e5293b8d357cae8fe",
+      "storageBytes": 30605312
+    },
+    {
+      "role": "control",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "6a723a4d4dce0cf61bada7a6f2f8b5a93771b98b490ffa6256817f3573c3d430",
+      "storageBytes": 30601216
+    },
+    {
+      "role": "control",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "8018315203490ff82e330b2e1b3a84b7cc3aa4dd5ca5f9d5295c95ce3767b990",
+      "storageBytes": 30593024
+    },
+    {
+      "role": "pinned",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "3ade32be2632b9ee5cc0982414cddf7c59d0323ad064503e8e07fdb9a5341976",
+      "storageBytes": 30588928
+    },
+    {
+      "role": "pinned",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "29ee4c89979656c0efb632daab69af3c8cad7b7598632b5bc6956dbd0f4cc85c",
+      "storageBytes": 30584832
+    },
+    {
+      "role": "pinned",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "ed2e35a2e42110b75013b302da9a84b5e00809c485b5fa59b6276dcbc9431632",
+      "storageBytes": 30597120
+    },
+    {
+      "role": "pi",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "2499e47521f17f4376e8ddb031b7689d5414375d5072279696a2e424bd448ce0",
+      "storageBytes": 2711552
+    },
+    {
+      "role": "pi",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "8d3235332deb710ab8e7c9ad9585c4bc9f9953b435a32473d2fd07273ad01214",
+      "storageBytes": 2711552
+    },
+    {
+      "role": "pi",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "e5a71e9c026148afae2140c9b3c37b8079ddea282a1f97caaed62efd095a676c",
+      "storageBytes": 2711552
+    },
+    {
+      "role": "tardie",
+      "sample": 0,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "storageBytes": 7671808
+    },
+    {
+      "role": "tardie",
+      "sample": 1,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "storageBytes": 7671808
+    },
+    {
+      "role": "tardie",
+      "sample": 2,
+      "fingerprint": "ac520308146f2a8f",
+      "objectId": "997d42d272bf26aec06530fb8b7c51d183b2b90d142a7fd7d03d4f16548da2b5",
+      "storageBytes": 7671808
+    }
+  ],
+  "threadModuleOverlapAtRecordedRestarts": [
+    {
+      "samples": [
+        0,
+        1
+      ],
+      "sharedThreadModuleIds": []
+    },
+    {
+      "samples": [
+        0,
+        2
+      ],
+      "sharedThreadModuleIds": []
+    },
+    {
+      "samples": [
+        1,
+        2
+      ],
+      "sharedThreadModuleIds": []
+    }
+  ],
+  "seedingFinishedBefore1000Measurements": true
+}

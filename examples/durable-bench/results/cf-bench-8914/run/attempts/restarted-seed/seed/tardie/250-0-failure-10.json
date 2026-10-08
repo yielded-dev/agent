@@ -1,0 +1,8 @@
+{
+  "role": "tardie",
+  "size": 250,
+  "sample": 0,
+  "from": 10,
+  "to": 20,
+  "error": "HttpClientError: Transport error (POST https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev/seed?key=250_0)"
+}

@@ -1,0 +1,72 @@
+[
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_1",
+        "generation": "seed",
+        "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+        "objects": [
+          {
+            "objectId": "3b706e9579f2462a3134dfafef3dc2a46b6d1f4ea594527450baa0a5851ee025",
+            "moduleId": "291c7dc1-7225-408e-9c1f-d2cf8ec16738",
+            "runtimeId": "54b10e33-bdd5-44b0-bf43-b0cceedb587a",
+            "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+            "generation": "seed",
+            "actorObjectId": "f9acad9cb659c5b083e279a98ea1b11241a82634fdbf9a08d5c8a3d7b03089db",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "f9acad9cb659c5b083e279a98ea1b11241a82634fdbf9a08d5c8a3d7b03089db",
+            "moduleId": "8ed02506-ca4e-4a24-abff-d4c47fbbf055",
+            "runtimeId": "35ba9eab-4e3c-41c3-b403-2aa7916f65c9",
+            "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+            "generation": "seed",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791474589833,
+      "ended": 1791474589974,
+      "clientWallMs": 141,
+      "cfRay": "a4764c3abad658c2-PDX"
+    }
+  },
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_1",
+        "generation": "seed",
+        "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+        "objects": [
+          {
+            "objectId": "3b706e9579f2462a3134dfafef3dc2a46b6d1f4ea594527450baa0a5851ee025",
+            "moduleId": "291c7dc1-7225-408e-9c1f-d2cf8ec16738",
+            "runtimeId": "7c1bfef5-193b-46c5-8eaf-71080800ba4a",
+            "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+            "generation": "seed",
+            "actorObjectId": "f9acad9cb659c5b083e279a98ea1b11241a82634fdbf9a08d5c8a3d7b03089db",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "f9acad9cb659c5b083e279a98ea1b11241a82634fdbf9a08d5c8a3d7b03089db",
+            "moduleId": "8ed02506-ca4e-4a24-abff-d4c47fbbf055",
+            "runtimeId": "1391c60d-cecf-4e34-98b5-adcaea1f4674",
+            "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+            "generation": "seed",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791474590473,
+      "ended": 1791474590844,
+      "clientWallMs": 371,
+      "cfRay": "a4764c3ebd1758c2-PDX"
+    }
+  }
+]

@@ -1,0 +1,59 @@
+{
+  "basis": "Overlap of recorded client request intervals; does not establish shared hardware or resource contention. Current accepted seed batch receipts only.",
+  "cohorts": [
+    {
+      "cohort": "1000-0",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "1000-1",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "1000-2",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "250-0",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "250-1",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "250-2",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "50-1",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "50-2",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    },
+    {
+      "cohort": "50-3",
+      "turns": 60,
+      "turnsOverlappingSeedClientIntervals": 0,
+      "details": []
+    }
+  ]
+}

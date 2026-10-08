@@ -1,0 +1,41 @@
+[
+  {
+    "role": "tardie",
+    "method": "identity",
+    "key": "250_0",
+    "result": {
+      "value": {
+        "objectId": "19172615e2858fa839f9feb0d8c68317b1150ac98877c50817d7cdcf9cb36d58",
+        "moduleId": "aba52405-0755-413d-9f4c-6adcda315128",
+        "runtimeId": "28a7bb2c-f24f-41b2-9b12-69a9e7e57b9d",
+        "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+        "generation": "seed",
+        "actorObjectId": "d2810e2fa107fc4a24d46b6656a0de7a9ffdc288f2471b230b846d858cd72b76"
+      },
+      "started": 1791474809655,
+      "ended": 1791474810031,
+      "clientWallMs": 376,
+      "cfRay": "a4765198e975cb90-PDX"
+    }
+  },
+  {
+    "role": "tardie",
+    "method": "stats",
+    "key": "250_0",
+    "result": {
+      "value": {
+        "bytes": 163840,
+        "tables": {
+          "experimental_events": 229,
+          "experimental_messages": 18,
+          "checkpoint": 0,
+          "checkpoint_chunks": 0
+        }
+      },
+      "started": 1791474810032,
+      "ended": 1791474810238,
+      "clientWallMs": 206,
+      "cfRay": "a476519b0df7cb90-PDX"
+    }
+  }
+]

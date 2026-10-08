@@ -1,0 +1,42 @@
+{
+  "name": "cf-bench-8914-b124507a-tardie",
+  "role": "tardie",
+  "generation": "measure-250-1",
+  "namespaces": [
+    "f18d03e328f24d6cac86a9825dd4c8a2",
+    "4824cbf93b0f4a7fa2c588aba05770c4",
+    "f9484408a0fe4050a04cb078fc4c9890",
+    "92269b2b8e7a4777ba64118fe332a407",
+    "3617634622ba4861a29eca6a304697c6",
+    "700ce9a315af4f4a9b04e64c19a251dd",
+    "cf9ac13614044fdc89411dc23ad8c51f",
+    "0b42b6a5bbb14beaacca0bd32df03815",
+    "a16a1c777ce043b1a519c549d9633f17",
+    "9de3e139dd0543cd87fa961ff6e07f53",
+    "b318f9e088734ab5a34d53032487613c",
+    "b4913a206f1846e0be772df3c1899d4d",
+    "4e560c1d900f4e388865c1cf5fdc468a",
+    "8e23bc0851dc4d1cb343f6205fc3ce7d",
+    "5177b5c6d6844e7d9a98e6310aa2b3b5",
+    "002b7d891ca7437088a23821afc12d89",
+    "5c1563e790324a8a94fbe7b27f15e237",
+    "034cf44ed6564c52b5be6ecd0607a6fa",
+    "3215e8c6a89847ac9a210e50d64114d3",
+    "f42571ef06f14589b12305728e8e47fb"
+  ],
+  "modules": [
+    {
+      "name": "bench.mjs",
+      "bytes": 1689120,
+      "sha256": "c8fbbb722e67090856e46048ab8197f49f197b64900aa4513c48adba4a909484"
+    },
+    {
+      "name": "worker.mjs",
+      "bytes": 18124,
+      "sha256": "9f22f5b15a156fa20b8868fb23b2df158434bf16dbeff4de6af628dee98ced5f"
+    }
+  ],
+  "cpuLimitMs": 300000,
+  "compatibilityDate": "2026-08-18",
+  "locationHint": "wnam"
+}

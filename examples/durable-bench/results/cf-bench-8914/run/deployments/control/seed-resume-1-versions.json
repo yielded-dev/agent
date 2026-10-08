@@ -1,0 +1,57 @@
+{
+  "result": {
+    "items": [
+      {
+        "id": "68e528ec-32e3-4598-8e14-b5c73e311d33",
+        "number": 3,
+        "metadata": {
+          "created_on": "2026-10-08T16:09:30.331019Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "a60be001-94b5-45ba-8387-30225301849c",
+        "number": 2,
+        "metadata": {
+          "created_on": "2026-10-08T15:49:31.481344Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "42dff23a-9a60-4b2a-bdf2-7c3063dd6419",
+        "number": 1,
+        "metadata": {
+          "created_on": "2026-10-08T15:49:30.244072Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      }
+    ]
+  },
+  "success": true,
+  "errors": null,
+  "messages": null,
+  "result_info": {
+    "page": 1,
+    "per_page": 10,
+    "count": 3,
+    "total_count": 3
+  }
+}

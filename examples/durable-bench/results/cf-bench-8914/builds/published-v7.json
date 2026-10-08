@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-08T17:59:18.584077+00:00",
+  "reason": "Reconcile the public manifest index with the existing byte-verified uploaded wrapper. No bundle, deployed code or measurement receipt was changed. Previous public manifests remain in their original wrapper archives.",
+  "roles": [
+    {
+      "role": "base",
+      "previousPublicManifestSha256": "10a45dce1e98614cb13f6c7f9ac8f167fd6ad9e0fad69cdae665a20ae700b14b",
+      "publishedManifestSha256": "f0429acd83f3a4f1ad4801c046b5e9426de2d183420d2999bfdda66d64b0737a",
+      "benchSha256": "deabe97056af77fd01a5b8799d9bece4f1ce3ae68ee509aa45f70630849269db",
+      "wrapperSha256": "6b2bef1521f8eecc8c2ea3161833ec95ba66a7f107ab89d5479a41938d25cf7c",
+      "archive": "wrapper-v7/base"
+    },
+    {
+      "role": "head",
+      "previousPublicManifestSha256": "685f8289ac023db2afee7044e220cb1af86e30f1a5ca1c49b21cd11c8813c59c",
+      "publishedManifestSha256": "c76362929250a1be2a0b98b6b11c1e2aa5fa3ef47e636f1649f9d76ed8e659e3",
+      "benchSha256": "fc50f45a421a0792e153e3c91a344f38a51a9569cfd36b4d54b0a479ee2b23c8",
+      "wrapperSha256": "6b2bef1521f8eecc8c2ea3161833ec95ba66a7f107ab89d5479a41938d25cf7c",
+      "archive": "wrapper-v7/head"
+    },
+    {
+      "role": "control",
+      "previousPublicManifestSha256": "427bcf3ef498407b018217a17e6651785333527d351f9330a280ac2ff9026c50",
+      "publishedManifestSha256": "b3baac4982dbd070289a469a86d11a11e0a4a2522cf30e24c41bbd68e6edbf27",
+      "benchSha256": "deabe97056af77fd01a5b8799d9bece4f1ce3ae68ee509aa45f70630849269db",
+      "wrapperSha256": "6b2bef1521f8eecc8c2ea3161833ec95ba66a7f107ab89d5479a41938d25cf7c",
+      "archive": "wrapper-v7/control"
+    },
+    {
+      "role": "pinned",
+      "previousPublicManifestSha256": "85884bec64c32f10a7b3638e42035b9542886f86fa7a336591ca96c6a32cbed3",
+      "publishedManifestSha256": "72dcb8183046dbd700089e6b49cf3fe46694e88738609047d26f375bd6d32c86",
+      "benchSha256": "c823d1745273673543621a777765ef3531a3392682dbc3bddea3981c5000defb",
+      "wrapperSha256": "6b2bef1521f8eecc8c2ea3161833ec95ba66a7f107ab89d5479a41938d25cf7c",
+      "archive": "wrapper-v7/pinned"
+    },
+    {
+      "role": "pi",
+      "previousPublicManifestSha256": "49fce3f335a438586db583853686550d4fd610eecf26044834fa443de5c6d8ab",
+      "publishedManifestSha256": "66bcdf36014152b44963add5752e75cbc627241f1f3e303b3f27bd7bca6aea3d",
+      "benchSha256": "5526e585eb8bccfdc9b3eb4e68cf58cb57c97697abce9a27951fc7486efb3985",
+      "wrapperSha256": "f1947b8feb9606ff4e133a4733727f2cf2bf62997c29125be939a7a8f0b10eab",
+      "archive": "wrapper-v7/pi"
+    },
+    {
+      "role": "tardie",
+      "previousPublicManifestSha256": "5834b61aaccc24a98f6352e668f3d98d82a684b790b7ba3526fee163c3780ce5",
+      "publishedManifestSha256": "5229a99a7e0dd61096d297a82dce4f7b91a77ad2b0c6b04976ed03d59f97e9ca",
+      "benchSha256": "c8fbbb722e67090856e46048ab8197f49f197b64900aa4513c48adba4a909484",
+      "wrapperSha256": "9f22f5b15a156fa20b8868fb23b2df158434bf16dbeff4de6af628dee98ced5f",
+      "archive": "wrapper-v7/tardie"
+    }
+  ]
+}

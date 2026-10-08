@@ -1,0 +1,24 @@
+{
+  "role": "tardie",
+  "size": 50,
+  "sample": 1,
+  "fingerprint": "b017b487524e44a4",
+  "stats": {
+    "bytes": 430080,
+    "tables": {
+      "experimental_events": 657,
+      "experimental_messages": 50,
+      "checkpoint": 1,
+      "checkpoint_chunks": 1
+    },
+    "checkpoint": 500
+  },
+  "identity": {
+    "objectId": "3b706e9579f2462a3134dfafef3dc2a46b6d1f4ea594527450baa0a5851ee025",
+    "moduleId": "291c7dc1-7225-408e-9c1f-d2cf8ec16738",
+    "runtimeId": "7c1bfef5-193b-46c5-8eaf-71080800ba4a",
+    "version": "9566bf6a-0b86-4e6e-92ea-3e5b12d6dab7",
+    "generation": "seed",
+    "actorObjectId": "f9acad9cb659c5b083e279a98ea1b11241a82634fdbf9a08d5c8a3d7b03089db"
+  }
+}

@@ -1,0 +1,2962 @@
+[
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481312561,
+      "ended": 1791481313083,
+      "clientWallMs": 522,
+      "cfRay": "a476f05c1ad31f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "af466f4a-0edc-4de1-9e88-6aafb150445a",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "started": 1791481313606,
+    "ended": 1791481315028,
+    "clientWallMs": 1422,
+    "cfRay": "a476f0629f471f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481315040,
+      "ended": 1791481315432,
+      "clientWallMs": 392,
+      "cfRay": "a476f06b8b091f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "started": 1791481315435,
+    "ended": 1791481316474,
+    "clientWallMs": 1039,
+    "cfRay": "a476f06e0ab41f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481316477,
+      "ended": 1791481316952,
+      "clientWallMs": 475,
+      "cfRay": "a476f074f8651f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "started": 1791481316954,
+    "ended": 1791481318113,
+    "clientWallMs": 1159,
+    "cfRay": "a476f077c9af1f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481318116,
+      "ended": 1791481318498,
+      "clientWallMs": 382,
+      "cfRay": "a476f07ec8291f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "started": 1791481318499,
+    "ended": 1791481319501,
+    "clientWallMs": 1002,
+    "cfRay": "a476f0812f8b1f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481319502,
+      "ended": 1791481319886,
+      "clientWallMs": 384,
+      "cfRay": "a476f0877a0b1f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "started": 1791481319887,
+    "ended": 1791481320779,
+    "clientWallMs": 892,
+    "cfRay": "a476f089d9421f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481320783,
+      "ended": 1791481321167,
+      "clientWallMs": 384,
+      "cfRay": "a476f08f7a311f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "started": 1791481321169,
+    "ended": 1791481322268,
+    "clientWallMs": 1099,
+    "cfRay": "a476f091e9071f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481322271,
+      "ended": 1791481322909,
+      "clientWallMs": 638,
+      "cfRay": "a476f098ccf71f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "started": 1791481322911,
+    "ended": 1791481324391,
+    "clientWallMs": 1480,
+    "cfRay": "a476f09cf8bd1f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481324394,
+      "ended": 1791481324995,
+      "clientWallMs": 601,
+      "cfRay": "a476f0a61a261f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "started": 1791481324996,
+    "ended": 1791481326190,
+    "clientWallMs": 1194,
+    "cfRay": "a476f0a9edbf1f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481326196,
+      "ended": 1791481326742,
+      "clientWallMs": 546,
+      "cfRay": "a476f0b14a291f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "started": 1791481326743,
+    "ended": 1791481327701,
+    "clientWallMs": 958,
+    "cfRay": "a476f0b4cd3e1f37-MRS"
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481327702,
+      "ended": 1791481328078,
+      "clientWallMs": 376,
+      "cfRay": "a476f0bab8851f37-MRS",
+      "value": {
+        "thread": {
+          "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+          "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+          "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+          "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "base",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "3667e287c639840fc21d91435e43e0b1d39565d54b439e1e301c8841dcb61abd",
+      "moduleId": "55809f38-252c-4608-bd24-faa2c53d1684",
+      "runtimeId": "188bd3bd-c8b4-45a2-9980-576021fe2edf",
+      "version": "ad183241-6e52-4592-9166-7f51fa5661fb",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "started": 1791481328078,
+    "ended": 1791481329114,
+    "clientWallMs": 1036,
+    "cfRay": "a476f0bd08051f37-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481339654,
+      "ended": 1791481340143,
+      "clientWallMs": 489,
+      "cfRay": "a476f1056ce048ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "8ece46f6-4e45-43e3-8c94-a9371f66cd3d",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "started": 1791481340674,
+    "ended": 1791481342058,
+    "clientWallMs": 1384,
+    "cfRay": "a476f10be9b948ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481342059,
+      "ended": 1791481342477,
+      "clientWallMs": 418,
+      "cfRay": "a476f1149a6848ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "started": 1791481342478,
+    "ended": 1791481343508,
+    "clientWallMs": 1030,
+    "cfRay": "a476f117787548ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481343514,
+      "ended": 1791481343920,
+      "clientWallMs": 406,
+      "cfRay": "a476f11dad3b48ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "started": 1791481343922,
+    "ended": 1791481344809,
+    "clientWallMs": 887,
+    "cfRay": "a476f1201acc48ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481344813,
+      "ended": 1791481345229,
+      "clientWallMs": 416,
+      "cfRay": "a476f125afbc48ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "started": 1791481345231,
+    "ended": 1791481346032,
+    "clientWallMs": 801,
+    "cfRay": "a476f1285dbf48ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481346035,
+      "ended": 1791481346427,
+      "clientWallMs": 392,
+      "cfRay": "a476f12d4ff048ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "started": 1791481346431,
+    "ended": 1791481347362,
+    "clientWallMs": 931,
+    "cfRay": "a476f12fdd4e48ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481347365,
+      "ended": 1791481347804,
+      "clientWallMs": 439,
+      "cfRay": "a476f135eb1848ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "started": 1791481347805,
+    "ended": 1791481348736,
+    "clientWallMs": 931,
+    "cfRay": "a476f1386a4348ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481348740,
+      "ended": 1791481349144,
+      "clientWallMs": 404,
+      "cfRay": "a476f13e3f6b48ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "started": 1791481349145,
+    "ended": 1791481350098,
+    "clientWallMs": 953,
+    "cfRay": "a476f140bc2248ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481350100,
+      "ended": 1791481350507,
+      "clientWallMs": 407,
+      "cfRay": "a476f146bfac48ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "started": 1791481350510,
+    "ended": 1791481351447,
+    "clientWallMs": 937,
+    "cfRay": "a476f1494ce448ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481351450,
+      "ended": 1791481351858,
+      "clientWallMs": 408,
+      "cfRay": "a476f14f393948ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "started": 1791481351860,
+    "ended": 1791481352798,
+    "clientWallMs": 938,
+    "cfRay": "a476f151ced348ba-MRS"
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481352801,
+      "ended": 1791481353201,
+      "clientWallMs": 400,
+      "cfRay": "a476f157ab4848ba-MRS",
+      "value": {
+        "thread": {
+          "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+          "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+          "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+          "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "head",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "07d60ba0e842a6550e8c2e12f6b9b26deec56655b0d89ab2d82ad482d527c726",
+      "moduleId": "4e025afb-463f-4e59-8d69-40efe4cd1c88",
+      "runtimeId": "9b8dbc18-f5eb-4d46-b851-ed414722dedb",
+      "version": "5f4dc16a-b5cc-46d5-bc15-fb79990268ca",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "started": 1791481353203,
+    "ended": 1791481354049,
+    "clientWallMs": 846,
+    "cfRay": "a476f15a184748ba-MRS"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481364432,
+      "ended": 1791481364841,
+      "clientWallMs": 409,
+      "cfRay": "a476f1a00d51d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "df7e938f-53c1-44ee-a50e-c013fe8aba12",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "started": 1791481365187,
+    "ended": 1791481366728,
+    "clientWallMs": 1541,
+    "cfRay": "a476f1a4cca5d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481366740,
+      "ended": 1791481367052,
+      "clientWallMs": 312,
+      "cfRay": "a476f1ae7c4ad4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "started": 1791481367055,
+    "ended": 1791481367933,
+    "clientWallMs": 878,
+    "cfRay": "a476f1b07f95d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481367939,
+      "ended": 1791481368298,
+      "clientWallMs": 359,
+      "cfRay": "a476f1b5f954d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "started": 1791481368299,
+    "ended": 1791481369151,
+    "clientWallMs": 852,
+    "cfRay": "a476f1b83cf7d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481369152,
+      "ended": 1791481369428,
+      "clientWallMs": 276,
+      "cfRay": "a476f1bd8e97d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "started": 1791481369431,
+    "ended": 1791481370213,
+    "clientWallMs": 782,
+    "cfRay": "a476f1bf4a42d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481370217,
+      "ended": 1791481370497,
+      "clientWallMs": 280,
+      "cfRay": "a476f1c43a1fd4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "started": 1791481370499,
+    "ended": 1791481371247,
+    "clientWallMs": 748,
+    "cfRay": "a476f1c5fcdcd4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481371248,
+      "ended": 1791481371526,
+      "clientWallMs": 278,
+      "cfRay": "a476f1caaba1d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "started": 1791481371527,
+    "ended": 1791481372351,
+    "clientWallMs": 824,
+    "cfRay": "a476f1cc6e03d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481372351,
+      "ended": 1791481372625,
+      "clientWallMs": 274,
+      "cfRay": "a476f1d18cc8d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "started": 1791481372627,
+    "ended": 1791481373516,
+    "clientWallMs": 889,
+    "cfRay": "a476f1d34f2ad4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481373520,
+      "ended": 1791481373806,
+      "clientWallMs": 286,
+      "cfRay": "a476f1d8df4bd4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "started": 1791481373809,
+    "ended": 1791481374539,
+    "clientWallMs": 730,
+    "cfRay": "a476f1dac9ced4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481374540,
+      "ended": 1791481374823,
+      "clientWallMs": 283,
+      "cfRay": "a476f1df3fd1d4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "started": 1791481374823,
+    "ended": 1791481375598,
+    "clientWallMs": 775,
+    "cfRay": "a476f1e0fa55d4a1-KIX"
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481375599,
+      "ended": 1791481375872,
+      "clientWallMs": 273,
+      "cfRay": "a476f1e5d92ed4a1-KIX",
+      "value": {
+        "thread": {
+          "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+          "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+          "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+          "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "control",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "74ad5afc14f4b8d9f7fff2f370f774eaeca6cdf095f1c03fca1b104d773385ff",
+      "moduleId": "421d2920-f13a-488b-a1e7-53e0967a9360",
+      "runtimeId": "d5a0b199-7990-4386-8990-b867b3b83d59",
+      "version": "f5bf8db6-8d92-47e4-af05-772cde4cde26",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "started": 1791481375875,
+    "ended": 1791481376660,
+    "clientWallMs": 785,
+    "cfRay": "a476f1e78b9bd4a1-KIX"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481388161,
+      "ended": 1791481388707,
+      "clientWallMs": 546,
+      "cfRay": "a476f234991de1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "15057f87-3fcc-4dcc-989e-4127fce6cf6c",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "started": 1791481389233,
+    "ended": 1791481390758,
+    "clientWallMs": 1525,
+    "cfRay": "a476f23b4ce1e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481390761,
+      "ended": 1791481391416,
+      "clientWallMs": 655,
+      "cfRay": "a476f244d94ae1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "started": 1791481391419,
+    "ended": 1791481392532,
+    "clientWallMs": 1113,
+    "cfRay": "a476f248eebae1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481392534,
+      "ended": 1791481393172,
+      "clientWallMs": 638,
+      "cfRay": "a476f24feadbe1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "started": 1791481393173,
+    "ended": 1791481394489,
+    "clientWallMs": 1316,
+    "cfRay": "a476f253ef12e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481394493,
+      "ended": 1791481395168,
+      "clientWallMs": 675,
+      "cfRay": "a476f25c293be1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "started": 1791481395170,
+    "ended": 1791481396181,
+    "clientWallMs": 1011,
+    "cfRay": "a476f2605dd6e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481396183,
+      "ended": 1791481396896,
+      "clientWallMs": 713,
+      "cfRay": "a476f266b8b2e1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "started": 1791481396898,
+    "ended": 1791481397825,
+    "clientWallMs": 927,
+    "cfRay": "a476f26b2e73e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481397829,
+      "ended": 1791481398446,
+      "clientWallMs": 617,
+      "cfRay": "a476f270f88ce1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "started": 1791481398449,
+    "ended": 1791481399503,
+    "clientWallMs": 1054,
+    "cfRay": "a476f274dc3ee1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481399506,
+      "ended": 1791481400136,
+      "clientWallMs": 630,
+      "cfRay": "a476f27b7924e1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "started": 1791481400138,
+    "ended": 1791481401410,
+    "clientWallMs": 1272,
+    "cfRay": "a476f27f6e07e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481401414,
+      "ended": 1791481402051,
+      "clientWallMs": 637,
+      "cfRay": "a476f2876d3ae1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "started": 1791481402056,
+    "ended": 1791481403069,
+    "clientWallMs": 1013,
+    "cfRay": "a476f28b68f1e1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481403070,
+      "ended": 1791481403691,
+      "clientWallMs": 621,
+      "cfRay": "a476f291cbdde1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "started": 1791481403693,
+    "ended": 1791481404822,
+    "clientWallMs": 1129,
+    "cfRay": "a476f295a83be1e1-MRS"
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481404825,
+      "ended": 1791481405520,
+      "clientWallMs": 695,
+      "cfRay": "a476f29cbe2ae1e1-MRS",
+      "value": {
+        "thread": {
+          "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+          "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+          "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+          "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pinned",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "c88ce5929ae8a1ab415b66a65b882b8b1e2e35cabb49842d74c83d0abc978fea",
+      "moduleId": "4877e983-79a5-4d77-8be2-f6433217204c",
+      "runtimeId": "3b8b7caf-7505-475e-a246-e2bf8927cb3f",
+      "version": "df11e408-f1f8-4bc6-9a21-d51ffdfdefab",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "started": 1791481405522,
+    "ended": 1791481406484,
+    "clientWallMs": 962,
+    "cfRay": "a476f2a11bade1e1-MRS"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481422102,
+      "ended": 1791481422559,
+      "clientWallMs": 457,
+      "cfRay": "a476f308ad2bdfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3d2183be-8ab8-4e23-a2ae-34220e4fe306",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "started": 1791481423047,
+    "ended": 1791481423757,
+    "clientWallMs": 710,
+    "cfRay": "a476f30e99a1dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481423761,
+      "ended": 1791481424133,
+      "clientWallMs": 372,
+      "cfRay": "a476f3130cd5dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "started": 1791481424134,
+    "ended": 1791481424690,
+    "clientWallMs": 556,
+    "cfRay": "a476f3156ed4dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481424696,
+      "ended": 1791481425065,
+      "clientWallMs": 369,
+      "cfRay": "a476f318eb1edfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "started": 1791481425068,
+    "ended": 1791481425597,
+    "clientWallMs": 529,
+    "cfRay": "a476f31b3d59dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481425603,
+      "ended": 1791481425966,
+      "clientWallMs": 363,
+      "cfRay": "a476f31e8fa8dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "started": 1791481425968,
+    "ended": 1791481426497,
+    "clientWallMs": 529,
+    "cfRay": "a476f320d966dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481426502,
+      "ended": 1791481426874,
+      "clientWallMs": 372,
+      "cfRay": "a476f3242c20dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "started": 1791481426876,
+    "ended": 1791481427391,
+    "clientWallMs": 515,
+    "cfRay": "a476f3268df9dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481427394,
+      "ended": 1791481427762,
+      "clientWallMs": 368,
+      "cfRay": "a476f329c884dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "started": 1791481427766,
+    "ended": 1791481428333,
+    "clientWallMs": 567,
+    "cfRay": "a476f32c1a44dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481428337,
+      "ended": 1791481428704,
+      "clientWallMs": 367,
+      "cfRay": "a476f32fac89dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "started": 1791481428706,
+    "ended": 1791481429323,
+    "clientWallMs": 617,
+    "cfRay": "a476f331fdf9dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481429327,
+      "ended": 1791481429716,
+      "clientWallMs": 389,
+      "cfRay": "a476f335f85adfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "started": 1791481429718,
+    "ended": 1791481430271,
+    "clientWallMs": 553,
+    "cfRay": "a476f33849e8dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481430274,
+      "ended": 1791481430690,
+      "clientWallMs": 416,
+      "cfRay": "a476f33bcc83dfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "started": 1791481430694,
+    "ended": 1791481431218,
+    "clientWallMs": 524,
+    "cfRay": "a476f33e6fb5dfe7-MAD"
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481431223,
+      "ended": 1791481431588,
+      "clientWallMs": 365,
+      "cfRay": "a476f341ba6adfe7-MAD",
+      "value": {
+        "thread": {
+          "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+          "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+          "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+          "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  },
+  {
+    "role": "pi",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+      "moduleId": "25247f37-7095-4121-91e5-ce5ebb015cc3",
+      "runtimeId": "3b035cc8-aa19-40e2-b3ed-057377ceddf7",
+      "version": "791b3a72-864b-4ccf-9a56-26016774ea3a",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "started": 1791481431590,
+    "ended": 1791481432166,
+    "clientWallMs": 576,
+    "cfRay": "a476f343fcc7dfe7-MAD"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "reference": {
+      "started": 1791481516350,
+      "ended": 1791481516712,
+      "clientWallMs": 362,
+      "cfRay": "a476f5556d1f6c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "461e265b-c614-43d0-bc18-665f4c2f909c",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "2ff672bc-3fde-4718-8814-e1852eba422b",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481515956,
+        "ended": 1791481516350,
+        "clientWallMs": 394,
+        "cfRay": "a476f552fb406c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "cold",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 807,
+      "phase": "cold"
+    },
+    "started": 1791481517182,
+    "ended": 1791481518681,
+    "clientWallMs": 1499,
+    "cfRay": "a476f55a99ad6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "reference": {
+      "started": 1791481519142,
+      "ended": 1791481519529,
+      "clientWallMs": 387,
+      "cfRay": "a476f566df946c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm1",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481518685,
+        "ended": 1791481519142,
+        "clientWallMs": 457,
+        "cfRay": "a476f5640cbd6c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm1",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 750,
+      "phase": "warm1"
+    },
+    "started": 1791481519531,
+    "ended": 1791481520830,
+    "clientWallMs": 1299,
+    "cfRay": "a476f569db9c6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "reference": {
+      "started": 1791481521290,
+      "ended": 1791481521722,
+      "clientWallMs": 432,
+      "cfRay": "a476f5744afc6c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm2",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481520833,
+        "ended": 1791481521289,
+        "clientWallMs": 456,
+        "cfRay": "a476f57168a76c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm2",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 756,
+      "phase": "warm2"
+    },
+    "started": 1791481521726,
+    "ended": 1791481522873,
+    "clientWallMs": 1147,
+    "cfRay": "a476f5770d6d6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "reference": {
+      "started": 1791481523369,
+      "ended": 1791481523819,
+      "clientWallMs": 450,
+      "cfRay": "a476f5814d9d6c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm3",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481522877,
+        "ended": 1791481523369,
+        "clientWallMs": 492,
+        "cfRay": "a476f57e39796c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm3",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 1045,
+      "phase": "warm3"
+    },
+    "started": 1791481523821,
+    "ended": 1791481525316,
+    "clientWallMs": 1495,
+    "cfRay": "a476f58418776c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "reference": {
+      "started": 1791481525801,
+      "ended": 1791481526215,
+      "clientWallMs": 414,
+      "cfRay": "a476f5907a546c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm4",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481525319,
+        "ended": 1791481525801,
+        "clientWallMs": 482,
+        "cfRay": "a476f58d7db46c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm4",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 847,
+      "phase": "warm4"
+    },
+    "started": 1791481526216,
+    "ended": 1791481527549,
+    "clientWallMs": 1333,
+    "cfRay": "a476f5931c8e6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "reference": {
+      "started": 1791481528010,
+      "ended": 1791481528429,
+      "clientWallMs": 419,
+      "cfRay": "a476f59e4e956c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm5",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481527554,
+        "ended": 1791481528010,
+        "clientWallMs": 456,
+        "cfRay": "a476f59b7b186c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm5",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 881,
+      "phase": "warm5"
+    },
+    "started": 1791481528432,
+    "ended": 1791481529809,
+    "clientWallMs": 1377,
+    "cfRay": "a476f5a0f8976c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "reference": {
+      "started": 1791481530276,
+      "ended": 1791481530702,
+      "clientWallMs": 426,
+      "cfRay": "a476f5ac7cad6c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm6",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481529814,
+        "ended": 1791481530276,
+        "clientWallMs": 462,
+        "cfRay": "a476f5a998986c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm6",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 920,
+      "phase": "warm6"
+    },
+    "started": 1791481530705,
+    "ended": 1791481532015,
+    "clientWallMs": 1310,
+    "cfRay": "a476f5af389a6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "reference": {
+      "started": 1791481532473,
+      "ended": 1791481532891,
+      "clientWallMs": 418,
+      "cfRay": "a476f5ba2e256c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "e41723f7-f73f-454e-b224-ac9ff14b33ad",
+          "runtimeId": "0aab453f-eedc-4834-8e1e-da905771e781",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm7",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481532016,
+        "ended": 1791481532473,
+        "clientWallMs": 457,
+        "cfRay": "a476f5b75a226c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm7",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 906,
+      "phase": "warm7"
+    },
+    "started": 1791481532893,
+    "ended": 1791481534428,
+    "clientWallMs": 1535,
+    "cfRay": "a476f5bccb166c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "reference": {
+      "started": 1791481534816,
+      "ended": 1791481535204,
+      "clientWallMs": 388,
+      "cfRay": "a476f5c8dc726c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "a0d2a1bd-a1b2-4585-8cf4-c155698de431",
+          "runtimeId": "f165104c-cc61-440a-9844-8ee762c7b9f4",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm8",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481534433,
+        "ended": 1791481534816,
+        "clientWallMs": 383,
+        "cfRay": "a476f5c67b2f6c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm8",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 731,
+      "phase": "warm8"
+    },
+    "started": 1791481535206,
+    "ended": 1791481536082,
+    "clientWallMs": 876,
+    "cfRay": "a476f5cb4e0d6c1b-MIA"
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "reference": {
+      "started": 1791481536460,
+      "ended": 1791481536853,
+      "clientWallMs": 393,
+      "cfRay": "a476f5d31cf76c1b-MIA",
+      "value": {
+        "thread": {
+          "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+          "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+          "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+          "moduleId": "a0d2a1bd-a1b2-4585-8cf4-c155698de431",
+          "runtimeId": "f165104c-cc61-440a-9844-8ee762c7b9f4",
+          "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+          "generation": "measure-250-2",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceWarm9",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791481536088,
+        "ended": 1791481536460,
+        "clientWallMs": 372,
+        "cfRay": "a476f5d0cc686c1b-MIA"
+      }
+    }
+  },
+  {
+    "role": "tardie",
+    "size": 250,
+    "sample": 2,
+    "phase": "warm9",
+    "value": {
+      "objectId": "5abb5cbe2287685073a3089e11ae7521644a75534693fd370b7873a2e8074e37",
+      "moduleId": "7b1e4cfa-e05c-4f1d-b2e0-4d7910917bdc",
+      "runtimeId": "86907c2f-2866-4595-a875-601fc0c0ec52",
+      "version": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd",
+      "generation": "measure-250-2",
+      "protocol": "cold-v3-reference",
+      "actorObjectId": "f3cee5d49a3ca3fd59eaacfe7572579e3ea2a65670aeb1ceee23f63356d2c008",
+      "insideWallMs": 912,
+      "phase": "warm9"
+    },
+    "started": 1791481536855,
+    "ended": 1791481538343,
+    "clientWallMs": 1488,
+    "cfRay": "a476f5d59e1d6c1b-MIA"
+  }
+]

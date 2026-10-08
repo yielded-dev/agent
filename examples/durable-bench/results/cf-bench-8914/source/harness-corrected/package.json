@@ -1,0 +1,13 @@
+{
+  "name": "kom433-spike-01a119d5-measurement",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": { "node": "24.21.0" },
+  "scripts": {
+    "stage": "bun stage.mjs",
+    "counts": "bun counts.mjs",
+    "cpu-worker": "/Users/dan/.vite-plus/js_runtime/node/24.21.0/bin/node cpu-worker.mjs",
+    "cpu-cohorts": "python3 cpu-cohorts.py"
+  }
+}

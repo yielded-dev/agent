@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-08T18:03:38.683Z",
+  "role": "tardie",
+  "key": "1000_0",
+  "lastAcknowledgedTurns": 570,
+  "failedRequest": "GET /diagnostic?key=1000_0",
+  "error": "HttpClientError / ECONNRESET",
+  "nextSeedBatchSubmitted": false,
+  "basis": "The complete 560\u2013570 seed batch acknowledgement was already persisted. The following read-only quiescence probe failed; no next seed input was sent."
+}

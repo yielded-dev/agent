@@ -1,0 +1,50 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-base-50-0",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791475980052,
+      "to": 1791476026405
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-base"
+        },
+        {
+          "key": "$workers.cpuTimeMs",
+          "operation": "exists",
+          "type": "number"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791476096579,
+  "poll": 1,
+  "events": [
+    {
+      "timestamp": 1791475989400,
+      "id": "01M4E4MEWR0000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "633c86da17161617ef0e3d5359ed4034",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "af7e3bc2-21ab-45e4-b0a4-c90f6909baaa"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "role": "pinned",
+  "size": 1000,
+  "sample": 1,
+  "from": 160,
+  "to": 170,
+  "error": "HttpClientError: Transport error (POST https://cf-bench-8914-b124507a-pinned.danieljmerwe.workers.dev/seed?key=1000_1)"
+}

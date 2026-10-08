@@ -1,0 +1,23 @@
+{
+  "complete": false,
+  "failedCohorts": [
+    {
+      "size": 50,
+      "sample": 1,
+      "failures": [],
+      "telemetryComplete": false
+    },
+    {
+      "size": 50,
+      "sample": 2,
+      "failures": [],
+      "telemetryComplete": false
+    },
+    {
+      "size": 50,
+      "sample": 3,
+      "failures": [],
+      "telemetryComplete": false
+    }
+  ]
+}

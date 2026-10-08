@@ -1,0 +1,30 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-base-50-0-constructors",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791475980052,
+      "to": 1791476026405
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-base"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791476096579,
+  "poll": 1,
+  "totalLogs": 1,
+  "rows": [],
+  "shapes": [
+    "{\"type\":\"cf-worker-event\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"level\",\"message\"]}"
+  ]
+}

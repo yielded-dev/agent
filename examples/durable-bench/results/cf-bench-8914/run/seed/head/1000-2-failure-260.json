@@ -1,0 +1,8 @@
+{
+  "role": "head",
+  "size": 1000,
+  "sample": 2,
+  "from": 260,
+  "to": 270,
+  "error": "HttpClientError: Transport error (POST https://cf-bench-8914-b124507a-head.danieljmerwe.workers.dev/seed?key=1000_2)"
+}

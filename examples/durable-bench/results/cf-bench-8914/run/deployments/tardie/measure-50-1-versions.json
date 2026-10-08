@@ -1,0 +1,85 @@
+{
+  "result": {
+    "items": [
+      {
+        "id": "51eac705-b7bf-4477-ac6f-c7713ab0d916",
+        "number": 5,
+        "metadata": {
+          "created_on": "2026-10-08T17:04:39.956713Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "d9a37c1d-5201-423f-824f-3923db630c7e",
+        "number": 4,
+        "metadata": {
+          "created_on": "2026-10-08T16:26:00.289844Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "8e6a9bfa-6248-427d-a3f3-212cca3803c1",
+        "number": 3,
+        "metadata": {
+          "created_on": "2026-10-08T16:13:58.789175Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "eee56206-8273-4c58-9ac4-697bcbe60289",
+        "number": 2,
+        "metadata": {
+          "created_on": "2026-10-08T16:03:08.12029Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      },
+      {
+        "id": "ae8da94f-427e-425a-975d-b351a9730e38",
+        "number": 1,
+        "metadata": {
+          "created_on": "2026-10-08T16:03:06.164307Z",
+          "source": "api",
+          "author_id": "92721146c1e53318ae91f123c8f81ff0",
+          "author_email": "",
+          "has_preview": false
+        },
+        "annotations": {
+          "workers/triggered_by": "upload"
+        }
+      }
+    ]
+  },
+  "success": true,
+  "errors": null,
+  "messages": null,
+  "result_info": {
+    "page": 1,
+    "per_page": 10,
+    "count": 5,
+    "total_count": 5
+  }
+}

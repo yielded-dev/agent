@@ -1,0 +1,11 @@
+{
+  "action": "seed --role tardie --size 250 --sample 2 --resume-at 35",
+  "executed": false,
+  "reason": "Automatic approval review requires separately recorded persisted proof beyond the acknowledged 30-turn prefix before continuation.",
+  "nextAction": "Read-only seed-proof for exactly 35 completed turns; no workload replay.",
+  "resolution": {
+    "proof": "seed-proofs/tardie-250_2-1791480810568/decision.json",
+    "completedPrefix": 35,
+    "action": "Explicit original seed command accepted after separate read-only proof; no indirect bypass"
+  }
+}

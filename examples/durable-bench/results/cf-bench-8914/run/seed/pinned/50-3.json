@@ -1,0 +1,51 @@
+{
+  "role": "pinned",
+  "size": 50,
+  "sample": 3,
+  "fingerprint": "b017b487524e44a4",
+  "stats": {
+    "bytes": 2224128,
+    "tables": {
+      "platform_cloudflare_due_queue": 4,
+      "effect_agent_threads": 1,
+      "effect_agent_canonical_batches": 235,
+      "effect_agent_canonical_records": 603,
+      "effect_agent_record_runs": 368,
+      "effect_agent_tool_declarations": 34,
+      "effect_agent_record_refusals": 0,
+      "effect_agent_checkpoints": 0,
+      "effect_agent_submissions": 50,
+      "effect_agent_submission_ownership": 0,
+      "effect_agent_attempts": 50,
+      "effect_agent_abort_intents": 0,
+      "effect_agent_approval_decisions": 0,
+      "effect_agent_unknown_resolutions": 0,
+      "effect_agent_child_reservations": 0,
+      "effect_agent_child_settlements": 0,
+      "effect_agent_message_deliveries": 0,
+      "effect_agent_worker_stops": 0,
+      "effect_agent_meta": 1,
+      "effect_agent_journal_ranges": 1,
+      "effect_agent_archive_batches": 0,
+      "effect_agent_archive_records": 0,
+      "effect_agent_live_child_reservations": 0,
+      "effect_agent_transfer_commands": 0,
+      "effect_agent_input_intervals": 50,
+      "effect_agent_settlement_spans": 150,
+      "effect_agent_import_fifo": 0,
+      "effect_agent_import_delivery_visits": 0,
+      "effect_agent_transfer_state": 1,
+      "effect_agent_work_index": 1,
+      "effect_agent_work_entries": 0,
+      "effect_agent_schema": 1
+    }
+  },
+  "identity": {
+    "objectId": "f826b0248d3e2dcd9a6a1743711ec0de5b9d24927a3c750729f48d407f0ca9a1",
+    "moduleId": "2d7859f4-8c9b-4b9b-a821-f607a5467043",
+    "runtimeId": "30a202b7-6ff5-4d9e-83d4-53c50da3ca44",
+    "version": "6eabd61f-5ee2-4bb9-8370-f0683a5341a2",
+    "generation": "seed-resume-2",
+    "protocol": "cold-v2"
+  }
+}

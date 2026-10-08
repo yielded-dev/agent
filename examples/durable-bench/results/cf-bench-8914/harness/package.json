@@ -1,0 +1,13 @@
+{
+  "name": "cf-bench-8914-harness",
+  "private": true,
+  "workspaces": [],
+  "type": "module",
+  "scripts": {
+    "build": "bun build.ts",
+    "check": "vp check build.ts contracts.ts deployment.ts main.ts rewrap.ts seed-proof.ts stack.ts summarize.ts telemetry.ts vite.config.ts wrapper.ts",
+    "hosted": "node --experimental-strip-types main.ts",
+    "rewrap": "bun rewrap.ts",
+    "summarize": "bun summarize.ts"
+  }
+}

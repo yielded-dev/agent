@@ -1,0 +1,37 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-tardie-seed-errors",
+    "dry": true,
+    "view": "events",
+    "limit": 200,
+    "timeframe": {
+      "from": 1791474284581,
+      "to": 1791474884581
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-tardie"
+        },
+        {
+          "key": "$metadata.type",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-worker"
+        },
+        {
+          "key": "$workers.durableObjectId",
+          "operation": "eq",
+          "type": "string",
+          "value": "19172615e2858fa839f9feb0d8c68317b1150ac98877c50817d7cdcf9cb36d58"
+        }
+      ]
+    }
+  },
+  "count": 1,
+  "errors": []
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "attempt": 0,
+    "health": {
+      "value": {
+        "generation": "measure-1000-0",
+        "version": "70c2b3d8-f787-4bb9-aa65-68824374c893",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791484163033,
+      "ended": 1791484163299,
+      "clientWallMs": 266,
+      "cfRay": "a47735f3f9e96b89-DFW"
+    },
+    "identity": {
+      "objectId": "2499e47521f17f4376e8ddb031b7689d5414375d5072279696a2e424bd448ce0",
+      "moduleId": "6f2c3fdd-967b-46d5-b00b-5fe3f60b4eeb",
+      "runtimeId": "fecb57c2-dacc-40bd-b997-fc61336c22e8",
+      "version": "70c2b3d8-f787-4bb9-aa65-68824374c893",
+      "generation": "measure-1000-0",
+      "protocol": "cold-v3-reference",
+      "phase": "referenceCold",
+      "algorithm": "mix32-v1",
+      "iterations": 10000000,
+      "checksum": 623056721
+    },
+    "reference": {
+      "started": 1791484164389,
+      "ended": 1791484164783,
+      "clientWallMs": 394,
+      "cfRay": "a47735fbbb4e6b89-DFW",
+      "value": {
+        "thread": {
+          "objectId": "2499e47521f17f4376e8ddb031b7689d5414375d5072279696a2e424bd448ce0",
+          "moduleId": "6f2c3fdd-967b-46d5-b00b-5fe3f60b4eeb",
+          "runtimeId": "fecb57c2-dacc-40bd-b997-fc61336c22e8",
+          "version": "70c2b3d8-f787-4bb9-aa65-68824374c893",
+          "generation": "measure-1000-0",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      }
+    }
+  }
+]

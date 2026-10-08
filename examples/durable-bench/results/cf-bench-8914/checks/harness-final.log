@@ -1,0 +1,4 @@
+$ vp check build.ts contracts.ts deployment.ts main.ts rewrap.ts seed-proof.ts stack.ts summarize.ts telemetry.ts vite.config.ts wrapper.ts ⊘ cache disabled
+pass: All 11 files are correctly formatted (95ms, 16 threads)
+pass: Found no warnings, lint errors, or type errors in 11 files (1.0s, 16 threads)
+

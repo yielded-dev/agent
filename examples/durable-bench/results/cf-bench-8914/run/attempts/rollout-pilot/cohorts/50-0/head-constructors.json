@@ -1,0 +1,54 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-head-50-0-constructors",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791475987406,
+      "to": 1791476039239
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-head"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791476108683,
+  "poll": 1,
+  "totalLogs": 45,
+  "rows": [
+    {
+      "timestamp": 1791475996664,
+      "id": "01M4E4MNZR0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "bbafa14acd52f063785193df6b6b0f87",
+      "executionModel": "durableObject",
+      "durableObjectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "eventType": "jsrpc",
+      "scriptName": "cf-bench-8914-b124507a-head",
+      "scriptVersion": {
+        "id": "aa357f5b-f16c-4853-b9db-dfb113561b0c"
+      },
+      "construction": {
+        "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+        "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+        "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+        "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+        "generation": "measure-50-0",
+        "benchConstructor": true,
+        "kind": "thread"
+      }
+    }
+  ],
+  "shapes": [
+    "{\"type\":\"cf-worker\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"benchConstructor\",\"generation\",\"kind\",\"moduleId\",\"objectId\",\"runtimeId\",\"version\"]}",
+    "{\"type\":\"cf-worker-event\",\"keys\":[\"$metadata\",\"$workers\",\"dataset\",\"source\",\"timestamp\"],\"sourceKeys\":[\"level\",\"message\"]}"
+  ]
+}

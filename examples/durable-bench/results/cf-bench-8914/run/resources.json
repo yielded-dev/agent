@@ -1,0 +1,138 @@
+{
+  "run": "b124507a",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/private/tmp/cf-bench-8914-state-52hIJ9",
+  "output": "/Users/dan/dev/effect-agent/.worktrees/dan-cf-bench-effect-8914/examples/durable-bench/results/cf-bench-8914/run",
+  "targets": [
+    {
+      "role": "base",
+      "name": "cf-bench-8914-b124507a-base",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/base",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "b856828a72334d15a31522d8d044a6c2",
+        "e58e08a5fae244c1bfce55cfe938a69a",
+        "bcf4e098c69d496b9c7ef4bdb9c26869",
+        "48b09398146b40308c51a77d2f699792",
+        "9104a2816164413fbe7e184e628629b8",
+        "070f49e814d44d799e8e900a23b81c99",
+        "8c570339841345ffb23c618448936de9",
+        "ebdeb85c6b3842f3a40df8184bc69376",
+        "798b53f672224a41a11f99f68fbbf8bb",
+        "c02598112f47434daa134391c6b7af0d"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "role": "head",
+      "name": "cf-bench-8914-b124507a-head",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/head",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "63f0a5f09105475685767cb98171d5a6",
+        "46d7ded8ca474dec816faa0df8d1112e",
+        "04adb687a87743f3b4dd4fcec09b3e87",
+        "ec6ee9f1e21846ff86de925dcc6e5633",
+        "21284b44a70a4dc595642bf57aaba99d",
+        "8323465d72fc43748030fff162602a8f",
+        "7c74ae8ce9e84cd490a46e97cb0e0136",
+        "1c7ef676c1974eba9268123eba3526a2",
+        "16ae742cb6b347898b871f22dab28cb9",
+        "22a6875694ad459f82ed7f449a78547d"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "role": "control",
+      "name": "cf-bench-8914-b124507a-control",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/control",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "3ff2a89350ae4886b4f56dbfeaeb43b5",
+        "9177886b6370430180fc92d4a6b8f8a6",
+        "6d3aaa1fdf4d4e8ea37fa9d219971714",
+        "12516362555e436fb0875051596207bd",
+        "694c0d1523094a24b421434b30647e9f",
+        "eee19d7adea5429f91ebbbe26b201c8b",
+        "8b627c7684e8469cabfad22987d2df49",
+        "e95c38baa05e498f90ec89d997197482",
+        "7ab34a2db9b24fb087435e47b149dda4",
+        "876129a572b043c784c16c5cfb65f724"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "role": "pinned",
+      "name": "cf-bench-8914-b124507a-pinned",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/pinned",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "8ef47dbb17fd4dfd932abafa1f9ee61f",
+        "65be1f9fb4a94ac4acbccdd5b06a0b6d",
+        "ce29791440194ed18a4b281d1a2c7aa0",
+        "c80f6260aa2b49e2a63e17c8dca4faa2",
+        "966a03f1a5f94ab1961c37d963a5c59f",
+        "bbc3fe9130ff48e8a067db9384821aa6",
+        "ed7fef14926548cb8796a388af24d9bb",
+        "7338fc62574442c4b878bba32eb5b9ef",
+        "69eb104871674ef58484c9d68fa1e815",
+        "bf7b0a398cb747d682cb55e1749000ea"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "role": "pi",
+      "name": "cf-bench-8914-b124507a-pi",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/pi",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "5c7ad8533fd849cda729e722559a6cb6",
+        "b9133058d029488886d8623623899e54",
+        "b808da0b72d84bffbeeb3afa98f4bb69",
+        "62d614a0df3f4bf6b624fe3885ca6d9e",
+        "d26143256a40402ea5f33d7e6da7c01a",
+        "800a6bffb19342ff8ccbd0dd2abc1588",
+        "84be0dd383e640038471ce42f63c3597",
+        "183a14f0e0b548ce8a3a0364b32ed328",
+        "6b0a41c9b0c94b48a5480b2bca9534a9",
+        "ba3b777cb53a4912945e4b5f028e7bac"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    },
+    {
+      "role": "tardie",
+      "name": "cf-bench-8914-b124507a-tardie",
+      "bundleDirectory": "/private/tmp/cf-bench-8914-bundles/tardie",
+      "generation": "measure-1000-2",
+      "namespaces": [
+        "f18d03e328f24d6cac86a9825dd4c8a2",
+        "4824cbf93b0f4a7fa2c588aba05770c4",
+        "f9484408a0fe4050a04cb078fc4c9890",
+        "92269b2b8e7a4777ba64118fe332a407",
+        "3617634622ba4861a29eca6a304697c6",
+        "700ce9a315af4f4a9b04e64c19a251dd",
+        "cf9ac13614044fdc89411dc23ad8c51f",
+        "0b42b6a5bbb14beaacca0bd32df03815",
+        "a16a1c777ce043b1a519c549d9633f17",
+        "9de3e139dd0543cd87fa961ff6e07f53",
+        "b318f9e088734ab5a34d53032487613c",
+        "b4913a206f1846e0be772df3c1899d4d",
+        "4e560c1d900f4e388865c1cf5fdc468a",
+        "8e23bc0851dc4d1cb343f6205fc3ce7d",
+        "5177b5c6d6844e7d9a98e6310aa2b3b5",
+        "002b7d891ca7437088a23821afc12d89",
+        "5c1563e790324a8a94fbe7b27f15e237",
+        "034cf44ed6564c52b5be6ecd0607a6fa",
+        "3215e8c6a89847ac9a210e50d64114d3",
+        "f42571ef06f14589b12305728e8e47fb"
+      ],
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    }
+  ]
+}

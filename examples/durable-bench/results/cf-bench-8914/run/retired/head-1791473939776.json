@@ -1,0 +1,18 @@
+{
+  "name": "cf-bench-8914-b124507a-head",
+  "role": "head",
+  "workerStatus": 404,
+  "knownNamespaceIds": [
+    "8f567f7ed29340dfa4942b8810d67d6f",
+    "32ea35eaadd54854816038db4891b9d5",
+    "9472ca8dea554fa2829e40bc05f9be33",
+    "ed102032f93a46d689a88268ee7f3af0",
+    "751dbccfedba448b99612e571a90cb8c",
+    "b752b086deed419db567b82250ad58de",
+    "13ac0cf60e2f4651943b89330d12f4e5",
+    "2b4e84f2a1f04445a0b2ca51b9d26943",
+    "17efc8b102e34bd8b8291bf3e19095d5"
+  ],
+  "namespaceIdsRemaining": [],
+  "complete": true
+}

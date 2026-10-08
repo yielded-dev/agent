@@ -1,0 +1,27 @@
+{
+  "role": "pi",
+  "size": 250,
+  "sample": 2,
+  "fingerprint": "dcea9f30b0917245",
+  "stats": {
+    "bytes": 757760,
+    "tables": {
+      "durable_schema": 1,
+      "durable_metadata": 1,
+      "record_ids": 1675,
+      "conversations": 1,
+      "entries": 835,
+      "tasks": 584,
+      "submissions": 250,
+      "documents": 5,
+      "document_revisions": 5
+    }
+  },
+  "identity": {
+    "objectId": "e8a880eb3d1f26298d5cc7cf15e83848990497ee4e7d834872402e2a0e2e7a1d",
+    "moduleId": "03f5eaf5-6aea-44d7-a9f0-f99aa1deb722",
+    "runtimeId": "a392040d-0cbb-4886-84c5-fc8a286fe127",
+    "version": "f4b4a459-7322-4605-8989-fd6845d4b436",
+    "generation": "seed"
+  }
+}

@@ -1,0 +1,1572 @@
+{
+  "query": {
+    "queryId": "cf-bench-8914-b124507a-base-1000-1",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791484329105,
+      "to": 1791484400422
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-base"
+        },
+        {
+          "key": "$workers.cpuTimeMs",
+          "operation": "exists",
+          "type": "number"
+        }
+      ]
+    }
+  },
+  "polledAt": 1791484718963,
+  "poll": 1,
+  "events": [
+    {
+      "timestamp": 1791484363630,
+      "id": "01M4ECM0VE000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "d6392f9438d1b2395e2bf2450dff98ed",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 38,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484363535,
+      "id": "01M4ECM0RF000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "99ee53260f342652b09b379ebbbce2ec",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 49,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484363428,
+      "id": "01M4ECM0N4000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "d77e9a66219b8f1d43880a28533dff71",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 830,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484362593,
+      "id": "01M4ECKZV10000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "d6392f9438d1b2395e2bf2450dff98ed",
+      "cpuTimeMs": 4,
+      "wallTimeMs": 34,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "fingerprint",
+      "rpcMethods": [
+        "fingerprint"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484362542,
+      "id": "01M4ECKZSE000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "2c385c13c007943da3eefe7fad022016",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 69,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484362419,
+      "id": "01M4ECKZNK000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "29003ddcbf9464000fa70028b599ebf0",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 681,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484362394,
+      "id": "01M4ECKZMT000000000000003D",
+      "metadataType": "cf-worker-event",
+      "traceId": "99ee53260f342652b09b379ebbbce2ec",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 40,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "stats",
+      "rpcMethods": [
+        "stats"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484362394,
+      "id": "01M4ECKZMT0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "07a7769d02cc1653a5e99e1d24cf0fbd",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 125,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484362173,
+      "id": "01M4ECKZDX000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "d77e9a66219b8f1d43880a28533dff71",
+      "cpuTimeMs": 547,
+      "wallTimeMs": 824,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm9",
+      "rpcMethods": [
+        "warm9"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484362172,
+      "id": "01M4ECKZDW0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "af0085d3316af64f17ab7a9dee78b082",
+      "cpuTimeMs": 6,
+      "wallTimeMs": 133,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484361680,
+      "id": "01M4ECKYYG000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "f05ee712ed45edb3a7db2822dc9988a8",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484361551,
+      "id": "01M4ECKYTF000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "bd92f8c002bb1e49ca1993f077286384",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 916,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484361409,
+      "id": "01M4ECKYP10000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "2c385c13c007943da3eefe7fad022016",
+      "cpuTimeMs": 29,
+      "wallTimeMs": 64,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm9",
+      "rpcMethods": [
+        "referenceWarm9"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484361409,
+      "id": "01M4ECKYP10000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "bb053080272139ff8ddfa3403057d892",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 123,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484361208,
+      "id": "01M4ECKYFR0000000000000117",
+      "metadataType": "cf-worker-event",
+      "traceId": "29003ddcbf9464000fa70028b599ebf0",
+      "cpuTimeMs": 439,
+      "wallTimeMs": 678,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm8",
+      "rpcMethods": [
+        "warm8"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484361207,
+      "id": "01M4ECKYFQ0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "36c273202a913ed28982ed2668e914b1",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 127,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484360579,
+      "id": "01M4ECKXW3000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "b70e38f5976c4af681ad690e2013b6f8",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484360556,
+      "id": "01M4ECKXVC0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "f05ee712ed45edb3a7db2822dc9988a8",
+      "cpuTimeMs": 28,
+      "wallTimeMs": 61,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm8",
+      "rpcMethods": [
+        "referenceWarm8"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484360556,
+      "id": "01M4ECKXVC0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "85cafdbd8de6ea097779b21110794cd7",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 131,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484360456,
+      "id": "01M4ECKXR8000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "186a1abeb9fe851d1edd2bf14cc571f8",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 778,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484360339,
+      "id": "01M4ECKXMK000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "bd92f8c002bb1e49ca1993f077286384",
+      "cpuTimeMs": 635,
+      "wallTimeMs": 910,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm7",
+      "rpcMethods": [
+        "warm7"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484360339,
+      "id": "01M4ECKXMK0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "a91fdf127abca98e923f7061aca5c0b1",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 130,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484359606,
+      "id": "01M4ECKWXP0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "b70e38f5976c4af681ad690e2013b6f8",
+      "cpuTimeMs": 28,
+      "wallTimeMs": 60,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm7",
+      "rpcMethods": [
+        "referenceWarm7"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484359606,
+      "id": "01M4ECKWXP0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "d1b1739c77b1724fd1c9e13ba42c8120",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 125,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484359588,
+      "id": "01M4ECKWX4000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "c18036b572af6911bc4695e0966fca4f",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 85,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484359450,
+      "id": "01M4ECKWRT000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "10ccced01158a27fb075440bc4978ff1",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 755,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484359413,
+      "id": "01M4ECKWQN000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "186a1abeb9fe851d1edd2bf14cc571f8",
+      "cpuTimeMs": 514,
+      "wallTimeMs": 772,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm6",
+      "rpcMethods": [
+        "warm6"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484359413,
+      "id": "01M4ECKWQN0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "40f12b8d28b30423486d062ced4d6de4",
+      "cpuTimeMs": 4,
+      "wallTimeMs": 130,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484358706,
+      "id": "01M4ECKW1J0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "c18036b572af6911bc4695e0966fca4f",
+      "cpuTimeMs": 41,
+      "wallTimeMs": 76,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm6",
+      "rpcMethods": [
+        "referenceWarm6"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484358706,
+      "id": "01M4ECKW1J0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "a0e4fbf6f7d1c9bc57924443b8a6e433",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 138,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484358528,
+      "id": "01M4ECKVW0000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "10ccced01158a27fb075440bc4978ff1",
+      "cpuTimeMs": 490,
+      "wallTimeMs": 742,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm5",
+      "rpcMethods": [
+        "warm5"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484358527,
+      "id": "01M4ECKVVZ0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "db26e5841f5d8fe649bd3dae574db54d",
+      "cpuTimeMs": 6,
+      "wallTimeMs": 128,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484358343,
+      "id": "01M4ECKVP7000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "d3f7fb83058018b072ea4c02b1903bca",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 69,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484358212,
+      "id": "01M4ECKVJ4000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "18ab9295a4dedb4143fd3359cc6e6739",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 990,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484357399,
+      "id": "01M4ECKTRQ0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "d3f7fb83058018b072ea4c02b1903bca",
+      "cpuTimeMs": 29,
+      "wallTimeMs": 63,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm5",
+      "rpcMethods": [
+        "referenceWarm5"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484357399,
+      "id": "01M4ECKTRQ0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "0b29a9955ffb89b41fb49624cab845f5",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 129,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484357206,
+      "id": "01M4ECKTJP000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "18ab9295a4dedb4143fd3359cc6e6739",
+      "cpuTimeMs": 730,
+      "wallTimeMs": 984,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm4",
+      "rpcMethods": [
+        "warm4"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484357205,
+      "id": "01M4ECKTJN0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "0c40d20bb70a8137f316dd24fb4e34e6",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 129,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484357164,
+      "id": "01M4ECKTHC000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "099e193132f8d1896a06aa43f9f26d2c",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 69,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484357035,
+      "id": "01M4ECKTDB000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "def23f9cbf620aeb5853fa3a458e3c2d",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 644,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484356596,
+      "id": "01M4ECKSZM0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "099e193132f8d1896a06aa43f9f26d2c",
+      "cpuTimeMs": 29,
+      "wallTimeMs": 64,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm4",
+      "rpcMethods": [
+        "referenceWarm4"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484356596,
+      "id": "01M4ECKSZM0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "9752d6aed5816284ff207a0205d0fb13",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 127,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484356444,
+      "id": "01M4ECKSTW000000000000010Y",
+      "metadataType": "cf-worker-event",
+      "traceId": "def23f9cbf620aeb5853fa3a458e3c2d",
+      "cpuTimeMs": 387,
+      "wallTimeMs": 638,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm3",
+      "rpcMethods": [
+        "warm3"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484356444,
+      "id": "01M4ECKSTW0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "def2c4a150af9fd6c6e516e8a774303a",
+      "cpuTimeMs": 5,
+      "wallTimeMs": 132,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484356307,
+      "id": "01M4ECKSPK000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "1e7286e0f94c36604cf69e130899b881",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 72,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484356177,
+      "id": "01M4ECKSJH000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "6db9eb09983d3998526b14ea281cd1d5",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 736,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484355933,
+      "id": "01M4ECKSAX0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "1e7286e0f94c36604cf69e130899b881",
+      "cpuTimeMs": 28,
+      "wallTimeMs": 61,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm3",
+      "rpcMethods": [
+        "referenceWarm3"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484355933,
+      "id": "01M4ECKSAX0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "1e753652da1e15235c6acf30a2ae1804",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 132,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484355794,
+      "id": "01M4ECKS6J000000000000010R",
+      "metadataType": "cf-worker-event",
+      "traceId": "6db9eb09983d3998526b14ea281cd1d5",
+      "cpuTimeMs": 456,
+      "wallTimeMs": 730,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm2",
+      "rpcMethods": [
+        "warm2"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484355793,
+      "id": "01M4ECKS6H0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "f85bc8f7c2900206a9d93a010ad374b5",
+      "cpuTimeMs": 8,
+      "wallTimeMs": 131,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484352337,
+      "id": "01M4ECKNTH0000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "7ba832416215f362d9b458a2425a50a9",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "63d80171-a46d-4974-ae90-be49406742d0"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484349284,
+      "id": "01M4ECKJV40000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "a9b9065157eb7381d58e9cf3fb1f305c",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "63d80171-a46d-4974-ae90-be49406742d0"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484349229,
+      "id": "01M4ECKJSD000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "1b02ea357f3f2c91159380f51dd3acd2",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 79,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484349088,
+      "id": "01M4ECKJN0000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "eec8344a4f7a6ea566ad3b7625adf42e",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 761,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484348443,
+      "id": "01M4ECKJ0V0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "1b02ea357f3f2c91159380f51dd3acd2",
+      "cpuTimeMs": 37,
+      "wallTimeMs": 72,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm2",
+      "rpcMethods": [
+        "referenceWarm2"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484348443,
+      "id": "01M4ECKJ0V0000000000000001",
+      "metadataType": "cf-worker-event",
+      "traceId": "c8630c09d7261e4703245b3a8df5f92b",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 136,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484348271,
+      "id": "01M4ECKHVF000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "aff6660b38932a5e9819483529753f83",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 68,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484348270,
+      "id": "01M4ECKHVE000000000000010R",
+      "metadataType": "cf-worker-event",
+      "traceId": "eec8344a4f7a6ea566ad3b7625adf42e",
+      "cpuTimeMs": 494,
+      "wallTimeMs": 756,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "warm1",
+      "rpcMethods": [
+        "warm1"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484348269,
+      "id": "01M4ECKHVD0000000000000019",
+      "metadataType": "cf-worker-event",
+      "traceId": "573658b913ca6b375db3e03d44188682",
+      "cpuTimeMs": 6,
+      "wallTimeMs": 130,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484348071,
+      "id": "01M4ECKHN7000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "03e6d59738bd73cf399ccd8db3d0b2ff",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1302,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484347701,
+      "id": "01M4ECKH9N0000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "aff6660b38932a5e9819483529753f83",
+      "cpuTimeMs": 30,
+      "wallTimeMs": 61,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceWarm1",
+      "rpcMethods": [
+        "referenceWarm1"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484347434,
+      "id": "01M4ECKH1A000000000000013G",
+      "metadataType": "cf-worker-event",
+      "traceId": "03e6d59738bd73cf399ccd8db3d0b2ff",
+      "cpuTimeMs": 868,
+      "wallTimeMs": 1295,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "cold",
+      "rpcMethods": [
+        "cold"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484347434,
+      "id": "01M4ECKH1A0000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "23498084e15573ea83efcee6929caa5e",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 124,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "canceled",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484347433,
+      "id": "01M4ECKH19000000000000001C",
+      "metadataType": "cf-worker-event",
+      "traceId": "ef045372217041635cbbaf16a732a165",
+      "cpuTimeMs": 12,
+      "wallTimeMs": 134,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484346841,
+      "id": "01M4ECKGES0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "03e6d59738bd73cf399ccd8db3d0b2ff",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "cold",
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484343659,
+      "id": "01M4ECKDBB0000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "c5fba7053479f53ec2967c780e9f3270",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "63d80171-a46d-4974-ae90-be49406742d0"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484343539,
+      "id": "01M4ECKD7K000000000000000J",
+      "metadataType": "cf-worker-event",
+      "traceId": "30378a14bb7e8d4a391f09ce4b4c648d",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 71,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484343429,
+      "id": "01M4ECKD450000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "30378a14bb7e8d4a391f09ce4b4c648d",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "aborted",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "restart",
+      "rpcMethods": [
+        "restart"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484343429,
+      "id": "01M4ECKD450000000000000005",
+      "metadataType": "cf-worker",
+      "traceId": "30378a14bb7e8d4a391f09ce4b4c648d",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "restart",
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484343394,
+      "id": "01M4ECKD320000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "30378a14bb7e8d4a391f09ce4b4c648d",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 31,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "identity",
+      "rpcMethods": [
+        "identity"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484343341,
+      "id": "01M4ECKD1D000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "3302d5b00d0eebcb89c572b6b359ca35",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 156,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484343208,
+      "id": "01M4ECKCX80000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "3302d5b00d0eebcb89c572b6b359ca35",
+      "cpuTimeMs": 118,
+      "wallTimeMs": 149,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referenceCold",
+      "rpcMethods": [
+        "referenceCold"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484340065,
+      "id": "01M4ECK9V10000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "c48bd3996bdb359b57d8af74892d9456",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "63d80171-a46d-4974-ae90-be49406742d0"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484339784,
+      "id": "01M4ECK9J8000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "7e7e44ac164d5b00e19c81d58e5e9add",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 166,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484339581,
+      "id": "01M4ECK9BX0000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "7e7e44ac164d5b00e19c81d58e5e9add",
+      "cpuTimeMs": 123,
+      "wallTimeMs": 156,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "referencePrime",
+      "rpcMethods": [
+        "referencePrime"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484339564,
+      "id": "01M4ECK9BC000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "dad6a271ff0927732df6743ff6feccc2",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 369,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484339445,
+      "id": "01M4ECK97N000000000000001Q",
+      "metadataType": "cf-worker-event",
+      "traceId": "dad6a271ff0927732df6743ff6feccc2",
+      "cpuTimeMs": 77,
+      "wallTimeMs": 143,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "identity",
+      "rpcMethods": [
+        "identity"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791484339445,
+      "id": "01M4ECK97N0000000000000001",
+      "metadataType": "cf-worker",
+      "traceId": "dad6a271ff0927732df6743ff6feccc2",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "67ea61c7767b397ba1a00f932fa900adf3e9669d508a419c15e1a8c3cdb8a876",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": "identity",
+      "rpcMethods": []
+    },
+    {
+      "timestamp": 1791484339110,
+      "id": "01M4ECK8X60000000000000002",
+      "metadataType": "cf-worker-event",
+      "traceId": "1ccbf1e895413e1f9996fd625c80691a",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "scriptName": "cf-bench-8914-b124507a-base",
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "ca153f46-9fb5-4335-8d08-3df9c2185281"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    }
+  ]
+}

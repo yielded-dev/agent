@@ -1,0 +1,38 @@
+{
+  "onlyReplaced": "/Users/dan/dev/effect-agent/.worktrees/dan-cf-bench-effect-8914/node_modules/.bun/effect@4.0.0/node_modules/effect",
+  "lockfileSha256": "574fa0aff46d96f79a01c9f0125154c96266363804f47a0265c5cad564952abf",
+  "checks": [
+    {
+      "variant": "base",
+      "command": [
+        "vp",
+        "check",
+        "--no-fmt",
+        "packages/effect-agent/src",
+        "packages/storage-sql/src",
+        "packages/storage-cloudflare/src",
+        "packages/platform-cloudflare/src",
+        "examples/durable-bench/src",
+        "examples/durable-bench/bench"
+      ],
+      "exitCode": 0
+    },
+    {
+      "variant": "head",
+      "command": [
+        "vp",
+        "check",
+        "--no-fmt",
+        "packages/effect-agent/src",
+        "packages/storage-sql/src",
+        "packages/storage-cloudflare/src",
+        "packages/platform-cloudflare/src",
+        "examples/durable-bench/src",
+        "examples/durable-bench/bench"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "pinnedRestored": true,
+  "lockfileUnchanged": true
+}

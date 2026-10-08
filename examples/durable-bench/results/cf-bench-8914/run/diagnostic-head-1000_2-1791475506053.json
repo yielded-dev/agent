@@ -1,0 +1,68 @@
+[
+  {
+    "role": "head",
+    "method": "identity",
+    "key": "1000_2",
+    "result": {
+      "value": {
+        "objectId": "1d2eaf1dc9c0e1b6704f500b531ff07c441e75cb115a972a6378e4ea4ad1eea1",
+        "moduleId": "37d69585-2202-487b-a13a-0be71c204c09",
+        "runtimeId": "9d84e8c1-1f28-4c6f-9be9-2438aa3e5b38",
+        "version": "b8167c8a-9a44-41ae-9026-2c1f2aecfeb6",
+        "generation": "seed"
+      },
+      "started": 1791475504000,
+      "ended": 1791475505794,
+      "clientWallMs": 1794,
+      "cfRay": "a476628e5956fc98-KIX"
+    }
+  },
+  {
+    "role": "head",
+    "method": "stats",
+    "key": "1000_2",
+    "result": {
+      "value": {
+        "bytes": 8552448,
+        "tables": {
+          "platform_cloudflare_due_queue": 4,
+          "effect_agent_threads": 1,
+          "effect_agent_canonical_batches": 1215,
+          "effect_agent_canonical_records": 3123,
+          "effect_agent_record_runs": 1908,
+          "effect_agent_tool_declarations": 174,
+          "effect_agent_record_refusals": 0,
+          "effect_agent_checkpoints": 0,
+          "effect_agent_submissions": 260,
+          "effect_agent_submission_ownership": 0,
+          "effect_agent_attempts": 260,
+          "effect_agent_abort_intents": 0,
+          "effect_agent_approval_decisions": 0,
+          "effect_agent_unknown_resolutions": 0,
+          "effect_agent_child_reservations": 0,
+          "effect_agent_child_settlements": 0,
+          "effect_agent_message_deliveries": 0,
+          "effect_agent_worker_stops": 0,
+          "effect_agent_meta": 1,
+          "effect_agent_journal_ranges": 4,
+          "effect_agent_archive_batches": 0,
+          "effect_agent_archive_records": 0,
+          "effect_agent_live_child_reservations": 0,
+          "effect_agent_transfer_commands": 0,
+          "effect_agent_input_intervals": 260,
+          "effect_agent_settlement_spans": 780,
+          "effect_agent_import_fifo": 0,
+          "effect_agent_import_delivery_visits": 0,
+          "effect_agent_transfer_state": 1,
+          "effect_agent_work_index": 1,
+          "effect_agent_work_entries": 0,
+          "effect_agent_schema": 1
+        }
+      },
+      "started": 1791475505795,
+      "ended": 1791475506053,
+      "clientWallMs": 258,
+      "cfRay": "a4766297deacfc98-KIX"
+    }
+  }
+]

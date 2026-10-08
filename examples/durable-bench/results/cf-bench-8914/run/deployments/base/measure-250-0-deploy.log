@@ -1,0 +1,53 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[10:21:56.091] INFO (#1): Deploy · cf-bench-8914-b124507a-base
+[10:21:56.091] INFO (#1): Importing stack module
+[10:21:56.782] INFO (#1): Resolving stack services
+[10:21:56.792] INFO (#1): Loading stack state
+[10:21:56.793] INFO (#1): Computing plan
+[10:21:56.798] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[10:21:56.806] INFO (#1): Plan ready (715ms)
+[10:21:56.806] INFO (#1): Plan: 1 to update, 1 binding changes
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker] update
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] update
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] noop
+[10:21:56.806] INFO (#1): [cf-bench-8914-worker/THREADS_50_3] noop
+[10:21:56.806] INFO (#1): 
+[10:21:56.809] INFO (#765): [cf-bench-8914-worker] updating
+[10:21:56.809] INFO (#765): Cloudflare Worker reconcile: starting cf-bench-8914-b124507a-base
+[10:21:56.809] INFO (#765): Cloudflare Worker reconcile: durable objects [{"logicalId":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","className":"C50_2"},{"logicalId":"THREADS_50_3","className":"C50_3"}]
+[10:21:57.010] INFO (#765): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2;THREADS_50_3=C50_3"]
+[10:21:57.010] INFO (#765): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2;THREADS_50_3=C50_3"]
+[10:21:57.011] INFO (#765): Cloudflare Worker update: preparing bundle for cf-bench-8914-b124507a-base
+[10:21:57.019] INFO (#765): Cloudflare Worker update: uploading script for cf-bench-8914-b124507a-base
+[10:21:57.019] INFO (#765): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2","THREADS_50_3":"C50_3"},"currentDoClassNameByLogicalId":{"THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2","THREADS_50_3":"C50_3"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[10:21:59.254] INFO (#765): [cf-bench-8914-worker] updated — Uploading worker (3.29 MB) ... (2.4s)
+[10:21:59.257] INFO (#979): [cf-bench-8914-worker] updated — Uploading worker (3.29 MB) ... (2.4s)
+[10:21:59.259] INFO (#1): 
+[10:21:59.259] INFO (#1): Done: 1 succeeded (2.5s)
+{
+  workerName: 'cf-bench-8914-b124507a-base',
+  url: 'https://cf-bench-8914-b124507a-base.danieljmerwe.workers.dev',
+  namespaces: {
+    C1000_0: '798b53f672224a41a11f99f68fbbf8bb',
+    C1000_1: 'b856828a72334d15a31522d8d044a6c2',
+    C1000_2: 'e58e08a5fae244c1bfce55cfe938a69a',
+    C250_0: 'bcf4e098c69d496b9c7ef4bdb9c26869',
+    C250_1: '48b09398146b40308c51a77d2f699792',
+    C250_2: '9104a2816164413fbe7e184e628629b8',
+    C50_0: '070f49e814d44d799e8e900a23b81c99',
+    C50_1: '8c570339841345ffb23c618448936de9',
+    C50_2: 'ebdeb85c6b3842f3a40df8184bc69376',
+    C50_3: 'c02598112f47434daa134391c6b7af0d'
+  }
+}

@@ -1,0 +1,76 @@
+[
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_3",
+        "generation": "seed-resume-2",
+        "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+        "objects": [
+          {
+            "objectId": "c8c7a019ff76b9f24b482addf7f6f87d49108d47ea08226fdc9e812bf5d34dfe",
+            "moduleId": "edcb9ab8-c899-4d83-a054-dd1d24875a9d",
+            "runtimeId": "b3ee8ce3-c4f7-4119-84e2-88d5546cf780",
+            "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "actorObjectId": "6ad25681ac564f1b5ab32d4abd58762859dec70cea3c5ab0afb09db7e515f490",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "6ad25681ac564f1b5ab32d4abd58762859dec70cea3c5ab0afb09db7e515f490",
+            "moduleId": "68f0968a-58ca-48f1-90e3-e485b525a443",
+            "runtimeId": "eee3cc42-14e5-4bb6-a4b7-686aea6a689e",
+            "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791477026995,
+      "ended": 1791477027990,
+      "clientWallMs": 995,
+      "cfRay": "a47687bb4a3052b3-OTP"
+    }
+  },
+  {
+    "afterTurn": 50,
+    "result": {
+      "value": {
+        "key": "50_3",
+        "generation": "seed-resume-2",
+        "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+        "objects": [
+          {
+            "objectId": "c8c7a019ff76b9f24b482addf7f6f87d49108d47ea08226fdc9e812bf5d34dfe",
+            "moduleId": "edcb9ab8-c899-4d83-a054-dd1d24875a9d",
+            "runtimeId": "5d95d9b2-1438-41d3-a3c3-0dded609188c",
+            "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "actorObjectId": "6ad25681ac564f1b5ab32d4abd58762859dec70cea3c5ab0afb09db7e515f490",
+            "kind": "thread",
+            "restarted": true
+          },
+          {
+            "objectId": "6ad25681ac564f1b5ab32d4abd58762859dec70cea3c5ab0afb09db7e515f490",
+            "moduleId": "68f0968a-58ca-48f1-90e3-e485b525a443",
+            "runtimeId": "24580313-39d3-4ccf-b115-482486d0321f",
+            "version": "d9a37c1d-5201-423f-824f-3923db630c7e",
+            "generation": "seed-resume-2",
+            "protocol": "cold-v2",
+            "kind": "actor",
+            "restarted": true
+          }
+        ]
+      },
+      "started": 1791477029088,
+      "ended": 1791477030102,
+      "clientWallMs": 1014,
+      "cfRay": "a47687c86dae52b3-OTP"
+    }
+  }
+]

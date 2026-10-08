@@ -1,0 +1,11 @@
+{
+  "role": "pi",
+  "generation": "measure-250-2",
+  "route": "/health",
+  "attempt": 1,
+  "started": 1791481417414,
+  "ended": 1791481417602,
+  "status": 412,
+  "cfRay": "a476f2eb6a34dfe7-MAD",
+  "workloadExecuted": false
+}

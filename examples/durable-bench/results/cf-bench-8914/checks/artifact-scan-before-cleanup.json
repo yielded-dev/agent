@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-08T18:43:21.883713+00:00",
+  "filesScanned": 1181,
+  "bytesScanned": 50082069,
+  "exactCredentialLabelsChecked": [
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "BENCH_TOKEN"
+  ],
+  "privateStatePresent": true,
+  "findings": [],
+  "complete": true,
+  "excludedDirectoryNames": [
+    ".cache",
+    ".git",
+    ".vite",
+    "node_modules"
+  ]
+}

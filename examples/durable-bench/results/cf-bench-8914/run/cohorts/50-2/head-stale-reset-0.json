@@ -1,0 +1,33 @@
+{
+  "identity": {
+    "objectId": "946d862f7ee4850a010016e68604926681a0558ffcebb6e122eb8177ad72f9a6",
+    "moduleId": "3e9022cf-eadb-4ad3-b6f0-97830c55be6a",
+    "runtimeId": "3b4bc8d1-c6d4-41ce-82b6-1669d9529e66",
+    "version": "13317316-dbfc-4f52-8504-a6648f1475e5",
+    "generation": "measure-50-1",
+    "protocol": "cold-v3-reference"
+  },
+  "reset": {
+    "value": {
+      "key": "50_2",
+      "generation": "measure-50-2",
+      "version": "fa22cf34-7eb6-42a3-b67a-33fa9ae8ef6d",
+      "objects": [
+        {
+          "objectId": "946d862f7ee4850a010016e68604926681a0558ffcebb6e122eb8177ad72f9a6",
+          "moduleId": "3e9022cf-eadb-4ad3-b6f0-97830c55be6a",
+          "runtimeId": "3b4bc8d1-c6d4-41ce-82b6-1669d9529e66",
+          "version": "13317316-dbfc-4f52-8504-a6648f1475e5",
+          "generation": "measure-50-1",
+          "protocol": "cold-v3-reference",
+          "kind": "thread",
+          "restarted": true
+        }
+      ]
+    },
+    "started": 1791479386786,
+    "ended": 1791479387136,
+    "clientWallMs": 350,
+    "cfRay": "a476c157aa1dd3fb-KIX"
+  }
+}

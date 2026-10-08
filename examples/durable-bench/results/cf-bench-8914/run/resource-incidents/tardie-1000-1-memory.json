@@ -1,0 +1,66 @@
+{
+  "role": "tardie",
+  "fixture": "1000_1",
+  "phase": "seed",
+  "failedBatch": {
+    "from": 990,
+    "to": 1000
+  },
+  "lastAcknowledgedPrefixBeforeFailure": 990,
+  "persistedSuccessfulPrefixAfterFailure": 998,
+  "continuationInputs": [
+    "h998",
+    "h999"
+  ],
+  "proofDecisions": [
+    "seed-proofs/tardie-1000_1-1791483402143/decision.json",
+    "seed-proofs/tardie-1000_1-1791483441063/decision.json"
+  ],
+  "finalFingerprint": "ac520308146f2a8f",
+  "finalSeedReceipt": "seed/tardie/1000-1.json",
+  "clientFailureReceipt": "seed/tardie/1000-1-failure-990.json",
+  "outcomeRecords": [
+    {
+      "timestamp": 1791483237677,
+      "id": "01M4EBHN9D000000000000004P",
+      "metadataType": "cf-worker-event",
+      "traceId": "21792b49687a2c5be6d4bbcc2d9797c1",
+      "cpuTimeMs": 33,
+      "wallTimeMs": 5568,
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "outcome": "exceededMemory",
+      "scriptVersion": {
+        "id": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd"
+      },
+      "truncated": false,
+      "rpcMethod": "seed",
+      "rpcMethods": [
+        "seed"
+      ],
+      "rpcCallCount": 1
+    },
+    {
+      "timestamp": 1791483237677,
+      "id": "01M4EBHN9D000000000000002E",
+      "metadataType": "cf-worker-event",
+      "traceId": "0de8a29eefb569c0fb17cc31ec8182f4",
+      "cpuTimeMs": 4709,
+      "wallTimeMs": 5499,
+      "executionModel": "durableObject",
+      "eventType": "alarm",
+      "durableObjectId": "349ec998b1f02c369db6d8b96b745a4690230e3496e219caa820dd81acf8c615",
+      "scriptName": "cf-bench-8914-b124507a-tardie",
+      "outcome": "exceededMemory",
+      "scriptVersion": {
+        "id": "4f9d6a85-f17c-49c5-bfbb-2d4723b3e3fd"
+      },
+      "truncated": false,
+      "rpcMethod": null,
+      "rpcMethods": []
+    }
+  ],
+  "note": "One observed seed RPC failure is represented by two exceededMemory invocation records (seed RPC and alarm) at the same timestamp on the same Thread Object. The completed prefix was proved before any new input; no ambiguous input was replayed."
+}

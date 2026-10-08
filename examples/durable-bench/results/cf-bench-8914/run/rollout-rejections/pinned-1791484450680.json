@@ -1,0 +1,11 @@
+{
+  "role": "pinned",
+  "generation": "measure-1000-1",
+  "route": "/health",
+  "attempt": 1,
+  "started": 1791484450680,
+  "ended": 1791484450701,
+  "status": 412,
+  "cfRay": "a4773cf8f8048ac8-SJC",
+  "workloadExecuted": false
+}

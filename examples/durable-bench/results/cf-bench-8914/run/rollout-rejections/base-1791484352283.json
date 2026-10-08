@@ -1,0 +1,11 @@
+{
+  "role": "base",
+  "generation": "measure-1000-1",
+  "route": "/warm2?key=1000_1",
+  "attempt": 1,
+  "started": 1791484352283,
+  "ended": 1791484352352,
+  "status": 412,
+  "cfRay": "a4773a921c25bc84-DFW",
+  "workloadExecuted": false
+}

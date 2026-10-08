@@ -1,0 +1,291 @@
+{
+  "task": "cf-bench-8914",
+  "auditedAt": "2026-10-08T18:47:12.061Z",
+  "result": "Workload coverage, seed/final fingerprints and deployment provenance verified; cold telemetry gaps and supporting Actor reincarnations qualified below.",
+  "scope": {
+    "roles": [
+      "base",
+      "head",
+      "control",
+      "pinned",
+      "pi",
+      "tardie"
+    ],
+    "acceptedCohorts": [
+      "50-1",
+      "50-2",
+      "50-3",
+      "250-0",
+      "250-1",
+      "250-2",
+      "1000-0",
+      "1000-1",
+      "1000-2"
+    ],
+    "phases": [
+      "cold",
+      "warm1",
+      "warm2",
+      "warm3",
+      "warm4",
+      "warm5",
+      "warm6",
+      "warm7",
+      "warm8",
+      "warm9"
+    ],
+    "excluded": "50-0 rollout pilot; its six saved Object identities are disjoint from accepted Objects.",
+    "method": "Local read-only artifact/schema/hash inspection and revalidation of saved seed proofs. No hosted calls, new workloads, tests or framework changes."
+  },
+  "coverage": {
+    "cohorts": 9,
+    "receipts": 540,
+    "uniqueMainObjects": 54,
+    "uniqueSupportingActors": 9,
+    "mainAndActorSetsDisjoint": true,
+    "workloadIntents": 540,
+    "workloadResponses": 540,
+    "duplicateOrMissingRolePhases": 0,
+    "declaredWorkloadFailures": 0,
+    "perCohort": {
+      "receipts": 60,
+      "roles": 6,
+      "seedsMatched": 6,
+      "finalFingerprintsMatched": 6,
+      "deploymentsMatched": 6
+    },
+    "checks": "Exact ordered cold/warm1..9 coverage; one seeded Object per role/cohort; matching intent/reference/result pairs; ordered client intervals. Saved continuations at 50-1 and 250-2 contain no duplicate workload attempts."
+  },
+  "fingerprints": {
+    "50": {
+      "seed": "b017b487524e44a4",
+      "postRun": "b73859cee894aca6",
+      "seedMatches": 18,
+      "postRunMatches": 18
+    },
+    "250": {
+      "seed": "dcea9f30b0917245",
+      "postRun": "f6e15b16d798144d",
+      "seedMatches": 18,
+      "postRunMatches": 18
+    },
+    "1000": {
+      "seed": "ac520308146f2a8f",
+      "postRun": "968717ce90067c11",
+      "seedMatches": 18,
+      "postRunMatches": 18
+    },
+    "boundaryCounts": "All 54 fixtures have size admissions/messages before measurement and size+10 afterward. All 36 Yielded fixtures also have matching attempts and zero ownership/work entries at both boundaries."
+  },
+  "seeds": {
+    "acknowledgedBatches": 2803,
+    "acknowledgedInputTurns": 23376,
+    "inputTurnsProvedAfterLostAcknowledgements": 24,
+    "totalInputTurns": 23400,
+    "prefixCoverage": "All 54 chains reach the exact size without overlapping acknowledged ranges. Four gaps totaling 24 inputs have persisted terminal-prefix proofs.",
+    "resumeReceipts": 9,
+    "terminalProofsLocallyRevalidated": 5,
+    "terminalProofs": [
+      {
+        "fixture": "tardie/250-1",
+        "acknowledged": 207,
+        "proved": 208
+      },
+      {
+        "fixture": "tardie/250-2",
+        "acknowledged": 30,
+        "proved": 35
+      },
+      {
+        "fixture": "tardie/1000-0",
+        "acknowledged": 570,
+        "proved": 570
+      },
+      {
+        "fixture": "tardie/1000-1",
+        "acknowledged": 990,
+        "proved": 998
+      },
+      {
+        "fixture": "pinned/1000-2",
+        "acknowledged": 820,
+        "proved": 830
+      }
+    ],
+    "acknowledgedOnlyResumptions": [
+      {
+        "fixture": "control/1000-0",
+        "completed": 950
+      },
+      {
+        "fixture": "base/1000-1",
+        "completed": 440
+      },
+      {
+        "fixture": "pinned/1000-1",
+        "completed": 160
+      },
+      {
+        "fixture": "head/1000-2",
+        "completed": 260
+      }
+    ],
+    "acknowledgedOnlyChecks": "Saved fresh seed-resume version, matching acknowledged count, admissions/attempts and zero ownership/work entries.",
+    "tardieFinalSeedQuietSnapshots": 9,
+    "quietCriterion": "Final afterTurn equals seed size; quiet=true, alarm=null, watchdog={}. Point-in-time seed observation."
+  },
+  "incarnations": {
+    "main": {
+      "coldResetIdentitiesMatched": 54,
+      "newRuntimeComparedWithSeedAndReference": 54,
+      "newVersionComparedWithSeed": 54,
+      "sameModuleAsPrimedReference": 54,
+      "warmModuleRuntimeVersionMatches": 486,
+      "coldDefinition": "Fresh main DO incarnation after reset on the confirmed measurement version; module code and the plain-JS reference were already loaded and primed.",
+      "constructorTraceMatches": 50,
+      "constructorTraceSnapshotAt": "2026-10-08T18:47:12.061Z",
+      "missingTraceEvidence": [
+        {
+          "fixture": "base/50-2",
+          "coldInvocationRecords": 0,
+          "matchingConstructorRecords": 0,
+          "polledAt": "2026-10-08T17:13:44.565Z"
+        },
+        {
+          "fixture": "tardie/250-0",
+          "coldInvocationRecords": 0,
+          "matchingConstructorRecords": 0,
+          "polledAt": "2026-10-08T17:28:59.505Z"
+        },
+        {
+          "fixture": "control/250-1",
+          "coldInvocationRecords": 1,
+          "matchingConstructorRecords": 0,
+          "polledAt": "2026-10-08T17:50:48.358Z"
+        },
+        {
+          "fixture": "head/1000-0",
+          "coldInvocationRecords": 0,
+          "matchingConstructorRecords": 0,
+          "polledAt": "2026-10-08T18:39:45.811Z"
+        }
+      ],
+      "criterion": "Matching Object/module/runtime/version/generation constructor record on the cold RPC trace. Missing evidence does not fail workload completion."
+    },
+    "tardieActors": {
+      "correctObjectVersionGenerationReferenceReceipts": 90,
+      "firstWarmConstructorObservedWithinColdClientInterval": 8,
+      "missingFirstWarmConstructorLog": "50-2",
+      "cohortsWithStableObservedWarmReferences": 7,
+      "incarnationChanges": [
+        {
+          "cohort": "50-2",
+          "constructorDuring": "warm6",
+          "firstChangedReference": "warm7",
+          "laterChangedReferences": [
+            "warm8",
+            "warm9"
+          ]
+        },
+        {
+          "cohort": "250-2",
+          "constructorDuring": "warm7",
+          "firstChangedReference": "warm8",
+          "laterChangedReferences": [
+            "warm9"
+          ]
+        }
+      ],
+      "changedFields": [
+        "runtimeId",
+        "moduleId"
+      ],
+      "unchangedFields": [
+        "objectId",
+        "version",
+        "generation"
+      ],
+      "qualification": "Thread warm identities remain stable. Uniform warm continuity for all participating Actors is contradicted in these two cohorts. Actor constructors occur in lookup RPCs on separate alarm-related traces; interval overlap alone is not causal attribution."
+    },
+    "reference": {
+      "threadReceipts": 540,
+      "separateActorReceipts": 90,
+      "algorithm": "mix32-v1",
+      "iterations": 10000000,
+      "checksum": 623056721,
+      "allMatched": true
+    }
+  },
+  "provenance": {
+    "measurementDeploymentIdentitiesMatched": 54,
+    "seedDeploymentIdentitiesMatched": 54,
+    "uploadedModulesMatched": 108,
+    "taskRoleWorkerVersionGuardsMatched": true,
+    "settings": {
+      "cpuLimitMs": 300000,
+      "compatibilityDate": "2026-08-18",
+      "locationHint": "wnam"
+    },
+    "localBenchCopiesMatched": 6,
+    "fixtureSourceHashEntriesRechecked": 31,
+    "archivedWrapperHashChecks": 42,
+    "baseAndControlBenchBytesIdentical": true,
+    "benchSha256": {
+      "base": "deabe97056af77fd01a5b8799d9bece4f1ce3ae68ee509aa45f70630849269db",
+      "head": "fc50f45a421a0792e153e3c91a344f38a51a9569cfd36b4d54b0a479ee2b23c8",
+      "control": "deabe97056af77fd01a5b8799d9bece4f1ce3ae68ee509aa45f70630849269db",
+      "pinned": "c823d1745273673543621a777765ef3531a3392682dbc3bddea3981c5000defb",
+      "pi": "5526e585eb8bccfdc9b3eb4e68cf58cb57c97697abce9a27951fc7486efb3985",
+      "tardie": "c8fbbb722e67090856e46048ab8197f49f197b64900aa4513c48adba4a909484"
+    },
+    "wrappers": "All accepted uploaded worker.mjs hashes match wrapper-v5 or wrapper-v6/v7 archives. Separate ./bench.mjs imports remain intact. Cold/warm method bodies are identical across used revisions for all six roles; later changes add seed-proof/serial-seed routes.",
+    "effect": {
+      "head": "01c6222ccf74390848595633ef23410cbfa6983b",
+      "mergeBase": "757821fe99b7179f907d6d1a34a4e86de4173112",
+      "mergeBaseMethod": "git merge-base --all <head> <fetched-main>; full non-shallow commit history; exactly one result",
+      "equivalentLanguageModelPatchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+      "tempPackageRuntimeHashesMatchBuildManifests": true,
+      "versions": {
+        "base": "4.0.1",
+        "head": "4.0.1",
+        "control": "4.0.1",
+        "pinned": "4.0.0",
+        "tardie": "4.0.0-rc.115"
+      },
+      "piNote": "Pi has no Effect dependency; its manifest records the parent build CLI installation.",
+      "upstreamBuildLimit": "Recorded packages use TypeScript 6.0.3 compiler API emission; this audit checked hashes, not upstream typechecking."
+    },
+    "currentPrepareOutputsMatch": [
+      "head",
+      "pi",
+      "tardie"
+    ],
+    "originalOutputLimit": "Base/control/pinned prepare intermediates have been overwritten. Their saved local bench copies, build manifests and uploaded-module verification remain available."
+  },
+  "limits": [
+    "Checks establish saved client evidence, not an independent capture of every request body or platform invocation.",
+    "Fingerprints are the original benchmark's 64-bit SHA-256 prefix over model-visible history. Complete canonical histories were not replayed.",
+    "Reset acknowledgements and runtime IDs alone do not exclude earlier alarm activation; four main cold constructor traces remain unconfirmed.",
+    "Telemetry collection/completeness, inferred missing CPU and full alarm completion are outside this workload audit. Incomplete telemetry is not a failed workload."
+  ],
+  "evidence": {
+    "pathsRelativeTo": "examples/durable-bench/results/cf-bench-8914",
+    "clients": "run/cohorts/<accepted-cohort>/{samples,attempts,audits,order,window}.json",
+    "seeds": "run/seed/<role>/<cohort>{,-batches,-resume-<prefix>,-quiescence}.json; run/seed-proofs/*/{raw,decision}.json",
+    "cold": "run/cohorts/<accepted-cohort>/<role>-{cold-preparation,cold-reference,constructors,telemetry}.json",
+    "deployments": "run/deployments/<role>/<generation>-{identity,verified}.json; run/resources.json",
+    "builds": "builds/<role>.json; builds/wrapper-v*/<role>/{manifest.json,worker.mjs}; effect-builds/build.json and applied patches",
+    "cohortInputSha256": {
+      "50-1": "cfeca7220b772b905d060807bb2797ba0e3f994e33de39f13a383df99ac6147f",
+      "50-2": "67cec2f1f5f71085a77b1d5a7b6e238b25a310f8b9418d6fc5546f8d51ac172b",
+      "50-3": "4242f20065fb9829c0366d6eb0870b85a1909fba736799abd82f9ce370cb9cf1",
+      "250-0": "3de73dbe43746be7113507f2de2b35c4f024601ec903a4f5c06e6c6c162459d1",
+      "250-1": "ae3d919f7e294c709527fde7fa1b1b4f22ca139d9d5acbe095e98ff7298ccce6",
+      "250-2": "d35174ef03d3ac7c1bdcae741f143da1416253da2ce6d76a3bcf818a2de175b9",
+      "1000-0": "09a81972b1c0cd11a7b87ecad0321479003d917f4897176be68c71a7101424e8",
+      "1000-1": "8fc56d0591a6405f21eb7031b9ca54b397a6630f04a107c2b9dc492939c06dcc",
+      "1000-2": "7f90a7af9cdec625271148de2763d3d82594f32d3ca0510e105332bd989c3add"
+    },
+    "digestMethod": "Each cohort digest is SHA-256 of LF-joined sorted task-relative path + NUL + file SHA-256 entries for samples, attempts, audits, order, window and the six final seed JSON receipts (11 files)."
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "prime": {
+    "started": 1791479047992,
+    "ended": 1791479048607,
+    "clientWallMs": 615,
+    "cfRay": "a476b912ec185b3e-MAD",
+    "value": {
+      "thread": {
+        "objectId": "38acb1d08a59961d9da290dc80e6db15079426336b9fd3de6e44986bf6f49a1c",
+        "moduleId": "71b93c5d-72e3-4fbc-a383-c09b67ce43a2",
+        "runtimeId": "89243213-2468-4567-986d-cba8d4d44063",
+        "version": "baa4a87b-09c6-4308-a5d9-b0b56a5a1478",
+        "generation": "measure-50-1",
+        "protocol": "cold-v3-reference",
+        "phase": "referencePrime",
+        "algorithm": "mix32-v1",
+        "iterations": 10000000,
+        "checksum": 623056721
+      }
+    }
+  },
+  "reference": {
+    "started": 1791479048607,
+    "ended": 1791479049118,
+    "clientWallMs": 511,
+    "cfRay": "a476b9164c595b3e-MAD",
+    "value": {
+      "thread": {
+        "objectId": "38acb1d08a59961d9da290dc80e6db15079426336b9fd3de6e44986bf6f49a1c",
+        "moduleId": "71b93c5d-72e3-4fbc-a383-c09b67ce43a2",
+        "runtimeId": "89243213-2468-4567-986d-cba8d4d44063",
+        "version": "baa4a87b-09c6-4308-a5d9-b0b56a5a1478",
+        "generation": "measure-50-1",
+        "protocol": "cold-v3-reference",
+        "phase": "referenceCold",
+        "algorithm": "mix32-v1",
+        "iterations": 10000000,
+        "checksum": 623056721
+      }
+    }
+  },
+  "reset": {
+    "value": {
+      "key": "50_1",
+      "generation": "measure-50-1",
+      "version": "baa4a87b-09c6-4308-a5d9-b0b56a5a1478",
+      "objects": [
+        {
+          "objectId": "38acb1d08a59961d9da290dc80e6db15079426336b9fd3de6e44986bf6f49a1c",
+          "moduleId": "71b93c5d-72e3-4fbc-a383-c09b67ce43a2",
+          "runtimeId": "89243213-2468-4567-986d-cba8d4d44063",
+          "version": "baa4a87b-09c6-4308-a5d9-b0b56a5a1478",
+          "generation": "measure-50-1",
+          "protocol": "cold-v3-reference",
+          "kind": "thread",
+          "restarted": true
+        }
+      ]
+    },
+    "started": 1791479049119,
+    "ended": 1791479049659,
+    "clientWallMs": 540,
+    "cfRay": "a476b9198c1b5b3e-MAD"
+  }
+}

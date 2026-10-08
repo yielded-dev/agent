@@ -1,0 +1,43 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[10:03:35.276] INFO (#1): Deploy · cf-bench-8914-b124507a-control
+[10:03:35.276] INFO (#1): Importing stack module
+[10:03:35.947] INFO (#1): Resolving stack services
+[10:03:35.961] INFO (#1): Loading stack state
+[10:03:35.962] INFO (#1): Computing plan
+[10:03:35.966] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[10:03:35.972] INFO (#1): Plan ready (696ms)
+[10:03:35.972] INFO (#1): Plan: no changes
+[10:03:35.972] INFO (#1): [cf-bench-8914-worker] noop
+[10:03:35.972] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] noop
+[10:03:35.972] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] noop
+[10:03:35.972] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] noop
+[10:03:35.972] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] noop
+[10:03:35.973] INFO (#1): [cf-bench-8914-worker/THREADS_50_3] noop
+[10:03:35.973] INFO (#1): 
+[10:03:35.975] INFO (#1): 
+[10:03:35.975] INFO (#1): Done: 0 succeeded (2ms)
+{
+  workerName: 'cf-bench-8914-b124507a-control',
+  url: 'https://cf-bench-8914-b124507a-control.danieljmerwe.workers.dev',
+  namespaces: {
+    C1000_0: '3ff2a89350ae4886b4f56dbfeaeb43b5',
+    C1000_1: '7ab34a2db9b24fb087435e47b149dda4',
+    C1000_2: '9177886b6370430180fc92d4a6b8f8a6',
+    C250_0: '6d3aaa1fdf4d4e8ea37fa9d219971714',
+    C250_1: '12516362555e436fb0875051596207bd',
+    C250_2: '694c0d1523094a24b421434b30647e9f',
+    C50_0: 'eee19d7adea5429f91ebbbe26b201c8b',
+    C50_1: '8b627c7684e8469cabfad22987d2df49',
+    C50_2: 'e95c38baa05e498f90ec89d997197482',
+    C50_3: '876129a572b043c784c16c5cfb65f724'
+  }
+}

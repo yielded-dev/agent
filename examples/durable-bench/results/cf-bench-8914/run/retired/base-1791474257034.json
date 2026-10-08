@@ -1,0 +1,18 @@
+{
+  "name": "cf-bench-8914-b124507a-base",
+  "role": "base",
+  "workerStatus": 404,
+  "knownNamespaceIds": [
+    "a0990c162f9b43a199b14c71bcc6de59",
+    "c51b067c9a6d40c8bd818ea580bbec35",
+    "51983c5127ef4876ac937f30c6ce9f14",
+    "bb62431c920e435d8251e9a30019b07a",
+    "9d93db152f664c31aeb858a3d655254a",
+    "4070ac7007b5424094795ef722ed6eed",
+    "46c6e36571a44f4dbf596ecd938e5393",
+    "e2fbe7d0ce234236a8ab87a92f1f2b83",
+    "744ae1b2a85d4e898ebd519de43be68a"
+  ],
+  "namespaceIdsRemaining": [],
+  "complete": true
+}

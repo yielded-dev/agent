@@ -1,0 +1,61 @@
+[
+  {
+    "role": "base",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "head",
+    "complete": false,
+    "expected": 10,
+    "matched": 9,
+    "missing": [
+      {
+        "phase": "cold",
+        "matches": 0,
+        "reason": "main RPC telemetry missing or duplicated"
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "control",
+    "complete": false,
+    "expected": 10,
+    "matched": 10,
+    "missing": [
+      {
+        "phase": "warm1",
+        "reason": "reference telemetry missing, zero, or invalid"
+      }
+    ],
+    "poll": 6
+  },
+  {
+    "role": "pinned",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "pi",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  },
+  {
+    "role": "tardie",
+    "complete": true,
+    "expected": 10,
+    "matched": 10,
+    "missing": [],
+    "poll": 1
+  }
+]

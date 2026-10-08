@@ -1,0 +1,20 @@
+[
+  {
+    "role": "tardie",
+    "method": "identity",
+    "key": "1000_1",
+    "error": "HttpClientError: Transport error (GET https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev/identity?key=1000_1)"
+  },
+  {
+    "role": "tardie",
+    "method": "stats",
+    "key": "1000_1",
+    "error": "HttpClientError: Transport error (GET https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev/stats?key=1000_1)"
+  },
+  {
+    "role": "tardie",
+    "method": "diagnostic",
+    "key": "1000_1",
+    "error": "HttpClientError: Transport error (GET https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev/diagnostic?key=1000_1)"
+  }
+]

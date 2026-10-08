@@ -1,0 +1,539 @@
+{
+  "limitedPreviewOnly": true,
+  "query": {
+    "queryId": "cf-bench-8914-probe-tardie",
+    "dry": true,
+    "view": "events",
+    "limit": 20,
+    "timeframe": {
+      "from": 1791472707086,
+      "to": 1791473667086
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "cf-bench-8914-b124507a-tardie"
+        },
+        {
+          "key": "$workers.cpuTimeMs",
+          "operation": "exists",
+          "type": "number"
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "timestamp": 1791473539808,
+      "metadata": {
+        "id": "01M4E29PQ00000000000000002",
+        "type": "cf-worker-event",
+        "traceId": "f0d8686d6bc8a7a1f59dbb7ac626dd43"
+      },
+      "worker": {
+        "cpuTimeMs": 0,
+        "wallTimeMs": 77,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "canceled",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473539806,
+      "metadata": {
+        "id": "01M4E29PPY000000000000002G",
+        "type": "cf-worker-event",
+        "traceId": "3578e5433eaca18a65844fcce1886d6a"
+      },
+      "worker": {
+        "cpuTimeMs": 392,
+        "wallTimeMs": 679,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473539372,
+      "metadata": {
+        "id": "01M4E29P9C0000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "879acb06edc878e7a15eff83b0989d83"
+      },
+      "worker": {
+        "cpuTimeMs": 21,
+        "wallTimeMs": 104,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473539246,
+      "metadata": {
+        "id": "01M4E29P5E0000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "434f809db391c54fd93fa254dbcd96c6"
+      },
+      "worker": {
+        "cpuTimeMs": 21,
+        "wallTimeMs": 101,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473539122,
+      "metadata": {
+        "id": "01M4E29P1J0000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "89b0870c03c3420b2197be8d090f9cbe"
+      },
+      "worker": {
+        "cpuTimeMs": 25,
+        "wallTimeMs": 106,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473539054,
+      "metadata": {
+        "id": "01M4E29NZE0000000000000006",
+        "type": "cf-worker-event",
+        "traceId": "5b578af0312e6377b6fb3a4f619fc9dd"
+      },
+      "worker": {
+        "cpuTimeMs": 0,
+        "wallTimeMs": 6,
+        "executionModel": "durableObject",
+        "eventType": "jsrpc",
+        "durableObjectId": "da32cb1e10414e8a40814fe9d0b49e70d97e45dd634389e64689c88487ed78e8",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": [
+          "lookup"
+        ],
+        "rpcCallCount": 1
+      }
+    },
+    {
+      "timestamp": 1791473538995,
+      "metadata": {
+        "id": "01M4E29NXK000000000000002H",
+        "type": "cf-worker-event",
+        "traceId": "5a2e7554f19c81c1d5c961f4d3247c05"
+      },
+      "worker": {
+        "cpuTimeMs": 41,
+        "wallTimeMs": 173,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473538784,
+      "metadata": {
+        "id": "01M4E29NQ00000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "dbf993252b857ed4b6e800ba3ead8e9a"
+      },
+      "worker": {
+        "cpuTimeMs": 19,
+        "wallTimeMs": 129,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473538605,
+      "metadata": {
+        "id": "01M4E29NHD000000000000003F",
+        "type": "cf-worker-event",
+        "traceId": "5b578af0312e6377b6fb3a4f619fc9dd"
+      },
+      "worker": {
+        "cpuTimeMs": 361,
+        "wallTimeMs": 686,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473538332,
+      "metadata": {
+        "id": "01M4E29N8W0000000000000006",
+        "type": "cf-worker-event",
+        "traceId": "dc4807c77efc1e757d90efcd5fc896e9"
+      },
+      "worker": {
+        "cpuTimeMs": 0,
+        "wallTimeMs": 24,
+        "executionModel": "durableObject",
+        "eventType": "jsrpc",
+        "durableObjectId": "da32cb1e10414e8a40814fe9d0b49e70d97e45dd634389e64689c88487ed78e8",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": [
+          "lookup"
+        ],
+        "rpcCallCount": 1
+      }
+    },
+    {
+      "timestamp": 1791473538063,
+      "metadata": {
+        "id": "01M4E29N0F000000000000003F",
+        "type": "cf-worker-event",
+        "traceId": "dc4807c77efc1e757d90efcd5fc896e9"
+      },
+      "worker": {
+        "cpuTimeMs": 143,
+        "wallTimeMs": 472,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473537552,
+      "metadata": {
+        "id": "01M4E29MGG0000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "36739b2b79cef84366510d60d1418b29"
+      },
+      "worker": {
+        "cpuTimeMs": 25,
+        "wallTimeMs": 135,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473537431,
+      "metadata": {
+        "id": "01M4E29MCQ0000000000000006",
+        "type": "cf-worker-event",
+        "traceId": "b4aa766450853a1bfe29cdd95c229a26"
+      },
+      "worker": {
+        "cpuTimeMs": 0,
+        "wallTimeMs": 11,
+        "executionModel": "durableObject",
+        "eventType": "jsrpc",
+        "durableObjectId": "da32cb1e10414e8a40814fe9d0b49e70d97e45dd634389e64689c88487ed78e8",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": [
+          "lookup"
+        ],
+        "rpcCallCount": 1
+      }
+    },
+    {
+      "timestamp": 1791473537379,
+      "metadata": {
+        "id": "01M4E29MB30000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "660202885724ee9b44e4c7929852438e"
+      },
+      "worker": {
+        "cpuTimeMs": 28,
+        "wallTimeMs": 133,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473537209,
+      "metadata": {
+        "id": "01M4E29M5S000000000000003F",
+        "type": "cf-worker-event",
+        "traceId": "b4aa766450853a1bfe29cdd95c229a26"
+      },
+      "worker": {
+        "cpuTimeMs": 457,
+        "wallTimeMs": 851,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473536614,
+      "metadata": {
+        "id": "01M4E29KK60000000000000006",
+        "type": "cf-worker-event",
+        "traceId": "da091c90d4ea8ffdde9c42a1e2035d67"
+      },
+      "worker": {
+        "cpuTimeMs": 0,
+        "wallTimeMs": 37,
+        "executionModel": "durableObject",
+        "eventType": "jsrpc",
+        "durableObjectId": "da32cb1e10414e8a40814fe9d0b49e70d97e45dd634389e64689c88487ed78e8",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": [
+          "lookup"
+        ],
+        "rpcCallCount": 1
+      }
+    },
+    {
+      "timestamp": 1791473536598,
+      "metadata": {
+        "id": "01M4E29KJP000000000000003F",
+        "type": "cf-worker-event",
+        "traceId": "da091c90d4ea8ffdde9c42a1e2035d67"
+      },
+      "worker": {
+        "cpuTimeMs": 118,
+        "wallTimeMs": 616,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473535875,
+      "metadata": {
+        "id": "01M4E29JW30000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "81b2dd55403652188d9a710a4d2ff9f9"
+      },
+      "worker": {
+        "cpuTimeMs": 26,
+        "wallTimeMs": 139,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473535703,
+      "metadata": {
+        "id": "01M4E29JPQ0000000000000019",
+        "type": "cf-worker-event",
+        "traceId": "4700c020ab2d1f508cb2e4ee1ef56f0b"
+      },
+      "worker": {
+        "cpuTimeMs": 22,
+        "wallTimeMs": 102,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "ok",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    },
+    {
+      "timestamp": 1791473535578,
+      "metadata": {
+        "id": "01M4E29JJT0000000000000002",
+        "type": "cf-worker-event",
+        "traceId": "03138a2ff9688d169ad513fd357cceaa"
+      },
+      "worker": {
+        "cpuTimeMs": 39,
+        "wallTimeMs": 222,
+        "executionModel": "durableObject",
+        "eventType": "alarm",
+        "durableObjectId": "0ba51a5c7e23653ee5c090b0383ca784b4dc2b3c0168696e883b8a18727ccdff",
+        "outcome": "canceled",
+        "scriptVersion": {
+          "id": "455a0201-109f-4e00-a012-12e82ba52f89"
+        },
+        "truncated": false
+      },
+      "rpc": {
+        "rpcMethod": null,
+        "rpcMethods": null,
+        "rpcCallCount": null
+      }
+    }
+  ]
+}

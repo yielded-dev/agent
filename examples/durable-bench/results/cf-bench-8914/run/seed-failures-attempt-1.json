@@ -1,0 +1,69 @@
+[
+  {
+    "role": "head",
+    "phase": "seed",
+    "size": 1000,
+    "sample": 0,
+    "lastAcknowledgedTurnCount": 600,
+    "attemptedRange": [
+      600,
+      650
+    ],
+    "error": "HTTP 500: Durable Object storage operation exceeded timeout which caused object to be reset.",
+    "observedLocalTime": "2026-10-08 08:35:18.520 America/Los_Angeles"
+  },
+  {
+    "role": "tardie",
+    "phase": "seed",
+    "size": 250,
+    "sample": 0,
+    "lastAcknowledgedTurnCount": 0,
+    "attemptedRange": [
+      0,
+      50
+    ],
+    "error": "HttpClientError: Transport error; TypeError: The socket connection was closed unexpectedly.",
+    "observedLocalTime": "2026-10-08 08:32:59.775 America/Los_Angeles",
+    "subsequentDiagnostic": "diagnostic-tardie-250_0.json",
+    "subsequentMessageRows": 44
+  },
+  {
+    "role": "base",
+    "phase": "seed",
+    "size": 1000,
+    "sample": 0,
+    "lastAcknowledgedTurnCount": 850,
+    "attemptedRange": [
+      850,
+      900
+    ],
+    "error": "HTTP 500: Durable Object storage operation exceeded timeout which caused object to be reset.",
+    "observedLocalTime": "2026-10-08 08:37:13.582 America/Los_Angeles"
+  },
+  {
+    "role": "control",
+    "phase": "seed",
+    "size": 1000,
+    "sample": 0,
+    "lastAcknowledgedTurnCount": 550,
+    "attemptedRange": [
+      550,
+      600
+    ],
+    "error": "HTTP 500: Durable Object storage operation exceeded timeout which caused object to be reset.",
+    "observedLocalTime": "2026-10-08 08:37:44.676 America/Los_Angeles"
+  },
+  {
+    "role": "pinned",
+    "phase": "seed",
+    "size": 1000,
+    "sample": 0,
+    "lastAcknowledgedTurnCount": 750,
+    "attemptedRange": [
+      750,
+      800
+    ],
+    "error": "HTTP 500: Durable Object storage operation exceeded timeout which caused object to be reset.",
+    "observedLocalTime": "2026-10-08 08:37:47.276 America/Los_Angeles"
+  }
+]

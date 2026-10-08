@@ -1,0 +1,73 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[09:25:59.125] INFO (#1): Deploy · cf-bench-8914-b124507a-tardie
+[09:25:59.125] INFO (#1): Importing stack module
+[09:25:59.895] INFO (#1): Resolving stack services
+[09:25:59.904] INFO (#1): Loading stack state
+[09:25:59.906] INFO (#1): Computing plan
+[09:25:59.911] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[09:25:59.913] INFO (#1): Plan ready (788ms)
+[09:25:59.914] INFO (#1): Plan: 1 to update, 3 binding changes
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker] update
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_1000_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_250_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_250_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_250_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_50_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_50_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_50_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/ACTORS_50_3] create
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/BENCH_GENERATION] update
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/BENCH_ROLE] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/BENCH_TOKEN] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/BENCH_VERSION] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_1000_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_1000_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_1000_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_250_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_250_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_250_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_50_0] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_50_1] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_50_2] noop
+[09:25:59.914] INFO (#1): [cf-bench-8914-worker/THREADS_50_3] create
+[09:25:59.914] INFO (#1): 
+[09:25:59.917] INFO (#1065): [cf-bench-8914-worker] updating
+[09:25:59.917] INFO (#1065): Cloudflare Worker reconcile: starting cf-bench-8914-b124507a-tardie
+[09:25:59.917] INFO (#1065): Cloudflare Worker reconcile: durable objects [{"logicalId":"ACTORS_1000_0","className":"A1000_0"},{"logicalId":"ACTORS_1000_1","className":"A1000_1"},{"logicalId":"ACTORS_1000_2","className":"A1000_2"},{"logicalId":"ACTORS_250_0","className":"A250_0"},{"logicalId":"ACTORS_250_1","className":"A250_1"},{"logicalId":"ACTORS_250_2","className":"A250_2"},{"logicalId":"ACTORS_50_0","className":"A50_0"},{"logicalId":"ACTORS_50_1","className":"A50_1"},{"logicalId":"ACTORS_50_2","className":"A50_2"},{"logicalId":"ACTORS_50_3","className":"A50_3"},{"logicalId":"THREADS_1000_0","className":"C1000_0"},{"logicalId":"THREADS_1000_1","className":"C1000_1"},{"logicalId":"THREADS_1000_2","className":"C1000_2"},{"logicalId":"THREADS_250_0","className":"C250_0"},{"logicalId":"THREADS_250_1","className":"C250_1"},{"logicalId":"THREADS_250_2","className":"C250_2"},{"logicalId":"THREADS_50_0","className":"C50_0"},{"logicalId":"THREADS_50_1","className":"C50_1"},{"logicalId":"THREADS_50_2","className":"C50_2"},{"logicalId":"THREADS_50_3","className":"C50_3"}]
+[09:26:00.133] INFO (#1065): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:ACTORS_1000_0=A1000_0;ACTORS_1000_1=A1000_1;ACTORS_1000_2=A1000_2;ACTORS_250_0=A250_0;ACTORS_250_1=A250_1;ACTORS_250_2=A250_2;ACTORS_50_0=A50_0;ACTORS_50_1=A50_1;ACTORS_50_2=A50_2;THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[09:26:00.133] INFO (#1065): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:ACTORS_1000_0=A1000_0;ACTORS_1000_1=A1000_1;ACTORS_1000_2=A1000_2;ACTORS_250_0=A250_0;ACTORS_250_1=A250_1;ACTORS_250_2=A250_2;ACTORS_50_0=A50_0;ACTORS_50_1=A50_1;ACTORS_50_2=A50_2;THREADS_1000_0=C1000_0;THREADS_1000_1=C1000_1;THREADS_1000_2=C1000_2;THREADS_250_0=C250_0;THREADS_250_1=C250_1;THREADS_250_2=C250_2;THREADS_50_0=C50_0;THREADS_50_1=C50_1;THREADS_50_2=C50_2"]
+[09:26:00.134] INFO (#1065): Cloudflare Worker update: preparing bundle for cf-bench-8914-b124507a-tardie
+[09:26:00.139] INFO (#1065): Cloudflare Worker update: uploading script for cf-bench-8914-b124507a-tardie
+[09:26:00.139] INFO (#1065): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"ACTORS_1000_0":"A1000_0","ACTORS_1000_1":"A1000_1","ACTORS_1000_2":"A1000_2","ACTORS_250_0":"A250_0","ACTORS_250_1":"A250_1","ACTORS_250_2":"A250_2","ACTORS_50_0":"A50_0","ACTORS_50_1":"A50_1","ACTORS_50_2":"A50_2","THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2"},"currentDoClassNameByLogicalId":{"ACTORS_1000_0":"A1000_0","ACTORS_1000_1":"A1000_1","ACTORS_1000_2":"A1000_2","ACTORS_250_0":"A250_0","ACTORS_250_1":"A250_1","ACTORS_250_2":"A250_2","ACTORS_50_0":"A50_0","ACTORS_50_1":"A50_1","ACTORS_50_2":"A50_2","ACTORS_50_3":"A50_3","THREADS_1000_0":"C1000_0","THREADS_1000_1":"C1000_1","THREADS_1000_2":"C1000_2","THREADS_250_0":"C250_0","THREADS_250_1":"C250_1","THREADS_250_2":"C250_2","THREADS_50_0":"C50_0","THREADS_50_1":"C50_1","THREADS_50_2":"C50_2","THREADS_50_3":"C50_3"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":["A50_3","C50_3"]}
+[09:26:02.407] INFO (#1065): [cf-bench-8914-worker] updated — Uploading worker (1.62 MB) ... (2.5s)
+[09:26:02.408] INFO (#1400): [cf-bench-8914-worker] updated — Uploading worker (1.62 MB) ... (2.5s)
+[09:26:02.409] INFO (#1): 
+[09:26:02.409] INFO (#1): Done: 1 succeeded (2.5s)
+{
+  workerName: 'cf-bench-8914-b124507a-tardie',
+  url: 'https://cf-bench-8914-b124507a-tardie.danieljmerwe.workers.dev',
+  namespaces: {
+    A1000_0: '002b7d891ca7437088a23821afc12d89',
+    A1000_1: '5177b5c6d6844e7d9a98e6310aa2b3b5',
+    A1000_2: '8e23bc0851dc4d1cb343f6205fc3ce7d',
+    A250_0: '4e560c1d900f4e388865c1cf5fdc468a',
+    A250_1: 'b4913a206f1846e0be772df3c1899d4d',
+    A250_2: 'b318f9e088734ab5a34d53032487613c',
+    A50_0: '9de3e139dd0543cd87fa961ff6e07f53',
+    A50_1: 'a16a1c777ce043b1a519c549d9633f17',
+    A50_2: '0b42b6a5bbb14beaacca0bd32df03815',
+    A50_3: 'f42571ef06f14589b12305728e8e47fb',
+    C1000_0: 'cf9ac13614044fdc89411dc23ad8c51f',
+    C1000_1: '700ce9a315af4f4a9b04e64c19a251dd',
+    C1000_2: '3617634622ba4861a29eca6a304697c6',
+    C250_0: '92269b2b8e7a4777ba64118fe332a407',
+    C250_1: 'f9484408a0fe4050a04cb078fc4c9890',
+    C250_2: '4824cbf93b0f4a7fa2c588aba05770c4',
+    C50_0: '034cf44ed6564c52b5be6ecd0607a6fa',
+    C50_1: 'f18d03e328f24d6cac86a9825dd4c8a2',
+    C50_2: '5c1563e790324a8a94fbe7b27f15e237',
+    C50_3: '3215e8c6a89847ac9a210e50d64114d3'
+  }
+}

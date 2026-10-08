@@ -1,0 +1,24 @@
+[
+  {
+    "attempt": 0,
+    "health": {
+      "value": {
+        "generation": "measure-250-1",
+        "version": "01622157-caf5-4104-b42d-f0d8e4a33022",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791481152747,
+      "ended": 1791481153237,
+      "clientWallMs": 490,
+      "cfRay": "a476ec76ef23d3e9-KIX"
+    },
+    "identity": {
+      "objectId": "392dd11f318673a8efd4e12f6b1662460ccce69f62e5bf1494e7f45e9092b3d9",
+      "moduleId": "bef8d5ba-4ff3-4044-9ddf-3c07c62d830c",
+      "runtimeId": "4d276d3c-8f13-4d88-908f-5e7a02a94c69",
+      "version": "01622157-caf5-4104-b42d-f0d8e4a33022",
+      "generation": "measure-250-1",
+      "protocol": "cold-v3-reference"
+    }
+  }
+]

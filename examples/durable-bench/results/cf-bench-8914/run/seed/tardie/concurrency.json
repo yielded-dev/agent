@@ -1,0 +1,15 @@
+{
+  "fixtures": [
+    "1000_0",
+    "1000_1",
+    "1000_2"
+  ],
+  "method": "Three independent CLI seed processes, each owning a distinct Thread namespace and Actor namespace. Each process serializes the original per-turn seed RPCs and checks native alarm quiescence.",
+  "measurementIsolation": "The 250-turn workloads finished before these processes started. No measured application turn runs while these seed processes remain active. Read-only collection of historical telemetry may overlap seeding.",
+  "workloadChanges": false,
+  "batchSize": 10,
+  "restartInterval": 50,
+  "timestamps": "Exact start/end times and acknowledgements are retained in each fixture's batch receipts.",
+  "allFixturesVerifiedBeforeMeasurement": "2026-10-08T18:27:30.454987+00:00",
+  "recordedThreadModuleSetsDisjoint": true
+}

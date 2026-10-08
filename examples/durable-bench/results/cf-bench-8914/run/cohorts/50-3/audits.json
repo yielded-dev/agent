@@ -1,0 +1,198 @@
+[
+  {
+    "role": "base",
+    "stats": {
+      "bytes": 3121152,
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 355,
+        "effect_agent_canonical_records": 943,
+        "effect_agent_record_runs": 588,
+        "effect_agent_tool_declarations": 114,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 60,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 60,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 60,
+        "effect_agent_settlement_spans": 200,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      }
+    },
+    "fingerprint": "b73859cee894aca6"
+  },
+  {
+    "role": "head",
+    "stats": {
+      "bytes": 3121152,
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 355,
+        "effect_agent_canonical_records": 943,
+        "effect_agent_record_runs": 588,
+        "effect_agent_tool_declarations": 114,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 60,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 60,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 60,
+        "effect_agent_settlement_spans": 200,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      }
+    },
+    "fingerprint": "b73859cee894aca6"
+  },
+  {
+    "role": "control",
+    "stats": {
+      "bytes": 3121152,
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 355,
+        "effect_agent_canonical_records": 943,
+        "effect_agent_record_runs": 588,
+        "effect_agent_tool_declarations": 114,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 60,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 60,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 60,
+        "effect_agent_settlement_spans": 200,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      }
+    },
+    "fingerprint": "b73859cee894aca6"
+  },
+  {
+    "role": "pinned",
+    "stats": {
+      "bytes": 3121152,
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 355,
+        "effect_agent_canonical_records": 943,
+        "effect_agent_record_runs": 588,
+        "effect_agent_tool_declarations": 114,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 60,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 60,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 60,
+        "effect_agent_settlement_spans": 200,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      }
+    },
+    "fingerprint": "b73859cee894aca6"
+  },
+  {
+    "role": "pi",
+    "stats": {
+      "bytes": 409600,
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 703,
+        "conversations": 1,
+        "entries": 349,
+        "tasks": 288,
+        "submissions": 60,
+        "documents": 5,
+        "document_revisions": 5
+      }
+    },
+    "fingerprint": "b73859cee894aca6"
+  },
+  {
+    "role": "tardie",
+    "stats": {
+      "bytes": 847872,
+      "tables": {
+        "experimental_events": 1447,
+        "experimental_messages": 60,
+        "checkpoint": 1,
+        "checkpoint_chunks": 1
+      },
+      "checkpoint": 1001
+    },
+    "fingerprint": "b73859cee894aca6"
+  }
+]

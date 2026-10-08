@@ -1,0 +1,72 @@
+[
+  {
+    "attempt": 0,
+    "error": "BenchError: DO has not reached the guarded measurement version"
+  },
+  {
+    "attempt": 1,
+    "health": {
+      "value": {
+        "generation": "measure-1000-0",
+        "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+        "protocol": "cold-v3-reference"
+      },
+      "started": 1791484190161,
+      "ended": 1791484190237,
+      "clientWallMs": 76,
+      "cfRay": "a477369cdd7838c3-ATL"
+    },
+    "identity": {
+      "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+      "moduleId": "9840fa43-a130-4586-9146-62cd91cf8c58",
+      "runtimeId": "e312e918-1d5d-4b4d-a0fe-ada056f29f25",
+      "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+      "generation": "measure-1000-0",
+      "actorObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+      "protocol": "cold-v3-reference",
+      "phase": "referenceCold",
+      "algorithm": "mix32-v1",
+      "iterations": 10000000,
+      "checksum": 623056721
+    },
+    "reference": {
+      "started": 1791484192841,
+      "ended": 1791484193175,
+      "clientWallMs": 334,
+      "cfRay": "a47736ad989338c3-ATL",
+      "value": {
+        "thread": {
+          "objectId": "45e8775b408f6f3da4cb9846c7de4e1d1445442ca29b20696cc8a831bf0c9a1f",
+          "moduleId": "9840fa43-a130-4586-9146-62cd91cf8c58",
+          "runtimeId": "e312e918-1d5d-4b4d-a0fe-ada056f29f25",
+          "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+          "generation": "measure-1000-0",
+          "actorObjectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        },
+        "actor": {
+          "objectId": "6e3dd79ca21558a54e2062a0712807d9fce548c618fe2e820e4ceacb59d4b4c6",
+          "moduleId": "07accc69-d73b-472a-adb8-eae6084803d7",
+          "runtimeId": "45e9d23c-5641-4329-a659-75117ce00866",
+          "version": "2c6d12e1-db96-457a-b45f-c01fa8c5905f",
+          "generation": "measure-1000-0",
+          "protocol": "cold-v3-reference",
+          "phase": "referenceCold",
+          "algorithm": "mix32-v1",
+          "iterations": 10000000,
+          "checksum": 623056721
+        }
+      },
+      "actorTiming": {
+        "started": 1791484192440,
+        "ended": 1791484192841,
+        "clientWallMs": 401,
+        "cfRay": "a47736ab191b38c3-ATL"
+      }
+    }
+  }
+]

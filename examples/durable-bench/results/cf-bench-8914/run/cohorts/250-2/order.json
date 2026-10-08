@@ -1,0 +1,13 @@
+{
+  "roles": [
+    "base",
+    "head",
+    "control",
+    "pinned",
+    "pi",
+    "tardie"
+  ],
+  "size": 250,
+  "sample": 2,
+  "started": 1791481303433
+}

@@ -1,0 +1,28 @@
+{
+  "workerName": "cf-bench-8914-b124507a-tardie",
+  "workerId": "745c73a37dc94d5394f7e271217d1f44",
+  "generation": "seed-resume-3",
+  "version": {
+    "id": "6e5374bf-9fb2-46ce-af66-e790424b6954",
+    "number": 9,
+    "startup_time_ms": 145,
+    "limits": {
+      "cpu_ms": 300000
+    },
+    "compatibility_date": "2026-08-18"
+  },
+  "modules": [
+    {
+      "name": "bench.mjs",
+      "bytes": 1689120,
+      "sha256": "c8fbbb722e67090856e46048ab8197f49f197b64900aa4513c48adba4a909484",
+      "matchesLocal": true
+    },
+    {
+      "name": "worker.mjs",
+      "bytes": 18124,
+      "sha256": "8a7f8d35d64b0c6934efc949a23714de7d5e66b31e3befdf56ed55fc58e77b63",
+      "matchesLocal": true
+    }
+  ]
+}

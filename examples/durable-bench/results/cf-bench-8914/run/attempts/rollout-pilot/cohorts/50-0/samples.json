@@ -1,0 +1,382 @@
+[
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "started": 1791475995740,
+    "ended": 1791475997268,
+    "clientWallMs": 1528,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a4766e8fda538cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm1",
+    "started": 1791475997269,
+    "ended": 1791475997795,
+    "clientWallMs": 526,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a4766e97af568cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm2",
+    "started": 1791475997795,
+    "ended": 1791475998315,
+    "clientWallMs": 520,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4766e9ae9568cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm3",
+    "started": 1791475998316,
+    "ended": 1791475998825,
+    "clientWallMs": 509,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4766e9e4b7f8cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm4",
+    "started": 1791475998825,
+    "ended": 1791475999473,
+    "clientWallMs": 648,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a4766ea15dae8cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm5",
+    "started": 1791475999474,
+    "ended": 1791476000016,
+    "clientWallMs": 542,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a4766ea568878cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm6",
+    "started": 1791476000017,
+    "ended": 1791476000680,
+    "clientWallMs": 663,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4766ea8cab98cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm7",
+    "started": 1791476000681,
+    "ended": 1791476001181,
+    "clientWallMs": 500,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a4766eacfceb8cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm8",
+    "started": 1791476001182,
+    "ended": 1791476001727,
+    "clientWallMs": 545,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a4766eb01e918cf8-KIX"
+  },
+  {
+    "role": "head",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm9",
+    "started": 1791476001727,
+    "ended": 1791476002239,
+    "clientWallMs": 512,
+    "receipt": {
+      "objectId": "099cf401e02dae1ee27329dd0f85260af3345ce44d994f2e99ebbec874ad3a1e",
+      "moduleId": "eb0c9f3d-7c22-4edc-95cc-8849028b3e31",
+      "runtimeId": "6bb2be64-3719-4eb2-b07e-4d1f2917663b",
+      "version": "aa357f5b-f16c-4853-b9db-dfb113561b0c",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4766eb388fe8cf8-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "cold",
+    "started": 1791476010342,
+    "ended": 1791476013326,
+    "clientWallMs": 2984,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "cold"
+    },
+    "cfRay": "a4766eeadd20fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm1",
+    "started": 1791476013327,
+    "ended": 1791476014167,
+    "clientWallMs": 840,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm1"
+    },
+    "cfRay": "a4766efc1f6dfcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm2",
+    "started": 1791476014167,
+    "ended": 1791476014912,
+    "clientWallMs": 745,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm2"
+    },
+    "cfRay": "a4766f014cedfcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm3",
+    "started": 1791476014913,
+    "ended": 1791476015647,
+    "clientWallMs": 734,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm3"
+    },
+    "cfRay": "a4766f0619c2fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm4",
+    "started": 1791476015648,
+    "ended": 1791476016448,
+    "clientWallMs": 800,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm4"
+    },
+    "cfRay": "a4766f0a8de5fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm5",
+    "started": 1791476016449,
+    "ended": 1791476017223,
+    "clientWallMs": 774,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm5"
+    },
+    "cfRay": "a4766f0f8b75fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm6",
+    "started": 1791476017224,
+    "ended": 1791476017913,
+    "clientWallMs": 689,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm6"
+    },
+    "cfRay": "a4766f145883fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm7",
+    "started": 1791476017913,
+    "ended": 1791476018628,
+    "clientWallMs": 715,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm7"
+    },
+    "cfRay": "a4766f18ed96fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm8",
+    "started": 1791476018629,
+    "ended": 1791476019361,
+    "clientWallMs": 732,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm8"
+    },
+    "cfRay": "a4766f1d2968fcb9-KIX"
+  },
+  {
+    "role": "control",
+    "size": 50,
+    "sample": 0,
+    "phase": "warm9",
+    "started": 1791476019361,
+    "ended": 1791476020149,
+    "clientWallMs": 788,
+    "receipt": {
+      "objectId": "058148f03c2c4c80f80a3b0b278f1bc404fbb5c614ac01e71c0f65a22f19cccc",
+      "moduleId": "bc339768-ab43-4607-ba7d-11b8587be043",
+      "runtimeId": "0a604b85-66be-4b10-a54b-43e0b1338534",
+      "version": "c7ce50c2-1b10-45ae-b9ff-c1459afa48c1",
+      "generation": "measure-50-0",
+      "insideWallMs": 0,
+      "phase": "warm9"
+    },
+    "cfRay": "a4766f21dedbfcb9-KIX"
+  }
+]

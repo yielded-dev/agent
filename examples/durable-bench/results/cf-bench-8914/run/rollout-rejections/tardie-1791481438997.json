@@ -1,0 +1,11 @@
+{
+  "role": "tardie",
+  "generation": "measure-250-2",
+  "route": "/health",
+  "attempt": 0,
+  "started": 1791481438997,
+  "ended": 1791481439602,
+  "status": 412,
+  "cfRay": "a476f374ac89d3ee-KIX",
+  "workloadExecuted": false
+}

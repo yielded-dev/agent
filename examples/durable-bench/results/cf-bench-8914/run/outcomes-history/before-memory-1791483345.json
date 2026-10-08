@@ -1,0 +1,386 @@
+[
+  {
+    "role": "base",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-base-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-base"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "base",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-base-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-base"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "head",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-head-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-head"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "head",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-head-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-head"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "control",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-control-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-control"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "control",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-control-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-control"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "pinned",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-pinned-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-pinned"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "pinned",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-pinned-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-pinned"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "pi",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-pi-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-pi"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "pi",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-pi-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-pi"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "tardie",
+    "outcome": "exceededCpu",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-tardie-exceededCpu",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-tardie"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededCpu"
+          }
+        ]
+      }
+    },
+    "events": []
+  },
+  {
+    "role": "tardie",
+    "outcome": "exceededMemory",
+    "query": {
+      "queryId": "cf-bench-8914-b124507a-tardie-exceededMemory",
+      "dry": true,
+      "view": "events",
+      "limit": 2000,
+      "timeframe": {
+        "from": 1791392176012,
+        "to": 1791478576012
+      },
+      "parameters": {
+        "filterCombination": "and",
+        "filters": [
+          {
+            "key": "$workers.scriptName",
+            "operation": "eq",
+            "type": "string",
+            "value": "cf-bench-8914-b124507a-tardie"
+          },
+          {
+            "key": "$workers.outcome",
+            "operation": "eq",
+            "type": "string",
+            "value": "exceededMemory"
+          }
+        ]
+      }
+    },
+    "events": []
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "role": "base",
+  "generation": "measure-1000-1",
+  "route": "/cold?key=1000_1",
+  "attempt": 0,
+  "started": 1791484343606,
+  "ended": 1791484343659,
+  "status": 412,
+  "cfRay": "a4773a5bdc4cbc84-DFW",
+  "workloadExecuted": false
+}
