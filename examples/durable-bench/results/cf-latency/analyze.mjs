@@ -76,7 +76,7 @@ const invocation = (event) => event.$metadata?.type === "cf-worker-event";
 const worker = (event) => event.$workers?.scriptName;
 const eventKey = (event) => event.$metadata?.id;
 const requestKey = (row) => `${row.worker}/${row.framework}/${row.object}/${row.sample}`;
-const metricNames = ["clientMs", "clientMinusProviderMs", "providerMs", "configuredProviderMs", "firstModelArrivalMs", "stepGapMs", "stepGapTotalMs", "tailFromProviderMs", "doWallMs", "fetchCpuMs", "attributedDoCpuMs", "observedDoCpuMs", "alarmCpuMs", "alarmOverlapCount", "boundaryCpuMs", "sqlBindingBytes", "kvJsonBytes", "transactions", "transactionSync", "nativeSyncCalls", "nativeSyncWaitMs", "explicitProbeSyncMs", "logicalMutationStatements", "setAlarmCalls", "deleteAlarmCalls", "requestBytes", "responseBytes"];
+const metricNames = ["clientMs", "clientMinusProviderMs", "providerMs", "configuredProviderMs", "firstModelArrivalMs", "stepGapMs", "stepGapTotalMs", "tailFromProviderMs", "doWallMs", "fetchCpuMs", "attributedDoCpuMs", "observedDoCpuMs", "alarmCpuMs", "alarmOverlapCount", "boundaryCpuMs", "sqlBindingBytes", "kvJsonBytes", "transactions", "transactionSync", "writeTransactions", "writeTransactionSync", "overlappingTransactionCallbacks", "nativeSyncCalls", "nativeSyncWaitMs", "explicitProbeSyncMs", "logicalMutationStatements", "setAlarmCalls", "deleteAlarmCalls", "requestBytes", "responseBytes"];
 const objectSummaries = (turns) => Object.fromEntries(metricNames.map((metric) => [metric, stats([...group(turns, (t) => t.object).values()].map((object) => median(object.map((t) => t[metric]))))]));
 
 const AnalysisError = Schema.TaggedError()("CfLatencyAnalysisError", { message: Schema.String });
@@ -224,6 +224,7 @@ const run = Effect.try({
         ingressColo: outer?.$workers.event?.request?.cf?.colo ?? row.cfRay?.split("-").at(-1),
         sqlBindingBytes: add("writeBindingBytes"), kvJsonBytes: add("kvJsonBytes"),
         transactions: add("transactions"), transactionSync: add("transactionSync"),
+        writeTransactions: add("writeTransactions"), writeTransactionSync: add("writeTransactionSync"), overlappingTransactionCallbacks: add("overlappingTransactionCallbacks"),
         nativeSyncCalls: add("syncCalls"), nativeSyncWaitMs: add("syncWaitMs"),
         explicitProbeSyncMs: enabledSync,
         logicalMutationStatements: add("mutationStatements"),

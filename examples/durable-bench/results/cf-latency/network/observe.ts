@@ -17,12 +17,18 @@ const zero = () => ({
   writeBindingBytes: 0,
   writeSqlTextBytes: 0,
   kvPutCalls: 0,
+  kvDeleteCalls: 0,
   kvJsonBytes: 0,
   getAlarmCalls: 0,
   setAlarmCalls: 0,
   deleteAlarmCalls: 0,
   transactions: 0,
   transactionSync: 0,
+  writeTransactions: 0,
+  writeTransactionSync: 0,
+  overlappingTransactionCallbacks: 0,
+  transactionRollbacks: 0,
+  transactionWindowCrossings: 0,
   transactionFailures: 0,
   syncCalls: 0,
   syncWaitMs: 0,
@@ -260,6 +266,7 @@ export class Observation {
 }
 
 const observations = new WeakMap<DurableObjectStorage, Observation>();
+const mutations = (counts: Counts) => counts.mutationStatements + counts.kvPutCalls + counts.kvDeleteCalls + counts.setAlarmCalls + counts.deleteAlarmCalls;
 
 export const observation = (storage: DurableObjectStorage): Observation => {
   const found = observations.get(storage);
@@ -272,6 +279,7 @@ export const observation = (storage: DurableObjectStorage): Observation => {
 /** Wrap the state before super(), so SQL captured by framework constructors is observed too. */
 export function instrument(state: DurableObjectState, env: Env): DurableObjectState {
   const meter = new Observation(env, () => state.storage.sync());
+  let transactionCallbacks = 0;
 
   const sql = new Proxy(state.storage.sql, {
     get(target, property) {
@@ -338,6 +346,12 @@ export function instrument(state: DurableObjectState, env: Env): DurableObjectSt
         return value.apply(target, args);
       };
     }
+    if (property === "delete" || property === "deleteAll") {
+      return (...args: unknown[]) => {
+        if (meter.active) meter.counts.kvDeleteCalls++;
+        return value.apply(target, args);
+      };
+    }
     return value.bind(target);
   };
   const storage = new Proxy(state.storage, {
@@ -345,9 +359,13 @@ export function instrument(state: DurableObjectState, env: Env): DurableObjectSt
       if (property === "sql") return sql;
       if (property === "transactionSync")
         return <T>(callback: () => T) => {
-          if (meter.active) meter.counts.transactionSync++;
+          const counts = meter.active ? meter.counts : undefined;
+          const before = counts && mutations(counts);
+          if (counts) counts.transactionSync++;
           try {
-            return target.transactionSync(callback);
+            const result = target.transactionSync(callback);
+            if (counts && before !== undefined && mutations(counts) > before) counts.writeTransactionSync++;
+            return result;
           } catch (cause) {
             if (meter.active) meter.counts.transactionFailures++;
             throw cause;
@@ -355,12 +373,36 @@ export function instrument(state: DurableObjectState, env: Env): DurableObjectSt
         };
       if (property === "transaction")
         return async <T>(callback: (tx: DurableObjectTransaction) => Promise<T>) => {
-          if (meter.active) meter.counts.transactions++;
+          const counts = meter.active ? meter.counts : undefined;
+          if (counts) counts.transactions++;
+          let wrote = false;
+          let rolledBack = false;
           try {
-            return await target.transaction((tx) => callback(new Proxy(tx, { get: kvMethods })));
+            const result = await target.transaction(async (tx) => {
+              rolledBack = false;
+              const before = counts && mutations(counts);
+              if (counts && transactionCallbacks > 0) counts.overlappingTransactionCallbacks++;
+              transactionCallbacks++;
+              try { return await callback(new Proxy(tx, { get(target, property) {
+                if (property !== "rollback") return kvMethods(target, property);
+                return (...args: unknown[]) => {
+                  rolledBack = true;
+                  if (counts) counts.transactionRollbacks++;
+                  return Reflect.get(target, property, target).apply(target, args);
+                };
+              } })); }
+              finally {
+                transactionCallbacks--;
+                wrote = counts !== undefined && before !== undefined && mutations(counts) > before;
+              }
+            });
+            if (counts && wrote && !rolledBack) counts.writeTransactions++;
+            return result;
           } catch (cause) {
             if (meter.active) meter.counts.transactionFailures++;
             throw cause;
+          } finally {
+            if (counts && (meter.counts !== counts || !meter.active)) counts.transactionWindowCrossings++;
           }
         };
       return kvMethods(target, property);

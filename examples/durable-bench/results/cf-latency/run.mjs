@@ -456,6 +456,11 @@ const measureNetwork = async (pilot = false) => {
         await request(item, networkUrl("/run", cohort, `m${index++}`, extra), {}, "network-variant", cohort.object);
       }
     }
+    // Fully completed fixtures no longer need to keep their runtimes resident.
+    // Persisted history is retained; this is the same explicit, observed abort
+    // used for cold entry, outside every measured interval and for all targets.
+    const release = await request(item, networkUrl("/cold", cohort, "post-cohort-release"), {}, "cohort-release", cohort.object);
+    if (!release.response.ok || !release.response.coldRequested) throw new Error("Completed cohort release was not acknowledged");
     finished.push({ key, incarnation, completedAt: Date.now() });
     save(finishedFile, finished);
     console.log(`${name} measured ${finished.length}/${plan.cohorts.length}: ${key}`);
