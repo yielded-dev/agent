@@ -1,0 +1,31 @@
+[
+  {
+    "name": "pin",
+    "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "effectVersion": "4.0.0",
+    "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "fixtureSha256": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+    "fixtureFiles": [
+      {
+        "path": "examples/durable-bench/src/yielded.ts",
+        "sha256": "31a887d112bf75a8dfa10c2cdf62d88431e7d07233abb511ff77bc67ddc2159a"
+      },
+      {
+        "path": "examples/durable-bench/src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "examples/durable-bench/src/serve.ts",
+        "sha256": "662ec88f877f7bbcf7e78e7227fe689adfe3d6d2d9564cfd3746b92520881ddb"
+      }
+    ],
+    "wrapperSha256": "b3659e991c2de1f2ea91470cb7168e7b1bb7535dc3111dbb16f2b095efb02c01",
+    "bundleSha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+    "bundleBytes": 3433709,
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/effect-eval-cost-20261008/turn-bundle"
+  }
+]

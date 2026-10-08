@@ -1,0 +1,98 @@
+{
+  "complete": false,
+  "checkedAt": "2026-10-08T16:17:42.458Z",
+  "workerNamesVerified": 13,
+  "recordedNamespaceIdsVerified": 12,
+  "recordedNamespaceIds": [
+    "1a24c0cf17cc483db9f79618019e9350",
+    "3305ba2194f74957956384c139ab5ddc",
+    "4aca0b4249ae45af87ebf5122e19c414",
+    "4dc42c8b32194e70abeb86d47ad27e7a",
+    "5c221c91d8ec43188abcdcc120eb9dec",
+    "6916b490363d461f8116052f0a0f9899",
+    "7968076c11b24ff4b94e159aefa5c634",
+    "c3eca82ef5b7498f9876de38b3ac2a43",
+    "c4f4e2b8942b4cbe91837e17b482a0e3",
+    "caf2c8c14d80442188ea89cce04b293e",
+    "e8a919be0e244fedb42b91d223a2425c",
+    "eeea2371a8bd4f7b970ffc0695cf6616"
+  ],
+  "completeListing": true,
+  "pages": 1,
+  "remainingNamespaces": [],
+  "workers": [
+    {
+      "name": "effect-eval-cost-0db0c9ff-pin",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-0db0c9ff-pin-control",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-0db0c9ff-base",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-0db0c9ff-head",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-0db0c9ff-base-control",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-race-6379e339-pin",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-race-6379e339-pin-control",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-race-6379e339-base",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-race-6379e339-head",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-race-6379e339-base-control",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-turn-2cacd1eb-pin",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-turn-2cacd1eb-pin-control",
+      "status": 404
+    },
+    {
+      "name": "effect-eval-cost-91162aca-pin",
+      "status": 404
+    }
+  ],
+  "privateState": [
+    {
+      "lane": "calibration/hosted",
+      "directoryAbsent": true
+    },
+    {
+      "lane": "calibration-race/hosted",
+      "directoryAbsent": true
+    },
+    {
+      "lane": "real-turn/hosted",
+      "directoryAbsent": true
+    },
+    {
+      "lane": "calibration/failed-startup",
+      "directoryAbsent": true
+    }
+  ],
+  "valid": false,
+  "reason": "Supplemental recheck invalidated: ambient shell account hash differed from recorded deployment account. Original Alchemy cleanup checks used the deployment ownership guard and remain separate.",
+  "checkedAccountSha256": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd"
+}

@@ -1,0 +1,185 @@
+[
+  {
+    "name": "pin",
+    "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "effectCommit": null,
+    "effectVersion": "4.0.0",
+    "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+    "bundleSha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+    "bundleBytes": 667555,
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2022",
+    "countedSites": [
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "AsyncImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "IteratorImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "ContImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnSuccessAndFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "MatchImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnExitImpl"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "PrimitiveImpl"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "ExitPrimitive"
+      }
+    ],
+    "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/pin"
+  },
+  {
+    "name": "base",
+    "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "effectCommit": "757821fe99b7179f907d6d1a34a4e86de4173112",
+    "effectVersion": "4.0.1",
+    "buildId": "757821fe99b7179f907d6d1a34a4e86de4173112+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+    "bundleSha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+    "bundleBytes": 1314460,
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2022",
+    "countedSites": [
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "AsyncImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "IteratorImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "ContImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnSuccessAndFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "MatchImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnExitImpl"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "PrimitiveImpl"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "ExitPrimitive"
+      }
+    ],
+    "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/base"
+  },
+  {
+    "name": "head",
+    "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "effectCommit": "01c6222ccf74390848595633ef23410cbfa6983b",
+    "effectVersion": "4.0.1",
+    "buildId": "01c6222ccf74390848595633ef23410cbfa6983b+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+    "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+    "bundleSha256": "77b0c536b91243dfc8cbf4b2eb4dd57a578f8239b958978ea0d567347806523a",
+    "bundleBytes": 1327413,
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2022",
+    "countedSites": [
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "AsyncImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "IteratorImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "ContImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnSuccessAndFailureImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "MatchImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "OnExitImpl"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "Sync"
+      },
+      {
+        "file": "dist/internal/effect.js",
+        "constructor": "Suspend"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "PrimitiveImpl"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "ExitPrimitive"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "Success"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "Failure"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "WithFiber"
+      },
+      {
+        "file": "dist/internal/core.js",
+        "constructor": "WithFiberSucceed"
+      }
+    ],
+    "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/head"
+  }
+]

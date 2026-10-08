@@ -1,0 +1,58 @@
+{
+  "wholeAt50": {
+    "evaluations": 37431,
+    "allocations": 44024,
+    "evaluationModelMs": [
+      5.823439346781563,
+      9.953707987678808
+    ],
+    "allocationModelMs": [
+      8.501389567531989,
+      14.879211434101675
+    ]
+  },
+  "candidateScenarios": [
+    {
+      "name": "All success-path OnFailure frames",
+      "rangeMs": [
+        1.7627970377604165,
+        3.4333546956380205
+      ]
+    },
+    {
+      "name": "All span entries represented by 280 endSpan calls",
+      "rangeMs": [
+        1.6762288411458333,
+        2.9081217447916665
+      ]
+    },
+    {
+      "name": "KOM-433's actually demonstrated synchronous conversions",
+      "rangeMs": [
+        0.4192826544729319,
+        1.024753976653559
+      ]
+    },
+    {
+      "name": "Uncontended permit wrappers",
+      "rangeMs": [
+        0.17138671875,
+        0.333251953125
+      ]
+    },
+    {
+      "name": "The 56 race orchestration entries",
+      "rangeMs": [
+        0.042154947916666664,
+        0.16064453125
+      ]
+    },
+    {
+      "name": "Disabled failpoint calls and wrappers",
+      "rangeMs": [
+        0.0258636474609375,
+        0.03192901611328125
+      ]
+    }
+  ]
+}

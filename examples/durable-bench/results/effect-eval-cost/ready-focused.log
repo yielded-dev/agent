@@ -1,0 +1,76 @@
+~/tooling/pr-review-eval$ vp test
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/tooling/pr-review-eval
+
+ ✓ test/review-loop-fixtures.test.ts (1 test) 12ms
+ ✓ test/report.test.ts (5 tests) 30ms
+ ✓ test/eval-runner.test.ts (7 tests) 153ms
+ ❯ test/local-git-repository.test.ts (6 tests | 4 failed) 38522ms
+     × validates an exact changed path beyond the 100-result file listing 6496ms
+     × accepts changed source searchable despite the read-file line bound 7569ms
+     × keeps capacity-excluded paths readable while honoring explicit source exclusions 8582ms
+     × fails closed when a pinned blob is missing from a partial clone 6217ms
+     ✓ exposes committed callers and keeps the Action's ignore, binary, and symlink scope  4722ms
+     ✓ stamps local source identity on observations without claiming frozen fixture source  4936ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > validates an exact changed path beyond the 100-result file listing
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:156:6
+    154|
+    155| describe("pinned local Git review source", () => {
+    156|   it.effect("validates an exact changed path beyond the 100-result fil…
+       |      ^
+    157|     Effect.acquireUseRelease(
+    158|       Effect.sync(makeCrowdedGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > accepts changed source searchable despite the read-file line bound
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:184:6
+    182|   );
+    183|
+    184|   it.effect("accepts changed source searchable despite the read-file l…
+       |      ^
+    185|     Effect.acquireUseRelease(
+    186|       Effect.sync(makeLongLineGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > keeps capacity-excluded paths readable while honoring explicit source exclusions
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:210:6
+    208|   );
+    209|
+    210|   it.effect(
+       |      ^
+    211|     "keeps capacity-excluded paths readable while honoring explicit so…
+    212|     () =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  test/local-git-repository.test.ts > pinned local Git review source > fails closed when a pinned blob is missing from a partial clone
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/local-git-repository.test.ts:259:6
+    257|   );
+    258|
+    259|   it.effect("fails closed when a pinned blob is missing from a partial…
+       |      ^
+    260|     Effect.acquireUseRelease(
+    261|       Effect.sync(makePartialGitFixture),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  4 failed | 15 passed (19)
+   Start at  08:55:12
+   Duration  39.99s (transform 2.15s, setup 0ms, import 4.37s, tests 38.72s, environment 0ms)
+
+

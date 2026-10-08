@@ -1,0 +1,93 @@
+{
+  "scheduled": 2940,
+  "recorded": 2940,
+  "valid": 2817,
+  "problems": 138,
+  "identityContinuity": [
+    {
+      "role": "pin",
+      "instances": [
+        "6af2369a-a0c5-4b28-ac88-f92b42fe930f",
+        "4a631137-f965-4541-bcf4-8c64fc02607b"
+      ],
+      "incarnations": [
+        "45aa6ea4-1616-44c9-88e9-6d7c33de088c",
+        "7089d6eb-26fb-4f58-97fe-ad5df3d6a096"
+      ],
+      "versions": [
+        "a076392b-f9a7-45dd-9f32-8407f5988a7d"
+      ]
+    },
+    {
+      "role": "pin-control",
+      "instances": [
+        "c77aff6f-d5ee-4ee4-9a9a-5bfe14f961ef",
+        "86b34d99-a22a-4675-a55a-077fb5ea9e7a"
+      ],
+      "incarnations": [
+        "f55e6aa3-d5de-464c-8f08-3063fbca5a67"
+      ],
+      "versions": [
+        "aa76928b-c9b0-4516-8056-072f940e021d"
+      ]
+    },
+    {
+      "role": "base",
+      "instances": [
+        "dbe2482a-5945-4ffc-b896-728fdc8d2bdd",
+        "dedffbe3-0561-4f15-9f89-23322361b095"
+      ],
+      "incarnations": [
+        "e7b173e7-a006-4336-ae3c-701bf6b409d5"
+      ],
+      "versions": [
+        "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      ]
+    },
+    {
+      "role": "head",
+      "instances": [
+        "b24e3c2b-bd71-48c8-abfd-8fe8ce3d47e5",
+        "7f1bc870-2f8d-49ee-8369-79bf3fde99e3"
+      ],
+      "incarnations": [
+        "d8dfe8de-5e42-437a-88e7-9706ae336b8c"
+      ],
+      "versions": [
+        "28754956-6432-4315-a32c-9e2e98e1e2b2"
+      ]
+    },
+    {
+      "role": "base-control",
+      "instances": [
+        "32bb5189-f977-455b-9cf9-fe2469561a1d",
+        "e84f0ca3-fece-4ed8-92d3-365843e16fd8"
+      ],
+      "incarnations": [
+        "29016d40-039b-49c5-aa79-3a72ca6d5588",
+        "469bc2b3-7dac-408c-988a-3a293479876d"
+      ],
+      "versions": [
+        "e1fc2e4c-16f0-4b51-810d-b9a58527b6f8"
+      ]
+    }
+  ],
+  "outcomes": {
+    "pin": {
+      "ok": 1178
+    },
+    "pin-control": {
+      "ok": 1168
+    },
+    "base": {
+      "ok": 1183
+    },
+    "head": {
+      "ok": 1178
+    },
+    "base-control": {
+      "ok": 1196,
+      "exception": 16
+    }
+  }
+}

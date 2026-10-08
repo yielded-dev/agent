@@ -1,0 +1,17 @@
+{
+  "stack": "effect-eval-cost",
+  "roles": [
+    "pin",
+    "pin-control",
+    "base",
+    "head",
+    "base-control"
+  ],
+  "metric": "deployed DO invocation cpuTimeMs",
+  "iterations": "fixed per case; 1× and 4×",
+  "rounds": 7,
+  "locationHint": "wnam",
+  "cpuLimitMs": 300000,
+  "state": "private temporary directory",
+  "cleanup": "Alchemy destroy and API absence checks"
+}

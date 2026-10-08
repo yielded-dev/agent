@@ -1,0 +1,10 @@
+{
+  "python": "3.14.7",
+  "matplotlib": "3.11.2",
+  "numpy": "2.5.3",
+  "inputs": [
+    "calibration/summary.json",
+    "real-turn/summary.json",
+    "projection.json"
+  ]
+}

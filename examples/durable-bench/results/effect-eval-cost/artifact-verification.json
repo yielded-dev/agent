@@ -1,0 +1,62 @@
+{
+  "bundleChecks": [
+    {
+      "lane": "calibration",
+      "build": "pin",
+      "bundleBytes": 858056,
+      "sha256": "92f1568cd985f1a03a6b3185897ac017b75935a10e4bb9879c7b54a73524c937",
+      "retained": "calibration/build-identities/bundle-pin.mjs.gz"
+    },
+    {
+      "lane": "calibration",
+      "build": "base",
+      "bundleBytes": 1346089,
+      "sha256": "9a5e2e5e6f085ed4b7a5985c2fcb465df40f299893a599903e398357bd597fd4",
+      "retained": "calibration/build-identities/bundle-base.mjs.gz"
+    },
+    {
+      "lane": "calibration",
+      "build": "head",
+      "bundleBytes": 1359042,
+      "sha256": "0a204768801b32e16b0055b7bb9da48ec691d73d1bdb63378713522a7cdb16a4",
+      "retained": "calibration/build-identities/bundle-head.mjs.gz"
+    },
+    {
+      "lane": "calibration-race",
+      "build": "pin",
+      "bundleBytes": 667555,
+      "sha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+      "retained": "calibration-race/build-identities/bundle-pin.mjs.gz"
+    },
+    {
+      "lane": "calibration-race",
+      "build": "base",
+      "bundleBytes": 1314460,
+      "sha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+      "retained": "calibration-race/build-identities/bundle-base.mjs.gz"
+    },
+    {
+      "lane": "calibration-race",
+      "build": "head",
+      "bundleBytes": 1327413,
+      "sha256": "77b0c536b91243dfc8cbf4b2eb4dd57a578f8239b958978ea0d567347806523a",
+      "retained": "calibration-race/build-identities/bundle-head.mjs.gz"
+    },
+    {
+      "lane": "real-turn",
+      "build": "pin",
+      "bundleBytes": 3433709,
+      "sha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+      "retained": "real-turn/build-identities/bundle-pin.mjs.gz"
+    }
+  ],
+  "currentWorkerAndFixtureSourcesMatchMeasuredManifests": true,
+  "environmentSecretValuesScanned": 10,
+  "environmentSecretMatches": [],
+  "note": "Selected credential environment values compared as bytes against every retained file, including decompressed archives. No secret values are included in this receipt. All final repository changes are task evidence only.",
+  "localReportLinksChecked": true,
+  "symlinks": [],
+  "offlineReductionReceipt": "offline-replay.json",
+  "cleanupSupplementalLimitation": "cleanup-supplemental-status.json",
+  "uploadedBundlesContainNoCountHooks": true
+}

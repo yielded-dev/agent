@@ -1,0 +1,44 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:25:09.272] INFO (#1): Deploy · effect-eval-cost-91162aca-pin
+[08:25:09.272] INFO (#1): Importing stack module
+[08:25:10.572] INFO (#1): Resolving stack services
+[08:25:10.584] INFO (#1): Loading stack state
+[08:25:10.585] INFO (#1): Computing plan
+[08:25:10.588] INFO (#322): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:25:10.588] INFO (#322): Cloudflare Worker read: checking effect-eval-cost-91162aca-pin
+[08:25:10.772] INFO (#1): Plan ready (1.5s)
+[08:25:10.773] INFO (#1): Plan: 1 to create, 3 binding changes
+[08:25:10.773] INFO (#1): [effect-eval-cost-worker] create
+[08:25:10.773] INFO (#1): [effect-eval-cost-worker/BENCH] create
+[08:25:10.773] INFO (#1): [effect-eval-cost-worker/TOKEN] create
+[08:25:10.773] INFO (#1): [effect-eval-cost-worker/VERSION] create
+[08:25:10.773] INFO (#1): 
+[08:25:10.775] INFO (#392): [effect-eval-cost-worker] pre-creating
+[08:25:10.776] INFO (#392): Cloudflare Worker precreate: starting effect-eval-cost-91162aca-pin
+[08:25:10.776] INFO (#392): Cloudflare Worker precreate: durable objects [{"logicalId":"BENCH","bindingName":"BENCH","className":"Calibration"}]
+[08:25:12.289] INFO (#392): [effect-eval-cost-worker] creating
+[08:25:12.290] INFO (#392): Cloudflare Worker reconcile: starting effect-eval-cost-91162aca-pin
+[08:25:12.290] INFO (#392): Cloudflare Worker reconcile: durable objects [{"logicalId":"BENCH","className":"Calibration"}]
+[08:25:12.427] INFO (#392): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:BENCH=Calibration"]
+[08:25:12.427] INFO (#392): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:BENCH=Calibration"]
+[08:25:12.428] INFO (#392): Cloudflare Worker create: preparing bundle for effect-eval-cost-91162aca-pin
+[08:25:12.430] INFO (#392): Cloudflare Worker create: uploading script for effect-eval-cost-91162aca-pin
+[08:25:12.430] INFO (#392): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"BENCH":"Calibration"},"currentDoClassNameByLogicalId":{"BENCH":"Calibration"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:25:12.749] INFO (#392): [effect-eval-cost-worker] fail — ScriptStartupError: Uncaught Error: Disallowed operation called within global scope. Asynchronous I/O (ex: fetch() or connect()), setting a timeout, and generating random values are not allowed within global scope. To fix this error, perform this operation within a handler. https://developers.cloudflare.com/workers/runtime-apis/handlers/ (2.0s)
+[08:25:12.749] INFO (#1): 
+[08:25:12.749] INFO (#1): Failed: 0 succeeded, 1 failed (2.0s)
+[08:25:12.901] ERROR (#1): ScriptStartupError: Uncaught Error: Disallowed operation called within global scope. Asynchronous I/O (ex: fetch() or connect()), setting a timeout, and generating random values are not allowed within global scope. To fix this error, perform this operation within a handler. https://developers.cloudflare.com/workers/runtime-apis/handlers/
+  at worker.mjs:25178:26
+
+    at matchTypedError (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/@distilled.cloud+core@1.0.0-rc.13+a594d97e083afb95/node_modules/@distilled.cloud/core/src/protocol-http.ts:804:10)
+    at <anonymous> (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/@distilled.cloud+cloudflare@1.0.0-rc.13+a594d97e083afb95/node_modules/@distilled.cloud/cloudflare/src/protocol.ts:394:23)
+    at Effect.fn (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Cloudflare/Workers/WorkerProvider.ts:5836:25)
+    at Effect.fn (definition) (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Cloudflare/Workers/WorkerProvider.ts:3633:32)
+    at Effect.fn (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:983:12)
+    at Effect.fn (definition) (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Cloudflare/Workers/WorkerProvider.ts:5739:27)
+    at provider.create (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:135:14)
+    at apply.resource (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:1490:12)
+    at Effect.fn (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:265:14)
+    at Effect.fn (definition) (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:369:28)
+    at apply (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Apply.ts:354:12)
+    at openStackSessionUncached (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/alchemy@2.0.0-beta.80+99aba6469ffd2360/node_modules/alchemy/src/Alchemist/Session.ts:248:11)

@@ -1,0 +1,20 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[09:01:49.765] INFO (#1): Destroy · effect-eval-cost-turn-2cacd1eb-pin-control
+[09:01:49.765] INFO (#1): Importing stack module
+[09:01:50.687] INFO (#1): Resolving stack services
+[09:01:50.701] INFO (#1): Loading stack state
+[09:01:50.705] INFO (#1): Computing plan
+[09:01:50.725] INFO (#1): Plan ready (960ms)
+[09:01:50.726] INFO (#1): Plan: 1 to delete, 4 binding changes
+[09:01:50.726] INFO (#1): [effect-eval-cost-turn-worker] delete
+[09:01:50.726] INFO (#1): [effect-eval-cost-turn-worker/PHASE] unbind
+[09:01:50.726] INFO (#1): [effect-eval-cost-turn-worker/THREADS] unbind
+[09:01:50.726] INFO (#1): [effect-eval-cost-turn-worker/TOKEN] unbind
+[09:01:50.726] INFO (#1): [effect-eval-cost-turn-worker/VERSION] unbind
+[09:01:50.726] INFO (#1): 
+[09:01:50.733] INFO (#318): [effect-eval-cost-turn-worker] deleting
+[09:01:50.759] INFO (#318): Cloudflare Worker delete: deleting effect-eval-cost-turn-2cacd1eb-pin-control
+[09:01:50.761] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[09:01:51.610] INFO (#318): [effect-eval-cost-turn-worker] deleted (877ms)
+[09:01:51.617] INFO (#1): 
+[09:01:51.617] INFO (#1): Done: 1 succeeded (891ms)

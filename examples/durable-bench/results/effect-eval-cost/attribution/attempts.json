@@ -1,0 +1,793 @@
+[
+  {
+    "directory": "run-01",
+    "reportBytesSha256": "6444d4dce77286a8fcd81e45b9c306b2ddda3144d556c73cb6997c8dcb0c2838",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "failure": "Error: Build failed with 23 errors:\n../../node_modules/.bun/effect@4.0.0/node_modules/effect/dist/Tracer.js:12:42: ERROR: Expected \":\" but found \"__kom433_1270\"\n../../node_modules/.bun/effect@4.0.0/node_modules/effect/dist/ai/LanguageModel.js:174:55: ERROR: Expected \":\" but found \"__kom433_1506\"\n../../node_modules/.bun/effect@4.0.0/node_modules/effect/dist/ai/Response.js:62:43: ERROR: Expected \":\" but found \"__kom433_1934\"\n../../packages/effect-agent/src/core/Usage.ts:194:39: ERROR: Expected \":\" but found \"__kom433_1673\"\n../../packages/effect-agent/src/durable/DurableAgentRuntime.ts:658:51: ERROR: Expected \":\" but found \"__kom433_165\"\n...\n    at failureErrorWithLog (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:1748:15)\n    at /Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:1207:25\n    at runOnEndCallbacks (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:1588:45)\n    at buildResponseToResult (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:1205:7)\n    at /Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:1232:16\n    at responseCallbacks.<computed> (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:884:9)\n    at handleIncomingPacket (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:939:12)\n    at Socket.readFromStdout (/Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/lib/main.js:862:7)\n    at Socket.emit (node:events:514:28)\n    at addChunk (node:internal/streams/readable:568:12)",
+    "status": "superseded"
+  },
+  {
+    "directory": "run-02",
+    "reportBytesSha256": "584bce158c1b82995122be3ffdffee17a4ead85712db53ecdee8a56419a94395",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "d1fc1086d316cbbdb8af49773189ac930b2e503ceb1ad3e170b9c84a0b53723d",
+    "failure": null,
+    "interruption": "Sandbox loopback-listener EPERM terminated before harness could persist failure.",
+    "status": "superseded"
+  },
+  {
+    "directory": "run-03",
+    "reportBytesSha256": "8ca5d9f12e56c7d5c3d96041bbb9790443d1141405d2f88bf3c9231f42505751",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "d045486b5f5ac3768d8162ad0073c850d686b74a3c08422c723351ab88af0137",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "allocations": 44024,
+        "calls": 62160,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "allocations": 45194,
+        "calls": 63575,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "allocations": 46622,
+        "calls": 65218,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "allocations": 48052,
+        "calls": 66861,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "allocations": 49480,
+        "calls": 68504,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "allocations": 50911,
+        "calls": 70147,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "allocations": 52339,
+        "calls": 71790,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "allocations": 53767,
+        "calls": 73433,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "allocations": 55194,
+        "calls": 75076,
+        "unclosedSites": 7
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "allocations": 56623,
+        "calls": 76719,
+        "unclosedSites": 7
+      }
+    ],
+    "failure": null,
+    "status": "superseded",
+    "note": "Superseded attribution: earlier stage-filter/selector iteration. Do not use stage tables."
+  },
+  {
+    "directory": "run-04",
+    "reportBytesSha256": "46f52a2bfbe19b77f23f0c35495b27fa4c65611844f20bb528edc821330ff8e9",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "11e69b929b958c3bff606253966a7144c1f859cf853f7368817f24bb5dc31f37",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "allocations": 44024,
+        "calls": 62160,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "allocations": 45194,
+        "calls": 63575,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "allocations": 46622,
+        "calls": 65218,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "allocations": 48052,
+        "calls": 66861,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "allocations": 49480,
+        "calls": 68504,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "allocations": 50911,
+        "calls": 70147,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "allocations": 52339,
+        "calls": 71790,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "allocations": 53767,
+        "calls": 73433,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "allocations": 55194,
+        "calls": 75076,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "allocations": 56623,
+        "calls": 76719,
+        "unclosedSites": 0
+      }
+    ],
+    "failure": null,
+    "status": "superseded",
+    "note": "Superseded attribution: earlier stage-filter/selector iteration. Do not use stage tables."
+  },
+  {
+    "directory": "run-05",
+    "reportBytesSha256": "b0a321e5f5e228e60c4470212d031ecf0648bffa584e422ada71eb81e60b58d8",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "ad4df149ec626d4b256142d409ab512acf7767dd60bec360be906aacebe81190",
+    "harnessSha256": "2a55ee1dd0d8f09b68220aeddddba813c0695438dc19709f0a9e91259dab497b",
+    "probeSha256": "ff3123c16687878da804428f4ca23c5275638e0a5925b0c2442d87874ee2575a",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "allocations": 44024,
+        "calls": 64120,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "allocations": 45194,
+        "calls": 65517,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "allocations": 46622,
+        "calls": 67160,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "allocations": 48052,
+        "calls": 68803,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "allocations": 49480,
+        "calls": 70446,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "allocations": 50911,
+        "calls": 72089,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "allocations": 52339,
+        "calls": 73732,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "allocations": 53767,
+        "calls": 75375,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "allocations": 55194,
+        "calls": 77018,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "allocations": 56623,
+        "calls": 78661,
+        "unclosedSites": 0
+      }
+    ],
+    "failure": null,
+    "status": "superseded",
+    "note": "Superseded attribution: earlier stage-filter/selector iteration. Do not use stage tables."
+  },
+  {
+    "directory": "run-06",
+    "reportBytesSha256": "5e8de54239d06d6c1909faf2e6ea352a708b23ccc7d2a8822419a2f4c7183972",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "8734996272618312671343b5c6103830a9ecfb5e63e78fc0ae91586f5f31c630",
+    "harnessSha256": "b62d9ea0b7ebf24f0c52fcd61ea8f6c3f56d90b6caf3441a1285179a90256516",
+    "probeSha256": "9c717d4d7f80d932e7cc1741d365fb8daefe20b928a2434d2278637594146a01",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "allocations": 44024,
+        "calls": 64120,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "allocations": 45194,
+        "calls": 65517,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "allocations": 46622,
+        "calls": 67160,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "allocations": 48052,
+        "calls": 68803,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "allocations": 49480,
+        "calls": 70446,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "allocations": 50911,
+        "calls": 72089,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "allocations": 52339,
+        "calls": 73732,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "allocations": 53767,
+        "calls": 75375,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "allocations": 55194,
+        "calls": 77018,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "allocations": 56623,
+        "calls": 78661,
+        "unclosedSites": 0
+      }
+    ],
+    "failure": null,
+    "status": "superseded"
+  },
+  {
+    "directory": "final-counts",
+    "reportBytesSha256": "1857ce8f15cc342050fcedbb438270b897f4742603f6f2ab12c81a616e3a765e",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "1c66a69ec9625243c2f7d8362b126dac12b6caf630a4f68489de5205eb70bef3",
+    "harnessSha256": "99f65a1557707d51fe50b09ab58e148aa181c6db0b9d62a23c7a5af5d6b71daa",
+    "probeSha256": "d1b06fdc49e8b6d413823ee179bbcd916369e9273918ab60da721354a2ecf427",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "iteratorSuccesses": 1167,
+        "allocations": 44024,
+        "calls": 239059,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "iteratorSuccesses": 1167,
+        "allocations": 45194,
+        "calls": 221876,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "iteratorSuccesses": 1167,
+        "allocations": 46622,
+        "calls": 231253,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "iteratorSuccesses": 1167,
+        "allocations": 48052,
+        "calls": 240630,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "iteratorSuccesses": 1167,
+        "allocations": 49480,
+        "calls": 250007,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "iteratorSuccesses": 1167,
+        "allocations": 50911,
+        "calls": 259384,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "iteratorSuccesses": 1167,
+        "allocations": 52339,
+        "calls": 268761,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "iteratorSuccesses": 1167,
+        "allocations": 53767,
+        "calls": 278138,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "iteratorSuccesses": 1167,
+        "allocations": 55194,
+        "calls": 287515,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "iteratorSuccesses": 1167,
+        "allocations": 56623,
+        "calls": 296892,
+        "unclosedSites": 0
+      }
+    ],
+    "failure": null,
+    "status": "identical-final-repeat"
+  },
+  {
+    "directory": "capture",
+    "reportBytesSha256": "f79e2c8fb8f674694a46576478e0d222fa69c2ef3ede55a29f3d06ce7d5e3301",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "51a339ea864c60f1660dfea371f290c1f56f768ee4ca04ffd0724fc3a090ade3",
+    "harnessSha256": "99f65a1557707d51fe50b09ab58e148aa181c6db0b9d62a23c7a5af5d6b71daa",
+    "probeSha256": "d1b06fdc49e8b6d413823ee179bbcd916369e9273918ab60da721354a2ecf427",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "totals": [
+      {
+        "input": {
+          "id": "m0",
+          "text": "turn m0 tools=8"
+        },
+        "evaluations": 37431,
+        "inlineSuccesses": 2303,
+        "iteratorSuccesses": 1167,
+        "allocations": 44024,
+        "calls": 239059,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m1",
+          "text": "turn m1 tools=8"
+        },
+        "evaluations": 38338,
+        "inlineSuccesses": 2450,
+        "iteratorSuccesses": 1167,
+        "allocations": 45194,
+        "calls": 221876,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m2",
+          "text": "turn m2 tools=8"
+        },
+        "evaluations": 39335,
+        "inlineSuccesses": 2597,
+        "iteratorSuccesses": 1167,
+        "allocations": 46622,
+        "calls": 231253,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m3",
+          "text": "turn m3 tools=8"
+        },
+        "evaluations": 40336,
+        "inlineSuccesses": 2744,
+        "iteratorSuccesses": 1167,
+        "allocations": 48052,
+        "calls": 240630,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m4",
+          "text": "turn m4 tools=8"
+        },
+        "evaluations": 41333,
+        "inlineSuccesses": 2891,
+        "iteratorSuccesses": 1167,
+        "allocations": 49480,
+        "calls": 250007,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m5",
+          "text": "turn m5 tools=8"
+        },
+        "evaluations": 42335,
+        "inlineSuccesses": 3038,
+        "iteratorSuccesses": 1167,
+        "allocations": 50911,
+        "calls": 259384,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m6",
+          "text": "turn m6 tools=8"
+        },
+        "evaluations": 43332,
+        "inlineSuccesses": 3185,
+        "iteratorSuccesses": 1167,
+        "allocations": 52339,
+        "calls": 268761,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m7",
+          "text": "turn m7 tools=8"
+        },
+        "evaluations": 44331,
+        "inlineSuccesses": 3332,
+        "iteratorSuccesses": 1167,
+        "allocations": 53767,
+        "calls": 278138,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m8",
+          "text": "turn m8 tools=8"
+        },
+        "evaluations": 45329,
+        "inlineSuccesses": 3479,
+        "iteratorSuccesses": 1167,
+        "allocations": 55194,
+        "calls": 287515,
+        "unclosedSites": 0
+      },
+      {
+        "input": {
+          "id": "m9",
+          "text": "turn m9 tools=8"
+        },
+        "evaluations": 46329,
+        "inlineSuccesses": 3626,
+        "iteratorSuccesses": 1167,
+        "allocations": 56623,
+        "calls": 296892,
+        "unclosedSites": 0
+      }
+    ],
+    "failure": null,
+    "status": "final"
+  },
+  {
+    "directory": "plain-control",
+    "reportBytesSha256": "633c7367d85def153d04aec60f17d44dd5597ba878f9a356cec3a33cdae94137",
+    "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+    "bundleSha256": "c823d1745273673543621a777765ef3531a3392682dbc3bddea3981c5000defb",
+    "harnessSha256": "b62d9ea0b7ebf24f0c52fcd61ea8f6c3f56d90b6caf3441a1285179a90256516",
+    "probeSha256": "9c717d4d7f80d932e7cc1741d365fb8daefe20b928a2434d2278637594146a01",
+    "seedFingerprint": "b017b487524e44a4",
+    "measuredFingerprint": "b73859cee894aca6",
+    "failure": null,
+    "status": "uninstrumented-fingerprint-control"
+  }
+]

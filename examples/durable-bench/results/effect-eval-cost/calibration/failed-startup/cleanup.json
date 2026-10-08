@@ -1,0 +1,13 @@
+{
+  "complete": true,
+  "secretStateRemoved": true,
+  "checkedAt": "2026-10-08T15:25:49.582Z",
+  "checks": [
+    {
+      "worker": "effect-eval-cost-91162aca-pin",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:25:49.580Z"
+    }
+  ]
+}

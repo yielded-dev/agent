@@ -1,0 +1,52 @@
+{
+  "complete": true,
+  "secretStateRemoved": true,
+  "checkedAt": "2026-10-08T15:59:26.333Z",
+  "checks": [
+    {
+      "worker": "effect-eval-cost-0db0c9ff-pin",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:59:13.292Z"
+    },
+    {
+      "worker": "effect-eval-cost-0db0c9ff-pin-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:59:16.782Z"
+    },
+    {
+      "worker": "effect-eval-cost-0db0c9ff-base",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:59:19.854Z"
+    },
+    {
+      "worker": "effect-eval-cost-0db0c9ff-head",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:59:22.922Z"
+    },
+    {
+      "worker": "effect-eval-cost-0db0c9ff-base-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:59:26.330Z"
+    }
+  ],
+  "priorAttempts": [
+    {
+      "complete": true,
+      "secretStateRemoved": true,
+      "checkedAt": "2026-10-08T15:25:49.582Z",
+      "checks": [
+        {
+          "worker": "effect-eval-cost-91162aca-pin",
+          "workerGetStatus": 404,
+          "remainingNamespaces": [],
+          "checkedAt": "2026-10-08T15:25:49.580Z"
+        }
+      ]
+    }
+  ]
+}

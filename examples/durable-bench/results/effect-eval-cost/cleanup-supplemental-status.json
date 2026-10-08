@@ -1,0 +1,30 @@
+{
+  "complete": false,
+  "requiredOriginalCleanupComplete": true,
+  "reason": "Current ambient, direnv-scoped and project-dev Infisical credentials do not match the account hash captured at deployment. Supplemental verification fails closed before querying the mismatched account.",
+  "attempts": [
+    {
+      "context": "ambient shell, guard initially absent",
+      "status": "invalidated",
+      "receipt": "cleanup-api-recheck-wrong-account.json"
+    },
+    {
+      "context": "ambient shell with account guard",
+      "status": "account ownership mismatch; no verification accepted"
+    },
+    {
+      "context": "direnv repository context",
+      "status": "account hash mismatch"
+    },
+    {
+      "context": "Yielded project dev / via Universal Auth",
+      "status": "account ownership mismatch; no verification accepted"
+    },
+    {
+      "context": "Cloudflare accounts visible to provided token",
+      "status": "no account matches captured hash; no verification accepted"
+    }
+  ],
+  "effectOnPriorEvidence": "Original per-lane cleanup used the same account guard as deployment, completed Alchemy destroy, and verified Worker 404s and paginated DO namespace absence. Those successful receipts remain authoritative. No resource was mutated during the supplemental checks.",
+  "futureReplay": "verify-cleanup.mjs requires credentials for the captured account and checks recorded namespace IDs as well as script names."
+}

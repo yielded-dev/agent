@@ -1,0 +1,32 @@
+{
+  "run": "91162aca",
+  "accountSha256": "a462e66f1d3360f04ad50e46f4f3fe736ec85de50ca161caf0b78e366ec6af6c",
+  "privateDirectory": "/private/tmp/effect-eval-cost-20261008/state-91162aca",
+  "startedAt": 1791473105148,
+  "targets": [
+    {
+      "role": "pin",
+      "name": "effect-eval-cost-91162aca-pin",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/bundles/pin/worker.mjs",
+      "url": "https://effect-eval-cost-91162aca-pin.reve-ea6.workers.dev",
+      "build": {
+        "name": "pin",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": null,
+        "effectVersion": "4.0.0",
+        "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "c935011e22b5b1241934eb584d9359f7a0c307e645d20d6cca89771dedc6cf3e",
+        "bundleSha256": "73f9ad450ed84d47ce5b75fe13a63413b96ddfa8143049a025cd97f644fc1caf",
+        "bundleBytes": 858041,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [],
+        "output": "/private/tmp/effect-eval-cost-20261008/bundles/pin"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true
+    }
+  ]
+}

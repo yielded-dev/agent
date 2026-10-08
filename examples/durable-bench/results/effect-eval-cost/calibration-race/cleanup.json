@@ -1,0 +1,38 @@
+{
+  "complete": true,
+  "secretStateRemoved": true,
+  "checkedAt": "2026-10-08T15:57:37.298Z",
+  "checks": [
+    {
+      "worker": "effect-eval-cost-race-6379e339-pin",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:57:23.380Z"
+    },
+    {
+      "worker": "effect-eval-cost-race-6379e339-pin-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:57:27.981Z"
+    },
+    {
+      "worker": "effect-eval-cost-race-6379e339-base",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:57:30.894Z"
+    },
+    {
+      "worker": "effect-eval-cost-race-6379e339-head",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:57:33.855Z"
+    },
+    {
+      "worker": "effect-eval-cost-race-6379e339-base-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T15:57:37.293Z"
+    }
+  ],
+  "priorAttempts": []
+}

@@ -1,0 +1,21 @@
+~/tooling/pr-review-eval$ vp test
+
+ RUN  v4.1.11 /Users/dan/dev/effect-agent/.worktrees/dan-effect-eval-cost/tooling/pr-review-eval
+
+ ✓ test/review-loop-fixtures.test.ts (1 test) 12ms
+ ✓ test/report.test.ts (5 tests) 28ms
+ ✓ test/eval-runner.test.ts (7 tests) 153ms
+ ✓ test/local-git-repository.test.ts (6 tests) 18978ms
+     ✓ validates an exact changed path beyond the 100-result file listing  2471ms
+     ✓ accepts changed source searchable despite the read-file line bound  2841ms
+     ✓ keeps capacity-excluded paths readable while honoring explicit source exclusions  3108ms
+     ✓ fails closed when a pinned blob is missing from a partial clone  3358ms
+     ✓ exposes committed callers and keeps the Action's ignore, binary, and symlink scope  4253ms
+     ✓ stamps local source identity on observations without claiming frozen fixture source  2947ms
+
+ Test Files  4 passed (4)
+      Tests  19 passed (19)
+   Start at  09:02:35
+   Duration  19.80s (transform 913ms, setup 0ms, import 2.81s, tests 19.17s, environment 0ms)
+
+

@@ -1,0 +1,19 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:25:47.145] INFO (#1): Destroy · effect-eval-cost-91162aca-pin
+[08:25:47.145] INFO (#1): Importing stack module
+[08:25:47.916] INFO (#1): Resolving stack services
+[08:25:47.926] INFO (#1): Loading stack state
+[08:25:47.931] INFO (#1): Computing plan
+[08:25:47.934] INFO (#1): Plan ready (789ms)
+[08:25:47.935] INFO (#1): Plan: 1 to delete, 3 binding changes
+[08:25:47.935] INFO (#1): [effect-eval-cost-worker] delete
+[08:25:47.935] INFO (#1): [effect-eval-cost-worker/BENCH] unbind
+[08:25:47.935] INFO (#1): [effect-eval-cost-worker/TOKEN] unbind
+[08:25:47.935] INFO (#1): [effect-eval-cost-worker/VERSION] unbind
+[08:25:47.935] INFO (#1): 
+[08:25:47.936] INFO (#318): [effect-eval-cost-worker] deleting
+[08:25:47.937] INFO (#318): Cloudflare Worker delete: deleting effect-eval-cost-91162aca-pin
+[08:25:47.938] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:25:48.488] INFO (#318): [effect-eval-cost-worker] deleted (552ms)
+[08:25:48.489] INFO (#1): 
+[08:25:48.489] INFO (#1): Done: 1 succeeded (554ms)

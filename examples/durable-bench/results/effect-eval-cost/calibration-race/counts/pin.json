@@ -1,0 +1,785 @@
+[
+  {
+    "case": "empty",
+    "mode": "plain",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "plain",
+    "iterations": 1000,
+    "checksum": 1431050544,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "plain",
+    "iterations": 10000,
+    "checksum": 3244474304,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "plain",
+    "iterations": 16384,
+    "checksum": 3512074240,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "plain",
+    "iterations": 65536,
+    "checksum": 1163395072,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "effect",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "effect",
+    "iterations": 1000,
+    "checksum": 1431050544,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "effect",
+    "iterations": 10000,
+    "checksum": 3244474304,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "effect",
+    "iterations": 16384,
+    "checksum": 3512074240,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "empty",
+    "mode": "effect",
+    "iterations": 65536,
+    "checksum": 1163395072,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "plain",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "plain",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "plain",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "plain",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "plain",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "sync",
+    "mode": "effect",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 3,
+    "inlineSuccesses": 0,
+    "allocations": 3,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Success": 1
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "sync",
+    "mode": "effect",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 1003,
+    "inlineSuccesses": 0,
+    "allocations": 1003,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Sync": 1000,
+      "Success": 1
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 1000,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "sync",
+    "mode": "effect",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 10015,
+    "inlineSuccesses": 0,
+    "allocations": 10007,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Sync": 10000,
+      "OnSuccess": 4,
+      "Yield": 4,
+      "Success": 5
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 10000,
+      "ContImpl": 4,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "sync",
+    "mode": "effect",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 16411,
+    "inlineSuccesses": 0,
+    "allocations": 16395,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Sync": 16384,
+      "OnSuccess": 8,
+      "Yield": 8,
+      "Success": 9
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 16384,
+      "ContImpl": 8,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "sync",
+    "mode": "effect",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 65635,
+    "inlineSuccesses": 0,
+    "allocations": 65571,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Sync": 65536,
+      "OnSuccess": 32,
+      "Yield": 32,
+      "Success": 33
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 65536,
+      "ContImpl": 32,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "plain",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "plain",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "plain",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "plain",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "plain",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "effect",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 3,
+    "inlineSuccesses": 0,
+    "allocations": 3,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Success": 1
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "effect",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 5006,
+    "inlineSuccesses": 0,
+    "allocations": 5004,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 1000,
+      "Async": 1000,
+      "Sync": 1000,
+      "Success": 2002,
+      "OnSuccess": 1,
+      "Yield": 1
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 1000,
+      "PrimitiveImpl:WithFiber": 1000,
+      "OnExitImpl": 1000,
+      "AsyncImpl": 1000,
+      "ExitPrimitive:Success": 1001,
+      "ContImpl": 1
+    }
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "effect",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 50060,
+    "inlineSuccesses": 0,
+    "allocations": 50022,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 10000,
+      "Async": 10000,
+      "Sync": 10000,
+      "Success": 20020,
+      "OnSuccess": 19,
+      "Yield": 19
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 10000,
+      "PrimitiveImpl:WithFiber": 10000,
+      "OnExitImpl": 10000,
+      "AsyncImpl": 10000,
+      "ExitPrimitive:Success": 10001,
+      "ContImpl": 19
+    }
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "effect",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 82019,
+    "inlineSuccesses": 0,
+    "allocations": 81955,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 16384,
+      "Async": 16384,
+      "Sync": 16384,
+      "Success": 32801,
+      "OnSuccess": 32,
+      "Yield": 32
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 16384,
+      "PrimitiveImpl:WithFiber": 16384,
+      "OnExitImpl": 16384,
+      "AsyncImpl": 16384,
+      "ExitPrimitive:Success": 16385,
+      "ContImpl": 32
+    }
+  },
+  {
+    "case": "race-winner-first",
+    "mode": "effect",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 328067,
+    "inlineSuccesses": 0,
+    "allocations": 327811,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 65536,
+      "Async": 65536,
+      "Sync": 65536,
+      "Success": 131201,
+      "OnSuccess": 128,
+      "Yield": 128
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 65536,
+      "PrimitiveImpl:WithFiber": 65536,
+      "OnExitImpl": 65536,
+      "AsyncImpl": 65536,
+      "ExitPrimitive:Success": 65537,
+      "ContImpl": 128
+    }
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "plain",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "plain",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "plain",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "plain",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "plain",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "effect",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 3,
+    "inlineSuccesses": 0,
+    "allocations": 3,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "Success": 1
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "ExitPrimitive:Success": 1
+    }
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "effect",
+    "iterations": 1000,
+    "checksum": 516730632,
+    "evaluations": 13015,
+    "inlineSuccesses": 0,
+    "allocations": 12007,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 2000,
+      "Async": 3000,
+      "Sync": 1000,
+      "Success": 4005,
+      "OnSuccess": 2004,
+      "Failure": 1000,
+      "Yield": 4
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 2000,
+      "PrimitiveImpl:WithFiber": 2000,
+      "OnExitImpl": 1000,
+      "AsyncImpl": 2000,
+      "ExitPrimitive:Success": 2001,
+      "ContImpl": 2004,
+      "ExitPrimitive:Failure": 1000
+    }
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "effect",
+    "iterations": 10000,
+    "checksum": 1047786608,
+    "evaluations": 130147,
+    "inlineSuccesses": 0,
+    "allocations": 120051,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 20000,
+      "Async": 30000,
+      "Sync": 10000,
+      "Success": 40049,
+      "OnSuccess": 20048,
+      "Failure": 10000,
+      "Yield": 48
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 20000,
+      "PrimitiveImpl:WithFiber": 20000,
+      "OnExitImpl": 10000,
+      "AsyncImpl": 20000,
+      "ExitPrimitive:Success": 20001,
+      "ContImpl": 20048,
+      "ExitPrimitive:Failure": 10000
+    }
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "effect",
+    "iterations": 16384,
+    "checksum": 2321678336,
+    "evaluations": 213235,
+    "inlineSuccesses": 0,
+    "allocations": 196691,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 32768,
+      "Async": 49152,
+      "Sync": 16384,
+      "Success": 65617,
+      "OnSuccess": 32848,
+      "Failure": 16384,
+      "Yield": 80
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 32768,
+      "PrimitiveImpl:WithFiber": 32768,
+      "OnExitImpl": 16384,
+      "AsyncImpl": 32768,
+      "ExitPrimitive:Success": 32769,
+      "ContImpl": 32848,
+      "ExitPrimitive:Failure": 16384
+    }
+  },
+  {
+    "case": "race-loser-first",
+    "mode": "effect",
+    "iterations": 65536,
+    "checksum": 696778752,
+    "evaluations": 852931,
+    "inlineSuccesses": 0,
+    "allocations": 786755,
+    "operations": {
+      "Suspend": 1,
+      "Iterator": 1,
+      "WithFiber": 131072,
+      "Async": 196608,
+      "Sync": 65536,
+      "Success": 262465,
+      "OnSuccess": 131392,
+      "Failure": 65536,
+      "Yield": 320
+    },
+    "constructors": {
+      "PrimitiveImpl:Suspend": 1,
+      "IteratorImpl": 1,
+      "PrimitiveImpl:Sync": 131072,
+      "PrimitiveImpl:WithFiber": 131072,
+      "OnExitImpl": 65536,
+      "AsyncImpl": 131072,
+      "ExitPrimitive:Success": 131073,
+      "ContImpl": 131392,
+      "ExitPrimitive:Failure": 65536
+    }
+  },
+  {
+    "case": "allocate",
+    "mode": "plain",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "plain",
+    "iterations": 1000,
+    "checksum": 647618864,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "plain",
+    "iterations": 10000,
+    "checksum": 2541522368,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "plain",
+    "iterations": 1048576,
+    "checksum": 1986002944,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "plain",
+    "iterations": 4194304,
+    "checksum": 2088763392,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "effect",
+    "iterations": 0,
+    "checksum": 0,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 0,
+    "operations": {},
+    "constructors": {}
+  },
+  {
+    "case": "allocate",
+    "mode": "effect",
+    "iterations": 1000,
+    "checksum": 647618864,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 1000,
+    "operations": {},
+    "constructors": {
+      "ExitPrimitive:Success": 1000
+    }
+  },
+  {
+    "case": "allocate",
+    "mode": "effect",
+    "iterations": 10000,
+    "checksum": 2541522368,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 10000,
+    "operations": {},
+    "constructors": {
+      "ExitPrimitive:Success": 10000
+    }
+  },
+  {
+    "case": "allocate",
+    "mode": "effect",
+    "iterations": 1048576,
+    "checksum": 1986002944,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 1048576,
+    "operations": {},
+    "constructors": {
+      "ExitPrimitive:Success": 1048576
+    }
+  },
+  {
+    "case": "allocate",
+    "mode": "effect",
+    "iterations": 4194304,
+    "checksum": 2088763392,
+    "evaluations": 0,
+    "inlineSuccesses": 0,
+    "allocations": 4194304,
+    "operations": {},
+    "constructors": {
+      "ExitPrimitive:Success": 4194304
+    }
+  }
+]

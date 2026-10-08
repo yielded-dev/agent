@@ -1,0 +1,20 @@
+{
+  "complete": true,
+  "secretStateRemoved": true,
+  "checkedAt": "2026-10-08T16:01:53.138Z",
+  "checks": [
+    {
+      "worker": "effect-eval-cost-turn-2cacd1eb-pin",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T16:01:46.933Z"
+    },
+    {
+      "worker": "effect-eval-cost-turn-2cacd1eb-pin-control",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-08T16:01:53.117Z"
+    }
+  ],
+  "priorAttempts": []
+}

@@ -1,0 +1,552 @@
+{
+  "run": "6379e339",
+  "accountSha256": "a462e66f1d3360f04ad50e46f4f3fe736ec85de50ca161caf0b78e366ec6af6c",
+  "privateDirectory": "/private/tmp/effect-eval-cost-20261008/state-6379e339",
+  "startedAt": 1791474134862,
+  "targets": [
+    {
+      "role": "pin",
+      "name": "effect-eval-cost-race-6379e339-pin",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/race-bundles/pin/worker.mjs",
+      "url": "https://effect-eval-cost-race-6379e339-pin.reve-ea6.workers.dev",
+      "build": {
+        "name": "pin",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": null,
+        "effectVersion": "4.0.0",
+        "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "bundleSha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+        "bundleBytes": 667555,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "AsyncImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "IteratorImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "ContImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnSuccessAndFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "MatchImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnExitImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "PrimitiveImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "ExitPrimitive"
+          }
+        ],
+        "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/pin"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "3305ba2194f74957956384c139ab5ddc",
+          "name": "effect-eval-cost-race-6379e339-pin_Calibration",
+          "script": "effect-eval-cost-race-6379e339-pin"
+        }
+      ],
+      "objectName": "calibration-6379e339-1",
+      "identity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "incarnation": "667c32a2-1e36-4feb-abfa-aea18d93216f",
+        "instance": "61cb3b20-f47d-45e7-b527-ef103b82c045",
+        "objectId": "c88d9b097fe032f86d301164bf1f7c06699e342b1f22225374563e0c4112d9ab",
+        "version": "caf1749c-c8fa-414b-9872-d422e8c334e2",
+        "finalized": 0
+      }
+    },
+    {
+      "role": "pin-control",
+      "name": "effect-eval-cost-race-6379e339-pin-control",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/race-bundles/pin/worker.mjs",
+      "url": "https://effect-eval-cost-race-6379e339-pin-control.reve-ea6.workers.dev",
+      "build": {
+        "name": "pin",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": null,
+        "effectVersion": "4.0.0",
+        "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "bundleSha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+        "bundleBytes": 667555,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "AsyncImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "IteratorImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "ContImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnSuccessAndFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "MatchImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnExitImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "PrimitiveImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "ExitPrimitive"
+          }
+        ],
+        "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/pin"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "5ec2a38a9200ac6c06ad128ccf54fbc55e0000d31745869ada1aade00edfc794",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "4dc42c8b32194e70abeb86d47ad27e7a",
+          "name": "effect-eval-cost-race-6379e339-pin-control_Calibration",
+          "script": "effect-eval-cost-race-6379e339-pin-control"
+        }
+      ],
+      "objectName": "calibration-6379e339-0",
+      "identity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "incarnation": "12d1a28b-bf49-4b6d-aa6f-9d8cf248063d",
+        "instance": "16b6569d-0236-4847-8689-2548a5b92dad",
+        "objectId": "18d3c69c498e46357a0c4d01cf9b0b4abc753c8ef6f971f0cebff4b1e4317d9a",
+        "version": "5b161726-2e24-436c-89f1-a96c2cb88b24",
+        "finalized": 0
+      }
+    },
+    {
+      "role": "base",
+      "name": "effect-eval-cost-race-6379e339-base",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/race-bundles/base/worker.mjs",
+      "url": "https://effect-eval-cost-race-6379e339-base.reve-ea6.workers.dev",
+      "build": {
+        "name": "base",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": "757821fe99b7179f907d6d1a34a4e86de4173112",
+        "effectVersion": "4.0.1",
+        "buildId": "757821fe99b7179f907d6d1a34a4e86de4173112+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "bundleSha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+        "bundleBytes": 1314460,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "AsyncImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "IteratorImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "ContImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnSuccessAndFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "MatchImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnExitImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "PrimitiveImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "ExitPrimitive"
+          }
+        ],
+        "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/base"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "caf2c8c14d80442188ea89cce04b293e",
+          "name": "effect-eval-cost-race-6379e339-base_Calibration",
+          "script": "effect-eval-cost-race-6379e339-base"
+        }
+      ],
+      "objectName": "calibration-6379e339-1",
+      "identity": {
+        "build": "757821fe99b7179f907d6d1a34a4e86de4173112+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "incarnation": "041b73f0-23b6-4277-9fcc-4a89c6c8ffd7",
+        "instance": "324c5c3e-1d74-4617-9fc5-777a7c7c58a8",
+        "objectId": "6eb3b826dbf509151d0ec7f1b4e560a00ffe3660c6507895bcf23db5cf1b3637",
+        "version": "001ee1c4-d1ec-4eae-9b80-8a3cb451b423",
+        "finalized": 0
+      }
+    },
+    {
+      "role": "head",
+      "name": "effect-eval-cost-race-6379e339-head",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/race-bundles/head/worker.mjs",
+      "url": "https://effect-eval-cost-race-6379e339-head.reve-ea6.workers.dev",
+      "build": {
+        "name": "head",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": "01c6222ccf74390848595633ef23410cbfa6983b",
+        "effectVersion": "4.0.1",
+        "buildId": "01c6222ccf74390848595633ef23410cbfa6983b+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "bundleSha256": "77b0c536b91243dfc8cbf4b2eb4dd57a578f8239b958978ea0d567347806523a",
+        "bundleBytes": 1327413,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "AsyncImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "IteratorImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "ContImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnSuccessAndFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "MatchImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnExitImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "Sync"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "Suspend"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "PrimitiveImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "ExitPrimitive"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "Success"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "Failure"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "WithFiber"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "WithFiberSucceed"
+          }
+        ],
+        "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/head"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "77b0c536b91243dfc8cbf4b2eb4dd57a578f8239b958978ea0d567347806523a",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "e8a919be0e244fedb42b91d223a2425c",
+          "name": "effect-eval-cost-race-6379e339-head_Calibration",
+          "script": "effect-eval-cost-race-6379e339-head"
+        }
+      ],
+      "objectName": "calibration-6379e339-1",
+      "identity": {
+        "build": "01c6222ccf74390848595633ef23410cbfa6983b+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "incarnation": "8f80387a-b9f7-4328-b62a-990902f381f6",
+        "instance": "076b9a3f-5899-4207-be03-59450cf8b624",
+        "objectId": "42af936a469694c13573c8d291176b44e1cd358f5d955feac47f1c9af517228f",
+        "version": "4dac5c0c-316b-4d44-8b54-9f0b5911289c",
+        "finalized": 0
+      }
+    },
+    {
+      "role": "base-control",
+      "name": "effect-eval-cost-race-6379e339-base-control",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/race-bundles/base/worker.mjs",
+      "url": "https://effect-eval-cost-race-6379e339-base-control.reve-ea6.workers.dev",
+      "build": {
+        "name": "base",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectCommit": "757821fe99b7179f907d6d1a34a4e86de4173112",
+        "effectVersion": "4.0.1",
+        "buildId": "757821fe99b7179f907d6d1a34a4e86de4173112+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "bundleSha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+        "bundleBytes": 1314460,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2022",
+        "countedSites": [
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "AsyncImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "IteratorImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "ContImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnSuccessAndFailureImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "MatchImpl"
+          },
+          {
+            "file": "dist/internal/effect.js",
+            "constructor": "OnExitImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "PrimitiveImpl"
+          },
+          {
+            "file": "dist/internal/core.js",
+            "constructor": "ExitPrimitive"
+          }
+        ],
+        "output": "/private/tmp/effect-eval-cost-20261008/race-bundles/base"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "db479a6928dc4a27a1706f397a7c53a1d90bfb4214f1af8aedac38a20f08b611",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "7968076c11b24ff4b94e159aefa5c634",
+          "name": "effect-eval-cost-race-6379e339-base-control_Calibration",
+          "script": "effect-eval-cost-race-6379e339-base-control"
+        }
+      ],
+      "objectName": "calibration-6379e339-2",
+      "identity": {
+        "build": "757821fe99b7179f907d6d1a34a4e86de4173112+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "cecfbc7abb9216e08403c0dd0c274dba3bbb1096559ca9ecacb3832f3527466c",
+        "incarnation": "7ffb3fa1-43b3-4759-89a3-6ec494fa05e7",
+        "instance": "7a7b9c44-5fa8-4d2d-985d-1c8eeebcff96",
+        "objectId": "ca0bb2343ec412ad82e4e6015d76ff662454f6d0f82016f1699ecd6a8c691ff1",
+        "version": "295030d7-b0d5-4a7a-b11e-bcc85ef8df17",
+        "finalized": 0
+      }
+    }
+  ]
+}

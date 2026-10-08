@@ -1,0 +1,47 @@
+{
+  "reducersExitCodes": {
+    "calibration": 1,
+    "calibration-race": 1,
+    "real-turn": 1
+  },
+  "expectedNonzeroReason": "Retained missing telemetry and failure records; reducers wrote complete outputs.",
+  "outputs": [
+    {
+      "path": "calibration/summary.json",
+      "byteIdentical": true,
+      "sha256": "e7948779c31ffc560d9ba73af48ce6f25572b6862708fb8d0fe2f7869b0a4343"
+    },
+    {
+      "path": "calibration/samples.json",
+      "byteIdentical": true,
+      "sha256": "5637f0700005699ccb6d1c94b55e607298e56afa0b5c384db7534799008781ce"
+    },
+    {
+      "path": "calibration-race/summary.json",
+      "byteIdentical": true,
+      "sha256": "1a66ee677dafa99fcf7e06486393ac624254a7bbfa9895965e678450deffe5c0"
+    },
+    {
+      "path": "calibration-race/samples.json",
+      "byteIdentical": true,
+      "sha256": "853d8b452721053e2057c45786a967a8fe343e091e3ee3e4b00209548f64bb23"
+    },
+    {
+      "path": "real-turn/samples.json",
+      "byteIdentical": true,
+      "sha256": "dccf7bde8ed330f648569e07cff7c95340145343be85c2f159eb56807e41a151"
+    },
+    {
+      "path": "attribution/summary.json",
+      "byteIdentical": true,
+      "sha256": "cf19b5940b3278a23673f43703245ba6685ae798f82fb0f1d5488cb74320a204"
+    },
+    {
+      "path": "projection.json",
+      "byteIdentical": true,
+      "sha256": "30309280cf86e78c9b2e057fbdf6a80f157c5002b17a40b879a11361f4d17390"
+    }
+  ],
+  "attributionReducerExitCode": 0,
+  "synthesisExitCode": 0
+}

@@ -1,0 +1,85 @@
+{
+  "scheduled": 560,
+  "recorded": 560,
+  "valid": 538,
+  "problems": 30,
+  "identityContinuity": [
+    {
+      "role": "pin",
+      "instances": [
+        "2b8f018e-1c66-4254-97e1-3d2a16547eef"
+      ],
+      "incarnations": [
+        "667c32a2-1e36-4feb-abfa-aea18d93216f"
+      ],
+      "versions": [
+        "caf1749c-c8fa-414b-9872-d422e8c334e2"
+      ]
+    },
+    {
+      "role": "pin-control",
+      "instances": [
+        "e36945c8-6ddf-4790-bf7a-05deb84cf572"
+      ],
+      "incarnations": [
+        "12d1a28b-bf49-4b6d-aa6f-9d8cf248063d"
+      ],
+      "versions": [
+        "5b161726-2e24-436c-89f1-a96c2cb88b24"
+      ]
+    },
+    {
+      "role": "base",
+      "instances": [
+        "f91eb1d9-d2a2-41e1-b61f-ce62001679d1"
+      ],
+      "incarnations": [
+        "041b73f0-23b6-4277-9fcc-4a89c6c8ffd7"
+      ],
+      "versions": [
+        "001ee1c4-d1ec-4eae-9b80-8a3cb451b423"
+      ]
+    },
+    {
+      "role": "head",
+      "instances": [
+        "a5733181-9e7a-4cf7-b06b-650fb3394354"
+      ],
+      "incarnations": [
+        "8f80387a-b9f7-4328-b62a-990902f381f6"
+      ],
+      "versions": [
+        "4dac5c0c-316b-4d44-8b54-9f0b5911289c"
+      ]
+    },
+    {
+      "role": "base-control",
+      "instances": [
+        "9fd94e52-850e-4fa0-a7d7-66ba43194e04"
+      ],
+      "incarnations": [
+        "7ffb3fa1-43b3-4759-89a3-6ec494fa05e7"
+      ],
+      "versions": [
+        "295030d7-b0d5-4a7a-b11e-bcc85ef8df17"
+      ]
+    }
+  ],
+  "outcomes": {
+    "pin": {
+      "ok": 229
+    },
+    "pin-control": {
+      "ok": 227
+    },
+    "base": {
+      "ok": 225
+    },
+    "head": {
+      "ok": 234
+    },
+    "base-control": {
+      "ok": 225
+    }
+  }
+}

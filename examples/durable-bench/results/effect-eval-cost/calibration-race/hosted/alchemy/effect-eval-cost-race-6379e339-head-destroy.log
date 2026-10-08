@@ -1,0 +1,19 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:57:32.030] INFO (#1): Destroy · effect-eval-cost-race-6379e339-head
+[08:57:32.030] INFO (#1): Importing stack module
+[08:57:32.764] INFO (#1): Resolving stack services
+[08:57:32.773] INFO (#1): Loading stack state
+[08:57:32.775] INFO (#1): Computing plan
+[08:57:32.784] INFO (#1): Plan ready (754ms)
+[08:57:32.785] INFO (#1): Plan: 1 to delete, 3 binding changes
+[08:57:32.786] INFO (#1): [effect-eval-cost-race-worker] delete
+[08:57:32.786] INFO (#1): [effect-eval-cost-race-worker/BENCH] unbind
+[08:57:32.786] INFO (#1): [effect-eval-cost-race-worker/TOKEN] unbind
+[08:57:32.786] INFO (#1): [effect-eval-cost-race-worker/VERSION] unbind
+[08:57:32.786] INFO (#1): 
+[08:57:32.788] INFO (#318): [effect-eval-cost-race-worker] deleting
+[08:57:32.789] INFO (#318): Cloudflare Worker delete: deleting effect-eval-cost-race-6379e339-head
+[08:57:32.790] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:57:33.329] INFO (#318): [effect-eval-cost-race-worker] deleted (542ms)
+[08:57:33.331] INFO (#1): 
+[08:57:33.331] INFO (#1): Done: 1 succeeded (545ms)

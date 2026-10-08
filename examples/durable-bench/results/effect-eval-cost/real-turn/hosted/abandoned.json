@@ -1,0 +1,14 @@
+[
+  {
+    "round": 5,
+    "target": "pin",
+    "reason": "Interrupted cohort; preserve attempted turns and do not retry a turn with unknown execution outcome",
+    "unattempted": [
+      "real-5-m5",
+      "real-5-m6",
+      "real-5-m7",
+      "real-5-m8",
+      "real-5-m9"
+    ]
+  }
+]

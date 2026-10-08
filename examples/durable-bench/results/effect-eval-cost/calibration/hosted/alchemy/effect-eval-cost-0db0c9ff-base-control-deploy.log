@@ -1,0 +1,35 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:27:23.968] INFO (#1): Deploy · effect-eval-cost-0db0c9ff-base-control
+[08:27:23.969] INFO (#1): Importing stack module
+[08:27:24.683] INFO (#1): Resolving stack services
+[08:27:24.693] INFO (#1): Loading stack state
+[08:27:24.694] INFO (#1): Computing plan
+[08:27:24.697] INFO (#315): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:27:24.697] INFO (#315): Cloudflare Worker read: checking effect-eval-cost-0db0c9ff-base-control
+[08:27:24.826] INFO (#1): Plan ready (858ms)
+[08:27:24.827] INFO (#1): Plan: 1 to create, 3 binding changes
+[08:27:24.827] INFO (#1): [effect-eval-cost-worker] create
+[08:27:24.827] INFO (#1): [effect-eval-cost-worker/BENCH] create
+[08:27:24.827] INFO (#1): [effect-eval-cost-worker/TOKEN] create
+[08:27:24.827] INFO (#1): [effect-eval-cost-worker/VERSION] create
+[08:27:24.827] INFO (#1): 
+[08:27:24.830] INFO (#385): [effect-eval-cost-worker] pre-creating
+[08:27:24.830] INFO (#385): Cloudflare Worker precreate: starting effect-eval-cost-0db0c9ff-base-control
+[08:27:24.830] INFO (#385): Cloudflare Worker precreate: durable objects [{"logicalId":"BENCH","bindingName":"BENCH","className":"Calibration"}]
+[08:27:25.737] INFO (#385): [effect-eval-cost-worker] creating
+[08:27:25.737] INFO (#385): Cloudflare Worker reconcile: starting effect-eval-cost-0db0c9ff-base-control
+[08:27:25.737] INFO (#385): Cloudflare Worker reconcile: durable objects [{"logicalId":"BENCH","className":"Calibration"}]
+[08:27:25.926] INFO (#385): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:BENCH=Calibration"]
+[08:27:25.926] INFO (#385): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:BENCH=Calibration"]
+[08:27:25.927] INFO (#385): Cloudflare Worker create: preparing bundle for effect-eval-cost-0db0c9ff-base-control
+[08:27:25.931] INFO (#385): Cloudflare Worker create: uploading script for effect-eval-cost-0db0c9ff-base-control
+[08:27:25.931] INFO (#385): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"BENCH":"Calibration"},"currentDoClassNameByLogicalId":{"BENCH":"Calibration"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:27:27.318] INFO (#385): [effect-eval-cost-worker] created — Enabling workers.dev subdomain... (2.5s)
+[08:27:27.319] INFO (#474): [effect-eval-cost-worker] created — Enabling workers.dev subdomain... (2.5s)
+[08:27:27.320] INFO (#1): 
+[08:27:27.320] INFO (#1): Done: 1 succeeded (2.5s)
+{
+  workerName: 'effect-eval-cost-0db0c9ff-base-control',
+  url: 'https://effect-eval-cost-0db0c9ff-base-control.reve-ea6.workers.dev',
+  namespaces: { Calibration: 'c4f4e2b8942b4cbe91837e17b482a0e3' }
+}

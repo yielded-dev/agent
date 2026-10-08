@@ -1,0 +1,14 @@
+{
+  "stack": "effect-eval-cost-turn",
+  "roles": [
+    "pin",
+    "pin-control"
+  ],
+  "history": 50,
+  "rounds": 7,
+  "turns": 10,
+  "timing": "DO measured RPC cpuTimeMs; wake/recovery is a separate invocation",
+  "locationHint": "wnam",
+  "cpuLimitMs": 300000,
+  "generation": "same bundle; environment update proves fresh module/runtime before measurement"
+}

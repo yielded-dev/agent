@@ -1,0 +1,167 @@
+{
+  "method": "Compare deployed seed/final table row counts to the uninstrumented deterministic fixture; bytes vary with generated identifiers and physical SQLite pages.",
+  "rows": [
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 0,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 0,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 1,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 1,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 2,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 2,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 3,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 3,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 4,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 4,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 5,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 5,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin",
+      "round": 6,
+      "mismatch": {}
+    },
+    {
+      "file": "seeds.json",
+      "target": "pin-control",
+      "round": 6,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 0,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 0,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 1,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 1,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 2,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 2,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 3,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 3,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 4,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 4,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 5,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin",
+      "round": 6,
+      "mismatch": {}
+    },
+    {
+      "file": "fingerprints.json",
+      "target": "pin-control",
+      "round": 6,
+      "mismatch": {}
+    }
+  ]
+}

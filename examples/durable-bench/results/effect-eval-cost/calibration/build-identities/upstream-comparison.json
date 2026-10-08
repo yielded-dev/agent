@@ -1,0 +1,7 @@
+{
+  "effectHead": "01c6222ccf74390848595633ef23410cbfa6983b",
+  "fetchedUpstreamMain": "13ace20e6c0501a0d01eb2b028672081c9780e42",
+  "mergeBase": "757821fe99b7179f907d6d1a34a4e86de4173112",
+  "sourcePatchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+  "comparison": "Head versus its merge-base, never current main; pinned patched 4.0.0 is an additional calibration."
+}

@@ -1,0 +1,16 @@
+{
+  "target": "base-control",
+  "phase": "measured",
+  "input": {
+    "id": "measured-0-sql-1-plain",
+    "case": "sql",
+    "mode": "plain",
+    "iterations": 4096
+  },
+  "status": null,
+  "error": "TypeError: fetch failed before an HTTP response was recorded; this attempt is not retried",
+  "startedAtLowerBound": 1791473564175,
+  "endedAtUpperBound": 1791473649446,
+  "clientWallMs": null,
+  "response": null
+}

@@ -1,0 +1,8 @@
+{
+  "pid": 95128,
+  "parentPid": 1,
+  "processGroup": 89229,
+  "ownedFailedGateProcessGroup": 89229,
+  "verifiedCommandIsOwnWorktreeWorkerd": true,
+  "action": "SIGTERM"
+}

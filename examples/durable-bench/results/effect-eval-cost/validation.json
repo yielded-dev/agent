@@ -1,0 +1,110 @@
+{
+  "sourceRevision": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+  "fullHandoff": {
+    "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 VITEST_MAX_WORKERS=1 vp run ready",
+    "exitCode": 0,
+    "log": "ready.log",
+    "taskCacheHits": 51,
+    "taskTotal": 71,
+    "scope": "Repository static/export/type checks, existing test tasks and builds. Vite Task cache reused successful results; relevant existing suites were also executed during preceding attempts."
+  },
+  "priorAttempts": [
+    {
+      "log": "ready-sandbox.log",
+      "outcome": "Sandbox localhost/listener EPERM; normal checks required elevated local networking."
+    },
+    {
+      "log": "ready-timeouts.log",
+      "outcome": "Five existing Git-fixture tests exceeded their unchanged five-second timeout. Gate later hung with an owned workerd descendant."
+    },
+    {
+      "log": "ready-focused.log",
+      "outcome": "Focused retry reproduced Git-fixture timeouts."
+    },
+    {
+      "log": "ready-serial-tests.log",
+      "outcome": "Serial workspace test tasks passed except one existing Git-fixture timeout. Hermetic Git configuration excluded personal hooks/config. Other suites including Cloudflare passed."
+    },
+    {
+      "log": "ready-focused-clean.log",
+      "outcome": "After terminating only the verified orphan owned by the failed gate, the focused four files / 19 tests passed with original timeouts."
+    }
+  ],
+  "environmentDoctor": {
+    "command": "vp env doctor",
+    "log": "env-doctor.log",
+    "node": "24.21.0",
+    "bun": "1.4.2",
+    "note": "Managed runtime resolves correctly; NVM_DIR/VOLTA_HOME environment coexistence warnings retained."
+  },
+  "productCodeChanges": false,
+  "newProductTests": false,
+  "localBenchmarkTimingRun": false,
+  "proof": [
+    "Two exact deterministic count captures with plain transcript/canonical-table control",
+    "Microcase plain/Effect checksums across pin/base/head and both measured iteration sizes",
+    "Race ordered-checksum and loser-finalization proof",
+    "Deployed whole-turn historical/final fingerprints and canonical table-count comparison",
+    "Unique invocation CPU joins with explicit missing telemetry; missing CPU is not imputed",
+    "Alchemy destroy plus Worker/DO namespace API absence checks for all owned resources"
+  ],
+  "limitations": [
+    "Hosted analyzers intentionally exit1 because missing telemetry and failures remain explicit; that is separate from the passed repository handoff gate.",
+    "Ordinary repository tests exercise local runtimes but no timings from those tests are benchmark evidence.",
+    "No unit tests were added or timeout values increased."
+  ],
+  "logs": [
+    {
+      "path": "ready.log",
+      "sha256": "030de74d0f61d530f1b751dbfebd9c9c5a34fc51e49f2291d6370a5b6d04fd66",
+      "bytes": 206020
+    },
+    {
+      "path": "ready-sandbox.log",
+      "sha256": "e16e8bf5f31a627bfc5fa9f55b50820072ef90decc6229fdd8cd3dbc879a5630",
+      "bytes": 81903
+    },
+    {
+      "path": "ready-timeouts.log",
+      "sha256": "95cb385da03831ca4ce19cb7f2740f8662697899735c8d5af0ba1ffe92c053ab",
+      "bytes": 102175
+    },
+    {
+      "path": "ready-focused.log",
+      "sha256": "4637f2d8eb5f2a11ceae72f7aa53ef4e89de8f8b1e134f079eb158639402f420",
+      "bytes": 3685
+    },
+    {
+      "path": "ready-serial-tests.log",
+      "sha256": "530af5545401425ca45219c1223d2eb60d36462b39b597547bbeceb2a383c8e6",
+      "bytes": 26102
+    },
+    {
+      "path": "ready-focused-clean.log",
+      "sha256": "1593f96f25a8edf9951e2017f5d631a9ff1bd3cde4c2999e3375652ad818a329",
+      "bytes": 1050
+    },
+    {
+      "path": "env-doctor.log",
+      "sha256": "04f318b44fb699bab2d3067ef20c6bc23ed792ef72f4fcdf5fd7b54eec15c960",
+      "bytes": 2344
+    },
+    {
+      "path": "local-test-cleanup.json",
+      "sha256": "d126d8f724696a8a6fac201a0cf3d793471e6f1db99f4f3be978878d1ced5a19",
+      "bytes": 172
+    }
+  ],
+  "finalArtifactReview": {
+    "all237StagedPathsUnderTaskDirectory": true,
+    "ownHarnessAndReportDiffCheck": "passed",
+    "historicalCopyDiffCheck": "Six intentional Markdown hard-break trailing spaces retained unchanged in kom433-source/discovery-architecture.md.",
+    "offlineReplay": "Seven packed numeric outputs reproduced byte-for-byte; three reducer exit1 statuses expected because original telemetry is incomplete.",
+    "controllerDryRuns": {
+      "calibration": 0,
+      "calibration-race": 0,
+      "real-turn": 0
+    },
+    "cleanupRecheckLimitation": "cleanup-supplemental-status.json"
+  }
+}

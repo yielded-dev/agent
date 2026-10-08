@@ -1,0 +1,68 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:51:25.375] INFO (#1): Deploy · effect-eval-cost-turn-2cacd1eb-pin
+[08:51:25.375] INFO (#1): Importing stack module
+[08:51:26.628] INFO (#1): Resolving stack services
+[08:51:26.640] INFO (#1): Loading stack state
+[08:51:26.641] INFO (#1): Computing plan
+[08:51:26.645] INFO (#322): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:51:26.645] INFO (#322): Cloudflare Worker read: checking effect-eval-cost-turn-2cacd1eb-pin
+[08:51:26.821] INFO (#1): Plan ready (1.4s)
+[08:51:26.822] INFO (#1): Plan: 1 to create, 4 binding changes
+[08:51:26.822] INFO (#1): [effect-eval-cost-turn-worker] create
+[08:51:26.822] INFO (#1): [effect-eval-cost-turn-worker/PHASE] create
+[08:51:26.822] INFO (#1): [effect-eval-cost-turn-worker/THREADS] create
+[08:51:26.822] INFO (#1): [effect-eval-cost-turn-worker/TOKEN] create
+[08:51:26.822] INFO (#1): [effect-eval-cost-turn-worker/VERSION] create
+[08:51:26.822] INFO (#1): 
+[08:51:26.829] INFO (#403): [effect-eval-cost-turn-worker] pre-creating
+[08:51:26.830] INFO (#403): Cloudflare Worker precreate: starting effect-eval-cost-turn-2cacd1eb-pin
+[08:51:26.830] INFO (#403): Cloudflare Worker precreate: durable objects [{"logicalId":"THREADS","bindingName":"THREADS","className":"MeasuredYieldedDO"}]
+[08:51:27.662] INFO (#403): [effect-eval-cost-turn-worker] creating
+[08:51:27.663] INFO (#403): Cloudflare Worker reconcile: starting effect-eval-cost-turn-2cacd1eb-pin
+[08:51:27.663] INFO (#403): Cloudflare Worker reconcile: durable objects [{"logicalId":"THREADS","className":"MeasuredYieldedDO"}]
+[08:51:27.892] INFO (#403): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:THREADS=MeasuredYieldedDO"]
+[08:51:27.892] INFO (#403): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:THREADS=MeasuredYieldedDO"]
+[08:51:27.892] INFO (#403): Cloudflare Worker create: preparing bundle for effect-eval-cost-turn-2cacd1eb-pin
+[08:51:27.896] INFO (#403): Cloudflare Worker create: uploading script for effect-eval-cost-turn-2cacd1eb-pin
+[08:51:27.897] INFO (#403): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"THREADS":"MeasuredYieldedDO"},"currentDoClassNameByLogicalId":{"THREADS":"MeasuredYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:51:31.193] INFO (#403): [effect-eval-cost-turn-worker] created — Enabling workers.dev subdomain... (4.4s)
+[08:51:31.195] INFO (#508): [effect-eval-cost-turn-worker] created — Enabling workers.dev subdomain... (4.4s)
+[08:51:31.195] INFO (#1): 
+[08:51:31.195] INFO (#1): Done: 1 succeeded (4.4s)
+{
+  workerName: 'effect-eval-cost-turn-2cacd1eb-pin',
+  url: 'https://effect-eval-cost-turn-2cacd1eb-pin.reve-ea6.workers.dev',
+  namespaces: { MeasuredYieldedDO: 'eeea2371a8bd4f7b970ffc0695cf6616' }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[08:54:44.317] INFO (#1): Deploy · effect-eval-cost-turn-2cacd1eb-pin
+[08:54:44.318] INFO (#1): Importing stack module
+[08:54:45.253] INFO (#1): Resolving stack services
+[08:54:45.264] INFO (#1): Loading stack state
+[08:54:45.270] INFO (#1): Computing plan
+[08:54:45.273] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[08:54:45.276] INFO (#1): Plan ready (959ms)
+[08:54:45.276] INFO (#1): Plan: 1 to update, 1 binding changes
+[08:54:45.276] INFO (#1): [effect-eval-cost-turn-worker] update
+[08:54:45.276] INFO (#1): [effect-eval-cost-turn-worker/PHASE] update
+[08:54:45.276] INFO (#1): [effect-eval-cost-turn-worker/THREADS] noop
+[08:54:45.276] INFO (#1): [effect-eval-cost-turn-worker/TOKEN] noop
+[08:54:45.276] INFO (#1): [effect-eval-cost-turn-worker/VERSION] noop
+[08:54:45.276] INFO (#1): 
+[08:54:45.279] INFO (#471): [effect-eval-cost-turn-worker] updating
+[08:54:45.279] INFO (#471): Cloudflare Worker reconcile: starting effect-eval-cost-turn-2cacd1eb-pin
+[08:54:45.279] INFO (#471): Cloudflare Worker reconcile: durable objects [{"logicalId":"THREADS","className":"MeasuredYieldedDO"}]
+[08:54:45.498] INFO (#471): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:THREADS=MeasuredYieldedDO"]
+[08:54:45.498] INFO (#471): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:THREADS=MeasuredYieldedDO"]
+[08:54:45.499] INFO (#471): Cloudflare Worker update: preparing bundle for effect-eval-cost-turn-2cacd1eb-pin
+[08:54:45.503] INFO (#471): Cloudflare Worker update: uploading script for effect-eval-cost-turn-2cacd1eb-pin
+[08:54:45.503] INFO (#471): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"THREADS":"MeasuredYieldedDO"},"currentDoClassNameByLogicalId":{"THREADS":"MeasuredYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[08:54:47.569] INFO (#471): [effect-eval-cost-turn-worker] updated — Uploading worker (3.27 MB) ... (2.3s)
+[08:54:47.571] INFO (#567): [effect-eval-cost-turn-worker] updated — Uploading worker (3.27 MB) ... (2.3s)
+[08:54:47.572] INFO (#1): 
+[08:54:47.572] INFO (#1): Done: 1 succeeded (2.3s)
+{
+  workerName: 'effect-eval-cost-turn-2cacd1eb-pin',
+  url: 'https://effect-eval-cost-turn-2cacd1eb-pin.reve-ea6.workers.dev',
+  namespaces: { MeasuredYieldedDO: 'eeea2371a8bd4f7b970ffc0695cf6616' }
+}

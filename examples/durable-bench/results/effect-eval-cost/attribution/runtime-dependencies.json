@@ -1,0 +1,22 @@
+{
+  "miniflare": {
+    "version": "5.20260811.1-alpha",
+    "packageJsonSha256": "af6b24b9269dc7e78c50297d9bdb0117828a254bef9399bd1f5e37cb3f39a318",
+    "path": "node_modules/.bun/miniflare@5.20260811.1-alpha/node_modules/miniflare/package.json"
+  },
+  "workerd": {
+    "version": "1.20260811.1",
+    "packageJsonSha256": "426532f77b220a2ef932c6ab958fa5e27e7ebbf0875ce5c11f788355b5498f5b",
+    "path": "node_modules/.bun/workerd@1.20260811.1/node_modules/workerd/package.json"
+  },
+  "esbuild": {
+    "version": "0.28.1",
+    "packageJsonSha256": "d55d1d19fcc5b6079e4a71dd4111340c79c682bc36835ac7058a0c364c7db58a",
+    "path": "node_modules/.bun/esbuild@0.28.1/node_modules/esbuild/package.json"
+  },
+  "effect": {
+    "version": "4.0.0",
+    "packageJsonSha256": "e30881994b541533b0da3e06d53e2530ac2f0e5cf66232c9c037a658c5b8330c",
+    "path": "node_modules/.bun/effect@4.0.0/node_modules/effect/package.json"
+  }
+}

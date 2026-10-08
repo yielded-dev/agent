@@ -1,0 +1,777 @@
+{
+  "createdAt": 1791473282376,
+  "locationHint": "wnam",
+  "rounds": 1,
+  "schedule": [
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-empty-1-plain",
+        "case": "empty",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-empty-1-effect",
+        "case": "empty",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-empty-1-plain",
+        "case": "empty",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-empty-1-effect",
+        "case": "empty",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-empty-1-plain",
+        "case": "empty",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-empty-1-effect",
+        "case": "empty",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-empty-1-plain",
+        "case": "empty",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-empty-1-effect",
+        "case": "empty",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-empty-1-plain",
+        "case": "empty",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-empty-1-effect",
+        "case": "empty",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-sync-1-plain",
+        "case": "sync",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-sync-1-effect",
+        "case": "sync",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-sync-1-plain",
+        "case": "sync",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-sync-1-effect",
+        "case": "sync",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-sync-1-plain",
+        "case": "sync",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-sync-1-effect",
+        "case": "sync",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-sync-1-plain",
+        "case": "sync",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-sync-1-effect",
+        "case": "sync",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-sync-1-plain",
+        "case": "sync",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-sync-1-effect",
+        "case": "sync",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-gen8-1-plain",
+        "case": "gen8",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-gen8-1-effect",
+        "case": "gen8",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-gen8-1-plain",
+        "case": "gen8",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-gen8-1-effect",
+        "case": "gen8",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-gen8-1-plain",
+        "case": "gen8",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-gen8-1-effect",
+        "case": "gen8",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-gen8-1-plain",
+        "case": "gen8",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-gen8-1-effect",
+        "case": "gen8",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-gen8-1-plain",
+        "case": "gen8",
+        "mode": "plain",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-gen8-1-effect",
+        "case": "gen8",
+        "mode": "effect",
+        "iterations": 65536
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-fn-traced-1-plain",
+        "case": "fn-traced",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-fn-traced-1-effect",
+        "case": "fn-traced",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-fn-traced-1-plain",
+        "case": "fn-traced",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-fn-traced-1-effect",
+        "case": "fn-traced",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-fn-traced-1-plain",
+        "case": "fn-traced",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-fn-traced-1-effect",
+        "case": "fn-traced",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-fn-traced-1-plain",
+        "case": "fn-traced",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-fn-traced-1-effect",
+        "case": "fn-traced",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-fn-traced-1-plain",
+        "case": "fn-traced",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-fn-traced-1-effect",
+        "case": "fn-traced",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-stream8-1-plain",
+        "case": "stream8",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-stream8-1-effect",
+        "case": "stream8",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-stream8-1-plain",
+        "case": "stream8",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-stream8-1-effect",
+        "case": "stream8",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-stream8-1-plain",
+        "case": "stream8",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-stream8-1-effect",
+        "case": "stream8",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-stream8-1-plain",
+        "case": "stream8",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-stream8-1-effect",
+        "case": "stream8",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-stream8-1-plain",
+        "case": "stream8",
+        "mode": "plain",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-stream8-1-effect",
+        "case": "stream8",
+        "mode": "effect",
+        "iterations": 16384
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-sql-1-plain",
+        "case": "sql",
+        "mode": "plain",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-sql-1-effect",
+        "case": "sql",
+        "mode": "effect",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-sql-1-plain",
+        "case": "sql",
+        "mode": "plain",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-sql-1-effect",
+        "case": "sql",
+        "mode": "effect",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-sql-1-plain",
+        "case": "sql",
+        "mode": "plain",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-sql-1-effect",
+        "case": "sql",
+        "mode": "effect",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-sql-1-plain",
+        "case": "sql",
+        "mode": "plain",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-sql-1-effect",
+        "case": "sql",
+        "mode": "effect",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-sql-1-plain",
+        "case": "sql",
+        "mode": "plain",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-sql-1-effect",
+        "case": "sql",
+        "mode": "effect",
+        "iterations": 4096
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-allocate-1-plain",
+        "case": "allocate",
+        "mode": "plain",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin",
+      "input": {
+        "id": "pilot-0-allocate-1-effect",
+        "case": "allocate",
+        "mode": "effect",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-allocate-1-plain",
+        "case": "allocate",
+        "mode": "plain",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "pin-control",
+      "input": {
+        "id": "pilot-0-allocate-1-effect",
+        "case": "allocate",
+        "mode": "effect",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-allocate-1-plain",
+        "case": "allocate",
+        "mode": "plain",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base",
+      "input": {
+        "id": "pilot-0-allocate-1-effect",
+        "case": "allocate",
+        "mode": "effect",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-allocate-1-plain",
+        "case": "allocate",
+        "mode": "plain",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "head",
+      "input": {
+        "id": "pilot-0-allocate-1-effect",
+        "case": "allocate",
+        "mode": "effect",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-allocate-1-plain",
+        "case": "allocate",
+        "mode": "plain",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    },
+    {
+      "target": "base-control",
+      "input": {
+        "id": "pilot-0-allocate-1-effect",
+        "case": "allocate",
+        "mode": "effect",
+        "iterations": 1048576
+      },
+      "round": 0,
+      "scale": 1
+    }
+  ]
+}

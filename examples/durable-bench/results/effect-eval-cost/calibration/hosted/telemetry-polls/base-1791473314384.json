@@ -1,0 +1,228 @@
+{
+  "query": {
+    "queryId": "effect-eval-cost-0db0c9ff-base",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791473115620,
+      "to": 1791473373869
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$workers.scriptName",
+          "operation": "eq",
+          "type": "string",
+          "value": "effect-eval-cost-0db0c9ff-base"
+        }
+      ]
+    }
+  },
+  "count": 8,
+  "events": [
+    {
+      "timestamp": 1791473284063,
+      "id": "01M4E21WYZ000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "8054c6ab46355f51fcccb9e645244e3a",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 7,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "sample": "pilot-0-empty-1-effect",
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473284058,
+      "id": "01M4E21WYT0000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "8054c6ab46355f51fcccb9e645244e3a",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 3,
+      "outcome": "ok",
+      "durableObjectId": "4d20eaa8ed35d2e809f0538e9108fa5b285749cec5cff61a03ce82f3569669d4",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "rpcMethods": [
+        "run"
+      ],
+      "rpcCallCount": 1,
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473284058,
+      "id": "01M4E21WYT0000000000000003",
+      "metadataType": "cf-worker",
+      "traceId": "8054c6ab46355f51fcccb9e645244e3a",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "4d20eaa8ed35d2e809f0538e9108fa5b285749cec5cff61a03ce82f3569669d4",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "rpcMethod": "run",
+      "evalCostSample": "pilot-0-empty-1-effect",
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473283973,
+      "id": "01M4E21WW5000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "d38b7836edf74dfad9e853ad97dffa19",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 180,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "sample": "pilot-0-empty-1-plain",
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473283970,
+      "id": "01M4E21WW20000000000000007",
+      "metadataType": "cf-worker-event",
+      "traceId": "d38b7836edf74dfad9e853ad97dffa19",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 6,
+      "outcome": "ok",
+      "durableObjectId": "4d20eaa8ed35d2e809f0538e9108fa5b285749cec5cff61a03ce82f3569669d4",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "rpcMethods": [
+        "run"
+      ],
+      "rpcCallCount": 1,
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473283970,
+      "id": "01M4E21WW20000000000000003",
+      "metadataType": "cf-worker",
+      "traceId": "d38b7836edf74dfad9e853ad97dffa19",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "durableObjectId": "4d20eaa8ed35d2e809f0538e9108fa5b285749cec5cff61a03ce82f3569669d4",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "rpcMethod": "run",
+      "evalCostSample": "pilot-0-empty-1-plain",
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473222418,
+      "id": "01M4E200RJ000000000000000A",
+      "metadataType": "cf-worker-event",
+      "traceId": "7c9f86e89dee865ef08b6c98e998104d",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "stateless",
+      "eventType": "fetch",
+      "cpuTimeMs": 6,
+      "wallTimeMs": 530,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "sample": null,
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    },
+    {
+      "timestamp": 1791473222367,
+      "id": "01M4E200PZ0000000000000006",
+      "metadataType": "cf-worker-event",
+      "traceId": "7c9f86e89dee865ef08b6c98e998104d",
+      "scriptName": "effect-eval-cost-0db0c9ff-base",
+      "executionModel": "durableObject",
+      "eventType": "jsrpc",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 117,
+      "outcome": "ok",
+      "durableObjectId": "4d20eaa8ed35d2e809f0538e9108fa5b285749cec5cff61a03ce82f3569669d4",
+      "scriptVersion": {
+        "id": "a4a65bd4-d711-42a4-bc38-fe69ea75286d"
+      },
+      "truncated": false,
+      "rpcMethods": [
+        "identity"
+      ],
+      "rpcCallCount": 1,
+      "topLevelKeys": [
+        "source",
+        "dataset",
+        "timestamp",
+        "$workers",
+        "$metadata"
+      ]
+    }
+  ]
+}

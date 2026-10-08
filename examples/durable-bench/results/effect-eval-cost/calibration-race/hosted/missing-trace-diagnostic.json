@@ -1,0 +1,48 @@
+{
+  "query": {
+    "queryId": "effect-eval-cost-missing-trace",
+    "dry": true,
+    "view": "events",
+    "limit": 2000,
+    "timeframe": {
+      "from": 1791474180442,
+      "to": 1791474240442
+    },
+    "parameters": {
+      "filterCombination": "and",
+      "filters": [
+        {
+          "key": "$metadata.traceId",
+          "operation": "eq",
+          "type": "string",
+          "value": "23f9a3f6cbd710eb185b95e0d945cb98"
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "statistics": {
+    "elapsed": 0.079978056,
+    "rows_read": 11112,
+    "bytes_read": 19959743,
+    "abr_level": 1
+  },
+  "events": [
+    {
+      "id": "01M4E2Y5MA0000000000000007",
+      "traceId": "23f9a3f6cbd710eb185b95e0d945cb98",
+      "type": "cf-worker-event",
+      "script": "effect-eval-cost-race-6379e339-pin",
+      "model": "durableObject",
+      "outcome": "ok",
+      "cpu": 7
+    },
+    {
+      "id": "01M4E2Y5MA0000000000000003",
+      "traceId": "23f9a3f6cbd710eb185b95e0d945cb98",
+      "type": "cf-worker",
+      "script": "effect-eval-cost-race-6379e339-pin",
+      "model": "durableObject"
+    }
+  ]
+}

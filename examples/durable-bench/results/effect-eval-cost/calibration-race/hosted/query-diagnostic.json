@@ -1,0 +1,12 @@
+{
+  "status": 200,
+  "count": 343,
+  "statistics": {
+    "abrLevel": 1,
+    "bytesRead": 833018768,
+    "rowsRead": 4953924
+  },
+  "sampleIntervals": [
+    1
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "run": "2cacd1eb",
+  "accountSha256": "a462e66f1d3360f04ad50e46f4f3fe736ec85de50ca161caf0b78e366ec6af6c",
+  "privateDirectory": "/private/tmp/effect-eval-cost-20261008/state-2cacd1eb",
+  "startedAt": 1791474683416,
+  "targets": [
+    {
+      "role": "pin",
+      "name": "effect-eval-cost-turn-2cacd1eb-pin",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/turn-bundle/worker.mjs",
+      "generation": "measure",
+      "url": "https://effect-eval-cost-turn-2cacd1eb-pin.reve-ea6.workers.dev",
+      "build": {
+        "name": "pin",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectVersion": "4.0.0",
+        "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "fixtureFiles": [
+          {
+            "path": "examples/durable-bench/src/yielded.ts",
+            "sha256": "31a887d112bf75a8dfa10c2cdf62d88431e7d07233abb511ff77bc67ddc2159a"
+          },
+          {
+            "path": "examples/durable-bench/src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "examples/durable-bench/src/serve.ts",
+            "sha256": "662ec88f877f7bbcf7e78e7227fe689adfe3d6d2d9564cfd3746b92520881ddb"
+          }
+        ],
+        "wrapperSha256": "b3659e991c2de1f2ea91470cb7168e7b1bb7535dc3111dbb16f2b095efb02c01",
+        "bundleSha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+        "bundleBytes": 3433709,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/effect-eval-cost-20261008/turn-bundle"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "eeea2371a8bd4f7b970ffc0695cf6616",
+          "name": "effect-eval-cost-turn-2cacd1eb-pin_MeasuredYieldedDO",
+          "script": "effect-eval-cost-turn-2cacd1eb-pin"
+        }
+      ],
+      "objectName": "measure-ready-2cacd1eb-0",
+      "identity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "incarnation": "1eb4caeb-cefa-46e0-913b-83dfead85f08",
+        "instance": "a2e27dbe-bb7b-48b1-9cea-3141cd9fc4d9",
+        "objectId": "f9d385845ea5bfeaad13dbb1e6060ee87d79d83b496df42763e43555b334ef71",
+        "version": "5b483b33-f87b-4c14-8c1d-bc72fdacc1f2",
+        "generation": "measure"
+      },
+      "seedIdentity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "incarnation": "25f061e3-7a78-49d1-97d2-68b7a8a999eb",
+        "instance": "536103b9-9b0c-4cd1-bc0e-01be9fde6cac",
+        "objectId": "3342f65820e7eae8d8c61c18c11ecefa3e602bb7172dd50915f87a30c4c0b694",
+        "version": "f9ebe772-a436-49ea-9f50-c7c98d0bf148",
+        "generation": "seed"
+      }
+    },
+    {
+      "role": "pin-control",
+      "name": "effect-eval-cost-turn-2cacd1eb-pin-control",
+      "bundle": "/private/tmp/effect-eval-cost-20261008/turn-bundle/worker.mjs",
+      "generation": "measure",
+      "url": "https://effect-eval-cost-turn-2cacd1eb-pin-control.reve-ea6.workers.dev",
+      "build": {
+        "name": "pin",
+        "repositoryCommit": "8c05714de84d68961b14e5ab7a3b7d809599563f",
+        "effectVersion": "4.0.0",
+        "buildId": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "patchSha256": "0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixtureSha256": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "fixtureFiles": [
+          {
+            "path": "examples/durable-bench/src/yielded.ts",
+            "sha256": "31a887d112bf75a8dfa10c2cdf62d88431e7d07233abb511ff77bc67ddc2159a"
+          },
+          {
+            "path": "examples/durable-bench/src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "examples/durable-bench/src/serve.ts",
+            "sha256": "662ec88f877f7bbcf7e78e7227fe689adfe3d6d2d9564cfd3746b92520881ddb"
+          }
+        ],
+        "wrapperSha256": "b3659e991c2de1f2ea91470cb7168e7b1bb7535dc3111dbb16f2b095efb02c01",
+        "bundleSha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+        "bundleBytes": 3433709,
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/effect-eval-cost-20261008/turn-bundle"
+      },
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "uploadedModuleSha256": "9c2369ccc95ea0a5e6031f74b49a4c962d9921feff537e86fe35a74c02010d7e",
+      "settings": {
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "id": "6916b490363d461f8116052f0a0f9899",
+          "name": "effect-eval-cost-turn-2cacd1eb-pin-control_MeasuredYieldedDO",
+          "script": "effect-eval-cost-turn-2cacd1eb-pin-control"
+        }
+      ],
+      "objectName": "measure-ready-2cacd1eb-0",
+      "identity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "incarnation": "c9b34498-a79b-4cd2-9661-3434620544c5",
+        "instance": "96892559-fb3b-478c-bae1-91695eb271f5",
+        "objectId": "0147d97edc45c469324c58f581e8cacc8e3c8a53c1a02e7ff8c2723fed686960",
+        "version": "3afeb79b-a6b5-4587-bda4-52354ce8fad5",
+        "generation": "measure"
+      },
+      "seedIdentity": {
+        "build": "effect@4.0.0+patch:0051517e101fedd1c2822d1b9787accbc7025afab1624ac97bf5ba41d54a3229",
+        "fixture": "8a0017cd405df8afcd90afa88944b670090e54db3f87da71ace68a60ea7a591f",
+        "incarnation": "c4f96bf6-cd06-4603-8fa1-5af5725cc7b9",
+        "instance": "d2c4adc0-2e88-46da-a31f-f80480d847b4",
+        "objectId": "e7697d7ad0dfc265ac8245c6387fe3dfd20e61675bf1f230c8f2e208a03e48ab",
+        "version": "54af4c69-53ae-4476-b1ab-66606726c781",
+        "generation": "seed"
+      }
+    }
+  ]
+}

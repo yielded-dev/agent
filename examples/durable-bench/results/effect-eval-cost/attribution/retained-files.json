@@ -1,0 +1,30 @@
+[
+  {
+    "file": "capture/report.json.gz",
+    "uncompressedBytes": 9146951,
+    "uncompressedSha256": "f79e2c8fb8f674694a46576478e0d222fa69c2ef3ede55a29f3d06ce7d5e3301",
+    "compressedBytes": 584134,
+    "compressedSha256": "e6069b2ca234087cd703b3a9104ab2f17e1d05ade6b30ec3d1c09a36309cd562"
+  },
+  {
+    "file": "capture/sites.json.gz",
+    "uncompressedBytes": 4819927,
+    "uncompressedSha256": "e4d159713c50275b50c2aaccbf25e9a39b933d159a75b67cba982f0396f45be4",
+    "compressedBytes": 220113,
+    "compressedSha256": "bad0e305a461f853118d62098ced928b0cb568382877129612e9267a60394cd5"
+  },
+  {
+    "file": "repeat/report.json.gz",
+    "uncompressedBytes": 9146951,
+    "uncompressedSha256": "1857ce8f15cc342050fcedbb438270b897f4742603f6f2ab12c81a616e3a765e",
+    "compressedBytes": 584134,
+    "compressedSha256": "0b5c21c3b3c15bd432b886ec2604a84fbd3f1a8d93c3d9fe3baba678e73aaf19"
+  },
+  {
+    "file": "plain-control/report.json.gz",
+    "uncompressedBytes": 4420,
+    "uncompressedSha256": "633c7367d85def153d04aec60f17d44dd5597ba878f9a356cec3a33cdae94137",
+    "compressedBytes": 1264,
+    "compressedSha256": "122a47a7933d228f5d237d8c5dd3b90c2fd0862e8f96746fb5a1b7d720569c49"
+  }
+]
