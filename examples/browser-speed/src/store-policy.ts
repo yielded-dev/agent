@@ -92,12 +92,12 @@ const refuse = (message: string) =>
 /**
  * Host authorization for real stores. Everywhere: no purchase or express-payment buttons, no
  * marketing opt-ins, no accounts, and the test email only on checkout pages. Once checkout starts
- * (a checkout URL, or any test-buyer detail typed), buttons and links may only move between steps
+ * (a checkout URL, or a completed fill of a test-buyer detail), buttons and links may only move between steps
  * and Enter and Space are refused, so an order cannot be submitted under any label. Once a card
  * field is authorized, no further clicks or key presses are allowed.
  *
- * `settle` records acknowledged fills: `cardEntered` is true only after the exact test number,
- * expiry and CVC were each acknowledged in their fields.
+ * `settle` records completed fills: they start checkout, and `cardEntered` is true only after the
+ * exact test number, expiry and CVC were each completed in their fields.
  */
 export const makeCheckoutPolicy = () => {
   let checkout = false;
@@ -123,7 +123,6 @@ export const makeCheckoutPolicy = () => {
 
         return Effect.void;
       }
-      if (buyerValues.has(action.value.trim().toLowerCase())) checkout = true;
     }
     if (cardStarted && action.kind !== "fill" && action.kind !== "select")
       return refuse(
@@ -161,15 +160,21 @@ export const makeCheckoutPolicy = () => {
     return Effect.void;
   };
 
-  /** Records completed fills of the test card's values into the card fields they targeted. */
+  /** Records completed fills: test-buyer details start checkout, test card values count as entered. */
   const settle = (
-    actions: ReadonlyArray<{ readonly kind: string; readonly ref: string }>,
+    actions: ReadonlyArray<{
+      readonly kind: string;
+      readonly ref: string;
+      readonly value?: string;
+    }>,
     result: { readonly completed: number },
   ) =>
     actions.slice(0, result.completed).forEach((action) => {
+      if (action.kind !== "fill") return;
       const field = cardRefs.get(action.ref);
 
-      if (action.kind === "fill" && field !== undefined) entered.add(field);
+      if (field !== undefined) entered.add(field);
+      if (buyerValues.has((action.value ?? "").trim().toLowerCase())) checkout = true;
     });
 
   return {

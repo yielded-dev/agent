@@ -949,10 +949,11 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
     let space = observation === undefined ? yield* observe : yield* toSpace(observation);
 
     for (let step = 1; step <= maxSteps; step++) {
-      // A page with no controls or text is still rendering: wait instead of asking for a
-      // decision, under the same ten-second WAIT cap.
+      // A page with no text and nothing to click or scroll is still rendering: wait instead of
+      // asking for a decision, under the same ten-second WAIT cap. A blank viewport above a
+      // scrollable page still goes to Jev, which can scroll.
       const { operation, targetIndex } =
-        space.page.controls.length === 0 && space.page.text.trim() === ""
+        space.targets.size === 0 && space.page.text.trim() === ""
           ? { operation: "WAIT" as const, targetIndex: undefined }
           : yield* decide(space);
 

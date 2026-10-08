@@ -227,11 +227,9 @@ export const executeTask = Effect.fnUntraced(function* (
         ? storeTask.prompt
         : (scenarios.find((scenario) => scenario.id === input.scenario)?.prompt ?? "");
 
-  // One model-agent run, from a given observation, through a given controller.
-  const runAgent = Effect.fnUntraced(function* (
-    message: string,
-    actions: typeof browser.actionsLayer,
-  ) {
+  // One model-agent run from a given observation. It requires the browser services, so each
+  // caller provides the controller it drives.
+  const runAgent = Effect.fnUntraced(function* (message: string) {
     const clientOptions = {
       apiKey: Redacted.make(apiKey),
       apiUrl,
@@ -272,7 +270,7 @@ export const executeTask = Effect.fnUntraced(function* (
           : AgentRuntime.run(individualAgent, message).pipe(Effect.provide(directSingle.layer()));
 
     const result = yield* traceModels(
-      run.pipe(Effect.provide([InMemory.layer, modelLayer, actions, completionLayer])),
+      run.pipe(Effect.provide([InMemory.layer, modelLayer, completionLayer])),
     ).pipe(
       Effect.mapError(
         (error) =>
@@ -344,8 +342,7 @@ export const executeTask = Effect.fnUntraced(function* (
       trace.update({ message: `Jev stopped (${result.stop}); a model agent continues…` });
       yield* runAgent(
         `${prompt}\n\nJev drove this browser first and stopped: ${result.message} Its last steps: ${steps}. Continue from the current page; check the cart and fix anything Jev got wrong.\n\nCurrent browser observation:\n${encodeObservation(observation)}`,
-        next.actionsLayer,
-      );
+      ).pipe(Effect.provide(next.actionsLayer));
       trace.update({
         message: `Jev took ${result.steps.length} steps and stopped (${result.stop}): ${result.message} Model: ${trace.snapshot().message}`,
       });
@@ -357,8 +354,7 @@ export const executeTask = Effect.fnUntraced(function* (
     trace.update({ message: "Agent is working…" });
     yield* runAgent(
       `${prompt}\n\nInitial browser observation:\n${encodeObservation(initial)}`,
-      browser.actionsLayer,
-    );
+    ).pipe(Effect.provide(browser.actionsLayer));
   }
   if (input.scenario === "shop") {
     trace.update({
