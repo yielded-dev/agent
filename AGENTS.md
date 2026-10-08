@@ -221,3 +221,11 @@ passes. Choose failure, interruption, resource, recovery and security checks for
 concrete risks in the change; this is not a mandatory scenario matrix. Preserve
 blocked required proof explicitly. A new source file, state transition or public
 API does not imply a new test file.
+
+## Worktree startup
+
+Create worktrees from cached refs; fetch explicitly when a newer base is needed.
+Run `vp install` when dependencies or `node_modules/effect/AGENTS.md` are needed.
+Installation uses Bun's shared store and keeps project-specific packages local.
+Start only the development services needed for the task, explicitly. Worktree
+creation itself should not install dependencies or start servers.

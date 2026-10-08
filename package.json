@@ -10,7 +10,7 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
+    "prepare": "effect-tsgo patch --typescript && vp config --no-agent --hooks-dir .vite-hooks",
     "patch:tsgo": "effect-tsgo patch --typescript",
     "changeset": "changeset",
     "changeset:version": "changeset version",
@@ -154,5 +154,38 @@
   },
   "patchedDependencies": {
     "effect@4.0.0": "patches/effect@4.0.0.patch"
-  }
+  },
+  "trustedDependencies": [
+    "@effect/tsgo-darwin-arm64",
+    "@effect/tsgo-darwin-x64",
+    "@effect/tsgo-linux-arm",
+    "@effect/tsgo-linux-arm64",
+    "@effect/tsgo-linux-x64",
+    "@effect/tsgo-win32-arm64",
+    "@effect/tsgo-win32-x64",
+    "@typescript/typescript-aix-ppc64",
+    "@typescript/typescript-darwin-arm64",
+    "@typescript/typescript-darwin-x64",
+    "@typescript/typescript-freebsd-arm64",
+    "@typescript/typescript-freebsd-x64",
+    "@typescript/typescript-linux-arm",
+    "@typescript/typescript-linux-arm64",
+    "@typescript/typescript-linux-loong64",
+    "@typescript/typescript-linux-mips64el",
+    "@typescript/typescript-linux-ppc64",
+    "@typescript/typescript-linux-riscv64",
+    "@typescript/typescript-linux-s390x",
+    "@typescript/typescript-linux-x64",
+    "@typescript/typescript-netbsd-arm64",
+    "@typescript/typescript-netbsd-x64",
+    "@typescript/typescript-openbsd-arm64",
+    "@typescript/typescript-openbsd-x64",
+    "@typescript/typescript-sunos-x64",
+    "@typescript/typescript-win32-arm64",
+    "@typescript/typescript-win32-x64",
+    "esbuild",
+    "react",
+    "sharp",
+    "workerd"
+  ]
 }

@@ -356,8 +356,8 @@ This includes `admin:durable` and the Node crash workers.
 
 ## Post-install setup
 
-`vp install` runs `vp config --no-agent --hooks-dir .vite-hooks` through `prepare`.
-Apply the compiler patch separately with `vp run patch:tsgo`.
+`vp install` patches the compiler and installs `.vite-hooks` through `prepare`.
+Use `vp run patch:tsgo` after an install that suppresses lifecycle scripts.
 The pinned upstream command selects a replacement for the installed TypeScript version and
 fails if that replacement is unavailable. Dependency versions live in the root catalog.
 
