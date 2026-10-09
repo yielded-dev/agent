@@ -1,0 +1,7 @@
+{
+  "verified": true,
+  "compressedTelemetryOnly": true,
+  "summaryIdenticalAfterRecomputation": true,
+  "cloudCallsMade": false,
+  "localTimingUsedAsBenchmarkEvidence": false
+}

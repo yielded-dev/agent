@@ -1,0 +1,48 @@
+{
+  "runs": [
+    {
+      "round": "warm-unary-a",
+      "recordedRevision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+      "buildSha256": "4a58cf1e0c3d773bfd1cdf3ef49478eae9053a84ea83da718e23403ac26bc21e",
+      "archivedBundle": "unary-a.mjs.gz",
+      "sourceCommittedBeforeRun": false
+    },
+    {
+      "round": "warm-unary-b",
+      "recordedRevision": "b55102f04f06bcd95586d8afc0d97f64feac38ee",
+      "buildSha256": "6e456bb63569ff0996014acad090d52ccb3ebb58f7c4091b67cbd3b3d46aeeb1",
+      "archivedBundle": "final.mjs.gz",
+      "sourceCommittedBeforeRun": true
+    },
+    {
+      "round": "warm-thread-a",
+      "recordedRevision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+      "buildSha256": "c24fb9818144c0e751390b450e805ac984ae46847c78d6c308d64df623819592",
+      "archivedBundle": null,
+      "sourceCommittedBeforeRun": false
+    },
+    {
+      "round": "warm-thread-cpu",
+      "recordedRevision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+      "buildSha256": "8bb28e3d9defcb59392f5f671aff4b743d93f3a4c1eba8f69112d45d26c8a064",
+      "archivedBundle": null,
+      "sourceCommittedBeforeRun": false
+    },
+    {
+      "round": "warm-push",
+      "recordedRevision": "47ff94d099da2f06836d73e0fce0dcfd027e855f",
+      "buildSha256": "ab9321e528a25b4a501c54be8b31c9295cd7be4366ee77249808acf7b87e26c9",
+      "archivedBundle": null,
+      "sourceCommittedBeforeRun": true
+    },
+    {
+      "round": "warm-push-controlled",
+      "recordedRevision": "b55102f04f06bcd95586d8afc0d97f64feac38ee",
+      "buildSha256": "6e456bb63569ff0996014acad090d52ccb3ebb58f7c4091b67cbd3b3d46aeeb1",
+      "archivedBundle": "final.mjs.gz",
+      "sourceCommittedBeforeRun": true
+    }
+  ],
+  "intermediateBundleLimitation": "Early Thread fixtures were not yet committed when deployed. Their per-run build hashes and guard results are retained, but exact compiled bundles were not archived. The completed Thread fixture source is in commit 47ff94d0.",
+  "unaryPathsUnchangedBetweenArchivedBuilds": true
+}

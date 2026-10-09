@@ -1,0 +1,42 @@
+{
+  "sourceRevision": "40e94837feab72f30aee145f8ff1908d37600b74",
+  "checks": [
+    {
+      "command": "vp run ready",
+      "result": "passed",
+      "cacheHits": 66,
+      "tasks": 71
+    },
+    {
+      "command": "vp run -F @yielded/agent-example-durable-bench rpc-overhead:check",
+      "result": "passed"
+    },
+    {
+      "command": "vp check --fix examples/durable-bench/deployed/rpc-overhead/cpu.ts",
+      "result": "passed"
+    }
+  ],
+  "earlierGateAttempts": [
+    {
+      "result": "blocked by local socket sandbox permission",
+      "resolution": "reran with local network access"
+    },
+    {
+      "result": "unrelated Postgres conformance timeout",
+      "resolution": "focused existing case and subsequent full gate passed; no code or test changes"
+    }
+  ],
+  "localTimingUsedAsBenchmarkEvidence": false,
+  "telemetryExportFailures": [
+    "Cloudflare API HTTP 500",
+    "Cloudflare API HTTP 503",
+    "Cloudflare API HTTP 403; subsequent account and telemetry probes both returned HTTP 200"
+  ],
+  "finalTelemetryExport": {
+    "result": "passed",
+    "successfulQueryPagesCachedPrivately": 119,
+    "transientReadFailures": 2,
+    "measuredCallsRetried": false,
+    "privateCacheRemovedWithCleanup": true
+  }
+}

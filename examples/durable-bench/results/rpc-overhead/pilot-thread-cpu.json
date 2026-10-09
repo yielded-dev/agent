@@ -1,0 +1,538 @@
+{
+  "mode": "thread-cpu",
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065",
+  "options": {
+    "action": "thread-cpu",
+    "objects": 2,
+    "calls": 4,
+    "warmup": 10,
+    "concurrency": 2,
+    "variants": [
+      "thread-native",
+      "thread-status",
+      "thread-progress",
+      "thread-submit"
+    ],
+    "round": "pilot-thread-cpu"
+  },
+  "start": 1791566440534,
+  "end": 1791566450007,
+  "rows": [
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 0,
+        "variant": "thread-native",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        18,
+        13,
+        9,
+        16
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 1,
+        "variant": "thread-status",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        40,
+        37,
+        47,
+        34
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 0,
+        "variant": "thread-status",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        23,
+        13,
+        19,
+        25
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 1,
+        "variant": "thread-progress",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        45,
+        47,
+        34,
+        30
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 0,
+        "variant": "thread-progress",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        37,
+        36,
+        14,
+        14
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 0,
+        "variant": "thread-submit",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        82,
+        59,
+        66,
+        50
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 1,
+        "variant": "thread-submit",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        534,
+        264,
+        207,
+        250
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "action": "thread-cpu",
+        "objects": 2,
+        "calls": 4,
+        "warmup": 0,
+        "concurrency": 2,
+        "variants": [
+          "thread-native",
+          "thread-status",
+          "thread-progress",
+          "thread-submit"
+        ],
+        "round": "pilot-thread-cpu",
+        "object": 1,
+        "variant": "thread-native",
+        "size": 200,
+        "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065"
+      },
+      "latencyMs": [
+        36,
+        39,
+        36,
+        34
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "ATL",
+      "placement": "remote-SJC",
+      "clientSetup": "one call per driver invocation; prepare, settlement drain and finish are separate invocations; cold clients marked separately"
+    }
+  ],
+  "samples": [
+    {
+      "object": 0,
+      "variant": "thread-native",
+      "index": 0,
+      "latencyMs": 18,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-native",
+      "index": 1,
+      "latencyMs": 13,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-native",
+      "index": 2,
+      "latencyMs": 9,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-status",
+      "index": 0,
+      "latencyMs": 40,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-native",
+      "index": 3,
+      "latencyMs": 16,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-status",
+      "index": 1,
+      "latencyMs": 37,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-status",
+      "index": 2,
+      "latencyMs": 47,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-status",
+      "index": 3,
+      "latencyMs": 34,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-status",
+      "index": 0,
+      "latencyMs": 23,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-status",
+      "index": 1,
+      "latencyMs": 13,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-status",
+      "index": 2,
+      "latencyMs": 19,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-status",
+      "index": 3,
+      "latencyMs": 25,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-progress",
+      "index": 0,
+      "latencyMs": 45,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-progress",
+      "index": 1,
+      "latencyMs": 47,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-progress",
+      "index": 2,
+      "latencyMs": 34,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-progress",
+      "index": 3,
+      "latencyMs": 30,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-progress",
+      "index": 0,
+      "latencyMs": 37,
+      "clientWarm": false,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-progress",
+      "index": 1,
+      "latencyMs": 36,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-progress",
+      "index": 2,
+      "latencyMs": 14,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-progress",
+      "index": 3,
+      "latencyMs": 14,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-submit",
+      "index": 0,
+      "latencyMs": 534,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-submit",
+      "index": 0,
+      "latencyMs": 82,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-submit",
+      "index": 1,
+      "latencyMs": 264,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-submit",
+      "index": 1,
+      "latencyMs": 59,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-submit",
+      "index": 2,
+      "latencyMs": 207,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-submit",
+      "index": 2,
+      "latencyMs": 66,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 0,
+      "variant": "thread-submit",
+      "index": 3,
+      "latencyMs": 50,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-submit",
+      "index": 3,
+      "latencyMs": 250,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-native",
+      "index": 0,
+      "latencyMs": 36,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-native",
+      "index": 1,
+      "latencyMs": 39,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-native",
+      "index": 2,
+      "latencyMs": 36,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    },
+    {
+      "object": 1,
+      "variant": "thread-native",
+      "index": 3,
+      "latencyMs": 34,
+      "clientWarm": true,
+      "placement": "remote-SJC"
+    }
+  ],
+  "failures": []
+}

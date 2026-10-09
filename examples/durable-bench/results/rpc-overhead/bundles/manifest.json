@@ -1,0 +1,12 @@
+[
+  {
+    "file": "unary-a.mjs.gz",
+    "sha256": "4a58cf1e0c3d773bfd1cdf3ef49478eae9053a84ea83da718e23403ac26bc21e",
+    "uncompressedBytes": 3915365
+  },
+  {
+    "file": "final.mjs.gz",
+    "sha256": "6e456bb63569ff0996014acad090d52ccb3ebb58f7c4091b67cbd3b3d46aeeb1",
+    "uncompressedBytes": 3933623
+  }
+]

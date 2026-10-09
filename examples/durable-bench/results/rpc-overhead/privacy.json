@@ -1,0 +1,11 @@
+{
+  "verified": true,
+  "filesChecked": 63,
+  "includesDecompressedBundlesAndTelemetry": true,
+  "includesReportTemplate": true,
+  "knownPrivateValuesAbsent": true,
+  "emailAddressesAbsent": true,
+  "deployedHostnamesAbsent": true,
+  "providerUuidsAbsent": true,
+  "nilUuidSchemaRegexLiterals": 2
+}

@@ -1,0 +1,74 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "4a58cf1e0c3d773bfd1cdf3ef49478eae9053a84ea83da718e23403ac26bc21e",
+  "options": {
+    "action": "push",
+    "objects": 1,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 1,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push"
+  },
+  "start": 1791565757921,
+  "end": 1791565804619,
+  "rows": [
+    {
+      "ok": false,
+      "round": "pilot-push",
+      "object": 0,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 17,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 41,
+            "publishToReceiveMs": [
+              14,
+              14,
+              14,
+              14
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 47,
+            "publishToReceiveMs": [
+              20,
+              20,
+              20,
+              20
+            ]
+          }
+        ],
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 43,
+        "savedCursor": 7,
+        "replayedSequence": 8
+      },
+      "websocket": null,
+      "reconnect": null,
+      "failures": [
+        {
+          "stage": "websocket prepare",
+          "cause": "prepare websocket source: RpcOverheadFault"
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

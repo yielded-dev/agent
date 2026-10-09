@@ -1,0 +1,74 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "c24fb9818144c0e751390b450e805ac984ae46847c78d6c308d64df623819592",
+  "options": {
+    "action": "push",
+    "objects": 1,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 1,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push-guard"
+  },
+  "start": 1791566742855,
+  "end": 1791566793761,
+  "rows": [
+    {
+      "ok": false,
+      "round": "pilot-push-guard",
+      "object": 0,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 18,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 43,
+            "publishToReceiveMs": [
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 43,
+            "publishToReceiveMs": [
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        ],
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 16,
+        "savedCursor": 7,
+        "replayedSequence": 8
+      },
+      "websocket": null,
+      "reconnect": null,
+      "failures": [
+        {
+          "stage": "native release confirmation",
+          "cause": "TimeoutError"
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

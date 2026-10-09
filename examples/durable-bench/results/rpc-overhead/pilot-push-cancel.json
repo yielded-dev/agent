@@ -1,0 +1,89 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "8bb28e3d9defcb59392f5f671aff4b743d93f3a4c1eba8f69112d45d26c8a064",
+  "options": {
+    "action": "push",
+    "objects": 1,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 1,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push-cancel"
+  },
+  "start": 1791567336387,
+  "end": 1791567398575,
+  "rows": [
+    {
+      "ok": false,
+      "round": "pilot-push-cancel",
+      "object": 0,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 18,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 41,
+            "publishToReceiveMs": [
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 948,
+            "publishToReceiveMs": [
+              922,
+              922,
+              922,
+              922
+            ]
+          }
+        ],
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 21,
+        "savedCursor": 7,
+        "replayedSequence": 8,
+        "cancellations": [
+          {
+            "readerUnlocked": false,
+            "succeeded": false,
+            "error": "Reader still locked",
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": false,
+            "succeeded": false,
+            "error": "Reader still locked",
+            "elapsedMs": 0
+          }
+        ],
+        "release": null
+      },
+      "websocket": null,
+      "reconnect": null,
+      "failures": [
+        {
+          "stage": "native cancellation diagnostic write",
+          "cause": "TimeoutError"
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

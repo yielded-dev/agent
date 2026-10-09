@@ -1,0 +1,22 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "ae3cf0aab2abbc43c00bb6ae6a4298981713a47233be9e1814ae8fc412cf3065",
+  "options": {
+    "action": "push",
+    "objects": 1,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 1,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push-cleanup"
+  },
+  "start": 1791566440812,
+  "end": 1791566446418,
+  "rows": [],
+  "failures": [
+    {
+      "object": 0,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"rpc-overhead controlled restart\"}"
+    }
+  ]
+}

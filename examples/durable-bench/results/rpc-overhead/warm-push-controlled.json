@@ -1,0 +1,1314 @@
+{
+  "revision": "b55102f04f06bcd95586d8afc0d97f64feac38ee",
+  "build": "6e456bb63569ff0996014acad090d52ccb3ebb58f7c4091b67cbd3b3d46aeeb1",
+  "options": {
+    "action": "push",
+    "objects": 8,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 4,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "warm-push-controlled"
+  },
+  "start": 1791568267884,
+  "end": 1791568472272,
+  "rows": [
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 0,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 15,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 42,
+            "publishToReceiveMs": [
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 42,
+            "publishToReceiveMs": [
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 13,
+          "publishToReceiveMs": [
+            14,
+            14,
+            14,
+            14
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 23,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 34,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 46,
+            "publishToReceiveMs": [
+              46,
+              46,
+              46,
+              46
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 44,
+            "publishToReceiveMs": [
+              44,
+              44,
+              44,
+              44
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 16,
+          "publishToReceiveMs": [
+            17,
+            17,
+            17,
+            17
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 19,
+            "wakeAndFirstReplayMs": 19,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 32,
+        "setupAndFirstFrameMs": 47,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 1,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 19,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 48,
+            "publishToReceiveMs": [
+              21,
+              21,
+              21,
+              21
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 48,
+            "publishToReceiveMs": [
+              19,
+              19,
+              19,
+              19
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 15,
+          "publishToReceiveMs": [
+            16,
+            16,
+            16,
+            16
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 21,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 53,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 44,
+            "publishToReceiveMs": [
+              44,
+              44,
+              44,
+              44
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 44,
+            "publishToReceiveMs": [
+              44,
+              44,
+              44,
+              44
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 18,
+          "publishToReceiveMs": [
+            19,
+            19,
+            19,
+            19
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 25,
+            "wakeAndFirstReplayMs": 25,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 46,
+        "setupAndFirstFrameMs": 66,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 3,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 12,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 32,
+            "publishToReceiveMs": [
+              8,
+              8,
+              8,
+              8
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 36,
+            "publishToReceiveMs": [
+              10,
+              10,
+              10,
+              10
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 12,
+          "publishToReceiveMs": [
+            15,
+            15,
+            15,
+            15
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 36,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 33,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 232,
+            "publishToReceiveMs": [
+              232,
+              232,
+              232,
+              232
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 38,
+            "publishToReceiveMs": [
+              38,
+              38,
+              38,
+              38
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 7,
+          "publishToReceiveMs": [
+            7,
+            7,
+            7,
+            7
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 21,
+            "wakeAndFirstReplayMs": 21,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 27,
+        "setupAndFirstFrameMs": 34,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 2,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 53,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 71,
+            "publishToReceiveMs": [
+              55,
+              55,
+              55,
+              55
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 71,
+            "publishToReceiveMs": [
+              53,
+              53,
+              53,
+              53
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 52,
+          "publishToReceiveMs": [
+            53,
+            53,
+            53,
+            53
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 55,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 107,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 67,
+            "publishToReceiveMs": [
+              67,
+              67,
+              67,
+              67
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 68,
+            "publishToReceiveMs": [
+              68,
+              68,
+              68,
+              68
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 50,
+          "publishToReceiveMs": [
+            51,
+            51,
+            51,
+            51
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 54,
+            "wakeAndFirstReplayMs": 54,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 104,
+        "setupAndFirstFrameMs": 155,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 4,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 8,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 37,
+            "publishToReceiveMs": [
+              8,
+              8,
+              8,
+              8
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 37,
+            "publishToReceiveMs": [
+              8,
+              8,
+              8,
+              8
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 8,
+          "publishToReceiveMs": [
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 16,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 15,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 36,
+            "publishToReceiveMs": [
+              36,
+              36,
+              36,
+              36
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 41,
+            "publishToReceiveMs": [
+              41,
+              41,
+              41,
+              41
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 7,
+          "publishToReceiveMs": [
+            7,
+            7,
+            7,
+            7
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 406,
+            "wakeAndFirstReplayMs": 406,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 16,
+        "setupAndFirstFrameMs": 25,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 5,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 16,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 50,
+            "publishToReceiveMs": [
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 41,
+            "publishToReceiveMs": [
+              14,
+              14,
+              14,
+              14
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 13,
+          "publishToReceiveMs": [
+            14,
+            14,
+            14,
+            14
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 16,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 31,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 54,
+            "publishToReceiveMs": [
+              54,
+              54,
+              54,
+              54
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 48,
+            "publishToReceiveMs": [
+              48,
+              48,
+              48,
+              48
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 14,
+          "publishToReceiveMs": [
+            14,
+            14,
+            14,
+            14
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 20,
+            "wakeAndFirstReplayMs": 20,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 27,
+        "setupAndFirstFrameMs": 39,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 7,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 13,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 19,
+            "publishToReceiveMs": [
+              14,
+              14,
+              14,
+              14
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 18,
+            "publishToReceiveMs": [
+              9,
+              9,
+              9,
+              9
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 7,
+          "publishToReceiveMs": [
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 8,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 24,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 18,
+            "publishToReceiveMs": [
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 53,
+            "publishToReceiveMs": [
+              53,
+              53,
+              53,
+              53
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 11,
+          "publishToReceiveMs": [
+            11,
+            11,
+            11,
+            11
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 19,
+            "wakeAndFirstReplayMs": 19,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 29,
+        "setupAndFirstFrameMs": 37,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    },
+    {
+      "ok": true,
+      "round": "warm-push-controlled",
+      "object": 6,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 12,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 34,
+            "publishToReceiveMs": [
+              10,
+              10,
+              10,
+              10
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 36,
+            "publishToReceiveMs": [
+              8,
+              8,
+              8,
+              8
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 8,
+          "publishToReceiveMs": [
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 20,
+        "savedCursor": 11,
+        "replayedSequence": 12,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 22,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 35,
+            "publishToReceiveMs": [
+              35,
+              35,
+              35,
+              35
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 37,
+            "publishToReceiveMs": [
+              37,
+              37,
+              37,
+              37
+            ]
+          }
+        ],
+        "precommittedBurst": {
+          "from": 9,
+          "sequences": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "publishRttMs": 9,
+          "publishToReceiveMs": [
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 20,
+            "wakeAndFirstReplayMs": 20,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 11
+      },
+      "reconnect": {
+        "setupMs": 24,
+        "setupAndFirstFrameMs": 32,
+        "replayedSequence": 12,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    }
+  ],
+  "failures": []
+}

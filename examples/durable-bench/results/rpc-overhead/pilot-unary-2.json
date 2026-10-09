@@ -1,0 +1,621 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+  "compatibilityDate": "2026-08-18",
+  "placement": "aws:us-west-1",
+  "objectHint": "wnam",
+  "options": {
+    "action": "run",
+    "objects": 2,
+    "calls": 16,
+    "warmup": 4,
+    "concurrency": 2,
+    "variants": [
+      "native",
+      "fetch",
+      "schema-sync",
+      "schema-runtime",
+      "effect-json",
+      "effect-ndjson"
+    ],
+    "round": "pilot-unary-2"
+  },
+  "start": 1791564921597,
+  "end": 1791564926337,
+  "rows": [
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "native",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        7,
+        6,
+        7,
+        8,
+        6,
+        6,
+        5,
+        6,
+        5,
+        5,
+        5,
+        6,
+        5,
+        5,
+        7,
+        8
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "native",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        14,
+        13,
+        13,
+        14,
+        14,
+        13,
+        14,
+        14,
+        14,
+        13,
+        14,
+        13,
+        14,
+        14,
+        13,
+        12
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "schema-runtime",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        6,
+        8,
+        6,
+        8,
+        9,
+        8,
+        10,
+        8,
+        8,
+        6,
+        10,
+        12,
+        8,
+        7,
+        8,
+        10
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "schema-sync",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        9,
+        7,
+        8,
+        7,
+        7,
+        8,
+        9,
+        9,
+        7,
+        7,
+        8,
+        8,
+        7,
+        7,
+        7,
+        8
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "fetch",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        19,
+        18,
+        32,
+        28,
+        18,
+        21,
+        25,
+        20,
+        20,
+        19,
+        20,
+        33,
+        23,
+        24,
+        26,
+        22
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "fetch",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        6,
+        8,
+        7,
+        6,
+        6,
+        5,
+        6,
+        11,
+        6,
+        6,
+        6,
+        6,
+        5,
+        6,
+        6,
+        5
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "native",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        6,
+        5,
+        4,
+        4,
+        6,
+        6,
+        6,
+        3,
+        6,
+        5,
+        5,
+        6,
+        4,
+        4,
+        6,
+        4
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "schema-sync",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        19,
+        19,
+        19,
+        17,
+        14,
+        18,
+        21,
+        19,
+        21,
+        20,
+        15,
+        16,
+        18,
+        14,
+        15,
+        16
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "schema-runtime",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        7,
+        5,
+        5,
+        7,
+        6,
+        6,
+        5,
+        4,
+        7,
+        5,
+        4,
+        8,
+        6,
+        4,
+        4,
+        5
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "schema-runtime",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        17,
+        20,
+        16,
+        18,
+        21,
+        17,
+        17,
+        17,
+        18,
+        21,
+        18,
+        16,
+        22,
+        18,
+        18,
+        17
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "schema-sync",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        7,
+        7,
+        11,
+        6,
+        11,
+        5,
+        7,
+        7,
+        4,
+        6,
+        6,
+        6,
+        6,
+        6,
+        5,
+        8
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 1,
+        "variant": "fetch",
+        "size": 200,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        7,
+        7,
+        7,
+        6,
+        6,
+        6,
+        8,
+        7,
+        6,
+        8,
+        11,
+        7,
+        6,
+        6,
+        7,
+        6
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "native",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        15,
+        14,
+        13,
+        14,
+        14,
+        13,
+        15,
+        16,
+        15,
+        15,
+        15,
+        15,
+        13,
+        14,
+        14,
+        15
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "fetch",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        19,
+        23,
+        17,
+        16,
+        17,
+        15,
+        16,
+        17,
+        24,
+        18,
+        23,
+        18,
+        18,
+        17,
+        20,
+        15
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "schema-sync",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        19,
+        18,
+        18,
+        20,
+        19,
+        20,
+        18,
+        21,
+        17,
+        23,
+        20,
+        17,
+        19,
+        19,
+        18,
+        19
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    },
+    {
+      "ok": true,
+      "batch": {
+        "round": "pilot-unary-2",
+        "object": 0,
+        "variant": "schema-runtime",
+        "size": 20000,
+        "build": "b396fde015d0734874e932cd90c849d2cbd70bd23556e827eb1e09adb424edf0",
+        "warmup": 4,
+        "calls": 16
+      },
+      "latencyMs": [
+        16,
+        17,
+        15,
+        18,
+        16,
+        20,
+        16,
+        16,
+        16,
+        16,
+        16,
+        18,
+        17,
+        17,
+        19,
+        18
+      ],
+      "setupMs": 0,
+      "sameInstance": true,
+      "colo": "PDX",
+      "clientSetup": "request-scoped; excluded from per-call RTT"
+    }
+  ],
+  "failures": [
+    {
+      "object": 1,
+      "variant": "effect-ndjson",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-json",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-ndjson",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-json",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-json",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-ndjson",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-json",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-ndjson",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    }
+  ]
+}

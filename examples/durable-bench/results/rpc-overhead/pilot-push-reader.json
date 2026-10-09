@@ -1,0 +1,89 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "4358f8271f3c5a2354a3fc06bea0eb99df82d8e9ec51f5ac65fb52da35bc175e",
+  "options": {
+    "action": "push",
+    "objects": 1,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 1,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push-reader"
+  },
+  "start": 1791567518780,
+  "end": 1791567579838,
+  "rows": [
+    {
+      "ok": false,
+      "round": "pilot-push-reader",
+      "object": 0,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 17,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 48,
+            "publishToReceiveMs": [
+              16,
+              16,
+              16,
+              16
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 50,
+            "publishToReceiveMs": [
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        ],
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 17,
+        "savedCursor": 7,
+        "replayedSequence": 8,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": null
+      },
+      "websocket": null,
+      "reconnect": null,
+      "failures": [
+        {
+          "stage": "native cancellation diagnostic write",
+          "cause": "TimeoutError"
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

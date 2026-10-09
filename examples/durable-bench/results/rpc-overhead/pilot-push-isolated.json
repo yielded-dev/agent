@@ -1,0 +1,153 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "ab9321e528a25b4a501c54be8b31c9295cd7be4366ee77249808acf7b87e26c9",
+  "options": {
+    "action": "push",
+    "objects": 2,
+    "calls": 100,
+    "warmup": 10,
+    "concurrency": 2,
+    "variants": "native,fetch,schema-sync,schema-runtime,effect-json,effect-ndjson,effect-ws",
+    "round": "pilot-push-isolated"
+  },
+  "start": 1791567695998,
+  "end": 1791567798692,
+  "rows": [
+    {
+      "ok": true,
+      "round": "pilot-push-isolated",
+      "object": 1,
+      "framesPerBurst": 4,
+      "idleMs": 45000,
+      "native": {
+        "setupMs": 23,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 43,
+            "publishToReceiveMs": [
+              23,
+              23,
+              23,
+              23
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 47,
+            "publishToReceiveMs": [
+              22,
+              22,
+              22,
+              22
+            ]
+          }
+        ],
+        "sameInstance": true,
+        "freshStreamSetupAndFirstFrameMs": 29,
+        "savedCursor": 7,
+        "replayedSequence": 8,
+        "cancellations": [
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          },
+          {
+            "readerUnlocked": true,
+            "succeeded": true,
+            "error": null,
+            "elapsedMs": 0
+          }
+        ],
+        "release": {
+          "observersAfterCancel": 2,
+          "diagnosticFrames": 8,
+          "observersAfterWrite": 2,
+          "resetRequired": true,
+          "releaseAfterWriteMs": null,
+          "observersAfterRelease": 0
+        }
+      },
+      "websocket": {
+        "setupMs": 55,
+        "bursts": [
+          {
+            "from": 1,
+            "sequences": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "publishRttMs": 52,
+            "publishToReceiveMs": [
+              52,
+              52,
+              52,
+              52
+            ]
+          },
+          {
+            "from": 5,
+            "sequences": [
+              5,
+              6,
+              7,
+              8
+            ],
+            "publishRttMs": 54,
+            "publishToReceiveMs": [
+              54,
+              54,
+              54,
+              54
+            ]
+          }
+        ],
+        "probes": [
+          {
+            "idleMs": 45000,
+            "wakeHelloMs": 27,
+            "wakeAndFirstReplayMs": 27,
+            "upgradeCount": 1,
+            "constructorChanged": true,
+            "sameSocket": true,
+            "replayedSequence": 4
+          }
+        ],
+        "recreationObserved": true,
+        "upgradeCount": 1,
+        "savedCursor": 7
+      },
+      "reconnect": {
+        "setupMs": 45,
+        "setupAndFirstFrameMs": 64,
+        "replayedSequence": 8,
+        "newConnection": true,
+        "upgradeCount": 1,
+        "totalUpgradeCount": 2
+      },
+      "failures": []
+    }
+  ],
+  "failures": [
+    {
+      "object": 0,
+      "error": "BenchError: Worker response was lost; request outcome is unknown and will not be retried."
+    }
+  ]
+}

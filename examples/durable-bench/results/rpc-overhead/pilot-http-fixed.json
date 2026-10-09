@@ -1,0 +1,72 @@
+{
+  "revision": "a1fda46d689a278beaf60fbbcfe4a19048005ced",
+  "build": "b9b3c614a187312340f48fad7ac50a610ae9dbeec8f04b2f00e4c5a0e1bcd816",
+  "compatibilityDate": "2026-08-18",
+  "placement": "aws:us-west-1",
+  "objectHint": "wnam",
+  "options": {
+    "action": "run",
+    "objects": 2,
+    "calls": 8,
+    "warmup": 2,
+    "concurrency": 2,
+    "variants": [
+      "effect-json",
+      "effect-ndjson"
+    ],
+    "round": "pilot-http-fixed"
+  },
+  "start": 1791565016507,
+  "end": 1791565017345,
+  "rows": [],
+  "failures": [
+    {
+      "object": 0,
+      "variant": "effect-json",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-json",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-ndjson",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-ndjson",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-json",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-json",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Error decoding HTTP response\"}"
+    },
+    {
+      "object": 1,
+      "variant": "effect-ndjson",
+      "size": 200,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    },
+    {
+      "object": 0,
+      "variant": "effect-ndjson",
+      "size": 20000,
+      "error": "BenchError: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"RpcClientDefect: Received empty HTTP response from RPC server\"}"
+    }
+  ]
+}
