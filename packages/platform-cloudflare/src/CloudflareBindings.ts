@@ -197,5 +197,9 @@ export class ThreadObjectIdentity extends Context.Service<
 /** Logical Threads whose canonical stores and admission ledger live in this physical Object. */
 export class ThreadObjectPlacement extends Context.Service<
   ThreadObjectPlacement,
-  { readonly ownsThread: (threadId: ThreadId) => boolean }
+  {
+    readonly ownsThread: (threadId: ThreadId) => boolean;
+    /** Present only when this physical Object owns exactly this one Thread. */
+    readonly threadId?: ThreadId;
+  }
 >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}

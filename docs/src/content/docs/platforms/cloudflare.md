@@ -289,8 +289,9 @@ changing the resolver alone does not move their durable records.
 Own one `SqlClient`, `ThreadMutationGate` and alarm slot per physical Object. Native migrations use
 their own migration history, leaving the application's migration rows intact. Call
 `ThreadMaintenance.ensureAlarm` in the local constructor gate and one bounded
-`ThreadMaintenance.pass` from `alarm()`. The event runs at most two independent Thread Attempts
-concurrently, with one active FIFO head per Thread and a durable cursor rotating between Threads.
+`ThreadMaintenance.pass` from `alarm()`. A single-Thread Object reserves one native slot; a shared
+host runs at most two independent Thread Attempts concurrently, with one active FIFO head per
+Thread and a durable cursor rotating between Threads.
 A free slot admits newly ready Threads while another Attempt is busy. Remaining work retains the
 alarm; generation acknowledgement waits for admitted Attempts to finish.
 
