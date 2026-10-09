@@ -6,6 +6,7 @@ import {
   decodeChat,
   errorText,
   ProviderReceipt,
+  separateTextAndTools,
   type Env,
   type Identity,
   type ProviderCall,
@@ -88,7 +89,9 @@ export class Observation {
       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
     )
       throw new Error("Unexpected provider destination");
-    const transcript = chatTranscript(decodeChat(await original.clone().json()));
+    const decoded = decodeChat(await original.clone().json());
+    const chat = query.textStreaming ? separateTextAndTools(decoded) : decoded;
+    const transcript = chatTranscript(chat);
 
     const digest = await fingerprint(transcript);
     const startMs = Date.now();
@@ -108,8 +111,17 @@ export class Observation {
     const headers = new Headers(original.headers);
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
+    if (query.textStreaming) headers.delete("content-length");
     try {
-      const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
+      const response = await globalThis.fetch(
+        new Request(
+          url,
+          new Request(original, {
+            headers,
+            ...(query.textStreaming ? { body: JSON.stringify(chat) } : {}),
+          }),
+        ),
+      );
 
       call.status = response.status;
       if (!response.body) throw new Error("Provider response has no body");

@@ -224,23 +224,27 @@ export interface Env {
 export const errorText = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-const Chat = Schema.Struct({
+// Preserve SDK options and tool identifiers when adjusting the streaming wire layout.
+const jsonStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
+  Schema.StructWithRest(Schema.Struct(fields), [Schema.Record(Schema.String, Schema.Json)]);
+
+const Chat = jsonStruct({
   messages: Schema.Array(
-    Schema.Struct({
+    jsonStruct({
       role: Schema.Literals(["system", "developer", "user", "assistant", "tool"]),
       content: Schema.optionalKey(
         Schema.Union([
           Schema.String,
           Schema.Null,
           Schema.Array(
-            Schema.Struct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
+            jsonStruct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
           ),
         ]),
       ),
       tool_calls: Schema.optionalKey(
         Schema.Array(
-          Schema.Struct({
-            function: Schema.Struct({ arguments: Schema.String }),
+          jsonStruct({
+            function: jsonStruct({ arguments: Schema.String }),
           }),
         ),
       ),
@@ -250,6 +254,23 @@ const Chat = Schema.Struct({
 
 export const decodeChat = Schema.decodeUnknownSync(Chat);
 const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
+
+// Match the pinned Effect provider's adjacent text/tool messages on every target.
+// This changes the forwarded request, not just its fingerprint.
+export const separateTextAndTools = (chat: typeof Chat.Type): typeof Chat.Type => ({
+  ...chat,
+  messages: chat.messages.flatMap((message) => {
+    const hasText =
+      typeof message.content === "string"
+        ? message.content.length > 0
+        : message.content?.some((part) => part.text);
+
+    if (message.role !== "assistant" || !message.tool_calls?.length || !hasText) return [message];
+    const { tool_calls, ...text } = message;
+
+    return [text, { ...text, content: null, tool_calls }];
+  }),
+});
 
 export const chatTranscript = (chat: typeof Chat.Type) =>
   chat.messages.flatMap((message) => {

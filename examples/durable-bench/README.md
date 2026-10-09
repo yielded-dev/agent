@@ -104,8 +104,9 @@ its tool call. This preamble and a longer final reply stream in word-sized fragm
 25 ms in the 400 ms cell (about 40 fragments/s, roughly one second for the final reply).
 Tool-only responses retain their original pacing; the 0 ms cell emits the same text without
 delays. Every target receives the same preamble and reply, and subsequent requests are
-checked against the extended reference transcript. The flag keeps the original completion
-workload available; compare tables with the same workload label.
+checked against the extended reference transcript. Before forwarding streaming requests, the
+common bridge splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
+The flag keeps the original completion workload available; compare tables with the same workload label.
 All Objects request `locationHint: "wnam"`; the driver and target Worker request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
 

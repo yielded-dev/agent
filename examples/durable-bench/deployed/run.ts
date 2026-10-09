@@ -63,12 +63,10 @@ const append = (messages: Message[], input: Turn, textStreaming = false): string
 
       return hashes;
     }
+    if (textStreaming && messages.at(-1)?.role === "user")
+      messages.push({ role: "assistant", text: PREAMBLE });
     messages.push(
-      {
-        role: "assistant",
-        text: textStreaming && messages.at(-1)?.role === "user" ? PREAMBLE : "",
-        calls: [step.call],
-      },
+      { role: "assistant", text: "", calls: [step.call] },
       { role: "tool", text: payload(step.call) },
     );
   }
