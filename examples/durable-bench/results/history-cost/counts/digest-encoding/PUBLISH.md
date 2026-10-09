@@ -21,5 +21,5 @@ summary.json
 
 The bundle contains the aggregate, exact runner/source patch, provenance, and
 reproduction commands. Retained canonical archives, fixture DBs, raw capture
-files, logs, and generated worker bundles stay outside the publication. Raw local
-capture paths and SHA-256 values are recorded in `provenance.json`.
+files, logs, and generated worker bundles stay outside the publication. Publication replaces the local task-directory prefix with `/tmp/history-cost`
+in metadata paths; count values and raw capture SHA-256 values are unchanged.

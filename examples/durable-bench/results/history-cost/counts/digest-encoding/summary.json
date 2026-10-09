@@ -3344,19 +3344,19 @@
   },
   "priorBaselineEquivalence": {
     "50": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-50.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-50.json",
       "sha256": "5b16a68afeb483c6f7b9e230791b3d4791cf5107c3b3f7250edfe2395b021c2b"
     },
     "250": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-250.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-250.json",
       "sha256": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516"
     },
     "1000": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-1000.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-1000.json",
       "sha256": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10"
     },
     "3500": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-3500.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-3500.json",
       "sha256": "5773bb5a3691b9e408062f80a94dfa05c5e0b01cd8c814fb943829f4f903d896"
     }
   }

@@ -1,0 +1,1659 @@
+{
+  "run": "history-cost-mv0od57p-9a2f71d3",
+  "revision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirty": true,
+  "startedAt": "2026-10-09T07:59:46.597Z",
+  "wallMs": 227987,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      50
+    ],
+    "ttft": [
+      0
+    ],
+    "objects": 1,
+    "repeats": 1,
+    "concurrency": 2,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad"
+  },
+  "seedBuild": {
+    "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "sha256": "abcfe9a6a82ef4105c125898212be1e69b883e5506b7f3e7e6b733763dbf2660"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "c0c1a4675e43f471a7f1c87f3648812f327aad08bf8b829d5263547d83d4ea0d"
+    },
+    {
+      "label": "candidate",
+      "revision": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+      "sha256": "41d39e6575e1c1be26d988fa18783df862ed73dad6f28502e512c5f89710f756"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 235,
+        "effect_agent_canonical_records": 603,
+        "effect_agent_record_runs": 368,
+        "effect_agent_tool_declarations": 34,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 50,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 50,
+        "effect_agent_settlement_spans": 150,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: platform_cloudflare_due_queue 4 -> absent, effect_agent_attempts 50 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 343,
+        "conversations": 1,
+        "entries": 169,
+        "tasks": 118,
+        "submissions": 50,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": true,
+  "failures": [],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "f28f6e642c79a1962d9a4bc9d54882deac676f90bc13bc2b30d411ab3861c3f7",
+  "samplesByStatus": {
+    "ok": 24
+  },
+  "fingerprintsVerified": 24,
+  "modelRequestsVerified": 216,
+  "clockChecks": {
+    "valid": 16,
+    "rejected": 0,
+    "intervalWidthMs": {
+      "n": 16,
+      "median": 36.5,
+      "q1": 34.75,
+      "q3": 41.5,
+      "min": 33,
+      "max": 47
+    },
+    "providerColos": {
+      "LAX": 16
+    }
+  },
+  "cpuOutcomes": [
+    {
+      "target": "pi",
+      "kind": "run",
+      "outcome": "ok",
+      "count": 10,
+      "cpuMs": {
+        "n": 10,
+        "median": 384.5,
+        "q1": 326.5,
+        "q3": 474.75,
+        "min": 256,
+        "max": 516
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 24,
+      "cpuMs": {
+        "n": 24,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 34,
+      "cpuMs": {
+        "n": 34,
+        "median": 34.5,
+        "q1": 22.25,
+        "q3": 43.0,
+        "min": 18,
+        "max": 73
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "aborted",
+      "count": 8,
+      "cpuMs": {
+        "n": 8,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "canceled",
+      "count": 2,
+      "cpuMs": {
+        "n": 2,
+        "median": 0.5,
+        "q1": 0.25,
+        "q3": 0.75,
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 468,
+      "cpuMs": {
+        "n": 468,
+        "median": 1.0,
+        "q1": 0.0,
+        "q3": 1.0,
+        "min": 0,
+        "max": 438
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 11,
+      "cpuMs": {
+        "n": 11,
+        "median": 193,
+        "q1": 161.0,
+        "q3": 360.0,
+        "min": 142,
+        "max": 557
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "await",
+      "outcome": "ok",
+      "count": 11,
+      "cpuMs": {
+        "n": 11,
+        "median": 374,
+        "q1": 347.0,
+        "q3": 381.0,
+        "min": 296,
+        "max": 533
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "submit",
+      "outcome": "ok",
+      "count": 12,
+      "cpuMs": {
+        "n": 12,
+        "median": 15.0,
+        "q1": 13.0,
+        "q3": 89.75,
+        "min": 11,
+        "max": 119
+      }
+    }
+  ],
+  "unmatchedCpuMarkers": 3,
+  "cells": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 396.0,
+                  "q1": 396.0,
+                  "q3": 396.0,
+                  "min": 396.0,
+                  "max": 396.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 123.0,
+                  "q1": 123.0,
+                  "q3": 123.0,
+                  "min": 123.0,
+                  "max": 123.0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1136.0,
+                  "q1": 1136.0,
+                  "q3": 1136.0,
+                  "min": 1136.0,
+                  "max": 1136.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 49.0,
+                  "q1": 49.0,
+                  "q3": 49.0,
+                  "min": 49.0,
+                  "max": 49.0
+                }
+              },
+              "yieldedDivPi": 2.8686868686868685
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 327.25,
+                  "q1": 327.25,
+                  "q3": 327.25,
+                  "min": 327.25,
+                  "max": 327.25
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 212.5,
+                  "q1": 212.5,
+                  "q3": 212.5,
+                  "min": 212.5,
+                  "max": 212.5
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 904.0,
+                  "q1": 904.0,
+                  "q3": 904.0,
+                  "min": 904.0,
+                  "max": 904.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 61.0,
+                  "q1": 61.0,
+                  "q3": 61.0,
+                  "min": 61.0,
+                  "max": 61.0
+                }
+              },
+              "yieldedDivPi": 2.7624140565317035
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.795774647887324,
+              "q1": 0.795774647887324,
+              "q3": 0.795774647887324,
+              "min": 0.795774647887324,
+              "max": 0.795774647887324
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -232.0,
+              "q1": -232.0,
+              "q3": -232.0,
+              "min": -232.0,
+              "max": -232.0
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.044084570400359846,
+              "q1": 0.044084570400359846,
+              "q3": 0.044084570400359846,
+              "min": 0.044084570400359846,
+              "max": 0.044084570400359846
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1159.5,
+                  "q1": 1159.5,
+                  "q3": 1159.5,
+                  "min": 1159.5,
+                  "max": 1159.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 197,
+                  "q1": 197.0,
+                  "q3": 197.0,
+                  "min": 197,
+                  "max": 197
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 2146.5,
+                  "q1": 2146.5,
+                  "q3": 2146.5,
+                  "min": 2146.5,
+                  "max": 2146.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 3,
+                  "q1": 3.0,
+                  "q3": 3.0,
+                  "min": 3,
+                  "max": 3
+                }
+              },
+              "yieldedDivPi": 1.851228978007762
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1091.0,
+                  "q1": 1091.0,
+                  "q3": 1091.0,
+                  "min": 1091.0,
+                  "max": 1091.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 184,
+                  "q1": 184.0,
+                  "q3": 184.0,
+                  "min": 184,
+                  "max": 184
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1865.5,
+                  "q1": 1865.5,
+                  "q3": 1865.5,
+                  "min": 1865.5,
+                  "max": 1865.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 145,
+                  "q1": 145.0,
+                  "q3": 145.0,
+                  "min": 145,
+                  "max": 145
+                }
+              },
+              "yieldedDivPi": 1.7098991750687442
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.8690892150011646,
+              "q1": 0.8690892150011646,
+              "q3": 0.8690892150011646,
+              "min": 0.8690892150011646,
+              "max": 0.8690892150011646
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -281.0,
+              "q1": -281.0,
+              "q3": -281.0,
+              "min": -281.0,
+              "max": -281.0
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.0013986013986013734,
+              "q1": 0.0013986013986013734,
+              "q3": 0.0013986013986013734,
+              "min": 0.0013986013986013734,
+              "max": 0.0013986013986013734
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1149.5,
+                  "q1": 1149.5,
+                  "q3": 1149.5,
+                  "min": 1149.5,
+                  "max": 1149.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 47,
+                  "q1": 47.0,
+                  "q3": 47.0,
+                  "min": 47,
+                  "max": 47
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 911.5,
+                  "q1": 911.5,
+                  "q3": 911.5,
+                  "min": 911.5,
+                  "max": 911.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 53,
+                  "q1": 53.0,
+                  "q3": 53.0,
+                  "min": 53,
+                  "max": 53
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.7929534580252283,
+              "q1": 0.7929534580252283,
+              "q3": 0.7929534580252283,
+              "min": 0.7929534580252283,
+              "max": 0.7929534580252283
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -238.0,
+              "q1": -238.0,
+              "q3": -238.0,
+              "min": -238.0,
+              "max": -238.0
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.04174067495559508,
+              "q1": 0.04174067495559508,
+              "q3": 0.04174067495559508,
+              "min": 0.04174067495559508,
+              "max": 0.04174067495559508
+            }
+          },
+          "coverage": {
+            "availableSamples": 4,
+            "completeSamples": 4,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 87.25,
+                  "q1": 87.25,
+                  "q3": 87.25,
+                  "min": 87.25,
+                  "max": 87.25
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 25.5,
+                  "q1": 25.5,
+                  "q3": 25.5,
+                  "min": 25.5,
+                  "max": 25.5
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 277.75,
+                  "q1": 277.75,
+                  "q3": 277.75,
+                  "min": 277.75,
+                  "max": 277.75
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 20.5,
+                  "q1": 20.5,
+                  "q3": 20.5,
+                  "min": 20.5,
+                  "max": 20.5
+                }
+              },
+              "yieldedDivPi": 3.183381088825215
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 96.0,
+                  "q1": 96.0,
+                  "q3": 96.0,
+                  "min": 96.0,
+                  "max": 96.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 27.0,
+                  "q1": 27.0,
+                  "q3": 27.0,
+                  "min": 27.0,
+                  "max": 27.0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 275.5,
+                  "q1": 275.5,
+                  "q3": 275.5,
+                  "min": 275.5,
+                  "max": 275.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 23,
+                  "q1": 23.0,
+                  "q3": 23.0,
+                  "min": 23,
+                  "max": 23
+                }
+              },
+              "yieldedDivPi": 2.8697916666666665
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.991899189918992,
+              "q1": 0.991899189918992,
+              "q3": 0.991899189918992,
+              "min": 0.991899189918992,
+              "max": 0.991899189918992
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -2.25,
+              "q1": -2.25,
+              "q3": -2.25,
+              "min": -2.25,
+              "max": -2.25
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.07663551401869162,
+              "q1": 0.07663551401869162,
+              "q3": 0.07663551401869162,
+              "min": 0.07663551401869162,
+              "max": 0.07663551401869162
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 741.5,
+                  "q1": 741.5,
+                  "q3": 741.5,
+                  "min": 741.5,
+                  "max": 741.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 107,
+                  "q1": 107.0,
+                  "q3": 107.0,
+                  "min": 107,
+                  "max": 107
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1108.5,
+                  "q1": 1108.5,
+                  "q3": 1108.5,
+                  "min": 1108.5,
+                  "max": 1108.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 101,
+                  "q1": 101.0,
+                  "q3": 101.0,
+                  "min": 101,
+                  "max": 101
+                }
+              },
+              "yieldedDivPi": 1.494942683749157
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 818.5,
+                  "q1": 818.5,
+                  "q3": 818.5,
+                  "min": 818.5,
+                  "max": 818.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 11,
+                  "q1": 11.0,
+                  "q3": 11.0,
+                  "min": 11,
+                  "max": 11
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1007.0,
+                  "q1": 1007.0,
+                  "q3": 1007.0,
+                  "min": 1007.0,
+                  "max": 1007.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 32,
+                  "q1": 32.0,
+                  "q3": 32.0,
+                  "min": 32,
+                  "max": 32
+                }
+              },
+              "yieldedDivPi": 1.230299328039096
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.9084348218313035,
+              "q1": 0.9084348218313035,
+              "q3": 0.9084348218313035,
+              "min": 0.9084348218313035,
+              "max": 0.9084348218313035
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -101.5,
+              "q1": -101.5,
+              "q3": -101.5,
+              "min": -101.5,
+              "max": -101.5
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.0954631379962192,
+              "q1": 0.0954631379962192,
+              "q3": 0.0954631379962192,
+              "min": 0.0954631379962192,
+              "max": 0.0954631379962192
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 250.0,
+                  "q1": 250.0,
+                  "q3": 250.0,
+                  "min": 250.0,
+                  "max": 250.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 26,
+                  "q1": 26.0,
+                  "q3": 26.0,
+                  "min": 26,
+                  "max": 26
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 252.5,
+                  "q1": 252.5,
+                  "q3": 252.5,
+                  "min": 252.5,
+                  "max": 252.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 21,
+                  "q1": 21.0,
+                  "q3": 21.0,
+                  "min": 21,
+                  "max": 21
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 1.01,
+              "q1": 1.01,
+              "q3": 1.01,
+              "min": 1.01,
+              "max": 1.01
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 2.5,
+              "q1": 2.5,
+              "q3": 2.5,
+              "min": 2.5,
+              "max": 2.5
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.10970464135021096,
+              "q1": 0.10970464135021096,
+              "q3": 0.10970464135021096,
+              "min": 0.10970464135021096,
+              "max": 0.10970464135021096
+            }
+          },
+          "coverage": {
+            "availableSamples": 4,
+            "completeSamples": 4,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 8,
+            "completeSamples": 8,
+            "incompleteObjects": []
+          }
+        }
+      }
+    }
+  ],
+  "objects": [
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 0,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 457.5,
+            "driverMs": 1258,
+            "gapMs": 0,
+            "driverStartedMs": 1791532871544,
+            "firstRequestArrivalMs": 1791532872012,
+            "firstRequestRawMs": 468,
+            "firstRequestLowerMs": 436,
+            "firstRequestUpperMs": 479,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 74.5,
+            "driverMs": 854,
+            "gapMs": 0,
+            "driverStartedMs": 1791532873267,
+            "firstRequestArrivalMs": 1791532873352,
+            "firstRequestRawMs": 85,
+            "firstRequestLowerMs": 54,
+            "firstRequestUpperMs": 95,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 74.5,
+            "driverMs": 688,
+            "gapMs": 0,
+            "driverStartedMs": 1791532874462,
+            "firstRequestArrivalMs": 1791532874546,
+            "firstRequestRawMs": 84,
+            "firstRequestLowerMs": 56,
+            "firstRequestUpperMs": 93,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 1,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 221,
+            "driverMs": 999,
+            "gapMs": 0,
+            "driverStartedMs": 1791532914130,
+            "firstRequestArrivalMs": 1791532914360,
+            "firstRequestRawMs": 230,
+            "firstRequestLowerMs": 202,
+            "firstRequestUpperMs": 240,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 67,
+            "driverMs": 689,
+            "gapMs": 0,
+            "driverStartedMs": 1791532915493,
+            "firstRequestArrivalMs": 1791532915568,
+            "firstRequestRawMs": 75,
+            "firstRequestLowerMs": 50,
+            "firstRequestUpperMs": 84,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 82.5,
+            "driverMs": 824,
+            "gapMs": 0,
+            "driverStartedMs": 1791532916592,
+            "firstRequestArrivalMs": 1791532916682,
+            "firstRequestRawMs": 90,
+            "firstRequestLowerMs": 66,
+            "firstRequestUpperMs": 99,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 2,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 433.5,
+            "driverMs": 1183,
+            "gapMs": 0,
+            "driverStartedMs": 1791532957207,
+            "firstRequestArrivalMs": 1791532957648,
+            "firstRequestRawMs": 441,
+            "firstRequestLowerMs": 416,
+            "firstRequestUpperMs": 451,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 63,
+            "driverMs": 693,
+            "gapMs": 0,
+            "driverStartedMs": 1791532958703,
+            "firstRequestArrivalMs": 1791532958774,
+            "firstRequestRawMs": 71,
+            "firstRequestLowerMs": 45,
+            "firstRequestUpperMs": 81,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 109.5,
+            "driverMs": 813,
+            "gapMs": 0,
+            "driverStartedMs": 1791532959822,
+            "firstRequestArrivalMs": 1791532959940,
+            "firstRequestRawMs": 118,
+            "firstRequestLowerMs": 92,
+            "firstRequestUpperMs": 127,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 3,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 334.5,
+            "driverMs": 1061,
+            "gapMs": 0,
+            "driverStartedMs": 1791532989761,
+            "firstRequestArrivalMs": 1791532990106,
+            "firstRequestRawMs": 345,
+            "firstRequestLowerMs": 314,
+            "firstRequestUpperMs": 355,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 71.5,
+            "driverMs": 729,
+            "gapMs": 0,
+            "driverStartedMs": 1791532991238,
+            "firstRequestArrivalMs": 1791532991316,
+            "firstRequestRawMs": 78,
+            "firstRequestLowerMs": 55,
+            "firstRequestUpperMs": 88,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 100,
+            "driverMs": 795,
+            "gapMs": 0,
+            "driverStartedMs": 1791532992291,
+            "firstRequestArrivalMs": 1791532992398,
+            "firstRequestRawMs": 107,
+            "firstRequestLowerMs": 83,
+            "firstRequestUpperMs": 117,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 0,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 1160.5,
+            "driverMs": 2145,
+            "admissionMs": 1173,
+            "gapMs": 0,
+            "driverStartedMs": 1791532870190,
+            "firstRequestArrivalMs": 1791532871360,
+            "firstRequestRawMs": 1170,
+            "firstRequestLowerMs": 1142,
+            "firstRequestUpperMs": 1179,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 303,
+            "driverMs": 1101,
+            "admissionMs": 283,
+            "gapMs": 0,
+            "driverStartedMs": 1791532872614,
+            "firstRequestArrivalMs": 1791532872925,
+            "firstRequestRawMs": 311,
+            "firstRequestLowerMs": 286,
+            "firstRequestUpperMs": 320,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 288,
+            "driverMs": 1159,
+            "admissionMs": 263,
+            "gapMs": 0,
+            "driverStartedMs": 1791532873969,
+            "firstRequestArrivalMs": 1791532874266,
+            "firstRequestRawMs": 297,
+            "firstRequestLowerMs": 270,
+            "firstRequestUpperMs": 306,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 1,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 873.5,
+            "driverMs": 1793,
+            "admissionMs": 885,
+            "gapMs": 0,
+            "driverStartedMs": 1791532915047,
+            "firstRequestArrivalMs": 1791532915933,
+            "firstRequestRawMs": 886,
+            "firstRequestLowerMs": 850,
+            "firstRequestUpperMs": 897,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 303,
+            "driverMs": 1088,
+            "admissionMs": 287,
+            "gapMs": 0,
+            "driverStartedMs": 1791532917203,
+            "firstRequestArrivalMs": 1791532917519,
+            "firstRequestRawMs": 316,
+            "firstRequestLowerMs": 281,
+            "firstRequestUpperMs": 325,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 287,
+            "driverMs": 1023,
+            "admissionMs": 263,
+            "gapMs": 0,
+            "driverStartedMs": 1791532918583,
+            "firstRequestArrivalMs": 1791532918877,
+            "firstRequestRawMs": 294,
+            "firstRequestLowerMs": 270,
+            "firstRequestUpperMs": 304,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 2,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 934.5,
+            "driverMs": 1938,
+            "admissionMs": 938,
+            "gapMs": 0,
+            "driverStartedMs": 1791532958443,
+            "firstRequestArrivalMs": 1791532959386,
+            "firstRequestRawMs": 943,
+            "firstRequestLowerMs": 913,
+            "firstRequestUpperMs": 956,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 313,
+            "driverMs": 1125,
+            "admissionMs": 299,
+            "gapMs": 0,
+            "driverStartedMs": 1791532960714,
+            "firstRequestArrivalMs": 1791532961039,
+            "firstRequestRawMs": 325,
+            "firstRequestLowerMs": 290,
+            "firstRequestUpperMs": 336,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 264,
+            "driverMs": 991,
+            "admissionMs": 242,
+            "gapMs": 0,
+            "driverStartedMs": 1791532962176,
+            "firstRequestArrivalMs": 1791532962448,
+            "firstRequestRawMs": 272,
+            "firstRequestLowerMs": 247,
+            "firstRequestUpperMs": 281,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 3,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "firstRequestMs": 1111.5,
+            "driverMs": 2148,
+            "admissionMs": 1126,
+            "gapMs": 0,
+            "driverStartedMs": 1791532990858,
+            "firstRequestArrivalMs": 1791532991981,
+            "firstRequestRawMs": 1123,
+            "firstRequestLowerMs": 1089,
+            "firstRequestUpperMs": 1134,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "firstRequestMs": 365,
+            "driverMs": 1263,
+            "admissionMs": 345,
+            "gapMs": 0,
+            "driverStartedMs": 1791532993355,
+            "firstRequestArrivalMs": 1791532993730,
+            "firstRequestRawMs": 375,
+            "firstRequestLowerMs": 343,
+            "firstRequestUpperMs": 387,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "firstRequestMs": 267.5,
+            "driverMs": 1058,
+            "admissionMs": 237,
+            "gapMs": 0,
+            "driverStartedMs": 1791532994903,
+            "firstRequestArrivalMs": 1791532995179,
+            "firstRequestRawMs": 276,
+            "firstRequestLowerMs": 250,
+            "firstRequestUpperMs": 285,
+            "firstRequestClockValid": true,
+            "colo": "SJC",
+            "providerColo": "LAX"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+{
+  "run": "history-cost-mv0om6ec-21e0247d",
+  "method": "For each warm repeat index, take each complete Object's median over both epochs of each build; report the median paired candidate/baseline ratio and delta across Objects. These six cohort estimates describe repeat variation; they are not independent trials or confidence intervals. Raw individual-turn ranges and baseline epoch drift remain in the compact run.",
+  "cells": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "metric": "firstRequestMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.8709408317734191,
+          "pairedMedianDeltaMs": -34.375
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 1.0477191417227996,
+          "pairedMedianDeltaMs": 9.25
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 0.9895362875832218,
+          "pairedMedianDeltaMs": -3.5
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.9426683761578314,
+          "pairedMedianDeltaMs": -13.75
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 0.8409810557435717,
+          "pairedMedianDeltaMs": -40.25
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 0.9567801174143253,
+          "pairedMedianDeltaMs": -11.5
+        }
+      ],
+      "ratioRange": 0.20673808597922783,
+      "deltaRangeMs": 49.5
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "metric": "driverMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.962685784157449,
+          "pairedMedianDeltaMs": -31.0
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 1.0488213706682425,
+          "pairedMedianDeltaMs": 35.0
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 0.9578109683743486,
+          "pairedMedianDeltaMs": -34.0
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.9595463675038023,
+          "pairedMedianDeltaMs": -36.0
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 0.9652206371072469,
+          "pairedMedianDeltaMs": -28.0
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 1.000412115218739,
+          "pairedMedianDeltaMs": 0.5
+        }
+      ],
+      "ratioRange": 0.0910104022938939,
+      "deltaRangeMs": 71.0
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "metric": "firstRequestMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.88977871301258,
+          "pairedMedianDeltaMs": -31.25
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 0.9354420758164046,
+          "pairedMedianDeltaMs": -19.25
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 1.004841866553607,
+          "pairedMedianDeltaMs": 0.75
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.9469251916223234,
+          "pairedMedianDeltaMs": -15.875
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 0.9510270912262571,
+          "pairedMedianDeltaMs": -14.75
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 0.9207012123787367,
+          "pairedMedianDeltaMs": -24.125
+        }
+      ],
+      "ratioRange": 0.11506315354102692,
+      "deltaRangeMs": 32.0
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "metric": "driverMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.9488448561788758,
+          "pairedMedianDeltaMs": -48.75
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 0.9355917009707364,
+          "pairedMedianDeltaMs": -57.0
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 1.011425749383137,
+          "pairedMedianDeltaMs": 10.75
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.9521837759806737,
+          "pairedMedianDeltaMs": -46.25
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 1.035837457093047,
+          "pairedMedianDeltaMs": 32.5
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 0.9301635588918868,
+          "pairedMedianDeltaMs": -65.0
+        }
+      ],
+      "ratioRange": 0.10567389820116024,
+      "deltaRangeMs": 97.5
+    },
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "metric": "firstRequestMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.8714721339507956,
+          "pairedMedianDeltaMs": -84.625
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 0.8697163577759871,
+          "pairedMedianDeltaMs": -96.625
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 0.869467638385151,
+          "pairedMedianDeltaMs": -105.5
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.8827180612069353,
+          "pairedMedianDeltaMs": -78.25
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 0.8974228487694644,
+          "pairedMedianDeltaMs": -78.0
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 0.8823517802948132,
+          "pairedMedianDeltaMs": -86.375
+        }
+      ],
+      "ratioRange": 0.027955210384313478,
+      "deltaRangeMs": 27.5
+    },
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "metric": "driverMs",
+      "objects": 20,
+      "repeatEstimates": [
+        {
+          "repeat": 2,
+          "pairedMedianRatio": 0.9023187380234432,
+          "pairedMedianDeltaMs": -150.5
+        },
+        {
+          "repeat": 3,
+          "pairedMedianRatio": 0.9371049266412923,
+          "pairedMedianDeltaMs": -85.75
+        },
+        {
+          "repeat": 4,
+          "pairedMedianRatio": 0.9501592586420093,
+          "pairedMedianDeltaMs": -78.75
+        },
+        {
+          "repeat": 5,
+          "pairedMedianRatio": 0.9358690211481586,
+          "pairedMedianDeltaMs": -83.0
+        },
+        {
+          "repeat": 6,
+          "pairedMedianRatio": 0.9388327123000917,
+          "pairedMedianDeltaMs": -90.5
+        },
+        {
+          "repeat": 7,
+          "pairedMedianRatio": 0.9282783304244725,
+          "pairedMedianDeltaMs": -112.5
+        }
+      ],
+      "ratioRange": 0.04784052061856614,
+      "deltaRangeMs": 71.75
+    }
+  ]
+}

@@ -1,13 +1,13 @@
 {
   "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
   "candidateRevision": "442c988c7485c6b088a10f56547daa70668fc0d6",
-  "candidateSourcePath": "/private/tmp/history-cost-20261009/digest-encoding/packages/effect-agent/src/durable/internal/run-context.ts",
+  "candidateSourcePath": "/tmp/history-cost/digest-encoding/packages/effect-agent/src/durable/internal/run-context.ts",
   "candidateSourceSha256": "85f7a1de02672c8e023559cfcb9bd337b93cb7bf5ab01b3ff6f9b1462f970420",
   "baselineSourceSha256": "4c15c1b938ed82519be91d078ee663a930216da90c75b425235024c4992f53d9",
   "runtimeChange": "packages/effect-agent/src/durable/internal/run-context.ts",
   "candidatePatchSha256": "75db053fe1471e747c42747db471e316fafd06742aa7c22497db39457e1d1fad",
   "baselineRecordsSha256": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
-  "capturedFrom": "/private/tmp/history-cost-20261009/counts/examples/durable-bench/counting-hydration",
+  "capturedFrom": "/tmp/history-cost/counts/examples/durable-bench/counting-hydration",
   "inheritedSourceSha256": {
     "instrument.ts": "c7ec2e29713a971478dea50859d09169890b6b070e18f4323cb871621fbd7af3",
     "probe.js": "4b28b0ecccd11bb9056080148c71db92a4c1a6a233f80c352bcccd733f65507a",
@@ -19,38 +19,38 @@
     {
       "size": 50,
       "archive": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/archive-50.json",
+        "path": "/tmp/history-cost/count-artifacts/archive-50.json",
         "bytes": 1028714,
         "sha256": "e2714cdcb51197a41742a83c31faf5bde215a21608340606b5d5d38ce77ab22e"
       },
       "metadata": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50.json",
+        "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50.json",
         "bytes": 1403,
         "sha256": "6f170d39c9a561a76b61cbfc8f1387773e32e77a4aca7eb938088505b78f5b26"
       },
       "fixtureFiles": [
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "8d069b883b3803a2a42dc4cc4d0d8d41a148e1ef61c488f805757d845d79962e"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/cache/miniflare-CacheObject/metadata.sqlite-wal",
           "bytes": 8272,
           "sha256": "cd52bfd2416d06f9f39c861f7f3961a9e8fed19b763e5213154ab2ec8b9161b8"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
           "bytes": 2220032,
           "sha256": "64b29901517f5f9081c26b2735d14c01ba31f40ddf6d0a48ef1f00375e088343"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/do/-YieldedDO/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-50/do/-YieldedDO/metadata.sqlite",
           "bytes": 8192,
           "sha256": "e9de3ce7846e950158e0186079053557b10f0be9ee0f5f7e612c215c5e6817b6"
         }
@@ -59,48 +59,48 @@
     {
       "size": 250,
       "archive": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/archive-250.json",
+        "path": "/tmp/history-cost/count-artifacts/archive-250.json",
         "bytes": 5140932,
         "sha256": "a147b7df7706b56e6967b9f36d53f171cd2e87740b8e9f1735bcaa9138c90a8b"
       },
       "metadata": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250.json",
+        "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250.json",
         "bytes": 1411,
         "sha256": "2a4b14b492691e869b61a3b1697a78b53c3a0f3ac4d59ca1011c609fbdc0e608"
       },
       "fixtureFiles": [
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "8d069b883b3803a2a42dc4cc4d0d8d41a148e1ef61c488f805757d845d79962e"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/cache/miniflare-CacheObject/metadata.sqlite-wal",
           "bytes": 8272,
           "sha256": "cd52bfd2416d06f9f39c861f7f3961a9e8fed19b763e5213154ab2ec8b9161b8"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
           "bytes": 8228864,
           "sha256": "0a629249f81175e08a49b57ca195ae8bfd5457d132429449d28a8b692b946f85"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "bf101981048b7d49f33d3ce7d7d6d49966f5fae32f0c7ff4a2ac690b5fa8645e"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-250/do/-YieldedDO/metadata.sqlite-wal",
           "bytes": 45352,
           "sha256": "a601506f298c493cff9dd4de96f3964caa12aff88cc379d027f5fc958480889c"
         }
@@ -109,58 +109,58 @@
     {
       "size": 1000,
       "archive": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/archive-1000.json",
+        "path": "/tmp/history-cost/count-artifacts/archive-1000.json",
         "bytes": 20606823,
         "sha256": "b70c40a799270ab8b74a9ec8b9b31926cf2a3621be688cbe68245213cc7fd9b3"
       },
       "metadata": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000.json",
+        "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000.json",
         "bytes": 1420,
         "sha256": "aec9783399af475c0fcabd6f6159a086170f32cd9e8210fffa9fc6a58970b164"
       },
       "fixtureFiles": [
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "8d069b883b3803a2a42dc4cc4d0d8d41a148e1ef61c488f805757d845d79962e"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/cache/miniflare-CacheObject/metadata.sqlite-wal",
           "bytes": 8272,
           "sha256": "cd52bfd2416d06f9f39c861f7f3961a9e8fed19b763e5213154ab2ec8b9161b8"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
           "bytes": 30482432,
           "sha256": "c3198257b28afaca70be4ce0fc22a3929defb5e3fca43a6c690482653357742b"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-shm",
           "bytes": 32768,
           "sha256": "3f2758c53676b555fbf12a848238ffd046e713fa78e51d042ba79250aa38bf16"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-wal",
           "bytes": 4330152,
           "sha256": "9c7817fea803658fe5432b3f869b4bb3edab3746fcbdeafb1937d4636c2d3a70"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "5e5d2fcce4d31ebfe399efed462010a53fab8915e171beef1f52de909ce326df"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-1000/do/-YieldedDO/metadata.sqlite-wal",
           "bytes": 111272,
           "sha256": "ae1d4f0a27b077fe11bdb560e891ca33c47dbb5b871ea6de25607fa8e3473950"
         }
@@ -169,58 +169,58 @@
     {
       "size": 3500,
       "archive": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/archive-3500.json",
+        "path": "/tmp/history-cost/count-artifacts/archive-3500.json",
         "bytes": 72251555,
         "sha256": "6a9787a49bb909eb37ec534d904ddb1f6aa7b66a54b28b026fc9b83c1afa2a44"
       },
       "metadata": {
-        "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500.json",
+        "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500.json",
         "bytes": 1426,
         "sha256": "669ea8957500b6e9732ee36e699f64e725234792d37ebbe2a109e5fa73626c2b"
       },
       "fixtureFiles": [
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "8d069b883b3803a2a42dc4cc4d0d8d41a148e1ef61c488f805757d845d79962e"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/cache/miniflare-CacheObject/metadata.sqlite-wal",
           "bytes": 8272,
           "sha256": "cd52bfd2416d06f9f39c861f7f3961a9e8fed19b763e5213154ab2ec8b9161b8"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite",
           "bytes": 105111552,
           "sha256": "f9daa6f8be6bf5cc8c41d26a7ee3747af0c9eedc094ecc4d18ea75bb142f8964"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-shm",
           "bytes": 32768,
           "sha256": "dbddb49967701823a442500312bc02b164db0727552ad0482e70ffd7551e7341"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/faa9616d2794ad5950550f98bfa287cb22e72ea91f8594c7f3ad93bc97bc9626.sqlite-wal",
           "bytes": 4338392,
           "sha256": "f2273a559cd9b208f2ff215c9c785350ff0c7bba206dcf436f10386f75f18d20"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite",
           "bytes": 4096,
           "sha256": "4c34b48e33536be849e9810707c97ff2b5625bb5cbf1637dbe384cfffdda3b9d"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite-shm",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite-shm",
           "bytes": 32768,
           "sha256": "336f387b16eec97accf8ad47bbf85417d2d9ea78d607975c0d9c4841e5c7a9f2"
         },
         {
-          "path": "/private/tmp/history-cost-20261009/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite-wal",
+          "path": "/tmp/history-cost/count-artifacts/prompt-hydration-0451aacb/fixtures/yielded-3500/do/-YieldedDO/metadata.sqlite-wal",
           "bytes": 337872,
           "sha256": "6b340c4ceb46191d5a1b3ecf6bef57b8c33be989090cccf6a7a366b2b2d23b1b"
         }
@@ -297,19 +297,19 @@
   },
   "priorBaselineEquivalence": {
     "50": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-50.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-50.json",
       "sha256": "5b16a68afeb483c6f7b9e230791b3d4791cf5107c3b3f7250edfe2395b021c2b"
     },
     "250": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-250.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-250.json",
       "sha256": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516"
     },
     "1000": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-1000.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-1000.json",
       "sha256": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10"
     },
     "3500": {
-      "file": "/private/tmp/history-cost-20261009/count-artifacts/yielded-baseline-3500.json",
+      "file": "/tmp/history-cost/count-artifacts/yielded-baseline-3500.json",
       "sha256": "5773bb5a3691b9e408062f80a94dfa05c5e0b01cd8c814fb943829f4f903d896"
     }
   },

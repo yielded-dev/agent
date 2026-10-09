@@ -94,7 +94,7 @@ for key, rows in sorted(groups(samples, lambda s: (s["target"], s["history"], s[
     target, history, ttft, obj, epoch, build = key
     item = {"target": target, "history": history, "ttftMs": ttft, "object": obj.rsplit("-o", 1)[-1], "epoch": epoch, "build": build, "states": {}}
     for state, rs in groups(rows, lambda s: s["state"]).items():
-        item["states"][state] = [{"repeat": s["repeat"], "status": s["status"], **{f: s[f] for f in (*metrics, "driverStartedMs", "firstRequestArrivalMs", "firstRequestRawMs", "firstRequestLowerMs", "firstRequestUpperMs", "firstRequestClockValid", "colo", "providerColo", "error") if f in s}} for s in rs]
+        item["states"][state] = [{"repeat": s["repeat"], "status": s["status"], **{f: s[f] for f in (*metrics, "objectBuildVerified", "driverStartedMs", "firstRequestArrivalMs", "firstRequestRawMs", "firstRequestLowerMs", "firstRequestUpperMs", "firstRequestClockValid", "colo", "providerColo", "error") if f in s}} for s in rs]
     per_object.append(item)
 
 cpu = run.get("cpu", [])
@@ -102,6 +102,8 @@ cpu_outcomes = [{"target": key[0], "kind": key[1], "outcome": key[2], "count": l
 clocks = [s for s in ok if s.get("firstRequestClockValid")]
 result = {k: run[k] for k in ("run", "revision", "dirty", "startedAt", "wallMs", "options", "seedBuild", "builds", "fixtures", "complete", "failures", "cleanup", "kept") if k in run}
 result.update({"rawSha256": hashlib.sha256(raw_bytes).hexdigest(), "samplesByStatus": dict(collections.Counter(s["status"] for s in samples)), "fingerprintsVerified": sum(s.get("fingerprintVerified", False) for s in samples), "modelRequestsVerified": sum(len(s.get("fingerprints", [])) for s in samples), "clockChecks": {"valid": len(clocks), "rejected": sum(s.get("firstRequestClockValid") is False for s in ok), "intervalWidthMs": stats([s["firstRequestUpperMs"]-s["firstRequestLowerMs"] for s in clocks]), "providerColos": dict(collections.Counter(s.get("providerColo", "unavailable") for s in ok))}, "cpuOutcomes": cpu_outcomes, "unmatchedCpuMarkers": run.get("unmatchedCpuMarkers"), "cells": cells, "objects": per_object})
+if any("objectBuildVerified" in s for s in samples):
+    result["objectBuildsVerified"] = sum(s.get("objectBuildVerified", False) for s in samples)
 args.output.parent.mkdir(parents=True, exist_ok=True)
 args.output.write_text(json.dumps(result, indent=2)+"\n")
 print(json.dumps({"complete": run["complete"], "sampleCount": len(samples), "failures": run["failures"], "clockChecks": result["clockChecks"]}))

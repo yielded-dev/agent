@@ -1,0 +1,17 @@
+{
+  "sourceSha256": "01ffe4ae69f00b9a442990c043331c6303eefdb72126f38aefe656872949833c",
+  "commandExitCode": 0,
+  "results": [
+    {
+      "entry": "seed",
+      "status": 200,
+      "body": "{\"ok\":true,\"build\":\"health-proof-seed\"}"
+    },
+    {
+      "entry": "target",
+      "status": 200,
+      "body": "{\"ok\":true,\"build\":\"health-proof-target\"}"
+    }
+  ],
+  "note": "Local readiness behavior only, not a latency measurement or proof of deployed propagation."
+}

@@ -32,7 +32,11 @@
       "vendoredThirdPartyNodeModules": false,
       "hostLoopbackAccess": true
     },
-    "logSha256": "558ac929ba6024fa768821ddde598a77ccb9475c0e2bf54686bd13990e0b75b1"
+    "logSha256": "558ac929ba6024fa768821ddde598a77ccb9475c0e2bf54686bd13990e0b75b1",
+    "ci": {
+      "runUrl": "https://github.com/yielded-dev/agent/actions/runs/37900903179",
+      "readyConclusion": "SUCCESS"
+    }
   },
   {
     "revision": "442c988c7485c6b088a10f56547daa70668fc0d6",

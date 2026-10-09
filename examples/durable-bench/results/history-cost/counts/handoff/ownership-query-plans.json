@@ -1,0 +1,410 @@
+{
+  "scope": "Read-only SQL against temporary fixture copies; host SQLite plans, not workerd row-read measurements",
+  "queries": {
+    "original": "SELECT ownership.* FROM effect_agent_submission_ownership AS ownership JOIN effect_agent_submissions AS submission ON submission.submission_id = ownership.submission_id WHERE submission.thread_id = ? ORDER BY ownership.lease_expires_at DESC LIMIT 1",
+    "ownershipFirst": "SELECT ownership.* FROM effect_agent_submission_ownership AS ownership CROSS JOIN effect_agent_submissions AS submission WHERE submission.submission_id = ownership.submission_id AND submission.thread_id = ? ORDER BY ownership.lease_expires_at DESC LIMIT 1",
+    "emptyOwnershipGuard": "SELECT ownership.* FROM effect_agent_submission_ownership AS ownership JOIN effect_agent_submissions AS submission ON submission.submission_id = ownership.submission_id WHERE submission.thread_id = ? AND EXISTS (SELECT 1 FROM effect_agent_submission_ownership) ORDER BY ownership.lease_expires_at DESC LIMIT 1"
+  },
+  "fixtures": {
+    "250": {
+      "sqliteVersion": "3.53.4",
+      "tables": {
+        "effect_agent_submissions": {
+          "rows": 250,
+          "schema": "CREATE TABLE effect_agent_submissions ( submission_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, principal TEXT NOT NULL, idempotency_key TEXT NOT NULL, agent_id TEXT NOT NULL, agent_digests_json TEXT NOT NULL, deployment_id TEXT NOT NULL, input_json TEXT NOT NULL, input_digest TEXT NOT NULL, receipt_id TEXT NOT NULL, state TEXT NOT NULL, settled_outcome TEXT, settled_record_id TEXT, finalized_at TEXT, created_at TEXT NOT NULL, ready_at TEXT, input_applied_record_id TEXT, input_applied_sequence INTEGER, joined_host_submission_id TEXT, suspended_reason_json TEXT, suspended_at TEXT, unknown_reason TEXT, unknown_tool_call_ids_json TEXT, parent_submission_id TEXT, parent_tool_call_id TEXT, admission_group TEXT, admission_fence_json TEXT, worker_admission_json TEXT, message_admission_json TEXT, UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )"
+        },
+        "effect_agent_submission_ownership": {
+          "rows": 0,
+          "schema": "CREATE TABLE effect_agent_submission_ownership ( submission_id TEXT PRIMARY KEY NOT NULL, attempt_id TEXT NOT NULL, ownership_token TEXT NOT NULL, producer_epoch INTEGER NOT NULL, owner_producer_id TEXT NOT NULL, lease_expires_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )"
+        }
+      },
+      "indexes": {
+        "effect_agent_submissions": [
+          {
+            "name": "effect_agent_submissions_active_parent",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_active_parent ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND parent_submission_id IS NOT NULL"
+          },
+          {
+            "name": "effect_agent_submissions_active_worker",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_active_worker ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND worker_admission_json IS NOT NULL"
+          },
+          {
+            "name": "effect_agent_submissions_nonterminal",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "queue_sequence"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'"
+          },
+          {
+            "name": "effect_agent_submissions_group",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "admission_group",
+              "state"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_group ON effect_agent_submissions (thread_id, admission_group, state)"
+          },
+          {
+            "name": "effect_agent_submissions_parent",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "parent_submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_parent ON effect_agent_submissions (parent_submission_id)"
+          },
+          {
+            "name": "effect_agent_submissions_joined_host",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "joined_host_submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_joined_host ON effect_agent_submissions (joined_host_submission_id)"
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_3",
+            "unique": true,
+            "origin": "u",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "queue_sequence"
+            ],
+            "sql": null
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_2",
+            "unique": true,
+            "origin": "u",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "principal",
+              "idempotency_key"
+            ],
+            "sql": null
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_1",
+            "unique": true,
+            "origin": "pk",
+            "partial": false,
+            "columns": [
+              "submission_id"
+            ],
+            "sql": null
+          }
+        ],
+        "effect_agent_submission_ownership": [
+          {
+            "name": "sqlite_autoindex_effect_agent_submission_ownership_1",
+            "unique": true,
+            "origin": "pk",
+            "partial": false,
+            "columns": [
+              "submission_id"
+            ],
+            "sql": null
+          }
+        ]
+      },
+      "plans": {
+        "original": [
+          [
+            7,
+            0,
+            61,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_3 (thread_id=?)"
+          ],
+          [
+            14,
+            0,
+            46,
+            "SEARCH ownership USING INDEX sqlite_autoindex_effect_agent_submission_ownership_1 (submission_id=?)"
+          ],
+          [
+            33,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ],
+        "ownershipFirst": [
+          [
+            6,
+            0,
+            216,
+            "SCAN ownership"
+          ],
+          [
+            8,
+            0,
+            46,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_1 (submission_id=?)"
+          ],
+          [
+            29,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ],
+        "emptyOwnershipGuard": [
+          [
+            10,
+            0,
+            211,
+            "SCAN effect_agent_submission_ownership EXISTS USING COVERING INDEX sqlite_autoindex_effect_agent_submission_ownership_1"
+          ],
+          [
+            12,
+            0,
+            61,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_3 (thread_id=?)"
+          ],
+          [
+            19,
+            0,
+            46,
+            "SEARCH ownership USING INDEX sqlite_autoindex_effect_agent_submission_ownership_1 (submission_id=?)"
+          ],
+          [
+            40,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ]
+      },
+      "returnedRows": {
+        "original": 0,
+        "ownershipFirst": 0,
+        "emptyOwnershipGuard": 0
+      }
+    },
+    "1000": {
+      "sqliteVersion": "3.53.4",
+      "tables": {
+        "effect_agent_submissions": {
+          "rows": 1000,
+          "schema": "CREATE TABLE effect_agent_submissions ( submission_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, principal TEXT NOT NULL, idempotency_key TEXT NOT NULL, agent_id TEXT NOT NULL, agent_digests_json TEXT NOT NULL, deployment_id TEXT NOT NULL, input_json TEXT NOT NULL, input_digest TEXT NOT NULL, receipt_id TEXT NOT NULL, state TEXT NOT NULL, settled_outcome TEXT, settled_record_id TEXT, finalized_at TEXT, created_at TEXT NOT NULL, ready_at TEXT, input_applied_record_id TEXT, input_applied_sequence INTEGER, joined_host_submission_id TEXT, suspended_reason_json TEXT, suspended_at TEXT, unknown_reason TEXT, unknown_tool_call_ids_json TEXT, parent_submission_id TEXT, parent_tool_call_id TEXT, admission_group TEXT, admission_fence_json TEXT, worker_admission_json TEXT, message_admission_json TEXT, UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )"
+        },
+        "effect_agent_submission_ownership": {
+          "rows": 0,
+          "schema": "CREATE TABLE effect_agent_submission_ownership ( submission_id TEXT PRIMARY KEY NOT NULL, attempt_id TEXT NOT NULL, ownership_token TEXT NOT NULL, producer_epoch INTEGER NOT NULL, owner_producer_id TEXT NOT NULL, lease_expires_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES effect_agent_submissions(submission_id) ON DELETE RESTRICT )"
+        }
+      },
+      "indexes": {
+        "effect_agent_submissions": [
+          {
+            "name": "effect_agent_submissions_active_parent",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_active_parent ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND parent_submission_id IS NOT NULL"
+          },
+          {
+            "name": "effect_agent_submissions_active_worker",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_active_worker ON effect_agent_submissions(thread_id, submission_id) WHERE state <> 'settled' AND worker_admission_json IS NOT NULL"
+          },
+          {
+            "name": "effect_agent_submissions_nonterminal",
+            "unique": false,
+            "origin": "c",
+            "partial": true,
+            "columns": [
+              "thread_id",
+              "queue_sequence"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'"
+          },
+          {
+            "name": "effect_agent_submissions_group",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "admission_group",
+              "state"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_group ON effect_agent_submissions (thread_id, admission_group, state)"
+          },
+          {
+            "name": "effect_agent_submissions_parent",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "parent_submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_parent ON effect_agent_submissions (parent_submission_id)"
+          },
+          {
+            "name": "effect_agent_submissions_joined_host",
+            "unique": false,
+            "origin": "c",
+            "partial": false,
+            "columns": [
+              "joined_host_submission_id"
+            ],
+            "sql": "CREATE INDEX effect_agent_submissions_joined_host ON effect_agent_submissions (joined_host_submission_id)"
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_3",
+            "unique": true,
+            "origin": "u",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "queue_sequence"
+            ],
+            "sql": null
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_2",
+            "unique": true,
+            "origin": "u",
+            "partial": false,
+            "columns": [
+              "thread_id",
+              "principal",
+              "idempotency_key"
+            ],
+            "sql": null
+          },
+          {
+            "name": "sqlite_autoindex_effect_agent_submissions_1",
+            "unique": true,
+            "origin": "pk",
+            "partial": false,
+            "columns": [
+              "submission_id"
+            ],
+            "sql": null
+          }
+        ],
+        "effect_agent_submission_ownership": [
+          {
+            "name": "sqlite_autoindex_effect_agent_submission_ownership_1",
+            "unique": true,
+            "origin": "pk",
+            "partial": false,
+            "columns": [
+              "submission_id"
+            ],
+            "sql": null
+          }
+        ]
+      },
+      "plans": {
+        "original": [
+          [
+            7,
+            0,
+            61,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_3 (thread_id=?)"
+          ],
+          [
+            14,
+            0,
+            46,
+            "SEARCH ownership USING INDEX sqlite_autoindex_effect_agent_submission_ownership_1 (submission_id=?)"
+          ],
+          [
+            33,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ],
+        "ownershipFirst": [
+          [
+            6,
+            0,
+            216,
+            "SCAN ownership"
+          ],
+          [
+            8,
+            0,
+            46,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_1 (submission_id=?)"
+          ],
+          [
+            29,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ],
+        "emptyOwnershipGuard": [
+          [
+            10,
+            0,
+            211,
+            "SCAN effect_agent_submission_ownership EXISTS USING COVERING INDEX sqlite_autoindex_effect_agent_submission_ownership_1"
+          ],
+          [
+            12,
+            0,
+            61,
+            "SEARCH submission USING INDEX sqlite_autoindex_effect_agent_submissions_3 (thread_id=?)"
+          ],
+          [
+            19,
+            0,
+            46,
+            "SEARCH ownership USING INDEX sqlite_autoindex_effect_agent_submission_ownership_1 (submission_id=?)"
+          ],
+          [
+            40,
+            0,
+            0,
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        ]
+      },
+      "returnedRows": {
+        "original": 0,
+        "ownershipFirst": 0,
+        "emptyOwnershipGuard": 0
+      }
+    }
+  }
+}

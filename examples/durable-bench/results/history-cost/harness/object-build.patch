@@ -1,0 +1,52 @@
+--- a/examples/durable-bench/deployed/worker/protocol.ts
++++ b/examples/durable-bench/deployed/worker/protocol.ts
+@@ -79,6 +79,7 @@
+ export type BulkFixture = typeof BulkFixture.Type;
+ 
+ export const Identity = Schema.Struct({
++  build: Schema.NonEmptyString,
+   incarnation: Schema.NonEmptyString,
+   constructedMs: Schema.Number,
+   firstEntry: Schema.Boolean,
+--- a/examples/durable-bench/deployed/worker/observe.ts
++++ b/examples/durable-bench/deployed/worker/observe.ts
+@@ -41,6 +41,7 @@
+   constructor(readonly env: Env) {}
+   identity(): Identity {
+     return {
++      build: this.env.BUILD,
+       incarnation: this.incarnation,
+       constructedMs: this.constructedMs,
+       firstEntry: this.entries === 0,
+--- a/examples/durable-bench/deployed/model.ts
++++ b/examples/durable-bench/deployed/model.ts
+@@ -60,6 +60,7 @@
+   colo: Schema.optionalKey(Schema.NullOr(Schema.String)),
+   controllerColo: Schema.optionalKey(Schema.NullOr(Schema.String)),
+   fingerprintVerified: Schema.optionalKey(Schema.Boolean),
++  objectBuildVerified: Schema.optionalKey(Schema.Boolean),
+   coldVerified: Schema.optionalKey(Schema.Boolean),
+   residentVerified: Schema.optionalKey(Schema.Boolean),
+   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
+--- a/examples/durable-bench/deployed/run.ts
++++ b/examples/durable-bench/deployed/run.ts
+@@ -403,6 +403,11 @@
+ 
+                 const metrics = (yield* request(url("/metrics", query), deploy.token, Metrics))
+                   .value;
++                const objectBuildVerified = metrics.identity.build === compiled.sha256 + `-e${epoch}`;
++                if (!objectBuildVerified)
++                  return yield* new BenchError({
++                    message: "Measured Object build differs from the deployed comparison build.",
++                  });
+ 
+                 const expected = references.get(query.history)?.get(query.sample);
+                 const reset = measured.value.reset;
+@@ -509,6 +514,7 @@
+                           controllerColo: measured.colo,
+                           colo: measured.value.colo,
+                           fingerprintVerified: true,
++                          objectBuildVerified,
+                           coldVerified,
+                           residentVerified,
+                           fingerprints: metrics.calls.map((call) => call.fingerprint),

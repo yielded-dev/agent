@@ -13,8 +13,8 @@ The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #
 | Single message-schema traversal | `40485f33` | Remove the outer encoded-message validation while retaining the native decoder | No demonstrated warm gain; no PR |
 | Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Counts and full gate passed; deployed setup failures retained |
 | Terminal filtering | `4417a095` | Omit a duplicate settlement when an earlier terminal record is in the logical read range | Counts complete; timing pending |
-| Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Measured warm/instant first-arrival gain at 1,000; reverse-order check pending |
-| Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Exact digest equivalence, counts and full gate passed; deployed timing pending |
+| Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Warm/instant first-arrival gain at 1,000 repeated in both build orders |
+| Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Exact digest equivalence, counts and full gate passed; deployed matrix running |
 
 Canonical append/import/recovery codecs, hash-chain verification, continuation verification, fencing, claims, leases, Unknown handling and confirmed durability remain in place. No warm in-memory context cache is introduced.
 
@@ -90,7 +90,7 @@ The first full matrix completed with ten Objects per target/size/provider cell, 
 | 1,000 | 400 | cold | 3.636× → 3.431× | 1.022× | +27.8 ms |
 | 1,000 | 400 | warm | 7.301× → 6.338× | 0.902× | -61.1 ms |
 
-At 1,000 turns with an instant provider, the paired warm median improved 12.9% (86.0 ms). The six cohort repeat estimates were 0.830–0.923 candidate/baseline (9.3 percentage points of spread); median baseline epoch drift was 4.2%. This clears those observed variations. At 250 warm/instant the apparent 11.5% gain is approximately the 11.4-point repeat spread, so it is not a resolved claim. The 50-turn and 400 ms provider estimates also fall within their observed repeat/control spread. Cold estimates are mixed, including slower 50/250-turn instant medians; an order-reversed check is pending. None of those cells is claimed as a gain.
+At 1,000 turns with an instant provider, the paired warm median improved 12.9% (86.0 ms). The six cohort repeat estimates were 0.830–0.923 candidate/baseline (9.3 percentage points of spread); median baseline epoch drift was 4.2%. This clears those observed variations. At 250 warm/instant the apparent 11.5% gain is approximately the 11.4-point repeat spread, so it is not a resolved claim. The 50-turn and 400 ms provider estimates also fall within their observed repeat/control spread. Cold estimates are mixed, including slower 50/250-turn instant medians. The reversed-order confirmation below retains a separate instant-provider cohort. None of those cold cells is claimed as a gain.
 
 Whole-turn warm/instant Yielded ÷ pi was 1.188 → 1.135 / 1.662 → 1.512 / 0.921 → 0.895 at 50/250/1,000 seeded turns. Those ratios alone do not establish a gain. [All first-arrival and complete-turn conditions, medians and control drift](runs/prompt-hydration.md), [compact evidence](runs/prompt-hydration.json), [repeat estimates](runs/prompt-hydration.repeats.json), [numeric samples](runs/prompt-hydration.samples.csv).
 
@@ -102,9 +102,34 @@ Successful marked warm/instant invocation CPU medians are below. Each cell has 1
 | 250 | 270 → 222 ms | 305 → 306 ms |
 | 1,000 | 477.5 → 426 ms | 949 → 930 ms |
 
+The native constructor change is [PR #830](https://github.com/yielded-dev/agent/pull/830). Source inspection found no deferred persistent history-index or row-view backfill: row views are memory-only, import populates canonical selectors and Run indexes, and pre-probes initialize native services. Imported snapshots do omit maintenance KV state; constructor setup schedules bootstrap maintenance but does not await it. Possible overlap with the first cold sample remains an uncertainty, not an established explanation for its admission latency.
+
 The clock check accepted 3,359 of 3,360 non-warmup turns. One pi 1,000-turn warm/400 ms sample had inconsistent bounds, so that metric uses nine complete pi Objects and ten Yielded Objects; all other first-arrival cells have ten each. Median clock-interval width was 31 ms (17–87 ms). Unattributed non-ok telemetry comprised 1,934 canceled alarms, 209 canceled fetches and 476 aborted fetches; the result retains them all, along with 61 unmatched telemetry markers. There were no controller or timed-workflow failures.
 
+### Native constructor restoration: reversed-order confirmation
+
+The ABBA confirmation used 20 Objects per target/size cell, instant providers, six warm repeats, and the same product revisions. All 3,840 turns, 34,560 model fingerprints and 3,360 non-warmup clock checks passed. Every timed Object's actual build binding was verified. Target cleanup was verified; there were no controller or workflow failures.
+
+| Seed turns | State | Yielded ÷ pi before → after | Paired candidate ÷ baseline | Paired change | Baseline epoch drift |
+|---:|---|---:|---:|---:|---:|
+| 50 | cold | 3.602× → 3.061× | 0.899× | -89.2 ms | 15.2% |
+| 50 | warm | 3.864× → 3.699× | 0.935× | -18.2 ms | 34.6% |
+| 250 | cold | 4.261× → 3.802× | 0.868× | -143.9 ms | 24.3% |
+| 250 | warm | 4.558× → 4.335× | 0.933× | -20.2 ms | 16.4% |
+| 1,000 | cold | 4.754× → 4.336× | 0.843× | -192.8 ms | 9.8% |
+| 1,000 | warm | 6.574× → 6.073× | 0.878× | -83.0 ms | 11.1% |
+
+Warm/instant first arrival at 1,000 turns improved by a paired 12.2% (83 ms). All six cohort repeat estimates improved: 0.869–0.897 candidate/baseline, a 2.8-percentage-point range; their delta estimates spanned 27.5 ms. Median baseline epoch drift was 11.1%. Together with the earlier 12.9% / 86 ms result in BAAB order, this supports the narrow warm/instant 1,000-turn claim. First-request latency remains above pi: the confirmation's ratio is 6.073× after the change.
+
+At 50 and 250, apparent warm gains of 6.5% and 6.7% remain inside repeat/control variation. Cold estimates differ across runs, so a cold gain is not established. Complete-turn estimates also remain inside repeat/control spread; no complete-turn improvement is claimed. The confirmation uses instant-only cohorts, while the earlier matrix mixed instant and 400 ms provider cells. Different placements, cohort workloads and protocol versions are retained rather than pooled.
+
+Clock-interval width had a 32 ms median (15–88 ms). Observed non-ok telemetry comprised 1,931 canceled alarms, 473 aborted fetches and 182 canceled fetches, all unattributed; 78 telemetry markers lacked matching invocation rows. Missing CPU is not inferred as zero. [Full condition tables](runs/prompt-hydration-abba.md), [compact evidence](runs/prompt-hydration-abba.json), [repeat estimates](runs/prompt-hydration-abba.repeats.json), [numeric samples](runs/prompt-hydration-abba.samples.csv).
+
 ### Setup outcomes retained
+
+- [Fresh-canary deployed check](runs/object-health-smoke.json): all 24 turns and 216 model requests matched, with target cleanup verified. It checks deployment transitions; one Object per target cannot support a performance claim. Later comparisons additionally require each timed Object’s build binding to match its declared framework build. The first full matrix predates that additional guard.
+
+- [Canary readiness timeout](runs/abba-object-health-timeout.json): all 120 seeds were verified, but production readiness failed before timing (524.6 s total). Cleanup verified. The canary probes reused names across builds; later probes use fresh names per build and probe and retain the last health error. Local handler checks pass, without establishing deployed latency or the cause of this timeout.
 
 - [Reverse-order setup](runs/abba-seed-missing-fetch.json): the first 250-turn seed reached an Object without a fetch handler after router health had passed. Zero timed samples; target cleanup verified. Subsequent runs add separate read-only canary Object health/build checks before seeding and timing. The uncertain seed was not retried.
 
@@ -119,6 +144,12 @@ Every controller/sample failure and every observed non-ok invocation outcome is 
 The seed gate and native-client changes did not eliminate setup timeouts. A subsequent [offline canonical import](runs/offline-import-seed-timeout.json) also timed out at 1,000 turns with no alarm observed: fetch CPU was 70,552 ms over 85,588 ms elapsed. This refutes alarms as a sufficient explanation of the timeout. No timed sample ran; target cleanup was verified. The current harness canonically imports every destination fixture locally, then deploys an explicit offline seed bundle to restore its exact SQLite snapshot into a fresh Object. It verifies the source and restored SHA-256, complete normalized table counts, and transcript fingerprints, including all indexes and triggers. Old Attempts and ownership were normalized by the real importer; no canonical payload is rewritten. The seed class cannot execute native submission RPCs. Production `ThreadObject` then replaces it on the same Worker, namespace and Object names before timing. Native gates, alarms, confirmed writes and recovery remain unchanged. [Adaptation patch, method and snapshot proof](harness/README.md).
 
 Pre-probes instantiate the production host before the timed cold eviction. “Cold” therefore means a fresh production instance over the prepared store. Native initialization, gates, alarms, submission, settlement and recovery stay active during all measured builds. The seed bundle hash and framework revision are retained alongside the two measured build hashes.
+
+## Remaining history read outside this ownership area
+
+The Cloudflare submission ledger's ownership query reads retained submissions even when ownership is empty. At 250/1,000/3,500 turns, the existing local capture observes two executions totaling 504/2,004/7,004 SQL cursor reads. Source control flow places one claim before model work and another after settlement; the capture does not split those totals, so they are not all attributed to first-provider arrival. The 50-turn fixture uses a bounded lane path and does not execute this query.
+
+Host SQLite query plans on copied fixtures show that an ownership-first CROSS JOIN would scan ownership and probe the existing submission primary key. The generic SQL ledger already has an empty-ownership EXISTS guard; the Cloudflare ledger does not. This is a handoff finding, with no product change, workerd candidate measurement, latency claim or lease-contention proof. [Queries, catalogs and observed host plans](counts/handoff/ownership-query-plans.json).
 
 ## Validation and cleanup
 

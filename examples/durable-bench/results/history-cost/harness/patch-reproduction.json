@@ -1,0 +1,19 @@
+{
+  "base": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "patchOrder": [
+    "bench.patch",
+    "force-abba.patch",
+    "object-health-fresh.patch",
+    "object-build.patch"
+  ],
+  "patchSha256": {
+    "bench.patch": "30bd0ba714fa9b3945d9353228144c17bbdd59d127c7ff505a2d74c3dcfb59de",
+    "force-abba.patch": "89b55f6de95be07a6a36df3a60331e904199ac7b4530be95b3ef3a91cc917027",
+    "object-health-fresh.patch": "3d73d0f16574ac152241ec79109790b1784d0f2ccb6fc35eae1c608f943ec0d4",
+    "object-build.patch": "7e3def113b6e1c75d0188353f8d38c65d6d3a597a40c28c612e38047f384b39a"
+  },
+  "applyCheck": true,
+  "comparedFiles": 20,
+  "currentSourceMatchesAfterPathRedaction": true,
+  "mismatches": []
+}
