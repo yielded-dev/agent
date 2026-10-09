@@ -168,9 +168,16 @@ jobs:
           task-cache: checks
 
       - name: Validate GitHub Actions workflows
-        uses: docker://mirror.gcr.io/rhysd/actionlint:1.7.12
-        with:
-          args: -color -shellcheck= -pyflakes=
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
 
       - name: Check formatting for a limited diff
         id: format
@@ -250,7 +257,7 @@ jobs:
             stateful: true
     services:
       postgres:
-        image: ${{ matrix.postgres && format('mirror.gcr.io/library/postgres:{0}-alpine', matrix.postgres) || '' }}
+        image: ${{ matrix.postgres && format('public.ecr.aws/docker/library/postgres:{0}-alpine', matrix.postgres) || '' }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
