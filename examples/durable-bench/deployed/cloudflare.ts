@@ -1,4 +1,4 @@
-import { Config, Effect, Redacted, Schema, type Duration } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema, type Duration } from "effect";
 
 import { BenchError, redact } from "./platform.ts";
 
@@ -8,7 +8,7 @@ const Namespaces = Schema.Array(
   Schema.Struct({ name: Schema.String, script: Schema.optionalKey(Schema.String) }),
 );
 
-export const connect = Effect.gen(function* () {
+const connect = Effect.gen(function* () {
   const accountId = Redacted.value(yield* Config.Redacted("CLOUDFLARE_ACCOUNT_ID"));
   const apiToken = Redacted.value(yield* Config.Redacted("CLOUDFLARE_API_TOKEN"));
 
@@ -102,7 +102,11 @@ export const connect = Effect.gen(function* () {
   };
 });
 
-export type Cloudflare = Effect.Success<typeof connect>;
+export class Cloudflare extends Context.Service<Cloudflare, Effect.Success<typeof connect>>()(
+  "durable-bench/Cloudflare",
+) {
+  static readonly layer = Layer.effect(Cloudflare, connect);
+}
 
 /** One transport attempt. Measurement and import calls are never automatically replayed. */
 export const request = <S extends Schema.Top & { readonly DecodingServices: never }>(

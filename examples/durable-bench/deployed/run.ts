@@ -12,7 +12,7 @@ import {
   type Turn,
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
-import { connect, request } from "./cloudflare.ts";
+import { Cloudflare, request } from "./cloudflare.ts";
 import { cpu } from "./cpu.ts";
 import { deployments } from "./deploy.ts";
 import { prepareFixtures } from "./fixtures.ts";
@@ -65,8 +65,8 @@ const shuffle = <A>(values: readonly A[]): A[] =>
 
 export const run = Effect.fnUntraced(function* (options: Options) {
   const started = yield* Clock.currentTimeMillis;
-  const cloud = yield* connect;
-  const deploy = yield* deployments(cloud);
+  const cloud = yield* Cloudflare;
+  const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
   const runName = `cold-storage-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
@@ -138,7 +138,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         yield* Effect.sleep("15 seconds");
         const upper = yield* Clock.currentTimeMillis;
 
-        yield* cpu(cloud, runName, telemetryFrom, upper).pipe(
+        yield* cpu(runName, telemetryFrom, upper).pipe(
           Effect.matchCauseEffect({
             onFailure: (cause) =>
               Effect.sync(() => {
@@ -544,8 +544,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 }, Effect.scoped);
 
 export const teardown = Effect.gen(function* () {
-  const cloud = yield* connect;
-  const deploy = yield* deployments(cloud);
+  const cloud = yield* Cloudflare;
+  const deploy = yield* deployments;
   const cleanup = yield* deploy.teardown;
 
   const result = {

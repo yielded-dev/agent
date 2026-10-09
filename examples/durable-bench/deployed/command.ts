@@ -22,14 +22,17 @@ export const command = Command.make(
       Flag.withDefault("0,400"),
       Flag.withDescription("Provider time to first token, in ms: 0,400"),
     ),
-    objects: positive("objects").pipe(Flag.withDefault(3)),
+    objects: positive("objects").pipe(
+      Flag.withDefault(7),
+      Flag.withDescription("Objects per target/cell (default: 7)"),
+    ),
     repeats: positive("repeats").pipe(
       Flag.optional,
       Flag.withDescription("Warm turns per Object (quick: 4; rigorous: 6 per build pass)"),
     ),
     concurrency: positive("concurrency").pipe(
-      Flag.withDefault(3),
-      Flag.withDescription("Concurrent Objects; each Object's turns stay sequential"),
+      Flag.withDefault(6),
+      Flag.withDescription("Concurrent Objects (default: 6); turns stay sequential within each"),
     ),
     cold: Flag.Boolean("cold").pipe(
       Flag.withDefault(false),
