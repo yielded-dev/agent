@@ -20,6 +20,7 @@ import {
 import { type RuntimeBinding } from "../../engine/AgentRuntime.ts";
 import { ContextRolloverTool } from "../../engine/ContextWindow.ts";
 import { getToolExecutionClass } from "../../engine/DurableStep.ts";
+import { withAttempt as withProvisionalTextAttempt } from "../../engine/internal/provisional-text.ts";
 import {
   BackgroundReporting,
   WorkerReportPreparationFailure,
@@ -420,7 +421,13 @@ const capture = <A extends ExecutableAgentBinding, Provides = never, Requires = 
         // collected. TypeScript cannot instantiate the higher-rank RuntimeBinding parameters
         // from the intentionally erased public shape, so specialize the driver back to A here.
         const run = driver as unknown as CapturedAttempt<A>;
-        const execute = run(agent, threadId, claim);
+
+        const execute = withProvisionalTextAttempt(
+          run(agent, threadId, claim),
+          threadId,
+          claim.submissionId,
+          claim.attemptId,
+        );
 
         const scoped =
           attemptLayer === undefined

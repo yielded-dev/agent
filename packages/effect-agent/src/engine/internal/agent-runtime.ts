@@ -150,6 +150,10 @@ import {
   boundedJsonSnapshot,
   type BoundedJsonSnapshot,
 } from "./provider-result-staging.ts";
+import {
+  CurrentAttempt as CurrentProvisionalTextAttempt,
+  type ModelHandle as ProvisionalTextModelHandle,
+} from "./provisional-text.ts";
 import { deliverToolFailure, isolateToolDerivative } from "./tool-derivative.ts";
 import {
   decodeSelection,
@@ -5657,6 +5661,7 @@ const makeTurn = <
       let restartRequested = false;
       let responseStarted = false;
       let activeModelSpan: Tracer.Span | undefined;
+      let activeProvisionalText: ProvisionalTextModelHandle | undefined;
 
       const trace: TurnTrace = {
         responsePartCount: 0,
@@ -6380,6 +6385,7 @@ const makeTurn = <
                   );
                 }
                 context.toolExposure = snapshot;
+                let provisionalText: ProvisionalTextModelHandle | undefined;
 
                 // Unbounded calls need no admission estimate. Context Tools still obtain the
                 // same live estimate on demand, without charging every outgoing request for it.
@@ -6446,8 +6452,15 @@ const makeTurn = <
                         }),
                       ),
                       Stream.onStart(
-                        Effect.sync(() => {
+                        Effect.gen(function* () {
+                          const attempt = yield* CurrentProvisionalTextAttempt;
+
                           trace.usageConsumed = false;
+                          provisionalText =
+                            !restartRequested && attempt?.threadId === context.threadId
+                              ? attempt.openModel(context.runId, turnId)
+                              : undefined;
+                          activeProvisionalText = provisionalText;
                         }),
                       ),
                       Stream.runForEach((part) =>
@@ -6472,14 +6485,27 @@ const makeTurn = <
                             owned.retainedBytes,
                             events,
                           );
+                          if (provisionalText !== undefined) {
+                            const part = owned.ownedPart;
+
+                            if (
+                              part.type === "text-start" ||
+                              part.type === "text-delta" ||
+                              part.type === "text-end"
+                            )
+                              provisionalText.offerUnsafe(part);
+                          }
                           // Publish before accepting the next part. Backpressure stays interruptible.
                           if (events !== undefined) yield* publishEvents(context, events);
                         }),
                       ),
                       (effect) => prepareWithinDeadline(context, effect),
-                      Effect.onExit((exit) =>
-                        Exit.isFailure(exit) ? retainFailedUsage() : Effect.void,
-                      ),
+                      Effect.onExit((exit) => {
+                        if (Exit.isSuccess(exit)) return Effect.void;
+                        provisionalText?.discard();
+
+                        return retainFailedUsage();
+                      }),
                     ),
                   ),
                 );
@@ -7320,6 +7346,7 @@ const makeTurn = <
               Effect.tap(() =>
                 Effect.sync(() => {
                   restartRequested = true;
+                  activeProvisionalText?.discard();
                   activeModelSpan?.attribute("effect_agent.model.outcome", "aborted");
                   activeModelSpan?.attribute("effect_agent.model.abort_reason", "joined-input");
                 }),
@@ -7335,7 +7362,23 @@ const makeTurn = <
           : response;
 
       const afterResponse = Effect.suspend(() => {
-        if (!restartRequested) return continuation.pipe(Effect.tapCause(() => retainFailedUsage()));
+        if (!restartRequested) {
+          const provisionalText = activeProvisionalText;
+
+          const observed =
+            provisionalText === undefined
+              ? continuation
+              : continuation.pipe(
+                  Effect.onExit((exit) => {
+                    if (Exit.isFailure(exit)) provisionalText.discard();
+                    else provisionalText.close();
+
+                    return Effect.void;
+                  }),
+                );
+
+          return observed.pipe(Effect.tapCause(() => retainFailedUsage()));
+        }
 
         // Invalidation is observed before fallible persistence or input rendering.
         return publishEvent(context, () =>
@@ -7401,6 +7444,7 @@ const makeTurn = <
       ).pipe(
         Effect.ensuring(
           Effect.sync(() => {
+            activeProvisionalText?.discard();
             if (typeof context.windowTokens === "function")
               context.windowTokens = context.lastInputTokens;
           }),

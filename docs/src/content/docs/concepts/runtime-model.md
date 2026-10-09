@@ -24,6 +24,8 @@ flowchart LR
 
 - Use one scoped Effect interpreter for running, streaming, and durable execution. Public streams
   observe that execution through a bounded producer; headless runs do not transport public events.
+  An optional provisional text channel can carry drafts separately from public `RunEvent`s,
+  without adding durable writes.
   Finish the model response before starting application tools. Validate and authorize executable
   calls, honor approvals,
   and commit their bounded results in declaration order after their streams close, before draining
@@ -122,6 +124,16 @@ journal. Events, history callbacks, and disposable drafts help observers follow 
 not reconstruct durable commits. Only canonical records establish recovery facts.
 Execution captures its services when it starts; changing a stream consumer's Context between pulls
 does not change the running model, tools, or hooks.
+
+The core `ProvisionalText.Publisher` port defaults to a no-op. A host can supply bounded,
+synchronous publication of validated native assistant text and optionally retain memory snapshots
+for active Attempts and model-call generations. These snapshots let observers replace drafts on
+reconnection or queue overflow; they disappear with the host incarnation. Publication performs
+no I/O and never waits for observers. Failed or replaced calls and ended Attempts invalidate
+their own drafts. Canonical responses and Run settlement supersede matching drafts; later
+snapshots or live events must never restore them. This channel leaves canonical history and
+recovery unchanged. See
+[Cloudflare live text](/platforms/cloudflare/#preview-live-text) for subscription and reconciliation.
 
 See [Run & stream](/guide/run-agents/), [budgets](/concepts/budgets/), and
 [durability](/concepts/durability/) for options and recovery boundaries.

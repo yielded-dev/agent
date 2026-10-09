@@ -112,6 +112,8 @@ import {
   type CloudflareDurableRuntimeServices,
   type CloudflareBootstrapServices,
 } from "./internal/layers.ts";
+import { Request as WatchTextRequest } from "./internal/live-text-protocol.ts";
+import { LiveTextHub } from "./internal/live-text.ts";
 import { ProgressWaitRegistry } from "./internal/progress-wait.ts";
 
 export {
@@ -622,6 +624,25 @@ const observePageEndpoint = (encoded: unknown): Effect.Effect<unknown, never, En
     Effect.flatMap(encodeResponse),
   );
 
+const watchTextEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
+  Schema.decodeUnknownEffect(WatchTextRequest)(encoded).pipe(
+    Effect.mapError(protocolFailure("The provisional text request could not be decoded")),
+    Effect.flatMap(() =>
+      Effect.gen(function* () {
+        const { threadId } = yield* ThreadObjectIdentity;
+        const authorizer = yield* OperationAuthorizer;
+
+        yield* authorizer.authorize(
+          OperationAuthorizationRequest.make({ operation: "observe", threadId }),
+        );
+        const hub = yield* LiveTextHub;
+
+        return yield* hub.open(threadId);
+      }),
+    ),
+    Effect.catch((failure) => encodeResponse(HostFailed.make({ failure }))),
+  );
+
 const abortEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
   decodeAbortCommand(encoded).pipe(
     Effect.mapError(protocolFailure("The abort command could not be decoded")),
@@ -999,6 +1020,7 @@ export const ThreadRpcOperation = Schema.Literals([
   "awaitSettlementRecordEncoded",
   "awaitProgressEncoded",
   "cancelProgressEncoded",
+  "watchTextEncoded",
   "observePage",
   "abortEncoded",
   "resolveApprovalEncoded",
@@ -1016,6 +1038,7 @@ const threadRpc = {
   awaitSettlementRecordEncoded: (encoded) => awaitSettlementEndpoint(encoded, true),
   awaitProgressEncoded: awaitProgressEndpoint,
   cancelProgressEncoded: cancelProgressEndpoint,
+  watchTextEncoded: watchTextEndpoint,
   observePage: observePageEndpoint,
   abortEncoded: abortEndpoint,
   resolveApprovalEncoded: resolveApprovalEndpoint,
@@ -1118,6 +1141,7 @@ export interface Instance<EventServices = never> extends InstanceType<
   awaitSettlementRecordEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   awaitProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   cancelProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
+  watchTextEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   observePage(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   abortEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   resolveApprovalEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
