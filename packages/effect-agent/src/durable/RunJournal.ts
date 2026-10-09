@@ -948,7 +948,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       boundIsValid(payload, sequence, contextEvidence);
 
   const retainEvidence = (envelope: A): void => {
-    if (onEvidence === undefined) return;
+    if (onEvidence === undefined || envelope.sequence >= historyFrom) return;
     onEvidence(envelope);
     if (envelope.sequence < historyFrom && envelope.record.payload._tag === "ModelResponseRecorded")
       // A retained declaration must preserve its already-settled siblings for later coverage checks.

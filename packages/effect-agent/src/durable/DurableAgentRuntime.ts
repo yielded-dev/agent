@@ -158,11 +158,8 @@ import {
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import { initialContext } from "./internal/initial-context.ts";
-import {
-  makeJournalMetadata,
-  type JournalMetadata,
-  type JournalRecordEnvelope,
-} from "./internal/journal-metadata.ts";
+import type { makeJournalMetadata } from "./internal/journal-metadata.ts";
+import { type JournalMetadata, type JournalRecordEnvelope } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
 import { digestRunHistory, readRunContext } from "./internal/run-context.ts";
@@ -1363,12 +1360,6 @@ interface OpenCallReview {
   readonly recovered: number;
 }
 
-interface InitialJournalSource {
-  records: ReadonlyArray<JournalRecordEnvelope> | undefined;
-  readonly original: CanonicalRecordEnvelope;
-  readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
-}
-
 const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
   const registeredBindings = [...bindings];
   const bindingSelection = yield* CurrentBindingSelection;
@@ -1445,17 +1436,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
     Effect.provideService(effect, Crypto.Crypto, crypto);
-
-  // Rebuild the pinned admission and captured suffix using this runtime's host dependencies.
-  const readInitialJournal = (
-    original: CanonicalRecordEnvelope,
-    suffix: ReadonlyArray<CanonicalRecordEnvelope>,
-  ) =>
-    initialContext(original).pipe(
-      Effect.provideService(ThreadReader, reader),
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.map((history) => history.concat(suffix)),
-    );
 
   const resolutionIntentsFor = (snapshot: RecoverySnapshot) => {
     const intents = new Map<ToolCallId, UnknownResolutionIntent>();
@@ -4844,7 +4824,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       JournalRecordEnvelope,
       ThreadStoreError | ThreadNotMaterialized | RunJournalError
     >,
-    initialJournal: InitialJournalSource | undefined,
     canonicalThrough: CanonicalSequence,
     progressThrough: CanonicalSequence | undefined,
     continuation: RunContinuation | undefined,
@@ -4996,10 +4975,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               undefined,
               priorContext,
             );
-
-      // All startup passes (including cache hits) are complete. Release the startup source;
-      // later compaction can reread the exact prefix.
-      if (initialJournal !== undefined) initialJournal.records = undefined;
 
       const rolloverOperation =
         journal.pendingContextToolCallId === undefined
@@ -6379,20 +6354,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               // overlays while reconstructing the exact source-to-record mapping.
               const tail = yield* ctx.tail;
 
-              const source =
-                initialJournal === undefined
-                  ? canonical
-                  : Stream.fromIterable(
-                      yield* recordHalt(
-                        readInitialJournal(initialJournal.original, initialJournal.suffix),
-                      ),
-                    );
-
               sourceBoundaries = [];
               sourceJournal = yield* recordHalt(
                 projectRunJournalStream(
                   Stream.concat(
-                    source,
+                    canonical,
                     Stream.fromIterable(
                       yield* recordHalt(
                         selectedRange(
@@ -8596,8 +8562,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ThreadStoreError | ThreadNotMaterialized | RunJournalError
         > = view.canonical;
 
-        let initialJournal: InitialJournalSource | undefined;
-
         if (view.context === undefined) {
           const original = currentRecords.find(
             ({ record }) =>
@@ -8613,24 +8577,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
-          // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
-          const source: InitialJournalSource = yield* Effect.gen(function* () {
-            const history = yield* readInitialJournal(original, suffix);
+          // Close dependencies once; every traversal replays the ORIGINAL admission and suffix.
+          canonical = yield* Effect.gen(function* () {
+            const history = yield* initialContext(original, runIdForSubmission(submissionId)).pipe(
+              Effect.provideService(ThreadReader, reader),
+              Effect.provideService(Crypto.Crypto, crypto),
+            );
 
-            journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
-            for (const entry of history) journalMetadata.add(entry);
+            journalMetadata = history.metadata;
+            for (const entry of suffix) journalMetadata?.add(entry);
 
-            return { records: history, original, suffix };
+            return Stream.concat(history.records, Stream.fromIterable(suffix)).pipe(
+              Stream.provideService(ThreadReader, reader),
+            );
           });
-
-          initialJournal = source;
-          canonical = Stream.fromIterableEffect(
-            Effect.suspend(() =>
-              source.records === undefined
-                ? readInitialJournal(source.original, source.suffix)
-                : Effect.succeed(source.records),
-            ),
-          );
         }
 
         const outcome = yield* runModel(
@@ -8640,7 +8600,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           session,
           currentRecords,
           canonical,
-          initialJournal,
           tail.sequence,
           view.progressThrough,
           view.progress,
@@ -8651,14 +8610,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentContracts,
           runTiming,
           yieldAfter,
-        ).pipe(
-          Effect.provideService(CurrentRunStart, start.publication),
-          Effect.ensuring(
-            Effect.sync(() => {
-              if (initialJournal !== undefined) initialJournal.records = undefined;
-            }),
-          ),
-        );
+        ).pipe(Effect.provideService(CurrentRunStart, start.publication));
 
         if (outcome._tag === "yielded") {
           if (outcome.nextSubmissionId !== undefined) onHandoff(outcome.nextSubmissionId);
