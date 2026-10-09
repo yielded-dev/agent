@@ -1,17 +1,17 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { payload, type Turn } from "../../src/plan.ts";
-import { BACKGROUND_CONTEXT as context } from "../../third-party/node_modules/@earendil-works/chord/dist/context/index.js";
+import { payload, type Turn } from "../../../src/plan.ts";
+import { BACKGROUND_CONTEXT as context } from "../../node_modules/@earendil-works/chord/dist/context/index.js";
 import {
   stream,
   streamSimple,
-} from "../../third-party/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js";
-import { Type } from "../../third-party/node_modules/@earendil-works/pi-ai/dist/index.js";
+} from "../../node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js";
+import { Type } from "../../node_modules/@earendil-works/pi-ai/dist/index.js";
 import {
   createModels,
   createProvider,
   hasApi,
-} from "../../third-party/node_modules/@earendil-works/pi-ai/dist/models.js";
+} from "../../node_modules/@earendil-works/pi-ai/dist/models.js";
 import {
   createRegistry,
   defineExtension,
@@ -19,17 +19,17 @@ import {
   Harness,
   section,
   type Conversation,
-} from "../../third-party/node_modules/@earendil-works/pi-durable/dist/index.js";
+} from "../../node_modules/@earendil-works/pi-durable/dist/index.js";
 import {
   SqliteStorage,
   type SqliteDatabase,
   type SqliteExecutor,
   type SqliteValue,
-} from "../../third-party/node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
-import { Host } from "./host.ts";
-import { type Observation } from "./observe.ts";
-import type { Env } from "./protocol.ts";
-import { importRows } from "./storage.ts";
+} from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
+import { Host } from "../../../deployed/worker/host.ts";
+import { type Observation } from "../../../deployed/worker/observe.ts";
+import type { Env } from "../../../deployed/worker/protocol.ts";
+import { importRows } from "../../../deployed/worker/storage.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 

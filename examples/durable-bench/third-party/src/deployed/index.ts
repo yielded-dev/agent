@@ -1,19 +1,20 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import { BrowserCrypto } from "../../../node_modules/@effect/platform-browser/dist/index.js";
 import { ThreadObjectNamespace } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+// The router uses the checkout's Effect; Tardie's adapter uses its isolated SDK version.
+import { Effect, Layer, ManagedRuntime, Schema } from "../../../node_modules/effect/dist/index.js";
 
-import { history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
-import { COLD_ABORT } from "./host.ts";
+import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
+import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, errorText, readQuery, type Env, type Query } from "./protocol.ts";
-import { FixtureError } from "./storage.ts";
+import { BulkFixture, Identity, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { FixtureError } from "../../../deployed/worker/storage.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
-import { agent, definitions, YieldedDO } from "./yielded.ts";
+import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
 export { YieldedDO, PiDO, ActorDO, ThreadDO };
 type Bindings = Env & {

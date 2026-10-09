@@ -151,8 +151,8 @@ export const deployments = Effect.fnUntraced(function* (cloud: Cloudflare) {
 
   const infrastructure = Effect.gen(function* () {
     const output = join(privateDirectory, "infrastructure");
-    const driverBuild = yield* build(output, "driver.ts");
-    const providerBuild = yield* build(output, "provider.ts");
+    const driverBuild = yield* build(output, "driver");
+    const providerBuild = yield* build(output, "provider");
 
     const revision = hash(
       driverBuild.sha256 +

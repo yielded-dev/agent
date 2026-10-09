@@ -49,6 +49,7 @@ export const table = (result: Result): string => {
   const lines = [
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
+    "Yielded/pi ranges use min(Y)/max(pi)–max(Y)/min(pi) of Object medians; descriptive, unpaired, not confidence intervals.",
     "",
   ];
 
@@ -79,11 +80,19 @@ export const table = (result: Result): string => {
       );
     }
 
-    const ratio =
-      median(objectMedians(samples.filter((row) => row.target === "yielded"))) /
-      median(objectMedians(samples.filter((row) => row.target === "pi")));
+    const yielded = objectMedians(samples.filter((row) => row.target === "yielded"));
+    const pi = objectMedians(samples.filter((row) => row.target === "pi"));
+    const ratio = median(yielded) / median(pi);
 
-    if (Number.isFinite(ratio)) lines.push("", `Yielded ÷ pi: **${ratio.toFixed(2)}×**.`);
+    if (Number.isFinite(ratio)) {
+      const low = Math.min(...yielded) / Math.max(...pi);
+      const high = Math.max(...yielded) / Math.min(...pi);
+
+      lines.push(
+        "",
+        `Yielded ÷ pi: **${ratio.toFixed(2)}×**; observed ratio range **${low.toFixed(2)}–${high.toFixed(2)}×** (${yielded.length} Yielded / ${pi.length} pi Objects).`,
+      );
+    }
     lines.push("");
   }
   if (rows.some((row) => row.build === "baseline")) {

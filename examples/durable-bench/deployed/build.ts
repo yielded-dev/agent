@@ -19,8 +19,18 @@ import {
 
 const Package = Schema.Struct({ name: Schema.String });
 
+const entries = {
+  driver: "driver.ts",
+  provider: "provider.ts",
+  target: "../third-party/src/deployed/index.ts",
+};
+
 /** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
-export const build = Effect.fnUntraced(function* (output: string, entry: string, ref?: string) {
+export const build = Effect.fnUntraced(function* (
+  output: string,
+  entry: keyof typeof entries,
+  ref?: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   let revision = yield* git(["rev-parse", "HEAD"]);
   let sourceRoot: string | undefined;
@@ -83,15 +93,12 @@ export const build = Effect.fnUntraced(function* (output: string, entry: string,
     },
   };
 
-  const outfile = join(
-    output,
-    entry === "worker/index.ts" ? "target.mjs" : entry.replace(".ts", ".mjs"),
-  );
+  const outfile = join(output, `${entry}.mjs`);
 
   yield* Effect.tryPromise({
     try: () =>
       bundle({
-        entryPoints: [join(directory, entry)],
+        entryPoints: [join(directory, entries[entry])],
         outfile,
         bundle: true,
         format: "esm",

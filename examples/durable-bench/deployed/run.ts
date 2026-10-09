@@ -218,7 +218,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             ? options.candidate
             : undefined;
 
-      const compiled = yield* build(join(privateDirectory, runName, label), "worker/index.ts", ref);
+      const compiled = yield* build(join(privateDirectory, runName, label), "target", ref);
 
       builds.set(label, compiled);
       yield* update((value) => ({

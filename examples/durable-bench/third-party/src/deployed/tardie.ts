@@ -1,10 +1,10 @@
-import { payload, type Turn } from "../../src/plan.ts";
-import { Effect, Layer, Schema } from "../../third-party/node_modules/effect/dist/index.js";
+import { payload, type Turn } from "../../../src/plan.ts";
+import { Effect, Layer, Schema } from "../../node_modules/effect/dist/index.js";
 import {
   FetchHttpClient,
   HttpClient,
-} from "../../third-party/node_modules/effect/dist/unstable/http/index.js";
-import { Rpc } from "../../third-party/node_modules/effect/dist/unstable/rpc/index.js";
+} from "../../node_modules/effect/dist/unstable/http/index.js";
+import { Rpc } from "../../node_modules/effect/dist/unstable/rpc/index.js";
 import {
   actorContext,
   agentMethods,
@@ -13,34 +13,34 @@ import {
   messages,
   tools,
   type ContextView,
-} from "../../third-party/node_modules/tardie/src/agent/index.ts";
+} from "../../node_modules/tardie/src/agent/index.ts";
 import {
   ModelLock,
   liveModelServices,
   modelActs,
   modelInfo,
   toolActs,
-} from "../../third-party/node_modules/tardie/src/agent/services/index.ts";
+} from "../../node_modules/tardie/src/agent/services/index.ts";
 import {
   atom,
   defineActor,
   type Atom,
   type ThreadCoordinate,
-} from "../../third-party/node_modules/tardie/src/core/index.ts";
+} from "../../node_modules/tardie/src/core/index.ts";
 import {
   defineLibrary,
   MethodDescription,
   MethodHints,
-} from "../../third-party/node_modules/tardie/src/libraries/index.ts";
-import { modelLockService } from "../../third-party/node_modules/tardie/src/model/lock.ts";
-import { providerLayer } from "../../third-party/node_modules/tardie/src/model/providers/openai-compat.ts";
+} from "../../node_modules/tardie/src/libraries/index.ts";
+import { modelLockService } from "../../node_modules/tardie/src/model/lock.ts";
+import { providerLayer } from "../../node_modules/tardie/src/model/providers/openai-compat.ts";
 import {
   cloudflareThreadName,
   createActorWorker,
-} from "../../third-party/node_modules/tardie/src/platform/cloudflare/index.ts";
-import { Host, COLD_ABORT } from "./host.ts";
-import { attach, observation } from "./observe.ts";
-import { type SqlDump, type Env } from "./protocol.ts";
+} from "../../node_modules/tardie/src/platform/cloudflare/index.ts";
+import { Host, COLD_ABORT } from "../../../deployed/worker/host.ts";
+import { attach, observation } from "../../../deployed/worker/observe.ts";
+import { type SqlDump, type Env } from "../../../deployed/worker/protocol.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 const MODEL = { provider: "scripted", model_id: "scripted-1" };

@@ -11,7 +11,8 @@ Install workspace dependencies with `vp install`. The command uses this checkout
 personal benchmark account. Its name appears only in local terminal output. The token
 needs Workers/SQLite Durable Object deployment and account-read access, plus Workers
 Observability read access if `--cpu` is selected. Dependencies for pi and tardie are installed
-in the isolated `third-party` workspace automatically on first use.
+in the isolated `third-party` workspace automatically on first use. Repository checks do not
+require that optional install.
 
 From the repository root:
 
