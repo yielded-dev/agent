@@ -38,7 +38,7 @@ import {
   stateDirectory,
   workspace,
 } from "./platform.ts";
-import { prepareProfile } from "./profile.ts";
+import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
 import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
 
@@ -84,6 +84,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const runName = `${cloud.prefix}-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
+  const withProfileBatch = yield* profileBatches(options.profiles.length);
 
   let result: Result = {
     version: 1,
@@ -422,21 +423,23 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       );
       yield* Effect.forEach(
         shuffle(cohorts),
-        (cohort) =>
-          Effect.gen(function* () {
-            const capture =
-              options.profiles.length > 0 &&
-              cohort.object.endsWith("-o0") &&
-              cohort.target !== "tardie"
-                ? yield* prepareProfile({
-                    worker: runName,
-                    endpoint: url("/profile-target", cohort),
-                    token: deploy.token,
-                    query: { ...cohort, expectedBuild },
-                    output,
-                    sourceMap: join(output, label, "target.mjs.map"),
-                  })
-                : undefined;
+        (cohort) => {
+          const profiled =
+            options.profiles.length > 0 &&
+            cohort.object.endsWith("-o0") &&
+            cohort.target !== "tardie";
+
+          return Effect.gen(function* () {
+            const capture = profiled
+              ? yield* prepareProfile({
+                  worker: runName,
+                  endpoint: url("/profile-target", cohort),
+                  token: deploy.token,
+                  query: { ...cohort, expectedBuild },
+                  output,
+                  sourceMap: join(output, label, "target.mjs.map"),
+                })
+              : undefined;
 
             const warmed = yield* Deferred.make<number>();
 
@@ -631,6 +634,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             if (profiling) yield* Fiber.join(profiling);
           }).pipe(
             Effect.scoped,
+            (batch) => (profiled ? withProfileBatch(batch) : batch),
             Effect.tapCause((cause) =>
               update((value) => ({
                 ...value,
@@ -640,7 +644,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 ],
               })),
             ),
-          ),
+          );
+        },
         { concurrency: options.concurrency, discard: true },
       );
     }

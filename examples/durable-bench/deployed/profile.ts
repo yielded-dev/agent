@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schema } from "effect";
+import { Clock, Console, Effect, FileSystem, Schema, Semaphore } from "effect";
 
 import { Cloudflare, request } from "./cloudflare.ts";
 import { type Profile, type ProfileType } from "./model.ts";
@@ -22,6 +22,36 @@ const Capture = Schema.Struct({
   profile_type: Schema.Literals(["cpu", "heap"]),
   namespace_id: Schema.NonEmptyString,
   actor_id: ProfileTarget.fields.actorId,
+});
+
+/** Reserve the five-capture / five-minute API quota before an Object's warmup. */
+export const profileBatches = Effect.fnUntraced(function* (size: number) {
+  const lock = yield* Semaphore.make(1);
+  let used = 0;
+  let finishedAt = 0;
+
+  return <A, E, R>(batch: Effect.Effect<A, E, R>) =>
+    lock.withPermit(
+      Effect.gen(function* () {
+        const remainingMs = 300_000 - ((yield* Clock.currentTimeMillis) - finishedAt);
+
+        if (remainingMs <= 0) used = 0;
+        if (used + size > 5) {
+          yield* Console.error("Waiting for the profiling quota before the next Object's warmup…");
+          yield* Effect.sleep(remainingMs);
+          used = 0;
+        }
+        used += size;
+
+        return yield* batch.pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              finishedAt = yield* Clock.currentTimeMillis;
+            }),
+          ),
+        );
+      }),
+    );
 });
 
 /** Resolve identity before warmup; capturing never invokes or wakes an Object. */
@@ -71,10 +101,13 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
           },
         );
 
-        if (!response.ok)
+        if (!response.ok) {
+          const retryAfter = response.headers.get("retry-after");
+
           throw new BenchError({
-            message: `Cloudflare ${type} profile returned HTTP ${response.status}: ${redact(await response.text(), [cloud.apiToken, cloud.accountId, cloud.accountName]).slice(0, 1000)}`,
+            message: `Cloudflare ${type} profile returned HTTP ${response.status}${retryAfter ? ` (Retry-After: ${retryAfter})` : ""}: ${redact(await response.text(), [cloud.apiToken, cloud.accountId, cloud.accountName]).slice(0, 1000)}`,
           });
+        }
 
         return new Uint8Array(await response.arrayBuffer());
       },

@@ -51,6 +51,9 @@ made during the window, not retained memory or a heap snapshot.
 
 Profile requests, downloads and file writes are outside the turn timers, but profiling adds
 runtime overhead and can extend the run. Use unprofiled runs for timing comparisons.
+Profiled Object batches are serialized and paced to five captures per five minutes;
+quota waits happen before warmup. Other account activity can still cause HTTP 429; wait
+for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
 Gzip-compressed `.pprof` paths are printed at completion; filenames and result JSON identify
 the cell, target, build and Object. Unminified bundles and linked source maps are uploaded;
