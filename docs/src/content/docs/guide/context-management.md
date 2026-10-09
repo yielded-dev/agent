@@ -1061,6 +1061,11 @@ Compaction changes the model view. It never rewrites the thread log. `Compaction
 reports each reduction. DN and DC also append `CompactionCreated`, so later attempts and runs use
 the same compacted view.
 
+`contextTokenLimit` limits model input, not peak memory. Durable history is read and projected
+before compaction. Summaries and rollovers can shorten later Runs' read ranges; clearing tool
+results alone does not. Recovery reconstructs the recovering Run's original saved range to verify
+its history digest, even if that Run later compacted.
+
 A summary must finish successfully and contain non-whitespace text. The interpreter charges its
 usage before validating it. A rejected summary leaves the previous summary and coverage in place;
 already committed pruning remains. All summaries, including custom strategy decisions, are limited

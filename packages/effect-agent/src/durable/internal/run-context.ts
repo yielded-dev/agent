@@ -4,6 +4,8 @@ import { Prompt } from "effect/ai";
 import { digestJson } from "../Digest.ts";
 import {
   CanonicalSequence,
+  PromptRecord,
+  PROMPT_EVIDENCE_TAGS,
   type CanonicalRecordEnvelope,
   type RunContextRecorded,
 } from "../Records.ts";
@@ -13,11 +15,32 @@ import {
   type RunJournalContext,
   type JournalBoundary,
 } from "../RunJournal.ts";
+import type { ThreadNotMaterialized, ThreadStoreError } from "../ThreadStore.ts";
 import { reference } from "./evidence.ts";
+import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
+
+const decodePromptRecord = Schema.decodeUnknownEffect(PromptRecord);
+const promptTags = new Set<string>(PROMPT_EVIDENCE_TAGS);
+
+const projectHistoryRecord = (
+  entry: CanonicalRecordEnvelope,
+  ownerRunId: RunContextRecorded["runId"],
+): Effect.Effect<JournalRecordEnvelope> => {
+  const payload = entry.record.payload;
+
+  if (("runId" in payload && payload.runId === ownerRunId) || !promptTags.has(payload._tag))
+    return Effect.succeed(entry);
+
+  return decodePromptRecord({ recordId: entry.record.recordId, payload }).pipe(
+    Effect.map((record) => ({ threadId: entry.threadId, sequence: entry.sequence, record })),
+    // Coverage and later canonical validation must retain their original error precedence.
+    Effect.catchTag("SchemaError", () => Effect.succeed(entry)),
+  );
+};
 
 export const digestRunHistory = (prompt: Prompt.Prompt) =>
   encodePrompt(prompt).pipe(
@@ -45,75 +68,23 @@ export const validateContextBoundary = (
     ? Effect.fail(invalid("Saved context has an invalid original admission boundary"))
     : Effect.void;
 
-/** Rebuild the prior Prompt and its disposable boundary mapping from full canonical facts. */
-export const projectRunContext = Effect.fnUntraced(function* (
+type ProjectedRunHistory = Pick<
+  RunJournalContext,
+  "prompt" | "historyFrom" | "contextWindowId" | "boundaries"
+>;
+
+/** Keep full canonical facts within projection so history hashing retains only its result. */
+const readProjectedHistory = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
-  digest: string,
-  records: ReadonlyArray<CanonicalRecordEnvelope>,
-): Effect.fn.Return<RunJournalContext, RunJournalError, Crypto.Crypto> {
-  yield* validateContextBoundary(context, original);
-  let through = 0;
-  const retained = new Map(context.retained.map((ref) => [ref.sequence, ref.recordId]));
-
-  for (const entry of records) {
-    if (
-      entry.threadId !== original.threadId ||
-      entry.sequence <= through ||
-      entry.sequence > context.historyThrough ||
-      (entry.sequence < context.historyFrom &&
-        retained.get(entry.sequence) !== entry.record.recordId)
-    )
-      return yield* invalid("Saved context has invalid canonical range evidence");
-    through = entry.sequence;
-    retained.delete(entry.sequence);
-  }
-  if (retained.size !== 0) return yield* invalid("Saved context is missing retained evidence");
-
-  const boundaries: Array<JournalBoundary> = [];
-
-  const history = yield* projectRunJournalStream(
-    Stream.fromIterable([...records, original]),
-    context.runId,
-    (boundary) => boundaries.push(boundary),
-  );
-
-  const historyDigest = yield* digestRunHistory(history.prompt);
-
-  if (
-    historyDigest !== context.historyDigest ||
-    history.historyFrom !== context.historyFrom ||
-    history.prompt.content.length !== context.priorHistoryLength ||
-    history.contextWindowId !== context.contextWindowId
-  )
-    return yield* invalid("Saved context differs from its original model history");
-
-  const prefix = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(context.runScopedInput).pipe(
-    Effect.mapError(() => invalid("Saved Run instructions and input are malformed")),
-  );
-
-  return {
-    runId: context.runId,
-    prompt: Prompt.fromMessages([...history.prompt.content, ...prefix.content]),
-    priorHistoryLength: context.priorHistoryLength,
-    historyFrom: context.historyFrom,
-    boundaries: boundaries.filter(
-      (boundary) => boundary.promptLength <= context.priorHistoryLength,
-    ),
-    digest,
-    ...(context.contextWindowId === undefined ? {} : { contextWindowId: context.contextWindowId }),
-  };
-});
-
-/** Cold recovery and explicit verify use full reads; fresh admission uses the narrow history port. */
-export const readRunContext = Effect.fnUntraced(function* (
-  context: RunContextRecorded,
-  original: CanonicalRecordEnvelope,
-  digest: string,
-) {
+): Effect.fn.Return<
+  ProjectedRunHistory,
+  RunJournalError | ThreadStoreError | ThreadNotMaterialized,
+  RunContextReader | Crypto.Crypto
+> {
   yield* validateContextBoundary(context, original);
   const reader = yield* RunContextReader;
-  const records: Array<CanonicalRecordEnvelope> = [];
+  const records: Array<JournalRecordEnvelope> = [];
 
   for (const ref of context.retained) {
     const entry = yield* reader.record(ref.recordId);
@@ -126,7 +97,7 @@ export const readRunContext = Effect.fnUntraced(function* (
       (yield* reference(entry.record)).digest !== ref.digest
     )
       return yield* invalid("Saved context has missing or corrupt retained evidence");
-    records.push(entry);
+    records.push(yield* projectHistoryRecord(entry, context.runId));
   }
 
   let after = CanonicalSequence.make(context.historyFrom - 1);
@@ -149,10 +120,80 @@ export const readRunContext = Effect.fnUntraced(function* (
       )
         return yield* invalid("Saved context range has invalid canonical ordering");
       after = entry.sequence;
-      records.push(entry);
+      records.push(yield* projectHistoryRecord(entry, context.runId));
     }
     if (page.length < 8) break;
   }
 
-  return yield* projectRunContext(context, original, digest, records);
+  let through = 0;
+  const retained = new Map(context.retained.map((ref) => [ref.sequence, ref.recordId]));
+
+  for (const entry of records) {
+    if (
+      entry.threadId !== original.threadId ||
+      entry.sequence <= through ||
+      entry.sequence > context.historyThrough ||
+      (entry.sequence < context.historyFrom &&
+        retained.get(entry.sequence) !== entry.record.recordId)
+    )
+      return yield* invalid("Saved context has invalid canonical range evidence");
+    through = entry.sequence;
+    retained.delete(entry.sequence);
+  }
+  if (retained.size !== 0) return yield* invalid("Saved context is missing retained evidence");
+
+  const boundaries: Array<JournalBoundary> = [];
+
+  records.push(original);
+
+  const history = yield* projectRunJournalStream(
+    Stream.fromIterable(records),
+    context.runId,
+    (boundary) => boundaries.push(boundary),
+  );
+
+  return {
+    prompt: history.prompt,
+    historyFrom: history.historyFrom,
+    boundaries,
+    ...(history.contextWindowId === undefined ? {} : { contextWindowId: history.contextWindowId }),
+  };
+});
+
+/** Cold recovery and explicit verify use full reads; fresh admission uses the narrow history port. */
+export const readRunContext = Effect.fnUntraced(function* (
+  context: RunContextRecorded,
+  original: CanonicalRecordEnvelope,
+  digest: string,
+): Effect.fn.Return<
+  RunJournalContext,
+  RunJournalError | ThreadStoreError | ThreadNotMaterialized,
+  RunContextReader | Crypto.Crypto
+> {
+  const history = yield* readProjectedHistory(context, original);
+  const historyDigest = yield* digestRunHistory(history.prompt);
+
+  if (
+    historyDigest !== context.historyDigest ||
+    history.historyFrom !== context.historyFrom ||
+    history.prompt.content.length !== context.priorHistoryLength ||
+    history.contextWindowId !== context.contextWindowId
+  )
+    return yield* invalid("Saved context differs from its original model history");
+
+  const prefix = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(context.runScopedInput).pipe(
+    Effect.mapError(() => invalid("Saved Run instructions and input are malformed")),
+  );
+
+  return {
+    runId: context.runId,
+    prompt: Prompt.fromMessages([...history.prompt.content, ...prefix.content]),
+    priorHistoryLength: context.priorHistoryLength,
+    historyFrom: context.historyFrom,
+    boundaries: history.boundaries.filter(
+      (boundary) => boundary.promptLength <= context.priorHistoryLength,
+    ),
+    digest,
+    ...(context.contextWindowId === undefined ? {} : { contextWindowId: context.contextWindowId }),
+  };
 });
