@@ -132,6 +132,7 @@ export const ProviderReceipt = Schema.Struct({
   ...Query.fields,
   call: Schema.Natural,
   requestId: Schema.NonEmptyString,
+  objectBuild: Schema.NonEmptyString,
   arrivalMs: Schema.Number,
   firstByteMs: Schema.Number,
   endMs: Schema.Number,

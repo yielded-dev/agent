@@ -24,6 +24,11 @@ export default {
 
     try {
       const query = readQuery(url);
+
+      const objectBuild = Schema.decodeUnknownSync(Schema.NonEmptyString)(
+        request.headers.get("x-cold-bisect-object-build"),
+      );
+
       const raw = await request.text();
       const json: unknown = JSON.parse(raw);
       const { model } = Schema.decodeUnknownSync(Header)(json);
@@ -140,6 +145,7 @@ export default {
               ...query,
               call: Number(url.searchParams.get("call")),
               requestId: id,
+              objectBuild,
               arrivalMs,
               firstByteMs,
               endMs: Date.now(),

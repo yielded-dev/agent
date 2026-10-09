@@ -542,10 +542,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         const readinessFailures: NonNullable<Upload["readinessFailures"]>[number][] = [];
         const requiredRounds = phase === "seed" ? 3 : 10;
 
-        // New Worker routes and their Object bindings propagate separately. These disposable
-        // identity probes are used only for the untimed seed version, never a measured epoch.
-        // A previous build served measured pi requests after three matching health rounds.
-        // Wait before stateless readiness; never probe or retry a measured Object here.
+        // Worker health does not prove Object code propagation. Disposable Objects report
+        // their own BUILD during every upload's readiness. Measured fresh Objects remain
+        // untouched until their timed input, whose Object rejects a stale build before admission.
         yield* Effect.sleep(phase === "seed" ? "30 seconds" : "60 seconds");
 
         for (let attempt = 0; attempt < 30; attempt++) {
@@ -571,29 +570,26 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             { concurrency: 2 },
           );
 
-          const objectProbes =
-            phase === "seed"
-              ? yield* Effect.forEach(
-                  Array.from({ length: options.concurrency }, (_, index) => index),
-                  (index) =>
-                    request(
-                      address({ worker, endpoint, expectedBuild }, "/identity", {
-                        target,
-                        object: `${runName}-readiness-${target}-${attempt}-${index}`,
-                        sample: "readiness",
-                        history: target === "bare" ? 0 : 50,
-                        ttftMs: 0,
-                        chunkDelayMs: 0,
-                      }),
-                      deploy.token,
-                      Identity,
-                      undefined,
-                      "10 seconds",
-                      expectedBuild,
-                    ).pipe(Effect.exit),
-                  { concurrency: options.concurrency },
-                )
-              : [];
+          const objectProbes = yield* Effect.forEach(
+            Array.from({ length: phase === "seed" ? options.concurrency : 1 }, (_, index) => index),
+            (index) =>
+              request(
+                address({ worker, endpoint, expectedBuild }, "/identity", {
+                  target,
+                  object: `${runName}-readiness-${target}-${attempt}-${index}`,
+                  sample: "readiness",
+                  history: target === "bare" ? 0 : 50,
+                  ttftMs: 0,
+                  chunkDelayMs: 0,
+                }),
+                deploy.token,
+                Identity,
+                undefined,
+                "10 seconds",
+                expectedBuild,
+              ).pipe(Effect.exit),
+            { concurrency: options.concurrency },
+          );
 
           const objectsReady = objectProbes.every(
             (outcome) =>
@@ -669,7 +665,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         }
         if (consecutive !== requiredRounds || health === undefined)
           return yield* new BenchError({
-            message: `Target build readiness failed; no Object lookup was requested. ${last}`,
+            message: `Target/Object build readiness failed; no measured input was sent. ${last}`,
           });
 
         live.set(target, { worker, endpoint, expectedBuild });
@@ -836,9 +832,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         yield* Effect.sleep("2 seconds");
       }
 
-      yield* Console.error(
-        `Pass ${epoch + 1}/${sequence.length}: acknowledging all resets on OLD builds…`,
-      );
+      if (options.coldMode === "object" && options.rigorous)
+        for (const target of targets) yield* upload(target, label, "epoch", epoch);
+
+      yield* Console.error(`Pass ${epoch + 1}/${sequence.length}: acknowledging all setup resets…`);
       yield* Effect.forEach(
         shuffle(cohorts),
         (cohort) =>
@@ -856,38 +853,51 @@ export const run = Effect.fnUntraced(function* (options: Options) {
               ],
             }));
             yield* Effect.gen(function* () {
-              const response = (yield* request(
-                address(current, "/cold", query),
-                deploy.token,
-                ColdResult,
-                {},
-                "3 minutes",
-                current.expectedBuild,
-              )).value;
+              const attempts: ColdResult[] = [];
 
-              yield* update((value) => ({
-                ...value,
-                resets: value.resets?.map((row) =>
-                  row.epoch === epoch && key(row) === key(query) ? { ...row, response } : row,
-                ),
-              }));
-              if (
-                !response.ok ||
-                !response.threadAborted ||
-                response.directoryAborted === false ||
-                response.before.isolate?.build !== current.expectedBuild
-              )
-                return yield* new BenchError({
-                  message:
-                    "Old-build Object abort or Object build was not acknowledged; refusing the next upload.",
-                });
-              resets.set(key(cohort), { build: current.expectedBuild, response });
-              yield* update((value) => ({
-                ...value,
-                resets: value.resets?.map((row) =>
-                  row.epoch === epoch && key(row) === key(query) ? { ...row, status: "ok" } : row,
-                ),
-              }));
+              for (let attempt = 0; attempt < 8; attempt++) {
+                const response = (yield* request(
+                  address(current, "/cold", query),
+                  deploy.token,
+                  ColdResult,
+                  {},
+                  "3 minutes",
+                  current.expectedBuild,
+                )).value;
+
+                attempts.push(response);
+                yield* update((value) => ({
+                  ...value,
+                  resets: value.resets?.map((row) =>
+                    row.epoch === epoch && key(row) === key(query)
+                      ? { ...row, response, attempts: [...attempts] }
+                      : row,
+                  ),
+                }));
+                if (!response.ok || !response.threadAborted || response.directoryAborted === false)
+                  return yield* new BenchError({
+                    message:
+                      "Old-build Object abort or Object build was not acknowledged; refusing the next upload.",
+                  });
+                if (response.before.isolate?.build !== current.expectedBuild) {
+                  if (attempt < 7) yield* Effect.sleep("2 seconds");
+                  continue;
+                }
+                resets.set(key(cohort), { build: current.expectedBuild, response });
+                yield* update((value) => ({
+                  ...value,
+                  resets: value.resets?.map((row) =>
+                    row.epoch === epoch && key(row) === key(query) ? { ...row, status: "ok" } : row,
+                  ),
+                }));
+
+                return;
+              }
+
+              return yield* new BenchError({
+                message:
+                  "Object still reports a stale BUILD after eight acknowledged setup resets; no input was sent.",
+              });
             }).pipe(
               Effect.tapCause((cause) =>
                 update((value) => ({
@@ -915,7 +925,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             "Not every old-build Object reset was acknowledged; no next-epoch upload was attempted.",
         });
 
-      // No /cold request occurs after either new upload. All subsequent Object work is measured.
+      // Fresh latency Objects remain untouched after upload; readiness uses disposable Objects.
       if (options.coldMode !== "object")
         for (const target of targets) yield* upload(target, label, "epoch", epoch);
       yield* Console.error(
@@ -1118,6 +1128,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                       call.fingerprint !== expected[i] ||
                       call.receipt === undefined ||
                       call.receipt.fingerprint !== expected[i] ||
+                      call.receipt.objectBuild !== current.expectedBuild ||
                       call.receipt.sample !== query.sample ||
                       call.receipt.object !== query.object ||
                       call.receipt.call !== i,
@@ -1184,6 +1195,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   status: reasons.length === 0 ? "ok" : "excluded",
                   fingerprintVerified: true,
                   buildVerified,
+                  providerBuildVerified: metrics.calls.every(
+                    (call) => call.receipt?.objectBuild === current.expectedBuild,
+                  ),
                   freshVerified:
                     !options.profile &&
                     options.coldMode !== "object" &&

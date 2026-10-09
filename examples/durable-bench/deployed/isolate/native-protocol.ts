@@ -197,6 +197,7 @@ export const parseReceipt = (input: unknown): ProviderReceipt => {
     ...query(value),
     call: natural(value.call),
     requestId: nonempty(value.requestId),
+    objectBuild: nonempty(value.objectBuild),
     arrivalMs: finite(value.arrivalMs),
     firstByteMs: finite(value.firstByteMs),
     endMs: finite(value.endMs),

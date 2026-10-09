@@ -47,6 +47,9 @@ export class Observation {
     };
   }
   begin(query: Query, workerIsolate?: IsolateState) {
+    // Isolated routes carry the expected routing build; reject before admission.
+    if (workerIsolate !== undefined && workerIsolate.build !== this.env.BUILD)
+      throw new Error("Object BUILD does not match the expected input build");
     timeline(this.storage)?.begin();
     storageProbe(this.storage)?.begin();
     this.entry = {
@@ -71,6 +74,7 @@ export class Observation {
   }
   readonly fetch: typeof globalThis.fetch = async (input, init) => {
     const query = this.query;
+    const objectBuild = this.env.BUILD;
 
     if (!query) throw new Error("Provider request without a benchmark sample");
     if (this.calls.length === 0) {
@@ -100,6 +104,7 @@ export class Observation {
     const headers = new Headers(original.headers);
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
+    headers.set("x-cold-bisect-object-build", objectBuild);
     try {
       if (call.call === 0 && query.sample.startsWith("profile-"))
         timeline(this.storage)?.point("profile.after:" + coldBisectAfterInit(7));
@@ -146,6 +151,7 @@ export class Observation {
                   if (call.receipt) throw new Error("Duplicate provider receipt");
                   call.receipt = parseReceipt(JSON.parse(line.slice(": rebench-receipt ".length)));
                   if (
+                    call.receipt.objectBuild !== objectBuild ||
                     call.receipt.call !== call.call ||
                     call.receipt.requestId !== requestId ||
                     call.receipt.fingerprint !== call.fingerprint ||

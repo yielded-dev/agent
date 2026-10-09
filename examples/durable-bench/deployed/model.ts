@@ -66,6 +66,7 @@ export const Sample = Schema.Struct({
   resetBefore: Schema.optionalKey(Identity),
   identity: Schema.optionalKey(Identity),
   buildVerified: Schema.optionalKey(Schema.Boolean),
+  providerBuildVerified: Schema.optionalKey(Schema.Boolean),
   freshVerified: Schema.optionalKey(Schema.Boolean),
   exclusionReasons: Schema.optionalKey(Schema.Array(Schema.String)),
   driverMs: Schema.optionalKey(Schema.Number),
@@ -135,6 +136,7 @@ export const Reset = Schema.Struct({
   expectedBuild: Schema.String,
   status: Schema.Literals(["running", "ok", "failed"]),
   response: Schema.optionalKey(ColdResult),
+  attempts: Schema.optionalKey(Schema.Array(ColdResult)),
   error: Schema.optionalKey(Schema.String),
 });
 
