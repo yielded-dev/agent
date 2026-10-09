@@ -168,7 +168,7 @@ jobs:
           task-cache: checks
 
       - name: Validate GitHub Actions workflows
-        uses: docker://rhysd/actionlint:1.7.12
+        uses: docker://mirror.gcr.io/rhysd/actionlint:1.7.12
         with:
           args: -color -shellcheck= -pyflakes=
 
@@ -250,7 +250,7 @@ jobs:
             stateful: true
     services:
       postgres:
-        image: ${{ matrix.postgres && format('public.ecr.aws/docker/library/postgres:{0}-alpine', matrix.postgres) || '' }}
+        image: ${{ matrix.postgres && format('mirror.gcr.io/library/postgres:{0}-alpine', matrix.postgres) || '' }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
