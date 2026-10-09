@@ -372,7 +372,7 @@ summaries derive only from those sanitized records. See [cleanup.json](cleanup.j
 and [secret-scan.json](secret-scan.json). The task-owned local validation database
 was also removed; its check is in [validation.json](validation.json).
 
-The product change is isolated at
+The unmerged product change is [PR #825](https://github.com/yielded-dev/agent/pull/825), isolated at
 [commit `16406112`](https://github.com/yielded-dev/agent/commit/1640611291eff448dc293797cb503c0e0ed287d1),
 branch `dan/prod-admit-prearmed-wake`, against `main`. No evidence files enter that diff.
 

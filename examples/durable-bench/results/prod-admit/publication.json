@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-09T00:16:06.977413+00:00",
+  "productPullRequest": "https://github.com/yielded-dev/agent/pull/825",
+  "base": "main",
+  "head": "dan/prod-admit-prearmed-wake",
+  "productCommit": "1640611291eff448dc293797cb503c0e0ed287d1",
+  "evidenceBranch": "dan/prod-admission-latency",
+  "initialEvidenceCommit": "c0ddf441",
+  "report": "https://github.com/yielded-dev/agent/blob/dan/prod-admission-latency/examples/durable-bench/results/prod-admit/report.md",
+  "mergeRequested": false
+}
