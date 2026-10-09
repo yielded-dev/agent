@@ -44,8 +44,8 @@ import {
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Duration, Effect, Layer, Schema } from "effect";
-import { RpcTracing } from "effect-cf";
+import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
+import { RpcTargets, RpcTracing } from "effect-cf";
 
 import { DurableAlarmError } from "./Alarm.ts";
 import {
@@ -56,6 +56,14 @@ import {
 import { AdmissionLimitExceeded } from "./CloudflareConfig.ts";
 import { cloudflareFailureSignals, safeCauseMessage } from "./internal/boundary.ts";
 import { cloudflareCryptoLayer } from "./internal/crypto.ts";
+import {
+  Frame as LiveTextFrame,
+  isBoundedEvent,
+  MAX_FRAME_BYTES,
+  Request as WatchTextRequest,
+} from "./internal/live-text-protocol.ts";
+
+export { Frame as LiveTextFrame } from "./internal/live-text-protocol.ts";
 
 /**
  * The Worker↔Thread-Object host protocol (plan §1.4): Schema envelopes for the host
@@ -359,6 +367,122 @@ export type ClientAbortFailure = typeof ClientAbortHostFailure.Type | ThreadClie
 export type ClientApprovalFailure = typeof ClientApprovalHostFailure.Type | ThreadClientError;
 export type ClientUnknownFailure = typeof ClientUnknownHostFailure.Type | ThreadClientError;
 
+const liveTextProtocolFailure = () =>
+  HostProtocolError.make({
+    message: "Provisional text is incomplete or invalid; discard drafts and read canonical records",
+  });
+
+const decodeLiveText = (
+  threadId: ThreadId,
+  source: ReadableStream<unknown>,
+): Stream.Stream<LiveTextFrame, HostProtocolError | ThreadClientError> =>
+  Stream.suspend(() => {
+    const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
+    const decode = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame));
+    let pending = "";
+    let pendingBytes = 0;
+    let expected = 0;
+    let streamId: string | undefined;
+    const models = new Map<string, { attemptId: string; parts: Set<string> }>();
+
+    const accept = (frame: LiveTextFrame): boolean => {
+      if (frame.sequence !== expected++) throw liveTextProtocolFailure();
+      if (frame._tag === "Reset") {
+        if (streamId !== undefined || frame.threadId !== threadId) throw liveTextProtocolFailure();
+        streamId = frame.streamId;
+
+        return true;
+      }
+      if (
+        streamId === undefined ||
+        frame.streamId !== streamId ||
+        frame.event.threadId !== threadId ||
+        !isBoundedEvent(frame.event)
+      )
+        throw liveTextProtocolFailure();
+      const event = frame.event;
+
+      if (event._tag === "AttemptEnded") {
+        for (const [key, model] of models)
+          if (model.attemptId === event.attemptId) models.delete(key);
+
+        return true;
+      }
+      const key = JSON.stringify([event.attemptId, event.runId, event.turnId, event.generation]);
+
+      if (event._tag === "Discard") {
+        models.delete(key);
+
+        return true;
+      }
+      let model = models.get(key);
+
+      if (event.part.type === "text-start") {
+        if (model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
+        if ([...models.values()].reduce((size, value) => size + value.parts.size, 0) >= 32)
+          throw liveTextProtocolFailure();
+        if (model === undefined) {
+          model = { attemptId: event.attemptId, parts: new Set() };
+          models.set(key, model);
+        }
+        model.parts.add(event.part.id);
+
+        return true;
+      }
+      // A prospective subscription may join during a part: never present its suffix as a prefix.
+      if (!model?.parts.has(event.part.id)) return false;
+      if (event.part.type === "text-end") {
+        model.parts.delete(event.part.id);
+        if (model.parts.size === 0) models.delete(key);
+      }
+
+      return true;
+    };
+
+    return Stream.fromReadableStream({
+      evaluate: () => source,
+      // The subscription Scope owns the single bounded cancellation after this reader unlocks.
+      releaseLockOnEnd: true,
+      onError: (cause) =>
+        ThreadClientError.make({
+          threadId,
+          message: "Provisional text disconnected; discard drafts and read canonical records",
+          cause,
+        }),
+    }).pipe(
+      Stream.mapEffect((chunk) =>
+        Effect.try({
+          try: () => {
+            if (!(chunk instanceof Uint8Array)) throw liveTextProtocolFailure();
+            const frames: LiveTextFrame[] = [];
+
+            for (let offset = 0; offset < chunk.byteLength;) {
+              const newline = chunk.indexOf(10, offset);
+              const end = newline < 0 ? chunk.byteLength : newline;
+
+              pendingBytes += end - offset;
+              if (pendingBytes > MAX_FRAME_BYTES) throw liveTextProtocolFailure();
+              pending += decoder.decode(chunk.subarray(offset, end), { stream: newline < 0 });
+              offset = end + 1;
+              if (newline < 0) break;
+              const frame = decode(pending);
+
+              pending = "";
+              pendingBytes = 0;
+              if (accept(frame)) frames.push(frame);
+            }
+
+            return frames;
+          },
+          catch: liveTextProtocolFailure,
+        }),
+      ),
+      Stream.flatMap(Stream.fromArray),
+      // This connection is open-ended. Clean EOF is also loss of provisional state.
+      Stream.concat(Stream.fail(liveTextProtocolFailure())),
+    );
+  });
+
 const outOfContract = (threadId: string, operation: string, observed: string): ThreadClientError =>
   ThreadClientError.make({
     threadId,
@@ -412,6 +536,13 @@ export class CloudflareThreadClient extends Context.Service<
       threadId: ThreadId,
       afterSequence: CanonicalSequence,
     ) => Effect.Effect<void, ClientProgressFailure>;
+    /**
+     * Future provisional native text, with an initial Reset readiness frame. Reconcile by
+     * Run/Turn identity to canonical records; discard drafts on Discard, AttemptEnded,
+     * Reset or stream failure. A slow consumer fails on a sequence gap. No replay/retry.
+     * Scope the stream: interruption cancels its remote subscription.
+     */
+    readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;
     /** One bounded page of canonical records. */
     readonly readPage: (
       threadId: ThreadId,
@@ -760,6 +891,101 @@ export class CloudflareThreadClient extends Context.Service<
 
             yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
           }),
+
+        watchText: (threadId) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const traceArgs =
+                rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
+
+              const openingFailure = (cause: unknown) =>
+                ThreadClientError.make({
+                  threadId,
+                  message: "Provisional text observation could not reach the Thread Object",
+                  cause,
+                  ...cloudflareFailureSignals(cause),
+                });
+
+              // Retain the original RPC promise: resolving through callThreadObject would
+              // erase its optional native disposer before an interrupted opening can use it.
+              const target = yield* RpcTargets.get(namespace, threadId, () =>
+                namespace.get(threadId),
+              ).pipe(Effect.mapError(openingFailure));
+
+              let request: Promise<unknown> | undefined;
+              let received: unknown;
+              let closed = false;
+
+              const cancel = () => {
+                const value = received;
+
+                received = undefined;
+
+                return value instanceof ReadableStream && !value.locked
+                  ? value.cancel().catch(() => undefined)
+                  : Promise.resolve();
+              };
+
+              // Install ownership before invoking foreign code, not after its promise settles.
+              yield* Effect.addFinalizer(() =>
+                Effect.try({
+                  try: () => {
+                    closed = true;
+                    if (Predicate.hasProperty(request, Symbol.dispose)) {
+                      const dispose = request[Symbol.dispose];
+
+                      if (typeof dispose === "function") dispose.call(request);
+                    }
+                  },
+                  catch: () => undefined,
+                }).pipe(
+                  Effect.ignore,
+                  Effect.andThen(
+                    Effect.tryPromise({ try: cancel, catch: () => undefined }).pipe(
+                      Effect.interruptible,
+                      Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
+                      Effect.ignore,
+                    ),
+                  ),
+                ),
+              );
+
+              const raw = yield* Effect.tryPromise({
+                try: () => {
+                  request = target.watchTextEncoded(
+                    Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
+                    ...traceArgs,
+                  );
+
+                  return request.then((value) => {
+                    received = value;
+
+                    // A custom endpoint may return a plain, non-cancellable promise. Keep
+                    // late cleanup on that native promise chain; it starts no Effect fiber.
+                    return closed ? cancel().then(() => value) : value;
+                  });
+                },
+                catch: openingFailure,
+              }).pipe(
+                Effect.interruptible,
+                Effect.tapCause(() => RpcTargets.invalidate(target)),
+              );
+
+              if (raw instanceof ReadableStream) return decodeLiveText(threadId, raw);
+
+              const response = yield* decodeHostResponse(raw).pipe(
+                Effect.mapError(liveTextProtocolFailure),
+              );
+
+              if (
+                response._tag === "HostFailed" &&
+                Schema.is(ClientObserveHostFailure)(response.failure)
+              )
+                return yield* response.failure;
+
+              return yield* liveTextProtocolFailure();
+            }),
+          ),
 
         readPage,
 

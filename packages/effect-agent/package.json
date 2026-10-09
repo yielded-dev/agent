@@ -66,6 +66,7 @@
     "./page-screenshot": "./src/sandbox/PageScreenshot.ts",
     "./persistent-history": "./src/durable/PersistentHistory.ts",
     "./prepared-input-admission": "./src/durable/PreparedInputAdmission.ts",
+    "./provisional-text": "./src/core/ProvisionalText.ts",
     "./receipt": "./src/core/Receipt.ts",
     "./records": "./src/durable/Records.ts",
     "./recovery": "./src/durable/Recovery.ts",

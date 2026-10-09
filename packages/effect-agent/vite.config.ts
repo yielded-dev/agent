@@ -46,6 +46,7 @@ export default defineConfig({
       "src/sandbox/PageCapture.ts",
       "src/sandbox/PageCrawl.ts",
       "src/sandbox/PageScreenshot.ts",
+      "src/core/ProvisionalText.ts",
       "src/core/Receipt.ts",
       "src/capabilities/Redaction.ts",
       "src/capabilities/Remembering.ts",
