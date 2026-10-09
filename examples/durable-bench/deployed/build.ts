@@ -26,6 +26,7 @@ const entries = {
   production: "../src/yielded.ts",
   bare: "isolate/bare.ts",
   yielded: "isolate/yielded.ts",
+  "yielded-profile": "isolate/profile-yielded.ts",
   pi: "../third-party/src/deployed/isolate-pi.ts",
 };
 
@@ -115,6 +116,8 @@ export const build = Effect.fnUntraced(function* (
         logLevel: "silent",
         plugins: [resolver, ...extraPlugins],
         metafile: true,
+        sourcemap: "external",
+        sourcesContent: false,
       }),
     catch: (cause) =>
       new BenchError({

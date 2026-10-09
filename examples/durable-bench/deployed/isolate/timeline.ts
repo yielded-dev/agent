@@ -7,6 +7,7 @@ export class Timeline {
   readonly events: Phase[] = [];
   private serial = 0;
   private entered = false;
+  opened?: Promise<unknown>;
   point(phase: string, id?: number) {
     if (this.events.length < 2000)
       this.events.push({ phase, atMs: Date.now(), ...(id === undefined ? {} : { id }) });
@@ -38,7 +39,7 @@ export const instrumentTimeline = (ctx: DurableObjectState): void => {
     value: <T>(callback: () => Promise<T>): Promise<T> => {
       const id = trace.operation("gate");
 
-      return gate(async () => {
+      const pending = gate(async () => {
         trace.point("gate.callback", id);
         try {
           return await callback();
@@ -56,6 +57,10 @@ export const instrumentTimeline = (ctx: DurableObjectState): void => {
           throw cause;
         },
       );
+
+      trace.opened ??= pending;
+
+      return pending;
     },
   });
   const transaction = ctx.storage.transaction.bind(ctx.storage);
@@ -133,13 +138,13 @@ export const instrumentTimeline = (ctx: DurableObjectState): void => {
 
 // These are deliberately recognizable sampled frames in profiling-only requests.
 export function coldBisectBeforeInit(seed: number): number {
-  for (let index = 0; index < 50_000_000; index++) seed = Math.imul(seed ^ index, 0x45d9f3b);
+  for (let index = 0; index < 5_000_000; index++) seed = Math.imul(seed ^ index, 0x45d9f3b);
 
   return seed;
 }
 
 export function coldBisectAfterInit(seed: number): number {
-  for (let index = 0; index < 50_000_000; index++) seed = Math.imul(seed + index, 0x45d9f3b);
+  for (let index = 0; index < 5_000_000; index++) seed = Math.imul(seed + index, 0x45d9f3b);
 
   return seed;
 }

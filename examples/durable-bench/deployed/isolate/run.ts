@@ -8,6 +8,7 @@ import {
   Effect,
   Exit,
   FileSystem,
+  Fiber,
   Schema,
   Semaphore,
 } from "effect";
@@ -47,6 +48,7 @@ import {
   workspace,
 } from "../platform.ts";
 import { median, table } from "../report.ts";
+import { profiler } from "./profile.ts";
 import {
   ColdResult,
   Identity,
@@ -295,8 +297,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           result.failures.length === 0 && (options.keep || result.cleanup?.verified === true),
       };
       yield* save(output + ".json", result);
-      yield* fs.writeFileString(output + ".md", table(result));
-      yield* Console.log(table(result));
+
+      const summary = options.profile
+        ? `CPU profiling diagnostic only; elapsed times are excluded from latency evidence.\nProfiles: ${result.profiles?.length ?? 0}; failures: ${result.failures.length}; cleanup: ${result.cleanup?.verified ?? false}.\n`
+        : table(result);
+
+      yield* fs.writeFileString(output + ".md", summary);
+      yield* Console.log(summary);
       yield* Console.error(
         `Results: results/${runName}.json; wall ${(result.wallMs / 1000).toFixed(1)} s.`,
       );
@@ -346,6 +353,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     const yieldedBuilds = new Map<BuildLabel, Built>();
     let piBuild: Built | undefined;
     let bareBuild: Built | undefined;
+    let profileBuild: Built | undefined;
 
     if (targets.includes("yielded"))
       for (const label of labels) {
@@ -376,6 +384,26 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           ],
         }));
       }
+    if (options.profile && options.coldMode === "fresh") {
+      profileBuild = yield* build(
+        join(privateDirectory, runName, "build", "yielded-profile"),
+        "yielded-profile",
+      );
+      const compiled = profileBuild;
+
+      yield* update((value) => ({
+        ...value,
+        builds: [
+          ...value.builds,
+          {
+            label: "deferred-initialization-profile",
+            target: "yielded",
+            revision: compiled.revision,
+            sha256: compiled.sha256,
+          },
+        ],
+      }));
+    }
     if (targets.includes("pi")) {
       const compiled = yield* build(join(privateDirectory, runName, "build", "pi"), "pi");
 
@@ -424,7 +452,11 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       ),
     );
 
-    const turnsPerEpoch = options.repeats + 2;
+    const turnsPerEpoch = options.profile ? 1 : options.repeats + 2;
+
+    const sampleName = (epoch: number, index: number) =>
+      `${options.profile ? "profile-" : ""}e${epoch}-t${index}`;
+
     const seedBytes = new Map<string, number>();
 
     const storageGroup = (cohort: Query) =>
@@ -444,7 +476,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
       for (let epoch = 0; epoch < sequence.length; epoch++)
         for (let index = 0; index < turnsPerEpoch; index++) {
-          const sample = `e${epoch}-t${index}`;
+          const sample = sampleName(epoch, index);
 
           expected.set(sample, append(messages, turn(sample, MEASURED_TOOLS)));
         }
@@ -458,7 +490,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       epoch?: number,
     ) {
       const compiled =
-        target === "bare" ? bareBuild : target === "pi" ? piBuild : yieldedBuilds.get(label);
+        target === "bare"
+          ? bareBuild
+          : target === "pi"
+            ? piBuild
+            : phase === "epoch" && profileBuild !== undefined
+              ? profileBuild
+              : yieldedBuilds.get(label);
 
       if (!compiled) return yield* new BenchError({ message: "Missing isolated target build." });
       const worker = `${runName}-${target}`;
@@ -889,22 +927,24 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         (cohort) =>
           Effect.gen(function* () {
             const current = live.get(cohort.target);
-            const reset = resets.get(key(cohort));
+            const initialReset = resets.get(key(cohort));
 
-            if (!current || !reset)
+            if (!current || !initialReset)
               return yield* new BenchError({ message: "Missing upload/reset evidence." });
+            let reset = initialReset;
             let anchor: Identity | undefined;
 
             for (let index = 0; index < turnsPerEpoch; index++) {
-              const query = { ...cohort, sample: `e${epoch}-t${index}` };
+              const query = { ...cohort, sample: sampleName(epoch, index) };
 
               const sample: Sample = {
                 ...query,
                 build: label,
                 epoch,
                 repeat: index,
-                state:
-                  index === 0
+                state: options.profile
+                  ? "profile"
+                  : index === 0
                     ? options.coldMode === "object"
                       ? "cold"
                       : "fresh-first-turn"
@@ -946,6 +986,58 @@ export const run = Effect.fnUntraced(function* (options: Options) {
               if (sample.status === "skipped") continue;
 
               yield* Effect.gen(function* () {
+                let joined: Effect.Effect<
+                  void,
+                  Effect.Error<Effect.Success<ReturnType<typeof profiler>>["record"]> | BenchError
+                > = Effect.void;
+
+                if (options.profile && index === 0) {
+                  const prepared = yield* profiler(
+                    current.worker,
+                    current.endpoint,
+                    current.expectedBuild,
+                    deploy.token,
+                    query,
+                    options.coldMode ?? "fresh",
+                  );
+
+                  const capture = yield* prepared.record.pipe(
+                    Effect.tap((profile) =>
+                      update((value) => ({
+                        ...value,
+                        profiles: [...(value.profiles ?? []), profile],
+                      })),
+                    ),
+                    Effect.forkScoped,
+                  );
+
+                  joined = Fiber.join(capture).pipe(
+                    Effect.flatMap((profile) =>
+                      profile.status === 200
+                        ? Effect.void
+                        : new BenchError({
+                            message: `Profile capture returned HTTP ${profile.status}`,
+                          }),
+                    ),
+                  );
+                  yield* Effect.sleep("2 seconds");
+                  yield* prepared.before;
+                  if (options.coldMode === "object") {
+                    const response = (yield* request(
+                      address(current, "/cold", query),
+                      deploy.token,
+                      ColdResult,
+                      {},
+                      "3 minutes",
+                      current.expectedBuild,
+                    )).value;
+
+                    if (!response.ok || !response.threadAborted)
+                      return yield* new BenchError({ message: "Profile cold reset failed" });
+                    reset = { build: current.expectedBuild, response };
+                    yield* amend({ resetBuild: reset.build, resetBefore: response.before });
+                  }
+                }
                 const before = yield* Clock.currentTimeMillis;
 
                 const measured = yield* request(
@@ -985,9 +1077,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   identity: metrics.identity,
                   timeline: metrics.timeline,
                   firstModelMs:
+                    measured.value.startedMs === undefined ||
+                    metrics.calls[0]?.receipt === undefined
+                      ? undefined
+                      : metrics.calls[0].receipt.arrivalMs - measured.value.startedMs,
+                  firstDispatchIoMs:
                     measured.value.startedMs === undefined || metrics.calls[0] === undefined
                       ? undefined
                       : metrics.calls[0].startMs - measured.value.startedMs,
+                  providerColo: metrics.calls[0]?.receipt?.colo,
                   fingerprints: metrics.calls.map((call) => call.fingerprint),
                   databaseBytes: metrics.bytes,
                   ...(metrics.storage === undefined ? {} : { storage: metrics.storage }),
@@ -1085,9 +1183,16 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   fingerprintVerified: true,
                   buildVerified,
                   freshVerified:
-                    options.coldMode !== "object" && index === 0 && reasons.length === 0,
+                    !options.profile &&
+                    options.coldMode !== "object" &&
+                    index === 0 &&
+                    reasons.length === 0,
                   coldVerified:
-                    options.coldMode === "object" && index === 0 && reasons.length === 0,
+                    !options.profile &&
+                    options.coldMode === "object" &&
+                    index === 0 &&
+                    reasons.length === 0,
+                  profileVerified: options.profile && index === 0 && reasons.length === 0,
                   residentVerified,
                   exclusionReasons: reasons,
                   gapMs: median(gaps),
@@ -1095,6 +1200,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                     ? {}
                     : { lastResponseToClientMs: measured.value.observedMs - lastEnd }),
                 });
+                yield* joined;
               }).pipe(
                 Effect.catchCause((cause) =>
                   Effect.gen(function* () {
@@ -1115,7 +1221,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
               );
             }
           }),
-        { concurrency: options.concurrency, discard: true },
+        {
+          concurrency: options.profile ? Math.min(2, options.concurrency) : options.concurrency,
+          discard: true,
+        },
       );
     }
   }).pipe(Effect.onExit(finish));

@@ -3,7 +3,7 @@ import { storageProbe } from "../isolate/cold-storage.ts";
 import { chatTranscript, errorText, parseReceipt } from "../isolate/native-protocol.ts";
 import { observeConstructor, isolateObservation } from "../isolate/observation.ts";
 import type { Env, Identity, ProviderCall, IsolateState, Query } from "../isolate/protocol.ts";
-import { timeline } from "../isolate/timeline.ts";
+import { coldBisectAfterInit, timeline } from "../isolate/timeline.ts";
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
 
@@ -101,6 +101,8 @@ export class Observation {
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
     try {
+      if (call.call === 0 && query.sample.startsWith("profile-"))
+        timeline(this.storage)?.point("profile.after:" + coldBisectAfterInit(7));
       if (call.call === 0) timeline(this.storage)?.point("provider.dispatch");
       const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
 

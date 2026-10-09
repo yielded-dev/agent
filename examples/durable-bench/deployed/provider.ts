@@ -115,7 +115,14 @@ export default {
           try {
             const delay =
               index === 0
-                ? Math.max(0, query.ttftMs - (Date.now() - arrivalMs))
+                ? Math.max(
+                    0,
+                    (query.sample.startsWith("profile-") &&
+                    Number(url.searchParams.get("call")) === 0
+                      ? 20000
+                      : query.ttftMs) -
+                      (Date.now() - arrivalMs),
+                  )
                 : query.chunkDelayMs;
 
             if (delay) await sleep(delay);

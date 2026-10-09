@@ -55,6 +55,7 @@ export const command = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Separate Yielded/pi Workers; reset old code before each fresh upload"),
     ),
+    profile: Flag.Boolean("profile").pipe(Flag.withDefault(false)),
     coldMode: Flag.Literals("cold-mode", ["object", "fresh"]).pipe(Flag.withDefault("fresh")),
     order: Flag.Literals("order", ["ABBA", "BAAB", "AABB"]).pipe(
       Flag.optional,
@@ -109,6 +110,18 @@ export const command = Command.make(
       return yield* new BenchError({ message: "Isolated mode supports only yielded and pi." });
     if (flags.isolate && sizes.some((size) => ![0, 50, 250, 1000].includes(size)))
       return yield* new BenchError({ message: "Isolated mode uses 0/50/250/1000 histories." });
+    if (
+      flags.profile &&
+      (!flags.isolate ||
+        targets.length !== 1 ||
+        targets[0] !== "yielded" ||
+        sizes.length !== 1 ||
+        sizes[0] !== 250 ||
+        flags.rigorous)
+    )
+      return yield* new BenchError({
+        message: "Profiles use isolated yielded/250 diagnostic cohorts, with no latency claims.",
+      });
     if (flags.storageProbe !== "none") {
       if (!flags.isolate || !flags.rigorous || baseline !== candidate)
         return yield* new BenchError({
@@ -138,6 +151,7 @@ export const command = Command.make(
       rigorous: flags.rigorous,
       isolate: flags.isolate,
       coldMode: flags.coldMode,
+      profile: flags.profile,
       storageProbe: flags.storageProbe,
       paddingMiB: flags.paddingMiB,
       ...(order === undefined ? {} : { order }),

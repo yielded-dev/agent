@@ -9,6 +9,7 @@ import {
   StorageTrace,
   Target,
   Timeline,
+  ProfileCapture,
 } from "./worker/protocol.ts";
 
 export const BuildLabel = Schema.Literals(["working", "baseline", "candidate"]);
@@ -29,6 +30,7 @@ export interface Options {
   readonly rigorous: boolean;
   readonly isolate?: boolean;
   readonly coldMode?: "object" | "fresh";
+  readonly profile?: boolean;
   readonly order?: "ABBA" | "BAAB" | "AABB";
   readonly baseline?: string;
   readonly candidate?: string;
@@ -54,7 +56,7 @@ export const Sample = Schema.Struct({
   build: BuildLabel,
   epoch: Schema.Natural,
   repeat: Schema.Natural,
-  state: Schema.Literals(["cold", "fresh-first-turn", "warmup", "warm"]),
+  state: Schema.Literals(["cold", "fresh-first-turn", "warmup", "warm", "profile"]),
   status: Schema.Literals(["running", "ok", "excluded", "failed", "skipped"]),
   outcome: Schema.optionalKey(Schema.Literals(["completed", "unknown", "not-sent"])),
   worker: Schema.optionalKey(Schema.String),
@@ -69,6 +71,8 @@ export const Sample = Schema.Struct({
   admissionMs: Schema.optionalKey(Schema.Number),
   startedMs: Schema.optionalKey(Schema.Number),
   firstModelMs: Schema.optionalKey(Schema.Number),
+  firstDispatchIoMs: Schema.optionalKey(Schema.Number),
+  providerColo: Schema.optionalKey(Schema.NullOr(Schema.String)),
   timeline: Schema.optionalKey(Timeline),
   routing: Schema.optionalKey(Timeline),
   gapMs: Schema.optionalKey(Schema.Number),
@@ -78,6 +82,7 @@ export const Sample = Schema.Struct({
   controllerColo: Schema.optionalKey(Schema.NullOr(Schema.String)),
   fingerprintVerified: Schema.optionalKey(Schema.Boolean),
   coldVerified: Schema.optionalKey(Schema.Boolean),
+  profileVerified: Schema.optionalKey(Schema.Boolean),
   residentVerified: Schema.optionalKey(Schema.Boolean),
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
   storage: Schema.optionalKey(StorageTrace),
@@ -176,6 +181,7 @@ export const Result = Schema.Struct({
   failures: Schema.Array(Schema.String),
   cpu: Schema.optionalKey(Schema.Array(Invocation)),
   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
+  profiles: Schema.optionalKey(Schema.Array(ProfileCapture)),
   cleanup: Schema.optionalKey(Cleanup),
   kept: Schema.Boolean,
   complete: Schema.Boolean,
@@ -196,6 +202,8 @@ export const MeasureResponse = Schema.Struct({
   admissionMs: Schema.optionalKey(Schema.Number),
   startedMs: Schema.optionalKey(Schema.Number),
   firstModelMs: Schema.optionalKey(Schema.Number),
+  firstDispatchIoMs: Schema.optionalKey(Schema.Number),
+  providerColo: Schema.optionalKey(Schema.NullOr(Schema.String)),
   timeline: Schema.optionalKey(Timeline),
   routing: Schema.optionalKey(Timeline),
   colo: Schema.NullOr(Schema.String),

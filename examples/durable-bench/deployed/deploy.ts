@@ -258,7 +258,12 @@ export const deployments = Effect.gen(function* () {
     const stack = state.targets[name];
 
     if (stack) yield* alchemy(stack, "destroy");
-    const remaining = yield* cloud.resources(name);
+    let remaining = yield* cloud.resources(name);
+
+    for (let attempt = 0; !remaining.verified && attempt < 5; attempt++) {
+      yield* Effect.sleep("2 seconds");
+      remaining = yield* cloud.resources(name);
+    }
 
     if (!remaining.verified)
       return yield* new BenchError({

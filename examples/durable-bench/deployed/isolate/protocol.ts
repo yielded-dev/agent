@@ -207,6 +207,27 @@ export const Phase = Schema.Struct({
 export type Phase = typeof Phase.Type;
 export const Timeline = Schema.Array(Phase);
 
+export const ProfileIdentity = Schema.Struct({
+  actorId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+  version: Schema.NonEmptyString,
+  isolate: IsolateState,
+  initialized: Schema.Boolean,
+});
+
+export const ProfileCapture = Schema.Struct({
+  target: Target,
+  object: Schema.String,
+  mode: Schema.Literals(["object", "fresh"]),
+  sample: Schema.String,
+  status: Schema.Int,
+  bytes: Schema.Natural,
+  sha256: Schema.String,
+  file: Schema.String,
+  preflight: Schema.Array(Schema.Struct({ status: Schema.Int, message: Schema.String })),
+});
+
+export type ProfileCapture = typeof ProfileCapture.Type;
+
 export const Prepared = Schema.Struct({
   ok: Schema.Literal(true),
   identity: Identity,

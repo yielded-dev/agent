@@ -4,7 +4,8 @@ import * as Schema from "effect/Schema";
 import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import { storageProbe } from "../isolate/cold-storage.ts";
-import { timeline } from "../isolate/timeline.ts";
+import { isolateObservation } from "../isolate/observation.ts";
+import { coldBisectBeforeInit, timeline } from "../isolate/timeline.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
   BulkFixture,
@@ -52,6 +53,15 @@ export class Host {
     const query = readQuery(url);
 
     if (query.target !== this.target) throw new Error("Target mismatch");
+    if (url.pathname === "/profile-id")
+      return Response.json({
+        actorId: this.ctx.id.toString(),
+        version: this.env.VERSION?.id,
+        isolate: isolateObservation(this.env),
+        initialized: true,
+      });
+    if (url.pathname === "/sentinel")
+      return Response.json({ ok: true, result: coldBisectBeforeInit(7) });
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
     if (url.pathname === "/cold") {
       await this.ctx.storage.sync();

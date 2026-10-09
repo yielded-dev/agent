@@ -147,6 +147,8 @@ export default {
           "/run",
           "/metrics",
           "/identity",
+          "/profile-id",
+          "/sentinel",
           "/storage",
         ].includes(url.pathname)
       )
