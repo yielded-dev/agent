@@ -1,6 +1,7 @@
 import {
   buildMismatch,
   INGRESS_HEADER,
+  markRouterSubmit,
   observeFetch,
 } from "../../../deployed/isolate/observation.ts";
 import { COLD_ABORT } from "../../../deployed/isolate/pi-host.ts";
@@ -41,6 +42,7 @@ export default {
 
       if (mismatch) return mismatch;
       const query = readQuery(url);
+      markRouterSubmit(env, query, url.pathname);
 
       if (query.target !== "pi") throw new Error("Target mismatch");
       if (

@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { turn } from "../../src/plan.ts";
 import { attach } from "../worker/observe.ts";
 import { errorText, parseIdentity, parseIsolate, readQuery } from "./native-protocol.ts";
-import { buildMismatch, INGRESS_HEADER, observeFetch } from "./observation.ts";
+import { buildMismatch, INGRESS_HEADER, markRouterSubmit, observeFetch } from "./observation.ts";
 import type { Env } from "./protocol.ts";
 import {
   coldBisectAfterInit,
@@ -130,6 +130,8 @@ export default {
 
       if (mismatch) return mismatch;
       const query = readQuery(url);
+
+      markRouterSubmit(env, query, url.pathname);
       const stub = env.BARE.getByName(query.object, { locationHint: "wnam" });
 
       if (url.pathname === "/cold") {

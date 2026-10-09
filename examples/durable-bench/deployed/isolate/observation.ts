@@ -1,4 +1,4 @@
-import type { Env, IsolateState } from "./protocol.ts";
+import type { Env, IsolateState, Query } from "./protocol.ts";
 
 export const BUILD_HEADER = "x-cold-bisect-build";
 export const INGRESS_HEADER = "x-cold-bisect-ingress";
@@ -42,3 +42,14 @@ export const buildMismatch = (request: Request, env: Env): Response | undefined 
         },
         { status: 409 },
       );
+
+/** Attribute caller CPU independently from Object submit/alarm CPU. */
+export const markRouterSubmit = (env: Env, query: Query, path: string): void => {
+  if (path === "/submit" && (env.CPU === true || env.CPU === "true"))
+    console.log({
+      target: query.target,
+      object: query.object,
+      sample: query.sample,
+      kind: "router-submit",
+    });
+};

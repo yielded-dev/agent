@@ -14,7 +14,7 @@ import { history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { COLD_ABORT } from "../worker/host.ts";
 import { FixtureError } from "../worker/storage.ts";
 import { agent, definitions, YieldedDO } from "../worker/yielded.ts";
-import { buildMismatch, observeFetch } from "./observation.ts";
+import { buildMismatch, markRouterSubmit, observeFetch } from "./observation.ts";
 import {
   ReplayChunk,
   type Phase,
@@ -120,6 +120,8 @@ export default {
 
       if (mismatch) return mismatch;
       const query = readQuery(url);
+
+      markRouterSubmit(env, query, url.pathname);
 
       if (query.target !== "yielded") throw new Error("Target mismatch");
 
