@@ -150,6 +150,7 @@ type Internals = {
 // Tardie's provision/lookup paths call getByName internally as well as at ingress.
 function withLocation<Bindings extends Env & { ACTORS: object; THREADS: object }>(
   env: Bindings,
+  onDirectoryUse?: () => void,
 ): Bindings {
   return new Proxy(env, {
     get(target, key) {
@@ -161,7 +162,25 @@ function withLocation<Bindings extends Env & { ACTORS: object; THREADS: object }
           const member = Reflect.get(namespace, method, namespace);
 
           if (method === "getByName")
-            return (name: string) => member.call(namespace, name, { locationHint: "wnam" });
+            return (name: string) => {
+              const stub = member.call(namespace, name, { locationHint: "wnam" });
+
+              if (key !== "ACTORS" || !onDirectoryUse) return stub;
+
+              return new Proxy(stub, {
+                get(target, method) {
+                  const value = Reflect.get(target, method, target);
+
+                  if (typeof value !== "function") return value;
+
+                  return (...args: unknown[]) => {
+                    if (method === "lookup" || method === "allocate") onDirectoryUse();
+
+                    return Reflect.apply(value, target, args);
+                  };
+                },
+              });
+            };
 
           return typeof member === "function" ? member.bind(namespace) : member;
         },
@@ -194,10 +213,11 @@ export class ActorDO extends actorWorker.ActorObject {
   identity() {
     return this.meter.identity();
   }
-  end() {
-    if (!this.nativeEntry) throw new Error("No Actor lookup evidence for this incarnation");
+  end(requireEvidence: boolean) {
+    if (requireEvidence && !this.nativeEntry) throw new Error("No Actor lookup evidence for this incarnation");
 
-    return this.nativeEntry;
+    // Without a native lookup this is only a residency observation, not an executor.
+    return this.nativeEntry ?? this.meter.identity();
   }
   async abortCold(): Promise<void> {
     await this.ctx.storage.sync();
@@ -217,11 +237,15 @@ export class ThreadDO extends actorWorker.ThreadObject {
   private reference?: Reference;
   private readonly host: Host;
   private importedHere = false;
+  private readonly directoryUsage: { used: boolean };
   constructor(
     ctx: DurableObjectState,
     env: ConstructorParameters<typeof actorWorker.ThreadObject>[1],
   ) {
-    super(ctx, withLocation(env));
+    const directoryUsage = { used: false };
+
+    super(ctx, withLocation(env, () => { directoryUsage.used = true; }));
+    this.directoryUsage = directoryUsage;
     this.host = new Host(ctx, env, "tardie");
   }
   override async alarm(
@@ -257,6 +281,7 @@ export class ThreadDO extends actorWorker.ThreadObject {
       return super.fetch(request);
 
     return this.host.fetch(request, {
+      directoryUsed: this.directoryUsage.used,
       import: async (fixture, query) => {
         if (!fixture.thread) throw new Error("Missing Tardie Thread fixture");
         await Host.importTardie(this.ctx.storage, fixture.thread, query.object);

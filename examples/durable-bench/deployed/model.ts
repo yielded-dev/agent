@@ -48,6 +48,7 @@ export const Sample = Schema.Struct({
   residentVerified: Schema.optionalKey(Schema.Boolean),
   buildVerified: Schema.optionalKey(Schema.Boolean),
   objectBuild: Schema.optionalKey(Schema.String),
+  directoryUsed: Schema.optionalKey(Schema.Boolean),
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
   error: Schema.optionalKey(Schema.String),
 });

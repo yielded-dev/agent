@@ -277,13 +277,18 @@ export default {
           directoryTables,
         });
 
-      if (url.pathname === "/metrics" && actor && response.ok)
+      if (url.pathname === "/metrics" && actor && response.ok) {
+        const metrics = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
+          await response.json(),
+        );
+
+        const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
+
         return Response.json({
-          ...Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
-            await response.json(),
-          ),
-          directory: await actor.end(),
+          ...metrics,
+          directory: await actor.end(directoryUsed),
         });
+      }
 
       return response;
     } catch (cause) {

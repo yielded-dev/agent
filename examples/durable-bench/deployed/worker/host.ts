@@ -42,6 +42,7 @@ export class Host {
     handlers: {
       import: (fixture: BulkFixture, query: Query) => Promise<void>;
       run?: (input: { id: string; text: string }) => Promise<void>;
+      directoryUsed?: boolean;
     },
   ): Promise<Response> {
     const url = new URL(request.url);
@@ -93,6 +94,9 @@ export class Host {
           ok: true,
           query: this.meter.query,
           identity: this.meter.entry,
+          ...(handlers.directoryUsed === undefined
+            ? {}
+            : { directoryUsed: handlers.directoryUsed }),
           calls: this.meter.calls,
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,

@@ -167,6 +167,7 @@ export const Metrics = Schema.Struct({
   query: Query,
   identity: Identity,
   directory: Schema.optionalKey(Identity),
+  directoryUsed: Schema.optionalKey(Schema.Boolean),
   calls: Schema.Array(ProviderCall),
   tables: Counts,
   bytes: Schema.Natural,

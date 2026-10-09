@@ -532,6 +532,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           residentVerified,
                           buildVerified: true,
                           objectBuild: metrics.identity.build,
+                          ...(metrics.directoryUsed === undefined
+                            ? {}
+                            : { directoryUsed: metrics.directoryUsed }),
                           fingerprints: metrics.calls.map((call) => call.fingerprint),
                         }
                       : row,

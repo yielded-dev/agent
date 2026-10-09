@@ -86,6 +86,8 @@ tardie's Actor directory and Thread are both restarted. It verifies a new instan
 earlier alarm entry, and a first request. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
 same live instance throughout the Object's sequential repeat batch.
+Tardie's native reference can skip the Actor directory. `directoryUsed` records whether
+the Thread has called it since reset; an unused directory's identity observes residency only.
 
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
 Before each pass, cold setup waits for the Object's own `BUILD` (including tardie's Actor
