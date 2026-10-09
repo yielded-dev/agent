@@ -16,6 +16,7 @@ import { Cloudflare, request } from "./cloudflare.ts";
 import { cpu } from "./cpu.ts";
 import { deployments } from "./deploy.ts";
 import { prepareFixtures } from "./fixtures.ts";
+import { run as runIsolated } from "./isolate/run.ts";
 import { MeasureResponse, type Options, type Result, type Sample } from "./model.ts";
 import {
   BenchError,
@@ -64,11 +65,12 @@ const shuffle = <A>(values: readonly A[]): A[] =>
     .map(({ value }) => value);
 
 export const run = Effect.fnUntraced(function* (options: Options) {
+  if (options.isolate) return yield* runIsolated(options);
   const started = yield* Clock.currentTimeMillis;
   const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
+  const runName = `cold-storage-fresh-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
 
@@ -113,7 +115,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   let targetStarted = false;
   let telemetryFrom = started;
 
-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
+  yield* Console.error("Preparing fixtures in the verified benchmark account…");
   yield* update((value) => value);
 
   const finish = (exit: Exit.Exit<unknown, unknown>) =>
@@ -498,7 +500,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 }, Effect.scoped);
 
 export const teardown = Effect.gen(function* () {
-  const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
   const cleanup = yield* deploy.teardown;
 
@@ -509,6 +510,6 @@ export const teardown = Effect.gen(function* () {
 
   yield* save(join(workspace, "results", "cleanup.json"), result);
   yield* Console.log(
-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
+    "Cleanup verified: no cold-storage-fresh Workers or Durable Object namespaces remain.",
   );
 });

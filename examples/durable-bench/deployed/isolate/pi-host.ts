@@ -1,41 +1,21 @@
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-
 import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
-import { storageProbe } from "../isolate/cold-storage.ts";
-import { attach, type Observation } from "./observe.ts";
-import {
-  BulkFixture,
-  errorText,
-  readQuery,
-  type Env,
-  type Query,
-  type Target,
-  type SqlDump,
-} from "./protocol.ts";
-import { addressTardie, importRows, verifyFixture } from "./storage.ts";
+import { attach, type Observation } from "../worker/observe.ts";
+import { storageProbe } from "./cold-storage.ts";
+import { parseFixture, parseIsolate, errorText, readQuery } from "./native-protocol.ts";
+import { INGRESS_HEADER } from "./observation.ts";
+import { verifyFixture } from "./pi-storage.ts";
+import type { BulkFixture, Env, Query } from "./protocol.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
+/** The existing deployed Host contract, with only pi's native fixture reader reachable. */
 export class Host {
-  static async importTardie(storage: DurableObjectStorage, dump: SqlDump, object: string) {
-    importRows(storage, await Effect.runPromise(addressTardie(dump, object)));
-    const actual = tables(storage.sql);
-
-    for (const table of dump.tables)
-      if (actual[table.name] !== table.rows.length)
-        throw new Error(`Tardie ${table.name} import count mismatch`);
-    if (Object.keys(actual).length !== dump.tables.length)
-      throw new Error("Tardie table inventory mismatch");
-
-    return actual;
-  }
   readonly meter: Observation;
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
-    readonly target: Target,
+    readonly target: "pi",
   ) {
     this.meter = attach(ctx, env);
   }
@@ -43,7 +23,7 @@ export class Host {
     request: Request,
     handlers: {
       import: (fixture: BulkFixture, query: Query) => Promise<void>;
-      run?: (input: { id: string; text: string }) => Promise<void>;
+      run: (input: { id: string; text: string }) => Promise<void>;
     },
   ): Promise<Response> {
     const url = new URL(request.url);
@@ -66,14 +46,14 @@ export class Host {
         return Response.json(result);
       }
       if (url.pathname === "/import") {
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
+        const fixture = parseFixture(await request.json());
 
         if (fixture.target !== query.target || fixture.history !== query.history)
           throw new Error("Fixture/query mismatch");
-        if (fixture.mode === "replay" && fixture.target !== "yielded")
+        if (fixture.mode === "replay")
           throw new Error("Only Yielded supports the fixture replay fallback");
         await handlers.import(fixture, query);
-        const verified = await Effect.runPromise(verifyFixture(this.ctx.storage, fixture));
+        const verified = await verifyFixture(this.ctx.storage, fixture);
 
         return Response.json({
           ok: true,
@@ -89,8 +69,9 @@ export class Host {
         });
       }
       if (url.pathname === "/run") {
-        if (!handlers.run) throw new Error("Yielded uses submit and await");
-        this.meter.begin(query);
+        const ingress = request.headers.get(INGRESS_HEADER);
+
+        this.meter.begin(query, ingress === null ? undefined : parseIsolate(JSON.parse(ingress)));
         this.meter.marker("run");
         await handlers.run(turn(query.sample, MEASURED_TOOLS));
 

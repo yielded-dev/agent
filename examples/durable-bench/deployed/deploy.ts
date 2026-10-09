@@ -19,8 +19,15 @@ import {
 } from "./platform.ts";
 
 const Stack = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
-  kind: Schema.Literals(["infrastructure", "target"]),
+  name: Schema.String.check(Schema.isPattern(/^cold-storage-fresh-[a-z0-9-]+$/)),
+  kind: Schema.Literals([
+    "infrastructure",
+    "target",
+    "yielded",
+    "pi",
+    "startup-yielded",
+    "startup-pi",
+  ]),
   bundle: Schema.String,
   build: Schema.String,
   cpu: Schema.Boolean,
@@ -32,7 +39,9 @@ const State = Schema.Struct({
   version: Schema.Literal(1),
   accountId: Schema.String,
   token: Schema.String,
-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
+  infrastructurePrefix: Schema.String.check(
+    Schema.isPattern(/^cold-storage-fresh-shared-[a-f0-9]{8}$/),
+  ),
   infrastructure: Schema.optionalKey(Stack),
   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
   targets: Schema.Record(Schema.String, Stack),
@@ -63,7 +72,7 @@ export const deployments = Effect.gen(function* () {
       version: 1,
       accountId: cloud.accountId,
       token: nonce() + nonce(),
-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
+      infrastructurePrefix: "cold-storage-fresh-shared-" + nonce().slice(0, 8),
       targets: {},
     };
   }
@@ -90,7 +99,11 @@ export const deployments = Effect.gen(function* () {
     const result = yield* execute(
       [
         "exec",
-        "alchemy",
+        "bun",
+        "--preload",
+        join(directory, "upload-observer.mjs"),
+        "--tsconfig-override=" + join(repository, "node_modules/alchemy/bin/tsconfig.json"),
+        join(repository, "node_modules/alchemy/bin/alchemy.js"),
         action,
         join(directory, "stack.ts"),
         "--stage",
@@ -114,6 +127,7 @@ export const deployments = Effect.gen(function* () {
         DURABLE_BENCH_CPU: String(stack.cpu),
         DURABLE_BENCH_PROVIDER: provider,
         DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
+        COLD_STORAGE_UPLOADS: join(privateDirectory, "uploads.jsonl"),
       },
     );
 
@@ -164,7 +178,7 @@ export const deployments = Effect.gen(function* () {
     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
 
     const infrastructure: Stack = {
-      name: "durable-bench-infrastructure",
+      name: "cold-storage-fresh-infrastructure",
       kind: "infrastructure",
       bundle: output,
       build: revision,
@@ -210,13 +224,16 @@ export const deployments = Effect.gen(function* () {
     bundle: string,
     revision: string,
     cpu: boolean,
+    kind: Exclude<Stack["kind"], "infrastructure"> = "target",
+    readiness = true,
   ) {
-    const stack: Stack = { name, kind: "target", bundle, build: revision, cpu };
+    const stack: Stack = { name, kind, bundle, build: revision, cpu };
 
     state = { ...state, targets: { ...state.targets, [name]: stack } };
     yield* save(stateFile, state);
     yield* Console.error("Deploying target Worker…");
     yield* alchemy(stack, "deploy");
+    if (!readiness) return url(name);
 
     const health = Effect.gen(function* () {
       yield* ready(url(name), revision);

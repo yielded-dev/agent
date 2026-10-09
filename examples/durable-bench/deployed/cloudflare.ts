@@ -65,7 +65,7 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
+  const resources = Effect.fnUntraced(function* (prefix = "cold-storage-fresh") {
     const workers = (yield* api("workers/scripts", Workers))
       .filter((w) => w.id.startsWith(prefix))
       .map((w) => w.id);
@@ -115,6 +115,7 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
   schema: S,
   body?: unknown,
   timeout: Duration.Input = "3 minutes",
+  expectedBuild?: string,
 ) =>
   Effect.gen(function* () {
     const response = yield* Effect.tryPromise({
@@ -122,11 +123,13 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
         fetch(url, {
           method: body === undefined ? "GET" : "POST",
           signal,
+          keepalive: false,
           cache: "no-store",
           headers: {
             authorization: `Bearer ${token}`,
             "content-type": "application/json",
             "cache-control": "no-store",
+            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),

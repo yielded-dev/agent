@@ -26,10 +26,11 @@ import {
   type SqliteExecutor,
   type SqliteValue,
 } from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
-import { Host } from "../../../deployed/worker/host.ts";
-import { type Observation } from "../../../deployed/worker/observe.ts";
+import { Host } from "../../../deployed/isolate/pi-host.ts";
+import { instrumentStorage } from "../../../deployed/isolate/cold-storage.ts";
+import type { Observation } from "../../../deployed/worker/observe.ts";
 import type { Env } from "../../../deployed/worker/protocol.ts";
-import { importRows } from "../../../deployed/worker/storage.ts";
+import { importRows } from "../../../deployed/isolate/pi-storage.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 
@@ -165,6 +166,7 @@ export class PiDO extends DurableObject<Env> {
   private root?: Conversation;
   private readonly host: Host;
   constructor(ctx: DurableObjectState, env: Env) {
+    ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "pi");
   }

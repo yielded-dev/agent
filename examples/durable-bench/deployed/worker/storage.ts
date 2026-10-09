@@ -5,8 +5,10 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { RecordEnvelope } from "@yielded/agent/records";
 import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
 import { ThreadAdmission, ThreadExport, ThreadExportRequest } from "@yielded/agent/thread-store";
-import { Effect, Schema, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";

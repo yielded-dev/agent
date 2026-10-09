@@ -18,9 +18,12 @@ export default {
     try {
       const input: unknown = await request.json();
 
-      const { targetUrl } = Schema.decodeUnknownSync(Schema.Struct({ targetUrl: Schema.String }))(
-        input,
-      );
+      const { targetUrl, expectedBuild } = Schema.decodeUnknownSync(
+        Schema.Struct({
+          targetUrl: Schema.String,
+          expectedBuild: Schema.optionalKey(Schema.NonEmptyString),
+        }),
+      )(input);
 
       const target = new URL(targetUrl);
 
@@ -28,13 +31,17 @@ export default {
         target.protocol !== "https:" ||
         target.username ||
         target.password ||
-        !target.hostname.startsWith("durable-bench-") ||
+        !target.hostname.startsWith("cold-storage-fresh-") ||
         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
       )
         return new Response("invalid target", { status: 400 });
       if (new URL(request.url).pathname === "/ready")
         return fetch(new URL("/health?probe=" + Date.now(), target), {
-          headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
+          headers: {
+            authorization: `Bearer ${env.BENCH_TOKEN}`,
+            "cache-control": "no-store",
+            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
+          },
         });
       const { query } = Schema.decodeUnknownSync(MeasureRequest)(input);
 
@@ -48,15 +55,21 @@ export default {
           headers: {
             authorization: `Bearer ${env.BENCH_TOKEN}`,
             "content-type": "application/json",
+            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
           },
           body: JSON.stringify(body ?? {}),
           signal: AbortSignal.timeout(180_000),
         });
 
-        if (!response.ok)
+        if (!response.ok) {
+          const detail = (await response.text())
+            .replaceAll(env.BENCH_TOKEN, "[redacted]")
+            .slice(0, 1200);
+
           throw new Error(
-            `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown.`,
+            `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown. ${detail}`,
           );
+        }
 
         return response.json();
       };

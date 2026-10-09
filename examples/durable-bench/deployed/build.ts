@@ -23,6 +23,9 @@ const entries = {
   driver: "driver.ts",
   provider: "provider.ts",
   target: "../third-party/src/deployed/index.ts",
+  production: "../src/yielded.ts",
+  yielded: "isolate/yielded.ts",
+  pi: "../third-party/src/deployed/isolate-pi.ts",
 };
 
 /** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
@@ -30,6 +33,7 @@ export const build = Effect.fnUntraced(function* (
   output: string,
   entry: keyof typeof entries,
   ref?: string,
+  extraPlugins: readonly Plugin[] = [],
 ) {
   const fs = yield* FileSystem.FileSystem;
   let revision = yield* git(["rev-parse", "HEAD"]);
@@ -95,7 +99,7 @@ export const build = Effect.fnUntraced(function* (
 
   const outfile = join(output, `${entry}.mjs`);
 
-  yield* Effect.tryPromise({
+  const compiled = yield* Effect.tryPromise({
     try: () =>
       bundle({
         entryPoints: [join(directory, entries[entry])],
@@ -108,13 +112,16 @@ export const build = Effect.fnUntraced(function* (
         mainFields: ["module", "main"],
         external: ["cloudflare:*", "node:*", ...builtinModules],
         logLevel: "silent",
-        plugins: [resolver],
+        plugins: [resolver, ...extraPlugins],
+        metafile: true,
       }),
     catch: (cause) =>
       new BenchError({
         message: `Cannot build ${entry}${ref ? " at the requested ref" : ""}: ${redact(cause instanceof Error ? cause.message : "Unknown build error").slice(0, 2000)}`,
       }),
   });
+
+  yield* fs.writeFileString(join(output, `${entry}-meta.json`), JSON.stringify(compiled.metafile));
 
   return { file: outfile, revision, sha256: hash(yield* fs.readFile(outfile)) };
 }, Effect.scoped);

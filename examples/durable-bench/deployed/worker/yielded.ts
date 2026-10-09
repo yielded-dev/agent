@@ -4,15 +4,20 @@ import * as Agent from "@yielded/agent/agent";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { text } from "@yielded/agent/output";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import { Effect, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
-import { Model, Tool, Toolkit } from "effect/ai";
-import { FetchHttpClient } from "effect/http";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { payload } from "../../src/plan.ts";
+import { instrumentStorage, storageProbe } from "../isolate/cold-storage.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
-import { type Env, type Query } from "./protocol.ts";
+import { type Env, type Query, type IsolateState } from "./protocol.ts";
 import { importCanonical } from "./storage.ts";
 
 const tools = Toolkit.make(
@@ -70,6 +75,7 @@ export class YieldedDO extends ThreadObject.make(application, {
 }) {
   private readonly host: Host;
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
+    ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "yielded");
   }
@@ -87,11 +93,19 @@ export class YieldedDO extends ThreadObject.make(application, {
       await this.ctx.storage.put(replayStarted, true);
     });
   }
-  async benchSubmit(encoded: unknown, query: Query): Promise<unknown> {
-    this.host.meter.begin(query);
+  async benchSubmit(
+    encoded: unknown,
+    query: Query,
+    workerIsolate?: IsolateState,
+  ): Promise<unknown> {
+    this.host.meter.begin(query, workerIsolate);
     this.host.meter.marker("submit");
 
-    return super.submitEncoded(encoded);
+    const receipt = await super.submitEncoded(encoded);
+
+    storageProbe(this.ctx.storage)?.point("admitted");
+
+    return receipt;
   }
   override async awaitSettlementEncoded(
     encoded: unknown,

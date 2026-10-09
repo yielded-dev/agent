@@ -1,16 +1,8 @@
-import { Schema } from "effect";
-
 import { fingerprint } from "../../src/plan.ts";
-import {
-  chatTranscript,
-  decodeChat,
-  errorText,
-  ProviderReceipt,
-  type Env,
-  type Identity,
-  type ProviderCall,
-  type Query,
-} from "./protocol.ts";
+import { storageProbe } from "../isolate/cold-storage.ts";
+import { chatTranscript, errorText, parseReceipt } from "../isolate/native-protocol.ts";
+import { observeConstructor, isolateObservation } from "../isolate/observation.ts";
+import type { Env, Identity, ProviderCall, IsolateState, Query } from "../isolate/protocol.ts";
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
 
@@ -23,7 +15,7 @@ export const observation = (storage: DurableObjectStorage): Observation => {
 };
 
 export const attach = (state: DurableObjectState, env: Env): Observation => {
-  const meter = new Observation(env);
+  const meter = new Observation(env, state.storage);
 
   meters.set(state.storage, meter);
 
@@ -38,17 +30,27 @@ export class Observation {
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
-  constructor(readonly env: Env) {}
+  constructor(
+    readonly env: Env,
+    readonly storage: DurableObjectStorage,
+  ) {
+    observeConstructor(env);
+  }
   identity(): Identity {
     return {
       incarnation: this.incarnation,
       constructedMs: this.constructedMs,
       firstEntry: this.entries === 0,
       priorAlarms: this.alarms,
+      isolate: isolateObservation(this.env),
     };
   }
-  begin(query: Query) {
-    this.entry = this.identity();
+  begin(query: Query, workerIsolate?: IsolateState) {
+    storageProbe(this.storage)?.begin();
+    this.entry = {
+      ...this.identity(),
+      ...(workerIsolate === undefined ? {} : { workerIsolate }),
+    };
     this.entries++;
     this.query = query;
     this.calls = [];
@@ -56,12 +58,12 @@ export class Observation {
   alarm() {
     this.alarms++;
   }
-  marker(kind: string) {
+  marker(kind: string, query = this.query) {
     if (this.env.CPU !== true && this.env.CPU !== "true") return;
     console.log({
-      target: this.query?.target,
-      object: this.query?.object,
-      sample: this.query?.sample,
+      target: query?.target,
+      object: query?.object,
+      sample: query?.sample,
       kind,
     });
   }
@@ -69,6 +71,7 @@ export class Observation {
     const query = this.query;
 
     if (!query) throw new Error("Provider request without a benchmark sample");
+    if (this.calls.length === 0) storageProbe(this.storage)?.point("first-provider");
     const original = new Request(input, init);
     const url = new URL(original.url);
     const base = new URL(this.env.PROVIDER_URL);
@@ -78,7 +81,7 @@ export class Observation {
       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
     )
       throw new Error("Unexpected provider destination");
-    const transcript = chatTranscript(decodeChat(await original.clone().json()));
+    const transcript = chatTranscript(await original.clone().json());
 
     const call: (typeof this.calls)[number] = {
       call: this.calls.length,
@@ -133,9 +136,7 @@ export class Observation {
                 if (line === "data: [DONE]") done = true;
                 if (line.startsWith(": rebench-receipt ")) {
                   if (call.receipt) throw new Error("Duplicate provider receipt");
-                  call.receipt = Schema.decodeUnknownSync(ProviderReceipt)(
-                    JSON.parse(line.slice(": rebench-receipt ".length)),
-                  );
+                  call.receipt = parseReceipt(JSON.parse(line.slice(": rebench-receipt ".length)));
                   if (
                     call.receipt.call !== call.call ||
                     call.receipt.requestId !== requestId ||
