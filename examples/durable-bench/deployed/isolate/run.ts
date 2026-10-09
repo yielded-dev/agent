@@ -434,7 +434,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       }));
     }
 
-    const cohorts: Query[] = options.sizes.flatMap((size) =>
+    let cohorts: Query[] = options.sizes.flatMap((size) =>
       options.ttft.flatMap((ttftMs) =>
         Array.from({ length: options.objects }, (_, object) =>
           targets
@@ -695,17 +695,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     yield* Console.error(
       `Seeding and checking complete fixture counts on ${cohorts.length} Objects…`,
     );
-    let seedFailed = false;
+    const seededKeys = new Set<string>();
     let seededCount = 0;
 
     yield* Effect.forEach(
       shuffle(cohorts),
       (cohort) =>
         Effect.gen(function* () {
-          if (seedFailed)
-            return yield* failure(
-              `${key(cohort)} seed: not sent after an earlier fixture setup failure.`,
-            );
           const current = live.get(cohort.target);
 
           const fixture = fixtures.find(
@@ -727,6 +723,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             if (empty.identity.isolate?.build !== current.expectedBuild)
               return yield* new BenchError({ message: "Empty Object build mismatch" });
             seededCount++;
+            seededKeys.add(key(cohort));
 
             return;
           }
@@ -772,21 +769,24 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 "Seed build, replay mode, transcript fingerprint, or complete table counts differ from the fixture.",
             });
           seededCount++;
+          seededKeys.add(key(cohort));
           if (seededCount % 10 === 0 || seededCount === cohorts.length)
             yield* Console.error(
               `Verified fixture setup on ${seededCount}/${cohorts.length} Objects.`,
             );
         }).pipe(
           Effect.catchCause((cause) => {
-            seedFailed = true;
-
             return failure(`${key(cohort)} seed: ${message(cause)}`);
           }),
         ),
       { concurrency: options.concurrency, discard: true },
     );
-    if (seedFailed)
-      return yield* new BenchError({ message: "Seeding failed; no measured epoch was uploaded." });
+    // A failed fixture is never resumed or measured. Independent verified Objects remain usable.
+    cohorts = cohorts.filter((cohort) => seededKeys.has(key(cohort)));
+    if (cohorts.length === 0)
+      return yield* new BenchError({
+        message: "No verified seed Objects; no timed input was sent.",
+      });
 
     const paddingByObject = new Map<string, PaddingResult>();
 
