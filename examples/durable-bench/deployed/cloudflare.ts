@@ -70,9 +70,17 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (resourcePrefix = prefix) {
+  const resources = Effect.fnUntraced(function* (workerName?: string) {
+    // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
+    const generatedName = new RegExp(
+      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8})$`,
+    );
+
+    const matches = (name: string) =>
+      workerName === undefined ? generatedName.test(name) : name === workerName;
+
     const workers = (yield* api("workers/scripts", Workers))
-      .filter((w) => w.id.startsWith(resourcePrefix))
+      .filter((w) => matches(w.id))
       .map((w) => w.id);
 
     const namespaces: string[] = [];
@@ -85,7 +93,8 @@ const connect = Effect.gen(function* () {
 
       namespaces.push(
         ...rows
-          .filter((n) => n.name.startsWith(resourcePrefix) || n.script?.startsWith(resourcePrefix))
+          // Namespace names are <worker>_<class>, including when script is absent.
+          .filter((n) => matches(n.name.split("_", 1)[0] ?? "") || matches(n.script ?? ""))
           .map((n) => `${n.script ?? ""}/${n.name}`),
       );
       if (rows.length < 100)
