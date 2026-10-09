@@ -158,5 +158,9 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
       ),
     );
 
-    return { value, colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null };
+    return {
+      value,
+      colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null,
+      placement: response.headers.get("cf-placement"),
+    };
   });

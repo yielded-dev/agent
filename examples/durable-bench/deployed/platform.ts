@@ -78,7 +78,7 @@ export const read = <S extends Schema.Top & { readonly DecodingServices: never }
     const fs = yield* FileSystem.FileSystem;
     const raw = yield* fs.readFileString(file);
 
-    return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(raw).pipe(
+    return yield* Schema.decodeEffect(Schema.fromJsonString(schema))(raw).pipe(
       Effect.mapError(
         () =>
           new BenchError({
