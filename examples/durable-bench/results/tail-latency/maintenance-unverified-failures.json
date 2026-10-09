@@ -1,0 +1,133 @@
+{
+  "run": "tail-latency-mv0nd0fk-d3d97d79",
+  "interpretation": "Unverified build labels. A baseline-labeled submit failed with Network connection lost before the requested graceful interrupt. Nine concurrent inputs were interrupted with unknown outcomes. No input was replayed. Automatic target cleanup verified.",
+  "messages": [
+    {
+      "message": "Network connection lost.",
+      "n": 3,
+      "first": 1791532215400,
+      "last": 1791532215400
+    },
+    {
+      "message": "durable-bench explicit cold",
+      "n": 328,
+      "first": 1791531601859,
+      "last": 1791532213200
+    }
+  ],
+  "exceptionInvocations": [
+    {
+      "timestamp": 1791532215400,
+      "cpuMs": 16,
+      "wallMs": 15145,
+      "outcome": "exception"
+    }
+  ],
+  "failed": [
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 12,
+      "sample": "e1-t4",
+      "error": "Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /submit returned HTTP 500; turn outcome may be unknown.\"}"
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 5,
+      "sample": "e1-t0",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 11,
+      "sample": "e1-t5",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 9,
+      "sample": "e1-t1",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 15,
+      "sample": "e1-t0",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 10,
+      "sample": "e1-t0",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 13,
+      "sample": "e1-t8",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 2,
+      "sample": "e1-t4",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 5,
+      "sample": "e1-t5",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "baseline",
+      "epoch": 1,
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 15,
+      "sample": "e1-t6",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    }
+  ],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  }
+}

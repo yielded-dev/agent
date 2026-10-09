@@ -1,0 +1,887 @@
+diff --git a/examples/durable-bench/deployed/cloudflare.ts b/examples/durable-bench/deployed/cloudflare.ts
+index ba55e9e6..4516a91a 100644
+--- a/examples/durable-bench/deployed/cloudflare.ts
++++ b/examples/durable-bench/deployed/cloudflare.ts
+@@ -65,7 +65,7 @@ const connect = Effect.gen(function* () {
+     Schema.Struct({ subdomain: Schema.NonEmptyString }),
+   );
+ 
+-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
++  const resources = Effect.fnUntraced(function* (prefix = "tail-latency") {
+     const workers = (yield* api("workers/scripts", Workers))
+       .filter((w) => w.id.startsWith(prefix))
+       .map((w) => w.id);
+@@ -103,7 +103,7 @@ const connect = Effect.gen(function* () {
+ });
+ 
+ export class Cloudflare extends Context.Service<Cloudflare, Effect.Success<typeof connect>>()(
+-  "durable-bench/Cloudflare",
++  "tail-latency/Cloudflare",
+ ) {
+   static readonly layer = Layer.effect(Cloudflare, connect);
+ }
+diff --git a/examples/durable-bench/deployed/cpu.ts b/examples/durable-bench/deployed/cpu.ts
+index 5120eaeb..ca7aef5e 100644
+--- a/examples/durable-bench/deployed/cpu.ts
++++ b/examples/durable-bench/deployed/cpu.ts
+@@ -7,6 +7,7 @@ import { Target } from "./worker/protocol.ts";
+ 
+ // Decode only the fields used for attribution; never persist raw telemetry or provider IDs.
+ const Event = Schema.Struct({
++  timestamp: Schema.optionalKey(Schema.Number),
+   $metadata: Schema.Struct({
+     id: Schema.String,
+     requestId: Schema.optionalKey(Schema.String),
+@@ -17,6 +18,11 @@ const Event = Schema.Struct({
+     eventType: Schema.optionalKey(Schema.String),
+     cpuTimeMs: Schema.optionalKey(Schema.Number),
+     wallTimeMs: Schema.optionalKey(Schema.Number),
++    durableObjectId: Schema.optionalKey(Schema.String),
++    scriptVersion: Schema.optionalKey(Schema.Struct({ id: Schema.String })),
++    event: Schema.optionalKey(
++      Schema.Struct({ request: Schema.optionalKey(Schema.Struct({ url: Schema.String })) }),
++    ),
+   }),
+   source: Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]),
+ });
+@@ -26,6 +32,8 @@ const Marker = Schema.Struct({
+   target: Schema.optionalKey(Target),
+   object: Schema.optionalKey(Schema.String),
+   sample: Schema.optionalKey(Schema.String),
++  actualBuild: Schema.optionalKey(Schema.String),
++  version: Schema.optionalKey(Schema.String),
+ });
+ 
+ const Page = Schema.Struct({
+@@ -87,7 +95,22 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to:
+     if (event.$metadata.type !== "cf-worker-event") continue;
+     const id = event.$metadata.requestId;
+     const matching = id === undefined ? [] : (markers.get(id) ?? []);
+-    const marker = matching.length === 1 ? matching[0] : undefined;
++    let marker = matching.length === 1 ? matching[0] : undefined;
++
++    if (marker === undefined && matching.length === 0 && event.$workers.event?.request?.url) {
++      const url = new URL(event.$workers.event.request.url);
++      const target = Schema.decodeUnknownOption(Target)(url.searchParams.get("target"));
++      const object = url.searchParams.get("object");
++      const sample = url.searchParams.get("sample");
++
++      if (Option.isSome(target) && object && sample)
++        marker = {
++          kind: (event.$workers.durableObjectId ? "object" : "worker") + url.pathname,
++          target: target.value,
++          object,
++          sample,
++        };
++    }
+ 
+     invocations.push({
+       kind:
+@@ -96,6 +119,12 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to:
+       outcome: event.$workers.outcome ?? "unknown",
+       cpuMs: event.$workers.cpuTimeMs ?? null,
+       wallMs: event.$workers.wallTimeMs ?? null,
++      ...(event.timestamp === undefined ? {} : { timestamp: event.timestamp }),
++      scope: event.$workers.durableObjectId ? "object" : "worker",
++      ...(marker?.actualBuild === undefined ? {} : { actualBuild: marker.actualBuild }),
++      ...(event.$workers.scriptVersion === undefined
++        ? {}
++        : { version: event.$workers.scriptVersion.id }),
+       ...(marker?.target ? { target: marker.target } : {}),
+       ...(marker?.object ? { object: marker.object } : {}),
+       ...(marker?.sample ? { sample: marker.sample } : {}),
+diff --git a/examples/durable-bench/deployed/deploy.ts b/examples/durable-bench/deployed/deploy.ts
+index e24bc0e8..cc84ff95 100644
+--- a/examples/durable-bench/deployed/deploy.ts
++++ b/examples/durable-bench/deployed/deploy.ts
+@@ -19,7 +19,7 @@ import {
+ } from "./platform.ts";
+ 
+ const Stack = Schema.Struct({
+-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
++  name: Schema.String.check(Schema.isPattern(/^tail-latency-[a-z0-9-]+$/)),
+   kind: Schema.Literals(["infrastructure", "target"]),
+   bundle: Schema.String,
+   build: Schema.String,
+@@ -32,7 +32,7 @@ const State = Schema.Struct({
+   version: Schema.Literal(1),
+   accountId: Schema.String,
+   token: Schema.String,
+-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
++  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^tail-latency-shared-[a-f0-9]{8}$/)),
+   infrastructure: Schema.optionalKey(Stack),
+   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
+   targets: Schema.Record(Schema.String, Stack),
+@@ -57,13 +57,13 @@ export const deployments = Effect.gen(function* () {
+     if (!existing.verified)
+       return yield* new BenchError({
+         message:
+-          "durable-bench resources exist without local ownership state. Restore the private state before deploying or tearing down.",
++          "tail-latency resources exist without local ownership state. Restore the private state before deploying or tearing down.",
+       });
+     state = {
+       version: 1,
+       accountId: cloud.accountId,
+       token: nonce() + nonce(),
+-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
++      infrastructurePrefix: "tail-latency-shared-" + nonce().slice(0, 8),
+       targets: {},
+     };
+   }
+@@ -164,7 +164,7 @@ export const deployments = Effect.gen(function* () {
+     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
+ 
+     const infrastructure: Stack = {
+-      name: "durable-bench-infrastructure",
++      name: "tail-latency-infrastructure",
+       kind: "infrastructure",
+       bundle: output,
+       build: revision,
+@@ -266,7 +266,7 @@ export const deployments = Effect.gen(function* () {
+ 
+     if (!remaining.verified)
+       return yield* new BenchError({
+-        message: "durable-bench resources remain in this account; cleanup is not verified.",
++        message: "tail-latency resources remain in this account; cleanup is not verified.",
+       });
+     yield* fs.remove(privateDirectory, { recursive: true });
+ 
+diff --git a/examples/durable-bench/deployed/driver.ts b/examples/durable-bench/deployed/driver.ts
+index 3a4aa6e5..c0df87b0 100644
+--- a/examples/durable-bench/deployed/driver.ts
++++ b/examples/durable-bench/deployed/driver.ts
+@@ -28,7 +28,7 @@ export default {
+         target.protocol !== "https:" ||
+         target.username ||
+         target.password ||
+-        !target.hostname.startsWith("durable-bench-") ||
++        !target.hostname.startsWith("tail-latency-") ||
+         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
+       )
+         return new Response("invalid target", { status: 400 });
+diff --git a/examples/durable-bench/deployed/model.ts b/examples/durable-bench/deployed/model.ts
+index a8e4debf..91ff5cff 100644
+--- a/examples/durable-bench/deployed/model.ts
++++ b/examples/durable-bench/deployed/model.ts
+@@ -1,6 +1,6 @@
+ import { Schema } from "effect";
+ 
+-import { Query, Target } from "./worker/protocol.ts";
++import { Query, Target, Metrics } from "./worker/protocol.ts";
+ 
+ export interface Options {
+   readonly targets: readonly (typeof Target.Type)[];
+@@ -25,6 +25,10 @@ export const Invocation = Schema.Struct({
+   target: Schema.optionalKey(Target),
+   object: Schema.optionalKey(Schema.String),
+   sample: Schema.optionalKey(Schema.String),
++  timestamp: Schema.optionalKey(Schema.Number),
++  scope: Schema.optionalKey(Schema.String),
++  actualBuild: Schema.optionalKey(Schema.String),
++  version: Schema.optionalKey(Schema.String),
+ });
+ 
+ export type Invocation = typeof Invocation.Type;
+@@ -46,8 +50,11 @@ export const Sample = Schema.Struct({
+   fingerprintVerified: Schema.optionalKey(Schema.Boolean),
+   coldVerified: Schema.optionalKey(Schema.Boolean),
+   residentVerified: Schema.optionalKey(Schema.Boolean),
++  buildVerified: Schema.optionalKey(Schema.Boolean),
+   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
+   error: Schema.optionalKey(Schema.String),
++  metrics: Schema.optionalKey(Metrics),
++  observedMs: Schema.optionalKey(Schema.Number),
+ });
+ 
+ export type Sample = typeof Sample.Type;
+@@ -83,6 +90,19 @@ export const Result = Schema.Struct({
+     }),
+   ),
+   samples: Schema.Array(Sample),
++  readiness: Schema.optionalKey(
++    Schema.Array(
++      Schema.Struct({
++        target: Target,
++        object: Schema.String,
++        epoch: Schema.Natural,
++        expectedBuild: Schema.String,
++        observedBuilds: Schema.Array(Schema.String),
++        resets: Schema.Natural,
++        waitMs: Schema.Number,
++      }),
++    ),
++  ),
+   failures: Schema.Array(Schema.String),
+   cpu: Schema.optionalKey(Schema.Array(Invocation)),
+   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
+diff --git a/examples/durable-bench/deployed/platform.ts b/examples/durable-bench/deployed/platform.ts
+index c456592a..00080700 100644
+--- a/examples/durable-bench/deployed/platform.ts
++++ b/examples/durable-bench/deployed/platform.ts
+@@ -1,5 +1,4 @@
+ import { createHash, randomBytes } from "node:crypto";
+-import { homedir } from "node:os";
+ import { dirname, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+@@ -13,7 +12,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
+ export const directory = dirname(fileURLToPath(import.meta.url));
+ export const workspace = resolve(directory, "..");
+ export const repository = resolve(workspace, "../..");
+-export const privateDirectory = resolve(homedir(), ".local/state/durable-bench");
++export const privateDirectory = "/private/tmp/tail-latency-L3OG0RgO/state";
+ 
+ export const hash = (value: string | Uint8Array) =>
+   createHash("sha256").update(value).digest("hex");
+diff --git a/examples/durable-bench/deployed/run.ts b/examples/durable-bench/deployed/run.ts
+index 09e7a96c..1f37359b 100644
+--- a/examples/durable-bench/deployed/run.ts
++++ b/examples/durable-bench/deployed/run.ts
+@@ -68,7 +68,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+   const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const fs = yield* FileSystem.FileSystem;
+-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
++  const runName = `tail-latency-${started.toString(36)}-${nonce().slice(0, 8)}`;
+   const output = join(workspace, "results", runName);
+   const lock = yield* Semaphore.make(1);
+ 
+@@ -89,6 +89,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+     builds: [],
+     fixtures: [],
+     samples: [],
++    readiness: [],
+     failures: [],
+     kept: options.keep,
+     complete: false,
+@@ -113,7 +114,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+   let targetStarted = false;
+   let telemetryFrom = started;
+ 
+-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
++  yield* Console.error("Preparing fixtures with the configured Cloudflare account…");
+   yield* update((value) => value);
+ 
+   const finish = (exit: Exit.Exit<unknown, unknown>) =>
+@@ -254,7 +255,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+     const cohorts = options.sizes.flatMap((size) =>
+       options.ttft.flatMap((ttftMs) =>
+         Array.from({ length: options.objects }, (_, object) =>
+-          options.targets.map((target): Query => ({
++          options.targets.map((target): Omit<Query, "expectedBuild"> => ({
+             target,
+             object: `${runName}-h${size}-d${ttftMs}-o${object}`,
+             history: size,
+@@ -272,23 +273,68 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+       if (!compiled) return yield* new BenchError({ message: "Missing target build." });
+       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
+       targetStarted = true;
++      const expectedBuild = compiled.sha256 + `-e${epoch}`;
+ 
+-      const endpoint = yield* deploy.target(
+-        runName,
+-        compiled.file,
+-        compiled.sha256 + `-e${epoch}`,
+-        options.cpu,
+-      );
++      const endpoint = yield* deploy.target(runName, compiled.file, expectedBuild, options.cpu);
+ 
+-      const url = (path: string, query: Query) => {
++      const url = (path: string, query: Omit<Query, "expectedBuild">) => {
+         const address = new URL(path, endpoint);
+ 
+         for (const [key, value] of Object.entries(query))
+           address.searchParams.set(key, String(value));
++        address.searchParams.set("expectedBuild", expectedBuild);
+ 
+         return address;
+       };
+ 
++      // Worker and Object versions propagate independently. Only readiness may retry;
++      // no benchmark input is sent until the Object's own build has been observed.
++      const resetForBuild = (cohort: Omit<Query, "expectedBuild">) =>
++        Effect.gen(function* () {
++          const before = yield* Clock.currentTimeMillis;
++          const observedBuilds = new Set<string>();
++
++          for (let resets = 1; resets <= 90; resets++) {
++            const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
++              .value;
++
++            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
++              return yield* new BenchError({ message: "Cold abort was not acknowledged." });
++            observedBuilds.add(reset.before.build);
++            if (
++              reset.before.build === expectedBuild &&
++              (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
++            ) {
++              const waitMs = (yield* Clock.currentTimeMillis) - before;
++
++              yield* update((value) => ({
++                ...value,
++                readiness: [
++                  ...(value.readiness ?? []),
++                  {
++                    target: cohort.target,
++                    object: cohort.object,
++                    epoch,
++                    expectedBuild,
++                    observedBuilds: [...observedBuilds],
++                    resets,
++                    waitMs,
++                  },
++                ],
++              }));
++
++              // /cold snapshots identity before aborting. No Object call follows this
++              // final reset until the timed submit/run, so cold verification stays real.
++              return reset;
++            }
++            yield* Effect.sleep("2 seconds");
++          }
++
++          return yield* new BenchError({
++            message: "Object build did not propagate before measurement; no input was sent.",
++          });
++        });
++
+       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
+       if (epoch === 0) {
+         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
+@@ -311,6 +357,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+               )).value;
+ 
+               if (
++                seeded.identity.build !== expectedBuild ||
+                 seeded.fingerprint !== fixture.fingerprint ||
+                 !equalCounts(seeded.tables, fixture.tables) ||
+                 (fixture.actor &&
+@@ -346,16 +393,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+         (cohort) =>
+           Effect.gen(function* () {
+             // Discard constructor caches after import, and restart the same stored Object after every build change.
+-            const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
+-              .value;
+-
+-            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
+-              return yield* new BenchError({ message: "Cold abort was not acknowledged." });
++            const reset = yield* resetForBuild(cohort);
+             let incarnation = "";
+             let directoryIncarnation: string | undefined;
+ 
+             for (let index = 0; index < turnsPerEpoch; index++) {
+-              const query = { ...cohort, sample: `e${epoch}-t${index}` };
++              const query = { ...cohort, sample: `e${epoch}-t${index}`, expectedBuild };
+ 
+               const state =
+                 options.cold && index === 0
+@@ -396,6 +439,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ 
+                 const expected = references.get(query.history)?.get(query.sample);
+ 
++                if (
++                  metrics.identity.build !== expectedBuild ||
++                  (metrics.directory !== undefined && metrics.directory.build !== expectedBuild)
++                )
++                  return yield* new BenchError({
++                    message:
++                      "Object executed the wrong build; sample is invalid and input will not be replayed.",
++                  });
++
+                 if (
+                   !expected ||
+                   metrics.calls.length !== 9 ||
+@@ -404,6 +456,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                       call.status !== 200 ||
+                       call.error !== undefined ||
+                       call.endMs === undefined ||
++                      call.receipt?.expectedBuild !== expectedBuild ||
+                       call.fingerprint !== expected[i] ||
+                       call.receipt?.fingerprint !== expected[i],
+                   )
+@@ -451,6 +504,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                           ...sample,
+                           status: "ok",
+                           driverMs: measured.value.driverMs,
++                          observedMs: measured.value.observedMs,
++                          metrics,
+                           ...(measured.value.admissionMs === undefined
+                             ? {}
+                             : { admissionMs: measured.value.admissionMs }),
+@@ -464,6 +519,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                           fingerprintVerified: true,
+                           coldVerified,
+                           residentVerified,
++                          buildVerified: true,
+                           fingerprints: metrics.calls.map((call) => call.fingerprint),
+                         }
+                       : row,
+@@ -498,7 +554,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ }, Effect.scoped);
+ 
+ export const teardown = Effect.gen(function* () {
+-  const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const cleanup = yield* deploy.teardown;
+ 
+@@ -509,6 +564,6 @@ export const teardown = Effect.gen(function* () {
+ 
+   yield* save(join(workspace, "results", "cleanup.json"), result);
+   yield* Console.log(
+-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
++    "Cleanup verified: no tail-latency Workers or Durable Object namespaces remain.",
+   );
+ });
+diff --git a/examples/durable-bench/deployed/stack.ts b/examples/durable-bench/deployed/stack.ts
+index 9a2ca2e2..58d7b7ff 100644
+--- a/examples/durable-bench/deployed/stack.ts
++++ b/examples/durable-bench/deployed/stack.ts
+@@ -3,7 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
+ import { Config, Effect } from "effect";
+ 
+ export default Alchemy.Stack(
+-  "durable-bench",
++  "tail-latency",
+   {
+     providers: Cloudflare.providers(),
+     state: Alchemy.localState(),
+@@ -23,7 +23,7 @@ export default Alchemy.Stack(
+       workersDev: { enabled: true, previewsEnabled: false },
+       compatibility: {
+         date: "2026-08-18",
+-        flags: ["nodejs_compat", "global_fetch_strictly_public"],
++        flags: ["nodejs_compat", "global_fetch_strictly_public", "enable_weak_ref"],
+       },
+       limits: { cpuMs: 300_000 },
+       observability: {
+@@ -37,14 +37,14 @@ export default Alchemy.Stack(
+     if (kind === "infrastructure") {
+       const prefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
+ 
+-      const provider = yield* Cloudflare.Worker("durable-bench-provider", {
++      const provider = yield* Cloudflare.Worker("tail-latency-provider", {
+         ...options,
+         name: prefix + "-provider",
+         main: bundle + "/provider.mjs",
+         env,
+       });
+ 
+-      const driver = yield* Cloudflare.Worker("durable-bench-driver", {
++      const driver = yield* Cloudflare.Worker("tail-latency-driver", {
+         ...options,
+         name: prefix + "-driver",
+         main: bundle + "/driver.mjs",
+@@ -55,7 +55,7 @@ export default Alchemy.Stack(
+       return { driver: driver.url, provider: provider.url };
+     }
+ 
+-    const worker = yield* Cloudflare.Worker("durable-bench-target", {
++    const worker = yield* Cloudflare.Worker("tail-latency-target", {
+       ...options,
+       name,
+       main: bundle,
+@@ -64,10 +64,10 @@ export default Alchemy.Stack(
+         ...env,
+         CPU: cpu,
+         PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
+-        YIELDED: Cloudflare.DurableObject("durable-bench-yielded", { className: "YieldedDO" }),
+-        PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
+-        ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
+-        THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
++        YIELDED: Cloudflare.DurableObject("tail-latency-yielded", { className: "YieldedDO" }),
++        PI: Cloudflare.DurableObject("tail-latency-pi", { className: "PiDO" }),
++        ACTORS: Cloudflare.DurableObject("tail-latency-actors", { className: "ActorDO" }),
++        THREADS: Cloudflare.DurableObject("tail-latency-threads", { className: "ThreadDO" }),
+       },
+     });
+ 
+diff --git a/examples/durable-bench/deployed/worker/host.ts b/examples/durable-bench/deployed/worker/host.ts
+index 5ca1a14c..55378e6f 100644
+--- a/examples/durable-bench/deployed/worker/host.ts
++++ b/examples/durable-bench/deployed/worker/host.ts
+@@ -55,6 +55,7 @@ export class Host {
+     }
+     try {
+       if (url.pathname === "/import") {
++        this.meter.assertBuild(query);
+         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
+ 
+         if (fixture.target !== query.target || fixture.history !== query.history)
+@@ -81,6 +82,7 @@ export class Host {
+         this.meter.begin(query);
+         this.meter.marker("run");
+         await handlers.run(turn(query.sample, MEASURED_TOOLS));
++        this.meter.event("run:return");
+ 
+         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
+       }
+@@ -93,6 +95,7 @@ export class Host {
+           query: this.meter.query,
+           identity: this.meter.entry,
+           calls: this.meter.calls,
++          diagnostics: this.meter.diagnostics(),
+           tables: tables(this.ctx.storage.sql),
+           bytes: this.ctx.storage.sql.databaseSize,
+         });
+diff --git a/examples/durable-bench/deployed/worker/observe.ts b/examples/durable-bench/deployed/worker/observe.ts
+index f802283f..4d4da8f3 100644
+--- a/examples/durable-bench/deployed/worker/observe.ts
++++ b/examples/durable-bench/deployed/worker/observe.ts
+@@ -25,6 +25,67 @@ export const observation = (storage: DurableObjectStorage): Observation => {
+ export const attach = (state: DurableObjectState, env: Env): Observation => {
+   const meter = new Observation(env);
+ 
++  for (const name of [
++    "transaction",
++    "transactionSync",
++    "get",
++    "put",
++    "delete",
++    "getAlarm",
++    "setAlarm",
++    "deleteAlarm",
++    "sync",
++  ]) {
++    const original = Reflect.get(state.storage, name);
++
++    Object.defineProperty(state.storage, name, {
++      configurable: true,
++      value: (...args: unknown[]) => {
++        meter.count(name);
++        if (name === "setAlarm") meter.event(name, Number(args[0]));
++        if (name === "deleteAlarm") meter.event(name);
++        if (name === "transaction" && typeof args[0] === "function") {
++          const callback = args[0];
++
++          const wrapped = (transaction: DurableObjectTransaction) =>
++            Reflect.apply(callback, undefined, [
++              new Proxy(transaction, {
++                get(target, key) {
++                  const value = Reflect.get(target, key, target);
++
++                  if (typeof value !== "function") return value;
++
++                  return (...values: unknown[]) => {
++                    meter.count("transaction:" + String(key));
++                    if (key === "setAlarm") meter.event("transaction:setAlarm", Number(values[0]));
++                    if (key === "deleteAlarm") meter.event("transaction:deleteAlarm");
++
++                    return Reflect.apply(value, target, values);
++                  };
++                },
++              }),
++            ]);
++
++          return Reflect.apply(original, state.storage, [wrapped, ...args.slice(1)]);
++        }
++
++        return Reflect.apply(original, state.storage, args);
++      },
++    });
++  }
++  const exec = state.storage.sql.exec;
++
++  Object.defineProperty(state.storage.sql, "exec", {
++    configurable: true,
++    value: (...args: unknown[]) => {
++      meter.count("sql");
++      if (typeof args[0] === "string" && args[0].includes("effect_agent_journal_ranges"))
++        meter.count("sql:ranges");
++
++      return Reflect.apply(exec, state.storage.sql, args);
++    },
++  });
++
+   meters.set(state.storage, meter);
+ 
+   return meter;
+@@ -38,20 +99,73 @@ export class Observation {
+   query?: Query;
+   entry?: Identity;
+   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
++  counts: Record<string, number> = {};
++  events: Array<{ name: string; atMs: number; value?: number }> = [];
++  gcCollected = 0;
++  gcAtBegin = 0;
++  activeAlarms = 0;
++  stages: Record<string, Record<string, number>> = {};
++  readonly gc =
++    typeof FinalizationRegistry === "undefined"
++      ? undefined
++      : new FinalizationRegistry(() => {
++          this.gcCollected++;
++        });
++  count(name: string) {
++    this.counts[name] = (this.counts[name] ?? 0) + 1;
++  }
++  event(name: string, value?: number) {
++    if (!this.query) return;
++    this.events.push({ name, atMs: Date.now(), ...(value === undefined ? {} : { value }) });
++    if (
++      [
++        "submit:return",
++        "provider:first",
++        "terminalize:before-publication",
++        "await:return",
++        "alarm:end",
++        "run:return",
++      ].includes(name)
++    )
++      this.stages[name] = { ...this.counts };
++  }
++  diagnostics() {
++    return {
++      counts: { ...this.counts },
++      events: [...this.events],
++      stages: this.stages,
++      gcCollected: this.gcCollected,
++      gcAtBegin: this.gcAtBegin,
++      activeAlarms: this.activeAlarms,
++    };
++  }
+   constructor(readonly env: Env) {}
+   identity(): Identity {
+     return {
++      build: this.env.BUILD,
++      ...(this.env.VERSION === undefined ? {} : { version: this.env.VERSION.id }),
+       incarnation: this.incarnation,
+       constructedMs: this.constructedMs,
+       firstEntry: this.entries === 0,
+       priorAlarms: this.alarms,
+     };
+   }
++  assertBuild(query: Query) {
++    if (query.expectedBuild !== this.env.BUILD)
++      throw new Error("Benchmark Object build mismatch; input was not admitted");
++  }
+   begin(query: Query) {
++    this.assertBuild(query);
+     this.entry = this.identity();
+     this.entries++;
+     this.query = query;
+     this.calls = [];
++    this.counts = {};
++    this.events = [];
++    this.stages = {};
++    this.gcAtBegin = this.gcCollected;
++    this.gc?.register({}, 0);
++    this.event("begin", this.activeAlarms);
+   }
+   alarm() {
+     this.alarms++;
+@@ -59,6 +173,8 @@ export class Observation {
+   marker(kind: string) {
+     if (this.env.CPU !== true && this.env.CPU !== "true") return;
+     console.log({
++      actualBuild: this.env.BUILD,
++      ...(this.env.VERSION === undefined ? {} : { version: this.env.VERSION.id }),
+       target: this.query?.target,
+       object: this.query?.object,
+       sample: this.query?.sample,
+@@ -66,6 +182,7 @@ export class Observation {
+     });
+   }
+   readonly fetch: typeof globalThis.fetch = async (input, init) => {
++    this.gc?.register({}, 0);
+     const query = this.query;
+ 
+     if (!query) throw new Error("Provider request without a benchmark sample");
+@@ -87,6 +204,7 @@ export class Observation {
+     };
+ 
+     this.calls.push(call);
++    if (call.call === 0) this.event("provider:first");
+     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
+     url.searchParams.set("call", String(call.call));
+     const headers = new Headers(original.headers);
+diff --git a/examples/durable-bench/deployed/worker/protocol.ts b/examples/durable-bench/deployed/worker/protocol.ts
+index 281e4dcb..ae5b468b 100644
+--- a/examples/durable-bench/deployed/worker/protocol.ts
++++ b/examples/durable-bench/deployed/worker/protocol.ts
+@@ -12,6 +12,7 @@ export const Query = Schema.Struct({
+   object: Schema.NonEmptyString,
+   history: History,
+   sample: Schema.NonEmptyString,
++  expectedBuild: Schema.NonEmptyString,
+   ttftMs: Schema.Literals([0, 400]),
+   chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
+ });
+@@ -24,6 +25,7 @@ export const readQuery = (url: URL): Query =>
+     object: url.searchParams.get("object"),
+     history: Number(url.searchParams.get("history")),
+     sample: url.searchParams.get("sample") ?? "import",
++    expectedBuild: url.searchParams.get("expectedBuild"),
+     ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
+     chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
+   });
+@@ -76,6 +78,8 @@ export const BulkFixture = Schema.Struct({
+ export type BulkFixture = typeof BulkFixture.Type;
+ 
+ export const Identity = Schema.Struct({
++  build: Schema.NonEmptyString,
++  version: Schema.optionalKey(Schema.NonEmptyString),
+   incarnation: Schema.NonEmptyString,
+   constructedMs: Schema.Number,
+   firstEntry: Schema.Boolean,
+@@ -158,12 +162,28 @@ export const ProviderCall = Schema.Struct({
+ 
+ export type ProviderCall = typeof ProviderCall.Type;
+ 
++export const Diagnostics = Schema.Struct({
++  counts: Counts,
++  events: Schema.Array(
++    Schema.Struct({
++      name: Schema.String,
++      atMs: Schema.Number,
++      value: Schema.optionalKey(Schema.Number),
++    }),
++  ),
++  gcCollected: Schema.Natural,
++  gcAtBegin: Schema.Natural,
++  activeAlarms: Schema.Natural,
++  stages: Schema.optionalKey(Schema.Record(Schema.String, Counts)),
++});
++
+ export const Metrics = Schema.Struct({
+   ok: Schema.Literal(true),
+   query: Query,
+   identity: Identity,
+   directory: Schema.optionalKey(Identity),
+   calls: Schema.Array(ProviderCall),
++  diagnostics: Schema.optionalKey(Diagnostics),
+   tables: Counts,
+   bytes: Schema.Natural,
+ });
+diff --git a/examples/durable-bench/deployed/worker/yielded.ts b/examples/durable-bench/deployed/worker/yielded.ts
+index 2c41e29c..1dcaccb2 100644
+--- a/examples/durable-bench/deployed/worker/yielded.ts
++++ b/examples/durable-bench/deployed/worker/yielded.ts
+@@ -67,13 +67,17 @@ export class YieldedDO extends ThreadObject.make(application, {
+   namespaceBinding: "YIELDED",
+   deploymentId: "durable-bench",
+   producerPrefix: "durable-bench",
++  maintenanceFailpoint: (ctx) => (point) =>
++    Effect.sync(() => observation(ctx.storage).event(point)),
++  runtimeFailpoint: (ctx) => (point) => Effect.sync(() => observation(ctx.storage).event(point)),
+ }) {
+   private readonly host: Host;
+   constructor(ctx: globalThis.DurableObjectState, env: Env) {
+     super(ctx, env);
+     this.host = new Host(ctx, env, "yielded");
+   }
+-  async beginReplay(): Promise<void> {
++  async beginReplay(query: Query): Promise<void> {
++    this.host.meter.assertBuild(query);
+     await this.ctx.blockConcurrencyWhile(async () => {
+       if (
+         (await this.ctx.storage.get(replayStarted)) !== undefined ||
+@@ -91,7 +95,11 @@ export class YieldedDO extends ThreadObject.make(application, {
+     this.host.meter.begin(query);
+     this.host.meter.marker("submit");
+ 
+-    return super.submitEncoded(encoded);
++    const result = await super.submitEncoded(encoded);
++
++    this.host.meter.event("submit:return");
++
++    return result;
+   }
+   override async awaitSettlementEncoded(
+     encoded: unknown,
+@@ -99,12 +107,24 @@ export class YieldedDO extends ThreadObject.make(application, {
+   ): Promise<unknown> {
+     this.host.meter.marker("await");
+ 
+-    return super.awaitSettlementEncoded(encoded, ...trace);
++    this.host.meter.event("await:start");
++    const result = await super.awaitSettlementEncoded(encoded, ...trace);
++
++    this.host.meter.event("await:return");
++
++    return result;
+   }
+   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
+     this.host.meter.alarm();
+     this.host.meter.marker("alarm");
+-    await super.alarm(...args);
++    this.host.meter.activeAlarms++;
++    this.host.meter.event("alarm:start", this.host.meter.activeAlarms);
++    try {
++      await super.alarm(...args);
++    } finally {
++      this.host.meter.activeAlarms--;
++      this.host.meter.event("alarm:end", this.host.meter.activeAlarms);
++    }
+   }
+   override fetch(request: Request): Promise<Response> {
+     return this.host.fetch(request, {
+diff --git a/examples/durable-bench/third-party/src/deployed/index.ts b/examples/durable-bench/third-party/src/deployed/index.ts
+index 3f62478b..2eda8c4e 100644
+--- a/examples/durable-bench/third-party/src/deployed/index.ts
++++ b/examples/durable-bench/third-party/src/deployed/index.ts
+@@ -111,6 +111,11 @@ export default {
+         return Response.json({ ok: true, build: env.BUILD });
+       }
+       const query = readQuery(url);
++      if (["/import", "/submit", "/run"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
++        return Response.json(
++          { ok: false, error: "Benchmark Worker build mismatch; input was not dispatched", sample: query.sample },
++          { status: 503 },
++        );
+       const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
+ 
+       if (mutating && request.method !== "POST")
+@@ -219,7 +224,7 @@ export default {
+             throw new Error("Concurrent submission to one benchmark Object");
+           cached.queries.set(query.object, query);
+           try {
+-            await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay();
++            await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay(query);
+             await cached.runtime.runPromise(
+               Effect.gen(function* () {
+                 for (const input of history(0, fixture.history)) {
+diff --git a/examples/durable-bench/vite.config.ts b/examples/durable-bench/vite.config.ts
+index 3e0dc6e2..7433357e 100644
+--- a/examples/durable-bench/vite.config.ts
++++ b/examples/durable-bench/vite.config.ts
+@@ -3,7 +3,7 @@ import { defineConfig } from "vite-plus";
+ export default defineConfig({
+   run: {
+     tasks: {
+-      deployed: { command: "direnv exec . vp exec bun deployed/main.ts", cache: false },
++      deployed: { command: "vp exec bun deployed/main.ts", cache: false },
+       seed: { command: "bun bench/seed.ts", cache: false },
+       vendor: { command: "bun install --cwd third-party", cache: false },
+     },
+diff --git a/packages/storage-cloudflare/src/internal/owned-state.ts b/packages/storage-cloudflare/src/internal/owned-state.ts
+index 367bd9c5..3b525e2d 100644
+--- a/packages/storage-cloudflare/src/internal/owned-state.ts
++++ b/packages/storage-cloudflare/src/internal/owned-state.ts
+@@ -76,7 +76,7 @@ export const ownedState = (sql: SqlClient) =>
+   );
+ 
+ /**
+- * Demand-loaded row views. Writes apply SQLite's RETURNING rows to every retained view in
++ * Demand-loaded row views. Writes apply SQLite's RETURNING rows to affected retained views in
+  * the same transaction; rollback discards them. Bounded views avoid loading a host's entire
+  * retained submission history just to fence one live submission.
+  */
+@@ -187,12 +187,17 @@ export const ownedRows = <A, I>(
+       <E, R>(effect: Effect.Effect<ReadonlyArray<unknown>, E, R>) =>
+         Effect.gen(function* () {
+           const rows = yield* decode(yield* effect);
++
++          if (rows.length === 0) return rows;
+           const changed = new Set(rows.map(key));
+ 
+           for (const { id, matches, maxRows, rows: prior } of Array.from(current.values())) {
++            const matchingRows = remove ? [] : rows.filter(matches);
++
++            if (matchingRows.length === 0 && !prior.some((row) => changed.has(key(row)))) continue;
+             const next = prior.filter((row) => !changed.has(key(row)));
+ 
+-            if (!remove) next.push(...rows.filter(matches));
++            next.push(...matchingRows);
+             retain(id, matches, next, maxRows);
+           }
+           // A RETURNING row completely defines its unique-key view, even on a new Thread.
