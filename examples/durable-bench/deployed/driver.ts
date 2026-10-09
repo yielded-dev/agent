@@ -1,7 +1,18 @@
-import { Schema } from "effect";
+import { Clock, Deferred, Effect, Schema, Stream } from "effect";
+import { Ndjson } from "effect/encoding";
 
-import { MeasureRequest } from "./model.ts";
-import { AwaitResult, RunResult, SubmitResult } from "./worker/protocol.ts";
+import { MeasureRequest, type FirstTextSource } from "./model.ts";
+import {
+  AwaitResult,
+  RunResult,
+  SettledTextResult,
+  SubmitResult,
+  TextObservation,
+} from "./worker/protocol.ts";
+
+class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
+  message: Schema.String,
+}) {}
 
 interface Env {
   BENCH_TOKEN: string;
@@ -59,36 +70,141 @@ export default {
             `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown.`,
           );
 
-        return response.json();
+        return response;
       };
 
-      const started = Date.now();
-      let admissionMs: number | undefined;
+      return Response.json(
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const ready = yield* Deferred.make<void, ObservationError>();
 
-      if (query.target === "yielded") {
-        const admission = Schema.decodeUnknownSync(SubmitResult)(await invoke("/submit"));
+            type Visible = { atMs: number; text: string; source: FirstTextSource };
+            const first = yield* Deferred.make<Visible, ObservationError>();
+            const visible = new Map<string, Visible>();
+            let input: string | undefined = query.target === "pi" ? query.sample : undefined;
+            let observationMs: number | null = null;
 
-        admissionMs = Date.now() - started;
+            if (query.target !== "tardie") {
+              const opening = yield* Clock.currentTimeMillis;
+              const response = yield* Effect.tryPromise(() => invoke("/text"));
+              const body = response.body;
 
-        const settled = Schema.decodeUnknownSync(AwaitResult)(
-          await invoke("/await", admission.receipt),
-        );
+              if (!body)
+                return yield* new ObservationError({ message: "Missing text observation body." });
 
-        if (settled.settlement.outcome !== "completed")
-          throw new Error("Yielded did not complete the turn.");
-      } else {
-        Schema.decodeUnknownSync(RunResult)(await invoke("/run"));
-      }
+              yield* Stream.fromReadableStream({
+                evaluate: () => body,
+                onError: () => new ObservationError({ message: "Text observation disconnected." }),
+              }).pipe(
+                Stream.pipeThroughChannel(Ndjson.decodeSchema(TextObservation)()),
+                Stream.concat(
+                  Stream.fail(
+                    new ObservationError({
+                      message: "Text observation ended before cancellation.",
+                    }),
+                  ),
+                ),
+                Stream.runForEach((frame) =>
+                  Effect.gen(function* () {
+                    if (frame._tag === "Ready") {
+                      yield* Deferred.succeed(ready, undefined);
 
-      const observedMs = Date.now();
+                      return;
+                    }
+                    if (!frame.text.trim()) return;
 
-      return Response.json({
-        ok: true,
-        driverMs: observedMs - started,
-        observedMs,
-        admissionMs,
-        colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
-      });
+                    const seen: Visible = visible.get(frame.input) ?? {
+                      atMs: yield* Clock.currentTimeMillis,
+                      text: frame.text,
+                      source: query.target === "yielded" ? "watchText" : "watchEvents",
+                    };
+
+                    visible.set(frame.input, seen);
+                    if (frame.input === input) yield* Deferred.succeed(first, seen);
+                  }),
+                ),
+                Effect.catchCause(() =>
+                  Effect.gen(function* () {
+                    const error = new ObservationError({
+                      message: "Public text observation failed; no first-text result is available.",
+                    });
+
+                    yield* Deferred.fail(ready, error);
+                    yield* Deferred.fail(first, error);
+                  }),
+                ),
+                Effect.forkScoped,
+              );
+              yield* Deferred.await(ready);
+              observationMs = (yield* Clock.currentTimeMillis) - opening;
+            }
+
+            const startedMs = yield* Clock.currentTimeMillis;
+            let admissionMs: number | undefined;
+            let receipt: SubmitResult["receipt"] | undefined;
+
+            if (query.target === "yielded") {
+              const admission = yield* Effect.tryPromise(async () =>
+                Schema.decodeUnknownSync(SubmitResult)(await (await invoke("/submit")).json()),
+              );
+
+              admissionMs = (yield* Clock.currentTimeMillis) - startedMs;
+              receipt = admission.receipt;
+              input = admission.receipt.submissionId;
+              const seen = visible.get(input);
+
+              if (seen) yield* Deferred.succeed(first, seen);
+
+              const settled = yield* Effect.tryPromise(async () =>
+                Schema.decodeUnknownSync(AwaitResult)(
+                  await (await invoke("/await", admission.receipt)).json(),
+                ),
+              );
+
+              if (settled.settlement.outcome !== "completed")
+                return yield* new ObservationError({
+                  message: "Yielded did not complete the turn.",
+                });
+            } else {
+              yield* Effect.tryPromise(async () =>
+                Schema.decodeUnknownSync(RunResult)(await (await invoke("/run")).json()),
+              );
+            }
+
+            // Preserve the completion endpoint even if the independent text transport arrives later.
+            const observedMs = yield* Clock.currentTimeMillis;
+
+            // Overflow can replace an instant reply with an empty draft snapshot after settlement.
+            if (receipt !== undefined && !(yield* Deferred.isDone(first))) {
+              const result = yield* Effect.tryPromise(async () =>
+                Schema.decodeUnknownSync(SettledTextResult)(
+                  await (await invoke("/result", receipt)).json(),
+                ),
+              );
+
+              const fallback: Visible = {
+                atMs: yield* Clock.currentTimeMillis,
+                text: result.text,
+                source: "settlementRecord",
+              };
+
+              yield* Deferred.succeed(first, fallback);
+            }
+            const text = query.target === "tardie" ? undefined : yield* Deferred.await(first);
+
+            return {
+              ok: true,
+              driverMs: observedMs - startedMs,
+              observedMs,
+              admissionMs,
+              firstTextMs: text === undefined ? null : text.atMs - startedMs,
+              ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
+              observationMs,
+              colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
+            };
+          }).pipe(Effect.scoped, Effect.timeout("3 minutes")),
+        ),
+      );
     } catch (cause) {
       return Response.json(
         {

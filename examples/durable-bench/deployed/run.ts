@@ -40,6 +40,7 @@ import {
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
+import { PREAMBLE, responseText } from "./text.ts";
 import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
@@ -47,7 +48,7 @@ const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<str
   Object.keys(a).every((key) => a[key] === b[key]);
 
 // The reference transcript is independent of every framework and computed before timing.
-const append = (messages: Message[], input: Turn): string[] => {
+const append = (messages: Message[], input: Turn, textStreaming = false): string[] => {
   const hashes: string[] = [];
 
   messages.push({ role: "user", text: input.text });
@@ -58,10 +59,12 @@ const append = (messages: Message[], input: Turn): string[] => {
     const step = next(messages);
 
     if ("answer" in step) {
-      messages.push({ role: "assistant", text: step.answer });
+      messages.push({ role: "assistant", text: responseText(step.answer, textStreaming) });
 
       return hashes;
     }
+    if (textStreaming && messages.at(-1)?.role === "user")
+      messages.push({ role: "assistant", text: PREAMBLE });
     messages.push(
       { role: "assistant", text: "", calls: [step.call] },
       { role: "tool", text: payload(step.call) },
@@ -87,7 +90,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const withProfileBatch = yield* profileBatches(options.profiles.length);
 
   let result: Result = {
-    version: 1,
+    version: 2,
     run: runName,
     revision: yield* git(["rev-parse", "HEAD"]),
     dirty: (yield* git(["status", "--porcelain"])).length > 0,
@@ -271,7 +274,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         for (let index = 0; index < turnsPerEpoch; index++) {
           const sample = `e${epoch}-t${index}`;
 
-          expected.set(sample, append(messages, turn(sample, MEASURED_TOOLS)));
+          expected.set(
+            sample,
+            append(messages, turn(sample, MEASURED_TOOLS), options.textStreaming),
+          );
         }
       references.set(size, expected);
     }
@@ -285,6 +291,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             history: size,
             ttftMs,
             chunkDelayMs: ttftMs === 400 ? 10 : 0,
+            textStreaming: options.textStreaming,
             sample: "import",
           })),
         ).flat(),
@@ -355,7 +362,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             reset.before.build === expectedBuild &&
             (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
           )
-            // /cold observes identity before aborting. The next Object call is timed.
+            // Observation attaches to the new incarnation before the submission timer starts.
             return reset;
           yield* Effect.sleep("2 seconds");
         }
@@ -520,6 +527,26 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 );
 
                 const after = yield* Clock.currentTimeMillis;
+                const firstText = measured.value.firstText;
+
+                const expectedText = [
+                  responseText(`done after ${MEASURED_TOOLS} lookups`, query.textStreaming),
+                  ...(query.textStreaming && measured.value.firstTextSource !== "settlementRecord"
+                    ? [PREAMBLE]
+                    : []),
+                ];
+
+                if (
+                  query.target !== "tardie" &&
+                  (measured.value.firstTextMs === null ||
+                    measured.value.firstTextMs < 0 ||
+                    !firstText?.trim() ||
+                    !expectedText.some((text) => text.startsWith(firstText)))
+                )
+                  return yield* new BenchError({
+                    message:
+                      "First visible text did not match the submitted turn's assistant reply.",
+                  });
 
                 const metrics = (yield* request(url("/metrics", query), deploy.token, Metrics))
                   .value;
@@ -586,6 +613,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   .map((call, i) => call.startMs - (metrics.calls[i]?.endMs ?? NaN));
 
                 const lastEnd = metrics.calls.at(-1)?.endMs;
+                const objectToFirstModelMs = metrics.calls[0]?.sinceEntryMs;
 
                 yield* update((value) => ({
                   ...value,
@@ -595,6 +623,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           ...sample,
                           status: "ok",
                           driverMs: measured.value.driverMs,
+                          firstTextMs: measured.value.firstTextMs,
+                          ...(measured.value.firstText === undefined
+                            ? {}
+                            : { firstText: measured.value.firstText }),
+                          ...(measured.value.firstTextSource === undefined
+                            ? {}
+                            : { firstTextSource: measured.value.firstTextSource }),
+                          observationMs: measured.value.observationMs,
+                          ...(objectToFirstModelMs === undefined ? {} : { objectToFirstModelMs }),
                           ...(measured.value.admissionMs === undefined
                             ? {}
                             : { admissionMs: measured.value.admissionMs }),

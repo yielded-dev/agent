@@ -6,6 +6,7 @@ import {
   decodeChat,
   errorText,
   ProviderReceipt,
+  separateTextAndTools,
   type Env,
   type Identity,
   type ProviderCall,
@@ -35,6 +36,7 @@ export class Observation {
   readonly constructedMs = Date.now();
   private entries = 0;
   private alarms = 0;
+  private entryMs = 0;
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
@@ -54,6 +56,7 @@ export class Observation {
   }
   begin(query: Query) {
     this.assertBuild(query);
+    this.entryMs = Date.now();
     this.entry = this.identity();
     this.entries++;
     this.query = query;
@@ -86,12 +89,19 @@ export class Observation {
       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
     )
       throw new Error("Unexpected provider destination");
-    const transcript = chatTranscript(decodeChat(await original.clone().json()));
+    const decoded = decodeChat(await original.clone().json());
+    const chat = query.textStreaming ? separateTextAndTools(decoded) : decoded;
+    const transcript = chatTranscript(chat);
+
+    const digest = await fingerprint(transcript);
+    const startMs = Date.now();
 
     const call: (typeof this.calls)[number] = {
       call: this.calls.length,
-      fingerprint: await fingerprint(transcript),
-      startMs: Date.now(),
+      fingerprint: digest,
+      startMs,
+      // The Object and driver clocks cannot be subtracted to obtain submit latency.
+      sinceEntryMs: startMs - this.entryMs,
     };
 
     this.calls.push(call);
@@ -101,8 +111,17 @@ export class Observation {
     const headers = new Headers(original.headers);
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
+    if (query.textStreaming) headers.delete("content-length");
     try {
-      const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
+      const response = await globalThis.fetch(
+        new Request(
+          url,
+          new Request(original, {
+            headers,
+            ...(query.textStreaming ? { body: JSON.stringify(chat) } : {}),
+          }),
+        ),
+      );
 
       call.status = response.status;
       if (!response.body) throw new Error("Provider response has no body");

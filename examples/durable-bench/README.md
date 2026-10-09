@@ -29,16 +29,20 @@ at once; changing it can also change contention and the numbers being compared.
 
 ```sh
 vp run deployed -- --ttft 0 --objects 7 --repeats 4 --concurrency 6
+vp run deployed -- --text-streaming --ttft 400 --objects 2 --repeats 2
 vp run deployed -- --cold --cpu
 vp run deployed -- --profile cpu,memory
 ```
 
-The output has one table per cell: median [Q1–Q3] of **Object medians**, the range of
-those medians, each Object's repeat range (median / maximum), and Yielded ÷ pi.
+The output has one table per cell: **first text (final answer)** in default mode or
+**first text** with `--text-streaming`, beside turn completion. Both use median [Q1–Q3]
+of **Object medians**, with Yielded ÷ pi for both. It also shows
+Object entry to the first outgoing model request, the completion medians' range and each Object's
+completion repeat range (median / maximum).
 The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) range of
 Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
-records admission, model-call gaps, the last response-to-client interval, ingress colos,
+records subscription setup, the first text fragment, admission, model-call gaps, the last response-to-client interval, ingress colos,
 fingerprint/build checks, cold setup attempts, failures and cleanup. No timing evidence is committed.
 
 `--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
@@ -93,7 +97,16 @@ Worker is deployed. Account IDs, tokens, namespace IDs and Alchemy output are no
 Historical turns repeat a one-tool, one-tool, zero-tool cycle. Each measured turn makes
 eight sequential readonly `lookup` calls, hence nine model requests. Tool results are
 256 bytes, except every 97th result is 8 KiB. Compaction is disabled for every target.
-The 400 ms provider also spaces SSE chunks by 10 ms, matching the deployed rebench harness.
+The standard 400 ms provider also spaces SSE chunks by 10 ms, matching the deployed rebench harness.
+`--text-streaming` retains the eight lookups and nine model requests, but starts the first
+response with "I will look up the requested records, then summarize what I find." before
+its tool call. This preamble and a longer final reply stream in word-sized fragments every
+25 ms in the 400 ms cell (about 40 fragments/s, roughly one second for the final reply).
+Tool-only responses retain their original pacing; the 0 ms cell emits the same text without
+delays. Every target receives the same preamble and reply, and subsequent requests are
+checked against the extended reference transcript. Before forwarding streaming requests, the
+common bridge splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
+The flag keeps the original completion workload available; compare tables with the same workload label.
 All Objects request `locationHint: "wnam"`; the driver and target Worker request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
 
@@ -103,6 +116,23 @@ all included. The Worker caches its client runtime and definition digest before 
 The waiter uses production wake hints with a 500 ms polling fallback. pi and tardie use
 their native turn APIs and storage. Driver elapsed time includes the HTTP/RPC boundary;
 laptop time and its `CF-Ray` colo are secondary fields, not the headline latency.
+
+Before submitting, the driver attaches to Yielded's public `watchText(threadId)` or
+pi-durable's public `watchEvents` inside its Object, forwarded over HTTP as text frames.
+It waits for the subscription acknowledgement, then starts both timers at submit. First text
+ends when nonempty assistant text reaches the driver; it includes framework publication and
+transport, rather than the provider's first byte. Yielded drafts are matched to the new
+Receipt. Instant-provider Yielded uses the settled-record fallback when drafts are too short-lived to observe.
+The public `awaitSettlementRecord` read follows completion; first text includes that extra read.
+JSON's `firstTextSource` distinguishes preview delivery from this canonical fallback.
+Default mode emits text only after the eight tool calls, so **first text (final answer)**
+measures the final reply. Streaming mode's **first text** measures submit to the first visible
+preamble token, including framework publication and transport. Tardie shows `n/a`:
+its existing adapter exposes completed method calls, and connecting its separate execution
+stream is outside this small harness change. Missing first text or observation failure before
+it invalidates the sample. `Object → model` measures submission-handler entry to the first
+outgoing model request on the Object's clock. It excludes driver transport and routing before
+that Object; short intervals may resolve to zero. Object/driver clock offsets are not request latency.
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no
@@ -115,9 +145,14 @@ the Thread has called it since reset; an unused directory's identity observes re
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
 Before each pass, cold setup waits for the Object's own `BUILD` (including tardie's Actor
 directory), retrying acknowledged resets for up to three minutes. Each attempt is recorded;
-setup errors stop the run. The final reset is followed directly by the timed input.
+setup errors stop the run. The final reset is followed by observer attachment, then the timed input.
 Each Thread checks its build before admission, and completed metrics and all provider receipts
 must match the expected build. A mismatch invalidates the sample; inputs are never retried.
+
+For Yielded and pi, pre-subscription opens the new Object before a cold turn's submit timer;
+`observationMs` records that excluded setup. Cold cells therefore describe the first turn
+after restart with observation prepared, and are not comparable to earlier unobserved cold
+completion timings. Tardie's cold timer still includes opening its native reference.
 
 The gap is measured between outgoing model requests and consumed responses on one Object
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is

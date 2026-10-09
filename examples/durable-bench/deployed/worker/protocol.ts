@@ -15,6 +15,7 @@ export const Query = Schema.Struct({
   expectedBuild: Schema.NonEmptyString,
   ttftMs: Schema.Literals([0, 400]),
   chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
+  textStreaming: Schema.Boolean,
 });
 
 export type Query = typeof Query.Type;
@@ -35,7 +36,23 @@ export const readQuery = (url: URL): Query =>
     expectedBuild: url.searchParams.get("expectedBuild"),
     ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
     chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
+    textStreaming:
+      Schema.decodeUnknownSync(Schema.Literals(["true", "false"]))(
+        url.searchParams.get("textStreaming") ?? "false",
+      ) === "true",
   });
+
+/** Acknowledgement follows public subscription acquisition; text excludes historical messages. */
+export const TextObservation = Schema.Union([
+  Schema.TaggedStruct("Ready", {}),
+  Schema.TaggedStruct("Text", {
+    // Yielded's Receipt submissionId, or the pi sample on its exclusively observed idle conversation.
+    input: Schema.NonEmptyString,
+    text: Schema.NonEmptyString,
+  }),
+]);
+
+export type TextObservation = typeof TextObservation.Type;
 
 export const expectedSeed: Readonly<Record<number, string>> = {
   50: "b017b487524e44a4",
@@ -132,6 +149,11 @@ export const AwaitResult = Schema.Struct({
 
 export type AwaitResult = typeof AwaitResult.Type;
 
+export const SettledTextResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  text: Schema.NonEmptyString,
+});
+
 export const RunResult = Schema.Struct({
   ok: Schema.Literal(true),
   outcome: Schema.Literal("completed"),
@@ -161,6 +183,7 @@ export const ProviderCall = Schema.Struct({
   call: Schema.Natural,
   fingerprint: Schema.String,
   startMs: Schema.Number,
+  sinceEntryMs: Schema.Number,
   endMs: Schema.optionalKey(Schema.Number),
   status: Schema.optionalKey(Schema.Int),
   receipt: Schema.optionalKey(ProviderReceipt),
@@ -201,23 +224,27 @@ export interface Env {
 export const errorText = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-const Chat = Schema.Struct({
+// Preserve SDK options and tool identifiers when adjusting the streaming wire layout.
+const jsonStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
+  Schema.StructWithRest(Schema.Struct(fields), [Schema.Record(Schema.String, Schema.Json)]);
+
+const Chat = jsonStruct({
   messages: Schema.Array(
-    Schema.Struct({
+    jsonStruct({
       role: Schema.Literals(["system", "developer", "user", "assistant", "tool"]),
       content: Schema.optionalKey(
         Schema.Union([
           Schema.String,
           Schema.Null,
           Schema.Array(
-            Schema.Struct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
+            jsonStruct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
           ),
         ]),
       ),
       tool_calls: Schema.optionalKey(
         Schema.Array(
-          Schema.Struct({
-            function: Schema.Struct({ arguments: Schema.String }),
+          jsonStruct({
+            function: jsonStruct({ arguments: Schema.String }),
           }),
         ),
       ),
@@ -227,6 +254,23 @@ const Chat = Schema.Struct({
 
 export const decodeChat = Schema.decodeUnknownSync(Chat);
 const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
+
+// Match the pinned Effect provider's adjacent text/tool messages on every target.
+// This changes the forwarded request, not just its fingerprint.
+export const separateTextAndTools = (chat: typeof Chat.Type): typeof Chat.Type => ({
+  ...chat,
+  messages: chat.messages.flatMap((message) => {
+    const hasText =
+      typeof message.content === "string"
+        ? message.content.length > 0
+        : message.content?.some((part) => part.text);
+
+    if (message.role !== "assistant" || !message.tool_calls?.length || !hasText) return [message];
+    const { tool_calls, ...text } = message;
+
+    return [text, { ...text, content: null, tool_calls }];
+  }),
+});
 
 export const chatTranscript = (chat: typeof Chat.Type) =>
   chat.messages.flatMap((message) => {
