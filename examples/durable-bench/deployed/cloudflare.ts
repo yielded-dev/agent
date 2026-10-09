@@ -9,6 +9,11 @@ const Namespaces = Schema.Array(
 );
 
 const connect = Effect.gen(function* () {
+  const prefix = yield* Config.schema(
+    Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9-]{0,23}$/)),
+    "DURABLE_BENCH_PREFIX",
+  ).pipe(Config.withDefault("durable-bench"));
+
   const accountId = Redacted.value(yield* Config.Redacted("CLOUDFLARE_ACCOUNT_ID"));
   const apiToken = Redacted.value(yield* Config.Redacted("CLOUDFLARE_API_TOKEN"));
 
@@ -65,9 +70,9 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
+  const resources = Effect.fnUntraced(function* (resourcePrefix = prefix) {
     const workers = (yield* api("workers/scripts", Workers))
-      .filter((w) => w.id.startsWith(prefix))
+      .filter((w) => w.id.startsWith(resourcePrefix))
       .map((w) => w.id);
 
     const namespaces: string[] = [];
@@ -80,7 +85,7 @@ const connect = Effect.gen(function* () {
 
       namespaces.push(
         ...rows
-          .filter((n) => n.name.startsWith(prefix) || n.script?.startsWith(prefix))
+          .filter((n) => n.name.startsWith(resourcePrefix) || n.script?.startsWith(resourcePrefix))
           .map((n) => `${n.script ?? ""}/${n.name}`),
       );
       if (rows.length < 100)
@@ -93,6 +98,7 @@ const connect = Effect.gen(function* () {
   });
 
   return {
+    prefix,
     accountId,
     apiToken,
     accountName: account.name,

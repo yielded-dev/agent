@@ -101,6 +101,7 @@ export const build = Effect.fnUntraced(function* (
         entryPoints: [join(directory, entries[entry])],
         outfile,
         bundle: true,
+        sourcemap: entry === "target" ? "linked" : false,
         format: "esm",
         platform: "neutral",
         target: "es2024",

@@ -1,6 +1,7 @@
 import { Effect, Option, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 
+import { ProfileType } from "./model.ts";
 import { BenchError } from "./platform.ts";
 import { run, teardown } from "./run.ts";
 import { History, Target } from "./worker/protocol.ts";
@@ -41,6 +42,16 @@ export const command = Command.make(
     cpu: Flag.Boolean("cpu").pipe(
       Flag.withDefault(false),
       Flag.withDescription("Enable invocation logs and query Cloudflare CPU telemetry"),
+    ),
+    profile: Flag.String("profile").pipe(
+      Flag.mapTryCatch(
+        (value) => Schema.decodeUnknownSync(Schema.NonEmptyArray(ProfileType))(value.split(",")),
+        () => "Expected cpu or memory, comma-separated.",
+      ),
+      Flag.atLeast(0),
+      Flag.withDescription(
+        "Capture cpu or memory profiles of one Yielded/pi Object per cell; repeat or comma-separate",
+      ),
     ),
     keep: Flag.Boolean("keep").pipe(
       Flag.withDefault(false),
@@ -86,6 +97,11 @@ export const command = Command.make(
     if (flags.rigorous && !targets.includes("yielded"))
       return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
 
+    const profiles = [...new Set(flags.profile.flat())];
+
+    if (profiles.length > 0 && !targets.some((target) => target === "yielded" || target === "pi"))
+      return yield* new BenchError({ message: "--profile requires the yielded or pi target." });
+
     return yield* run({
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
@@ -95,6 +111,7 @@ export const command = Command.make(
       concurrency: flags.concurrency,
       cold: flags.cold || flags.rigorous,
       cpu: flags.cpu || flags.rigorous,
+      profiles,
       keep: flags.keep,
       rigorous: flags.rigorous,
       ...(baseline === undefined ? {} : { baseline }),

@@ -13,7 +13,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
 export const directory = dirname(fileURLToPath(import.meta.url));
 export const workspace = resolve(directory, "..");
 export const repository = resolve(workspace, "../..");
-export const privateDirectory = resolve(homedir(), ".local/state/durable-bench");
+export const stateDirectory = (prefix: string) => resolve(homedir(), ".local/state", prefix);
 
 export const hash = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
