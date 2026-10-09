@@ -1,7 +1,7 @@
 import type { Env, IsolateState } from "./protocol.ts";
 
-export const BUILD_HEADER = "x-cold-storage-fresh-build";
-export const INGRESS_HEADER = "x-cold-storage-fresh-ingress";
+export const BUILD_HEADER = "x-cold-bisect-build";
+export const INGRESS_HEADER = "x-cold-bisect-ingress";
 
 let id: string | undefined;
 let statelessFetches = 0;

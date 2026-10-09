@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import { storageProbe } from "../isolate/cold-storage.ts";
+import { timeline } from "../isolate/timeline.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
   BulkFixture,
@@ -43,6 +44,7 @@ export class Host {
     request: Request,
     handlers: {
       import: (fixture: BulkFixture, query: Query) => Promise<void>;
+      empty?: () => Promise<void>;
       run?: (input: { id: string; text: string }) => Promise<void>;
     },
   ): Promise<Response> {
@@ -57,6 +59,18 @@ export class Host {
       this.ctx.abort(COLD_ABORT);
     }
     try {
+      if (url.pathname === "/empty") {
+        if (query.history !== 0) throw new Error("Empty preparation requires history0");
+        await handlers.empty?.();
+        await this.ctx.storage.sync();
+
+        return Response.json({
+          ok: true,
+          identity: this.meter.identity(),
+          tables: tables(this.ctx.storage.sql),
+          bytes: this.ctx.storage.sql.databaseSize,
+        });
+      }
       if (url.pathname === "/storage") {
         const result = storageProbe(this.ctx.storage)?.padding(await request.json());
 
@@ -106,6 +120,7 @@ export class Host {
           identity: this.meter.entry,
           calls: this.meter.calls,
           storage: storageProbe(this.ctx.storage)?.report(),
+          timeline: timeline(this.ctx.storage)?.events,
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

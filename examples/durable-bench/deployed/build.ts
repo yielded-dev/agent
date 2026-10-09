@@ -24,6 +24,7 @@ const entries = {
   provider: "provider.ts",
   target: "../third-party/src/deployed/index.ts",
   production: "../src/yielded.ts",
+  bare: "isolate/bare.ts",
   yielded: "isolate/yielded.ts",
   pi: "../third-party/src/deployed/isolate-pi.ts",
 };

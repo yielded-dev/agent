@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 
 import { payload } from "../../src/plan.ts";
 import { instrumentStorage, storageProbe } from "../isolate/cold-storage.ts";
+import { instrumentTimeline, timeline } from "../isolate/timeline.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query, type IsolateState } from "./protocol.ts";
@@ -75,9 +76,11 @@ export class YieldedDO extends ThreadObject.make(application, {
 }) {
   private readonly host: Host;
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
+    instrumentTimeline(ctx);
     ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "yielded");
+    timeline(ctx.storage)?.point("constructor.return");
   }
   async beginReplay(): Promise<void> {
     await this.ctx.blockConcurrencyWhile(async () => {
@@ -104,6 +107,7 @@ export class YieldedDO extends ThreadObject.make(application, {
     const receipt = await super.submitEncoded(encoded);
 
     storageProbe(this.ctx.storage)?.point("admitted");
+    timeline(this.ctx.storage)?.point("submit.complete");
 
     return receipt;
   }
@@ -116,6 +120,7 @@ export class YieldedDO extends ThreadObject.make(application, {
     return super.awaitSettlementEncoded(encoded, ...trace);
   }
   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
+    timeline(this.ctx.storage)?.point("alarm.entry");
     this.host.meter.alarm();
     this.host.meter.marker("alarm");
     await super.alarm(...args);

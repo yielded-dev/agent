@@ -1,9 +1,9 @@
 import * as Schema from "effect/Schema";
 
-export const TARGETS = ["yielded", "pi", "tardie"] as const;
+export const TARGETS = ["yielded", "pi", "tardie", "bare"] as const;
 export const Target = Schema.Literals(TARGETS);
 export type Target = typeof Target.Type;
-export const History = Schema.Int.check(Schema.isGreaterThan(0));
+export const History = Schema.Natural;
 
 export const Query = Schema.Struct({
   target: Target,
@@ -29,6 +29,7 @@ export const readQuery = (url: URL): Query =>
 export const expectedSeed: Readonly<Record<number, string>> = {
   50: "b017b487524e44a4",
   250: "dcea9f30b0917245",
+  1000: "ac520308146f2a8f",
 };
 
 export const Counts = Schema.Record(Schema.String, Schema.Natural);
@@ -197,6 +198,25 @@ export const PaddingResult = Schema.Struct({
 
 export type PaddingResult = typeof PaddingResult.Type;
 
+export const Phase = Schema.Struct({
+  phase: Schema.String,
+  atMs: Schema.Number,
+  id: Schema.optionalKey(Schema.Natural),
+});
+
+export type Phase = typeof Phase.Type;
+export const Timeline = Schema.Array(Phase);
+
+export const Prepared = Schema.Struct({
+  ok: Schema.Literal(true),
+  identity: Identity,
+  bytes: Schema.Natural,
+  tables: Counts,
+});
+
+export const ReplayChunk = Schema.Struct({ from: Schema.Natural, to: Schema.Natural });
+export const ReplayResult = Schema.Struct({ ok: Schema.Literal(true), next: Schema.Natural });
+
 export const Metrics = Schema.Struct({
   ok: Schema.Literal(true),
   query: Query,
@@ -206,6 +226,7 @@ export const Metrics = Schema.Struct({
   tables: Counts,
   bytes: Schema.Natural,
   storage: Schema.optionalKey(StorageTrace),
+  timeline: Schema.optionalKey(Timeline),
 });
 
 export type Metrics = typeof Metrics.Type;

@@ -8,11 +8,12 @@ import {
   Query,
   StorageTrace,
   Target,
+  Timeline,
 } from "./worker/protocol.ts";
 
 export const BuildLabel = Schema.Literals(["working", "baseline", "candidate"]);
 export type BuildLabel = typeof BuildLabel.Type;
-export const IsolatedTarget = Schema.Literals(["yielded", "pi"]);
+export const IsolatedTarget = Schema.Literals(["yielded", "pi", "bare"]);
 export type IsolatedTarget = typeof IsolatedTarget.Type;
 
 export interface Options {
@@ -27,6 +28,7 @@ export interface Options {
   readonly keep: boolean;
   readonly rigorous: boolean;
   readonly isolate?: boolean;
+  readonly coldMode?: "object" | "fresh";
   readonly order?: "ABBA" | "BAAB" | "AABB";
   readonly baseline?: string;
   readonly candidate?: string;
@@ -65,6 +67,10 @@ export const Sample = Schema.Struct({
   exclusionReasons: Schema.optionalKey(Schema.Array(Schema.String)),
   driverMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
+  startedMs: Schema.optionalKey(Schema.Number),
+  firstModelMs: Schema.optionalKey(Schema.Number),
+  timeline: Schema.optionalKey(Timeline),
+  routing: Schema.optionalKey(Timeline),
   gapMs: Schema.optionalKey(Schema.Number),
   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
   controllerMs: Schema.optionalKey(Schema.Number),
@@ -188,5 +194,9 @@ export const MeasureResponse = Schema.Struct({
   driverMs: Schema.Number,
   observedMs: Schema.Number,
   admissionMs: Schema.optionalKey(Schema.Number),
+  startedMs: Schema.optionalKey(Schema.Number),
+  firstModelMs: Schema.optionalKey(Schema.Number),
+  timeline: Schema.optionalKey(Timeline),
+  routing: Schema.optionalKey(Timeline),
   colo: Schema.NullOr(Schema.String),
 });

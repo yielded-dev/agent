@@ -12,7 +12,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
 export const directory = dirname(fileURLToPath(import.meta.url));
 export const workspace = resolve(directory, "..");
 export const repository = resolve(workspace, "../..");
-export const privateDirectory = "/private/tmp/cold-storage-fresh-private";
+export const privateDirectory = "/private/tmp/cold-bisect-private";
 
 export const hash = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");

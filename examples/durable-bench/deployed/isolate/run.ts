@@ -53,6 +53,8 @@ import {
   ImportResult,
   Metrics,
   PaddingResult,
+  Prepared,
+  ReplayResult,
   type Query,
 } from "./protocol.ts";
 
@@ -122,7 +124,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
   const lock = yield* Semaphore.make(1);
-  const runName = `cold-storage-fresh-${started.toString(36)}-${nonce().slice(0, 8)}`;
+  const runName = `cold-bisect-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const labels: readonly BuildLabel[] = options.rigorous ? ["baseline", "candidate"] : ["working"];
 
@@ -312,7 +314,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     );
     yield* ensureVendor;
 
-    const fixtures = (yield* prepareFixtures({ targets, sizes: options.sizes })).map((fixture) => {
+    const fixtures = (yield* prepareFixtures({
+      targets: targets.filter((target) => target !== "bare"),
+      sizes: options.sizes.filter((size) => size > 0),
+    })).map((fixture) => {
       if (fixture.target !== "yielded") return fixture;
       const { archive: _archive, ...source } = fixture;
 
@@ -340,6 +345,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     yield* update((value) => ({ ...value, infrastructureReused }));
     const yieldedBuilds = new Map<BuildLabel, Built>();
     let piBuild: Built | undefined;
+    let bareBuild: Built | undefined;
 
     if (targets.includes("yielded"))
       for (const label of labels) {
@@ -383,17 +389,37 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       }));
     }
 
+    if (targets.includes("bare")) {
+      bareBuild = yield* build(join(privateDirectory, runName, "build", "bare"), "bare");
+      const compiled = bareBuild;
+
+      yield* update((value) => ({
+        ...value,
+        builds: [
+          ...value.builds,
+          {
+            label: "control",
+            target: "bare",
+            revision: compiled.revision,
+            sha256: compiled.sha256,
+          },
+        ],
+      }));
+    }
+
     const cohorts: Query[] = options.sizes.flatMap((size) =>
       options.ttft.flatMap((ttftMs) =>
         Array.from({ length: options.objects }, (_, object) =>
-          targets.map((target): Query => ({
-            target,
-            object: `${runName}-h${size}-d${ttftMs}-o${object}`,
-            history: size,
-            ttftMs,
-            chunkDelayMs: ttftMs === 400 ? 10 : 0,
-            sample: "import",
-          })),
+          targets
+            .filter((target) => target !== "bare" || size === 0)
+            .map((target): Query => ({
+              target,
+              object: `${runName}-h${size}-d${ttftMs}-o${object}`,
+              history: size,
+              ttftMs,
+              chunkDelayMs: ttftMs === 400 ? 10 : 0,
+              sample: "import",
+            })),
         ).flat(),
       ),
     );
@@ -431,7 +457,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       phase: "seed" | "epoch",
       epoch?: number,
     ) {
-      const compiled = target === "pi" ? piBuild : yieldedBuilds.get(label);
+      const compiled =
+        target === "bare" ? bareBuild : target === "pi" ? piBuild : yieldedBuilds.get(label);
 
       if (!compiled) return yield* new BenchError({ message: "Missing isolated target build." });
       const worker = `${runName}-${target}`;
@@ -439,7 +466,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       const expectedBuild = `${runName}-${target}-${label}-${suffix}-${compiled.sha256}`;
       const file = join(privateDirectory, runName, "uploads", target, suffix, "worker.mjs");
       // Different module bytes even for the adjacent B/B (or A/A) pass, with no global random work.
-      const code = `// cold-storage-fresh code version: ${expectedBuild}\n${yield* fs.readFileString(compiled.file)}`;
+      const code = `// cold-bisect code version: ${expectedBuild}\n${yield* fs.readFileString(compiled.file)}`;
 
       yield* fs.makeDirectory(dirname(file), { recursive: true, mode: 0o700 });
       yield* fs.writeFileString(file, code, { mode: 0o600 });
@@ -517,7 +544,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                         target,
                         object: `${runName}-readiness-${target}-${attempt}-${index}`,
                         sample: "readiness",
-                        history: 50,
+                        history: target === "bare" ? 0 : 50,
                         ttftMs: 0,
                         chunkDelayMs: 0,
                       }),
@@ -652,8 +679,42 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             (item) => item.target === cohort.target && item.history === cohort.history,
           );
 
-          if (!current || !fixture)
-            return yield* new BenchError({ message: "Missing seed deployment or fixture." });
+          if (!current) return yield* new BenchError({ message: "Missing seed deployment" });
+          if (cohort.history === 0) {
+            const empty = (yield* request(
+              address(current, "/empty", cohort),
+              deploy.token,
+              Prepared,
+              {},
+              "3 minutes",
+              current.expectedBuild,
+            )).value;
+
+            seedBytes.set(key(cohort), empty.bytes);
+            if (empty.identity.isolate?.build !== current.expectedBuild)
+              return yield* new BenchError({ message: "Empty Object build mismatch" });
+            seededCount++;
+
+            return;
+          }
+          if (!fixture) return yield* new BenchError({ message: "Missing fixture" });
+          if (fixture.mode === "replay") {
+            for (let from = 0; from < cohort.history; from += 25) {
+              const to = Math.min(from + 25, cohort.history);
+
+              const response = (yield* request(
+                address(current, "/seed", cohort),
+                deploy.token,
+                ReplayResult,
+                { from, to },
+                "10 minutes",
+                current.expectedBuild,
+              )).value;
+
+              if (response.next !== to)
+                return yield* new BenchError({ message: "Seed acknowledgment mismatch" });
+            }
+          }
 
           const seeded = (yield* request(
             address(current, "/import", cohort),
@@ -818,7 +879,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         });
 
       // No /cold request occurs after either new upload. All subsequent Object work is measured.
-      for (const target of targets) yield* upload(target, label, "epoch", epoch);
+      if (options.coldMode !== "object")
+        for (const target of targets) yield* upload(target, label, "epoch", epoch);
       yield* Console.error(
         `Measuring ${label} pass ${epoch + 1}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
@@ -841,7 +903,14 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 build: label,
                 epoch,
                 repeat: index,
-                state: index === 0 ? "fresh-first-turn" : index === 1 ? "warmup" : "warm",
+                state:
+                  index === 0
+                    ? options.coldMode === "object"
+                      ? "cold"
+                      : "fresh-first-turn"
+                    : index === 1
+                      ? "warmup"
+                      : "warm",
                 status: poisoned.has(key(cohort)) ? "skipped" : "running",
                 ...(poisoned.has(key(cohort))
                   ? {
@@ -893,6 +962,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 yield* amend({
                   outcome: "completed",
                   driverMs: measured.value.driverMs,
+                  startedMs: measured.value.startedMs,
+                  routing: measured.value.routing,
                   ...(measured.value.admissionMs === undefined
                     ? {}
                     : { admissionMs: measured.value.admissionMs }),
@@ -912,11 +983,21 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
                 yield* amend({
                   identity: metrics.identity,
+                  timeline: metrics.timeline,
+                  firstModelMs:
+                    measured.value.startedMs === undefined || metrics.calls[0] === undefined
+                      ? undefined
+                      : metrics.calls[0].startMs - measured.value.startedMs,
                   fingerprints: metrics.calls.map((call) => call.fingerprint),
                   databaseBytes: metrics.bytes,
                   ...(metrics.storage === undefined ? {} : { storage: metrics.storage }),
                 });
-                const expected = references.get(query.history)?.get(query.sample);
+
+                const expected =
+                  query.target === "bare"
+                    ? append([], turn(query.sample, 0))
+                    : references.get(query.history)?.get(query.sample);
+
                 const actual = metrics.query;
 
                 if (
@@ -927,7 +1008,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   actual.ttftMs !== query.ttftMs ||
                   actual.chunkDelayMs !== query.chunkDelayMs ||
                   !expected ||
-                  metrics.calls.length !== MEASURED_TOOLS + 1 ||
+                  metrics.calls.length !== (query.target === "bare" ? 1 : MEASURED_TOOLS + 1) ||
                   metrics.calls.some(
                     (call, i) =>
                       call.call !== i ||
@@ -971,7 +1052,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
                 if (index === 0) {
                   anchor = identity;
-                  if (reset.build === current.expectedBuild)
+                  if (options.coldMode !== "object" && reset.build === current.expectedBuild)
                     reasons.push("Epoch build did not change after reset");
                   if (identity.incarnation === reset.response.before.incarnation)
                     reasons.push("Object incarnation unchanged after old-build reset");
@@ -979,12 +1060,17 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                     reasons.push("Object already entered before measured turn");
                   if (identity.priorAlarms !== 0)
                     reasons.push("Object alarm preceded measured turn");
-                  if (!objectIsolate || objectIsolate.id === reset.response.before.isolate?.id)
-                    reasons.push("Object isolate UUID unchanged or missing");
-                  if (objectIsolate?.durableObjectConstructors !== 1)
-                    reasons.push("Object isolate constructor count is not one");
-                  if (objectIsolate?.statelessFetches !== 0)
-                    reasons.push("Object isolate had earlier stateless fetches");
+                  if (options.coldMode === "object") {
+                    if (!objectIsolate || objectIsolate.id !== reset.response.before.isolate?.id)
+                      reasons.push("Cold Object did not retain warm isolate UUID");
+                  } else {
+                    if (!objectIsolate || objectIsolate.id === reset.response.before.isolate?.id)
+                      reasons.push("Object isolate UUID unchanged or missing");
+                    if (objectIsolate?.durableObjectConstructors !== 1)
+                      reasons.push("Object isolate constructor count is not one");
+                    if (objectIsolate?.statelessFetches !== 0)
+                      reasons.push("Object isolate had earlier stateless fetches");
+                  }
                 } else if (!residentVerified)
                   reasons.push("Object incarnation or isolate changed within the epoch");
 
@@ -998,7 +1084,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   status: reasons.length === 0 ? "ok" : "excluded",
                   fingerprintVerified: true,
                   buildVerified,
-                  freshVerified: index === 0 && reasons.length === 0,
+                  freshVerified:
+                    options.coldMode !== "object" && index === 0 && reasons.length === 0,
+                  coldVerified:
+                    options.coldMode === "object" && index === 0 && reasons.length === 0,
                   residentVerified,
                   exclusionReasons: reasons,
                   gapMs: median(gaps),

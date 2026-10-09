@@ -1,3 +1,4 @@
+import { instrumentTimeline, timeline } from "../../../deployed/isolate/timeline.ts";
 import { DurableObject } from "cloudflare:workers";
 
 import { payload, type Turn } from "../../../src/plan.ts";
@@ -164,14 +165,18 @@ function database(storage: DurableObjectStorage): SqliteDatabase {
 
 export class PiDO extends DurableObject<Env> {
   private root?: Conversation;
+  private pending?: Promise<void>;
   private readonly host: Host;
   constructor(ctx: DurableObjectState, env: Env) {
+    instrumentTimeline(ctx);
     ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "pi");
+    timeline(ctx.storage)?.point("constructor.return");
   }
   private async open() {
     if (this.root) return this.root;
+    timeline(this.ctx.storage)?.point("pi.open.start");
     const models = modelCollection(this.env, this.host.meter);
 
     const harness = await Harness.open(
@@ -184,25 +189,43 @@ export class PiDO extends DurableObject<Env> {
       context,
     );
 
-    return (this.root = await harness.root(context, {
+    const root = await harness.root(context, {
       agent: { model: { provider: "faux", modelId: "scripted-1" } },
-    }));
+    });
+    timeline(this.ctx.storage)?.point("pi.open.end");
+    return (this.root = root);
   }
-  private async turn({ id, text }: Turn) {
+  private async admit({id, text}: Turn) {
     const root = await this.open();
-    const submission = await root.submit({ type: "input", content: text, requestId: id }, context);
-    const settled = await submission.wait(context);
-
-    if (settled.status !== "done") throw new Error(JSON.stringify(settled));
-    await root.waitForIdle(context);
+    timeline(this.ctx.storage)?.point("pi.submit.start");
+    const submission = await root.submit({type: "input", content: text, requestId: id}, context);
+    timeline(this.ctx.storage)?.point("pi.submit.return");
+    this.pending = (async () => {
+      const settled = await submission.wait(context);
+      if (settled.status !== "done") throw new Error(JSON.stringify(settled));
+      await root.waitForIdle(context);
+    })();
+    this.ctx.waitUntil(this.pending);
+    return {id: submission.id};
+  }
+  private async wait() {
+    if (!this.pending) throw new Error("No pending pi submission");
+    await this.pending;
+  }
+  private async turn(input: Turn) {
+    await this.admit(input);
+    await this.wait();
   }
   override fetch(request: Request) {
     return this.host.fetch(request, {
+      empty: async () => { await this.open(); },
       import: async (fixture) => {
         if (!fixture.thread) throw new Error("Missing pi SQLite fixture");
         importRows(this.ctx.storage, fixture.thread);
       },
       run: (input) => this.turn(input),
+      submit: (input) => this.admit(input),
+      wait: () => this.wait(),
     });
   }
 }

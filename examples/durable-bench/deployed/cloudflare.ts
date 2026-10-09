@@ -65,7 +65,7 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (prefix = "cold-storage-fresh") {
+  const resources = Effect.fnUntraced(function* (prefix = "cold-bisect") {
     const workers = (yield* api("workers/scripts", Workers))
       .filter((w) => w.id.startsWith(prefix))
       .map((w) => w.id);
@@ -129,7 +129,7 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
             authorization: `Bearer ${token}`,
             "content-type": "application/json",
             "cache-control": "no-store",
-            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
+            ...(expectedBuild === undefined ? {} : { "x-cold-bisect-build": expectedBuild }),
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),

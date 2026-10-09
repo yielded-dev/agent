@@ -70,7 +70,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
-  const runName = `cold-storage-fresh-${started.toString(36)}-${nonce().slice(0, 8)}`;
+  const runName = `cold-bisect-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
 
@@ -510,6 +510,6 @@ export const teardown = Effect.gen(function* () {
 
   yield* save(join(workspace, "results", "cleanup.json"), result);
   yield* Console.log(
-    "Cleanup verified: no cold-storage-fresh Workers or Durable Object namespaces remain.",
+    "Cleanup verified: no cold-bisect Workers or Durable Object namespaces remain.",
   );
 });

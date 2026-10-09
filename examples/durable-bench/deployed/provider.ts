@@ -43,7 +43,7 @@ export default {
 
       const expected = seed
         ? history(seedIndex, seedIndex + 1)[0]?.text
-        : turn(query.sample, MEASURED_TOOLS).text;
+        : turn(query.sample, query.target === "bare" ? 0 : MEASURED_TOOLS).text;
 
       if (messages.findLast((m) => m.role === "user")?.text !== expected)
         throw new Error("Unexpected benchmark workload.");

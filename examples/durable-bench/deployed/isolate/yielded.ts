@@ -16,7 +16,8 @@ import { FixtureError } from "../worker/storage.ts";
 import { agent, definitions, YieldedDO } from "../worker/yielded.ts";
 import { buildMismatch, observeFetch } from "./observation.ts";
 import {
-  BulkFixture,
+  ReplayChunk,
+  type Phase,
   Identity,
   errorText,
   readQuery,
@@ -105,6 +106,7 @@ const expectedAbort = async (abort: () => Promise<unknown>) => {
 
 export default {
   async fetch(request: Request, env: Bindings): Promise<Response> {
+    const routing: Phase[] = [{ phase: "router.entry", atMs: Date.now() }];
     const ingress = observeFetch(env);
 
     if (!env.BENCH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
@@ -121,14 +123,23 @@ export default {
 
       if (query.target !== "yielded") throw new Error("Target mismatch");
 
-      const mutating = ["/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(
-        url.pathname,
-      );
+      const mutating = [
+        "/empty",
+        "/seed",
+        "/import",
+        "/cold",
+        "/submit",
+        "/await",
+        "/run",
+        "/storage",
+      ].includes(url.pathname);
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
       if (
         ![
+          "/empty",
+          "/seed",
           "/import",
           "/cold",
           "/submit",
@@ -160,8 +171,12 @@ export default {
       }
       if (url.pathname === "/submit" || url.pathname === "/await") {
         const receiptWire = url.pathname === "/await" ? await request.json() : undefined;
+
+        routing.push({ phase: "router.client.start", atMs: Date.now() });
         const cached = getClient(env);
         const { client, digests } = await cached.ready;
+
+        routing.push({ phase: "router.client.ready", atMs: Date.now() });
         const submitting = url.pathname === "/submit";
 
         if (submitting && cached.queries.has(query.object))
@@ -192,55 +207,55 @@ export default {
             }),
           );
 
-          return Response.json(result);
+          routing.push({ phase: "router.return", atMs: Date.now() });
+
+          return Response.json({ ...result, routing });
         } finally {
           if (submitting) cached.queries.delete(query.object);
         }
       }
       if (url.pathname === "/run") throw new Error("Yielded requires submit followed by await");
 
-      if (url.pathname === "/import") {
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
+      if (url.pathname === "/seed") {
+        const { from, to } = Schema.decodeUnknownSync(ReplayChunk)(await request.json());
 
-        if (fixture.target !== query.target || fixture.history !== query.history)
-          throw new Error("Fixture/query mismatch");
-        if (fixture.mode === "replay") {
-          if (!fixture.fallbackReason) throw new Error("Replay requires a fallback reason");
-          const cached = getClient(env);
-          const { client, digests } = await cached.ready;
+        if (to <= from || to - from > 25 || to > query.history)
+          throw new Error("Invalid seed range");
+        const cached = getClient(env);
+        const { client, digests } = await cached.ready;
 
-          if (cached.queries.has(query.object))
-            throw new Error("Concurrent submission to one benchmark Object");
-          cached.queries.set(query.object, { query, workerIsolate: ingress });
-          try {
-            await stub.beginReplay();
-            await cached.runtime.runPromise(
-              Effect.gen(function* () {
-                for (const input of history(0, fixture.history)) {
-                  cached.queries.set(query.object, {
-                    query: { ...query, sample: input.id, ttftMs: 0, chunkDelayMs: 0 },
-                    workerIsolate: ingress,
+        if (cached.queries.has(query.object)) throw new Error("Concurrent seed");
+        cached.queries.set(query.object, { query, workerIsolate: ingress });
+        try {
+          if (from === 0) await stub.beginReplay();
+          await cached.runtime.runPromise(
+            Effect.gen(function* () {
+              for (const input of history(from, to)) {
+                cached.queries.set(query.object, {
+                  query: { ...query, sample: input.id, ttftMs: 0, chunkDelayMs: 0 },
+                  workerIsolate: ingress,
+                });
+
+                const receipt = yield* client.submit(agent, input.text, {
+                  threadId: ThreadId.make(query.object),
+                  principal: Principal.make("bench"),
+                  idempotencyKey: IdempotencyKey.make(input.id),
+                  definitions: digests,
+                });
+
+                const settlement = yield* client.awaitSettlement(receipt);
+
+                if (settlement.outcome !== "completed")
+                  return yield* new FixtureError({
+                    message: `Seed ${input.id} did not complete; initialization will not be retried`,
                   });
+              }
+            }),
+          );
 
-                  const receipt = yield* client.submit(agent, input.text, {
-                    threadId: ThreadId.make(query.object),
-                    principal: Principal.make("bench"),
-                    idempotencyKey: IdempotencyKey.make(input.id),
-                    definitions: digests,
-                  });
-
-                  const settlement = yield* client.awaitSettlement(receipt);
-
-                  if (settlement.outcome !== "completed")
-                    return yield* new FixtureError({
-                      message: `Seed ${input.id} did not complete; initialization will not be retried`,
-                    });
-                }
-              }),
-            );
-          } finally {
-            cached.queries.delete(query.object);
-          }
+          return Response.json({ ok: true, next: to });
+        } finally {
+          cached.queries.delete(query.object);
         }
       }
 

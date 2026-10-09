@@ -3,7 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import { Config, Effect } from "effect";
 
 export default Alchemy.Stack(
-  "cold-storage-fresh",
+  "cold-bisect",
   {
     providers: Cloudflare.providers(),
     state: Alchemy.localState(),
@@ -37,14 +37,14 @@ export default Alchemy.Stack(
     if (kind === "infrastructure") {
       const prefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
 
-      const provider = yield* Cloudflare.Worker("cold-storage-fresh-provider", {
+      const provider = yield* Cloudflare.Worker("cold-bisect-provider", {
         ...options,
         name: prefix + "-provider",
         main: bundle + "/provider.mjs",
         env,
       });
 
-      const driver = yield* Cloudflare.Worker("cold-storage-fresh-driver", {
+      const driver = yield* Cloudflare.Worker("cold-bisect-driver", {
         ...options,
         name: prefix + "-driver",
         main: bundle + "/driver.mjs",
@@ -55,7 +55,7 @@ export default Alchemy.Stack(
       return { driver: driver.url, provider: provider.url };
     }
 
-    const worker = yield* Cloudflare.Worker("cold-storage-fresh-target", {
+    const worker = yield* Cloudflare.Worker("cold-bisect-target", {
       ...options,
       name,
       main: bundle,
@@ -66,33 +66,36 @@ export default Alchemy.Stack(
         PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
         ...(kind === "startup-yielded"
           ? {
-              THREADS: Cloudflare.DurableObject("cold-storage-fresh-yielded", {
+              THREADS: Cloudflare.DurableObject("cold-bisect-yielded", {
                 className: "YieldedDO",
               }),
             }
           : kind === "startup-pi"
             ? {
-                THREADS: Cloudflare.DurableObject("cold-storage-fresh-pi", { className: "PiDO" }),
+                THREADS: Cloudflare.DurableObject("cold-bisect-pi", { className: "PiDO" }),
               }
             : {
                 ...(kind === "target" || kind === "yielded"
                   ? {
-                      YIELDED: Cloudflare.DurableObject("cold-storage-fresh-yielded", {
+                      YIELDED: Cloudflare.DurableObject("cold-bisect-yielded", {
                         className: "YieldedDO",
                       }),
                     }
                   : {}),
+                ...(kind === "bare"
+                  ? { BARE: Cloudflare.DurableObject("cold-bisect-bare", { className: "BareDO" }) }
+                  : {}),
                 ...(kind === "target" || kind === "pi"
                   ? {
-                      PI: Cloudflare.DurableObject("cold-storage-fresh-pi", { className: "PiDO" }),
+                      PI: Cloudflare.DurableObject("cold-bisect-pi", { className: "PiDO" }),
                     }
                   : {}),
                 ...(kind === "target"
                   ? {
-                      ACTORS: Cloudflare.DurableObject("cold-storage-fresh-actors", {
+                      ACTORS: Cloudflare.DurableObject("cold-bisect-actors", {
                         className: "ActorDO",
                       }),
-                      THREADS: Cloudflare.DurableObject("cold-storage-fresh-threads", {
+                      THREADS: Cloudflare.DurableObject("cold-bisect-threads", {
                         className: "ThreadDO",
                       }),
                     }

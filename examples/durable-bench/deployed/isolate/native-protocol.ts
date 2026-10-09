@@ -78,7 +78,7 @@ export const parsePaddingRequest = (input: unknown): PaddingRequest => {
 };
 
 const target = (input: unknown): Target => {
-  if (input !== "yielded" && input !== "pi" && input !== "tardie")
+  if (input !== "yielded" && input !== "pi" && input !== "tardie" && input !== "bare")
     throw new Error("Unknown target");
 
   return input;
@@ -90,7 +90,7 @@ const query = (input: unknown): Query => {
   const ttftMs = integer(value.ttftMs);
   const chunkDelayMs = natural(value.chunkDelayMs);
 
-  if (!history || (ttftMs !== 0 && ttftMs !== 400) || chunkDelayMs > 1000)
+  if ((ttftMs !== 0 && ttftMs !== 400) || chunkDelayMs > 1000)
     throw new Error("Invalid query limits");
 
   return {
@@ -170,8 +170,6 @@ export const parseFixture = (input: unknown): BulkFixture => {
   if (value.version !== 1 || value.target !== "pi" || value.mode !== "import")
     throw new Error("Expected a native pi import fixture");
   const history = natural(value.history);
-
-  if (!history) throw new Error("Empty fixture history");
 
   return {
     version: 1,
@@ -253,4 +251,5 @@ export const errorText = (cause: unknown): string =>
 export const expectedSeed: Readonly<Record<number, string>> = {
   50: "b017b487524e44a4",
   250: "dcea9f30b0917245",
+  1000: "ac520308146f2a8f",
 };

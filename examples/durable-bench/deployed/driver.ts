@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 import { MeasureRequest } from "./model.ts";
-import { AwaitResult, RunResult, SubmitResult } from "./worker/protocol.ts";
+import { AwaitResult, RunResult, SubmitResult, Timeline } from "./worker/protocol.ts";
 
 interface Env {
   BENCH_TOKEN: string;
@@ -31,7 +31,7 @@ export default {
         target.protocol !== "https:" ||
         target.username ||
         target.password ||
-        !target.hostname.startsWith("cold-storage-fresh-") ||
+        !target.hostname.startsWith("cold-bisect-") ||
         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
       )
         return new Response("invalid target", { status: 400 });
@@ -40,7 +40,7 @@ export default {
           headers: {
             authorization: `Bearer ${env.BENCH_TOKEN}`,
             "cache-control": "no-store",
-            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
+            ...(expectedBuild === undefined ? {} : { "x-cold-bisect-build": expectedBuild }),
           },
         });
       const { query } = Schema.decodeUnknownSync(MeasureRequest)(input);
@@ -55,7 +55,7 @@ export default {
           headers: {
             authorization: `Bearer ${env.BENCH_TOKEN}`,
             "content-type": "application/json",
-            ...(expectedBuild === undefined ? {} : { "x-cold-storage-fresh-build": expectedBuild }),
+            ...(expectedBuild === undefined ? {} : { "x-cold-bisect-build": expectedBuild }),
           },
           body: JSON.stringify(body ?? {}),
           signal: AbortSignal.timeout(180_000),
@@ -76,9 +76,15 @@ export default {
 
       const started = Date.now();
       let admissionMs: number | undefined;
+      let routing: typeof Timeline.Type | undefined;
 
       if (query.target === "yielded") {
-        const admission = Schema.decodeUnknownSync(SubmitResult)(await invoke("/submit"));
+        const raw = await invoke("/submit");
+        const admission = Schema.decodeUnknownSync(SubmitResult)(raw);
+
+        routing = Schema.decodeUnknownSync(
+          Schema.Struct({ routing: Schema.optionalKey(Timeline) }),
+        )(raw).routing;
 
         admissionMs = Date.now() - started;
 
@@ -88,6 +94,13 @@ export default {
 
         if (settled.settlement.outcome !== "completed")
           throw new Error("Yielded did not complete the turn.");
+      } else if (query.target === "bare" || query.target === "pi") {
+        const admission = Schema.decodeUnknownSync(
+          Schema.Struct({ ok: Schema.Literal(true), receipt: Schema.Json }),
+        )(await invoke("/submit"));
+
+        admissionMs = Date.now() - started;
+        Schema.decodeUnknownSync(RunResult)(await invoke("/await", admission.receipt));
       } else {
         Schema.decodeUnknownSync(RunResult)(await invoke("/run"));
       }
@@ -98,7 +111,9 @@ export default {
         ok: true,
         driverMs: observedMs - started,
         observedMs,
+        startedMs: started,
         admissionMs,
+        routing,
         colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
       });
     } catch (cause) {

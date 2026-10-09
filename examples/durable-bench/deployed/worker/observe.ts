@@ -3,6 +3,7 @@ import { storageProbe } from "../isolate/cold-storage.ts";
 import { chatTranscript, errorText, parseReceipt } from "../isolate/native-protocol.ts";
 import { observeConstructor, isolateObservation } from "../isolate/observation.ts";
 import type { Env, Identity, ProviderCall, IsolateState, Query } from "../isolate/protocol.ts";
+import { timeline } from "../isolate/timeline.ts";
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
 
@@ -46,6 +47,7 @@ export class Observation {
     };
   }
   begin(query: Query, workerIsolate?: IsolateState) {
+    timeline(this.storage)?.begin();
     storageProbe(this.storage)?.begin();
     this.entry = {
       ...this.identity(),
@@ -71,7 +73,10 @@ export class Observation {
     const query = this.query;
 
     if (!query) throw new Error("Provider request without a benchmark sample");
-    if (this.calls.length === 0) storageProbe(this.storage)?.point("first-provider");
+    if (this.calls.length === 0) {
+      storageProbe(this.storage)?.point("first-provider");
+      timeline(this.storage)?.point("provider.prepare");
+    }
     const original = new Request(input, init);
     const url = new URL(original.url);
     const base = new URL(this.env.PROVIDER_URL);
@@ -96,6 +101,7 @@ export class Observation {
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
     try {
+      if (call.call === 0) timeline(this.storage)?.point("provider.dispatch");
       const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
 
       call.status = response.status;

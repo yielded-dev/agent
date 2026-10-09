@@ -6,6 +6,7 @@ import { parseFixture, parseIsolate, errorText, readQuery } from "./native-proto
 import { INGRESS_HEADER } from "./observation.ts";
 import { verifyFixture } from "./pi-storage.ts";
 import type { BulkFixture, Env, Query } from "./protocol.ts";
+import { timeline } from "./timeline.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
@@ -23,6 +24,9 @@ export class Host {
     request: Request,
     handlers: {
       import: (fixture: BulkFixture, query: Query) => Promise<void>;
+      empty?: () => Promise<void>;
+      submit: (input: { id: string; text: string }) => Promise<{ id: string }>;
+      wait: () => Promise<void>;
       run: (input: { id: string; text: string }) => Promise<void>;
     },
   ): Promise<Response> {
@@ -37,6 +41,18 @@ export class Host {
       this.ctx.abort(COLD_ABORT);
     }
     try {
+      if (url.pathname === "/empty") {
+        if (query.history !== 0) throw new Error("Empty preparation requires history0");
+        await handlers.empty?.();
+        await this.ctx.storage.sync();
+
+        return Response.json({
+          ok: true,
+          identity: this.meter.identity(),
+          tables: tables(this.ctx.storage.sql),
+          bytes: this.ctx.storage.sql.databaseSize,
+        });
+      }
       if (url.pathname === "/storage") {
         const result = storageProbe(this.ctx.storage)?.padding(await request.json());
 
@@ -68,6 +84,23 @@ export class Host {
           identity: this.meter.identity(),
         });
       }
+      if (url.pathname === "/submit") {
+        const ingress = request.headers.get(INGRESS_HEADER);
+
+        this.meter.begin(query, ingress === null ? undefined : parseIsolate(JSON.parse(ingress)));
+        this.meter.marker("submit");
+        const receipt = await handlers.submit(turn(query.sample, MEASURED_TOOLS));
+
+        timeline(this.ctx.storage)?.point("submit.complete");
+
+        return Response.json({ ok: true, receipt });
+      }
+      if (url.pathname === "/await") {
+        this.meter.marker("await");
+        await handlers.wait();
+
+        return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
+      }
       if (url.pathname === "/run") {
         const ingress = request.headers.get(INGRESS_HEADER);
 
@@ -87,6 +120,7 @@ export class Host {
           identity: this.meter.entry,
           calls: this.meter.calls,
           storage: storageProbe(this.ctx.storage)?.report(),
+          timeline: timeline(this.ctx.storage)?.events,
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

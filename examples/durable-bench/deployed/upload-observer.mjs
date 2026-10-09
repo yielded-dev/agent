@@ -7,7 +7,7 @@ globalThis.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
 
   const name = url.pathname.match(
-    /\/workers\/scripts\/(cold-storage-fresh-[a-z0-9-]+)(?:\/versions)?$/,
+    /\/workers\/scripts\/(cold-bisect-[a-z0-9-]+)(?:\/versions)?$/,
   )?.[1];
 
   const method = init?.method ?? (input instanceof Request ? input.method : "GET");
@@ -27,7 +27,7 @@ globalThis.fetch = async (input, init) => {
       const data = await response.clone().json();
 
       appendFileSync(
-        process.env.COLD_STORAGE_UPLOADS,
+        process.env.COLD_BISECT_UPLOADS,
         JSON.stringify({
           at: new Date().toISOString(),
           name,
@@ -46,7 +46,7 @@ globalThis.fetch = async (input, init) => {
   } catch (error) {
     if (observe)
       appendFileSync(
-        process.env.COLD_STORAGE_UPLOADS,
+        process.env.COLD_BISECT_UPLOADS,
         JSON.stringify({
           at: new Date().toISOString(),
           name,

@@ -19,12 +19,13 @@ import {
 } from "./platform.ts";
 
 const Stack = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^cold-storage-fresh-[a-z0-9-]+$/)),
+  name: Schema.String.check(Schema.isPattern(/^cold-bisect-[a-z0-9-]+$/)),
   kind: Schema.Literals([
     "infrastructure",
     "target",
     "yielded",
     "pi",
+    "bare",
     "startup-yielded",
     "startup-pi",
   ]),
@@ -39,9 +40,7 @@ const State = Schema.Struct({
   version: Schema.Literal(1),
   accountId: Schema.String,
   token: Schema.String,
-  infrastructurePrefix: Schema.String.check(
-    Schema.isPattern(/^cold-storage-fresh-shared-[a-f0-9]{8}$/),
-  ),
+  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^cold-bisect-shared-[a-f0-9]{8}$/)),
   infrastructure: Schema.optionalKey(Stack),
   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
   targets: Schema.Record(Schema.String, Stack),
@@ -72,7 +71,7 @@ export const deployments = Effect.gen(function* () {
       version: 1,
       accountId: cloud.accountId,
       token: nonce() + nonce(),
-      infrastructurePrefix: "cold-storage-fresh-shared-" + nonce().slice(0, 8),
+      infrastructurePrefix: "cold-bisect-shared-" + nonce().slice(0, 8),
       targets: {},
     };
   }
@@ -127,7 +126,7 @@ export const deployments = Effect.gen(function* () {
         DURABLE_BENCH_CPU: String(stack.cpu),
         DURABLE_BENCH_PROVIDER: provider,
         DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
-        COLD_STORAGE_UPLOADS: join(privateDirectory, "uploads.jsonl"),
+        COLD_BISECT_UPLOADS: join(privateDirectory, "uploads.jsonl"),
       },
     );
 
@@ -178,7 +177,7 @@ export const deployments = Effect.gen(function* () {
     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
 
     const infrastructure: Stack = {
-      name: "cold-storage-fresh-infrastructure",
+      name: "cold-bisect-infrastructure",
       kind: "infrastructure",
       bundle: output,
       build: revision,

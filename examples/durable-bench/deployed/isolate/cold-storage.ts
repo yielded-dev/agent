@@ -135,7 +135,7 @@ export const instrumentStorage = (ctx: DurableObjectState): DurableObjectState =
 
   Object.defineProperty(ctx.storage.sql, "exec", { value: meter.exec.bind(meter) });
   probes.set(ctx.storage, meter);
-  meter.initialize();
+  // The unread-padding experiment is complete. Opening this diagnostic performs no SQL.
 
   return ctx;
 };

@@ -5,7 +5,8 @@ import { BenchError } from "./platform.ts";
 import { run, teardown } from "./run.ts";
 import { History, Target } from "./worker/protocol.ts";
 
-const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History));
+const positive = (name: string) =>
+  Flag.Int(name).pipe(Flag.withSchema(Schema.Int.check(Schema.isGreaterThan(0))));
 
 export const command = Command.make(
   "deployed",
@@ -54,6 +55,7 @@ export const command = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Separate Yielded/pi Workers; reset old code before each fresh upload"),
     ),
+    coldMode: Flag.Literals("cold-mode", ["object", "fresh"]).pipe(Flag.withDefault("fresh")),
     order: Flag.Literals("order", ["ABBA", "BAAB", "AABB"]).pipe(
       Flag.optional,
       Flag.withDescription("Isolated rigorous pass order (default: randomly choose ABBA or BAAB)"),
@@ -105,8 +107,8 @@ export const command = Command.make(
       return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
     if (flags.isolate && targets.includes("tardie"))
       return yield* new BenchError({ message: "Isolated mode supports only yielded and pi." });
-    if (flags.isolate && sizes.some((size) => size !== 50 && size !== 250))
-      return yield* new BenchError({ message: "Isolated mode uses the verified 50/250 fixtures." });
+    if (flags.isolate && sizes.some((size) => ![0, 50, 250, 1000].includes(size)))
+      return yield* new BenchError({ message: "Isolated mode uses 0/50/250/1000 histories." });
     if (flags.storageProbe !== "none") {
       if (!flags.isolate || !flags.rigorous || baseline !== candidate)
         return yield* new BenchError({
@@ -135,6 +137,7 @@ export const command = Command.make(
       keep: flags.keep,
       rigorous: flags.rigorous,
       isolate: flags.isolate,
+      coldMode: flags.coldMode,
       storageProbe: flags.storageProbe,
       paddingMiB: flags.paddingMiB,
       ...(order === undefined ? {} : { order }),

@@ -44,14 +44,12 @@ export default {
 
       if (query.target !== "pi") throw new Error("Target mismatch");
       if (
-        ["/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(url.pathname) &&
+        ["/empty", "/seed", "/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(url.pathname) &&
         request.method !== "POST"
       )
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/identity", "/storage"].includes(url.pathname))
+      if (!["/empty", "/seed", "/import", "/cold", "/submit", "/await", "/run", "/metrics", "/identity", "/storage"].includes(url.pathname))
         return new Response("not found", { status: 404 });
-      if (url.pathname === "/submit" || url.pathname === "/await")
-        throw new Error("Only Yielded uses native receipts");
 
       const stub = env.PI.getByName(query.object, { locationHint: "wnam" });
 
