@@ -37,7 +37,15 @@ import {
   WorkerAdmissionPort,
   WorkerAdmissionFailure,
 } from "@yielded/agent/worker-admission";
-import { Cause, Clock, Context, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   SettlementPublishCall,

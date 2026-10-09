@@ -87,21 +87,19 @@ import type { ThreadReader } from "@yielded/agent/thread-store";
 import { AppendResult, ThreadStoreError, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
-import {
-  type Crypto,
-  Cause,
-  Clock,
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  ErrorReporter,
-  Layer,
-  Match,
-  Schema,
-  Semaphore,
-  Option,
-} from "effect";
+import type { Crypto } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Match from "effect/Match";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import {

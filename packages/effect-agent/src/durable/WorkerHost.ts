@@ -1,4 +1,7 @@
-import { Context, Effect, Option, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import type * as Agent from "../core/Agent.ts";
 import type { AgentPolicy } from "../core/AgentPolicy.ts";

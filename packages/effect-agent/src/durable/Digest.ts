@@ -1,6 +1,8 @@
 import type { PlatformError } from "effect";
-import { Crypto, Effect, Schema } from "effect";
-import { Hex } from "effect/encoding";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Schema from "effect/Schema";
 
 import { canonicalJson as stringifyCanonicalJson } from "./internal/canonical-json.ts";
 import type { DefinitionDigestInput } from "./Records.ts";

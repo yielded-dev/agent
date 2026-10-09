@@ -7,7 +7,7 @@ import {
   PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import type { RawAppendRequest } from "./do-journal.ts";
 

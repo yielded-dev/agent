@@ -6,7 +6,8 @@ import {
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { DoStorageConfig } from "./DoStorageConfig.ts";

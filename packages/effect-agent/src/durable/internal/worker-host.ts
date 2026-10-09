@@ -1,15 +1,13 @@
-import {
-  Cause,
-  Clock,
-  Context,
-  Crypto,
-  DateTime,
-  Duration,
-  Effect,
-  Option,
-  Schema,
-  Stream,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type * as Agent from "../../core/Agent.ts";
 import { AgentPolicy } from "../../core/AgentPolicy.ts";

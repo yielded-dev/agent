@@ -1,4 +1,7 @@
-import { Context, Effect, Layer, Option } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import type { ThreadId } from "../../core/Identifiers.ts";
 import type { CanonicalRecordEnvelope, RecordId } from "../Records.ts";

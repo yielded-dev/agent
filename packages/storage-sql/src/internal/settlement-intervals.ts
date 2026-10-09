@@ -6,9 +6,12 @@ import {
 } from "@yielded/agent/submission-ledger";
 import type { ThreadSettlementPredecessorRequest } from "@yielded/agent/thread-import";
 import { ThreadStoreError } from "@yielded/agent/thread-store";
-import { Effect, Option, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
+import * as Stream from "effect/Stream";
 
 import { makeSqlQuery, SqlInteger } from "../SqlStorage.ts";
 

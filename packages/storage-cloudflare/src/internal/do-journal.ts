@@ -20,9 +20,14 @@ import {
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { ThreadStoreDiagnostic, ThreadStoreError } from "@yielded/agent/thread-store";
-import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
+import * as Stream from "effect/Stream";
 
 import {
   type DoStorageFailpointError,

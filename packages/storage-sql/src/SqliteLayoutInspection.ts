@@ -1,5 +1,6 @@
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

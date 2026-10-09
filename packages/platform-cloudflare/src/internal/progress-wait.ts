@@ -1,4 +1,9 @@
-import { Context, Deferred, Effect, Layer, Ref, type Scope } from "effect";
+import type { Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 
 /** Cancellation tombstones are bounded hints, never durable authority. */
 const MAX_CANCELLATION_TOMBSTONES = 1_024;

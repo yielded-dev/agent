@@ -1,4 +1,6 @@
-import { Context, Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 /** Failure to enroll newly committed execution work. The source transaction must roll back. */
 export class SqlStorageProgressError extends Schema.TaggedError<SqlStorageProgressError>()(

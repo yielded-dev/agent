@@ -84,9 +84,16 @@ import {
 } from "@yielded/agent/thread-transfer";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { AssignmentTerminal } from "@yielded/agent/worker";
-import { Clock, Crypto, DateTime, Effect, Schema, Stream, Struct, Option } from "effect";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
+import * as Stream from "effect/Stream";
+import * as Struct from "effect/Struct";
 
 import { makeSqlSettlementIntervals } from "./internal/settlement-intervals.ts";
 import {

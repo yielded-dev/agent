@@ -1,5 +1,5 @@
 import type { Effect, Option } from "effect";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { ThreadId } from "../core/Identifiers.ts";
 import { CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";

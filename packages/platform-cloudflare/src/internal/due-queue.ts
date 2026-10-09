@@ -1,4 +1,7 @@
-import { Effect, Exit, Scheduler, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Scheduler from "effect/Scheduler";
+import * as Schema from "effect/Schema";
 import { SqlClient } from "effect/sql/SqlClient";
 import { SqlError, UnknownError } from "effect/sql/SqlError";
 

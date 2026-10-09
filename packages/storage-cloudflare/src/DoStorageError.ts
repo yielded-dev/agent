@@ -1,6 +1,6 @@
 import { CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { ThreadStoreDiagnostic } from "@yielded/agent/thread-store";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** The Durable Object's SQLite storage uses a private-development format this adapter cannot read. */
 export class DoStorageCompatibilityError extends Schema.TaggedError<DoStorageCompatibilityError>()(

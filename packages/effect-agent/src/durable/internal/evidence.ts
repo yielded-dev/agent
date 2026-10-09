@@ -1,4 +1,5 @@
-import { Effect, Option } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import type { ThreadId } from "../../core/Identifiers.ts";
 import { digestCanonicalJson } from "../Digest.ts";

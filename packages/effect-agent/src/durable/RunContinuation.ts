@@ -1,5 +1,12 @@
-import { Context, Crypto, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
 import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";

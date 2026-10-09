@@ -1,5 +1,7 @@
-import { Option, Schema, Struct } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
 import { PolicyLimit } from "../core/AgentError.ts";

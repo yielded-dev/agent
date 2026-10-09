@@ -436,6 +436,9 @@ PascalCase; public import subpaths use kebab-case. `import { Agent } from "@yiel
   boundary and should be removed.
 - Import other framework packages through their declared public entry points. Direct modules,
   roots, and namespace groups are allowed; declare the dependency and respect package direction.
+- Import upstream Effect modules directly in durable and platform implementations, such as
+  `import * as Schema from "effect/Schema"`, so bundlers can remove individual unused exports
+  without retaining a re-exported namespace in the Worker startup graph.
 - Keep one implementation owner for each API. Deliberate public modules may forward another
   package's bindings, including with `export *`, as Effect's platform packages do. A namespace
   group such as `/testing` is also a valid public boundary. Review additions for consumer value;

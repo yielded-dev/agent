@@ -1,4 +1,11 @@
-import { Clock, Context, Crypto, Effect, Layer, Result, Schema, Semaphore } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import { AgentId, DelegationId, ThreadId } from "../core/Identifiers.ts";

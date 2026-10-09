@@ -21,30 +21,28 @@ import {
   type ThreadProjectionError,
 } from "@yielded/agent/thread-projection-maintenance";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import {
-  Cause,
-  Clock,
-  Context,
-  DateTime,
-  Deferred,
-  Effect,
-  ErrorReporter,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Random,
-  Ref,
-  Result,
-  Schema,
-  Scope,
-  Semaphore,
-  Stream,
-  Struct,
-} from "effect";
 import { DurableObjectStorage } from "effect-cf";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Random from "effect/Random";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
+import * as Stream from "effect/Stream";
+import * as Struct from "effect/Struct";
 
 import { DurableObjectContext } from "./CloudflareBindings.ts";
 import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";

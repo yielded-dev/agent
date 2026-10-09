@@ -1,4 +1,5 @@
-import { Array, type Schema } from "effect";
+import type { Schema } from "effect";
+import * as Array from "effect/Array";
 
 interface JsonLimits {
   readonly depth: number;

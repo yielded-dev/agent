@@ -1,4 +1,6 @@
-import { DateTime, Effect, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { AgentId, ThreadId } from "../../core/Identifiers.ts";
 import { WorkerError } from "../../core/Worker.ts";

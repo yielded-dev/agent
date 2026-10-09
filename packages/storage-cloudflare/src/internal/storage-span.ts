@@ -1,4 +1,6 @@
-import { Effect, Predicate, Result } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
 
 type Tagged = { readonly _tag: string; readonly reason?: unknown };
 

@@ -1,4 +1,7 @@
-import { Effect, Schema, SchemaGetter, SchemaIssue } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as SchemaIssue from "effect/SchemaIssue";
 
 import {
   CanonicalBatch,

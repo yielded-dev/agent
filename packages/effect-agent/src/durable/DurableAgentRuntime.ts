@@ -1,24 +1,23 @@
 import type { Scope } from "effect";
-import {
-  Cause,
-  Clock,
-  Context,
-  Crypto,
-  DateTime,
-  Deferred,
-  Duration,
-  Effect,
-  Equal,
-  Exit,
-  Layer,
-  Option,
-  Ref,
-  Result,
-  Schema,
-  Semaphore,
-  Stream,
-} from "effect";
-import { Prompt, type Tool } from "effect/ai";
+import type { Tool } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import {
   type InputMessage,

@@ -44,8 +44,13 @@ import {
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Duration, Effect, Layer, Schema } from "effect";
 import { RpcTracing } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { DurableAlarmError } from "./Alarm.ts";
 import {

@@ -1,5 +1,8 @@
-import { Effect, Option, Schema, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { digestJson } from "../Digest.ts";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";

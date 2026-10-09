@@ -1,4 +1,6 @@
-import { DateTime, Predicate, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 
 import type { RunId } from "../../core/Identifiers.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";

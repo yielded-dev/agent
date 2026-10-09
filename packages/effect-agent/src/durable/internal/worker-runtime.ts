@@ -1,4 +1,5 @@
-import { Context, type Effect } from "effect";
+import type { Effect } from "effect";
+import * as Context from "effect/Context";
 
 import type { makeWorkerRuntime } from "./worker-host.ts";
 

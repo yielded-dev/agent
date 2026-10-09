@@ -2,7 +2,8 @@ import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-nati
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

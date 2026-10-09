@@ -46,6 +46,10 @@ by a root import; `sideEffects` does not make those exports lazy. Direct paths l
 module graph, including when importing upstream Effect modules. Other root imports in the same
 process can still load those shared modules.
 
+For Workers where global startup matters, import upstream Effect modules directly, such as
+`import * as Schema from "effect/Schema"`. Re-exported namespaces can keep unused exports
+reachable in the bundle.
+
 Use direct module paths at lazy-loading boundaries: mixing a
 static root import with a dynamic import of that same root can pull the runtime into the initial
 bundle. Also use dedicated subpaths for optional adapters and helpers intended for another

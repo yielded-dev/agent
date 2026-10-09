@@ -1,5 +1,13 @@
 import type { Scope } from "effect";
-import { Cause, Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import type { CanonicalBatch, CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";

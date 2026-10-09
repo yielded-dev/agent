@@ -1,5 +1,10 @@
 import { SqliteClient } from "@effect/sql-sqlite-do";
-import { Context, Effect, Exit, Predicate, Schema, Semaphore } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

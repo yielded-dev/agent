@@ -48,7 +48,10 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
-import { Context, Effect, Predicate, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";

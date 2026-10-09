@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { MessageStatus } from "../../core/Messaging.ts";
 import type { MessageDeliveryRecord } from "../MessageDelivery.ts";

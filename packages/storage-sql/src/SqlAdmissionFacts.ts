@@ -5,7 +5,8 @@ import {
   unknownResolutionKind,
 } from "@yielded/agent/submission-ledger";
 import { ThreadAdmission } from "@yielded/agent/thread-store";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
 const decodeAdmission = Schema.decodeUnknownEffect(ThreadAdmission);

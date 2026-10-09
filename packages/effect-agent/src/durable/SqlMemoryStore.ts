@@ -1,4 +1,8 @@
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

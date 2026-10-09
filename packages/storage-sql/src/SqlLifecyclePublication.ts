@@ -9,7 +9,14 @@ import {
   type LifecyclePublicationStorage,
 } from "@yielded/agent/lifecycle-publication";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import { Array, Cause, Context, Crypto, DateTime, Effect, Option, Schema } from "effect";
+import * as Array from "effect/Array";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";

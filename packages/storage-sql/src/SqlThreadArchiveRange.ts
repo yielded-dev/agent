@@ -26,7 +26,10 @@ import {
   ThreadCheckpoint,
   type ThreadExportBatch,
 } from "@yielded/agent/thread-store";
-import { Crypto, Effect, Option, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import type { RawAppendRequest } from "./SqlJournal.ts";

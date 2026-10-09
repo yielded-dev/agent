@@ -76,7 +76,8 @@ import {
   WorkDiscoveryUnavailable,
 } from "@yielded/agent/thread-work";
 import { WorkerAdmissionRequest } from "@yielded/agent/worker-admission";
-import { Schema, SchemaGetter } from "effect";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 /**
  * The cross-Durable-Object port protocol (plan §1.3, D-P6-3): Schema request/response/error

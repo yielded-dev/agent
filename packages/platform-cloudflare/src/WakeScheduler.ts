@@ -1,6 +1,10 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Layer, PubSub, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as PubSub from "effect/PubSub";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { DurableAlarmService } from "./Alarm.ts";
 import {

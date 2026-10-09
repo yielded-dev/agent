@@ -1,4 +1,12 @@
-import { Cause, Clock, Context, Crypto, Effect, Layer, Option, Schema, type Scope } from "effect";
+import type { Scope } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { Receipt } from "../core/Receipt.ts";

@@ -1,5 +1,9 @@
-import { Effect, Exit, Option, Schema, SchemaTransformation } from "effect";
 import type { Cause } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import { SqlClient } from "effect/sql/SqlClient";
 import { SqlError, UnknownError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";
