@@ -114,25 +114,26 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
 
         sequences.push(envelope.sequence);
         responseSequencesByRun.set(payload.runId, sequences);
-        const declarations = declarationsByRun.get(payload.runId) ?? [];
 
-        // Retain references to bounded source identities, not an expanded settlement-ID
-        // string and Map entry for every declared operation in the context.
-        declarations.push({
-          sequence: envelope.sequence,
-          turn: payload.turn,
-          callIds:
-            "toolOperations" in payload
-              ? payload.toolOperations.map((operation) => operation.toolCallId)
-              : payload.messages.content.flatMap((message) =>
-                  message.role === "assistant"
-                    ? message.content.flatMap((part) =>
-                        part.type === "tool-call" && !part.providerExecuted ? [part.id] : [],
-                      )
-                    : [],
-                ),
-        });
-        declarationsByRun.set(payload.runId, declarations);
+        const callIds =
+          "toolOperations" in payload
+            ? payload.toolOperations.map((operation) => operation.toolCallId)
+            : payload.messages.content.flatMap((message) =>
+                message.role === "assistant"
+                  ? message.content.flatMap((part) =>
+                      part.type === "tool-call" && !part.providerExecuted ? [part.id] : [],
+                    )
+                  : [],
+              );
+
+        if (callIds.length > 0) {
+          const declarations = declarationsByRun.get(payload.runId) ?? [];
+
+          // Retain references to bounded source identities, not an expanded settlement-ID
+          // string and Map entry for every declared operation in the context.
+          declarations.push({ sequence: envelope.sequence, turn: payload.turn, callIds });
+          declarationsByRun.set(payload.runId, declarations);
+        }
       } else if (payload._tag === "ToolCallSettled") {
         settledToolCallRecordIds.add(envelope.record.recordId);
         settledSequenceById.set(envelope.record.recordId, envelope.sequence);
