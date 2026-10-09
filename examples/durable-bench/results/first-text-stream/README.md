@@ -2,7 +2,7 @@
 
 The proposed Effect Stream adapter showed **no material latency penalty in this sample**. Warm first text was 679 / 805 ms at 50 / 250 seeded turns, versus 751 / 832 ms with the existing native byte stream. Warm settlement was 1.1% / 1.2% lower. These are different Object cohorts with overlapping variation, not proof that the refactor is faster or a statistical non-regression guarantee.
 
-The product branch and [draft #829](https://github.com/yielded-dev/agent/pull/829) remain unchanged at `a59d51e6`. This branch holds the experiment only. The original evidence commit `3cb24168` remains reachable.
+The native control is `a59d51e6`. The tested Effect Stream replacement is now applied to [draft #829](https://github.com/yielded-dev/agent/pull/829) in `5e4a1d8c`; its pre-commit linter added one blank line without changing the executable implementation. [The application receipt](validation-applied.json) records the fresh-checkout gate. This branch keeps the experiment outside the product PR, and the original evidence commit `3cb24168` remains reachable.
 
 ## Client latency
 
@@ -49,7 +49,7 @@ Public receipts hash provider-request, Run, Turn and Attempt identifiers. The pu
 | Direct Effect Stream | `111a29fbb8cb0d35a4947a278aba62f004fdb27ae35694f4bbf20c4f495702df` |
 | Shared provider | `017d55796b2aa5bb4538ef516d5a9363ab5f748cd51514da9fd7f26ccfce94ab` |
 
-The candidate package check passed. The unchanged product commit's full `vp run ready` gate already passed in a fresh CI-style checkout without vendored `third-party/node_modules`; [the validation receipt](validation-experiment.json) links that proof.
+The candidate package check passed during the experiment. [The original validation receipt](validation-experiment.json) records that run and the native control's clean-checkout gate. [The application receipt](validation-applied.json) records the full `vp run ready` gate for the replacement now in the PR, in another fresh CI-style checkout without vendored `third-party/node_modules`.
 
 ## Non-ok outcomes and cleanup
 

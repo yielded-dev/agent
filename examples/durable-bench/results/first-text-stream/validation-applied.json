@@ -1,0 +1,64 @@
+{
+  "commit": "5e4a1d8ce2d65ec8fb9cb7f3b1f1f892352faa55",
+  "change": "Replace manual ReadableStream callbacks with the measured Effect Stream pipeline; keep ReadableStream conversion at the RPC boundary.",
+  "sourceSha256": "159186f0ea0f1dbd4d9dbffa1bc1cd3149b91c693a1b67b381afdab964e6bdc3",
+  "deployedCandidateSourceSha256": "72fd5a6ce8c51283cefee600ef161232d58a4151dfbcc996c91e869ece9007fa",
+  "onlyDifferenceFromDeployedCandidate": "One blank line inserted by the pre-commit linter",
+  "deployedEvidenceReused": true,
+  "performanceReport": "https://github.com/yielded-dev/agent/blob/7c9866c30737c277d00c233527a32cace73b1a53/examples/durable-bench/results/first-text-stream/README.md",
+  "validation": {
+    "command": "vp run ready",
+    "ci": true,
+    "node": "24.20.0",
+    "postgres": "18.6",
+    "freshDetachedCheckout": true,
+    "frozenInstall": true,
+    "installScriptsSuppressed": true,
+    "repositoryTsgoPatchApplied": true,
+    "vendoredThirdPartyNodeModulesAbsent": true,
+    "experimentalEvidenceAbsent": true,
+    "initialAttempt": {
+      "exitCode": 1,
+      "stage": "platform-cloudflare test",
+      "failedTests": 9,
+      "failureMode": "5000 ms test deadlines during four concurrent workspace suites",
+      "observedHostLoadAverage": [
+        49.20703125,
+        32.70556640625,
+        21.78466796875
+      ],
+      "failures": [
+        " FAIL   workerd  test/context-compactor.test.ts > Cloudflare replaceable compaction > retains independent Tool authorization alongside a compactor after eviction",
+        " FAIL   workerd  test/message-delivery.test.ts > Thread Object message maintenance > stays dormant with its exact receipt while its destination waits for external approval",
+        " FAIL   workerd  test/message-delivery.test.ts > Thread Object message maintenance > delivers new wakes during source work and stays dormant after retirement",
+        " FAIL   workerd  test/message-delivery.test.ts > Thread Object message maintenance > executes new input during a held delivery and retains its exact retry after timeout",
+        " FAIL   workerd  test/projection.test.ts > live Thread projection and alarm backfill > does not let a future projection deadline gate approval publication or execution",
+        " FAIL   workerd  test/publication.test.ts > durable host publication > publishes start progress, then stays dormant during a held tool until settlement",
+        " FAIL   workerd  test/recovery-faults.test.ts > recovery faults independent of execution history > delivers submission fault transitions across interruption and keeps retries silent",
+        " FAIL   workerd  test/recovery-faults.test.ts > recovery faults independent of execution history > a real alarm publishes a fresh Thread reply while old recovery is stalled and cleanup survives eviction",
+        " FAIL   workerd  test/scheduling.test.ts > Cloudflare Schedule Owner > reaches healthy work after a full corrupt due page and retains its recovery alarm"
+      ],
+      "followUp": "Rerun the failed Cloudflare suite alone with the same code, assertions and timeouts; then finish vp run ready using successful task cache entries.",
+      "isolatedCloudflare": {
+        "exitCode": 0,
+        "testFiles": 36,
+        "passed": 141,
+        "skipped": 6,
+        "changedAssertions": false,
+        "changedTimeouts": false,
+        "freshProcess": true
+      }
+    },
+    "finalAttempt": {
+      "exitCode": 0,
+      "tasks": 71,
+      "cachedTasks": 41,
+      "logSha256": "bbe15cdfa28e7320371a3d9864244f426a08f638c311eb1a8d659da4c86e670c"
+    }
+  },
+  "cleanup": {
+    "temporaryPostgresStopped": true,
+    "additionalCloudflareDeployments": 0,
+    "priorCloudflareCleanup": "cleanup.json"
+  }
+}
