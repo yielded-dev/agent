@@ -1,0 +1,14 @@
+{
+  "baselineRevision": "a59d51e6a5981f4d520ada7357cd5aa653b9487a",
+  "nativePackageInputsMatchCommit": true,
+  "packageInputsChecked": 188,
+  "onlyAdapterChanged": true,
+  "changedInputs": [
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+      "native": "c5229c54b423a4ebdb62ab1b411a3fdde0ad51799f4f4075ce88b572190fb0fc",
+      "effectStream": "72fd5a6ce8c51283cefee600ef161232d58a4151dfbcc996c91e869ece9007fa"
+    }
+  ],
+  "otherRecordedSourceInputsIdentical": true
+}

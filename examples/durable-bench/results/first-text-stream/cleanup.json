@@ -1,0 +1,30 @@
+{
+  "complete": true,
+  "checkedAt": "2026-10-09T15:29:09.803Z",
+  "checks": [
+    {
+      "worker": "first-text-2e8162c1-plain",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-2e8162c1-native",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-2e8162c1-provider",
+      "status": 404,
+      "remainingNamespaces": 0
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "privateStateRemoved": true,
+  "privateValueScanPassed": true,
+  "filesScanned": 47,
+  "telemetryTailCollected": true,
+  "telemetryFailures": []
+}

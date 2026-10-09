@@ -1,0 +1,41 @@
+{
+  "baselineRevision": "a59d51e6a5981f4d520ada7357cd5aa653b9487a",
+  "bundleSha256": "874f8d75e590373c1702de302d31fa43a06bb355cc93cbb1226dd1776764aaf5",
+  "providerSha256": "017d55796b2aa5bb4538ef516d5a9363ab5f748cd51514da9fd7f26ccfce94ab",
+  "settings": {
+    "placement": {
+      "mode": "targeted",
+      "target": [
+        50
+      ]
+    },
+    "limits": {
+      "cpu_ms": 300000
+    },
+    "compatibilityDate": "2026-08-18",
+    "compatibilityFlags": [
+      "nodejs_compat",
+      "global_fetch_strictly_public"
+    ],
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    }
+  },
+  "privateStateMode": "0700",
+  "stackPrefix": "first-text",
+  "generation": "seed",
+  "at": "2026-10-09T15:13:51.668Z"
+}

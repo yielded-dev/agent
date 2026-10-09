@@ -1,0 +1,3 @@
+{"phase":"native-prototype","compatible":true,"noSubmission":true}
+{"phase":"plain-prototype","compatible":false,"noSubmission":true,"error":"TypeError: fetch failed"}
+{"phase":"plain-prototype","compatible":true,"noSubmission":true}

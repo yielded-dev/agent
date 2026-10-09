@@ -1,0 +1,50 @@
+{
+  "question": "Does modeling the live-text frames as an Effect Stream add material deployed client latency versus the existing native byte stream?",
+  "hypothesis": "The adapter refactor leaves first-visible latency and settlement within normal Object-to-Object and same-Object repeat variation.",
+  "primaryMetric": "Driver submit-start to first nonempty assistant text received by the public CloudflareThreadClient watchText consumer.",
+  "secondaryMetrics": [
+    "Provider first text token to client first text, conditionally calibrated across I/O clocks",
+    "Provider last token to complete visible text",
+    "Driver submit-start to durable settlement observed"
+  ],
+  "descriptiveAttentionThresholds": {
+    "firstVisibleDifferenceMs": 50,
+    "settlementDifferencePercent": 2,
+    "qualification": "Attention thresholds, not statistical equivalence guarantees. Interpret differences against per-Object and repeat spread; do not claim a speedup from an unpaired cohort difference."
+  },
+  "environment": {
+    "deployment": "Cloudflare Workers and Durable Objects through private Alchemy stacks",
+    "compatibilityDate": "2026-08-18",
+    "driverPlacement": "aws:us-west-1",
+    "durableObjectLocationHint": "wnam",
+    "effect": "4.0.0"
+  },
+  "sample": {
+    "variants": [
+      "native-prototype",
+      "plain-prototype"
+    ],
+    "seededTurns": [
+      50,
+      250
+    ],
+    "objectsPerSeedPerVariant": 3,
+    "turnsPerObject": 5,
+    "firstTurn": "forced Object reconstruction verified by incarnation",
+    "secondTurn": "retained settling sample, excluded from cold/warm summary",
+    "remainingTurns": "three warm same-incarnation repeats",
+    "plannedTurns": 60,
+    "plannedModelCalls": 540,
+    "parallelLanesPerVariant": 2
+  },
+  "provider": {
+    "timeToFirstTokenMs": 400,
+    "fragmentIntervalMs": 25,
+    "textFragmentsPerCall": 48,
+    "callsPerMeasuredTurn": 9,
+    "toolCallsPerTurn": 8
+  },
+  "timing": "Deployed receipts only. Millisecond I/O clocks; provider-driver lag uses the full observed same-colo echo offset envelope plus 1 ms quantization. Midpoints are conditional estimates. Driver-local first text and settlement do not cross clock domains.",
+  "stopRule": "One bounded two-variant comparison plus existing resource-lifetime proofs; preserve every failed outcome and do not replay uncertain turn submissions.",
+  "productChange": "Experiment only; restore the product branch unchanged."
+}

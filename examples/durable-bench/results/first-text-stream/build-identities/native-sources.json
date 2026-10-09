@@ -1,0 +1,782 @@
+[
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/host.ts",
+    "sha256": "8892fe44d3518952d5ecb7e89e8f0a1afd560b58d399136aef27243f86ba1321"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/observe.ts",
+    "sha256": "79d0c4d5a8ae5529e50a463640c2103bc071c3dbace841ec9a1ecceb3dc7c6c8"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/pi.ts",
+    "sha256": "c0a2e10c66906d297ec5b96dccfc57350b38168efe883bc31d180962a821c7c8"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/proof.ts",
+    "sha256": "f804e40f8470a1addbd3bac3c66582762c7df8cbeada55e99a21c97e412506b9"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/protocol.ts",
+    "sha256": "485873edee32abb2cbca4ff0ce6bfc2578405873250c576b224f19e2a5a72876"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/worker.ts",
+    "sha256": "7874bad46ebe9f11d3fed703555b6db75db0e6603a9b29fe85557f02ef6dff98"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/yielded.ts",
+    "sha256": "0a1aa579090b3a95d47a9f4ab586871ad29d46726ae1700338ac3cd87cf8f423"
+  },
+  {
+    "path": "packages/effect-agent/src/capabilities/BrowserUse.ts",
+    "sha256": "ecd2fe789e03a84a9a4dc843384837cd8e0d5bc782224c89141fdc48239c0293"
+  },
+  {
+    "path": "packages/effect-agent/src/capabilities/Messaging.ts",
+    "sha256": "86f7a94bfdbb38f542df88c3b40a5708c330e06907e33b06b619934d9e9bfaaf"
+  },
+  {
+    "path": "packages/effect-agent/src/capabilities/internal/utf8.ts",
+    "sha256": "6dd802a60f2217d56fec73119ff2661a77d1e6f0292f3142b7153fade7416698"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Agent.ts",
+    "sha256": "410db58475bfaf1397c7569f153cc5ca4900619fa9c9eef7bc78be2ce87eb575"
+  },
+  {
+    "path": "packages/effect-agent/src/core/AgentError.ts",
+    "sha256": "647cc4b4b0543f6ebed7662fa7636523542b4487f0bae7e16d4279b21121f915"
+  },
+  {
+    "path": "packages/effect-agent/src/core/AgentPolicy.ts",
+    "sha256": "e7bb4a472e32262be2ec0d5f6a8fc150248547728d97fda0b21ed4317a0b600a"
+  },
+  {
+    "path": "packages/effect-agent/src/core/AgentUpdates.ts",
+    "sha256": "c068dd94d9a91caee6a4bb70ecb2b8c79cadd6d096ba54a4c1cfc78753c8a992"
+  },
+  {
+    "path": "packages/effect-agent/src/core/FailureDiagnostic.ts",
+    "sha256": "3df023841f845e21590e6059c71249cd1f593aff3ec305bd555d158272174770"
+  },
+  {
+    "path": "packages/effect-agent/src/core/IdGenerator.ts",
+    "sha256": "0c15b2a52b98b8ef5de84dcee8f84272eefbb7c8ba84c2f80fe39d909035648a"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Identifiers.ts",
+    "sha256": "463dd7b145829cf7f8473a83c965b285f2a77be7ae6290233180cdf335c4ab80"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Memory.ts",
+    "sha256": "e2c605361f8710f181c42fb9606031a6cee34cea316f6f2113d840d023f31391"
+  },
+  {
+    "path": "packages/effect-agent/src/core/MemoryNamespace.ts",
+    "sha256": "61df9ffb362b397deb782d4fc62ac8f20d0fcb0a5f832645e9e844b9c91273ef"
+  },
+  {
+    "path": "packages/effect-agent/src/core/MemoryReference.ts",
+    "sha256": "5f219cf4a018e7dbefc4534a3ae1eab2ac45c4b0bd3a0fa9ecfec7c4ed012895"
+  },
+  {
+    "path": "packages/effect-agent/src/core/MemoryRevalidation.ts",
+    "sha256": "39154c528265c0a03160dfeb3a19762b727d574eae0f0c29de9fe94ddf62774d"
+  },
+  {
+    "path": "packages/effect-agent/src/core/MemoryStore.ts",
+    "sha256": "002d56c9ab48543962b1f42911651467f1e5be1f1d885170cde3e83c0e35a94b"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Messaging.ts",
+    "sha256": "05ffc761ecafdb5276a19f7dbcd1dd67862432d9bc8387b497346cbdcbadc367"
+  },
+  {
+    "path": "packages/effect-agent/src/core/ProvisionalText.ts",
+    "sha256": "2144cb82099b5dd25d15095578a2fd6288fff0547d5db39c174ac8a4f24d5617"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Receipt.ts",
+    "sha256": "d83b2ce9ab891b5bf375af0185a78819e0c02356f7bb36bdab2427e79441d017"
+  },
+  {
+    "path": "packages/effect-agent/src/core/RunEvent.ts",
+    "sha256": "e529c7db3257d9fa5d306c0313645ac1c9988de8270c91d73451f94ce8e890ba"
+  },
+  {
+    "path": "packages/effect-agent/src/core/RunPolicyUsage.ts",
+    "sha256": "b2cdab13f26ef3ca6f7a219bee43ecc382cea69729f292aaed3c00f7a5988912"
+  },
+  {
+    "path": "packages/effect-agent/src/core/SemanticMemoryIndex.ts",
+    "sha256": "d6caf0cd407df574327396f5e89011d0ad808326816748f0c43b6ed0cd8b665a"
+  },
+  {
+    "path": "packages/effect-agent/src/core/SemanticMemoryRevalidation.ts",
+    "sha256": "e373d0295873a369850ab1278c74c3894f21e08f86bd26c690143c3b73ec5d5b"
+  },
+  {
+    "path": "packages/effect-agent/src/core/SubagentContract.ts",
+    "sha256": "df8afee3fd30b56bc2aa70b0a840b5abf66bcd76dbfa3bad518da595fcb7aafe"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Thread.ts",
+    "sha256": "d6c4dbb821c25f8af8f8cb6c36bcf07f9755f3ab96371e90ef08b0ecb2e7a7f5"
+  },
+  {
+    "path": "packages/effect-agent/src/core/ToolExposure.ts",
+    "sha256": "bddc1862d4f90e421eb929b82e7024c87f0fdab07f5d88bab5e23a3e6f280754"
+  },
+  {
+    "path": "packages/effect-agent/src/core/ToolResult.ts",
+    "sha256": "03e8e17a85ac8f140762bc0e316da93d4fcdec14922739ca4503ee8b139b5721"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Usage.ts",
+    "sha256": "cb19371e4d73037d7787cd23fd904070aa9290898d8aec723bd186908cf368c4"
+  },
+  {
+    "path": "packages/effect-agent/src/core/Worker.ts",
+    "sha256": "9ba9a533e44a4038a6516a9b3a86946753ac2536696c770f729ff6f51daebfbb"
+  },
+  {
+    "path": "packages/effect-agent/src/core/internal/agent-updates.ts",
+    "sha256": "ca763a076780490efe3f7661dd37783cc7ecd85b90cca028171c90b2610ea9e8"
+  },
+  {
+    "path": "packages/effect-agent/src/core/internal/json.ts",
+    "sha256": "6f57b2bb0823a0d57657f93978f4ddc197c6e3b2b8f175787f5f4f0b37eb4f63"
+  },
+  {
+    "path": "packages/effect-agent/src/core/internal/message-status.ts",
+    "sha256": "98360e65b73f173c1d27b5987ee40d5e24b38c8fbecf9c2a94653e788664d475"
+  },
+  {
+    "path": "packages/effect-agent/src/core/internal/strict-schema.ts",
+    "sha256": "ec35d9b1684f62182052bf17a769b8c894278c585dd50060860d6437896423b0"
+  },
+  {
+    "path": "packages/effect-agent/src/core/internal/utf8.ts",
+    "sha256": "3eb8ca729f8cf0b3b0c5f76c22313d67a707288dcaf5c9224fd646461fd3ed73"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Admin.ts",
+    "sha256": "d5624fbb73f497af3e371914c675feaa3a7a6b812e82544e8e4c53f54ad7c8d5"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/AgentRegistration.ts",
+    "sha256": "800b51eade9bb15ea18aad832b2b671a3347274043cbc7d5a9affd8e8d97452c"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Digest.ts",
+    "sha256": "a9576e4f7a3bcde95bce1f10c23f37dc55f831e18a8a9a28d596afe63c0cba2a"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+    "sha256": "7e08c50b2f959ba6161ae3f9c1779f4144ceb63857f3816ba96300de99650674"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/DurableFailpoint.ts",
+    "sha256": "c7c3db2b39046bbc647ef5fc5c136c50c1079992259efefa67d1e7c73512ce4f"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/EventSource.ts",
+    "sha256": "919c691b0bff5a7d5c470ec9a6967743d6482750b152e571d62057f785dc1c8f"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/LifecyclePublication.ts",
+    "sha256": "74ba1c640bbed4d679c3e4ba2b61bef054b6ccfc972ebc1e0f2310cfee88b7c9"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/MessageDelivery.ts",
+    "sha256": "5af36fdccd5d1c17467aa08307aec1ce4f642bfa00eac4af1f2a4b8d03ef5a8c"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/OperationAuthorizer.ts",
+    "sha256": "2988568f14f4b47ebc499a3af70e07545450a8deb15484141aa80ddddc044ad8"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/PreparedInputAdmission.ts",
+    "sha256": "7d9dac39b3a53ff5a9ac2bfb6f8daba6c47896e8384ddf10e9da4b504132636e"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/RecordFormat.ts",
+    "sha256": "53c940661082660f17971d23c09cd117584608be1a31ac67eb2c1d4a45083bc0"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Records.ts",
+    "sha256": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Recovery.ts",
+    "sha256": "73de69bfed3959db3cd4a39a1f1b528e9dd1196b966e62597391916890ad3fc9"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/RunContinuation.ts",
+    "sha256": "30f959b374e85c8afade95e1edaa7b2cd699c8c295e51dfb6d9964d5f4bf255a"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/RunJournal.ts",
+    "sha256": "7d8abce3a1647e204c59945520a02028b93d356d364bac1fde7988544715bd4a"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/RunStorage.ts",
+    "sha256": "d25dd321b63ed9bd11b3bd4a0c5268b25498f98147ba37ff47faafb3e3feaecf"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Schedule.ts",
+    "sha256": "1a82905f2807ead4fbb5c77868e667184820021380e9342eb1d2880c707d52a8"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ScheduleTransition.ts",
+    "sha256": "0cb154974e64ac1d080375c0638197fab6f4ea9c11be8d6a59c2281d91f46f20"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Scheduling.ts",
+    "sha256": "5be51d9f9d91d244ec95aa9b5feac58910f7fd1ea7b8ac149000e980bfdab28e"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SettlementPublisher.ts",
+    "sha256": "97f51ee5d8497626f7cd9e576db3b593ac724004cef9954137661d5a977c11ff"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SqlMemoryStore.ts",
+    "sha256": "fe424a82b9c2eab18c6455e2c59ec7f6c926b04d4d6edd8c93c2fa801e6bfa29"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SubmissionLedger.ts",
+    "sha256": "7772a48c3fc1ebdc83c8dfb2a5637a1f647a00f3d14d7dbafbed15b5e3749c82"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SubmissionStatus.ts",
+    "sha256": "5ae309f7607ce330c2642fe5a3084cc29a5d5390985cb9f5bb02872494b5daa1"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Subscription.ts",
+    "sha256": "bfe269bb32b27ed2f82613da31227e69122644ac1c785539a50d2c2b7b77f6f5"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SubscriptionInput.ts",
+    "sha256": "a0a7b5f9e3f74cc446f7026dda3aad1adf2db8390774ced056d937ff53fb6273"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/SubscriptionTransition.ts",
+    "sha256": "6303ce64c7ff588e019b4b06f98e8a4fb0d8ea42ff8beaf94c22e9b3ab1ccf97"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/Subscriptions.ts",
+    "sha256": "f8560d2bb43d9f680717037264572cf315c3957b2ef80405939059407a7bd62f"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadArchiveRange.ts",
+    "sha256": "df27738eb9a86c02639b7350fb0a936b9776b091df42f8ed7246b029e788a6fd"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadImport.ts",
+    "sha256": "7c623eb571096f082cb044d7580adfed485b948c71b07d15afb768f7a69c2fae"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadInvariants.ts",
+    "sha256": "44b16f3d620650774565e01338d29ef103ea78022442d9e6636bf74e7fb35f3b"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadProjectionMaintenance.ts",
+    "sha256": "0ee210350ddcdf1a6b052f1fb1deac8026f4e33656bc52ca02eb45c8ed69be44"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadStore.ts",
+    "sha256": "e756794caf31ed0c3cf95535b08609c183478555a9bcb70a13d5b00a2ac006ec"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadTransfer.ts",
+    "sha256": "e5b7d22e7053699abfd519359ac2743d6f0e7e090745e396f1f14b117099caf5"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ThreadWork.ts",
+    "sha256": "b60d917980d7968e0da44b7bc0959c358681866677a4864d6c3625d852522a6d"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/ToolReconciler.ts",
+    "sha256": "edb803898f514c3622be808038bf8263a47374e391673cae87b3549684cec3a1"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/WakeScheduler.ts",
+    "sha256": "470615551371031e104c3633b7d1b686b2681909f09aa7eed71d50bfcbd7d714"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/WorkerAdmission.ts",
+    "sha256": "10de157349afc4d52cc1ce086969740f3e6427ff04a1da5ec1366e02817a838f"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/WorkerHost.ts",
+    "sha256": "5ce366dcaaae407c225dfcea025649921a6f7868829d7b51be0eab6d59b13010"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/agent-registration.ts",
+    "sha256": "74a41f47744ab53fd3be22f1019e30b709eb8f1c6920e5f18f5cb3407db57a90"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/agent-updates.ts",
+    "sha256": "1e994365bb5d7d3221546f97f149dad41c39b7fad6cc15b7e55cb124d872f459"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+    "sha256": "952ba966a175a86da8e0cd3200aea2f19fabc6f8183a9d5d34047bd5647ac97c"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/evidence.ts",
+    "sha256": "889e9999c67287530fac540840e50d17595789ab7f5f4bda5151b4a39b15914b"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/foreign-diagnostic.ts",
+    "sha256": "11e98e11f9ca49e22dfb96d39788669579adc3ff8c31b4f3d1cc7e63a7bfc05f"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/initial-context.ts",
+    "sha256": "579f2c4bd3618f0c2bbdb86f4936924c9a91a12483d1bdcf6830cc0439ff2e17"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/journal-metadata.ts",
+    "sha256": "ff0c569939cabadf17aa4d7f9fee64e47306bb7a9915f89e237235e090495cd1"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/message-status.ts",
+    "sha256": "4f2e416d5392b5aeff2f474a6a358dc36b16fcba6531a091f120f563a08fade1"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/messaging-host.ts",
+    "sha256": "ac8c44c2139625c6c5224226904967bf600b72a228b6a1f9fd0ec0045f6099d1"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/record-encoding.ts",
+    "sha256": "c294836643a5925409d32b0c3ba22684798431e10b3d6b1faee9fee631d39661"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/record-ownership.ts",
+    "sha256": "4577aae48a26ee59b5fecce9a25ec93c613d024ae3a27bf2d3e86ddc6fe0f9c7"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/run-context-reader.ts",
+    "sha256": "f155cc15c058669b7d7efca48b13150d1761fa28918ff5a48cbdc96b05d844cb"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/run-context.ts",
+    "sha256": "4c15c1b938ed82519be91d078ee663a930216da90c75b425235024c4992f53d9"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/schedule-time.ts",
+    "sha256": "261aa34b26a35c3e32e9325bf7ac3d708ce9cecb671a97784a3cdaeee151a471"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/thread-import-reader.ts",
+    "sha256": "6b3903e5a94f45c176d4e106a90c6f105cc6deda925c5698e368d1bf75c1315e"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/thread-initialization.ts",
+    "sha256": "54dc95ebf071913a722addb292dcf2b872a833adfa5e3ad81a2cf0772359c3ca"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/tool-operations.ts",
+    "sha256": "1f67fd33ae68c46d33d0e141b2e6d51cd6c8462665cb47b3c91cf7404d7c998d"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/transfer-dependencies.ts",
+    "sha256": "8bf4ae16913dfb034ac18024b767a3783c216ec8a93ab9acf10220f4a83e2116"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/worker-host.ts",
+    "sha256": "6cd11a59370d9699f0dd535564568b0ac348e315b2500ff62a53e4747d49ea76"
+  },
+  {
+    "path": "packages/effect-agent/src/durable/internal/worker-runtime.ts",
+    "sha256": "f63fbc474d441ae41a9a8edd68a0b78c7e5e9c2901802918beb016aab14c1d08"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/AgentRuntime.ts",
+    "sha256": "3aaccbb008cbddcb9611672e8fc36d8d95ee029119d51861d6f0b9a5d3b66f25"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/Compaction.ts",
+    "sha256": "5884cd144fbfb4f2d2d420a6fbd2d0210978e45066dcf053b954e84df76ad458"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/ContextCompactor.ts",
+    "sha256": "92aaa79d45af5d519e6344fa2a040ae809271b7d4c9c13adf423a74d62ecdc34"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/ContextWindow.ts",
+    "sha256": "f5f2ef3365e93785f1d166e9559d5ecf4f13e00ae57c383d0ed56a6d83221763"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/DurableStep.ts",
+    "sha256": "e8e66bb90f23bcc2ea593ad26f319ceec21e6a72078af7d9373ed09f2f3e1072"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/MessagingHost.ts",
+    "sha256": "1967fee854b174f9227887d26cc030d99b9d4f9200eb84c586161e13c6c93c92"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/Output.ts",
+    "sha256": "5b8c254e3d1003cc4e92c9a29bb0f50e9f88877dd7ad6760aceca45f5cae11f1"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/RunEventSink.ts",
+    "sha256": "826204e606379d2e4173799938a1736100df48b49c04a3a4fef896c52dc14a54"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/RunOptions.ts",
+    "sha256": "1e5a1724286d82804a3e5fab10d3fa522d79ec2f0039f6e6f30eda9b5da6a3d1"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/SubagentHost.ts",
+    "sha256": "7747d57a85ad3c4bfa84f70bded00aa40026da4129c7a0f1e94a2f62e0421e9b"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/ThreadHistory.ts",
+    "sha256": "382c492c6e74246bc8e0e200d6e22798ddc095598e4590717bac6514a76ec8ad"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/ToolBroker.ts",
+    "sha256": "b06785b8f77594bf3ac481ddda29a5b6346b2b5dbf9e0f2d9bc8a42bca62e39e"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/ToolExposure.ts",
+    "sha256": "1edf08cb4b300b88d6ce4f10b9863b951173f01602ad6e5462e366aacb7ea8e9"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
+    "sha256": "d1afdc7376afc97d177f0db1cae8bddf41b6d1e3156f4ed799ca5a864930cec5"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/bounded-value.ts",
+    "sha256": "f966d00b6cc63802bd32f4973821af868a13509f8746b1705939210faac85b07"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/compaction.ts",
+    "sha256": "5c73b070a6e08ecbd08a2ccd4544872a55f6a4e1b59aa8b3b119e24a63ad64a9"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/error-diagnostic.ts",
+    "sha256": "2c00033d9b10502ac926f0fd1b40b53211b3d1d4c88b0d67001383dc03a25809"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/output-contract.ts",
+    "sha256": "7b3dbdfde55c9e0641adf773a2002ddfe328532a4c6123ee9fe2bc94f1c489f2"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/primitive-delta.ts",
+    "sha256": "ba0b18013e4e82de1df73253957df86d4ca694d7dccb34da686d0b712e8e492c"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/provider-result-staging.ts",
+    "sha256": "9bc95869c250528ba50e09732a99344f4cf4666846c614257c9af682e5b7a296"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/provisional-text.ts",
+    "sha256": "134da804d9950519259511164f6c944995c1fe967d19cd568ba4728d13838d48"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/tool-derivative.ts",
+    "sha256": "d92f18f94149326284b7a9c809c1f69c8bfe5a7937bca233c53fa3017cfff126"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/tool-exposure.ts",
+    "sha256": "cb512adac28cc17b0cc33dcdd8360de9aa094182e4434aee4c4caa2b194cc2a2"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/tool-telemetry.ts",
+    "sha256": "095b293d1a9670bbffd7b5cdeac927f65c5a92a0ecfd0123418e043645282d97"
+  },
+  {
+    "path": "packages/effect-agent/src/sandbox/CodeExecutor.ts",
+    "sha256": "7aab361b8848adf2d5d5cae0c93ce3c7a9a389d456f481c37862df163c1be7c6"
+  },
+  {
+    "path": "packages/effect-agent/src/sandbox/InteractiveBrowser.ts",
+    "sha256": "19492f71734afc07f68dabf576a68a80a248bb23cce6546062390dc0656ccdb7"
+  },
+  {
+    "path": "packages/effect-agent/src/sandbox/PageCapture.ts",
+    "sha256": "0323e9c4409e8db5654670394275173566b45abcbec4afd40bb27ea08b18fc30"
+  },
+  {
+    "path": "packages/effect-agent/src/sandbox/PageScreenshot.ts",
+    "sha256": "9d4b41eb9f6a71154428fec0f24ffea1628c5978d1ff1b79b425b0324c118c68"
+  },
+  {
+    "path": "packages/effect-agent/src/sandbox/Sandbox.ts",
+    "sha256": "c247269d487239a4a39fd50253e5c6bf4f516ce8f02d8f976af3fe86e51b55ab"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/Alarm.ts",
+    "sha256": "3157b8ab3e7e1cb60f24a9c37e189445553c9d72e5bdd080668915a9f00b2e97"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/BrowserCredentials.ts",
+    "sha256": "057cd7436c3fa3e517aca701c7478b94b82d077d210bbd3c1ff5c777e618d055"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/BrowserSession.ts",
+    "sha256": "2fc6bab6f7bbcd66825bc3fd0605f08f5eeee2d0559879011e5b8dd324f0f443"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/BrowserUse.ts",
+    "sha256": "5a0df39c1f55842ecf999a1f46c5789e4c2f27291ce6b39b3f52d5ca03eb9278"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareAiGateway.ts",
+    "sha256": "cb9605c31c9606c17edcf094a79287ca95d075b3cdc469bb9241aaccfe43ebbd"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareBindings.ts",
+    "sha256": "fa513d08b486dc2c480aab54fd87828b129004cb2c3521c47c4a34b0eb5f359b"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareBrowser.ts",
+    "sha256": "217526302f00c23fa658f13da31c8e85a4e35019169b28247641adb21d9efb47"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareCodeMode.ts",
+    "sha256": "573c4cf6d6a978d8d1576c4a525a2dac1cec6b5022046b54d0838722f952645d"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareConfig.ts",
+    "sha256": "ef186a1c515d3fe5af36ea5fe82f480daa2d540fc5da822ba7b1a1e84d6f1d5f"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareMemory.ts",
+    "sha256": "fd277d072d8809dcb70a2eb85fcf6f4a9480d8c6f97ea7a7cfadd55207eac22f"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareScheduling.ts",
+    "sha256": "54c9f87910593e07957d1ecc1b526e99beebb8ad7cbdb1aa4cccefece4572b15"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareSubscriptions.ts",
+    "sha256": "70e762be40e3f13883d6372f123e18157868485924fe77868d73f9dcd8fa09e9"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+    "sha256": "8b30dda1bf419a1245376efdf0a633e2b4e5e6feb3087b42a5a2a756beda1d47"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/InteractiveBrowser.ts",
+    "sha256": "06529cad620cb940605e8cfe11e886ac7475c8243aabb63997aa11f08fa24f95"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/ThreadObject.ts",
+    "sha256": "2ff4a73a047b7d12ea410c93bd102c4194200f0215a08e295d6bbf7411871ad9"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/WakeScheduler.ts",
+    "sha256": "004f0aa38a6d369a274537d1e037fb9523be267871c7a3fe734c16e1f5dfb551"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/index.ts",
+    "sha256": "56c9e39571ce7d8bf952b1767c672e041f3e44c9e441cfc99fc154c7a7cf5c48"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/boundary.ts",
+    "sha256": "7eb93b70e502a97849c8424e9c347f8cd6c23f3265c3d37340b4867424dd7f9f"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-binding.ts",
+    "sha256": "6bad4b6e22bba45014c0f3b74d5bfee962c60c718f20604adcbc8ebc7764c4be"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-credentials.ts",
+    "sha256": "bebef4504d3b826a111362eaa0447803c6d55dbeb1297c97cfd920c650b4e7ba"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-dom.ts",
+    "sha256": "34410885a6f509c4b652acfc797df7bd60eee34c292452235bfc5cab62460621"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-failure.ts",
+    "sha256": "09fccfda6b66958b35c85183ae728f121b5940e37252178e023cec1c717ce3f0"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-file-selection.ts",
+    "sha256": "7649588ce5361eb8cd1e03097423dd982ccb5699181b4bf5e5ed44d4b0bdd08d"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-jev-dom.ts",
+    "sha256": "6cc9470c77c4e330850d13711d57440a6d8fa033b356e876512f477830686765"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-quick-action.ts",
+    "sha256": "e0d38f09678c54740f77e2b4accaef9633262d84bec7835625ffadc468116686"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-readonly-live-view.ts",
+    "sha256": "6fad178bfe3bc08723604f5a8fe20e763f07aa80a8bfd617584f187a504bb835"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/browser-session-lifecycle.ts",
+    "sha256": "88f53b9efd49b4967192d7326bff894da442715690f07398d7646b56883abf74"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/crypto.ts",
+    "sha256": "677f987d6f25fa75d4e0aaf4ac2f4c7db52e33de7b5d502dd66a6155175f42bf"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/due-queue.ts",
+    "sha256": "52c78f499de2857c37b89188d64cb3ed80c483545359e8091da322edcd472987"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/layers.ts",
+    "sha256": "2542b86bfcc394dbb9c573294a551f09e7e10b87de6d81310699d81191a3efc4"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/live-text-protocol.ts",
+    "sha256": "5958428350c5d1aa7950dfb09e7103c81811cae3ded1c141e70447a0edfc7159"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+    "sha256": "c5229c54b423a4ebdb62ab1b411a3fdde0ad51799f4f4075ce88b572190fb0fc"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/message-delivery.ts",
+    "sha256": "61b276d268bb57e876da821318c1c2702d2f4ec6c749770d4094a5ad783b8467"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/page-function.ts",
+    "sha256": "89d2004519e6bc064677421733fc62ddcd26cb328d90a473d14130cbda19ec89"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/prepared-admission.ts",
+    "sha256": "c848ece4dccd6b8da434b2c693aad729966f3fcf1d8863a031ba03cf47d4377e"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/progress-wait.ts",
+    "sha256": "45d2a037669f3c1b1f833835158f797e822a11e79ccccc08381fc37cdf3dded6"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/transport.ts",
+    "sha256": "55c9f1d02617634898f72bf01327678565307f53a52cfaa24ae43ba125f55a8f"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoMemoryStore.ts",
+    "sha256": "78284b31d0cd61ff1a8346b8b2c789032b7f7a7471bd7a2e7a26ec4fdab56751"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoMessageDeliveryStore.ts",
+    "sha256": "224116933c6755d62143f49224265da2bd6b729aff90ac7aaad57d0d23b7bb3c"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoScheduleStore.ts",
+    "sha256": "679c9703801a0c731d640373bc99bba3bade1bea1a20edea72be0b5341f34210"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoStorageConfig.ts",
+    "sha256": "08b7107bb5ce53ac81ce16013d5e7ebd4bb0e1ca59b26c8007bc364bc1bc7538"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoStorageError.ts",
+    "sha256": "8db6cb191bd4dfba78658bdf72ae3e24eb08736810eafbc35d28f09a258bdf8a"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoStorageFailpoint.ts",
+    "sha256": "ac728904e11fb1ad0f8fa3d5d20f350e60187aa9204b3ce64f00c0f4d73d6de5"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+    "sha256": "c2fe588b9dfa02d076af75013945b23e6786f1d77f447fe9e484523cacb4fa0e"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoSubscriptionStore.ts",
+    "sha256": "2ddfaa8a359775ee6aeb57ec4875ac07e0cf43370b79c58f0f42be89633f824f"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/DoThreadStore.ts",
+    "sha256": "0b548de219a2a1475ae2a2f5a1f797d58ee78340f4de82bd20f5220f86b637d2"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/MemoryProtocol.ts",
+    "sha256": "2be67f9099def8305ba0b70bde31632698c4d3b95b59fa67353dd43fb45ee71c"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/PortProtocol.ts",
+    "sha256": "47f1bdb9f0ebdd0aa55cd0c6eaa779e5681e898e5df47e72ddfb69c2085c19c5"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/PortRouting.ts",
+    "sha256": "1b5733c477dcf50c9617edabc269a54e70a39703a6dd41496786ddaea5aba0c0"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/internal/canonical-append.ts",
+    "sha256": "c9adb728ce9d726e67bd74612084dbaec069c41e7d5b53a2497d6da10f75e4d5"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/internal/do-journal.ts",
+    "sha256": "796a2e3a7939c0ef387b230256d9b76528872b87c1e88bc1c3df89f55778568b"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/internal/migrations.ts",
+    "sha256": "208b3472fdc5ca4971768facf7d10f77b6c566e926e0bbf07222a646e3d479b9"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/internal/owned-state.ts",
+    "sha256": "18dcca0913bcef30c08e9f7b0d94660c8ab799ef5a4c897b17b0189d284830ea"
+  },
+  {
+    "path": "packages/storage-cloudflare/src/internal/storage-span.ts",
+    "sha256": "6f304a27d5fb61ca48b44fff50d06ae16dda487bd5b27b94d477a231eb42076f"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlAdmissionFacts.ts",
+    "sha256": "28208214d864f77ac2ae9ec38004321686e17cbed2fe5de6d355bbd45da083a8"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlJournal.ts",
+    "sha256": "803a51376fe80736ec29a3628a6f3fd585d6cd3a9477d9aa6bf9d477abfc218f"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlLifecyclePublication.ts",
+    "sha256": "10c258e02d89f09c9a0afebfa3ee4ba71d1368adbfddc8ec8759e897c2eda7b9"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlMessageDeliveryStore.ts",
+    "sha256": "013587a9e6b424aaee3286e2a4db45cac0e196c9dfc944e65367f31e9acf1aa5"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlStorage.ts",
+    "sha256": "88b60dbe9560cfe9943e54b0c84ddbf18ec272c9c0d1aa180680b9a1025e8fb8"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlStorageProgress.ts",
+    "sha256": "a806fe653ac823a3ef53ef81f7389dabfe9a3bb4c4caf9f648e792a76ae5e080"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlSubscriptionStore.ts",
+    "sha256": "dda9a8438887faa0e0928db2161555cac576292d07fcbaa6b81650b941671f70"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlThreadArchiveRange.ts",
+    "sha256": "0b22ba24bf5f412c0614b84c21d2cee85d6145fd0379c15b10e60277f7559b3a"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlThreadImport.ts",
+    "sha256": "3466e38fbb1512a977a3d3e7c05d3ba2853af1fb97b3e26ea589b9409262b70d"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+    "sha256": "f0bb2755dd5648a5fd010eee158cb7dc43e7e21f02fdccaf681262f38d0b114a"
+  },
+  {
+    "path": "packages/storage-sql/src/SqlThreadWork.ts",
+    "sha256": "a31aba019d70dd55cf927d6c42d03cb9e726e79627df85e279c985a4a178f95c"
+  },
+  {
+    "path": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+    "sha256": "d54a226bd0fb39c5c680a6a7ed203d18de310e86c3d6449fbbc52c25c1b8490c"
+  },
+  {
+    "path": "packages/storage-sql/src/internal/settlement-intervals.ts",
+    "sha256": "6d23546c3a49c86f2c8f50df53eaf4e2730b7e74cae6dcc49d0a2e67bc8b18ad"
+  },
+  {
+    "path": "packages/storage-sql/src/internal/sql-json.ts",
+    "sha256": "77a2fa8b9117b4934def43deb8d99a6b0ba21a362b4ef43bcc7608586292c5da"
+  }
+]

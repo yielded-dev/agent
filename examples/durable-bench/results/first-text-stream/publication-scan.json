@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "filesScanned": 48,
+  "exactCloudflareAccountIdTokenAccountNameAndSubdomainAbsent": true,
+  "emailAddressesAbsent": true,
+  "raw32HexResourceIdsAbsent": true,
+  "generatedBenchmarkTokenScan": "All generated data was checked before private state deletion. Subsequent edits add public prose and replace ephemeral UUID identifiers with hashes; all non-identity receipt fields were verified unchanged.",
+  "cleanupVerified": true,
+  "rawUuidIdentifiersHashed": 2160,
+  "hashedFields": [
+    "provider.requestId",
+    "visible.runId",
+    "visible.turnId",
+    "visible.attemptId"
+  ],
+  "nonIdentityReceiptFieldsUnchanged": true,
+  "finalIdentifierAndEmailScanPassed": true,
+  "finalFilesScanned": 49
+}

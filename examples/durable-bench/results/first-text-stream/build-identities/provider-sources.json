@@ -1,0 +1,18 @@
+[
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/mock.ts",
+    "sha256": "e40547363683d52310116c99b89bac1737484290b46e937ac882d7ea60b24f5d"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/protocol.ts",
+    "sha256": "485873edee32abb2cbca4ff0ce6bfc2578405873250c576b224f19e2a5a72876"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/provider.ts",
+    "sha256": "05703c00b9d7a1976fa04b18a2ae475edaaa64ec1afb41f9c299f08668dda7f1"
+  },
+  {
+    "path": "examples/durable-bench/results/first-text-stream/network/text.ts",
+    "sha256": "adfa8aa9609f03a9dd2ef0e273a02e865428859d99428466f89dab059d73ed35"
+  }
+]

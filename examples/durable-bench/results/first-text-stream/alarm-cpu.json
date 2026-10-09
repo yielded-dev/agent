@@ -1,0 +1,993 @@
+{
+  "method": "Cloudflare platform-reported alarm invocation CPU, not wall time or a synchronous Workers clock interval. Match by hashed Durable Object identity and exactly one alarm longer than 1 s completing within 1 s of the final model-body-read receipt. Excludes admission RPC, driver and other invocation CPU. Missing or ambiguous receipts stay null; Object summaries require every repetition to have a receipt.",
+  "limitation": "Invocation telemetry is incomplete despite requested full sampling. This is diagnostic evidence and cannot establish a whole-turn CPU improvement. One strict completeness attempt failed when a measured turn had no matching alarm receipt; no data was fabricated or replaced by zero.",
+  "matchedTurns": 54,
+  "plannedTurns": 60,
+  "missingTurns": 6,
+  "allReceivedOutcomesOk": false,
+  "reportedResolutionMs": 1,
+  "completionTimestampDifferenceRangeMs": [
+    1,
+    705
+  ],
+  "summary": [
+    {
+      "cell": "native-prototype/250/cold",
+      "cpuTimeMs": {
+        "n": 2,
+        "median": 141.5,
+        "q1": 70.75,
+        "q3": 212.25
+      },
+      "objects": [
+        {
+          "object": 2,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 283
+        },
+        {
+          "object": 0,
+          "complete": false,
+          "received": 0,
+          "expected": 1,
+          "cpuTimeMs": null
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 0
+        }
+      ]
+    },
+    {
+      "cell": "native-prototype/50/cold",
+      "cpuTimeMs": {
+        "n": 3,
+        "median": 314,
+        "q1": 164.5,
+        "q3": 324.5
+      },
+      "objects": [
+        {
+          "object": 0,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 314
+        },
+        {
+          "object": 2,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 15
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 335
+        }
+      ]
+    },
+    {
+      "cell": "native-prototype/250/warm",
+      "cpuTimeMs": {
+        "n": 1,
+        "median": 10,
+        "q1": 10,
+        "q3": 10
+      },
+      "objects": [
+        {
+          "object": 2,
+          "complete": false,
+          "received": 2,
+          "expected": 3,
+          "cpuTimeMs": null
+        },
+        {
+          "object": 0,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 10
+        },
+        {
+          "object": 1,
+          "complete": false,
+          "received": 2,
+          "expected": 3,
+          "cpuTimeMs": null
+        }
+      ]
+    },
+    {
+      "cell": "native-prototype/50/warm",
+      "cpuTimeMs": {
+        "n": 2,
+        "median": 107.5,
+        "q1": 107.25,
+        "q3": 107.75
+      },
+      "objects": [
+        {
+          "object": 0,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 108
+        },
+        {
+          "object": 2,
+          "complete": false,
+          "received": 2,
+          "expected": 3,
+          "cpuTimeMs": null
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 107
+        }
+      ]
+    },
+    {
+      "cell": "plain-prototype/250/cold",
+      "cpuTimeMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 20,
+        "q3": 142.5
+      },
+      "objects": [
+        {
+          "object": 2,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 261
+        },
+        {
+          "object": 0,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 24
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 16
+        }
+      ]
+    },
+    {
+      "cell": "plain-prototype/50/cold",
+      "cpuTimeMs": {
+        "n": 3,
+        "median": 227,
+        "q1": 123,
+        "q3": 309
+      },
+      "objects": [
+        {
+          "object": 0,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 227
+        },
+        {
+          "object": 2,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 391
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 1,
+          "expected": 1,
+          "cpuTimeMs": 19
+        }
+      ]
+    },
+    {
+      "cell": "plain-prototype/50/warm",
+      "cpuTimeMs": {
+        "n": 2,
+        "median": 104,
+        "q1": 87,
+        "q3": 121
+      },
+      "objects": [
+        {
+          "object": 0,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 70
+        },
+        {
+          "object": 2,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 138
+        },
+        {
+          "object": 1,
+          "complete": false,
+          "received": 2,
+          "expected": 3,
+          "cpuTimeMs": null
+        }
+      ]
+    },
+    {
+      "cell": "plain-prototype/250/warm",
+      "cpuTimeMs": {
+        "n": 2,
+        "median": 112.5,
+        "q1": 58.25,
+        "q3": 166.75
+      },
+      "objects": [
+        {
+          "object": 2,
+          "complete": false,
+          "received": 2,
+          "expected": 3,
+          "cpuTimeMs": null
+        },
+        {
+          "object": 0,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 4
+        },
+        {
+          "object": 1,
+          "complete": true,
+          "received": 3,
+          "expected": 3,
+          "cpuTimeMs": 221
+        }
+      ]
+    }
+  ],
+  "receipts": [
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 283,
+      "wallTimeMs": 16487,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 1
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 314,
+      "wallTimeMs": 17027,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 163,
+      "wallTimeMs": 16244,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 6
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 170,
+      "wallTimeMs": 16533,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 2
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 101,
+      "wallTimeMs": 16468,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 127,
+      "wallTimeMs": 16099,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 1
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 108,
+      "wallTimeMs": 16475,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 9
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 131,
+      "wallTimeMs": 16100,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 1
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 124,
+      "wallTimeMs": 16486,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 15,
+      "wallTimeMs": 16496,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 4
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16269,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 7,
+      "wallTimeMs": 16647,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 9
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 124,
+      "wallTimeMs": 16137,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 11,
+      "wallTimeMs": 16474,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 8
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 4,
+      "wallTimeMs": 16538,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 14
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16110,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 10,
+      "wallTimeMs": 16656,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 2
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 335,
+      "wallTimeMs": 16662,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 30
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 0,
+      "wallTimeMs": 2003,
+      "outcome": "canceled",
+      "completionTimestampMinusFinalModelReadMs": 705
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 160,
+      "wallTimeMs": 16400,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 35
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 408,
+      "wallTimeMs": 16841,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 31
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 98,
+      "wallTimeMs": 16304,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 30
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 288,
+      "wallTimeMs": 16616,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 19
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 152,
+      "wallTimeMs": 16450,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 28
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 190,
+      "wallTimeMs": 16491,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 25
+    },
+    {
+      "phase": "native-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 107,
+      "wallTimeMs": 16340,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 39
+    },
+    {
+      "phase": "native-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 261,
+      "wallTimeMs": 16596,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 36
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 227,
+      "wallTimeMs": 16440,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 19
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 209,
+      "wallTimeMs": 16318,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 2
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 133,
+      "wallTimeMs": 16245,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 1
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 82,
+      "wallTimeMs": 16171,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 15
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 226,
+      "wallTimeMs": 16359,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 34
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 70,
+      "wallTimeMs": 16159,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 2
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 2,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 99,
+      "wallTimeMs": 16200,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 1
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 0,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 61,
+      "wallTimeMs": 16182,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 31
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 391,
+      "wallTimeMs": 16884,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 32
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 24,
+      "wallTimeMs": 17153,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 11
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 150,
+      "wallTimeMs": 16352,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 8,
+      "wallTimeMs": 16617,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 4
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 92,
+      "wallTimeMs": 16439,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 32
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 4,
+      "wallTimeMs": 16393,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 4
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 138,
+      "wallTimeMs": 16391,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 2
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 241,
+      "wallTimeMs": 16269,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 9
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 2,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 146,
+      "wallTimeMs": 16327,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 31
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 0,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16335,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 3
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 19,
+      "wallTimeMs": 16878,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 16
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m0",
+      "state": "cold",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 16,
+      "wallTimeMs": 17164,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 12
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 5,
+      "wallTimeMs": 16389,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 18
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m1",
+      "state": "settling",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 321,
+      "wallTimeMs": 16529,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 5
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 132,
+      "wallTimeMs": 16232,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 6
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m2",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 8,
+      "wallTimeMs": 16463,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 6
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 0,
+      "cpuTimeMs": null,
+      "wallTimeMs": null,
+      "outcome": null,
+      "completionTimestampMinusFinalModelReadMs": null
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m3",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 284,
+      "wallTimeMs": 16489,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 4
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 50,
+      "object": 1,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 152,
+      "wallTimeMs": 16316,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 4
+    },
+    {
+      "phase": "plain-prototype",
+      "history": 250,
+      "object": 1,
+      "sample": "m4",
+      "state": "warm",
+      "matchingInvocations": 1,
+      "cpuTimeMs": 221,
+      "wallTimeMs": 16455,
+      "outcome": "ok",
+      "completionTimestampMinusFinalModelReadMs": 11
+    }
+  ]
+}

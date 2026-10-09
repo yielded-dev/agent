@@ -1,0 +1,10 @@
+{
+  "nativeControlPassed": true,
+  "plainEffectStreamPassed": true,
+  "plainUsedByteBridge": false,
+  "initialFalseRow": "Local ENOTFOUND transport failure, retained and qualified in controller-non-ok.jsonl; not an RPC compatibility result.",
+  "scope": "Reset frame via public CloudflareThreadClient.watchText over deployed Durable Object RPC, then client cancellation. Full-turn streaming and lifetime checks follow separately.",
+  "documentation": "https://developers.cloudflare.com/workers/runtime-apis/rpc/#readablestream-writablestream-request-and-response",
+  "documentationCaveat": "Docs specify underlying type: bytes. Installed Effect adapter returns a regular ReadableStream<Uint8Array>. This deployed runtime accepted it; the probe does not establish BYOB support or portability across runtimes.",
+  "bridgeExploration": "An IdentityTransformStream bridge also compiled but was not deployed or timed after the direct probe succeeded."
+}

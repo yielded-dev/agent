@@ -1,0 +1,96 @@
+diff --git a/packages/platform-cloudflare/src/internal/live-text.ts b/packages/platform-cloudflare/src/internal/live-text.ts
+index 783bd726..f1580254 100644
+--- a/packages/platform-cloudflare/src/internal/live-text.ts
++++ b/packages/platform-cloudflare/src/internal/live-text.ts
+@@ -1,6 +1,6 @@
+ import { type ThreadId } from "@yielded/agent/identifiers";
+ import { Publisher, type Event } from "@yielded/agent/provisional-text";
+-import { Context, Effect, Exit, Layer, Queue, Schema, Scope } from "effect";
++import { Context, Effect, Exit, Layer, Queue, Schema, Scope, Stream } from "effect";
+
+ import { HostProtocolError } from "../CloudflareThreadClient.ts";
+ import {
+@@ -75,67 +75,42 @@ export class LiveTextHub extends Context.Service<
+             sequence: 0,
+           };
+
+-          let closed = false;
+-          let output: ReadableByteStreamController | undefined;
+           const close = Scope.close(scope, Exit.void);
+
+           yield* Scope.addFinalizer(
+             scope,
+             Effect.sync(() => {
+-              closed = true;
+               observers.delete(observer);
+               Queue.shutdownUnsafe(queue);
+-              // Native cancellation can have closed the controller already.
+-              try {
+-                output?.close();
+-              } catch {
+-                /* Already closed or cancelled. */
+-              }
+             }),
+           );
+           observers.add(observer);
+
+-          const bytes = (frame: Frame) => {
+-            // Byte-stream enqueue transfers ownership: each pull gets its own buffer.
++          const toBytes = Effect.fnUntraced(function* (frame: Frame) {
+             const value = encoder.encode(encode(frame) + "\n");
+
+             if (value.byteLength > MAX_FRAME_BYTES)
+-              throw HostProtocolError.make({
++              return yield* HostProtocolError.make({
+                 message: "Provisional text frame exceeds its wire bound",
+               });
+
+             return value;
++          });
++          const resetFrame: Frame = {
++            _tag: "Reset",
++            schemaVersion: 1,
++            streamId: observer.streamId,
++            threadId,
++            sequence: 0,
+           };
+
+-          return new ReadableStream({
+-            type: "bytes",
+-            start(controller) {
+-              output = controller;
+-              controller.enqueue(
+-                bytes({
+-                  _tag: "Reset",
+-                  schemaVersion: 1,
+-                  streamId: observer.streamId,
+-                  threadId,
+-                  sequence: 0,
+-                }),
+-              );
+-            },
+-            async pull(controller) {
+-              try {
+-                // The stream owns this pull; Scope shutdown wakes any pending Queue.take.
+-                const frame = await Effect.runPromise(Queue.take(queue));
+-
+-                if (!closed) controller.enqueue(bytes(frame));
+-              } catch (cause) {
+-                if (!closed) controller.error(cause);
+-                await Effect.runPromise(close);
+-              }
+-            },
+-            cancel() {
+-              return Effect.runPromise(close);
+-            },
+-          });
++          const frames = Stream.fromEffectRepeat(Queue.take(queue)).pipe(
++            Stream.prepend([resetFrame]),
++            Stream.mapEffect(toBytes),
++            Stream.ensuring(close),
++          );
++
++          return yield* Stream.toReadableStreamEffect(frames);
+         });
+
+       return Context.make(LiveTextHub, { open }).pipe(Context.add(Publisher, { offerUnsafe }));

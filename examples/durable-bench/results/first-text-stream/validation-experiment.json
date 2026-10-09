@@ -1,0 +1,16 @@
+{
+  "base": "a59d51e6a5981f4d520ada7357cd5aa653b9487a",
+  "node": "24.20.0",
+  "command": "vp run -F @yielded/agent-platform-cloudflare check",
+  "plainEffectStream": {
+    "exitCode": 0
+  },
+  "undeployedByteBridge": {
+    "exitCode": 0
+  },
+  "fullReadyReused": {
+    "commit": "a59d51e6a5981f4d520ada7357cd5aa653b9487a",
+    "receipt": "https://github.com/yielded-dev/agent/blob/8c8b27e4/examples/durable-bench/results/first-text/validation-pr-clean.json",
+    "reason": "Performance-only follow-up; product branch restored unchanged after the experiment."
+  }
+}
