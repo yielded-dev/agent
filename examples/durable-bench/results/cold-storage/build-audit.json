@@ -1,0 +1,132 @@
+{
+  "reason": "Follow-up to the tail-latency Worker/Object version divergence audit. No product-code A/B was performed by cold-storage; labels changed stored padding or were unchanged-framework controls.",
+  "checks": "Own Object BUILD and expected label independently compared for every accepted row; missing checks remain missing. Provider receipts in these older runs do not attest the Object build.",
+  "runs": [
+    {
+      "run": "cold-storage-mv0j0fwc-aa9db8fa",
+      "harness": "cold-storage-bench",
+      "accepted": 64,
+      "objectBuild": {
+        "missing": 64
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0j72rc-a5d8ade0",
+      "harness": "cold-storage-bench",
+      "accepted": 400,
+      "objectBuild": {
+        "missing": 400
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0jdxog-a828e38e",
+      "harness": "cold-storage-bench",
+      "accepted": 400,
+      "objectBuild": {
+        "missing": 400
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0kbt0j-f7d4aef9",
+      "harness": "cold-storage-bench",
+      "accepted": 480,
+      "objectBuild": {
+        "missing": 480
+      },
+      "baselineCandidateSourceHashEqual": false,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0knik1-1f2be739",
+      "harness": "cold-storage-bench",
+      "accepted": 480,
+      "objectBuild": {
+        "missing": 480
+      },
+      "baselineCandidateSourceHashEqual": false,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0la2q7-48de3796",
+      "harness": "cold-storage-bench",
+      "accepted": 480,
+      "objectBuild": {
+        "missing": 480
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-mv0li21e-017e9807",
+      "harness": "cold-storage-bench",
+      "accepted": 480,
+      "objectBuild": {
+        "missing": 480
+      },
+      "baselineCandidateSourceHashEqual": false,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "harness": "cold-storage-isolate-bench",
+      "accepted": 720,
+      "objectBuild": {
+        "ownMatches": 720
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    },
+    {
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "harness": "cold-storage-isolate-bench",
+      "accepted": 720,
+      "objectBuild": {
+        "ownMatches": 720
+      },
+      "baselineCandidateSourceHashEqual": true,
+      "providerBuildReceipt": false,
+      "beforeInputObjectBuildGuard": false,
+      "frameworkRevisionsBothLabels": [
+        "07f0272e7ba49a494064b6b74c6318b55514ae19"
+      ]
+    }
+  ]
+}
