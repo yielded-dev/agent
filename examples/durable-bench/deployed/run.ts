@@ -237,11 +237,14 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       }));
     }
 
-    const epochs: readonly Label[] = options.rigorous
-      ? nonce().charAt(0) < "8"
-        ? ["baseline", "candidate", "candidate", "baseline"]
-        : ["candidate", "baseline", "baseline", "candidate"]
-      : ["working"];
+    const epochs: readonly Label[] =
+      options.storageProbe === "allocated"
+        ? ["baseline", "baseline", "candidate", "candidate"]
+        : options.rigorous
+          ? nonce().charAt(0) < "8"
+            ? ["baseline", "candidate", "candidate", "baseline"]
+            : ["candidate", "baseline", "baseline", "candidate"]
+          : ["working"];
 
     const turnsPerEpoch = options.repeats + (options.cold ? 2 : 1);
     const references = new Map<number, Map<string, string[]>>();
@@ -277,6 +280,16 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     );
 
     const seedBytes = new Map<string, number>();
+
+    // Every Object starts small. Even indices grow only after both baseline passes;
+    // never-large controls follow the same history growth and timing schedule.
+    const storageGroup = (cohort: Query) =>
+      options.storageProbe === "allocated"
+        ? /[02468]$/.test(cohort.object)
+          ? "grown"
+          : "control"
+        : undefined;
+
     let deployedEndpoint: string | undefined;
 
     for (const [epoch, label] of epochs.entries()) {
@@ -402,7 +415,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 deploy.token,
                 PaddingResult,
                 {
-                  mib: label === "candidate" ? options.paddingMiB : 0,
+                  mib:
+                    label === "candidate" && storageGroup(cohort) !== "control"
+                      ? options.paddingMiB
+                      : 0,
                   read: options.storageProbe === "touched",
                 },
               )).value;
@@ -450,6 +466,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 state,
                 status: "running",
                 seedBytes: seedBytes.get(`${cohort.target}/${cohort.object}`),
+                ...(storageGroup(cohort) === undefined
+                  ? {}
+                  : { storageGroup: storageGroup(cohort) }),
                 ...(padding === undefined ? {} : { padding }),
               };
 

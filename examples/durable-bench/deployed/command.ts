@@ -52,9 +52,12 @@ export const command = Command.make(
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
-    storageProbe: Flag.Literals("storage-probe", ["none", "untouched", "touched"]).pipe(
-      Flag.withDefault("none"),
-    ),
+    storageProbe: Flag.Literals("storage-probe", [
+      "none",
+      "untouched",
+      "touched",
+      "allocated",
+    ]).pipe(Flag.withDefault("none")),
     paddingMiB: positive("padding-mib").pipe(Flag.withDefault(32)),
     teardown: Flag.Boolean("teardown").pipe(
       Flag.withDefault(false),
@@ -93,6 +96,12 @@ export const command = Command.make(
     if (flags.storageProbe !== "none" && (!flags.rigorous || baseline !== candidate))
       return yield* new BenchError({
         message: "Storage probes require rigorous mode with identical refs.",
+      });
+
+    if (flags.storageProbe === "allocated" && (flags.objects < 20 || flags.objects % 2 !== 0))
+      return yield* new BenchError({
+        message:
+          "Allocation probes need an even Object count of at least 20: half grow, half stay small.",
       });
 
     return yield* run({

@@ -15,7 +15,7 @@ export interface Options {
   readonly rigorous: boolean;
   readonly baseline?: string;
   readonly candidate?: string;
-  readonly storageProbe: "none" | "untouched" | "touched";
+  readonly storageProbe: "none" | "untouched" | "touched" | "allocated";
   readonly paddingMiB: number;
 }
 
@@ -51,6 +51,7 @@ export const Sample = Schema.Struct({
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
   storage: Schema.optionalKey(StorageTrace),
   padding: Schema.optionalKey(PaddingResult),
+  storageGroup: Schema.optionalKey(Schema.Literals(["grown", "control"])),
   databaseBytes: Schema.optionalKey(Schema.Natural),
   seedBytes: Schema.optionalKey(Schema.Natural),
   error: Schema.optionalKey(Schema.String),
