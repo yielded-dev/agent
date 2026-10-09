@@ -91,7 +91,7 @@ index 5120eaeb..ca7aef5e 100644
        ...(marker?.object ? { object: marker.object } : {}),
        ...(marker?.sample ? { sample: marker.sample } : {}),
 diff --git a/examples/durable-bench/deployed/deploy.ts b/examples/durable-bench/deployed/deploy.ts
-index e24bc0e8..cc84ff95 100644
+index e24bc0e8..790622d0 100644
 --- a/examples/durable-bench/deployed/deploy.ts
 +++ b/examples/durable-bench/deployed/deploy.ts
 @@ -19,7 +19,7 @@ import {
@@ -137,7 +137,24 @@ index e24bc0e8..cc84ff95 100644
        kind: "infrastructure",
        bundle: output,
        build: revision,
-@@ -266,7 +266,7 @@ export const deployments = Effect.gen(function* () {
+@@ -212,11 +212,16 @@ export const deployments = Effect.gen(function* () {
+     cpu: boolean,
+   ) {
+     const stack: Stack = { name, kind: "target", bundle, build: revision, cpu };
++    const fresh = state.targets[name] === undefined;
+ 
+     state = { ...state, targets: { ...state.targets, [name]: stack } };
+     yield* save(stateFile, state);
+     yield* Console.error("Deploying target Worker…");
+     yield* alchemy(stack, "deploy");
++    if (fresh) {
++      yield* Console.error("Waiting 45 seconds for the new target route before health checks…");
++      yield* Effect.sleep("45 seconds");
++    }
+ 
+     const health = Effect.gen(function* () {
+       yield* ready(url(name), revision);
+@@ -266,7 +271,7 @@ export const deployments = Effect.gen(function* () {
  
      if (!remaining.verified)
        return yield* new BenchError({
@@ -160,7 +177,7 @@ index 3a4aa6e5..c0df87b0 100644
        )
          return new Response("invalid target", { status: 400 });
 diff --git a/examples/durable-bench/deployed/model.ts b/examples/durable-bench/deployed/model.ts
-index a8e4debf..91ff5cff 100644
+index a8e4debf..3d81d646 100644
 --- a/examples/durable-bench/deployed/model.ts
 +++ b/examples/durable-bench/deployed/model.ts
 @@ -1,6 +1,6 @@
@@ -194,7 +211,7 @@ index a8e4debf..91ff5cff 100644
  });
  
  export type Sample = typeof Sample.Type;
-@@ -83,6 +90,19 @@ export const Result = Schema.Struct({
+@@ -83,6 +90,31 @@ export const Result = Schema.Struct({
      }),
    ),
    samples: Schema.Array(Sample),
@@ -208,6 +225,18 @@ index a8e4debf..91ff5cff 100644
 +        observedBuilds: Schema.Array(Schema.String),
 +        resets: Schema.Natural,
 +        waitMs: Schema.Number,
++      }),
++    ),
++  ),
++  readinessFailures: Schema.optionalKey(
++    Schema.Array(
++      Schema.Struct({
++        target: Target,
++        object: Schema.String,
++        epoch: Schema.Natural,
++        attempt: Schema.Natural,
++        error: Schema.String,
++        retryable: Schema.Boolean,
 +      }),
 +    ),
 +  ),
@@ -234,7 +263,7 @@ index c456592a..00080700 100644
  export const hash = (value: string | Uint8Array) =>
    createHash("sha256").update(value).digest("hex");
 diff --git a/examples/durable-bench/deployed/run.ts b/examples/durable-bench/deployed/run.ts
-index 09e7a96c..1f37359b 100644
+index 09e7a96c..3b1e9ddf 100644
 --- a/examples/durable-bench/deployed/run.ts
 +++ b/examples/durable-bench/deployed/run.ts
 @@ -68,7 +68,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
@@ -246,15 +275,16 @@ index 09e7a96c..1f37359b 100644
    const output = join(workspace, "results", runName);
    const lock = yield* Semaphore.make(1);
  
-@@ -89,6 +89,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -89,6 +89,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
      builds: [],
      fixtures: [],
      samples: [],
 +    readiness: [],
++    readinessFailures: [],
      failures: [],
      kept: options.keep,
      complete: false,
-@@ -113,7 +114,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -113,7 +115,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
    let targetStarted = false;
    let telemetryFrom = started;
  
@@ -263,7 +293,7 @@ index 09e7a96c..1f37359b 100644
    yield* update((value) => value);
  
    const finish = (exit: Exit.Exit<unknown, unknown>) =>
-@@ -254,7 +255,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -254,7 +256,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
      const cohorts = options.sizes.flatMap((size) =>
        options.ttft.flatMap((ttftMs) =>
          Array.from({ length: options.objects }, (_, object) =>
@@ -272,7 +302,7 @@ index 09e7a96c..1f37359b 100644
              target,
              object: `${runName}-h${size}-d${ttftMs}-o${object}`,
              history: size,
-@@ -272,23 +273,68 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -272,23 +274,101 @@ export const run = Effect.fnUntraced(function* (options: Options) {
        if (!compiled) return yield* new BenchError({ message: "Missing target build." });
        telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
        targetStarted = true;
@@ -305,8 +335,41 @@ index 09e7a96c..1f37359b 100644
 +          const observedBuilds = new Set<string>();
 +
 +          for (let resets = 1; resets <= 90; resets++) {
-+            const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
-+              .value;
++            if (resets > 1 && (yield* Clock.currentTimeMillis) - before >= 180_000) break;
++
++            const response = yield* request(
++              url("/cold", cohort),
++              deploy.token,
++              ColdResult,
++              {},
++            ).pipe(Effect.result);
++
++            if (response._tag === "Failure") {
++              // Cold setup sends no benchmark input. Retry received server errors,
++              // retaining every failed attempt; uncertain transport outcomes still fail.
++              const retryable =
++                response.failure._tag === "BenchError" &&
++                /^Worker returned HTTP 5\d\d;/.test(response.failure.message);
++
++              yield* update((value) => ({
++                ...value,
++                readinessFailures: [
++                  ...(value.readinessFailures ?? []),
++                  {
++                    target: cohort.target,
++                    object: cohort.object,
++                    epoch,
++                    attempt: resets,
++                    error: message(Cause.fail(response.failure)),
++                    retryable,
++                  },
++                ],
++              }));
++              if (!retryable) return yield* Effect.fail(response.failure);
++              yield* Effect.sleep("2 seconds");
++              continue;
++            }
++            const reset = response.success.value;
 +
 +            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
 +              return yield* new BenchError({ message: "Cold abort was not acknowledged." });
@@ -348,7 +411,7 @@ index 09e7a96c..1f37359b 100644
        // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
        if (epoch === 0) {
          yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
-@@ -311,6 +357,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -311,6 +391,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                )).value;
  
                if (
@@ -356,7 +419,7 @@ index 09e7a96c..1f37359b 100644
                  seeded.fingerprint !== fixture.fingerprint ||
                  !equalCounts(seeded.tables, fixture.tables) ||
                  (fixture.actor &&
-@@ -346,16 +393,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -346,16 +427,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
          (cohort) =>
            Effect.gen(function* () {
              // Discard constructor caches after import, and restart the same stored Object after every build change.
@@ -375,7 +438,7 @@ index 09e7a96c..1f37359b 100644
  
                const state =
                  options.cold && index === 0
-@@ -396,6 +439,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -396,6 +473,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
  
                  const expected = references.get(query.history)?.get(query.sample);
  
@@ -391,7 +454,7 @@ index 09e7a96c..1f37359b 100644
                  if (
                    !expected ||
                    metrics.calls.length !== 9 ||
-@@ -404,6 +456,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -404,6 +490,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                        call.status !== 200 ||
                        call.error !== undefined ||
                        call.endMs === undefined ||
@@ -399,7 +462,7 @@ index 09e7a96c..1f37359b 100644
                        call.fingerprint !== expected[i] ||
                        call.receipt?.fingerprint !== expected[i],
                    )
-@@ -451,6 +504,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -451,6 +538,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                            ...sample,
                            status: "ok",
                            driverMs: measured.value.driverMs,
@@ -408,7 +471,7 @@ index 09e7a96c..1f37359b 100644
                            ...(measured.value.admissionMs === undefined
                              ? {}
                              : { admissionMs: measured.value.admissionMs }),
-@@ -464,6 +519,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -464,6 +553,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                            fingerprintVerified: true,
                            coldVerified,
                            residentVerified,
@@ -416,7 +479,7 @@ index 09e7a96c..1f37359b 100644
                            fingerprints: metrics.calls.map((call) => call.fingerprint),
                          }
                        : row,
-@@ -498,7 +554,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+@@ -498,7 +588,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
  }, Effect.scoped);
  
  export const teardown = Effect.gen(function* () {
@@ -424,7 +487,7 @@ index 09e7a96c..1f37359b 100644
    const deploy = yield* deployments;
    const cleanup = yield* deploy.teardown;
  
-@@ -509,6 +564,6 @@ export const teardown = Effect.gen(function* () {
+@@ -509,6 +598,6 @@ export const teardown = Effect.gen(function* () {
  
    yield* save(join(workspace, "results", "cleanup.json"), result);
    yield* Console.log(

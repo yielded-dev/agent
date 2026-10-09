@@ -1,0 +1,157 @@
+{
+  "run": "tail-latency-mv0oh9zp-0a038a6d",
+  "interpretation": "Build-verified comparison interrupted during cold setup for a pi Object in pass three, before that Object received its next benchmark input. Nine concurrent timed inputs were interrupted with unknown outcomes and were not replayed. The planned final baseline pass did not run.",
+  "complete": false,
+  "failures": [
+    "pi/250/400: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"internal error; reference = [redacted-id]\",\"sample\":\"import\"}"
+  ],
+  "total": 3488,
+  "ok": 3479,
+  "buildsVerified": 3479,
+  "completedByEpoch": {
+    "0/baseline": 1280,
+    "1/candidate": 1280,
+    "2/candidate": 919
+  },
+  "failed": [
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 3,
+      "sample": "e2-t5",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 4,
+      "sample": "e2-t1",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 11,
+      "sample": "e2-t3",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 2,
+      "sample": "e2-t1",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 1,
+      "sample": "e2-t3",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 13,
+      "sample": "e2-t7",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "pi",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 8,
+      "sample": "e2-t7",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 14,
+      "sample": "e2-t8",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    },
+    {
+      "build": "candidate",
+      "epoch": 2,
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 5,
+      "sample": "e2-t4",
+      "error": "Controller interrupted; outcome unknown, input will not be replayed."
+    }
+  ],
+  "queries": [
+    {
+      "filter": "$workers.outcome",
+      "count": 0,
+      "retained": 0,
+      "truncated": false
+    },
+    {
+      "filter": "$metadata.level",
+      "count": 665,
+      "retained": 665,
+      "truncated": false
+    }
+  ],
+  "categories": {
+    "other": {
+      "n": 1,
+      "first": 1791534619176,
+      "last": 1791534619176
+    },
+    "explicit cold reset": {
+      "n": 664,
+      "first": 1791533441835,
+      "last": 1791534612286
+    }
+  },
+  "selectedEvents": [
+    {
+      "timestamp": 1791534619176,
+      "category": "other",
+      "type": "cf-worker-event",
+      "outcome": "ok",
+      "cpuMs": 1,
+      "wallMs": 12015,
+      "route": {
+        "path": "/cold",
+        "target": "pi",
+        "history": "250",
+        "ttftMs": "400",
+        "object": 11,
+        "sample": "import"
+      }
+    }
+  ],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  }
+}

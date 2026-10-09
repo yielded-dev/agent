@@ -1,0 +1,90 @@
+{
+  "run": "tail-latency-mv0l4yxs-23141551",
+  "interpretation": "Object I/O-clock observations, not exclusive CPU or client latency. The only two positive terminalize-to-await gaps began with an await RPC that arrived after terminalization and alarm return; they do not indicate a waiter sleeping through a lost settlement notification. Zero gaps cannot price synchronous work.",
+  "cells": [
+    {
+      "cell": "250/0",
+      "n": 240,
+      "positiveClockGap": 1,
+      "positiveGapWhileAlreadyAwaiting": 0,
+      "maxClockGapMs": 377
+    },
+    {
+      "cell": "250/400",
+      "n": 240,
+      "positiveClockGap": 0,
+      "positiveGapWhileAlreadyAwaiting": 0,
+      "maxClockGapMs": 0
+    },
+    {
+      "cell": "50/0",
+      "n": 240,
+      "positiveClockGap": 1,
+      "positiveGapWhileAlreadyAwaiting": 0,
+      "maxClockGapMs": 451
+    },
+    {
+      "cell": "50/400",
+      "n": 240,
+      "positiveClockGap": 0,
+      "positiveGapWhileAlreadyAwaiting": 0,
+      "maxClockGapMs": 0
+    }
+  ],
+  "positiveGaps": [
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "object": 3,
+      "sample": "e0-t5",
+      "driverMs": 1314,
+      "awaitStartedAfterTerminalize": true,
+      "terminalizeToAwaitReturnClockMs": 377,
+      "timeline": [
+        {
+          "name": "terminalize:after-canonical-append",
+          "sinceBeginClockMs": 869
+        },
+        {
+          "name": "alarm:end",
+          "sinceBeginClockMs": 869
+        },
+        {
+          "name": "await:start",
+          "sinceBeginClockMs": 1246
+        },
+        {
+          "name": "await:return",
+          "sinceBeginClockMs": 1246
+        }
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "object": 1,
+      "sample": "e0-t6",
+      "driverMs": 1008,
+      "awaitStartedAfterTerminalize": true,
+      "terminalizeToAwaitReturnClockMs": 451,
+      "timeline": [
+        {
+          "name": "terminalize:after-canonical-append",
+          "sinceBeginClockMs": 646
+        },
+        {
+          "name": "alarm:end",
+          "sinceBeginClockMs": 646
+        },
+        {
+          "name": "await:start",
+          "sinceBeginClockMs": 1097
+        },
+        {
+          "name": "await:return",
+          "sinceBeginClockMs": 1097
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,10 @@ For new experiments, apply [build-verified A/B instrumentation](verified-ab-inst
 
 The build-verified version checks the Object's own `BUILD` before admitting an input and again in metrics, and checks the provider receipt's expected build. Cold readiness waits for the correct Object build, records all observed builds and reset attempts, then leaves the Object cold for its timed input. A successful Worker deployment alone is insufficient: one historical baseline-labeled Object continued executing candidate code after a reset. Do not use the old labeled comparisons for causal claims.
 
+Received HTTP 5xx responses from cold setup are retried within the readiness bound and retained in `readinessFailures`. Uncertain transport outcomes, seed failures and timed input failures still stop the run. This prevents an unrelated setup response from silently disappearing or forcing input replay.
+
+A fresh target Worker waits 45 seconds after creation before its existing direct and driver health checks. Existing targets redeployed between A/B passes still use health checks plus Object-build readiness. This setup interval is outside timing and was added after a seed request received the Cloudflare HTTP 404 placeholder despite earlier successful health checks.
+
 Replace the private temporary path in `deployed/platform.ts` with a fresh mode-700 directory outside the repository. Keep its Alchemy ownership state until teardown. The run used credentials inherited through `direnv exec .` from the product checkout. Do not write credential values, account identifiers, account names, Worker subdomains or email addresses into results. Install the pinned repository dependencies with `vp install --frozen-lockfile`; the harness installs its third-party dependencies in this isolated bench checkout. Product validation used a different checkout without those vendor dependencies.
 
 From the product checkout, replacing `/absolute/bench` with the isolated bench path:
@@ -20,7 +24,7 @@ direnv exec . vp -C /absolute/bench/examples/durable-bench run deployed -- --rig
 
 The rigorous command selects ABBA or BAAB, redeploys the same Worker/namespaces, and preserves each Object's history across passes. It excludes one verified cold turn and one warmup per Object/pass. History therefore grows during the experiment; inspect epoch and paired-Object results as well as aggregate quantiles. Treat pi's changes and repeated-build spread as controls. No sample is silently dropped or replayed after an uncertain outcome.
 
-The notification experiment completed with unverified Object-build labels and is inconclusive. The first maintenance attempt failed during seeding; the next exposed stale Object code and later a lost-network failure. Both retained all known failures and verified target cleanup. A guarded pilot passed; the full guarded maintenance comparison is running. See the report for current status.
+The notification experiment completed with unverified Object-build labels and is inconclusive. The first maintenance attempt failed during seeding; the next exposed stale Object code and later a lost-network failure. A guarded pilot passed. The first full guarded run stopped on a pi cold-setup error during pass three; all 3,479 completed inputs had verified builds, but the final baseline pass was missing. The next attempt received a route-level HTTP 404 during seeding. Every failed run retained known failures and verified target cleanup. The guarded maintenance comparison with setup retries and initial route settling is running on fresh Objects. See the report for current status.
 
 Recompute the published warm distribution without Cloudflare access:
 
