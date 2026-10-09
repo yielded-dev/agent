@@ -158,11 +158,8 @@ import {
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import { initialContext } from "./internal/initial-context.ts";
-import {
-  makeJournalMetadata,
-  type JournalMetadata,
-  type JournalRecordEnvelope,
-} from "./internal/journal-metadata.ts";
+import type { makeJournalMetadata } from "./internal/journal-metadata.ts";
+import { type JournalMetadata, type JournalRecordEnvelope } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
 import { digestRunHistory, readRunContext } from "./internal/run-context.ts";
@@ -2507,11 +2504,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
    * canonical prompt boundary sits BEFORE the pending Turn, whose messages re-enter official
    * history through the engine's batch-resume continuation.
    */
-  const withoutPendingBatch = (
-    records: Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
+  const withoutPendingBatch = <E>(
+    records: Stream.Stream<JournalRecordEnvelope, E>,
     pending: PendingToolBatch,
     runId: ReturnType<typeof runIdForSubmission>,
-  ): Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized> =>
+  ): Stream.Stream<JournalRecordEnvelope, E> =>
     records.pipe(
       Stream.filter((envelope) => {
         if (envelope.record.recordId === pending.responseRecordId) return false;
@@ -4823,7 +4820,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     submission: SubmissionSnapshot,
     session: RunStorageSession,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
-    canonical: Stream.Stream<JournalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>,
+    canonical: Stream.Stream<
+      JournalRecordEnvelope,
+      ThreadStoreError | ThreadNotMaterialized | RunJournalError
+    >,
     canonicalThrough: CanonicalSequence,
     progressThrough: CanonicalSequence | undefined,
     continuation: RunContinuation | undefined,
@@ -8555,7 +8555,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         let canonical: Stream.Stream<
           JournalRecordEnvelope,
-          ThreadStoreError | ThreadNotMaterialized
+          ThreadStoreError | ThreadNotMaterialized | RunJournalError
         > = view.canonical;
 
         if (view.context === undefined) {
@@ -8571,19 +8571,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               message: "Run has no exact original input context boundary",
             });
 
-          // Context assembly is paid once, bounded at the ORIGINAL admission, never the later
-          // Thread tail. Subsequent recovery uses the immutable saved context and selected Run.
-          const history = yield* initialContext(original).pipe(
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
-          );
-
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
-          journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
-          for (const entry of history) journalMetadata.add(entry);
-          for (const entry of suffix) journalMetadata.add(entry);
-          canonical = Stream.fromIterable<JournalRecordEnvelope>([...history, ...suffix]);
+          // Close dependencies once; every traversal replays the ORIGINAL admission and suffix.
+          canonical = yield* Effect.gen(function* () {
+            const history = yield* initialContext(original, runIdForSubmission(submissionId)).pipe(
+              Effect.provideService(ThreadReader, reader),
+              Effect.provideService(Crypto.Crypto, crypto),
+            );
+
+            journalMetadata = history.metadata;
+            for (const entry of suffix) journalMetadata?.add(entry);
+
+            return Stream.concat(history.records, Stream.fromIterable(suffix)).pipe(
+              Stream.provideService(ThreadReader, reader),
+            );
+          });
         }
 
         const outcome = yield* runModel(
