@@ -23,12 +23,12 @@ export const CurrentAttempt = Context.Reference<Attempt | undefined>(
   { defaultValue: () => undefined },
 );
 
-const makeAttempt = (
-  publisher: ProvisionalText.PublisherService,
+const makeAttempt = Effect.fnUntraced(function* (
   threadId: ThreadId,
   submissionId: SubmissionId,
   attemptId: AttemptId,
-): Attempt => {
+): Effect.fn.Return<Attempt> {
+  const publisher = yield* ProvisionalText.Publisher;
   const identity = { threadId, submissionId, attemptId };
   const active = new Set<ModelHandle>();
   let closed = false;
@@ -86,7 +86,7 @@ const makeAttempt = (
       offerUnsafe({ _tag: "AttemptEnded", ...identity });
     },
   };
-};
+});
 
 /** Disabled observation acquires no Scope, counters, handles, or event payloads. */
 export const withAttempt = <A, E, R>(
@@ -99,9 +99,8 @@ export const withAttempt = <A, E, R>(
     publisher === ProvisionalText.noopPublisher
       ? Effect.provideService(effect, CurrentAttempt, undefined)
       : Effect.scoped(
-          Effect.acquireRelease(
-            Effect.sync(() => makeAttempt(publisher, threadId, submissionId, attemptId)),
-            (attempt) => Effect.sync(attempt.close),
+          Effect.acquireRelease(makeAttempt(threadId, submissionId, attemptId), (attempt) =>
+            Effect.sync(attempt.close),
           ).pipe(
             Effect.flatMap((attempt) => Effect.provideService(effect, CurrentAttempt, attempt)),
           ),

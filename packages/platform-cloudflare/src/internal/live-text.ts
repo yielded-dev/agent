@@ -81,7 +81,10 @@ export class LiveTextHub extends Context.Service<
         if (event._tag === "AttemptEnded" && event.attemptId === unavailable?.attemptId)
           unavailable = undefined;
         if (unavailable !== undefined) return false;
-        if (!isBoundedEvent(event)) return fail(event.attemptId);
+        if (!isBoundedEvent(event)) {
+          // Drop an oversized terminal frame without disabling an already-ended Attempt.
+          return event._tag === "AttemptEnded" ? false : fail(event.attemptId);
+        }
 
         if (event._tag === "Text") {
           const key = JSON.stringify([
