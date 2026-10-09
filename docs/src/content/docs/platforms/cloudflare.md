@@ -212,10 +212,12 @@ custom Crypto or namespace composition, and `threadNamespaceLayer` for untyped e
 
 In an authenticated handler, call `client.submit(agent, input, options)` with the thread ID,
 principal, idempotency key, and definition digests. Return its receipt after admission.
-Admission relies on its pre-armed maintenance alarm and returns the receipt after Cloudflare
-confirms the writes. The pre-arm delay is half `alarmBackoffBase`, rounded up to at least 1 ms
-(50 ms by default); larger custom values can delay healthy work. Earlier alarms and retained
-retry deadlines still apply, and the configured delay is not a delivery-time guarantee.
+Admission returns the receipt after Cloudflare confirms the writes. The standard
+`ThreadObject.make` RPC also requests a bounded maintenance pass immediately after admission.
+Its pre-armed alarm retains recovery authority if that in-process hint is lost. The recovery
+pre-arm delay is half `alarmBackoffBase`, rounded up to at least 1 ms (50 ms by default).
+Earlier alarms and retained retry deadlines still apply; the configured delay is not a
+delivery-time guarantee.
 
 Use `client.awaitSettlement(receipt)` for completion metadata. When you also need the output,
 use `client.awaitSettlementRecord(receipt)` to wait for finalization and retrieve that receipt's
@@ -390,8 +392,9 @@ Hosts can also call `DurableAgentRuntime.processThread`, `processThreadResolved`
 that processing and requests one wake for remaining due work on exit. Keep the alarm handler
 active: pre-armed deadlines still deliver maintenance while an inline tool awaits a worker,
 message, or other external result. Local progress notifications and remote Thread wakes continue
-normally. Standard submit enqueues work; the alarm handler processes it inside a deferred
-maintenance pass.
+normally. Submit enqueues work for a deferred maintenance pass. `ThreadObject.make` requests
+that pass after durable admission; shared hosts using `ThreadObject.submit` retain the alarm
+or choose their own inline execution.
 
 An unresolved tool effect stays parked as an Unknown Outcome while later input in the same Thread
 can run. The unknown record and settlement obligation remain intact across eviction, and the effect
@@ -948,13 +951,14 @@ that budget. See the [logical alarm recovery guide](https://github.com/danieljvd
 for configuration and persisted schedule upgrades. Thread Objects retain their own native alarm
 policy described below.
 
-Each Thread alarm grants an initial head Attempt and can advance further heads while auxiliary
+Each Thread maintenance pass grants an initial head Attempt and can advance further heads while auxiliary
 delivery remains in flight. Recovery precedes each claim, and all Attempts share the event's
 original ten-minute yield deadline. Accepted input can still join the active Run at normal turn
 boundaries. At the yield deadline, the Attempt commits its completed turn before yielding; a later
 alarm resumes the same Run with its original duration deadline and cumulative usage.
 
-The whole Thread alarm has a fourteen-minute watchdog, including time waiting for another pass.
+Overlapping native alarms join the active pass and then rearm any later admitted work.
+The whole Thread maintenance pass has a fourteen-minute watchdog, including time waiting for another pass.
 The Schedule Owner uses the same watchdog while scanning due schedules. It continues past failed
 pages so a page of broken schedules cannot block healthy followers. Interrupted work keeps its
 durable retry obligation. These timers leave room below Cloudflare's

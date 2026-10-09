@@ -46,6 +46,7 @@ import {
 } from "./fixtures.ts";
 import {
   allSettled,
+  dropSubmittedWake,
   anyInState,
   drainAlarmsUntil,
   laneRows,
@@ -105,6 +106,7 @@ const submit = (thread: string, definition: typeof plannerDefinition | typeof ap
 
 const withThread = (
   test: (thread: string, now: number, advance: (millis: number) => Promise<void>) => Promise<void>,
+  manualDispatch = false,
 ) =>
   Effect.runPromise(
     Effect.gen(function* () {
@@ -124,6 +126,7 @@ const withThread = (
           releaseMaintenancePause(thread);
         }),
       );
+      if (manualDispatch) yield* dropSubmittedWake(thread, namespace);
       yield* Effect.promise(() =>
         test(thread, now, (millis) => Effect.runPromise(testClock.adjust(millis))),
       );
@@ -226,7 +229,7 @@ describe("live Thread projection and alarm backfill", () => {
         { id: "test:WorkerStop", revision: 2, dueAt: expect.any(Number) },
       ]);
       expect(await scheduledAlarm(thread, namespace)).not.toBeNull();
-    }));
+    }, true));
 
   // Regression: https://github.com/yielded-dev/agent/commit/b0a978cbf654962a42d8a794c2e826cc23a4c625
   it("includes interruptible finalizers in the host lane's original allowance", () =>
@@ -630,7 +633,7 @@ describe("live Thread projection and alarm backfill", () => {
         expect(await readCanonical(thread, namespace)).toEqual(canonical);
         expect(await watermark(thread)).toBe(canonical.at(-1)!.sequence);
         expect(await allSettled(thread, namespace)()).toBe(true);
-      }),
+      }, true),
   );
 
   it("does not let a future projection deadline gate approval publication or execution", () =>

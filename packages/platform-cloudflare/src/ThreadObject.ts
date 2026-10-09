@@ -472,6 +472,8 @@ const submitEndpoint = (encoded: unknown): Effect.Effect<unknown, never, Endpoin
     Effect.flatMap(encodeResponse),
   );
 
+const isSubmitSucceeded = Schema.is(Schema.toEncoded(SubmitSucceeded));
+
 const submissionStatusEndpoint = (
   encoded: unknown,
 ): Effect.Effect<unknown, never, EndpointServices> =>
@@ -1253,12 +1255,52 @@ export const make = <
     // services. Options and the rpc satisfies check above retain their Effect requirements.
   } as NativeOptions);
 
-  // effect-cf's class type keeps `alarm` optional even when the handler option is present. This
-  // concrete override reflects this factory's stronger contract while delegating execution to
-  // the effect-cf runtime unchanged.
-  class ThreadObject extends EffectCfThreadObject {
-    override alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void {
-      return super.alarm?.(alarmInfo);
+  // Preserve the native RPC method's optional tracing argument while overriding its mapped type.
+  interface NativeInstance extends InstanceType<typeof EffectCfThreadObject> {
+    submitEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
+  }
+
+  const NativeThreadObject: new (ctx: DurableObjectState, env: Cloudflare.Env) => NativeInstance =
+    EffectCfThreadObject;
+
+  class ThreadObject extends NativeThreadObject {
+    #pendingPass: Promise<void> | undefined;
+    #hintPending = false;
+
+    override async submitEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown> {
+      const response = await super.submitEncoded(encoded, traceContext);
+
+      if (isSubmitSucceeded(response) && this.#pendingPass === undefined && !this.#hintPending) {
+        this.#hintPending = true;
+        this.ctx.waitUntil(
+          Promise.resolve()
+            .then(() => this.alarm())
+            .finally(() => {
+              this.#hintPending = false;
+            }),
+        );
+      }
+
+      return response;
+    }
+
+    override alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> {
+      if (this.#pendingPass !== undefined)
+        // The native event may have consumed an alarm for input admitted after the
+        // joined pass's final checkpoint. Rearm that generation in a fresh event Scope.
+        return this.#pendingPass.then(() =>
+          this[EffectCfDurableObject.RunSymbol](gateEndpoint, { event: "alarm" }),
+        );
+
+      // The alarm entrypoint opens its own event Scope. The pre-armed durable alarm
+      // remains recovery authority when this in-process hint is lost.
+      const pass = Promise.resolve(super.alarm?.(alarmInfo)).finally(() => {
+        this.#pendingPass = undefined;
+      });
+
+      this.#pendingPass = pass;
+
+      return pass;
     }
   }
 

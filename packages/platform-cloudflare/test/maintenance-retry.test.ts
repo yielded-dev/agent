@@ -55,7 +55,7 @@ import {
   plannerDefinition,
   submitOptions,
 } from "./fixtures.ts";
-import { readCanonical, runClient, scheduledAlarm, stubFor } from "./harness.ts";
+import { dropSubmittedWake, readCanonical, runClient, scheduledAlarm, stubFor } from "./harness.ts";
 
 describe("maintenance retry deadlines", () => {
   // Regression: https://linear.app/reve-ai/issue/KOM-291
@@ -139,6 +139,7 @@ describe("maintenance retry deadlines", () => {
 
           maintenanceClocks.set(thread, clock);
           yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(thread)));
+          yield* dropSubmittedWake(thread);
           yield* Effect.promise(() =>
             runClient(
               CloudflareThreadClient.use((client) =>
@@ -606,6 +607,7 @@ describe("maintenance retry deadlines", () => {
         yield* TestClock.setTime(Date.now() + 86_400_000);
         maintenanceClocks.set(thread, yield* Clock.Clock);
         yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(thread)));
+        yield* dropSubmittedWake(thread);
         yield* Effect.promise(() =>
           runClient(
             CloudflareThreadClient.use((client) =>
@@ -912,6 +914,7 @@ describe("maintenance retry deadlines", () => {
           yield* TestClock.setTime(Date.now() + 86_400_000);
           maintenanceClocks.set(thread, yield* Clock.Clock);
           yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(thread)));
+          yield* dropSubmittedWake(thread);
 
           const receipt = yield* Effect.promise(() =>
             runClient(
@@ -1160,6 +1163,7 @@ describe("maintenance retry deadlines", () => {
         yield* TestClock.setTime(Date.now() + 86_400_000);
         maintenanceClocks.set(thread, yield* Clock.Clock);
         yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(thread)));
+        yield* dropSubmittedWake(thread);
         yield* Effect.promise(() =>
           runClient(
             CloudflareThreadClient.use((client) =>
