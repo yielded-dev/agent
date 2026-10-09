@@ -1,0 +1,73 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "environment": {
+    "packageManager": "Bun 1.4.2",
+    "toolchain": "Vite+ 1.1.0",
+    "effect": "4.0.0",
+    "install": "vp install --frozen-lockfile",
+    "doctor": "vp env doctor passed",
+    "productCheckoutHasVendoredThirdPartyNodeModules": false,
+    "postgres": "Isolated temporary PostgreSQL 18 cluster on loopback; no production data"
+  },
+  "notificationCandidate": {
+    "revision": "514b83d00d4092d6df979612ca495846aae9606c",
+    "diff": "Only suppresses the in-memory gate notification for native-only progress owned by the active Attempt",
+    "review": "Independent read-only review found no liveness blocker; external and auxiliary notifications, native completion and ordinary wake hints remain",
+    "checks": [
+      {
+        "command": "vp run -F @yielded/agent-platform-cloudflare test -- --project workerd test/alarm.test.ts test/maintenance-retry.test.ts test/due-queue-transactions.test.ts test/message-delivery.test.ts test/subagent.test.ts",
+        "result": "passed",
+        "note": "The separator caused the full Cloudflare project to run, rather than only the named files",
+        "filesPassed": 36,
+        "testsPassed": 141,
+        "testsSkipped": 6
+      },
+      {
+        "command": "vp run ready",
+        "result": "failed",
+        "reason": "No local Postgres service at the default test port; ECONNREFUSED. Sibling test task cancellations followed this failure. Static checks passed."
+      },
+      {
+        "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<isolated-local-database> vp run ready",
+        "result": "passed",
+        "tasks": 71,
+        "cacheHits": 32
+      }
+    ]
+  },
+  "maintenanceWriteCandidate": {
+    "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+    "diff": "Only skips semantically unchanged native maintenance-state writes; retains reads, schema validation, initialization, dirty increments, retry clearing, queue revisions and alarm operations",
+    "review": "Independent read-only review found no correctness blocker; specifically checked initialization, stale retry removal and transaction commit boundaries",
+    "checks": [
+      {
+        "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<isolated-local-database> vp run ready",
+        "result": "failed",
+        "reason": "One recovery-faults test exceeded its existing 5000ms timeout under the full suite",
+        "cloudflareTestsPassed": 140,
+        "cloudflareTestsSkipped": 6,
+        "cloudflareTestsFailed": 1,
+        "cloudflareProjectSeconds": 97.95
+      },
+      {
+        "command": "vp -C packages/platform-cloudflare test --project workerd test/recovery-faults.test.ts -t 'a real alarm publishes'",
+        "result": "passed",
+        "testsPassed": 1,
+        "testsSkipped": 7,
+        "projectSeconds": 6.63,
+        "note": "Unchanged source, test and timeout; test itself took about 2.4 seconds, including its intentional 2-second recovery hold"
+      },
+      {
+        "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<isolated-local-database> vp run ready",
+        "result": "passed",
+        "tasks": 71,
+        "cacheHits": 61,
+        "note": "Unchanged full rerun after investigating the timeout; retained successful task caches"
+      }
+    ]
+  },
+  "newCommittedTests": 0,
+  "testOrTimeoutChanges": 0,
+  "distributionRecomputation": "All eight percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file",
+  "cleanup": "Pending final remote teardown and local Postgres shutdown"
+}
