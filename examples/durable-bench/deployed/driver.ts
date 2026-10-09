@@ -195,7 +195,6 @@ export default {
             return {
               ok: true,
               driverMs: observedMs - startedMs,
-              startedMs,
               observedMs,
               admissionMs,
               firstTextMs: text === undefined ? null : text.atMs - startedMs,

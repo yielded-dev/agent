@@ -36,7 +36,7 @@ vp run deployed -- --profile cpu,memory
 
 The output has one table per cell: first visible assistant text and turn completion,
 each as median [Q1–Q3] of **Object medians**, with Yielded ÷ pi for both. It also shows
-time to the first outgoing model request, the completion medians' range and each Object's
+Object entry to the first outgoing model request, the completion medians' range and each Object's
 completion repeat range (median / maximum).
 The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) range of
 Object medians. This unpaired spread is descriptive, not a confidence interval.
@@ -124,7 +124,9 @@ JSON's `firstTextSource` distinguishes preview delivery from this canonical fall
 This workload emits text only after the eight tool calls. Tardie shows `n/a`:
 its existing adapter exposes completed method calls, and connecting its separate execution
 stream is outside this small harness change. Missing first text or observation failure before
-it invalidates the sample. First-model-request time crosses Object/driver clocks and is approximate.
+it invalidates the sample. `Object → model` measures submission-handler entry to the first
+outgoing model request on the Object's clock. It excludes driver transport and routing before
+that Object; short intervals may resolve to zero. Object/driver clock offsets are not request latency.
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no

@@ -183,6 +183,7 @@ export const ProviderCall = Schema.Struct({
   call: Schema.Natural,
   fingerprint: Schema.String,
   startMs: Schema.Number,
+  sinceEntryMs: Schema.Number,
   endMs: Schema.optionalKey(Schema.Number),
   status: Schema.optionalKey(Schema.Int),
   receipt: Schema.optionalKey(ProviderReceipt),

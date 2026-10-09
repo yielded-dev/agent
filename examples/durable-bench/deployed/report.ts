@@ -32,7 +32,7 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
   return result;
 };
 
-type Metric = "driverMs" | "firstTextMs" | "firstModelRequestMs";
+type Metric = "driverMs" | "firstTextMs" | "objectToFirstModelMs";
 
 export const objectMedians = (rows: readonly Sample[], metric: Metric = "driverMs") =>
   [...group(rows, (row) => row.object).values()].flatMap((items) => {
@@ -56,7 +56,7 @@ const ratio = (samples: readonly Sample[], metric: Metric): string => {
 
   const value = median(yielded) / median(pi);
 
-  return Number.isFinite(value)
+  return Number.isFinite(value) && Math.min(...pi) > 0
     ? `${value.toFixed(2)}× [${(Math.min(...yielded) / Math.max(...pi)).toFixed(2)}–${(Math.max(...yielded) / Math.min(...pi)).toFixed(2)}×]`
     : "n/a";
 };
@@ -76,7 +76,7 @@ export const table = (result: Result): string => {
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
     "Yielded falls back to settled text if no preview arrives; JSON records firstTextSource.",
-    "First request crosses Object/driver clocks (approximate). Cold turns exclude observer attachment; first text is n/a for tardie.",
+    "Object → model uses the Object clock and excludes driver transport. Cold turns exclude observer attachment; first text is n/a for tardie.",
     "Yielded/pi ranges use min(Y)/max(pi)–max(Y)/min(pi) of Object medians; descriptive, unpaired, not confidence intervals.",
     "",
   ];
@@ -89,7 +89,7 @@ export const table = (result: Result): string => {
     lines.push(
       cell,
       "",
-      "| Target | First text ms | Turn ms | First request ≈ms | Turn median range | Turn repeat range, median / max | Objects |",
+      "| Target | First text ms | Turn ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |",
       "|---|---:|---:|---:|---:|---:|---:|",
     );
     for (const target of TARGETS) {
@@ -105,7 +105,7 @@ export const table = (result: Result): string => {
       });
 
       lines.push(
-        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "firstModelRequestMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
+        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "objectToFirstModelMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
       );
     }
 
@@ -114,7 +114,7 @@ export const table = (result: Result): string => {
       samples.some((row) => row.target === "pi")
     ) {
       lines.push(
-        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | ${ratio(samples, "firstModelRequestMs")} | | | |`,
+        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | ${ratio(samples, "objectToFirstModelMs")} | | | |`,
       );
     }
     lines.push("");

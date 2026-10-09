@@ -35,6 +35,7 @@ export class Observation {
   readonly constructedMs = Date.now();
   private entries = 0;
   private alarms = 0;
+  private entryMs = 0;
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
@@ -54,6 +55,7 @@ export class Observation {
   }
   begin(query: Query) {
     this.assertBuild(query);
+    this.entryMs = Date.now();
     this.entry = this.identity();
     this.entries++;
     this.query = query;
@@ -88,10 +90,15 @@ export class Observation {
       throw new Error("Unexpected provider destination");
     const transcript = chatTranscript(decodeChat(await original.clone().json()));
 
+    const digest = await fingerprint(transcript);
+    const startMs = Date.now();
+
     const call: (typeof this.calls)[number] = {
       call: this.calls.length,
-      fingerprint: await fingerprint(transcript),
-      startMs: Date.now(),
+      fingerprint: digest,
+      startMs,
+      // The Object and driver clocks cannot be subtracted to obtain submit latency.
+      sinceEntryMs: startMs - this.entryMs,
     };
 
     this.calls.push(call);

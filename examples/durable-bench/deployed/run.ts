@@ -606,7 +606,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   .map((call, i) => call.startMs - (metrics.calls[i]?.endMs ?? NaN));
 
                 const lastEnd = metrics.calls.at(-1)?.endMs;
-                const firstStart = metrics.calls[0]?.startMs;
+                const objectToFirstModelMs = metrics.calls[0]?.sinceEntryMs;
 
                 yield* update((value) => ({
                   ...value,
@@ -624,11 +624,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                             ? {}
                             : { firstTextSource: measured.value.firstTextSource }),
                           observationMs: measured.value.observationMs,
-                          ...(firstStart === undefined
-                            ? {}
-                            : {
-                                firstModelRequestMs: firstStart - measured.value.startedMs,
-                              }),
+                          ...(objectToFirstModelMs === undefined ? {} : { objectToFirstModelMs }),
                           ...(measured.value.admissionMs === undefined
                             ? {}
                             : { admissionMs: measured.value.admissionMs }),

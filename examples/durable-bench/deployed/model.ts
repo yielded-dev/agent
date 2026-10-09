@@ -62,7 +62,7 @@ export const Sample = Schema.Struct({
   firstText: Schema.optionalKey(Schema.String),
   firstTextSource: Schema.optionalKey(FirstTextSource),
   observationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-  firstModelRequestMs: Schema.optionalKey(Schema.Number),
+  objectToFirstModelMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   gapMs: Schema.optionalKey(Schema.Number),
   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
@@ -140,7 +140,6 @@ export const MeasureRequest = Schema.Struct({ query: Query, targetUrl: Schema.St
 export const MeasureResponse = Schema.Struct({
   ok: Schema.Literal(true),
   driverMs: Schema.Number,
-  startedMs: Schema.Number,
   observedMs: Schema.Number,
   firstTextMs: Schema.NullOr(Schema.Number),
   firstText: Schema.optionalKey(Schema.String),
