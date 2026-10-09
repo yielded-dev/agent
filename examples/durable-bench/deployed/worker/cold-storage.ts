@@ -48,7 +48,10 @@ class StorageProbe {
     }
   }
   begin() {
-    if (this.started) this.statements = [];
+    if (this.started) {
+      this.statements = [];
+      this.touchedPaddingBytes = 0;
+    }
     this.started = true;
     this.points = [];
     this.point("entry");
