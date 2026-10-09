@@ -35,6 +35,11 @@ AgentPolicy.make({
 installed cost estimator and cache-split usage. `contextTokenLimit` bounds the live context for one
 call. Set it below the model window so output and compaction have room.
 
+For durable Runs, this limit does not bound the memory needed to load or verify history.
+Recovery verifies the context captured at the Run's original admission before applying later
+compaction. Configure compaction from the start: enabling it on a long Thread can still require
+a large initial history read.
+
 ## Prompt preparation order
 
 At run start, the runtime evaluates instructions and the definition's optional
