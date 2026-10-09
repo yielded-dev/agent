@@ -55,7 +55,7 @@ Profiled Object batches are serialized and paced to five captures per five minut
 quota waits happen before warmup. Other account activity can still cause HTTP 429; wait
 for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
-Gzip-compressed `.pprof` paths are printed at completion; filenames and result JSON identify
+Saved `.pprof` paths are printed at completion; filenames and result JSON identify
 the cell, target, build and Object. Unminified bundles and linked source maps are uploaded;
 copies remain beside the profiles in `results/` after cleanup. Inspect with
 `go tool pprof -http=:8080 results/<run>/<profile>.pprof`, or use Cloudflare's Observability →
