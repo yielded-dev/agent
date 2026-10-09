@@ -1365,10 +1365,8 @@ interface OpenCallReview {
 
 interface InitialJournalSource {
   records: ReadonlyArray<JournalRecordEnvelope> | undefined;
-  readonly read: Effect.Effect<
-    ReadonlyArray<JournalRecordEnvelope>,
-    ThreadStoreError | ThreadNotMaterialized | RunJournalError
-  >;
+  readonly original: CanonicalRecordEnvelope;
+  readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
 }
 
 const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
@@ -1447,6 +1445,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
     Effect.provideService(effect, Crypto.Crypto, crypto);
+
+  // Rebuild the pinned admission and captured suffix using this runtime's host dependencies.
+  const readInitialJournal = (
+    original: CanonicalRecordEnvelope,
+    suffix: ReadonlyArray<CanonicalRecordEnvelope>,
+  ) =>
+    initialContext(original).pipe(
+      Effect.provideService(ThreadReader, reader),
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.map((history) => history.concat(suffix)),
+    );
 
   const resolutionIntentsFor = (snapshot: RecoverySnapshot) => {
     const intents = new Map<ToolCallId, UnknownResolutionIntent>();
@@ -6373,7 +6382,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               const source =
                 initialJournal === undefined
                   ? canonical
-                  : Stream.fromIterable(yield* recordHalt(initialJournal.read));
+                  : Stream.fromIterable(
+                      yield* recordHalt(
+                        readInitialJournal(initialJournal.original, initialJournal.suffix),
+                      ),
+                    );
 
               sourceBoundaries = [];
               sourceJournal = yield* recordHalt(
@@ -8601,25 +8614,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
-          const readHistory = initialContext(original).pipe(
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
-            Effect.map((history) => history.concat(suffix)),
-          );
-
           const source: InitialJournalSource = yield* Effect.gen(function* () {
-            const history = yield* readHistory;
+            const history = yield* readInitialJournal(original, suffix);
 
             journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
             for (const entry of history) journalMetadata.add(entry);
 
-            return { records: history, read: readHistory };
+            return { records: history, original, suffix };
           });
 
           initialJournal = source;
           canonical = Stream.fromIterableEffect(
             Effect.suspend(() =>
-              source.records === undefined ? source.read : Effect.succeed(source.records),
+              source.records === undefined
+                ? readInitialJournal(source.original, source.suffix)
+                : Effect.succeed(source.records),
             ),
           );
         }
