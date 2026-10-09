@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 import { fingerprint, history, MEASURED_TOOLS, next, turn } from "../src/plan.ts";
-import { responseText } from "./text.ts";
+import { PREAMBLE, responseText } from "./text.ts";
 import { chatTranscript, decodeChat, readQuery, type ProviderReceipt } from "./worker/protocol.ts";
 
 const encoder = new TextEncoder();
@@ -56,6 +56,14 @@ export default {
       if (messages.findLast((m) => m.role === "user")?.text !== expected)
         throw new Error("Unexpected benchmark workload.");
       const step = next(messages);
+
+      const text =
+        "answer" in step
+          ? responseText(step.answer, query.textStreaming)
+          : query.textStreaming && messages.at(-1)?.role === "user"
+            ? PREAMBLE
+            : "";
+
       const id = `chatcmpl-durable-bench-${crypto.randomUUID()}`;
 
       const envelope = (delta: object, finish: string | null = null) => ({
@@ -68,6 +76,13 @@ export default {
 
       const chunks: object[] = [envelope({ role: "assistant" })];
 
+      if (text) {
+        const fragments = query.textStreaming
+          ? (text.match(/\S+\s*/g) ?? [])
+          : ["done after ", text.slice("done after ".length)];
+
+        for (const content of fragments) chunks.push(envelope({ content }));
+      }
       if ("call" in step) {
         const args = JSON.stringify({ n: step.call });
 
@@ -87,11 +102,6 @@ export default {
           chunks.push(envelope({ tool_calls: [{ index: 0, function: { arguments: part } }] }));
         chunks.push(envelope({}, "tool_calls"));
       } else {
-        const fragments = query.textStreaming
-          ? (responseText(step.answer, true).match(/\S+\s*/g) ?? [])
-          : ["done after ", step.answer.slice("done after ".length)];
-
-        for (const content of fragments) chunks.push(envelope({ content }));
         chunks.push(envelope({}, "stop"));
       }
       chunks.push({
@@ -125,7 +135,7 @@ export default {
             const delay =
               index === 0
                 ? Math.max(0, query.ttftMs - (Date.now() - arrivalMs))
-                : query.textStreaming && "answer" in step && query.ttftMs === 400
+                : query.textStreaming && text && query.ttftMs === 400
                   ? 25
                   : query.chunkDelayMs;
 

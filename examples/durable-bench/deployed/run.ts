@@ -40,7 +40,7 @@ import {
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
-import { responseText } from "./text.ts";
+import { PREAMBLE, responseText } from "./text.ts";
 import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
@@ -64,7 +64,11 @@ const append = (messages: Message[], input: Turn, textStreaming = false): string
       return hashes;
     }
     messages.push(
-      { role: "assistant", text: "", calls: [step.call] },
+      {
+        role: "assistant",
+        text: textStreaming && messages.at(-1)?.role === "user" ? PREAMBLE : "",
+        calls: [step.call],
+      },
       { role: "tool", text: payload(step.call) },
     );
   }
@@ -525,16 +529,21 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 );
 
                 const after = yield* Clock.currentTimeMillis;
+                const firstText = measured.value.firstText;
+
+                const expectedText = [
+                  responseText(`done after ${MEASURED_TOOLS} lookups`, query.textStreaming),
+                  ...(query.textStreaming && measured.value.firstTextSource !== "settlementRecord"
+                    ? [PREAMBLE]
+                    : []),
+                ];
 
                 if (
                   query.target !== "tardie" &&
                   (measured.value.firstTextMs === null ||
                     measured.value.firstTextMs < 0 ||
-                    !measured.value.firstText?.trim() ||
-                    !responseText(
-                      `done after ${MEASURED_TOOLS} lookups`,
-                      query.textStreaming,
-                    ).startsWith(measured.value.firstText))
+                    !firstText?.trim() ||
+                    !expectedText.some((text) => text.startsWith(firstText)))
                 )
                   return yield* new BenchError({
                     message:

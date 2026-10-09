@@ -86,10 +86,12 @@ export const table = (result: Result): string => {
     (row) =>
       `${row.history} history · ${row.ttftMs} ms TTFT · ${row.textStreaming ? "text-streaming" : "standard"} · ${row.state} · ${row.build}`,
   )) {
+    const firstTextLabel = samples[0]?.textStreaming ? "First text" : "First text (final answer)";
+
     lines.push(
       cell,
       "",
-      "| Target | First text ms | Turn ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |",
+      `| Target | ${firstTextLabel} ms | Turn ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |`,
       "|---|---:|---:|---:|---:|---:|---:|",
     );
     for (const target of TARGETS) {

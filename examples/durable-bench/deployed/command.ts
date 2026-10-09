@@ -25,7 +25,9 @@ export const command = Command.make(
     ),
     textStreaming: Flag.Boolean("text-streaming").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Stream a longer final reply at 40 fragments/s in the 400 ms cell"),
+      Flag.withDescription(
+        "Stream an initial preamble and final reply at 40 fragments/s in the 400 ms cell",
+      ),
     ),
     objects: positive("objects").pipe(
       Flag.withDefault(7),

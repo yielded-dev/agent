@@ -34,8 +34,9 @@ vp run deployed -- --cold --cpu
 vp run deployed -- --profile cpu,memory
 ```
 
-The output has one table per cell: first visible assistant text and turn completion,
-each as median [Q1–Q3] of **Object medians**, with Yielded ÷ pi for both. It also shows
+The output has one table per cell: **first text (final answer)** in default mode or
+**first text** with `--text-streaming`, beside turn completion. Both use median [Q1–Q3]
+of **Object medians**, with Yielded ÷ pi for both. It also shows
 Object entry to the first outgoing model request, the completion medians' range and each Object's
 completion repeat range (median / maximum).
 The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) range of
@@ -97,12 +98,14 @@ Historical turns repeat a one-tool, one-tool, zero-tool cycle. Each measured tur
 eight sequential readonly `lookup` calls, hence nine model requests. Tool results are
 256 bytes, except every 97th result is 8 KiB. Compaction is disabled for every target.
 The standard 400 ms provider also spaces SSE chunks by 10 ms, matching the deployed rebench harness.
-`--text-streaming` selects a separate workload: it retains the eight lookups and nine model
-requests, then emits a longer final reply in word-sized fragments every 25 ms (about 40
-fragments/s, roughly one second of text). Tool-only responses retain their original pacing;
-the 0 ms cell emits the same text without delays. Every target receives the same reply, and
-subsequent requests are checked against the extended reference transcript. The flag keeps
-the original completion workload available; compare tables with the same workload label.
+`--text-streaming` retains the eight lookups and nine model requests, but starts the first
+response with "I will look up the requested records, then summarize what I find." before
+its tool call. This preamble and a longer final reply stream in word-sized fragments every
+25 ms in the 400 ms cell (about 40 fragments/s, roughly one second for the final reply).
+Tool-only responses retain their original pacing; the 0 ms cell emits the same text without
+delays. Every target receives the same preamble and reply, and subsequent requests are
+checked against the extended reference transcript. The flag keeps the original completion
+workload available; compare tables with the same workload label.
 All Objects request `locationHint: "wnam"`; the driver and target Worker request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
 
@@ -118,10 +121,12 @@ pi-durable's public `watchEvents` inside its Object, forwarded over HTTP as text
 It waits for the subscription acknowledgement, then starts both timers at submit. First text
 ends when nonempty assistant text reaches the driver; it includes framework publication and
 transport, rather than the provider's first byte. Yielded drafts are matched to the new
-Receipt. If an instant burst retires before its preview arrives, the driver reads the public
-`awaitSettlementRecord` result after recording completion; first text includes that extra read.
+Receipt. Instant-provider Yielded uses the settled-record fallback when drafts are too short-lived to observe.
+The public `awaitSettlementRecord` read follows completion; first text includes that extra read.
 JSON's `firstTextSource` distinguishes preview delivery from this canonical fallback.
-This workload emits text only after the eight tool calls. Tardie shows `n/a`:
+Default mode emits text only after the eight tool calls, so **first text (final answer)**
+measures the final reply. Streaming mode's **first text** measures submit to the first visible
+preamble token, including framework publication and transport. Tardie shows `n/a`:
 its existing adapter exposes completed method calls, and connecting its separate execution
 stream is outside this small harness change. Missing first text or observation failure before
 it invalidates the sample. `Object → model` measures submission-handler entry to the first
