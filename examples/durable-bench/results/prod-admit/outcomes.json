@@ -1,0 +1,372 @@
+{
+  "generatedAt": "2026-10-09T00:13:47.575349+00:00",
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "totals": {
+    "plannedTurns": 744,
+    "qualifiedTurns": 744,
+    "verifiedColdIncarnations": 208,
+    "verifiedModelRequestFingerprints": 6696,
+    "telemetryEvents": 29467,
+    "invocations": 16533,
+    "nonOkInvocations": 1042,
+    "failedControllerHttpResponses": 2
+  },
+  "globalInvocationOutcomes": [
+    {
+      "key": "prod-admit-1c518729-primary/durableObject/fetch/aborted",
+      "count": 276
+    },
+    {
+      "key": "prod-admit-1c518729-primary/durableObject/fetch/ok",
+      "count": 2330
+    },
+    {
+      "key": "prod-admit-1c518729-primary/durableObject/jsrpc/ok",
+      "count": 1079
+    },
+    {
+      "key": "prod-admit-1c518729-primary/durableObject/alarm/ok",
+      "count": 949
+    },
+    {
+      "key": "prod-admit-1c518729-primary/stateless/fetch/ok",
+      "count": 2160
+    },
+    {
+      "key": "prod-admit-1c518729-primary/durableObject/alarm/canceled",
+      "count": 762
+    },
+    {
+      "key": "prod-admit-1c518729-primary/stateless/fetch/canceled",
+      "count": 4
+    },
+    {
+      "key": "prod-admit-1c518729-provider/stateless/fetch/ok",
+      "count": 8973
+    }
+  ],
+  "nonOkInterpretation": [
+    {
+      "count": 276,
+      "outcome": "aborted",
+      "kind": "Durable Object fetch",
+      "interpretation": "All have /cold request paths: explicit harness resets or releases, including but not limited to the 208 measured cold turns."
+    },
+    {
+      "count": 762,
+      "outcome": "canceled",
+      "kind": "alarm",
+      "interpretation": "Canceled alarm deliveries are retained; these do not by themselves establish interruption of running Attempts or dropped accepted work."
+    },
+    {
+      "count": 4,
+      "outcome": "canceled",
+      "kind": "stateless fetch",
+      "interpretation": "Three seed requests and one pi identity keepalive. Controller responses were successful, but the reason for canceled invocation telemetry is unresolved."
+    },
+    {
+      "count": 2,
+      "outcome": "HTTP 404",
+      "kind": "provider /echo readiness",
+      "interpretation": "Initial deployment propagation; readiness subsequently succeeded. These were not uncertain canonical turns."
+    },
+    {
+      "count": 4,
+      "outcome": "API HTTP 500",
+      "kind": "version metadata lookup",
+      "interpretation": "Four recorded receipts after API failure logging began; successful fallback verified exact active version and uploaded module bytes. Earlier occurrences are represented by retained metadata but their exact multiplicity was not logged."
+    }
+  ],
+  "completeNonOkInvocationRows": "prearm-probe/failed-outcomes.json#failedOutcomes",
+  "completeHttpFailureRows": "prearm-probe/failed-outcomes.json#failedRequests",
+  "apiFailureRows": "controller-api-non-ok.jsonl",
+  "perPhase": [
+    {
+      "phase": "map",
+      "coverage": {
+        "requestsAllPhases": 2199,
+        "selectedRequests": 48,
+        "retiredTurns": 0,
+        "plannedTurns": 48,
+        "eligibleTurns": 48,
+        "measuredTurns": 48,
+        "completedLedgerRows": 48,
+        "telemetryEvents": 29467,
+        "invocations": 16533,
+        "nonOkOutcomes": 1042,
+        "failedRequests": 2,
+        "joinFailures": 100,
+        "providerSseReceipts": 432,
+        "providerLogFallbacks": 0,
+        "transcriptValidTurns": 48,
+        "verifiedColdTurns": 8
+      },
+      "zeroFailureCounts": {
+        "controllerErrors": 0,
+        "controllerFailures": 0,
+        "applicationFailures": 0,
+        "unreturnedAttempts": 0,
+        "integrityFailures": 0,
+        "planFailures": 0,
+        "warmProofFailures": 0,
+        "incompleteCohorts": 0,
+        "expectedButMissingTurns": 0,
+        "unexpectedTurns": 0
+      },
+      "joinFailureKinds": {
+        "end-log-context-disagreement": 48,
+        "publication-end": 48,
+        "provider-log": 2,
+        "submit-join": 1,
+        "alarm-join": 1
+      },
+      "yieldedSubmitCpu": {
+        "known": 47,
+        "missing": 1,
+        "total": 48
+      },
+      "missingSubmitCpuRows": [
+        {
+          "object": "prod-admit-map-h250-d400-o0",
+          "sample": "m4",
+          "state": "warm"
+        }
+      ]
+    },
+    {
+      "phase": "diagnostic",
+      "coverage": {
+        "requestsAllPhases": 2199,
+        "selectedRequests": 80,
+        "retiredTurns": 0,
+        "plannedTurns": 80,
+        "eligibleTurns": 80,
+        "measuredTurns": 80,
+        "completedLedgerRows": 80,
+        "telemetryEvents": 29467,
+        "invocations": 16533,
+        "nonOkOutcomes": 1042,
+        "failedRequests": 2,
+        "joinFailures": 196,
+        "providerSseReceipts": 720,
+        "providerLogFallbacks": 0,
+        "transcriptValidTurns": 80,
+        "verifiedColdTurns": 24
+      },
+      "zeroFailureCounts": {
+        "controllerErrors": 0,
+        "controllerFailures": 0,
+        "applicationFailures": 0,
+        "unreturnedAttempts": 0,
+        "integrityFailures": 0,
+        "planFailures": 0,
+        "warmProofFailures": 0,
+        "incompleteCohorts": 0,
+        "expectedButMissingTurns": 0,
+        "unexpectedTurns": 0
+      },
+      "joinFailureKinds": {
+        "end-log-context-disagreement": 103,
+        "publication-end": 80,
+        "submit-join": 3,
+        "alarm-join": 1,
+        "provider-log": 9
+      },
+      "yieldedSubmitCpu": {
+        "known": 77,
+        "missing": 3,
+        "total": 80
+      },
+      "missingSubmitCpuRows": [
+        {
+          "object": "prod-admit-diagnostic-h50-d0-o0",
+          "sample": "m6",
+          "state": "settling"
+        },
+        {
+          "object": "prod-admit-diagnostic-h50-d0-o0",
+          "sample": "m8",
+          "state": "warm"
+        },
+        {
+          "object": "prod-admit-diagnostic-h250-d400-o0",
+          "sample": "m16",
+          "state": "warm"
+        }
+      ]
+    },
+    {
+      "phase": "candidates",
+      "coverage": {
+        "requestsAllPhases": 2199,
+        "selectedRequests": 336,
+        "retiredTurns": 0,
+        "plannedTurns": 336,
+        "eligibleTurns": 336,
+        "measuredTurns": 336,
+        "completedLedgerRows": 336,
+        "telemetryEvents": 29467,
+        "invocations": 16533,
+        "nonOkOutcomes": 1042,
+        "failedRequests": 2,
+        "joinFailures": 507,
+        "providerSseReceipts": 3024,
+        "providerLogFallbacks": 0,
+        "transcriptValidTurns": 336,
+        "verifiedColdTurns": 96
+      },
+      "zeroFailureCounts": {
+        "controllerErrors": 0,
+        "controllerFailures": 0,
+        "applicationFailures": 0,
+        "unreturnedAttempts": 0,
+        "integrityFailures": 0,
+        "planFailures": 0,
+        "warmProofFailures": 0,
+        "incompleteCohorts": 0,
+        "expectedButMissingTurns": 0,
+        "unexpectedTurns": 0
+      },
+      "joinFailureKinds": {
+        "end-log-context-disagreement": 236,
+        "publication-end": 224,
+        "awaitSettlement-join": 3,
+        "alarm-join": 7,
+        "provider-log": 32,
+        "inline-fetch-join": 1,
+        "submit-join": 3,
+        "driver-fetch-join": 1
+      },
+      "yieldedSubmitCpu": {
+        "known": 221,
+        "missing": 3,
+        "total": 224
+      },
+      "missingSubmitCpuRows": [
+        {
+          "object": "prod-admit-candidates-h250-d0-o0",
+          "sample": "m27",
+          "state": "diagnostic"
+        },
+        {
+          "object": "prod-admit-candidates-h250-d400-o0",
+          "sample": "m22",
+          "state": "warm"
+        },
+        {
+          "object": "prod-admit-candidates-h250-d400-o1",
+          "sample": "m26",
+          "state": "diagnostic"
+        }
+      ]
+    },
+    {
+      "phase": "fast",
+      "coverage": {
+        "requestsAllPhases": 2199,
+        "selectedRequests": 264,
+        "retiredTurns": 0,
+        "plannedTurns": 264,
+        "eligibleTurns": 264,
+        "measuredTurns": 264,
+        "completedLedgerRows": 264,
+        "telemetryEvents": 29467,
+        "invocations": 16533,
+        "nonOkOutcomes": 1042,
+        "failedRequests": 2,
+        "joinFailures": 397,
+        "providerSseReceipts": 2376,
+        "providerLogFallbacks": 0,
+        "transcriptValidTurns": 264,
+        "verifiedColdTurns": 72
+      },
+      "zeroFailureCounts": {
+        "controllerErrors": 0,
+        "controllerFailures": 0,
+        "applicationFailures": 0,
+        "unreturnedAttempts": 0,
+        "integrityFailures": 0,
+        "planFailures": 0,
+        "warmProofFailures": 0,
+        "incompleteCohorts": 0,
+        "expectedButMissingTurns": 0,
+        "unexpectedTurns": 0
+      },
+      "joinFailureKinds": {
+        "end-log-context-disagreement": 189,
+        "publication-end": 176,
+        "provider-log": 15,
+        "alarm-join": 5,
+        "driver-fetch-join": 5,
+        "awaitSettlement-join": 3,
+        "submit-join": 2,
+        "inline-fetch-join": 2
+      },
+      "yieldedSubmitCpu": {
+        "known": 174,
+        "missing": 2,
+        "total": 176
+      },
+      "missingSubmitCpuRows": [
+        {
+          "object": "prod-admit-fast-h250-d0-o1",
+          "sample": "m2",
+          "state": "cold"
+        },
+        {
+          "object": "prod-admit-fast-h250-d400-o0",
+          "sample": "m18",
+          "state": "warm"
+        }
+      ]
+    },
+    {
+      "phase": "prearm-probe",
+      "coverage": {
+        "requestsAllPhases": 2199,
+        "selectedRequests": 16,
+        "retiredTurns": 0,
+        "plannedTurns": 16,
+        "eligibleTurns": 16,
+        "measuredTurns": 16,
+        "completedLedgerRows": 16,
+        "telemetryEvents": 29467,
+        "invocations": 16533,
+        "nonOkOutcomes": 1042,
+        "failedRequests": 2,
+        "joinFailures": 52,
+        "providerSseReceipts": 144,
+        "providerLogFallbacks": 0,
+        "transcriptValidTurns": 16,
+        "verifiedColdTurns": 8
+      },
+      "zeroFailureCounts": {
+        "controllerErrors": 0,
+        "controllerFailures": 0,
+        "applicationFailures": 0,
+        "unreturnedAttempts": 0,
+        "integrityFailures": 0,
+        "planFailures": 0,
+        "warmProofFailures": 0,
+        "incompleteCohorts": 0,
+        "expectedButMissingTurns": 0,
+        "unexpectedTurns": 0
+      },
+      "joinFailureKinds": {
+        "end-log-context-disagreement": 32,
+        "publication-end": 16,
+        "driver-fetch-join": 1,
+        "provider-log": 3
+      },
+      "yieldedSubmitCpu": {
+        "known": 16,
+        "missing": 0,
+        "total": 16
+      },
+      "missingSubmitCpuRows": []
+    }
+  ],
+  "cpuAttributionLimit": "CPU is Cloudflare invocation attribution, not a semantic phase timer. Nine Yielded submit CPU joins are missing across 544 Yielded turns; 200 pi turns have no submit invocation by design.",
+  "cleanup": "cleanup.json",
+  "validation": "validation.json"
+}

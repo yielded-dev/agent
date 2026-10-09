@@ -25,7 +25,9 @@ if (sizes.some((size) => !Number.isInteger(size) || size < 1)) {
   throw new Error("sizes must be positive integers");
 }
 if (!Number.isInteger(samples) || samples < 1 || !(cpuMax >= 0)) {
-  throw new Error("usage: bench <yielded|pi|tardie> [turns...] --samples N --cpu-max 0.08");
+  throw new Error(
+    "usage: bench <yielded|yielded-inline|pi|tardie> [turns...] --samples N --cpu-max 0.08",
+  );
 }
 
 await prepare(name);
@@ -58,6 +60,7 @@ for (const size of sizes) {
 
     const line = {
       target: name,
+      executionPath: name === "yielded" ? "rpc-alarm" : "direct-turn",
       version: version(name),
       turns: size,
       sample,

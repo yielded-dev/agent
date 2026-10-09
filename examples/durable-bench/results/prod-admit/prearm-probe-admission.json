@@ -1,0 +1,1774 @@
+{
+  "phase": "prearm-probe",
+  "planned": 16,
+  "received": 16,
+  "qualified": 16,
+  "complete": true,
+  "excluded": [],
+  "qualification": "Unique planned response and accepted completion, verified transcript/cold/alarm path, and a complete eligible cohort from analyze.mjs. Missing invocation CPU does not disqualify driver latency.",
+  "criterion": "A positive latency claim must exceed the full pooled baseline admission repeat range within that Object/state. Label-median spread is also shown; neither is a significance test. Cold is a new Object incarnation, not guaranteed a new isolate.",
+  "cpuLimit": "Known invocation CPU is summarized with explicit n/missing; partial samples are not claimed complete. CPU is platform attribution, not semantic phase accounting.",
+  "objectGroups": [
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d0-o0/cold/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d0-o0",
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "candidate": "clock-sync",
+      "samples": [
+        "m0"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 494,
+        "min": 494,
+        "max": 494,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2131,
+        "min": 2131,
+        "max": 2131,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 49,
+        "min": 49,
+        "max": 49,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 30,
+        "min": 30,
+        "max": 30,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 88,
+        "min": 88,
+        "max": 88,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d0-o0/cold/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d0-o0",
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m1"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 580,
+        "min": 580,
+        "max": 580,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2153,
+        "min": 2153,
+        "max": 2153,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 101,
+        "min": 101,
+        "max": 101,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 15,
+        "min": 15,
+        "max": 15,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 50,
+        "min": 50,
+        "max": 50,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d0-o0/warm/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d0-o0",
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "candidate": "clock-sync",
+      "samples": [
+        "m2"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 218,
+        "min": 218,
+        "max": 218,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 1905,
+        "min": 1905,
+        "max": 1905,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 6,
+        "min": 6,
+        "max": 6,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 6,
+        "min": 6,
+        "max": 6,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 92,
+        "min": 92,
+        "max": 92,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 5,
+          "min": 5,
+          "max": 5,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d0-o0/warm/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d0-o0",
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m3"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 206,
+        "min": 206,
+        "max": 206,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 1722,
+        "min": 1722,
+        "max": 1722,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 7,
+        "min": 7,
+        "max": 7,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 4,
+        "min": 4,
+        "max": 4,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 68,
+        "min": 68,
+        "max": 68,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 5,
+          "min": 5,
+          "max": 5,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d400-o0/cold/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d400-o0",
+      "history": 50,
+      "ttftMs": 400,
+      "state": "cold",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m0"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 655,
+        "min": 655,
+        "max": 655,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 6180,
+        "min": 6180,
+        "max": 6180,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 73,
+        "min": 73,
+        "max": 73,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 40,
+        "min": 40,
+        "max": 40,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 89,
+        "min": 89,
+        "max": 89,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d400-o0/cold/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d400-o0",
+      "history": 50,
+      "ttftMs": 400,
+      "state": "cold",
+      "candidate": "clock-sync",
+      "samples": [
+        "m1"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 562,
+        "min": 562,
+        "max": 562,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 6020,
+        "min": 6020,
+        "max": 6020,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 35,
+        "min": 35,
+        "max": 35,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 117,
+        "min": 117,
+        "max": 117,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d400-o0/warm/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d400-o0",
+      "history": 50,
+      "ttftMs": 400,
+      "state": "warm",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m2"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 216,
+        "min": 216,
+        "max": 216,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 5573,
+        "min": 5573,
+        "max": 5573,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 11,
+        "min": 11,
+        "max": 11,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 86,
+        "min": 86,
+        "max": 86,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 5,
+          "min": 5,
+          "max": 5,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h50-d400-o0/warm/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h50-d400-o0",
+      "history": 50,
+      "ttftMs": 400,
+      "state": "warm",
+      "candidate": "clock-sync",
+      "samples": [
+        "m3"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 238,
+        "min": 238,
+        "max": 238,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 5637,
+        "min": 5637,
+        "max": 5637,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 11,
+        "min": 11,
+        "max": 11,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 18,
+        "min": 18,
+        "max": 18,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 123,
+        "min": 123,
+        "max": 123,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 5,
+          "min": 5,
+          "max": 5,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d0-o0/cold/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d0-o0",
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m0"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 648,
+        "min": 648,
+        "max": 648,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2403,
+        "min": 2403,
+        "max": 2403,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 55,
+        "min": 55,
+        "max": 55,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": -14,
+        "min": -14,
+        "max": -14,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 108,
+        "min": 108,
+        "max": 108,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 14,
+          "min": 14,
+          "max": 14,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d0-o0/cold/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d0-o0",
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "candidate": "clock-sync",
+      "samples": [
+        "m1"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 663,
+        "min": 663,
+        "max": 663,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2514,
+        "min": 2514,
+        "max": 2514,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 36,
+        "min": 36,
+        "max": 36,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 17,
+        "min": 17,
+        "max": 17,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 148,
+        "min": 148,
+        "max": 148,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 14,
+          "min": 14,
+          "max": 14,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d0-o0/warm/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d0-o0",
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "candidate": "clock-sync",
+      "samples": [
+        "m2"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 307,
+        "min": 307,
+        "max": 307,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2168,
+        "min": 2168,
+        "max": 2168,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 15,
+        "min": 15,
+        "max": 15,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 156,
+        "min": 156,
+        "max": 156,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 11,
+          "min": 11,
+          "max": 11,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d0-o0/warm/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d0-o0",
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m3"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 356,
+        "min": 356,
+        "max": 356,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 2277,
+        "min": 2277,
+        "max": 2277,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 5,
+        "min": 5,
+        "max": 5,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 120,
+        "min": 120,
+        "max": 120,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 11,
+          "min": 11,
+          "max": 11,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d400-o0/cold/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d400-o0",
+      "history": 250,
+      "ttftMs": 400,
+      "state": "cold",
+      "candidate": "clock-sync",
+      "samples": [
+        "m0"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 793,
+        "min": 793,
+        "max": 793,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 6430,
+        "min": 6430,
+        "max": 6430,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 73,
+        "min": 73,
+        "max": 73,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 28,
+        "min": 28,
+        "max": 28,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 178,
+        "min": 178,
+        "max": 178,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 14,
+          "min": 14,
+          "max": 14,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d400-o0/cold/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d400-o0",
+      "history": 250,
+      "ttftMs": 400,
+      "state": "cold",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m1"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 691,
+        "min": 691,
+        "max": 691,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 6118,
+        "min": 6118,
+        "max": 6118,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 58,
+        "min": 58,
+        "max": 58,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 10,
+        "min": 10,
+        "max": 10,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 119,
+        "min": 119,
+        "max": 119,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 14,
+          "min": 14,
+          "max": 14,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d400-o0/warm/prearm-only-probe",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d400-o0",
+      "history": 250,
+      "ttftMs": 400,
+      "state": "warm",
+      "candidate": "prearm-only-probe",
+      "samples": [
+        "m2"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 310,
+        "min": 310,
+        "max": 310,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 5794,
+        "min": 5794,
+        "max": 5794,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 11,
+        "min": 11,
+        "max": 11,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 6,
+        "min": 6,
+        "max": 6,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 93,
+        "min": 93,
+        "max": 93,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 11,
+          "min": 11,
+          "max": 11,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "range": 0
+        }
+      }
+    },
+    {
+      "key": "yielded/prod-admit-prearm-probe-h250-d400-o0/warm/clock-sync",
+      "framework": "yielded",
+      "object": "prod-admit-prearm-probe-h250-d400-o0",
+      "history": 250,
+      "ttftMs": 400,
+      "state": "warm",
+      "candidate": "clock-sync",
+      "samples": [
+        "m3"
+      ],
+      "admission": {
+        "n": 1,
+        "missing": 0,
+        "median": 292,
+        "min": 292,
+        "max": 292,
+        "range": 0
+      },
+      "turn": {
+        "n": 1,
+        "missing": 0,
+        "median": 5815,
+        "min": 5815,
+        "max": 5815,
+        "range": 0
+      },
+      "cpu": {
+        "n": 1,
+        "missing": 0,
+        "median": 16,
+        "min": 16,
+        "max": 16,
+        "range": 0
+      },
+      "clientMinusInvocation": {
+        "n": 1,
+        "missing": 0,
+        "median": 4,
+        "min": 4,
+        "max": 4,
+        "range": 0
+      },
+      "sync": {
+        "n": 1,
+        "missing": 0,
+        "median": 146,
+        "min": 146,
+        "max": 146,
+        "range": 0
+      },
+      "counts": {
+        "transaction:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "transactionSync:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "range": 0
+        },
+        "sql": {
+          "n": 1,
+          "missing": 0,
+          "median": 11,
+          "min": 11,
+          "max": 11,
+          "range": 0
+        },
+        "get:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "put:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "range": 0
+        },
+        "getAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "range": 0
+        },
+        "setAlarm:start": {
+          "n": 1,
+          "missing": 0,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "range": 0
+        }
+      }
+    }
+  ],
+  "comparisons": []
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "name": "provider",
+    "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+    "dirty": true,
+    "bundleSha256": "586fc15a336b68f10cf028db8872cd52106d286a7d63a0014f4454b0149b9f9b",
+    "bundleBytes": 558518,
+    "gzipBytes": 113836,
+    "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "33e7e0970be706ec8461bdf0ab4bf3b7a7b319ad0efdcba1d35337fa4a925b97",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/prod-admit-y5pR3T/bundles/provider",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+    "dirty": true,
+    "bundleSha256": "892e189a2fb11bad0297e57e59f553e759be46db9e7766d8a53bb624c55717ec",
+    "bundleBytes": 5312262,
+    "gzipBytes": 1000922,
+    "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "d1faf494a6bb33742585ec56d0042e6a3a49d4dbe4c1412b04c52973800e85f9",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+    "effectVersion": "4.0.0"
+  }
+]

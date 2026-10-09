@@ -1,0 +1,34 @@
+{
+  "at": "2026-10-08T23:35:07.901635+00:00",
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "branch": "dan/prod-admit-immediate-prearm",
+  "command": "vp run ready (Vite+ Node 24 shim first on PATH)",
+  "exitCode": 0,
+  "tasks": 71,
+  "cacheHits": 38,
+  "sourceSha256": {
+    "packages/platform-cloudflare/src/Alarm.ts": "99638532d159717f5a731528623ac68808c68b28f6876fb3d2f1e33a08b5eee4",
+    "docs/src/content/docs/platforms/cloudflare.md": "b574ef65e94bff0671236e8fd42acbf74f343a575cd71333648b7b143a54a452",
+    ".changeset/cloudflare-admission-alarm.md": "664e68d768070e0cf4985cc39499f588d6a9c3440987663ed45eac7b8a6842ce"
+  },
+  "logSha256": "bc371ad7cb1495a4cc87d30859106b141166d7c384b8627d596b441ff4139226",
+  "priorNonOk": [
+    {
+      "stage": "first gate",
+      "reason": "System Node 26 rejects --experimental-transform-types used by child-process recovery fixtures; 7 Node tests failed and 3 parallel jobs were canceled."
+    },
+    {
+      "stage": "second gate",
+      "reason": "Pinned Node fixed child processes; sandbox denied loopback access to the PostgreSQL test service (EPERM 127.0.0.1:55432), canceling parallel jobs."
+    }
+  ],
+  "resolution": "Reran the unchanged complete gate with the managed Node shim and authorized local network access; all tasks passed.",
+  "newTests": false,
+  "review": "Read-only reservation, stale-clock, active-alarm, retry-floor and generation-acknowledgement review found no concrete correctness issue. Existing helpers also serve other mutation endpoints; maintenance-pass execution code was not edited.",
+  "prototypeEquivalence": {
+    "fastArmFunctionByteIdentical": true,
+    "fastArmFunctionSha256": "1ef598295d600d3a301647bc6e645b0dc76857a2ab537ebba0bb288749a17241",
+    "prearmDeadline": "Math.max(deadline, now)",
+    "sourceAfterReleaseLanesByteIdenticalToMain": true
+  }
+}

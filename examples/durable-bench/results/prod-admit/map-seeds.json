@@ -1,0 +1,26 @@
+[
+  {
+    "key": "yielded/prod-admit-map-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500487159,
+    "databaseBytes": 2732032
+  },
+  {
+    "key": "yielded/prod-admit-map-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500490394,
+    "databaseBytes": 2699264
+  },
+  {
+    "key": "yielded/prod-admit-map-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500543959,
+    "databaseBytes": 10571776
+  },
+  {
+    "key": "yielded/prod-admit-map-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500563145,
+    "databaseBytes": 10665984
+  }
+]

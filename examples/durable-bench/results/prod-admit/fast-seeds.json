@@ -1,0 +1,74 @@
+[
+  {
+    "key": "pi/prod-admit-fast-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503000437,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/prod-admit-fast-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503003715,
+    "databaseBytes": 2719744
+  },
+  {
+    "key": "yielded/prod-admit-fast-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503005935,
+    "databaseBytes": 2756608
+  },
+  {
+    "key": "pi/prod-admit-fast-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503006985,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/prod-admit-fast-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503007876,
+    "databaseBytes": 2719744
+  },
+  {
+    "key": "yielded/prod-admit-fast-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503015036,
+    "databaseBytes": 2736128
+  },
+  {
+    "key": "pi/prod-admit-fast-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503019995,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/prod-admit-fast-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503056257,
+    "databaseBytes": 10780672
+  },
+  {
+    "key": "yielded/prod-admit-fast-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503062094,
+    "databaseBytes": 10645504
+  },
+  {
+    "key": "pi/prod-admit-fast-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503065225,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/prod-admit-fast-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503076618,
+    "databaseBytes": 10649600
+  },
+  {
+    "key": "yielded/prod-admit-fast-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503134886,
+    "databaseBytes": 10797056
+  }
+]

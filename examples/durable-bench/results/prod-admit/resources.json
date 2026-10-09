@@ -1,0 +1,649 @@
+{
+  "run": "1c518729",
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/private/tmp/prod-admit-y5pR3T",
+  "startedAt": 1791500347129,
+  "targets": [
+    {
+      "role": "provider",
+      "kind": "provider",
+      "name": "prod-admit-1c518729-provider",
+      "bundle": "/private/tmp/prod-admit-y5pR3T/bundles/provider/worker.mjs",
+      "build": {
+        "name": "provider",
+        "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+        "dirty": true,
+        "bundleSha256": "586fc15a336b68f10cf028db8872cd52106d286a7d63a0014f4454b0149b9f9b",
+        "bundleBytes": 558518,
+        "gzipBytes": 113836,
+        "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "33e7e0970be706ec8461bdf0ab4bf3b7a7b319ad0efdcba1d35337fa4a925b97",
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/prod-admit-y5pR3T/bundles/provider",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "seed",
+      "provider": "",
+      "url": "https://prod-admit-1c518729-provider.danieljmerwe.workers.dev",
+      "deployedAt": 1791500441520,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "967123c5-3afd-4d7c-8531-579597f41f14",
+      "startupTimeMs": 11,
+      "startupEvidence": {
+        "version": "967123c5-3afd-4d7c-8531-579597f41f14",
+        "number": 2,
+        "startupTimeMs": 11,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "uploadRevision": "",
+        "capturedAt": 1791500448725
+      },
+      "uploadedModuleSha256": "586fc15a336b68f10cf028db8872cd52106d286a7d63a0014f4454b0149b9f9b",
+      "observedUploadRevision": "",
+      "settings": {
+        "placement": {},
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": []
+    },
+    {
+      "role": "primary",
+      "kind": "network",
+      "name": "prod-admit-1c518729-primary",
+      "bundle": "/private/tmp/prod-admit-y5pR3T/bundles/network/worker.mjs",
+      "build": {
+        "name": "network",
+        "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+        "dirty": true,
+        "bundleSha256": "892e189a2fb11bad0297e57e59f553e759be46db9e7766d8a53bb624c55717ec",
+        "bundleBytes": 5312262,
+        "gzipBytes": 1000922,
+        "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "d1faf494a6bb33742585ec56d0042e6a3a49d4dbe4c1412b04c52973800e85f9",
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "measure",
+      "provider": "https://prod-admit-1c518729-provider.danieljmerwe.workers.dev/v1",
+      "url": "https://prod-admit-1c518729-primary.danieljmerwe.workers.dev",
+      "deployedAt": 1791500453635,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "b7d58b6e-495c-4117-8aa0-e8f7a143921a",
+      "startupMetadataFailure": "Error: Cloudflare workers/workers/[redacted-worker-id]/versions/b7d58b6e-495c-4117-8aa0-e8f7a143921a: 500 non-JSON gateway response; ray a47926d579c33493-SJC",
+      "startupTimeMs": null,
+      "startupEvidence": {
+        "version": "b7d58b6e-495c-4117-8aa0-e8f7a143921a",
+        "number": 12,
+        "startupTimeMs": null,
+        "uploadRevision": null,
+        "capturedAt": 1791504515940
+      },
+      "uploadedModuleSha256": "892e189a2fb11bad0297e57e59f553e759be46db9e7766d8a53bb624c55717ec",
+      "observedUploadRevision": null,
+      "settings": {
+        "placement": {
+          "mode": "targeted",
+          "target": [
+            50
+          ]
+        },
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "name": "prod-admit-1c518729-primary_NetworkYieldedDO",
+          "script": "prod-admit-1c518729-primary"
+        },
+        {
+          "name": "prod-admit-1c518729-primary_NetworkPiDO",
+          "script": "prod-admit-1c518729-primary"
+        }
+      ],
+      "deployments": [
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "709dcdf0964edbef9a4cf16438e48f10ec352fa3a1303ea6ad3b8d444aca63cb",
+            "bundleBytes": 5306107,
+            "gzipBytes": 999499,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "4b4db2219dec3bd32a99a101991215ba3aa7ca171652e1c09de0138fe0b6640d",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "1f74ceef-553e-45ba-a494-c248bf522420",
+          "startupEvidence": {
+            "version": "1f74ceef-553e-45ba-a494-c248bf522420",
+            "number": 2,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791500463608
+          },
+          "replacedAt": 1791500578339
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "709dcdf0964edbef9a4cf16438e48f10ec352fa3a1303ea6ad3b8d444aca63cb",
+            "bundleBytes": 5306107,
+            "gzipBytes": 999499,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "4b4db2219dec3bd32a99a101991215ba3aa7ca171652e1c09de0138fe0b6640d",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "189aaf1f-a8ef-4002-9514-26b07467b356",
+          "startupEvidence": {
+            "version": "189aaf1f-a8ef-4002-9514-26b07467b356",
+            "number": 3,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791500584478
+          },
+          "replacedAt": 1791500862915
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "c3d1d5ceb35447d49e33e7b9790cec3f86df27f023a0297268e9e48c6b02c0c5",
+            "bundleBytes": 5307613,
+            "gzipBytes": 999833,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "7bd04c4abacc7625db1b3234e2a5a7d80c961c9aefca979665cccaaa0f4fc234",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "0fa8b522-474a-42e5-bded-9f8fa3ee1625",
+          "startupEvidence": {
+            "version": "0fa8b522-474a-42e5-bded-9f8fa3ee1625",
+            "number": 4,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791500868576
+          },
+          "replacedAt": 1791500987046
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "c3d1d5ceb35447d49e33e7b9790cec3f86df27f023a0297268e9e48c6b02c0c5",
+            "bundleBytes": 5307613,
+            "gzipBytes": 999833,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "7bd04c4abacc7625db1b3234e2a5a7d80c961c9aefca979665cccaaa0f4fc234",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "71e4e7bd-7c14-48e7-818b-b10a977c5f64",
+          "startupEvidence": {
+            "version": "71e4e7bd-7c14-48e7-818b-b10a977c5f64",
+            "number": 5,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791500993793
+          },
+          "replacedAt": 1791501394258
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "7324493086c54cd2e7d2e436be51e1491ab6e81a0cf33b3b2b03afa25ddc1b97",
+            "bundleBytes": 5308448,
+            "gzipBytes": 1000082,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "ef601f7251563d489b4b9746e4772beeb84d4828ecde5013e7f254b52bddd1aa",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "b18071f6-37d6-4bd5-b343-ec003b08d503",
+          "startupEvidence": {
+            "version": "b18071f6-37d6-4bd5-b343-ec003b08d503",
+            "number": 6,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791501400961
+          },
+          "replacedAt": 1791501597806
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "a6fe6a622e726d9943a6ec52a6d3996421d249348d8f014cec72ee4eb38ea20a",
+            "bundleBytes": 5309392,
+            "gzipBytes": 1000248,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "bb5e3221fdfdea638f7490e38e236a47faa878b0bffc2eb6f2ae78f10d7600d6",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "a7194e6f-b646-47e9-a656-11971c61d4f3",
+          "startupEvidence": {
+            "version": "a7194e6f-b646-47e9-a656-11971c61d4f3",
+            "number": 7,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791501608234
+          },
+          "replacedAt": 1791501699019
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "052322eac197d228b7bca66495e38d1989315c27dbc4f07839c52c13037b8d6a",
+            "bundleBytes": 5310417,
+            "gzipBytes": 1000561,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "a981e320d510dc650dae73c8c5ac1ffc455a36b335e59d03420f5f84e6a7f900",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "419aa5ad-81a3-4908-b16b-40f7ad399ee4",
+          "startupEvidence": {
+            "version": "419aa5ad-81a3-4908-b16b-40f7ad399ee4",
+            "number": 8,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791501706413
+          },
+          "replacedAt": 1791502972494
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "f0dd40884aef2b31ff043b10b0e93928df4bfa1001b644e984453e1afb7c7324",
+            "bundleBytes": 5312147,
+            "gzipBytes": 1000909,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "9f70c2756a5d2144b81fd7cb65b5202a466ae5e2a71516af466b4ae40e1eaea6",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "34b331da-a2f3-42a9-9558-9b86051da847",
+          "startupEvidence": {
+            "version": "34b331da-a2f3-42a9-9558-9b86051da847",
+            "number": 9,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791502979404
+          },
+          "replacedAt": 1791503177713
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "f0dd40884aef2b31ff043b10b0e93928df4bfa1001b644e984453e1afb7c7324",
+            "bundleBytes": 5312147,
+            "gzipBytes": 1000909,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "9f70c2756a5d2144b81fd7cb65b5202a466ae5e2a71516af466b4ae40e1eaea6",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "55793fcd-b838-4843-9d66-3b67d726053e",
+          "startupEvidence": {
+            "version": "55793fcd-b838-4843-9d66-3b67d726053e",
+            "number": 10,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791503184545
+          },
+          "replacedAt": 1791504421880
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+            "dirty": true,
+            "bundleSha256": "892e189a2fb11bad0297e57e59f553e759be46db9e7766d8a53bb624c55717ec",
+            "bundleBytes": 5312262,
+            "gzipBytes": 1000922,
+            "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "d1faf494a6bb33742585ec56d0042e6a3a49d4dbe4c1412b04c52973800e85f9",
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "b9a33089-4a95-4b44-855a-8f30bc429c64",
+          "startupEvidence": {
+            "version": "b9a33089-4a95-4b44-855a-8f30bc429c64",
+            "number": 11,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791504428207
+          },
+          "replacedAt": 1791504510028
+        }
+      ]
+    }
+  ],
+  "baselineRevision": "d52ee32a51c7bf93a226272578f13cebcc66f2e1"
+}

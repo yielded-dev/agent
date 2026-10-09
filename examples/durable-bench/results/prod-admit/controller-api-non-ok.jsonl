@@ -1,0 +1,4 @@
+{"at":1791502979209,"action":"refresh-seed","status":500,"message":"Cloudflare workers/workers/[redacted-worker-id]/versions/34b331da-a2f3-42a9-9558-9b86051da847: 500 non-JSON gateway response; ray a47901522df55b6a-SJC"}
+{"at":1791503184310,"action":"activate","status":500,"message":"Cloudflare workers/workers/[redacted-worker-id]/versions/55793fcd-b838-4843-9d66-3b67d726053e: 500 non-JSON gateway response; ray a479065468198f42-SJC"}
+{"at":1791504428067,"action":"refresh-seed","status":500,"message":"Cloudflare workers/workers/[redacted-worker-id]/versions/b9a33089-4a95-4b44-855a-8f30bc429c64: 500 non-JSON gateway response; ray a47924b1ef3258dc-SJC"}
+{"at":1791504515779,"action":"activate","status":500,"message":"Cloudflare workers/workers/[redacted-worker-id]/versions/b7d58b6e-495c-4117-8aa0-e8f7a143921a: 500 non-JSON gateway response; ray a47926d579c33493-SJC"}

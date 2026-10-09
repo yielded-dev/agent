@@ -1,0 +1,7 @@
+{
+  "capturedAt": "2026-10-08T23:22:22.160736+00:00",
+  "bundleSha256": "052322eac197d228b7bca66495e38d1989315c27dbc4f07839c52c13037b8d6a",
+  "version": "419aa5ad-81a3-4908-b16b-40f7ad399ee4",
+  "baselineRevision": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "selection": "Native argument object is registered in a WeakMap before super.submitEncoded; the suspended endpoint decodes the variant from that argument and supplies an Effect Context.Reference. The controller checks candidate:selected against the randomized plan. No AsyncLocalStorage read selects behavior."
+}

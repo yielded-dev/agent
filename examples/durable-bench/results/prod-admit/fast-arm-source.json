@@ -1,0 +1,6 @@
+{
+  "source": "packages/platform-cloudflare/src/Alarm.ts",
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "method": "Exact armNow source copied from the isolated PR worktree, renamed fastArmNow in the comparison bundle. The candidate also uses the immediate prearm deadline.",
+  "sourceText": "        const fastArmNow = Clock.currentTimeMillis.pipe(\n          Effect.flatMap((now) =>\n            storageOperation(\"wake maintenance lanes\", async () => {\n              const next = DueQueue.next(DueQueue.make(ctx.storage).read());\n\n              if (!Number.isFinite(next)) return;\n              const existing = await ctx.storage.getAlarm();\n\n              // A pending due alarm already owns this droppable promptness hint.\n              if (existing !== null && existing <= Math.max(now, next)) return;\n\n              await ctx.storage.transaction(async (transaction) => {\n                const next = DueQueue.next(DueQueue.make(ctx.storage).read());\n\n                if (Number.isFinite(next))\n                  await ensureTransactionAlarmBy(transaction, Math.max(now, next));\n              });\n            }),\n          ),\n        );\n\n"
+}

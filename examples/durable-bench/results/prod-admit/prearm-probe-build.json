@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-09T00:09:00.301118+00:00",
+  "bundleSha256": "892e189a2fb11bad0297e57e59f553e759be46db9e7766d8a53bb624c55717ec",
+  "bundleBytes": 5312262,
+  "version": "b7d58b6e-495c-4117-8aa0-e8f7a143921a",
+  "baselineRevision": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "diagnosticOnly": true,
+  "purpose": "Per-boundary output-gated provider beacons for baseline and kept wake suppression, one cold and one warm request per condition and variant; never used as a performance comparison."
+}

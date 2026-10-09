@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-09T00:07:46.800556+00:00",
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "branch": "dan/prod-admit-prearmed-wake",
+  "command": "vp run ready (Vite+ managed Node 24 shim; task-owned loopback PostgreSQL on port 55439)",
+  "exitCode": 0,
+  "tasks": 71,
+  "cacheHits": 56,
+  "sourceSha256": {
+    "packages/platform-cloudflare/src/ThreadObject.ts": "532f8a06b5fe36bc026a90d44800e41023db7e8ef1d00bcfe60eadf0f003b7d7",
+    "packages/platform-cloudflare/src/Alarm.ts": "7d779fb3eff371b8b492911bfeb00820120360a1442565c38b058d7cd0371674",
+    "packages/platform-cloudflare/src/CloudflareConfig.ts": "ef186a1c515d3fe5af36ea5fe82f480daa2d540fc5da822ba7b1a1e84d6f1d5f",
+    "docs/src/content/docs/platforms/cloudflare.md": "f19b08199f669cb8ad7af8b8cbf469aa009cb2f2004e76e4403f18a1867726d9",
+    ".changeset/cloudflare-admission-wake.md": "a57d76bfad94335d009a141939800fbaa4d7c76a721be618500a583afa11763c"
+  },
+  "logSha256": "f1654132490df7c39c8e004f662523f4b3dce9a317719571c03183385d5cd394",
+  "priorNonOk": [
+    {
+      "stage": "kept-fix first full gate",
+      "reason": "The previously available shared PostgreSQL service on 127.0.0.1:55432 disappeared; ECONNREFUSED. No product code was changed in response."
+    }
+  ],
+  "resolution": "Started a task-owned PostgreSQL 17 Alpine container on 127.0.0.1:55439 and reran the complete gate with the managed Node shim; all tasks passed.",
+  "earlierPrototypeValidation": "validation-fast.json records the discarded combined prototype gate and its Node/sandbox environment failures.",
+  "localResourceCleanup": {
+    "name": "prod-admit-postgres",
+    "stopped": true,
+    "dockerPsAfterStop": [],
+    "preexistingImageRetained": true
+  },
+  "newTests": false,
+  "review": "Read-only admission/maintenance contract review confirmed optional wake hints, durable prearm and progress generation tracking preserve recovery; custom alarmBackoffBase promptness and the explicit service dependency are documented.",
+  "prototypeEquivalence": {
+    "measuredBundleSha256": "052322eac197d228b7bca66495e38d1989315c27dbc4f07839c52c13037b8d6a",
+    "variant": "prearm-only",
+    "scope": "Both apply the existing DurableAlarmService.withWakesDeferred to runtime.submit only, inside withMutation, before publication. No product scheduling helper or after-receipt code is changed."
+  },
+  "commit": "1640611291eff448dc293797cb503c0e0ed287d1",
+  "postCommitSourceHashesMatch": true
+}

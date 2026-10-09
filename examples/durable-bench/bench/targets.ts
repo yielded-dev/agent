@@ -25,6 +25,11 @@ export const TARGETS = {
     objects: { THREADS: "YieldedDO" },
     packageJson: "../../packages/effect-agent/package.json",
   },
+  "yielded-inline": {
+    entry: "src/yielded-inline.ts",
+    objects: { THREADS: "YieldedDO" },
+    packageJson: "../../packages/effect-agent/package.json",
+  },
   pi: {
     entry: "third-party/src/pi.ts",
     objects: { PI: "PiDO" },
@@ -42,9 +47,10 @@ export const version = (name: Target): string => readVersion(TARGETS[name].packa
 export type Target = keyof typeof TARGETS;
 
 export const target = (name: string | undefined): Target => {
-  if (name === "yielded" || name === "pi" || name === "tardie") return name;
+  if (name === "yielded" || name === "yielded-inline" || name === "pi" || name === "tardie")
+    return name;
 
-  throw new Error("target: yielded | pi | tardie");
+  throw new Error("target: yielded | yielded-inline | pi | tardie");
 };
 
 export const fixture = (name: Target, turns: number) => `fixtures/${name}-${turns}`;

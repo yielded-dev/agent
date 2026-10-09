@@ -1,0 +1,26 @@
+[
+  {
+    "key": "yielded/prod-admit-diagnostic-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500906419,
+    "databaseBytes": 2801664
+  },
+  {
+    "key": "yielded/prod-admit-diagnostic-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500912017,
+    "databaseBytes": 2830336
+  },
+  {
+    "key": "yielded/prod-admit-diagnostic-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500940893,
+    "databaseBytes": 11083776
+  },
+  {
+    "key": "yielded/prod-admit-diagnostic-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500969940,
+    "databaseBytes": 11198464
+  }
+]

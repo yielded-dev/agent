@@ -1,0 +1,78 @@
+{
+  "name": "prod-admit-1c518729-primary",
+  "kind": "network",
+  "phase": "measure",
+  "build": {
+    "name": "network",
+    "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+    "dirty": true,
+    "bundleSha256": "f0dd40884aef2b31ff043b10b0e93928df4bfa1001b644e984453e1afb7c7324",
+    "bundleBytes": 5312147,
+    "gzipBytes": 1000909,
+    "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "9f70c2756a5d2144b81fd7cb65b5202a466ae5e2a71516af466b4ae40e1eaea6",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/prod-admit-y5pR3T/bundles/network",
+    "effectVersion": "4.0.0"
+  },
+  "expectedVersion": "55793fcd-b838-4843-9d66-3b67d726053e",
+  "startupEvidence": {
+    "version": "55793fcd-b838-4843-9d66-3b67d726053e",
+    "number": 10,
+    "startupTimeMs": null,
+    "uploadRevision": null,
+    "capturedAt": 1791503184545
+  },
+  "settings": {
+    "placement": {
+      "mode": "targeted",
+      "target": [
+        50
+      ]
+    },
+    "limits": {
+      "cpu_ms": 300000
+    },
+    "compatibilityDate": "2026-08-18",
+    "compatibilityFlags": [
+      "nodejs_compat",
+      "global_fetch_strictly_public"
+    ],
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    }
+  }
+}
