@@ -2,19 +2,16 @@
   "name": "@yielded/agent-example-durable-bench",
   "private": true,
   "type": "module",
-  "scripts": {
-    "vendor": "bun install --cwd third-party",
-    "seed": "bun bench/seed.ts",
-    "bench": "bun bench/run.ts",
-    "report": "bun bench/report.ts",
-    "chart": "bun bench/chart.ts"
-  },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
+    "@effect/ai-openai-compat": "catalog:",
     "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
     "@types/node": "catalog:",
     "@yielded/agent": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
+    "@yielded/agent-storage-cloudflare": "workspace:*",
+    "alchemy": "catalog:",
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "esbuild": "catalog:",

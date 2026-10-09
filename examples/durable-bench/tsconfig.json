@@ -4,5 +4,5 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["src", "bench"]
+  "include": ["src", "bench", "deployed"]
 }
