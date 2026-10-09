@@ -2,6 +2,22 @@ import { Schema } from "effect";
 
 import { Query, Target } from "./worker/protocol.ts";
 
+export const ProfileType = Schema.Literals(["cpu", "memory"]);
+
+export const Profile = Schema.Struct({
+  type: ProfileType,
+  target: Query.fields.target,
+  object: Query.fields.object,
+  history: Query.fields.history,
+  ttftMs: Query.fields.ttftMs,
+  build: Query.fields.expectedBuild,
+  durationMs: Schema.Int,
+  file: Schema.String,
+  sourceMap: Schema.String,
+});
+
+export type Profile = typeof Profile.Type;
+
 export interface Options {
   readonly targets: readonly (typeof Target.Type)[];
   readonly sizes: readonly number[];
@@ -11,6 +27,7 @@ export interface Options {
   readonly concurrency: number;
   readonly cold: boolean;
   readonly cpu: boolean;
+  readonly profiles: readonly (typeof ProfileType.Type)[];
   readonly keep: boolean;
   readonly rigorous: boolean;
   readonly baseline?: string;
@@ -99,6 +116,7 @@ export const Result = Schema.Struct({
     }),
   ),
   failures: Schema.Array(Schema.String),
+  profiles: Schema.Array(Profile),
   cpu: Schema.optionalKey(Schema.Array(Invocation)),
   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
   cleanup: Schema.optionalKey(Cleanup),

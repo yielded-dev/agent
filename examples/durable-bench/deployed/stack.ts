@@ -15,6 +15,11 @@ export default Alchemy.Stack(
     const build = yield* Config.NonEmptyString("DURABLE_BENCH_BUILD");
     const token = Config.Redacted("DURABLE_BENCH_TOKEN");
     const cpu = yield* Config.String("DURABLE_BENCH_CPU").pipe(Config.withDefault("false"));
+
+    const resourcePrefix = yield* Config.NonEmptyString("DURABLE_BENCH_PREFIX").pipe(
+      Config.withDefault("durable-bench"),
+    );
+
     const env = { BENCH_TOKEN: token, BUILD: build, VERSION: Cloudflare.VersionMetadata() };
 
     const options = {
@@ -49,7 +54,11 @@ export default Alchemy.Stack(
         name: prefix + "-driver",
         main: bundle + "/driver.mjs",
         placement: { region: "aws:us-west-1" },
-        env: { ...env, WORKERS_SUBDOMAIN: yield* Config.NonEmptyString("DURABLE_BENCH_SUBDOMAIN") },
+        env: {
+          ...env,
+          BENCH_PREFIX: resourcePrefix,
+          WORKERS_SUBDOMAIN: yield* Config.NonEmptyString("DURABLE_BENCH_SUBDOMAIN"),
+        },
       });
 
       return { driver: driver.url, provider: provider.url };
@@ -59,6 +68,7 @@ export default Alchemy.Stack(
       ...options,
       name,
       main: bundle,
+      rules: [{ globs: ["*.mjs.map"] }],
       placement: { region: "aws:us-west-1" },
       env: {
         ...env,

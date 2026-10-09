@@ -9,6 +9,11 @@ const Namespaces = Schema.Array(
 );
 
 const connect = Effect.gen(function* () {
+  const prefix = yield* Config.schema(
+    Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9-]{0,23}$/)),
+    "DURABLE_BENCH_PREFIX",
+  ).pipe(Config.withDefault("durable-bench"));
+
   const accountId = Redacted.value(yield* Config.Redacted("CLOUDFLARE_ACCOUNT_ID"));
   const apiToken = Redacted.value(yield* Config.Redacted("CLOUDFLARE_API_TOKEN"));
 
@@ -65,9 +70,17 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
+  const resources = Effect.fnUntraced(function* (workerName?: string) {
+    // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
+    const generatedName = new RegExp(
+      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8})$`,
+    );
+
+    const matches = (name: string) =>
+      workerName === undefined ? generatedName.test(name) : name === workerName;
+
     const workers = (yield* api("workers/scripts", Workers))
-      .filter((w) => w.id.startsWith(prefix))
+      .filter((w) => matches(w.id))
       .map((w) => w.id);
 
     const namespaces: string[] = [];
@@ -80,7 +93,8 @@ const connect = Effect.gen(function* () {
 
       namespaces.push(
         ...rows
-          .filter((n) => n.name.startsWith(prefix) || n.script?.startsWith(prefix))
+          // Namespace names are <worker>_<class>, including when script is absent.
+          .filter((n) => matches(n.name.split("_", 1)[0] ?? "") || matches(n.script ?? ""))
           .map((n) => `${n.script ?? ""}/${n.name}`),
       );
       if (rows.length < 100)
@@ -93,6 +107,7 @@ const connect = Effect.gen(function* () {
   });
 
   return {
+    prefix,
     accountId,
     apiToken,
     accountName: account.name,

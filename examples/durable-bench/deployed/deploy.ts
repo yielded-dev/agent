@@ -11,37 +11,41 @@ import {
   execute,
   hash,
   nonce,
-  privateDirectory,
   read,
   redact,
   repository,
   save,
+  stateDirectory,
 } from "./platform.ts";
-
-const Stack = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
-  kind: Schema.Literals(["infrastructure", "target"]),
-  bundle: Schema.String,
-  build: Schema.String,
-  cpu: Schema.Boolean,
-});
-
-type Stack = typeof Stack.Type;
-
-const State = Schema.Struct({
-  version: Schema.Literal(1),
-  accountId: Schema.String,
-  token: Schema.String,
-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
-  infrastructure: Schema.optionalKey(Stack),
-  infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
-  targets: Schema.Record(Schema.String, Stack),
-});
 
 /** The only persistent state is private Alchemy state and enough ownership data to destroy it. */
 export const deployments = Effect.gen(function* () {
   const cloud = yield* Cloudflare;
   const fs = yield* FileSystem.FileSystem;
+  const privateDirectory = stateDirectory(cloud.prefix);
+
+  const Stack = Schema.Struct({
+    name: Schema.String.check(Schema.isPattern(new RegExp(`^${cloud.prefix}-[a-z0-9-]+$`))),
+    kind: Schema.Literals(["infrastructure", "target"]),
+    bundle: Schema.String,
+    build: Schema.String,
+    cpu: Schema.Boolean,
+  });
+
+  type Stack = typeof Stack.Type;
+
+  const State = Schema.Struct({
+    version: Schema.Literal(1),
+    accountId: Schema.String,
+    token: Schema.String,
+    infrastructurePrefix: Schema.String.check(
+      Schema.isPattern(new RegExp(`^${cloud.prefix}-shared-[a-f0-9]{8}$`)),
+    ),
+    infrastructure: Schema.optionalKey(Stack),
+    infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
+    targets: Schema.Record(Schema.String, Stack),
+  });
+
   const stateFile = join(privateDirectory, "state.json");
   let state: typeof State.Type;
 
@@ -56,14 +60,13 @@ export const deployments = Effect.gen(function* () {
 
     if (!existing.verified)
       return yield* new BenchError({
-        message:
-          "durable-bench resources exist without local ownership state. Restore the private state before deploying or tearing down.",
+        message: `${cloud.prefix} resources exist without local ownership state. Restore the private state before deploying or tearing down.`,
       });
     state = {
       version: 1,
       accountId: cloud.accountId,
       token: nonce() + nonce(),
-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
+      infrastructurePrefix: cloud.prefix + "-shared-" + nonce().slice(0, 8),
       targets: {},
     };
   }
@@ -106,6 +109,7 @@ export const deployments = Effect.gen(function* () {
         CLOUDFLARE_ACCOUNT_ID: cloud.accountId,
         CLOUDFLARE_API_TOKEN: cloud.apiToken,
         DURABLE_BENCH_KIND: stack.kind,
+        DURABLE_BENCH_PREFIX: cloud.prefix,
         DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
         DURABLE_BENCH_NAME: stack.name,
         DURABLE_BENCH_BUNDLE: stack.bundle,
@@ -164,7 +168,7 @@ export const deployments = Effect.gen(function* () {
     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
 
     const infrastructure: Stack = {
-      name: "durable-bench-infrastructure",
+      name: cloud.prefix + "-infrastructure",
       kind: "infrastructure",
       bundle: output,
       build: revision,
@@ -266,7 +270,7 @@ export const deployments = Effect.gen(function* () {
 
     if (!remaining.verified)
       return yield* new BenchError({
-        message: "durable-bench resources remain in this account; cleanup is not verified.",
+        message: `${cloud.prefix} resources remain in this account; cleanup is not verified.`,
       });
     yield* fs.remove(privateDirectory, { recursive: true });
 

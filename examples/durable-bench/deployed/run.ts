@@ -1,6 +1,17 @@
 import { join } from "node:path";
 
-import { Cause, Clock, Console, DateTime, Effect, Exit, FileSystem, Semaphore } from "effect";
+import {
+  Cause,
+  Clock,
+  Console,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Semaphore,
+} from "effect";
 
 import {
   history,
@@ -22,11 +33,12 @@ import {
   git,
   hash,
   nonce,
-  privateDirectory,
   redact,
   save,
+  stateDirectory,
   workspace,
 } from "./platform.ts";
+import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
 import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
 
@@ -68,9 +80,11 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
+  const privateDirectory = stateDirectory(cloud.prefix);
+  const runName = `${cloud.prefix}-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
+  const withProfileBatch = yield* profileBatches(options.profiles.length);
 
   let result: Result = {
     version: 1,
@@ -85,12 +99,14 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       targets: [...options.targets],
       sizes: [...options.sizes],
       ttft: [...options.ttft],
+      profiles: [...options.profiles],
     },
     builds: [],
     fixtures: [],
     samples: [],
     readiness: [],
     failures: [],
+    profiles: [],
     kept: options.keep,
     complete: false,
   };
@@ -183,6 +199,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       yield* Console.error(
         `Wall time ${(result.wallMs / 1000).toFixed(1)} s; infrastructure ${result.infrastructureReused ? "reused" : "deployed"}. Results: results/${runName}.json`,
       );
+      for (const profile of result.profiles) yield* Console.error(`Profile: ${profile.file}`);
       if (!result.complete)
         return yield* new BenchError({
           message: "Run incomplete; failures and cleanup status are recorded in the result JSON.",
@@ -221,6 +238,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
       const compiled = yield* build(join(privateDirectory, runName, label), "target", ref);
 
+      if (options.profiles.length > 0) {
+        const retained = join(output, label);
+
+        yield* fs.makeDirectory(retained, { recursive: true, mode: 0o700 });
+        yield* fs.copyFile(compiled.file, join(retained, "target.mjs"));
+        yield* fs.copyFile(compiled.file + ".map", join(retained, "target.mjs.map"));
+      }
       builds.set(label, compiled);
       yield* update((value) => ({
         ...value,
@@ -399,8 +423,62 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       );
       yield* Effect.forEach(
         shuffle(cohorts),
-        (cohort) =>
-          Effect.gen(function* () {
+        (cohort) => {
+          const profiled =
+            options.profiles.length > 0 &&
+            cohort.object.endsWith("-o0") &&
+            cohort.target !== "tardie";
+
+          return Effect.gen(function* () {
+            const capture = profiled
+              ? yield* prepareProfile({
+                  worker: runName,
+                  endpoint: url("/profile-target", cohort),
+                  token: deploy.token,
+                  query: { ...cohort, expectedBuild },
+                  output,
+                  sourceMap: join(output, label, "target.mjs.map"),
+                })
+              : undefined;
+
+            const warmed = yield* Deferred.make<number>();
+
+            const profiling = capture
+              ? yield* Deferred.await(warmed).pipe(
+                  Effect.flatMap((warmupMs) =>
+                    Effect.forEach(
+                      options.profiles,
+                      (type) =>
+                        capture(
+                          type,
+                          Math.min(
+                            50_000,
+                            Math.max(5000, Math.ceil(warmupMs * options.repeats * 1.25)),
+                          ),
+                        ).pipe(
+                          Effect.matchCauseEffect({
+                            onFailure: (cause) =>
+                              update((value) => ({
+                                ...value,
+                                failures: [
+                                  ...value.failures,
+                                  `${cohort.target}/${cohort.history}/${cohort.ttftMs} ${type} profile: ${message(cause)}`,
+                                ],
+                              })),
+                            onSuccess: (profile) =>
+                              update((value) => ({
+                                ...value,
+                                profiles: [...value.profiles, profile],
+                              })),
+                          }),
+                        ),
+                      { concurrency: 2, discard: true },
+                    ),
+                  ),
+                  Effect.forkScoped,
+                )
+              : undefined;
+
             // Discard constructor caches after import, and restart the same stored Object after every build change.
             const reset = yield* resetForBuild(cohort);
             let incarnation = "";
@@ -540,6 +618,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                       : row,
                   ),
                 }));
+                if (state === "warmup") yield* Deferred.succeed(warmed, measured.value.driverMs);
               }).pipe(
                 Effect.tapCause((cause) =>
                   update((value) => ({
@@ -551,7 +630,11 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 ),
               );
             }
+            // Joining and writing profiles are outside the driver's per-turn timer.
+            if (profiling) yield* Fiber.join(profiling);
           }).pipe(
+            Effect.scoped,
+            (batch) => (profiled ? withProfileBatch(batch) : batch),
             Effect.tapCause((cause) =>
               update((value) => ({
                 ...value,
@@ -561,7 +644,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 ],
               })),
             ),
-          ),
+          );
+        },
         { concurrency: options.concurrency, discard: true },
       );
     }
@@ -580,6 +664,6 @@ export const teardown = Effect.gen(function* () {
 
   yield* save(join(workspace, "results", "cleanup.json"), result);
   yield* Console.log(
-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
+    `Cleanup verified in ${cloud.accountName}: no ${cloud.prefix} Workers or Durable Object namespaces remain.`,
   );
 });

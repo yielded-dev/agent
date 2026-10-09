@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema } from "../../../node_modules/eff
 import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ProfileTarget, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { FixtureError } from "../../../deployed/worker/storage.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
@@ -111,7 +111,7 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/import", "/submit", "/await", "/run"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/import", "/submit", "/await", "/run", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -121,6 +121,18 @@ export default {
           { status: 503 },
         );
       const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
+
+      if (url.pathname === "/profile-target") {
+        if (query.target === "tardie") throw new Error("Profiling supports Yielded and pi");
+        const namespace = query.target === "yielded" ? env.YIELDED : env.PI;
+
+        return Response.json(Schema.decodeUnknownSync(ProfileTarget)({
+          actorId: namespace.idFromName(query.object).toString(),
+          binding: query.target === "yielded" ? "YIELDED" : "PI",
+          versionId: env.VERSION?.id,
+          build: env.BUILD,
+        }));
+      }
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });

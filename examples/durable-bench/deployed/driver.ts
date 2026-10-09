@@ -5,6 +5,7 @@ import { AwaitResult, RunResult, SubmitResult } from "./worker/protocol.ts";
 
 interface Env {
   BENCH_TOKEN: string;
+  BENCH_PREFIX: string;
   WORKERS_SUBDOMAIN: string;
   BUILD: string;
 }
@@ -28,7 +29,7 @@ export default {
         target.protocol !== "https:" ||
         target.username ||
         target.password ||
-        !target.hostname.startsWith("durable-bench-") ||
+        !target.hostname.startsWith(env.BENCH_PREFIX + "-") ||
         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
       )
         return new Response("invalid target", { status: 400 });

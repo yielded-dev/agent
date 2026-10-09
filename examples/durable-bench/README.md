@@ -30,6 +30,7 @@ at once; changing it can also change contention and the numbers being compared.
 ```sh
 vp run deployed -- --ttft 0 --objects 7 --repeats 4 --concurrency 6
 vp run deployed -- --cold --cpu
+vp run deployed -- --profile cpu,memory
 ```
 
 The output has one table per cell: median [Q1–Q3] of **Object medians**, the range of
@@ -39,6 +40,26 @@ Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
 records admission, model-call gaps, the last response-to-client interval, ingress colos,
 fingerprint/build checks, cold setup attempts, failures and cleanup. No timing evidence is committed.
+
+`--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
+Yielded Object and, when selected, the first pi Object in every history/TTFT cell and build
+pass. Captures start after warmup, alongside the warm turns, for an estimated batch duration
+(5–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
+also contain other Objects. Only already-running isolates can be captured; the bench supplies
+traffic. Short batches may finish before capture does. Memory profiles contain allocations
+made during the window, not retained memory or a heap snapshot.
+
+Profile requests, downloads and file writes are outside the turn timers, but profiling adds
+runtime overhead and can extend the run. Use unprofiled runs for timing comparisons.
+Profiled Object batches are serialized and paced to five captures per five minutes;
+quota waits happen before warmup. Other account activity can still cause HTTP 429; wait
+for the reported `Retry-After` before rerunning.
+The token needs Workers Scripts Read permission and the account must support profiling.
+Saved `.pprof` paths are printed at completion; filenames and result JSON identify
+the cell, target, build and Object. Unminified bundles and linked source maps are uploaded;
+copies remain beside the profiles in `results/` after cleanup. Inspect with
+`go tool pprof -http=:8080 results/<run>/<profile>.pprof`, or use Cloudflare's Observability →
+Flamegraph view while the Worker is retained with `--keep`.
 
 ## Infrastructure and cleanup
 
@@ -54,6 +75,8 @@ Private ownership data and Alchemy state live under `~/.local/state/durable-benc
 700), outside the checkout. Keep that directory until cleanup. The command refuses to
 reuse it with another account, or adopt existing resources without ownership state.
 Run only one benchmark/teardown command at a time. Within a run, Objects are concurrent.
+Set `DURABLE_BENCH_PREFIX=bench-profile` to isolate resource names and private state under
+that prefix; use the same environment value for `--teardown`.
 
 ```sh
 vp run deployed -- --teardown
