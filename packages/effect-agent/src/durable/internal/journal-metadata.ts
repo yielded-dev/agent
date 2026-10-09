@@ -165,16 +165,22 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
           });
       }
     },
-    finish: (): JournalMetadata => ({
-      ownerRunId,
-      firstSequenceByRun,
-      responseSequencesByRun,
-      terminalSequenceByRun,
-      settledSpans,
-      settledSequenceById,
-      settledToolCallRecordIds,
-      settledById,
-      compactions,
-    }),
+    finish: (): JournalMetadata => {
+      responseSequencesByRun.forEach((sequences, runId) => {
+        responseSequencesByRun.set(runId, sequences.slice());
+      });
+
+      return {
+        ownerRunId,
+        firstSequenceByRun,
+        responseSequencesByRun,
+        terminalSequenceByRun,
+        settledSpans,
+        settledSequenceById,
+        settledToolCallRecordIds,
+        settledById,
+        compactions,
+      };
+    },
   };
 };
