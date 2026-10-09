@@ -5,8 +5,9 @@ import { call, fixture, SIZES, start, target, version } from "./targets.ts";
 
 const BATCH = 50;
 
-const name = target(process.argv[2]);
-const sizes = process.argv.length > 3 ? process.argv.slice(3).map(Number) : [...SIZES];
+const [nameArg, ...sizeArgs] = process.argv.slice(2).filter((arg: string) => arg !== "--");
+const name = target(nameArg);
+const sizes = sizeArgs.length ? sizeArgs.map(Number) : [...SIZES];
 const work = `fixtures/${name}-work`;
 
 rmSync(work, { recursive: true, force: true });
