@@ -36,6 +36,11 @@
     "ci": {
       "runUrl": "https://github.com/yielded-dev/agent/actions/runs/37900903179",
       "readyConclusion": "SUCCESS"
+    },
+    "automatedReview": {
+      "pullRequest": "https://github.com/yielded-dev/agent/pull/830",
+      "submittedAt": "2026-10-09T08:41:35Z",
+      "actionableFindings": 0
     }
   },
   {

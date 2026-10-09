@@ -1,0 +1,343 @@
+{
+  "run": "history-cost-mv0pgioy-79197daf",
+  "method": "Cold samples have one observation per Object per epoch. For ABBA, compare candidate epoch 1 with baseline epoch 0, and candidate epoch 2 with baseline epoch 3. Each estimate is the median within-Object ratio or delta across ten Objects. Their range is descriptive epoch/order variation, not a confidence interval or an independent-trial estimate. Warm repeat estimates are reported separately.",
+  "cells": [
+    {
+      "metric": "firstRequestMs",
+      "history": 50,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 742.0,
+        "1": 598.5,
+        "2": 644.25,
+        "3": 604.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.7998242613930361,
+          "pairedMedianDeltaMs": -115.75
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9440536825935808,
+          "pairedMedianDeltaMs": -34.75
+        }
+      ],
+      "ratioRange": 0.14422942120054472,
+      "deltaRangeMs": 81.0
+    },
+    {
+      "metric": "firstRequestMs",
+      "history": 50,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 735.75,
+        "1": 634.0,
+        "2": 601.0,
+        "3": 648.5
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.8942561768279746,
+          "pairedMedianDeltaMs": -74.75
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9348041777040652,
+          "pairedMedianDeltaMs": -33.5
+        }
+      ],
+      "ratioRange": 0.04054800087609056,
+      "deltaRangeMs": 41.25
+    },
+    {
+      "metric": "firstRequestMs",
+      "history": 250,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1008.0,
+        "1": 814.25,
+        "2": 797.5,
+        "3": 887.25
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.8632310221978624,
+          "pairedMedianDeltaMs": -129.75
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9721160824830295,
+          "pairedMedianDeltaMs": -18.25
+        }
+      ],
+      "ratioRange": 0.10888506028516709,
+      "deltaRangeMs": 111.5
+    },
+    {
+      "metric": "firstRequestMs",
+      "history": 250,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1040.75,
+        "1": 841.75,
+        "2": 828.75,
+        "3": 870.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.8193388955483139,
+          "pairedMedianDeltaMs": -132.75
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9417001204335608,
+          "pairedMedianDeltaMs": -32.0
+        }
+      ],
+      "ratioRange": 0.12236122488524692,
+      "deltaRangeMs": 100.75
+    },
+    {
+      "metric": "firstRequestMs",
+      "history": 1000,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1588.25,
+        "1": 1467.5,
+        "2": 1464.5,
+        "3": 1544.25
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.9556450702846384,
+          "pairedMedianDeltaMs": -69.0
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.8994611661220964,
+          "pairedMedianDeltaMs": -144.25
+        }
+      ],
+      "ratioRange": 0.05618390416254204,
+      "deltaRangeMs": 75.25
+    },
+    {
+      "metric": "firstRequestMs",
+      "history": 1000,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1419.75,
+        "1": 1139.0,
+        "2": 1181.0,
+        "3": 1316.5
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.8173130647032263,
+          "pairedMedianDeltaMs": -241.5
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9705746459782915,
+          "pairedMedianDeltaMs": -35.75
+        }
+      ],
+      "ratioRange": 0.15326158127506517,
+      "deltaRangeMs": 205.75
+    },
+    {
+      "metric": "driverMs",
+      "history": 50,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1390.5,
+        "1": 1309.5,
+        "2": 1347.0,
+        "3": 1250.5
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.94902468755166,
+          "pairedMedianDeltaMs": -76.0
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 1.0167081072935504,
+          "pairedMedianDeltaMs": 21.5
+        }
+      ],
+      "ratioRange": 0.0676834197418904,
+      "deltaRangeMs": 97.5
+    },
+    {
+      "metric": "driverMs",
+      "history": 50,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 5494.0,
+        "1": 5407.0,
+        "2": 5435.0,
+        "3": 5389.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.9904222716178507,
+          "pairedMedianDeltaMs": -52.0
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 1.0014203901967593,
+          "pairedMedianDeltaMs": 8.5
+        }
+      ],
+      "ratioRange": 0.010998118578908644,
+      "deltaRangeMs": 60.5
+    },
+    {
+      "metric": "driverMs",
+      "history": 250,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 1744.5,
+        "1": 1622.5,
+        "2": 1533.0,
+        "3": 1715.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.9032557657430795,
+          "pairedMedianDeltaMs": -177.5
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9779813493264047,
+          "pairedMedianDeltaMs": -39.5
+        }
+      ],
+      "ratioRange": 0.07472558358332515,
+      "deltaRangeMs": 138.0
+    },
+    {
+      "metric": "driverMs",
+      "history": 250,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 5903.0,
+        "1": 5679.0,
+        "2": 5702.0,
+        "3": 5853.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.96433530677613,
+          "pairedMedianDeltaMs": -203.5
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 1.00010740147804,
+          "pairedMedianDeltaMs": 0.0
+        }
+      ],
+      "ratioRange": 0.03577209470191001,
+      "deltaRangeMs": 203.5
+    },
+    {
+      "metric": "driverMs",
+      "history": 1000,
+      "ttftMs": 0,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 2799.5,
+        "1": 2653.5,
+        "2": 2579.5,
+        "3": 2649.5
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.9807728020263635,
+          "pairedMedianDeltaMs": -58.5
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9566652874809749,
+          "pairedMedianDeltaMs": -132.5
+        }
+      ],
+      "ratioRange": 0.02410751454538862,
+      "deltaRangeMs": 74.0
+    },
+    {
+      "metric": "driverMs",
+      "history": 1000,
+      "ttftMs": 400,
+      "objects": 10,
+      "epochMediansMs": {
+        "0": 6351.0,
+        "1": 6262.0,
+        "2": 6353.0,
+        "3": 6395.0
+      },
+      "adjacentEpochEstimates": [
+        {
+          "baselineEpoch": 0,
+          "candidateEpoch": 1,
+          "pairedMedianRatio": 0.9698718314409939,
+          "pairedMedianDeltaMs": -180.5
+        },
+        {
+          "baselineEpoch": 3,
+          "candidateEpoch": 2,
+          "pairedMedianRatio": 0.9778667042976592,
+          "pairedMedianDeltaMs": -144.5
+        }
+      ],
+      "ratioRange": 0.007994872856665336,
+      "deltaRangeMs": 36.0
+    }
+  ],
+  "sourceRawSha256": "4499a6bdadd27400d7f8876bacae157433e251dd0b9c9b85e09e9c1a56c4b5e7"
+}

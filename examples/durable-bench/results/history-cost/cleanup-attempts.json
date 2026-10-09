@@ -1,0 +1,21 @@
+{
+  "initialTeardown": {
+    "outcome": "final verification failed",
+    "message": "history-cost resources remain in this account; cleanup is not verified.",
+    "logCompletedAt": "2026-10-09T09:12:17.646881Z",
+    "logSha256": "66ed941ff54dce7dabfbee85b7d50c38543162f6bee3dd98bcfef57245f461af"
+  },
+  "readOnlyFollowUp": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "finalTeardown": {
+    "exitCode": 0,
+    "verification": "cleanup.json",
+    "logSha256": "2a658f4e2e94ee1022d9ed6c4c7de08345cb5c84096e2997fb7dc2c5bbfb0b09"
+  },
+  "privateAlchemyStateRemoved": true,
+  "temporaryPostgresStopped": true,
+  "temporaryPostgresDataRemoved": true
+}

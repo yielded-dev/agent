@@ -1,6 +1,8 @@
 # History-dependent turn cost
 
-Work in progress. Latency claims require a completed deployed same-Object comparison; local counts below are diagnostic. The primary metric is submission to the mock provider's first-request arrival, with whole-turn latency retained. Warm/cold, instant/400 ms and 50/250/1,000-turn coverage are tracked separately. Both the original 3,500-turn import and the repaired snapshot seed exceeded the deployed Object memory limit before timing; their failures and verified target cleanup are retained. Deterministic counts still cover 3,500 turns.
+[PR #830](https://github.com/yielded-dev/agent/pull/830) reduces warm/instant submission-to-first-provider-request latency at 1,000 seeded turns by a paired 12.9% / 86 ms and 12.2% / 83 ms in two deployed same-Object comparisons with reversed build orders. The required 50/250/1,000-turn matrix covers warm/cold and instant/400 ms providers. First-request parity with pi is not achieved, and other conditions do not support a resolved latency-gain claim. The next owned candidate, direct digest encoding, remained below repeat/control variation, meeting the requested stopping rule.
+
+Deterministic counts cover 50/250/1,000/3,500 turns. Both the original 3,500-turn import and the repaired snapshot seed exceeded the deployed Object memory limit before timing; their failures and verified target cleanup are retained.
 
 The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #827). The benchmark is the separate #828 worktree; its latest measured head and local adaptations are recorded per run. Product candidates contain no benchmark or results files.
 
@@ -11,10 +13,10 @@ The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #
 | Candidate | Commit | Change | Status |
 |---|---|---|---|
 | Single message-schema traversal | `40485f33` | Remove the outer encoded-message validation while retaining the native decoder | No demonstrated warm gain; no PR |
-| Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Counts and full gate passed; deployed setup failures retained |
-| Terminal filtering | `4417a095` | Omit a duplicate settlement when an earlier terminal record is in the logical read range | Counts complete; timing pending |
+| Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Counts and full gate passed; setup failures and one-Object diagnostic retained; no gain claim or PR |
+| Terminal filtering | `4417a095` | Omit a duplicate settlement when an earlier terminal record is in the logical read range | Count-only prototype; extra SQL probes; no latency claim or PR |
 | Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Warm/instant first-arrival gain at 1,000 repeated in both build orders |
-| Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Exact digest equivalence, counts and full gate passed; deployed matrix running |
+| Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Full deployed matrix below observed variation; no PR |
 
 Canonical append/import/recovery codecs, hash-chain verification, continuation verification, fencing, claims, leases, Unknown handling and confirmed durability remain in place. No warm in-memory context cache is introduced.
 
@@ -125,6 +127,31 @@ At 50 and 250, apparent warm gains of 6.5% and 6.7% remain inside repeat/control
 
 Clock-interval width had a 32 ms median (15–88 ms). Observed non-ok telemetry comprised 1,931 canceled alarms, 473 aborted fetches and 182 canceled fetches, all unattributed; 78 telemetry markers lacked matching invocation rows. Missing CPU is not inferred as zero. [Full condition tables](runs/prompt-hydration-abba.md), [compact evidence](runs/prompt-hydration-abba.json), [repeat estimates](runs/prompt-hydration-abba.repeats.json), [numeric samples](runs/prompt-hydration-abba.samples.csv).
 
+### Direct digest encoding: below observed variation
+
+The next candidate compared `07f0272e` → `442c988c` in ABBA order, with ten Objects per target/size/provider cell and six warm repeats. All 3,840 turns, 34,560 request fingerprints, 3,840 actual Object build bindings and 3,360 non-warmup clock checks passed. There were no controller or workflow failures; target cleanup was verified.
+
+| Seed turns | Provider ms | State | Yielded ÷ pi before → after | Paired candidate ÷ baseline | Paired change |
+|---:|---:|---|---:|---:|---:|
+| 50 | 0 | cold | 2.956× → 3.007× | 0.893× | -70.8 ms |
+| 50 | 0 | warm | 4.049× → 3.984× | 0.964× | -6.8 ms |
+| 50 | 400 | cold | 2.966× → 2.511× | 0.914× | -51.6 ms |
+| 50 | 400 | warm | 3.039× → 3.151× | 1.022× | +4.8 ms |
+| 250 | 0 | cold | 3.575× → 3.343× | 0.910× | -91.6 ms |
+| 250 | 0 | warm | 4.666× → 4.374× | 0.965× | -8.5 ms |
+| 250 | 400 | cold | 4.805× → 3.901× | 0.876× | -111.9 ms |
+| 250 | 400 | warm | 5.491× → 5.720× | 0.975× | -6.9 ms |
+| 1,000 | 0 | cold | 5.367× → 4.850× | 0.947× | -87.4 ms |
+| 1,000 | 0 | warm | 8.569× → 9.646× | 0.991× | -9.5 ms |
+| 1,000 | 400 | cold | 3.600× → 3.516× | 0.860× | -168.5 ms |
+| 1,000 | 400 | warm | 5.253× → 5.492× | 0.985× | -12.1 ms |
+
+At 1,000 warm turns the paired first-arrival changes were only -0.9% / -9.5 ms with instant providers and -1.5% / -12.1 ms with 400 ms providers. Cohort repeat-estimate ranges were 11.2 percentage points in both cases; baseline epoch drift was 11.3% and 12.3%. No warm cell cleared observed repeat/control variation.
+
+Cold estimates also failed that bar. Each Object has one cold sample in each epoch. For ABBA, the adjacent comparisons are candidate epoch 1 versus baseline 0 and candidate 2 versus baseline 3. At 1,000/400 ms, their median ratios were 0.817 and 0.971: a 15.3-point range, larger than the aggregate apparent 14.0% gain. Their delta estimates differed by 205.8 ms, versus an aggregate 168.5 ms. Every cold cell remained within its adjacent-epoch range or baseline control drift. These are descriptive order/epoch checks, not independent trials or confidence intervals. Complete-turn changes likewise provide no resolved gain. The candidate is not proposed as a PR; this ends the owned optimization loop at the requested noise threshold.
+
+Clock intervals had a 32 ms median width (2–88 ms). Non-ok telemetry comprised 1,941 canceled alarms, 479 aborted fetches and 219 canceled fetches, all unattributed; 65 telemetry markers had no matching invocation row. [All first-arrival and complete-turn conditions](runs/digest-encoding.md), [compact evidence](runs/digest-encoding.json), [warm repeat estimates](runs/digest-encoding.repeats.json), [cold epoch estimates](runs/digest-encoding.cold-epochs.json), [numeric samples](runs/digest-encoding.samples.csv).
+
 ### Setup outcomes retained
 
 - [Fresh-canary deployed check](runs/object-health-smoke.json): all 24 turns and 216 model requests matched, with target cleanup verified. It checks deployment transitions; one Object per target cannot support a performance claim. Later comparisons additionally require each timed Object’s build binding to match its declared framework build. The first full matrix predates that additional guard.
@@ -153,6 +180,8 @@ Host SQLite query plans on copied fixtures show that an ownership-first CROSS JO
 
 ## Validation and cleanup
 
-[Gate evidence](ready.json) binds passing `vp run ready` runs to exact product revisions, with no vendored `third-party/node_modules`. Existing context-continuity, compaction, adapter, crash and recovery proofs are reused; no new committed test suite is added.
+[Gate evidence](ready.json) binds passing `vp run ready` runs to exact product revisions, with no vendored `third-party/node_modules`. Existing context-continuity, compaction, adapter, crash and recovery proofs are reused; no new committed test suite is added. CI passed on the measured PR head, and its automated full-diff review reported no actionable findings.
 
-Shared benchmark infrastructure is still in use. Final Alchemy teardown and prefix-wide Cloudflare API verification are pending; this report does not yet claim full cleanup.
+Alchemy teardown completed. At `2026-10-09T09:14:56.588Z`, prefix-wide Cloudflare API checks found zero `history-cost` Workers and zero Durable Object namespaces. The private Alchemy state was removed, and the task-owned PostgreSQL server was stopped and its temporary data removed. [cleanup.json](cleanup.json) records the final API result.
+
+The first teardown returned from Alchemy but failed its immediate prefix-wide verification. A subsequent read-only API check found zero resources; the final teardown verified zero again before removing private state. That non-ok attempt is retained in [cleanup-attempts.json](cleanup-attempts.json).
