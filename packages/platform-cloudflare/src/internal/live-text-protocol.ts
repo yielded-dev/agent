@@ -7,12 +7,17 @@ export const MAX_ID_LENGTH = 256;
 export const MAX_DELTA_LENGTH = 4_096;
 export const BUFFER_SIZE = 32;
 export const MAX_OBSERVERS = 8;
+export const MAX_DRAFT_PARTS = 32;
+export const MAX_DRAFT_LENGTH = 2 * 1_024 * 1_024;
 
 const streamId = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_ID_LENGTH));
 
 export const Request = Schema.Struct({ schemaVersion: Schema.Literal(1) });
 
-/** Disposable connection framing; sequences have no relationship to canonical sequences. */
+/**
+ * Reset replaces all drafts with a snapshot, streamed as native Text parts before live deltas.
+ * Each snapshot starts a fresh streamId. Its sequences are unrelated to canonical sequences.
+ */
 export const Frame = Schema.Union([
   Schema.TaggedStruct("Reset", {
     schemaVersion: Schema.Literal(1),

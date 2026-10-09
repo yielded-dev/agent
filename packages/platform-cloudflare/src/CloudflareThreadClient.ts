@@ -59,6 +59,7 @@ import { cloudflareCryptoLayer } from "./internal/crypto.ts";
 import {
   Frame as LiveTextFrame,
   isBoundedEvent,
+  MAX_DRAFT_PARTS,
   MAX_FRAME_BYTES,
   Request as WatchTextRequest,
 } from "./internal/live-text-protocol.ts";
@@ -386,16 +387,19 @@ const decodeLiveText = (
     const models = new Map<string, { attemptId: string; parts: Set<string> }>();
 
     const accept = (frame: LiveTextFrame): boolean => {
-      if (frame.sequence !== expected++) throw liveTextProtocolFailure();
       if (frame._tag === "Reset") {
-        if (streamId !== undefined || frame.threadId !== threadId) throw liveTextProtocolFailure();
+        if (frame.streamId === streamId || frame.threadId !== threadId)
+          throw liveTextProtocolFailure();
         streamId = frame.streamId;
+        expected = 1;
+        models.clear();
 
         return true;
       }
       if (
         streamId === undefined ||
         frame.streamId !== streamId ||
+        frame.sequence !== expected++ ||
         frame.event.threadId !== threadId ||
         !isBoundedEvent(frame.event)
       )
@@ -419,7 +423,10 @@ const decodeLiveText = (
 
       if (event.part.type === "text-start") {
         if (model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
-        if ([...models.values()].reduce((size, value) => size + value.parts.size, 0) >= 32)
+        if (
+          [...models.values()].reduce((size, value) => size + value.parts.size, 0) >=
+          MAX_DRAFT_PARTS
+        )
           throw liveTextProtocolFailure();
         if (model === undefined) {
           model = { attemptId: event.attemptId, parts: new Set() };
@@ -429,8 +436,7 @@ const decodeLiveText = (
 
         return true;
       }
-      // A prospective subscription may join during a part: never present its suffix as a prefix.
-      if (!model?.parts.has(event.part.id)) return false;
+      if (!model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
       if (event.part.type === "text-end") {
         model.parts.delete(event.part.id);
         if (model.parts.size === 0) models.delete(key);
@@ -537,9 +543,10 @@ export class CloudflareThreadClient extends Context.Service<
       afterSequence: CanonicalSequence,
     ) => Effect.Effect<void, ClientProgressFailure>;
     /**
-     * Future provisional native text, with an initial Reset readiness frame. Reconcile by
+     * Current provisional text followed by native deltas. Reset starts a replacement snapshot,
+     * including when a slow consumer exceeds the fixed backlog. Reconcile by
      * Run/Turn identity to canonical records; discard drafts on Discard, AttemptEnded,
-     * Reset or stream failure. A slow consumer fails on a sequence gap. No replay/retry.
+     * Reset or stream failure. Snapshots exist only in the Object incarnation's memory.
      * Scope the stream: interruption cancels its remote subscription.
      */
     readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;

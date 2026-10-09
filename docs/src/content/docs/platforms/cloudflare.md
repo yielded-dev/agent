@@ -231,75 +231,89 @@ Expose these Effects through your application's HTTP or RPC API.
 
 ### Preview live text
 
-Use `client.watchText(threadId)` to preview disposable assistant-text drafts during a Run.
-It returns `Stream<LiveTextFrame, ClientObserveFailure>`; the `LiveTextFrame` Schema and both
-types are exported from `@yielded/agent-platform-cloudflare/cloudflare-thread-client`.
-The Object requires the same `observe` authorization as canonical reads and isolates the
-addressed Thread, including within a shared Object.
+`watchText(threadId)` returns `Stream<LiveTextFrame, ClientObserveFailure>` over Durable Object
+RPC. The Object requires the same `observe` authorization as canonical reads and isolates the
+addressed Thread, including within a shared Object. It retains drafts for active Attempts and
+model-call generations even without observers, entirely in that Object incarnation's memory.
+Unlike persisted partials, these memory drafts are lost if the Object is evicted mid-response.
 
-Each subscription starts with `Reset`: `schemaVersion: 1`, `sequence: 0`, `streamId`, and
-`threadId`. Clear old uncommitted drafts when this readiness signal arrives. Later `Event`
-frames carry the same version and stream ID, contiguous positive subscription sequences,
-and an `event: ProvisionalText.Event`. These sequences are independent of canonical log cursors.
-Subscriptions receive only future events, with no snapshot or replay. For a complete new draft,
-consume `Reset` before submitting:
+In an authenticated Worker handler, authorize the requested Thread and forward its draft
+snapshots and live text to the browser as SSE:
 
-```ts
+```ts twoslash
+import { type ThreadObjectRpc } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import {
   CloudflareThreadClient,
-  type ClientObserveFailure,
+  LiveTextFrame,
 } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
-import { Deferred, Effect, Stream } from "effect";
+// @types: @cloudflare/workers-types
+import { type ThreadId } from "@yielded/agent/identifiers";
+import { Effect, Schema, Stream } from "effect";
 
-const runWithPreview = Effect.scoped(
-  Effect.gen(function* () {
-    const client = yield* CloudflareThreadClient;
-    const ready = yield* Deferred.make<void, ClientObserveFailure>();
+export const textResponse = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  env: { THREADS: DurableObjectNamespace<ThreadObjectRpc> },
+): Effect.fn.Return<Response> {
+  const encode = Schema.encodeEffect(Schema.fromJsonString(LiveTextFrame));
+  const encoder = new TextEncoder();
+  const bytes = Stream.unwrap(
+    Effect.map(CloudflareThreadClient, (client) => client.watchText(threadId)),
+  ).pipe(
+    Stream.mapEffect((frame) => encode(frame)),
+    Stream.map((json) => encoder.encode(`data: ${json}\n\n`)),
+    Stream.provide(CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS })),
+  );
+  const body = yield* Stream.toReadableStreamEffect(bytes);
 
-    yield* client.watchText(threadId).pipe(
-      Stream.runForEach((frame) =>
-        frame._tag === "Reset"
-          ? drafts.clearUncommitted.pipe(Effect.andThen(Deferred.succeed(ready, undefined)))
-          : drafts.apply(frame.event),
-      ),
-      Effect.onExit((exit) => Deferred.done(ready, exit)),
-      Effect.ensuring(drafts.clearUncommitted),
-      Effect.forkScoped,
-    );
-
-    yield* Deferred.await(ready);
-    const receipt = yield* client.submit(agent, input, { ...options, threadId });
-    return yield* client.awaitSettlementRecord(receipt);
-  }),
-);
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+});
 ```
 
-Here `drafts.apply` and `drafts.clearUncommitted` are application-owned Effects for this
-subscription. Keep their state separate from canonical history:
+Return `Effect.runPromise(textResponse(threadId, env))` from that Worker's `fetch` handler
+after authentication and the access check. The client Layer belongs to the body stream's Scope:
+returning the `Response` leaves it alive, and body completion or cancellation closes it.
+The browser can use `EventSource` and decode each `data` value with
+`Schema.fromJsonString(LiveTextFrame)`.
+
+On connection or reconnection, `Reset` carries `schemaVersion: 1`, `sequence: 0`, a new
+`streamId`, and `threadId`. Subsequent `Event` frames carry `event: ProvisionalText.Event` and
+contiguous positive sequences under that stream ID. The snapshot uses upstream Effect `Response`
+text-start parts, coalesced text-deltas of at most 4,096 UTF-16 code units, and text-end parts for
+already-ended text; live events follow. These sequences are independent of canonical log cursors.
+
+Queue overflow replaces queued events with another `Reset`, a new stream ID, and a full snapshot
+of the current draft prefixes before continuing with live events. Overflow does not fail the
+stream. On every `Reset`, clear that subscription's uncommitted drafts and rebuild from the
+following events:
 
 - `Text` carries an upstream Effect `Response` text-start, text-delta, or text-end part.
   Key drafts by `threadId`, `submissionId`, `attemptId`, `runId`, `turnId`, `generation`, and
-  the native part ID. Ignore deltas whose text-start you have not observed; attaching mid-call
-  can miss a prefix even without a sequence gap. A text-end does not establish a committed result.
-- `Discard` removes the named model-call generation, including on failure or replacement.
-- `AttemptEnded` removes uncommitted drafts for its Thread, Submission, and Attempt.
+  the native part ID. A text-end does not establish a committed result.
+- `Discard` removes the named generation from retained and displayed drafts.
+- `AttemptEnded` removes retained and displayed drafts for its Thread, Submission, and Attempt.
 
 Only ordinary assistant text is published. Tool arguments, structured final-tool output,
 reasoning, and native provider metadata are excluded. Continue using `readPage` and
-`awaitProgress` for canonical reconciliation. A matching canonical model response or Run
-settlement retires its drafts permanently; ignore delayed events that would restore them.
+`awaitProgress` for canonical history and reconciliation. Keep reconciled Run/Turn identities
+across resets and reconnects: a matching canonical model response or Run settlement retires its
+drafts permanently, including any later snapshot or live events that would restore them.
 Drafts are untrusted model output; render them as text or sanitize them at the display boundary.
 
-A sequence gap, disconnect, or EOF fails with `ClientObserveFailure`. Clear uncommitted drafts,
-reconnect, and reread canonical history. Reconnection starts a fresh subscription; it does not
-resume a draft or require another submission. Closing the observation Scope cancels the stream
-without aborting accepted work.
+Malformed drafts, exceeded content bounds, disconnects, EOF, and unexpected sequence gaps fail
+with `ClientObserveFailure`. Clear uncommitted drafts and reread canonical history. After a
+disconnect, EOF, or sequence gap, reconnect for a current snapshot. Malformed or oversized drafts
+disable previews until the offending Attempt ends; use canonical reads until then. Cancelling
+observation does not abort accepted work.
 
-Each physical Object permits 8 consumers with 32 queued frames each. Slow consumers lose old
-frames independently, without delaying model generation. Limits are 4,096 UTF-16 code units per
-text delta, 256 per identifier, 32 simultaneously open text parts per client, and 32 KiB per
-wire frame. Publication performs no producer I/O
-and adds no durable writes; canonical history and recovery remain unchanged.
+Fixed limits per physical Object are 8 consumers, 32 queued frames per consumer, 32 retained
+text parts, and 2,097,152 UTF-16 code units of total draft text. Each text delta is limited to
+4,096 UTF-16 code units, each identifier to 256, and each wire frame to 32 KiB. Publication
+performs no producer I/O, never waits for consumers, and adds no durable writes.
 
 ## Configure runtime services
 
