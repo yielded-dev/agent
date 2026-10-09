@@ -212,6 +212,10 @@ custom Crypto or namespace composition, and `threadNamespaceLayer` for untyped e
 
 In an authenticated handler, call `client.submit(agent, input, options)` with the thread ID,
 principal, idempotency key, and definition digests. Return its receipt after admission.
+Admission relies on its pre-armed maintenance alarm and returns the receipt after Cloudflare
+confirms the writes. The pre-arm delay is half `alarmBackoffBase`, rounded up to at least 1 ms
+(50 ms by default); larger custom values can delay healthy work. Earlier alarms and retained
+retry deadlines still apply, and the configured delay is not a delivery-time guarantee.
 
 Use `client.awaitSettlement(receipt)` for completion metadata. When you also need the output,
 use `client.awaitSettlementRecord(receipt)` to wait for finalization and retrieve that receipt's
