@@ -89,6 +89,7 @@ export const ImportResult = Schema.Struct({
   target: Target,
   history: History,
   fingerprint: Schema.String,
+  bytes: Schema.Natural,
   tables: Counts,
   mode: FixtureMode,
   fallbackReason: Schema.optionalKey(Schema.NonEmptyString),

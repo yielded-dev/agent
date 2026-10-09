@@ -78,6 +78,7 @@ export class Host {
           target: query.target,
           history: query.history,
           ...verified,
+          bytes: this.ctx.storage.sql.databaseSize,
           mode: fixture.mode,
           ...(fixture.fallbackReason === undefined
             ? {}

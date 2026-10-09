@@ -52,6 +52,7 @@ export const Sample = Schema.Struct({
   storage: Schema.optionalKey(StorageTrace),
   padding: Schema.optionalKey(PaddingResult),
   databaseBytes: Schema.optionalKey(Schema.Natural),
+  seedBytes: Schema.optionalKey(Schema.Natural),
   error: Schema.optionalKey(Schema.String),
 });
 

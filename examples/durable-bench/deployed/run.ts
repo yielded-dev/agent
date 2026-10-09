@@ -269,6 +269,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       ),
     );
 
+    const seedBytes = new Map<string, number>();
     let deployedEndpoint: string | undefined;
 
     for (const [epoch, label] of epochs.entries()) {
@@ -321,6 +322,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 fixture,
                 "10 minutes",
               )).value;
+
+              seedBytes.set(`${cohort.target}/${cohort.object}`, seeded.bytes);
 
               if (
                 seeded.fingerprint !== fixture.fingerprint ||
@@ -410,6 +413,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 repeat: index,
                 state,
                 status: "running",
+                seedBytes: seedBytes.get(`${cohort.target}/${cohort.object}`),
                 ...(padding === undefined ? {} : { padding }),
               };
 
