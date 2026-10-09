@@ -150,6 +150,13 @@ export const profiler = Effect.fnUntraced(function* (
     );
   });
 
+  // New isolates need time to become discoverable by the production profiler.
+  // Keep the unopened shell active instead of spending capture quota on 404s.
+  if (mode === "fresh") {
+    yield* before;
+    yield* waitActive(45000);
+  }
+
   // Start the real capture directly. Early read-only failures can retry while the
   // Object stays active; no framework input is sent until a capture remains open.
   for (let attempt = 0; attempt < 8; attempt++) {
