@@ -4895,6 +4895,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // The projected prompt owns its needed context.
       journalMetadata = undefined;
 
+      historyEvidence.forEach((entry, id) => {
+        if (entry.sequence >= journal.historyFrom) historyEvidence.delete(id);
+      });
+
       projectedJournal = {
         threadId: ctx.threadId,
         through: CanonicalSequence.make(projectionThrough),
