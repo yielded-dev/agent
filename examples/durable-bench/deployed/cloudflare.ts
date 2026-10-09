@@ -122,6 +122,7 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
         fetch(url, {
           method: body === undefined ? "GET" : "POST",
           signal,
+          keepalive: false,
           cache: "no-store",
           headers: {
             authorization: `Bearer ${token}`,
@@ -130,10 +131,18 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),
-      catch: () =>
-        new BenchError({
-          message: "Worker response was lost; request outcome is unknown and will not be retried.",
-        }),
+      catch: (cause) => {
+        const name = cause instanceof Error ? cause.name : "unknown";
+
+        const code =
+          cause instanceof Error && "code" in cause && typeof cause.code === "string"
+            ? `/${cause.code}`
+            : "";
+
+        return new BenchError({
+          message: `Worker response was lost (${name}${code}); request outcome is unknown and will not be retried.`,
+        });
+      },
     }).pipe(Effect.timeout(timeout));
 
     if (!response.ok) {

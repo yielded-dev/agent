@@ -328,10 +328,20 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 for (let from = 0; from < cohort.history; from += 25) {
                   const to = Math.min(from + 25, cohort.history);
 
-                  const replay = (yield* request(url("/seed", cohort), deploy.token, ReplayResult, {
-                    from,
-                    to,
-                  })).value;
+                  const replay = (yield* request(
+                    url("/seed", cohort),
+                    deploy.token,
+                    ReplayResult,
+                    { from, to },
+                    "10 minutes",
+                  ).pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new BenchError({
+                          message: `Seed chunk ${from}..${to}: ${cause.message}`,
+                        }),
+                    ),
+                  )).value;
 
                   if (replay.next !== to)
                     return yield* new BenchError({ message: "Seed chunk acknowledgment differs." });
@@ -375,7 +385,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 })),
               ),
             ),
-          { concurrency: Math.max(20, options.concurrency), discard: true },
+          { concurrency: options.concurrency, discard: true },
         );
       }
 
