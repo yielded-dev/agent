@@ -34,6 +34,7 @@ import { ToolParameterRejection } from "../core/ToolResult.ts";
 import { ModelCallUsage, RunUsageSummary, RunTotals } from "../core/Usage.ts";
 import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../core/Worker.ts";
 import { ContextHandoff } from "../engine/ContextWindow.ts";
+import { HistoryPrompt } from "./internal/history-prompt.ts";
 
 /** Stable identity of one canonical record. */
 export const RecordId = Schema.NonEmptyString.pipe(Schema.brand("@effect-agent/thread/RecordId"));
@@ -1357,12 +1358,12 @@ export const PromptRecordPayload = Schema.TaggedUnion({
   },
   ModelCompleted: {
     runId: RunId,
-    history: Schema.optionalKey(Prompt.Prompt),
+    history: Schema.optionalKey(HistoryPrompt),
   },
   ModelResponseRecorded: {
     runId: RunId,
     turn: TurnNumber,
-    messages: Prompt.Prompt,
+    messages: HistoryPrompt,
     runScopedPrefixLength: ModelResponseRecorded.fields.runScopedPrefixLength,
   },
   ToolCallSettled: {
