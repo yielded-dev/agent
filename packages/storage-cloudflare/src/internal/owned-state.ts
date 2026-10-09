@@ -76,7 +76,7 @@ export const ownedState = (sql: SqlClient) =>
   );
 
 /**
- * Demand-loaded row views. Writes apply SQLite's RETURNING rows to every retained view in
+ * Demand-loaded row views. Writes apply SQLite's RETURNING rows to affected retained views in
  * the same transaction; rollback discards them. Bounded views avoid loading a host's entire
  * retained submission history just to fence one live submission.
  */
@@ -187,12 +187,17 @@ export const ownedRows = <A, I>(
       <E, R>(effect: Effect.Effect<ReadonlyArray<unknown>, E, R>) =>
         Effect.gen(function* () {
           const rows = yield* decode(yield* effect);
+
+          if (rows.length === 0) return rows;
           const changed = new Set(rows.map(key));
 
           for (const { id, matches, maxRows, rows: prior } of Array.from(current.values())) {
+            const matchingRows = remove ? [] : rows.filter(matches);
+
+            if (matchingRows.length === 0 && !prior.some((row) => changed.has(key(row)))) continue;
             const next = prior.filter((row) => !changed.has(key(row)));
 
-            if (!remove) next.push(...rows.filter(matches));
+            next.push(...matchingRows);
             retain(id, matches, next, maxRows);
           }
           // A RETURNING row completely defines its unique-key view, even on a new Thread.
