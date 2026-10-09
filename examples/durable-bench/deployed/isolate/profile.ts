@@ -16,6 +16,22 @@ const Settings = Schema.Struct({
   ),
 });
 
+// The production endpoint rate-limits captures; reserve starts across concurrent Objects.
+let nextCaptureAt = 0;
+
+const reserveCapture = Effect.gen(function* () {
+  const wait = yield* Effect.sync(() => {
+    const now = Date.now();
+    const start = Math.max(now, nextCaptureAt);
+
+    nextCaptureAt = start + 15000;
+
+    return start - now;
+  });
+
+  if (wait > 0) yield* Effect.sleep(wait);
+});
+
 /** Binary production profiling API. Capture retries are read-only; turns never retry. */
 export const profiler = Effect.fnUntraced(function* (
   worker: string,
@@ -52,6 +68,8 @@ export const profiler = Effect.fnUntraced(function* (
   const preflight: { status: number; message: string }[] = [];
 
   const capture = Effect.fnUntraced(function* (duration: number, file: string) {
+    if (duration === 1000) yield* reserveCapture;
+
     const response = yield* Effect.tryPromise({
       try: (signal) =>
         fetch(route, {
@@ -80,7 +98,7 @@ export const profiler = Effect.fnUntraced(function* (
 
     yield* fs.writeFile(join(directory, file), bytes, { mode: 0o600 });
 
-    return {
+    const result = {
       status: response.status,
       bytes: bytes.length,
       sha256: hash(bytes),
@@ -94,47 +112,15 @@ export const profiler = Effect.fnUntraced(function* (
             cloud.subdomain,
             token,
           ]).slice(0, 1200),
-      retryAfter: Number(response.headers.get("retry-after") ?? 5),
+      retryAfter: Number(response.headers.get("retry-after") ?? 15),
     };
-  });
 
-  // Recent-execution discovery is delayed. Validate availability before appending the
-  // one 250-turn measurement; failed preflights do not initialize the deferred shell.
-  let available = false;
-
-  for (let attempt = 0; attempt < 8; attempt++) {
-    yield* request(url, token, ProfileIdentity, {}, "30 seconds", expectedBuild);
-    const result = yield* capture(1000, `preflight-${attempt}.bin`);
-
-    preflight.push({ status: result.status, message: result.message });
-    if (result.status === 200) {
-      available = true;
-      break;
-    }
-    if (result.status !== 404 && result.status !== 429)
-      return yield* new BenchError({
-        message: `Profile preflight HTTP ${result.status}: ${result.message}`,
-      });
-    yield* Effect.sleep(Math.min(30, Math.max(5, result.retryAfter)) * 1000);
-  }
-  if (!available)
-    return yield* new BenchError({
-      message: "Profile target was not discoverable after eight preflights",
+    yield* fs.writeFileString(join(directory, file + ".json"), JSON.stringify(result) + "\n", {
+      mode: 0o600,
     });
 
-  const record = capture(20000, "cold-first-request.pprof.gz").pipe(
-    Effect.map((result): ProfileCapture => ({
-      target: query.target,
-      object: query.object,
-      mode,
-      sample: query.sample,
-      status: result.status,
-      bytes: result.bytes,
-      sha256: result.sha256,
-      file: result.file,
-      preflight,
-    })),
-  );
+    return result;
+  });
 
   const before = Effect.gen(function* () {
     const sentinel = new URL(url);
@@ -149,6 +135,49 @@ export const profiler = Effect.fnUntraced(function* (
       expectedBuild,
     );
   });
+
+  // Recent-execution discovery is delayed. Validate availability before appending the
+  // one 250-turn measurement; failed preflights do not initialize the deferred shell.
+  let available = false;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    yield* request(url, token, ProfileIdentity, {}, "30 seconds", expectedBuild);
+    yield* before;
+    const result = yield* capture(1000, `preflight-${attempt}.bin`);
+
+    preflight.push({ status: result.status, message: result.message });
+    if (result.status === 200) {
+      available = true;
+      break;
+    }
+    if (result.status !== 404 && result.status !== 429)
+      return yield* new BenchError({
+        message: `Profile preflight HTTP ${result.status}: ${result.message}`,
+      });
+    yield* Effect.sleep(
+      Math.max(15, Number.isFinite(result.retryAfter) ? result.retryAfter : 15) * 1000,
+    );
+  }
+  if (!available)
+    return yield* new BenchError({
+      message: "Profile target was not discoverable after eight preflights",
+    });
+
+  yield* reserveCapture;
+
+  const record = capture(20000, "cold-first-request.pprof.gz").pipe(
+    Effect.map((result): ProfileCapture => ({
+      target: query.target,
+      object: query.object,
+      mode,
+      sample: query.sample,
+      status: result.status,
+      bytes: result.bytes,
+      sha256: result.sha256,
+      file: result.file,
+      preflight,
+    })),
+  );
 
   return { record, before };
 });
