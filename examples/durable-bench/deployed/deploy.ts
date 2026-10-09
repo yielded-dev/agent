@@ -19,7 +19,7 @@ import {
 } from "./platform.ts";
 
 const Stack = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
+  name: Schema.String.check(Schema.isPattern(/^cold-storage-[a-z0-9-]+$/)),
   kind: Schema.Literals(["infrastructure", "target"]),
   bundle: Schema.String,
   build: Schema.String,
@@ -32,7 +32,7 @@ const State = Schema.Struct({
   version: Schema.Literal(1),
   accountId: Schema.String,
   token: Schema.String,
-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
+  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^cold-storage-shared-[a-f0-9]{8}$/)),
   infrastructure: Schema.optionalKey(Stack),
   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
   targets: Schema.Record(Schema.String, Stack),
@@ -62,7 +62,7 @@ export const deployments = Effect.fnUntraced(function* (cloud: Cloudflare) {
       version: 1,
       accountId: cloud.accountId,
       token: nonce() + nonce(),
-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
+      infrastructurePrefix: "cold-storage-shared-" + nonce().slice(0, 8),
       targets: {},
     };
   }
@@ -163,7 +163,7 @@ export const deployments = Effect.fnUntraced(function* (cloud: Cloudflare) {
     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
 
     const infrastructure: Stack = {
-      name: "durable-bench-infrastructure",
+      name: "cold-storage-infrastructure",
       kind: "infrastructure",
       bundle: output,
       build: revision,

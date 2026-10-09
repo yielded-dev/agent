@@ -1,5 +1,4 @@
 import { createHash, randomBytes } from "node:crypto";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,7 +12,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
 export const directory = dirname(fileURLToPath(import.meta.url));
 export const workspace = resolve(directory, "..");
 export const repository = resolve(workspace, "../..");
-export const privateDirectory = resolve(homedir(), ".local/state/durable-bench");
+export const privateDirectory = "/private/tmp/cold-storage-state";
 
 export const hash = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");

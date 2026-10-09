@@ -158,6 +158,40 @@ export const ProviderCall = Schema.Struct({
 
 export type ProviderCall = typeof ProviderCall.Type;
 
+export const SqlCount = Schema.Struct({
+  sql: Schema.String,
+  count: Schema.Natural,
+  read: Schema.Natural,
+  written: Schema.Natural,
+});
+
+export const StoragePoint = Schema.Struct({
+  phase: Schema.String,
+  atMs: Schema.Number,
+  sql: Schema.Array(SqlCount),
+});
+
+export const StorageTrace = Schema.Struct({
+  points: Schema.Array(StoragePoint),
+  touchedPaddingBytes: Schema.Natural,
+});
+
+export const PaddingRequest = Schema.Struct({
+  mib: Schema.Natural.check(Schema.isLessThanOrEqualTo(64)),
+  read: Schema.Boolean,
+});
+
+export const PaddingResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  bytes: Schema.Natural,
+  paddingBytes: Schema.Natural,
+  read: Schema.Boolean,
+  pageSize: Schema.NullOr(Schema.Number),
+  pageCount: Schema.NullOr(Schema.Number),
+  freelistCount: Schema.NullOr(Schema.Number),
+  unavailable: Schema.Array(Schema.String),
+});
+
 export const Metrics = Schema.Struct({
   ok: Schema.Literal(true),
   query: Query,
@@ -166,6 +200,7 @@ export const Metrics = Schema.Struct({
   calls: Schema.Array(ProviderCall),
   tables: Counts,
   bytes: Schema.Natural,
+  storage: Schema.optionalKey(StorageTrace),
 });
 
 export type Metrics = typeof Metrics.Type;

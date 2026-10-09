@@ -3,7 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import { Config, Effect } from "effect";
 
 export default Alchemy.Stack(
-  "durable-bench",
+  "cold-storage",
   {
     providers: Cloudflare.providers(),
     state: Alchemy.localState(),
@@ -37,14 +37,14 @@ export default Alchemy.Stack(
     if (kind === "infrastructure") {
       const prefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
 
-      const provider = yield* Cloudflare.Worker("durable-bench-provider", {
+      const provider = yield* Cloudflare.Worker("cold-storage-provider", {
         ...options,
         name: prefix + "-provider",
         main: bundle + "/provider.mjs",
         env,
       });
 
-      const driver = yield* Cloudflare.Worker("durable-bench-driver", {
+      const driver = yield* Cloudflare.Worker("cold-storage-driver", {
         ...options,
         name: prefix + "-driver",
         main: bundle + "/driver.mjs",
@@ -55,7 +55,7 @@ export default Alchemy.Stack(
       return { driver: driver.url, provider: provider.url };
     }
 
-    const worker = yield* Cloudflare.Worker("durable-bench-target", {
+    const worker = yield* Cloudflare.Worker("cold-storage-target", {
       ...options,
       name,
       main: bundle,
@@ -64,10 +64,10 @@ export default Alchemy.Stack(
         ...env,
         CPU: cpu,
         PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
-        YIELDED: Cloudflare.DurableObject("durable-bench-yielded", { className: "YieldedDO" }),
-        PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
-        ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
-        THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
+        YIELDED: Cloudflare.DurableObject("cold-storage-yielded", { className: "YieldedDO" }),
+        PI: Cloudflare.DurableObject("cold-storage-pi", { className: "PiDO" }),
+        ACTORS: Cloudflare.DurableObject("cold-storage-actors", { className: "ActorDO" }),
+        THREADS: Cloudflare.DurableObject("cold-storage-threads", { className: "ThreadDO" }),
       },
     });
 

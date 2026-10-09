@@ -27,6 +27,7 @@ import {
   type SqliteValue,
 } from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
 import { Host } from "../../../deployed/worker/host.ts";
+import { instrumentStorage } from "../../../deployed/worker/cold-storage.ts";
 import { type Observation } from "../../../deployed/worker/observe.ts";
 import type { Env } from "../../../deployed/worker/protocol.ts";
 import { importRows } from "../../../deployed/worker/storage.ts";
@@ -165,6 +166,7 @@ export class PiDO extends DurableObject<Env> {
   private root?: Conversation;
   private readonly host: Host;
   constructor(ctx: DurableObjectState, env: Env) {
+    ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "pi");
   }

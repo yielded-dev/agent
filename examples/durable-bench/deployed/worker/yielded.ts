@@ -10,6 +10,7 @@ import { Model, Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
 import { payload } from "../../src/plan.ts";
+import { instrumentStorage, storageProbe } from "./cold-storage.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
@@ -70,6 +71,7 @@ export class YieldedDO extends ThreadObject.make(application, {
 }) {
   private readonly host: Host;
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
+    ctx = instrumentStorage(ctx);
     super(ctx, env);
     this.host = new Host(ctx, env, "yielded");
   }
@@ -91,7 +93,11 @@ export class YieldedDO extends ThreadObject.make(application, {
     this.host.meter.begin(query);
     this.host.meter.marker("submit");
 
-    return super.submitEncoded(encoded);
+    const receipt = await super.submitEncoded(encoded);
+
+    storageProbe(this.ctx.storage)?.point("admitted");
+
+    return receipt;
   }
   override async awaitSettlementEncoded(
     encoded: unknown,

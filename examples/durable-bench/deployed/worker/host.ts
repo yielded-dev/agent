@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 
 import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
+import { storageProbe } from "./cold-storage.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
   BulkFixture,
@@ -54,6 +55,14 @@ export class Host {
       this.ctx.abort(COLD_ABORT);
     }
     try {
+      if (url.pathname === "/storage") {
+        const result = storageProbe(this.ctx.storage)?.padding(await request.json());
+
+        if (!result) throw new Error("Storage probe not installed");
+        await this.ctx.storage.sync();
+
+        return Response.json(result);
+      }
       if (url.pathname === "/import") {
         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
 
@@ -93,6 +102,7 @@ export class Host {
           query: this.meter.query,
           identity: this.meter.entry,
           calls: this.meter.calls,
+          storage: storageProbe(this.ctx.storage)?.report(),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

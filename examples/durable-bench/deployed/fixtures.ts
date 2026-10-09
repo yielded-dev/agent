@@ -21,7 +21,11 @@ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureErr
 }) {}
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const failure = (message: string) => (_cause: unknown) => new FixtureError({ message });
+
+const failure = (message: string) => (cause: unknown) =>
+  new FixtureError({
+    message: `${message}: ${cause instanceof Error ? cause.message : String(cause)}`,
+  });
 
 const boundary = <A>(message: string, run: () => Promise<A>) =>
   Effect.tryPromise({ try: run, catch: failure(message) });

@@ -65,7 +65,7 @@ export const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
+  const resources = Effect.fnUntraced(function* (prefix = "cold-storage") {
     const workers = (yield* api("workers/scripts", Workers))
       .filter((w) => w.id.startsWith(prefix))
       .map((w) => w.id);

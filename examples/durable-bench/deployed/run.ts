@@ -28,7 +28,7 @@ import {
   workspace,
 } from "./platform.ts";
 import { median, table } from "./report.ts";
-import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
+import { ColdResult, ImportResult, Metrics, PaddingResult, type Query } from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
   Object.keys(a).length === Object.keys(b).length &&
@@ -68,7 +68,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const cloud = yield* connect;
   const deploy = yield* deployments(cloud);
   const fs = yield* FileSystem.FileSystem;
-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
+  const runName = `cold-storage-${started.toString(36)}-${nonce().slice(0, 8)}`;
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
 
@@ -113,7 +113,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   let targetStarted = false;
   let telemetryFrom = started;
 
-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
+  yield* Console.error("Verified configured Cloudflare account. Preparing fixtures…");
   yield* update((value) => value);
 
   const finish = (exit: Exit.Exit<unknown, unknown>) =>
@@ -218,7 +218,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             ? options.candidate
             : undefined;
 
-      const compiled = yield* build(join(privateDirectory, runName, label), "target", ref);
+      const existing = options.storageProbe === "none" ? undefined : builds.get("baseline");
+
+      const compiled =
+        existing ?? (yield* build(join(privateDirectory, runName, label), "target", ref));
 
       builds.set(label, compiled);
       yield* update((value) => ({
@@ -266,6 +269,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       ),
     );
 
+    let deployedEndpoint: string | undefined;
+
     for (const [epoch, label] of epochs.entries()) {
       const compiled = builds.get(label);
 
@@ -273,12 +278,17 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
 
-      const endpoint = yield* deploy.target(
-        runName,
-        compiled.file,
-        compiled.sha256 + `-e${epoch}`,
-        options.cpu,
-      );
+      const endpoint =
+        options.storageProbe !== "none" && deployedEndpoint
+          ? deployedEndpoint
+          : yield* deploy.target(
+              runName,
+              compiled.file,
+              compiled.sha256 + `-e${epoch}`,
+              options.cpu,
+            );
+
+      deployedEndpoint = endpoint;
 
       const url = (path: string, query: Query) => {
         const address = new URL(path, endpoint);
@@ -291,6 +301,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
       if (epoch === 0) {
+        yield* Console.error("Allowing 30 seconds for target route propagation before input…");
+        yield* Effect.sleep("30 seconds");
         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
         yield* Effect.forEach(
           shuffle(cohorts),
@@ -338,6 +350,31 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         );
       }
 
+      const paddingByObject = new Map<string, typeof PaddingResult.Type>();
+
+      if (options.storageProbe !== "none") {
+        yield* Console.error(`Preparing ${label} storage perturbation before all timed turns…`);
+        yield* Effect.forEach(
+          cohorts,
+          (cohort) =>
+            Effect.gen(function* () {
+              const padding = (yield* request(
+                url("/storage", cohort),
+                deploy.token,
+                PaddingResult,
+                {
+                  mib: label === "candidate" ? options.paddingMiB : 0,
+                  read: options.storageProbe === "touched",
+                },
+              )).value;
+
+              paddingByObject.set(`${cohort.target}/${cohort.object}`, padding);
+            }),
+          { concurrency: options.concurrency, discard: true },
+        );
+        yield* Effect.sleep("2 seconds");
+      }
+
       yield* Console.error(
         `Measuring ${label}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
@@ -345,6 +382,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         shuffle(cohorts),
         (cohort) =>
           Effect.gen(function* () {
+            const padding = paddingByObject.get(`${cohort.target}/${cohort.object}`);
+
             // Discard constructor caches after import, and restart the same stored Object after every build change.
             const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
               .value;
@@ -371,6 +410,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 repeat: index,
                 state,
                 status: "running",
+                ...(padding === undefined ? {} : { padding }),
               };
 
               const matches = (row: Sample) =>
@@ -465,6 +505,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           coldVerified,
                           residentVerified,
                           fingerprints: metrics.calls.map((call) => call.fingerprint),
+                          databaseBytes: metrics.bytes,
+                          ...(metrics.storage === undefined ? {} : { storage: metrics.storage }),
                         }
                       : row,
                   ),
@@ -509,6 +551,6 @@ export const teardown = Effect.gen(function* () {
 
   yield* save(join(workspace, "results", "cleanup.json"), result);
   yield* Console.log(
-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
+    "Cleanup verified: no cold-storage Workers or Durable Object namespaces remain.",
   );
 });

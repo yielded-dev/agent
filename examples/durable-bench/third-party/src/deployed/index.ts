@@ -111,11 +111,11 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
+      const mutating = ["/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(url.pathname);
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics"].includes(url.pathname))
+      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/storage"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =

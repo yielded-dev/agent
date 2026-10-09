@@ -49,6 +49,10 @@ export const command = Command.make(
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
+    storageProbe: Flag.Literals("storage-probe", ["none", "untouched", "touched"]).pipe(
+      Flag.withDefault("none"),
+    ),
+    paddingMiB: positive("padding-mib").pipe(Flag.withDefault(32)),
     teardown: Flag.Boolean("teardown").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -83,6 +87,11 @@ export const command = Command.make(
     if (flags.rigorous && !targets.includes("yielded"))
       return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
 
+    if (flags.storageProbe !== "none" && (!flags.rigorous || baseline !== candidate))
+      return yield* new BenchError({
+        message: "Storage probes require rigorous mode with identical refs.",
+      });
+
     return yield* run({
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
@@ -94,6 +103,8 @@ export const command = Command.make(
       cpu: flags.cpu || flags.rigorous,
       keep: flags.keep,
       rigorous: flags.rigorous,
+      storageProbe: flags.storageProbe,
+      paddingMiB: flags.paddingMiB,
       ...(baseline === undefined ? {} : { baseline }),
       ...(candidate === undefined ? {} : { candidate }),
     });

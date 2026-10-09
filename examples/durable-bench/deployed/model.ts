@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { Query, Target } from "./worker/protocol.ts";
+import { Query, Target, StorageTrace, PaddingResult } from "./worker/protocol.ts";
 
 export interface Options {
   readonly targets: readonly (typeof Target.Type)[];
@@ -15,6 +15,8 @@ export interface Options {
   readonly rigorous: boolean;
   readonly baseline?: string;
   readonly candidate?: string;
+  readonly storageProbe: "none" | "untouched" | "touched";
+  readonly paddingMiB: number;
 }
 
 export const Invocation = Schema.Struct({
@@ -47,6 +49,9 @@ export const Sample = Schema.Struct({
   coldVerified: Schema.optionalKey(Schema.Boolean),
   residentVerified: Schema.optionalKey(Schema.Boolean),
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
+  storage: Schema.optionalKey(StorageTrace),
+  padding: Schema.optionalKey(PaddingResult),
+  databaseBytes: Schema.optionalKey(Schema.Natural),
   error: Schema.optionalKey(Schema.String),
 });
 

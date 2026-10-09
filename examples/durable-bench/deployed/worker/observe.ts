@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 import { fingerprint } from "../../src/plan.ts";
+import { storageProbe } from "./cold-storage.ts";
 import {
   chatTranscript,
   decodeChat,
@@ -23,7 +24,7 @@ export const observation = (storage: DurableObjectStorage): Observation => {
 };
 
 export const attach = (state: DurableObjectState, env: Env): Observation => {
-  const meter = new Observation(env);
+  const meter = new Observation(env, state.storage);
 
   meters.set(state.storage, meter);
 
@@ -38,7 +39,10 @@ export class Observation {
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
-  constructor(readonly env: Env) {}
+  constructor(
+    readonly env: Env,
+    readonly storage: DurableObjectStorage,
+  ) {}
   identity(): Identity {
     return {
       incarnation: this.incarnation,
@@ -48,6 +52,7 @@ export class Observation {
     };
   }
   begin(query: Query) {
+    storageProbe(this.storage)?.begin();
     this.entry = this.identity();
     this.entries++;
     this.query = query;
@@ -69,6 +74,7 @@ export class Observation {
     const query = this.query;
 
     if (!query) throw new Error("Provider request without a benchmark sample");
+    if (this.calls.length === 0) storageProbe(this.storage)?.point("first-provider");
     const original = new Request(input, init);
     const url = new URL(original.url);
     const base = new URL(this.env.PROVIDER_URL);

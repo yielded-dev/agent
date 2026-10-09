@@ -28,7 +28,7 @@ export default {
         target.protocol !== "https:" ||
         target.username ||
         target.password ||
-        !target.hostname.startsWith("durable-bench-") ||
+        !target.hostname.startsWith("cold-storage-") ||
         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
       )
         return new Response("invalid target", { status: 400 });
