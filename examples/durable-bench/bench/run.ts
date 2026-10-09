@@ -25,7 +25,9 @@ if (sizes.some((size) => !Number.isInteger(size) || size < 1)) {
   throw new Error("sizes must be positive integers");
 }
 if (!Number.isInteger(samples) || samples < 1 || !(cpuMax >= 0)) {
-  throw new Error("usage: bench <yielded|pi|tardie> [turns...] --samples N --cpu-max 0.08");
+  throw new Error(
+    "usage: bench <yielded|yielded-inline|pi|tardie> [turns...] --samples N --cpu-max 0.08",
+  );
 }
 
 await prepare(name);
@@ -39,6 +41,8 @@ for (const size of sizes) {
     let at = performance.now();
     const mf = await start(name, dir);
     const startup = performance.now() - at;
+
+    if (name === "yielded") await call(mf, "/setup");
 
     at = performance.now();
     await call(mf, "/wake");
