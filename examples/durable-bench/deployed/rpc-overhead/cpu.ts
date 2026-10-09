@@ -1,4 +1,4 @@
-import { Console, Effect, Option, Schema } from "effect";
+import { Console, Effect, Option, Schedule, Schema } from "effect";
 
 import { Cloudflare } from "../cloudflare.ts";
 import { BenchError } from "../platform.ts";
@@ -45,13 +45,14 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: 
   const windows = [{ from, to }];
   const events = new Map<string, typeof Event.Type>();
   let queries = 0;
+  let transientReadFailures = 0;
 
   while (windows.length) {
     const window = windows.pop();
 
     if (!window) break;
 
-    const page = yield* cloud.api("workers/observability/telemetry/query", Page, {
+    const query = cloud.api("workers/observability/telemetry/query", Page, {
       queryId: "rpc-overhead",
       dry: true,
       view: "events",
@@ -62,6 +63,21 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: 
         filters: [{ key: "$workers.scriptName", operation: "eq", type: "string", value: name }],
       },
     });
+
+    // Retry only this read, never a measured RPC or a deployment mutation.
+    const transient = (error: Effect.Error<typeof query>) =>
+      error._tag === "BenchError" &&
+      /^Cloudflare API returned HTTP (429|5\d\d)\.$/.test(error.message);
+
+    const page = yield* query.pipe(
+      Effect.tapError((error) => {
+        if (!transient(error)) return Effect.void;
+        transientReadFailures++;
+
+        return Console.error("Transient telemetry API failure; retaining collected windows.");
+      }),
+      Effect.retry({ times: 4, schedule: Schedule.exponential("1 second"), while: transient }),
+    );
 
     if (++queries % 16 === 0)
       yield* Console.error(
@@ -106,7 +122,7 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: 
     const matching = id ? (markers.get(id) ?? []) : [];
 
     rows.push({
-      marker: matching.length === 1 ? matching[0]! : null,
+      marker: matching.length === 1 ? (matching[0] ?? null) : null,
       cpuMs: event.$workers.cpuTimeMs ?? null,
       wallMs: event.$workers.wallTimeMs ?? null,
       outcome: event.$workers.outcome ?? "unknown",
@@ -125,5 +141,6 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: 
     rows,
     unmatchedMarkers: [...markers.values()].flat().length,
     retrievedEvents: events.size,
+    transientReadFailures,
   };
 });
