@@ -1,90 +1,38 @@
 name: PR Review
 
 on:
-  # CI uses GitHub's native fork approval. Only a completed, admitted CI run
-  # can start an automatic review with repository secrets.
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  # Review immediately using trusted code; PR source is read only through the API.
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      pull-request:
+        description: Pull request number for a full review
+        required: true
+        type: number
 
 permissions:
   contents: read
   checks: write
 
 jobs:
-  resolve:
-    # Comment commands retain their existing maintainer authorization.
+  review:
+    # The Action parses the first command line; keep this filter broad enough
+    # for leading whitespace, varied spacing, and explanation below it.
     if: >-
-      (github.event_name == 'workflow_run' &&
-        github.event.workflow_run.event == 'pull_request' &&
-        github.event.workflow_run.path == '.github/workflows/ci.yml' &&
-        (github.event.workflow_run.conclusion == 'success' ||
-         github.event.workflow_run.conclusion == 'failure')) ||
+      (github.event_name == 'pull_request_target' &&
+        !github.event.pull_request.draft) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
         (github.event.comment.author_association == 'OWNER' ||
          github.event.comment.author_association == 'MEMBER' ||
          github.event.comment.author_association == 'COLLABORATOR') &&
-        contains(github.event.comment.body, '@effect-agent'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      numbers: ${{ steps.pr.outputs.numbers || '[]' }}
-      head: ${{ steps.pr.outputs.head }}
-    steps:
-      - name: Resolve the admitted PR head
-        id: pr
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea9 # v7
-        with:
-          script: |
-            if (context.eventName === 'issue_comment') {
-              core.setOutput('numbers', JSON.stringify([context.payload.issue.number]));
-              return;
-            }
-            const run = context.payload.workflow_run;
-            if (run.repository.id !== context.payload.repository.id || !run.head_repository) return;
-            // Fork runs can omit pull_requests. Resolve through GitHub's API,
-            // never through artifacts or code from the untrusted CI run.
-            const candidates = run.pull_requests.length ? run.pull_requests :
-              await github.paginate(github.rest.pulls.list, {
-                ...context.repo, state: 'open',
-                head: `${run.head_repository.owner.login}:${run.head_branch}`,
-                per_page: 100,
-              });
-            const numbers = [];
-            for (const candidate of candidates) {
-              const { data: pr } = await github.rest.pulls.get({
-                ...context.repo, pull_number: candidate.number,
-              });
-              if (pr.state !== 'open' || pr.draft || pr.head.sha !== run.head_sha ||
-                  pr.head.repo?.id !== run.head_repository.id ||
-                  pr.base.repo.id !== context.payload.repository.id) continue;
-              const files = await github.paginate(github.rest.pulls.listFiles, {
-                ...context.repo, pull_number: pr.number, per_page: 100,
-              });
-              // Preserve the generated-release metadata exclusion.
-              const generated = /^(?:\.changeset\/|bun\.lock$|packages\/[^/]+\/(?:CHANGELOG\.md|package\.json)$)/;
-              if (files.length && files.every(file => generated.test(file.filename) &&
-                  (!file.previous_filename || generated.test(file.previous_filename)))) continue;
-              numbers.push(pr.number);
-            }
-            core.setOutput('numbers', JSON.stringify(numbers));
-            core.setOutput('head', run.head_sha);
-
-  review:
-    needs: resolve
-    if: needs.resolve.outputs.numbers != '[]'
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        number: ${{ fromJSON(needs.resolve.outputs.numbers) }}
+        contains(github.event.comment.body, '@effect-agent')) ||
+      github.event_name == 'workflow_dispatch'
+    # Rejected comments must not displace an admitted review waiting for this PR.
     concurrency:
-      group: pr-review-${{ matrix.number }}
+      group: pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull-request }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -92,10 +40,10 @@ jobs:
       name: pr-review
       deployment: false
     steps:
-      - name: Check out the trusted review channel
+      - name: Check out trusted repository guidance
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Never check out or execute PR-head code in this privileged job.
+          # This job has secrets and write permissions. Never execute PR-head code.
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
@@ -110,19 +58,19 @@ jobs:
           permission-pull-requests: write
 
       - name: Review the pull request
-        uses: yielded-dev/agent/action@action-v1
+        uses: yielded-dev/agent/action@9b953c3cd0a94c4e47ebb280501f26bfdecd22a6 # action-v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
-          pull-request: ${{ matrix.number }}
+          pull-request: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pull-request }}
           review-author: effect-agent[bot]
           check-name: Effect Agent review
           checks-token: ${{ github.token }}
-          mode: ${{ github.event_name == 'workflow_run' && 'auto' || 'incremental' }}
+          mode: ${{ github.event_name == 'pull_request_target' && 'auto' || github.event_name == 'workflow_dispatch' && 'full' || 'incremental' }}
           command: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
           comment-id: ${{ github.event.comment.id || 0 }}
+          expected-head: ${{ github.event.pull_request.head.sha || '' }}
           automatic-review-limit: 5
-          expected-head: ${{ needs.resolve.outputs.head || '' }}
           guidance-file: .github/review-guidance.md
           model: gpt-6.1-sol
           web-search: "true"

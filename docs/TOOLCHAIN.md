@@ -623,31 +623,27 @@ failures still fail CI.
 The generated Changesets PR uses the release metadata proof below, with ordinary CI as its fallback.
 Explicit `@effect-agent review` comments still request review.
 
-PR Review follows completed pull-request CI runs using `workflow_run` and runs only
-trusted default-branch code. It starts after CI succeeds or fails; cancelled runs do
-not start reviews. Drafts and generated release metadata remain excluded.
-It publishes the shared `Effect Agent review` check on the inspected PR head using the workflow
-token's `checks: write` permission. Automatic and manual reviews use the same check name;
-manual retries show progress in the PR checks panel. Published findings and incomplete coverage
-fail that check, while setup, execution, and check publication failures also fail the workflow job.
+PR Review starts alongside CI when a PR opens, reopens, receives commits, or leaves
+draft. This includes forks and release metadata; drafts are skipped. The `pr-review`
+environment must have no required reviewers. Fork CI may still require GitHub workflow
+approval independently of review.
+
+Require both `ready` and `Effect Agent review` from GitHub Actions in the main branch
+ruleset. The review check reports progress on the inspected PR commit and passes only
+after complete review without unresolved blockers. Missing, failed, incomplete, or
+paused reviews block merging. After five automatic attempts, an authorized
+`@effect-agent review full` comment or a manual workflow dispatch starts a full retry;
+`@effect-agent review` requests an incremental pass. Automatic and manual reviews use
+the same check name and workflow token; the GitHub App retains its review identity.
 Maintainers and authorized coding agents can clear a fixed or refuted bot review by commenting
 `@effect-agent dismiss <review-id-or-url>` with evidence on subsequent lines. The command records
 the disposition and refreshes the check without inference; other blockers and incomplete coverage
 remain blocking. See [dismissal and CLI usage](../action/README.md#dismissing-a-review).
 See the [Action check configuration](../action/README.md#pr-check-status) for consumer setup.
-For fork PRs that require GitHub workflow approval, click **Approve workflows to run**
-once on the PR. CI runs first, then PR Review starts without a separate environment
-approval. The `pr-review` environment is used for all reviews and must have no required
-reviewers. The old `pr-review-forks` environment is no longer used.
-Approving CI does not give the CI job repository secrets.
 
-The workflow resolves the PR through GitHub's API and checks that the CI run belongs to
-this repository and its head still matches the open, non-draft PR. The Action's
-expected-head check also skips a review if the PR changes after that resolution.
-Comment-triggered reviews retain their maintainer authorization and do not wait for CI.
-Never check out, install dependencies from, or execute the PR head in this secret-bearing
-workflow; the reviewer reads untrusted source through GitHub's API instead. CI artifacts
-and caches are not consumed by the review workflow.
+Reviews use a pinned Action and trusted default-branch guidance, reading PR source
+through GitHub's API. They never execute PR-head code or consume CI artifacts or
+caches. Stale event heads are skipped; a newer commit needs its own review.
 
 Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
 builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
