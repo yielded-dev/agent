@@ -17,7 +17,11 @@ import { reference } from "./evidence.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
-const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
+
+// Encode native messages once; the Prompt wrapper would validate the encoded history again.
+const encodePrompt = Schema.encodeEffect(
+  Schema.toCodecJson(Schema.Struct({ content: Schema.Array(Prompt.Message) })),
+);
 
 export const digestRunHistory = (prompt: Prompt.Prompt) =>
   encodePrompt(prompt).pipe(
