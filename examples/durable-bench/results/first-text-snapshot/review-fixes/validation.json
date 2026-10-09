@@ -1,0 +1,66 @@
+{
+  "review": "https://github.com/yielded-dev/agent/pull/829#pullrequestreview-5473378123",
+  "reviewedCommit": "15b3b93bb895037febf3bacafd371db712b99b29",
+  "source": [
+    {
+      "path": "packages/effect-agent/src/engine/internal/provisional-text.ts",
+      "sha256": "5b90167756fc4ae6423085791470a7c34c8537e0e02f28a6dbf47dfc830d1c12"
+    },
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+      "sha256": "7962dc29fd368e46e8af354f047478222ba9a50b7514326c89461ccdf66f6051"
+    }
+  ],
+  "probe": {
+    "command": "vp run -F @yielded/agent-platform-cloudflare test --project workerd test/review-live-text.test.ts",
+    "before": {
+      "exitCode": 1,
+      "cases": 3,
+      "failures": 3,
+      "reason": "HostProtocolError persisted after the oversized Attempt ended"
+    },
+    "after": {
+      "exitCode": 0,
+      "cases": 3,
+      "failures": 0
+    },
+    "sourceSha256": "fdbc32dc5eebb15168e81dd6ddab8d6f00c0b8f97b3d6cd36804174b3e500b7e",
+    "permanentTestAdded": false
+  },
+  "ready": {
+    "command": "vp run ready",
+    "exitCode": 0,
+    "node": "24.20.0",
+    "nodeOnChildProcessPath": true,
+    "bun": "1.4.2",
+    "ci": true,
+    "frozenInstall": true,
+    "installScripts": false,
+    "tsgoPatchApplied": true,
+    "postgres": "18",
+    "vendorDependenciesPresent": false,
+    "evidencePresentInProduct": false,
+    "summary": "vp run: 7/71 cache hit (9%), 4.44s saved. (Run `vp run --last-details` for full details)",
+    "logSha256": "3bc4027c50d4374f0e0c5d150eafd5255160afe4d47227ab9e546b40fb564b05"
+  },
+  "cleanup": {
+    "cloudflareResourcesCreated": 0,
+    "postgresStopped": true
+  },
+  "nonOk": [
+    {
+      "stage": "initial probe invocation",
+      "outcome": "workspace-root invocation selected no tests; reran via the documented package task"
+    },
+    {
+      "stage": "pre-fix probe",
+      "outcome": "three intended HostProtocolError failures; these are the reproduced regression"
+    }
+  ],
+  "fixedCommit": "31743a6d6b7be154169ebe4ab0f7076d824d2c77",
+  "validatedInputsMatchCommit": true,
+  "publicationScan": {
+    "files": 5,
+    "privateMatches": 0
+  }
+}

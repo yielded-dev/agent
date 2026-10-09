@@ -1,0 +1,11 @@
+   × reopens watchText after an admitted 257-character Submission settles
+   × releases the shared hub after an oversized Attempt without text
+   × releases the shared hub after an oversized Attempt with text
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL   workerd  test/review-live-text.test.ts > reopens watchText after an admitted 257-character Submission settles
+HostProtocolError: Provisional text exceeds its draft bounds or is invalid; read canonical records
+ FAIL   workerd  test/review-live-text.test.ts > releases the shared hub after an oversized Attempt without text
+ FAIL   workerd  test/review-live-text.test.ts > releases the shared hub after an oversized Attempt with text
+HostProtocolError: Provisional text exceeds its draft bounds or is invalid; read canonical records
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
