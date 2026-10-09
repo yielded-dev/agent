@@ -31,6 +31,7 @@ export interface Options {
   readonly isolate?: boolean;
   readonly coldMode?: "object" | "fresh";
   readonly profile?: boolean;
+  readonly framework?: string;
   readonly order?: "ABBA" | "BAAB" | "AABB";
   readonly baseline?: string;
   readonly candidate?: string;

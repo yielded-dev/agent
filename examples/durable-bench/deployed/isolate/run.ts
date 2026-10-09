@@ -121,6 +121,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       message: "Rigorous isolated runs require both framework refs.",
     });
 
+  const framework = yield* git(["rev-parse", options.framework ?? "origin/main"]);
   const started = yield* Clock.currentTimeMillis;
   const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
@@ -153,6 +154,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     infrastructureReused: false,
     options: {
       ...options,
+      framework,
       isolate: true,
       order,
       targets: [...targets],
@@ -241,9 +243,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         };
       }
       if (options.cpu && attempted.size > 0) {
-        yield* Console.error(
-          "Collecting invocation CPU for both isolated Workers, including aborts…",
-        );
+        yield* Console.error("Collecting invocation CPU for isolated Workers, including aborts…");
         yield* Effect.sleep("15 seconds");
         const upper = yield* Clock.currentTimeMillis;
 
@@ -269,7 +269,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         }
       }
       if (!options.keep && attempted.size > 0) {
-        yield* Console.error("Destroying this run's isolated target stacks and verifying both…");
+        yield* Console.error("Destroying this run's isolated target stacks and verifying removal…");
         let verified = true;
         const workers: string[] = [];
         const namespaces: string[] = [];
@@ -316,9 +316,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
   yield* update((value) => value);
   yield* Effect.gen(function* () {
-    yield* Console.error(
-      "Preparing the verified 50/250 fixtures; measured turns have not started…",
-    );
+    yield* Console.error("Preparing verified fixtures; measured turns have not started…");
     yield* ensureVendor;
 
     const fixtures = (yield* prepareFixtures({
@@ -362,7 +360,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             ? options.baseline
             : label === "candidate"
               ? options.candidate
-              : undefined;
+              : framework;
 
         const existing =
           options.storageProbe === "none" ? undefined : yieldedBuilds.get("baseline");
@@ -388,6 +386,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       profileBuild = yield* build(
         join(privateDirectory, runName, "build", "yielded-profile"),
         "yielded-profile",
+        framework,
       );
       const compiled = profileBuild;
 

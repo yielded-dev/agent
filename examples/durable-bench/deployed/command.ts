@@ -61,6 +61,7 @@ export const command = Command.make(
       Flag.optional,
       Flag.withDescription("Isolated rigorous pass order (default: randomly choose ABBA or BAAB)"),
     ),
+    framework: Flag.String("framework").pipe(Flag.withDefault("origin/main")),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
     storageProbe: Flag.Literals("storage-probe", ["none", "untouched", "touched"]).pipe(
@@ -152,6 +153,7 @@ export const command = Command.make(
       isolate: flags.isolate,
       coldMode: flags.coldMode,
       profile: flags.profile,
+      framework: flags.framework,
       storageProbe: flags.storageProbe,
       paddingMiB: flags.paddingMiB,
       ...(order === undefined ? {} : { order }),

@@ -38,12 +38,15 @@ export const objectMedians = (rows: readonly Sample[]) =>
 const eligible = (row: Sample) =>
   row.status === "ok" &&
   row.state !== "warmup" &&
+  row.state !== "profile" &&
   (row.expectedBuild === undefined ||
     (row.fingerprintVerified === true &&
       row.buildVerified === true &&
       (row.state === "fresh-first-turn"
         ? row.freshVerified === true
-        : row.residentVerified === true)));
+        : row.state === "cold"
+          ? row.coldVerified === true
+          : row.residentVerified === true)));
 
 export const table = (result: Result): string => {
   const rows = result.samples
@@ -71,16 +74,17 @@ export const table = (result: Result): string => {
 
   if (result.sequence)
     lines.push(
-      `Upload order: ${result.sequence.join(" → ")}. Each pass follows acknowledged old-build resets and distinct uploaded code bytes.`,
+      `Build order: ${result.sequence.join(" → ")}. Reset and upload evidence is recorded for each pass.`,
+      "Cold Object requires a new incarnation on the same warm isolate; fresh-first-turn requires a new isolate after upload.",
       "Fresh-first-turn requires matching Worker/Object builds, changed Object isolate and incarnation, one Object constructor, zero prior stateless fetches, first entry, and no prior alarms. Routing Worker health probes are recorded separately.",
       "Warm turns require the same Object incarnation and isolate throughout that epoch; non-fresh first turns do not disqualify otherwise valid warm turns.",
       "",
-      "| Target / history / TTFT / build | Verified fresh | Attempted | Excluded | Failed / skipped |",
+      "| Target / history / TTFT / build | Verified cold / fresh | Attempted | Excluded | Failed / skipped |",
       "|---|---:|---:|---:|---:|",
     );
   if (result.sequence) {
     for (const [cell, samples] of group(
-      result.samples.filter((row) => row.state === "fresh-first-turn"),
+      result.samples.filter((row) => row.state === "fresh-first-turn" || row.state === "cold"),
       (row) =>
         `${row.target}/${row.history}/${row.ttftMs}/${row.build}${row.storageGroup === undefined ? "" : `/${row.storageGroup}`}`,
     ))
@@ -88,8 +92,8 @@ export const table = (result: Result): string => {
         `| ${cell} | ${samples.filter(eligible).length} | ${samples.length} | ${samples.filter((row) => row.status === "excluded").length} | ${samples.filter((row) => row.status === "failed").length} / ${samples.filter((row) => row.status === "skipped").length} |`,
       );
     lines.push("");
-    if (!rows.some((row) => row.state === "fresh-first-turn"))
-      lines.push("No verified fresh-first-turn samples; no fresh-start ratio can be reported.", "");
+    if (!rows.some((row) => row.state === "fresh-first-turn" || row.state === "cold"))
+      lines.push("No verified cold/fresh first turns; no cold-start ratio can be reported.", "");
   }
 
   for (const [cell, samples] of group(
@@ -100,8 +104,8 @@ export const table = (result: Result): string => {
     lines.push(
       cell,
       "",
-      "| Target | Turn ms | Object median range | Repeat range, median / max | Objects |",
-      "|---|---:|---:|---:|---:|",
+      "| Target | Receipt ms | First model arrival ms | Turn ms | Object median range | Repeat range, median / max | Objects |",
+      "|---|---:|---:|---:|---:|---:|---:|",
     );
     for (const target of TARGETS) {
       const turns = samples.filter((row) => row.target === target);
@@ -116,7 +120,7 @@ export const table = (result: Result): string => {
       });
 
       lines.push(
-        `| ${target} | ${interval(medians)} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
+        `| ${target} | ${interval(turns.flatMap((row) => (row.admissionMs === undefined ? [] : [row.admissionMs])))} | ${interval(turns.flatMap((row) => (row.firstModelMs === undefined ? [] : [row.firstModelMs])))} | ${interval(medians)} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
       );
     }
 
@@ -128,8 +132,23 @@ export const table = (result: Result): string => {
       const low = Math.min(...yielded) / Math.max(...pi);
       const high = Math.max(...yielded) / Math.min(...pi);
 
+      const metricRatio = (field: "admissionMs" | "firstModelMs") => {
+        const values = (target: string) =>
+          [
+            ...group(
+              samples.filter((row) => row.target === target),
+              (row) => row.object,
+            ).values(),
+          ].map((rows) =>
+            median(rows.flatMap((row) => (row[field] === undefined ? [] : [row[field]]))),
+          );
+
+        return median(values("yielded")) / median(values("pi"));
+      };
+
       lines.push(
         "",
+        `Yielded ÷ pi, receipt / first model arrival: **${metricRatio("admissionMs").toFixed(2)}× / ${metricRatio("firstModelMs").toFixed(2)}×**.`,
         `Yielded ÷ pi: **${ratio.toFixed(2)}×**; observed ratio range **${low.toFixed(2)}–${high.toFixed(2)}×** (${yielded.length} Yielded / ${pi.length} pi Objects).`,
       );
     }
