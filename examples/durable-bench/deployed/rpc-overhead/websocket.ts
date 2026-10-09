@@ -58,6 +58,7 @@ const Publish = Schema.Struct({
   ...SourceRequest.fields,
   from: Cursor,
   count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 })),
+  notify: Schema.optionalKey(Schema.Boolean),
 });
 
 const Published = Schema.Struct({ last: Cursor, instance: Schema.String });
@@ -146,8 +147,10 @@ class Frames extends Context.Service<
   {
     readonly prepare: (request: typeof SourceRequest.Type) => Effect.Effect<void, Fault>;
     readonly publish: (request: typeof Publish.Type) => Effect.Effect<typeof Published.Type, Fault>;
+    readonly notify: (request: typeof SourceRequest.Type) => Effect.Effect<void, Fault>;
     readonly watch: (request: typeof NativeWatch.Type) => Stream.Stream<Frame, Fault>;
     readonly observerCount: Effect.Effect<number>;
+    readonly parked: Effect.Effect<boolean>;
   }
 >()("rpc-overhead/Frames") {
   static readonly layer = Layer.effect(
@@ -156,6 +159,7 @@ class Frames extends Context.Service<
       const object = yield* ObjectContext;
       const gate = yield* Semaphore.make(1);
       const listeners = new Set<Queue.Queue<void>>();
+      const parked = new Set<Queue.Queue<void>>();
 
       const requireBuild = (build: string) =>
         build === object.build
@@ -215,13 +219,23 @@ class Frames extends Context.Service<
           }));
 
           yield* write({ ...stored, frames: [...stored.frames, ...added] });
-          // Coalesced in-memory hints; the committed source is always re-read.
-          for (const listener of listeners) Queue.offerUnsafe(listener, undefined);
+          if (request.notify === false) {
+            yield* io("sync source", () => object.state.raw.storage.sync());
+          } else {
+            // Coalesced in-memory hints; the committed source is always re-read.
+            for (const listener of listeners) Queue.offerUnsafe(listener, undefined);
+          }
 
           return { last: stored.frames.length + request.count, instance: object.instance };
         },
         (effect) => gate.withPermit(effect),
       );
+
+      const notify = Effect.fnUntraced(function* (request: typeof SourceRequest.Type) {
+        yield* requireBuild(request.build);
+        yield* read(request.source);
+        for (const listener of listeners) Queue.offerUnsafe(listener, undefined);
+      });
 
       const watch = (request: typeof NativeWatch.Type) =>
         Stream.unwrap(
@@ -235,6 +249,7 @@ class Frames extends Context.Service<
             yield* Effect.addFinalizer(() =>
               Effect.sync(() => {
                 listeners.delete(wake);
+                parked.delete(wake);
               }).pipe(Effect.andThen(Queue.shutdown(wake))),
             );
 
@@ -252,14 +267,24 @@ class Frames extends Context.Service<
                   const last = available.at(-1);
 
                   if (last !== undefined) return [available, Option.some(last.sequence)] as const;
-                  yield* Queue.take(wake);
+                  parked.add(wake);
+                  yield* Queue.take(wake).pipe(
+                    Effect.ensuring(Effect.sync(() => parked.delete(wake))),
+                  );
                 }
               }),
             );
           }),
         );
 
-      return { prepare, publish, watch, observerCount: Effect.sync(() => listeners.size) };
+      return {
+        prepare,
+        publish,
+        notify,
+        watch,
+        observerCount: Effect.sync(() => listeners.size),
+        parked: Effect.sync(() => listeners.size === 1 && parked.size === 1),
+      };
     }),
   );
 }
@@ -352,6 +377,12 @@ const Transport = DurableObjectRpcWebSocket.DurableObjectRpcWebSocket;
 /** Native controls share the exact same persisted source as the WS handlers. */
 export const wsRpc = {
   frameObservers: () => Effect.flatMap(Frames, (frames) => frames.observerCount),
+  frameParked: () => Effect.flatMap(Frames, (frames) => frames.parked),
+  notifyFrames: Effect.fnUntraced(function* (raw: unknown) {
+    const request = yield* Schema.decodeUnknownEffect(SourceRequest)(raw);
+
+    yield* Effect.flatMap(Frames, (frames) => frames.notify(request));
+  }),
   prepare: Effect.fnUntraced(function* (raw: unknown) {
     const request = yield* Schema.decodeUnknownEffect(SourceRequest)(raw);
     const frames = yield* Frames;
@@ -621,6 +652,8 @@ export const unaryBatch = Effect.fnUntraced(
 /** A single stub must supply every control; the experiment never chooses another Object. */
 type PushStub = FetchStub & {
   readonly frameObservers: () => Promise<number>;
+  readonly frameParked: () => Promise<boolean>;
+  readonly notifyFrames: (request: typeof SourceRequest.Type) => Promise<void>;
   readonly prepare: (request: typeof SourceRequest.Type) => Promise<void>;
   readonly publish: (request: typeof Publish.Type) => Promise<typeof Published.Type>;
   readonly nativeStream: (request: typeof NativeWatch.Type) => Promise<ReadableStream<Uint8Array>>;
@@ -657,6 +690,46 @@ const noQueuedFrame = Effect.fnUntraced(function* <E>(queue: Queue.Dequeue<Obser
   if (Option.isSome(unexpected)) {
     return yield* new Fault({ message: `Unexpected frame ${unexpected.value.frame.sequence}` });
   }
+});
+
+const precommittedBurst = Effect.fnUntraced(function* <E>(
+  stub: PushStub,
+  build: string,
+  source: string,
+  from: number,
+  count: number,
+  queue: Queue.Dequeue<ObservedFrame, E>,
+) {
+  // The sole consumer must already be parked before appending without a wake hint.
+  yield* Effect.gen(function* () {
+    while (!(yield* io("frame parked", () => stub.frameParked()))) yield* Effect.sleep("25 millis");
+  }).pipe(Effect.timeout("5 seconds"));
+
+  const committed = yield* io("precommit frames", () =>
+    stub.publish({ build, source, from, count, notify: false }),
+  );
+
+  if (committed.last !== from + count - 1)
+    return yield* new Fault({ message: "Precommitted cursor mismatch" });
+  yield* noQueuedFrame(queue);
+  const start = yield* Clock.currentTimeMillis;
+
+  yield* io("notify precommitted frames", () => stub.notifyFrames({ build, source }));
+  const publishRttMs = (yield* Clock.currentTimeMillis) - start;
+  const sequences: number[] = [];
+  const publishToReceiveMs: number[] = [];
+
+  for (let sequence = from; sequence < from + count; sequence++) {
+    const observed = yield* expectedFrame(queue, sequence);
+
+    if (observed.receivedAt < start)
+      return yield* new Fault({ message: "Precommitted frame escaped before its trigger" });
+    sequences.push(observed.frame.sequence);
+    publishToReceiveMs.push(observed.receivedAt - start);
+  }
+  yield* noQueuedFrame(queue);
+
+  return { from, sequences, publishRttMs, publishToReceiveMs } satisfies typeof BurstMetrics.Type;
 });
 
 const nativeQueue = Effect.fnUntraced(function* (
@@ -827,12 +900,28 @@ export const pushExperiment = Effect.fnUntraced(function* (
           bursts.push({ from, sequences, publishRttMs, publishToReceiveMs });
         }
 
-        return { setupMs, bursts, sameInstance: instances[0] === instances[1] };
+        stage = "native precommitted burst";
+
+        const committed = yield* precommittedBurst(
+          stub,
+          build,
+          nativeSource,
+          count * 2 + 1,
+          count,
+          queue,
+        );
+
+        return {
+          setupMs,
+          bursts,
+          precommittedBurst: committed,
+          sameInstance: instances[0] === instances[1],
+        };
       }),
     );
 
     stage = "native fresh stream";
-    const savedCursor = count * 2 - 1;
+    const savedCursor = count * 3 - 1;
 
     const freshNative = yield* Effect.scoped(
       Effect.gen(function* () {
@@ -877,7 +966,7 @@ export const pushExperiment = Effect.fnUntraced(function* (
 
       diagnosticFrames = 8;
       yield* io("native diagnostic publish", () =>
-        stub.publish({ build, source: nativeSource, from: count * 2 + 1, count: diagnosticFrames }),
+        stub.publish({ build, source: nativeSource, from: count * 3 + 1, count: diagnosticFrames }),
       );
       const released = yield* waitForRelease.pipe(Effect.result);
 
@@ -1021,6 +1110,19 @@ export const pushExperiment = Effect.fnUntraced(function* (
           bursts.push({ from, sequences, publishRttMs, publishToReceiveMs });
         }
         if (!probes.some((probe) => probe.constructorChanged)) yield* idle(count * 2);
+        yield* checkpoint(count * 2);
+        stage = "websocket precommitted burst";
+
+        const committed = yield* precommittedBurst(
+          stub,
+          build,
+          source,
+          count * 2 + 1,
+          count,
+          queue,
+        );
+
+        yield* checkpoint(savedCursor);
         if (connection.upgradeCount() !== 1)
           return yield* new Fault({ message: "Unexpected automatic redial" });
 
@@ -1029,6 +1131,7 @@ export const pushExperiment = Effect.fnUntraced(function* (
           metrics: {
             setupMs,
             bursts,
+            precommittedBurst: committed,
             probes,
             savedCursor,
             recreationObserved: probes.some(

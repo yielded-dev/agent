@@ -138,6 +138,7 @@ export const NativeCancellation = Schema.Struct({
 export const NativeMetrics = Schema.Struct({
   setupMs: Schema.Number,
   bursts: Schema.Array(BurstMetrics),
+  precommittedBurst: BurstMetrics,
   sameInstance: Schema.Boolean,
   freshStreamSetupAndFirstFrameMs: Schema.Number,
   savedCursor: Cursor,
@@ -158,6 +159,7 @@ export const NativeMetrics = Schema.Struct({
 export const WebSocketMetrics = Schema.Struct({
   setupMs: Schema.Number,
   bursts: Schema.Array(BurstMetrics),
+  precommittedBurst: BurstMetrics,
   probes: Schema.Array(IdleProbe),
   recreationObserved: Schema.Boolean,
   upgradeCount: Schema.Natural,

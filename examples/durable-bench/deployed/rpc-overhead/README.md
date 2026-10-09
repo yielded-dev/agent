@@ -93,6 +93,12 @@ burst. Delivery latency runs from the driver initiating publication to that
 driver receiving a frame, so it includes the common trigger and storage work
 without subtracting clocks on different machines.
 
+A third burst isolates delivery from source-write/output-gate delay. The
+consumer must be parked, then four frames are appended and `storage.sync()`
+finishes without notifying it. Timing starts only when a separate native
+notification wakes that consumer. An early frame invalidates this control.
+Keep this result separate from the bursts that write storage inside timing.
+
 Two bursts are separated by 45 seconds of driver-side waiting. The Object has
 no timer or periodic storage poll. The WebSocket leaves the last frame
 unacknowledged over idle, then checks for a new constructor with the same
@@ -100,7 +106,7 @@ socket attachment and no additional upgrade. Only that combination proves
 natural hibernation in this experiment. Replay must contain the expected
 sequence and content; checkpointing then allows the next burst. If there is
 no recreation, a second idle window is tried and the absence is reported.
-A fresh connection also resumes from the saved cursor, with upgrade/hello
+A fresh connection also resumes the last unacknowledged frame from the saved cursor, with upgrade/hello
 and upgrade-through-first-frame costs recorded separately.
 
 Native cancellation is checked at the Object before starting WebSocket idle.
