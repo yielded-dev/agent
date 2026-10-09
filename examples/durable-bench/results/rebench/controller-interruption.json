@@ -1,0 +1,15 @@
+{
+  "observedAt": "2026-10-09T02:22:01.616Z",
+  "controllerProcessAbsent": true,
+  "privateAlchemyStatePreserved": true,
+  "completedGroups": 7,
+  "recordedTurns": 116,
+  "unreturned": {
+    "framework": "yielded",
+    "object": "rebench-main-h50-d400-o0",
+    "sample": "m3",
+    "startedAt": 1791512324366
+  },
+  "outcome": "unknown to controller; no replay",
+  "action": "retire incomplete three-target group and seed a fresh group"
+}

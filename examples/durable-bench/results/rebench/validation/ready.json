@@ -1,0 +1,11 @@
+{
+  "command": "vp run ready",
+  "postgresOverride": "postgres://dan@localhost:5432/postgres",
+  "exitCode": 0,
+  "passed": 1187,
+  "skipped": 10,
+  "notes": [
+    "Local correctness evidence only; all latency evidence is deployed.",
+    "Initial overlapping agent gate attempts reported an unavailable default Postgres at 55432 and test exits 137; final gate used the existing local server and ran alone."
+  ]
+}

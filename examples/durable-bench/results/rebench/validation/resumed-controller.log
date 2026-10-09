@@ -1,0 +1,87 @@
+[0mdirenv: loading ~/dev/effect-agent/.envrc
+[0mdirenv: loading ~/dev/.envrc
+Verified primary generation measure; placement {"mode":"targeted","target":[50]}
+[0mdirenv: loading ~/dev/effect-agent/.envrc
+[0mdirenv: loading ~/dev/.envrc
+Resume keeps completed group rebench-main-h250-d0-o0
+Resume keeps completed group rebench-main-h50-d0-o0
+Resume keeps completed group rebench-main-h250-d400-o1
+Resume keeps completed group rebench-main-sr1-h250-d0-o1
+Resume keeps completed group rebench-main-h50-d400-o2
+Resume keeps completed group rebench-main-h50-d400-o1
+Resume keeps completed group rebench-main-h250-d400-o0
+main 50/400/o0 pi/inline cold/m0: 5392 ms
+main 50/400/o0 yielded/production cold/m0: 5553 ms
+main 50/400/o0 tardie/inline cold/m0: 7336 ms
+main 50/400/o0 pi/inline settling/m1: 4960 ms
+main 50/400/o0 tardie/inline settling/m1: 6280 ms
+main 50/400/o0 yielded/production settling/m1: 4820 ms
+main 50/400/o0 pi/inline warm/m2: 4994 ms
+main 50/400/o0 tardie/inline warm/m2: 6664 ms
+main 50/400/o0 yielded/production warm/m2: 4987 ms
+main 50/400/o0 tardie/inline warm/m3: 6087 ms
+main 50/400/o0 pi/inline warm/m3: 5037 ms
+main 50/400/o0 yielded/production warm/m3: 4861 ms
+main 50/400/o0 pi/inline warm/m4: 4954 ms
+main 50/400/o0 yielded/production warm/m4: 4972 ms
+main 50/400/o0 tardie/inline warm/m4: 6677 ms
+main 250/0/o2 tardie/inline cold/m0: 2415 ms
+main 250/0/o2 pi/inline cold/m0: 898 ms
+main 250/0/o2 yielded/production cold/m0: 1525 ms
+main 250/0/o2 pi/inline settling/m1: 827 ms
+main 250/0/o2 tardie/inline settling/m1: 1820 ms
+main 250/0/o2 yielded/production settling/m1: 942 ms
+main 250/0/o2 tardie/inline warm/m2: 1484 ms
+main 250/0/o2 yielded/production warm/m2: 1370 ms
+main 250/0/o2 pi/inline warm/m2: 702 ms
+main 250/0/o2 yielded/production warm/m3: 929 ms
+main 250/0/o2 tardie/inline warm/m3: 1995 ms
+main 250/0/o2 pi/inline warm/m3: 871 ms
+main 250/0/o2 tardie/inline warm/m4: 1441 ms
+main 250/0/o2 pi/inline warm/m4: 892 ms
+main 250/0/o2 yielded/production warm/m4: 859 ms
+main 50/0/o1 tardie/inline cold/m0: 2364 ms
+main 50/0/o1 pi/inline cold/m0: 1187 ms
+main 50/0/o1 yielded/production cold/m0: 2138 ms
+main 50/0/o1 pi/inline settling/m1: 759 ms
+main 50/0/o1 yielded/production settling/m1: 1624 ms
+main 50/0/o1 tardie/inline settling/m1: 1886 ms
+main 50/0/o1 pi/inline warm/m2: 859 ms
+main 50/0/o1 tardie/inline warm/m2: 1976 ms
+main 50/0/o1 yielded/production warm/m2: 1219 ms
+main 50/0/o1 pi/inline warm/m3: 757 ms
+main 50/0/o1 yielded/production warm/m3: 1408 ms
+main 50/0/o1 tardie/inline warm/m3: 1907 ms
+main 50/0/o1 yielded/production warm/m4: 1790 ms
+main 50/0/o1 pi/inline warm/m4: 688 ms
+main 50/0/o1 tardie/inline warm/m4: 2097 ms
+main 250/400/o2 tardie/inline cold/m0: 7128 ms
+main 250/400/o2 yielded/production cold/m0: 5768 ms
+main 250/400/o2 pi/inline cold/m0: 5019 ms
+main 250/400/o2 pi/inline settling/m1: 4901 ms
+main 250/400/o2 yielded/production settling/m1: 5343 ms
+main 250/400/o2 tardie/inline settling/m1: 5998 ms
+main 250/400/o2 tardie/inline warm/m2: 5808 ms
+main 250/400/o2 yielded/production warm/m2: 5269 ms
+main 250/400/o2 pi/inline warm/m2: 4860 ms
+main 250/400/o2 yielded/production warm/m3: 5093 ms
+main 250/400/o2 tardie/inline warm/m3: 6045 ms
+main 250/400/o2 pi/inline warm/m3: 4956 ms
+main 250/400/o2 tardie/inline warm/m4: 5777 ms
+main 250/400/o2 yielded/production warm/m4: 4995 ms
+main 250/400/o2 pi/inline warm/m4: 4858 ms
+main 50/0/o2 tardie/inline cold/m0: 2646 ms
+main 50/0/o2 pi/inline cold/m0: 820 ms
+main 50/0/o2 yielded/production cold/m0: 1238 ms
+main 50/0/o2 yielded/production settling/m1: 800 ms
+main 50/0/o2 pi/inline settling/m1: 579 ms
+main 50/0/o2 tardie/inline settling/m1: 1935 ms
+main 50/0/o2 pi/inline warm/m2: 612 ms
+main 50/0/o2 yielded/production warm/m2: 759 ms
+main 50/0/o2 tardie/inline warm/m2: 2047 ms
+main 50/0/o2 pi/inline warm/m3: 585 ms
+main 50/0/o2 yielded/production warm/m3: 759 ms
+main 50/0/o2 tardie/inline warm/m3: 1873 ms
+main 50/0/o2 pi/inline warm/m4: 593 ms
+main 50/0/o2 tardie/inline warm/m4: 2325 ms
+main 50/0/o2 yielded/production warm/m4: 881 ms

@@ -1,0 +1,286 @@
+{
+  "phase": "pilot",
+  "baselineRevision": "aa7855a6c85e9a2a9395098c66f7cfcfe47c8467",
+  "objectsPerRole": 1,
+  "measuredTurns": 3,
+  "locationHint": "wnam",
+  "driverPlacement": "aws:us-west-1",
+  "cold": "Acknowledged storage.sync and ctx.abort before m0; new incarnation of existing Object, not guaranteed fresh isolate. Both Thread and Actor are reset for tardie.",
+  "idleHeartbeat": "Every 3 seconds, read /identity on idle comparison Objects while a measured turn is in flight. Verify their incarnations. No heartbeat reaches the actively measured Object.",
+  "cohorts": [
+    {
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "rebench-pilot-h50-d0-o0"
+    },
+    {
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "rebench-pilot-h50-d0-o0"
+    },
+    {
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 0,
+      "index": 0,
+      "object": "rebench-pilot-h50-d0-o0"
+    },
+    {
+      "framework": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "rebench-pilot-h50-d400-o0"
+    },
+    {
+      "framework": "pi",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "rebench-pilot-h50-d400-o0"
+    },
+    {
+      "framework": "tardie",
+      "history": 50,
+      "ttftMs": 400,
+      "index": 0,
+      "object": "rebench-pilot-h50-d400-o0"
+    }
+  ],
+  "groups": [
+    {
+      "object": "rebench-pilot-h50-d400-o0",
+      "schedule": [
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m0",
+          "variant": "production",
+          "state": "cold"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "settling"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "settling"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m1",
+          "variant": "production",
+          "state": "settling"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 400,
+          "index": 0,
+          "object": "rebench-pilot-h50-d400-o0",
+          "sample": "m2",
+          "variant": "production",
+          "state": "warm"
+        }
+      ]
+    },
+    {
+      "object": "rebench-pilot-h50-d0-o0",
+      "schedule": [
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m0",
+          "variant": "production",
+          "state": "cold"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m0",
+          "variant": "inline",
+          "state": "cold"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "settling"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m1",
+          "variant": "production",
+          "state": "settling"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m1",
+          "variant": "inline",
+          "state": "settling"
+        },
+        {
+          "framework": "pi",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "tardie",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m2",
+          "variant": "inline",
+          "state": "warm"
+        },
+        {
+          "framework": "yielded",
+          "history": 50,
+          "ttftMs": 0,
+          "index": 0,
+          "object": "rebench-pilot-h50-d0-o0",
+          "sample": "m2",
+          "variant": "production",
+          "state": "warm"
+        }
+      ]
+    }
+  ],
+  "references": {
+    "50": {
+      "seedFingerprint": "b017b487524e44a4",
+      "turns": {
+        "m0": [
+          "a334d85a6e65c3b7",
+          "480d1858e7a9eca2",
+          "c4c053026da88571",
+          "3d0c56dd05667f87",
+          "b7621f90e8a077a6",
+          "51712cb585edbc6a",
+          "4c6848010cb939df",
+          "f63e157f104feaae",
+          "52565bb0cbcb2b9b"
+        ],
+        "m1": [
+          "a6e6cdc0c1b29b7d",
+          "ddc299ffe3cc47fd",
+          "2099164d9a58f5c1",
+          "82447b2eb9f4bee0",
+          "c0408989a174613e",
+          "d3e3d8d259ec0d29",
+          "23d22b41e391029c",
+          "036de2133010f890",
+          "f79ad53c81104fa1"
+        ],
+        "m2": [
+          "74e91baa79e2ac39",
+          "19bd8f9557a687ab",
+          "852e8bbd58cacaf6",
+          "955e9a8b6f2ed423",
+          "435654b8e5ae6800",
+          "62d729a6fa6117f0",
+          "09238395514e75b6",
+          "c197bdad3cb7c529",
+          "32d7984050287c0c"
+        ]
+      }
+    }
+  }
+}

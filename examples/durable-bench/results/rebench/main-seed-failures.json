@@ -1,0 +1,8 @@
+[
+  {
+    "key": "tardie/rebench-main-h250-d0-o1",
+    "error": "Error: Worker primary /seed returned 500",
+    "at": 1791510927278,
+    "noRetry": true
+  }
+]

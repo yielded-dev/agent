@@ -1,0 +1,16 @@
+[
+  {
+    "framework": "yielded",
+    "history": 50,
+    "ttftMs": 400,
+    "index": 0,
+    "object": "rebench-main-h50-d400-o0",
+    "sample": "m3",
+    "variant": "production",
+    "state": "warm",
+    "at": 1791512521616,
+    "startedAt": 1791512324366,
+    "error": "Controller process ended; client response missing and request outcome unknown",
+    "noRetry": true
+  }
+]

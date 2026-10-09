@@ -1,0 +1,68 @@
+[
+  {
+    "name": "provider",
+    "repositoryCommit": "aa7855a6c85e9a2a9395098c66f7cfcfe47c8467",
+    "dirty": true,
+    "bundleSha256": "4cc787ac3a876979dcf16c35539b4e40a07415f5a9c3b19f22b335c088767b12",
+    "bundleBytes": 558501,
+    "gzipBytes": 113834,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "746fa126760d866ee003ca83724e8f4ede632f3dded164b4d8552ee3aa1c4f1d",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/rebench-D7qPgl/bundles/provider",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "aa7855a6c85e9a2a9395098c66f7cfcfe47c8467",
+    "dirty": true,
+    "bundleSha256": "4616646c6ca990bf2df484cfb7e026439e6a7611c8698fb2195068619e372134",
+    "bundleBytes": 7337149,
+    "gzipBytes": 1407655,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "392aa48342132958df5c4be4910980e3d35b4923a95da2588b407edb0f5302fb",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/rebench-D7qPgl/bundles/network",
+    "effectVersion": "4.0.0"
+  }
+]

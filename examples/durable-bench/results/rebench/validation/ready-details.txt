@@ -1,0 +1,223 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   71 tasks • 38 cache hits • 29 cache misses • 4 cache disabled
+Performance:  53% cache hit rate, 108.51s saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] effect-agent-monorepo#check: $ vp check ✓
+      → Cache hit - output replayed - 17.40s saved
+  ·······················································
+  [2] @yielded/agent-docs#check: ~/docs$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.54s saved
+  ·······················································
+  [3] @yielded/agent-ai-decision#check: ~/packages/ai-decision$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 420ms saved
+  ·······················································
+  [4] @yielded/agent#check: ~/packages/effect-agent$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.15s saved
+  ·······················································
+  [5] @yielded/agent-storage-sql#check: ~/packages/storage-sql$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.97s saved
+  ·······················································
+  [6] @yielded/agent-storage-memory#check: ~/packages/storage-memory$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.73s saved
+  ·······················································
+  [7] @yielded/agent-sandbox-local#check: ~/packages/sandbox-local$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 166ms saved
+  ·······················································
+  [8] @yielded/agent-pr-review#check: ~/packages/pr-review$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 425ms saved
+  ·······················································
+  [9] @yielded/agent-storage-postgres#check: ~/packages/storage-postgres$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.88s saved
+  ·······················································
+  [10] @yielded/agent-storage-sqlite#check: ~/packages/storage-sqlite$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.90s saved
+  ·······················································
+  [11] @yielded/agent-workflow#check: ~/packages/workflow$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.82s saved
+  ·······················································
+  [12] @yielded/agent-pr-review-action#check: ~/packages/pr-review-action$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 560ms saved
+  ·······················································
+  [13] @yielded/agent-example-semantic-memory-eval#check: ~/tooling/semantic-memory-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.75s saved
+  ·······················································
+  [14] @yielded/agent-platform-node#check: ~/packages/platform-node$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.06s saved
+  ·······················································
+  [15] @yielded/agent-testing#check: ~/packages/testing$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.42s saved
+  ·······················································
+  [16] @yielded/agent-example-pr-review-eval#check: ~/tooling/pr-review-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 595ms saved
+  ·······················································
+  [17] @yielded/agent-example-runtime-benchmark#check: ~/tooling/runtime-benchmark$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.18s saved
+  ·······················································
+  [18] @yielded/agent-storage-cloudflare#check: ~/packages/storage-cloudflare$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.26s saved
+  ·······················································
+  [19] @yielded/agent-platform-cloudflare#check: ~/packages/platform-cloudflare$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.41s saved
+  ·······················································
+  [20] @yielded/agent-example-browser-run-worker-proof#check: ~/tooling/browser-run-worker-proof$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.91s saved
+  ·······················································
+  [21] @yielded/agent-example-travel-planner#check: ~/examples/travel-planner$ tsc --noEmit ✓
+      → Cache hit - output replayed - 3.60s saved
+  ·······················································
+  [22] @yielded/agent-example-cloudflare-memory#check: ~/tooling/cloudflare-memory$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 1.91s saved
+  ·······················································
+  [23] @yielded/agent-example-context-continuity-eval#check: ~/tooling/context-continuity-eval$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 2.17s saved
+  ·······················································
+  [24] @yielded/agent-example-browser-speed#check: ~/examples/browser-speed$ tsc --noEmit -p tsconfig.json ✓
+      → Cache hit - output replayed - 3.08s saved
+  ·······················································
+  [25] effect-agent-monorepo#check: $ tsc --noEmit -p scripts/tsconfig.json ✓
+      → Cache hit - output replayed - 2.18s saved
+  ·······················································
+  [26] effect-agent-monorepo#check:exports: $ bun scripts/verify-package-exports.ts ✓
+      → Cache hit - output replayed - 1.18s saved
+  ·······················································
+  [27] effect-agent-monorepo#check:record-format: $ bun scripts/verify-record-format.ts ✓
+      → Cache hit - output replayed - 236ms saved
+  ·······················································
+  [28] effect-agent-monorepo#check:deploy: $ bun scripts/check-deployment.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [29] effect-agent-monorepo#check: $ bun scripts/verify-package-purity.ts ✓
+      → Cache hit - output replayed - 1.54s saved
+  ·······················································
+  [30] @yielded/agent-storage-cloudflare#test: ~/packages/storage-cloudflare$ vitest run ✓
+      → Cache hit - output replayed - 14.86s saved
+  ·······················································
+  [31] @yielded/agent-storage-sqlite#test: ~/packages/storage-sqlite$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 5.39s saved
+  ·······················································
+  [32] @yielded/agent-storage-sql#test: ~/packages/storage-sql$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 215ms saved
+  ·······················································
+  [33] @yielded/agent-sandbox-local#test: ~/packages/sandbox-local$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 1.41s saved
+  ·······················································
+  [34] @yielded/agent-pr-review-action#test: ~/packages/pr-review-action$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 1.44s saved
+  ·······················································
+  [35] @yielded/agent#test: ~/packages/effect-agent$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 3.69s saved
+  ·······················································
+  [36] @yielded/agent-storage-memory#test: ~/packages/storage-memory$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 5.22s saved
+  ·······················································
+  [37] @yielded/agent-example-cloudflare-memory#test: ~/tooling/cloudflare-memory$ vp test --passWithNoTests ✓
+      → Cache hit - output replayed - 3.03s saved
+  ·······················································
+  [38] @yielded/agent-example-runtime-benchmark#test: ~/tooling/runtime-benchmark$ vp test ✓
+      → Cache hit - output replayed - 3.61s saved
+  ·······················································
+  [39] @yielded/agent-example-pr-review-eval#test: ~/tooling/pr-review-eval$ vp test ✓
+      → Cache hit - output replayed - 6.20s saved
+  ·······················································
+  [40] @yielded/agent-platform-node#test: ~/packages/platform-node$ vp test --passWithNoTests ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [41] @yielded/agent-ai-decision#test: ~/packages/ai-decision$ vp test ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [42] @yielded/agent-example-travel-planner#test: ~/examples/travel-planner$ vp test ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [43] @yielded/agent-example-browser-run-worker-proof#test: ~/tooling/browser-run-worker-proof$ vp test --passWithNoTests ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [44] @yielded/agent-workflow#test: ~/packages/workflow$ vp test --passWithNoTests ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [45] @yielded/agent-testing#test: ~/packages/testing$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [46] @yielded/agent-example-context-continuity-eval#test: ~/tooling/context-continuity-eval$ vitest run ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [47] @yielded/agent-pr-review#test: ~/packages/pr-review$ vp test --passWithNoTests ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [48] @yielded/agent-example-browser-speed#test: ~/examples/browser-speed$ vp test ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [49] @yielded/agent-storage-postgres#test: ~/packages/storage-postgres$ vp test --passWithNoTests ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [50] @yielded/agent-platform-cloudflare#test: ~/packages/platform-cloudflare$ vitest run ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [51] @yielded/agent-ai-decision#build: ~/packages/ai-decision$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [52] @yielded/agent#build: ~/packages/effect-agent$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [53] @yielded/agent-sandbox-local#build: ~/packages/sandbox-local$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [54] @yielded/agent-storage-memory#build: ~/packages/storage-memory$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [55] @yielded/agent-pr-review#build: ~/packages/pr-review$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [56] @yielded/agent-storage-sql#build: ~/packages/storage-sql$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [57] @yielded/agent-workflow#build: ~/packages/workflow$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [58] @yielded/agent-storage-postgres#build: ~/packages/storage-postgres$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [59] @yielded/agent-storage-sqlite#build: ~/packages/storage-sqlite$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [60] @yielded/agent-platform-node#build: ~/packages/platform-node$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [61] @yielded/agent-testing#build: ~/packages/testing$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [62] @yielded/agent-storage-cloudflare#build: ~/packages/storage-cloudflare$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [63] @yielded/agent-platform-cloudflare#build: ~/packages/platform-cloudflare$ vp pack ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [64] @yielded/agent-example-browser-run-worker-proof#build: ~/tooling/browser-run-worker-proof$ wrangler deploy --dry-run ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [65] @yielded/agent-example-cloudflare-memory#build: ~/tooling/cloudflare-memory$ wrangler deploy --dry-run ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [66] @yielded/agent-example-browser-speed#build: ~/examples/browser-speed$ vp build ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [67] @yielded/agent-example-travel-planner#build: ~/examples/travel-planner$ vp build ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [68] @yielded/agent-example-context-continuity-eval#build: ~/tooling/context-continuity-eval$ bun src/build-cloudflare.ts ✓
+      → Cache disabled in task configuration
+  ·······················································
+  [69] @yielded/agent-example-browser-speed#build: ~/examples/browser-speed$ wrangler deploy --dry-run ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [70] @yielded/agent-docs#build: ~/docs$ NODE_OPTIONS=--max-old-space-size=8192 astro build ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [71] effect-agent-monorepo#action:build: $ bun scripts/build-action.ts ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

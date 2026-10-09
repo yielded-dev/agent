@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-09T02:34:14.373Z",
+  "reductionReproduced": true,
+  "comparedFields": [
+    "headline",
+    "groups",
+    "repeatSpread",
+    "coverage",
+    "outcomes",
+    "excluded",
+    "planFailures",
+    "integrityFailures"
+  ],
+  "losslessCompressionVerified": true,
+  "artifactFilesChecked": 63,
+  "accountAndApiCredentialScanPassed": true,
+  "benchmarkTokenScan": "Passed against every raw/decompressed input before private Alchemy state deletion; see secret-scan.json. Later files derive from those scanned inputs.",
+  "privateAlchemyStateAbsent": true
+}

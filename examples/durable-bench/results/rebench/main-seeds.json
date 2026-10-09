@@ -1,0 +1,248 @@
+[
+  {
+    "key": "pi/rebench-main-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510626507,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/rebench-main-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510629067,
+    "databaseBytes": 2658304
+  },
+  {
+    "key": "pi/rebench-main-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510632108,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/rebench-main-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510637791,
+    "databaseBytes": 2641920
+  },
+  {
+    "key": "yielded/rebench-main-h50-d0-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510643689,
+    "databaseBytes": 2646016
+  },
+  {
+    "key": "pi/rebench-main-h50-d0-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510646285,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "tardie/rebench-main-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510659823,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "yielded/rebench-main-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510666012,
+    "databaseBytes": 2703360
+  },
+  {
+    "key": "pi/rebench-main-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510668494,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "tardie/rebench-main-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510679075,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "yielded/rebench-main-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510688514,
+    "databaseBytes": 2695168
+  },
+  {
+    "key": "pi/rebench-main-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510691143,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "tardie/rebench-main-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510694659,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "yielded/rebench-main-h50-d400-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510700442,
+    "databaseBytes": 2703360
+  },
+  {
+    "key": "tardie/rebench-main-h50-d0-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510703339,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "pi/rebench-main-h50-d400-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510703378,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "tardie/rebench-main-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510711731,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "pi/rebench-main-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510719538,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "tardie/rebench-main-h50-d400-o2",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791510730496,
+    "databaseBytes": 401408
+  },
+  {
+    "key": "yielded/rebench-main-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510741222,
+    "databaseBytes": 10268672
+  },
+  {
+    "key": "pi/rebench-main-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510755328,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/rebench-main-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510764535,
+    "databaseBytes": 10268672
+  },
+  {
+    "key": "yielded/rebench-main-h250-d0-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510801310,
+    "databaseBytes": 10272768
+  },
+  {
+    "key": "pi/rebench-main-h250-d0-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510811863,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "tardie/rebench-main-h250-d0-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510930664,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "pi/rebench-main-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510945143,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "tardie/rebench-main-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510980863,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "yielded/rebench-main-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510985575,
+    "databaseBytes": 10571776
+  },
+  {
+    "key": "pi/rebench-main-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791510994433,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/rebench-main-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511016285,
+    "databaseBytes": 10543104
+  },
+  {
+    "key": "yielded/rebench-main-h250-d400-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511072019,
+    "databaseBytes": 10559488
+  },
+  {
+    "key": "tardie/rebench-main-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511075111,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "tardie/rebench-main-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511076621,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "pi/rebench-main-h250-d400-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511086024,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "tardie/rebench-main-h250-d400-o2",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511239404,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "yielded/rebench-main-sr1-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511346885,
+    "databaseBytes": 10665984
+  },
+  {
+    "key": "pi/rebench-main-sr1-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511357710,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "tardie/rebench-main-sr1-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791511594838,
+    "databaseBytes": 1916928
+  },
+  {
+    "key": "yielded/rebench-main-r1-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791512589768,
+    "databaseBytes": 2748416
+  },
+  {
+    "key": "pi/rebench-main-r1-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791512592255,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "tardie/rebench-main-r1-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791512627840,
+    "databaseBytes": 401408
+  }
+]

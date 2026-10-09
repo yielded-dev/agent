@@ -1,0 +1,19 @@
+{
+  "startedAt": "2026-10-09T02:25:35.940Z",
+  "endedAt": "2026-10-09T02:30:04.295Z",
+  "exitCode": 0,
+  "steps": [
+    {
+      "action": "activate",
+      "code": 0,
+      "signal": null,
+      "endedAt": "2026-10-09T02:25:45.143Z"
+    },
+    {
+      "action": "measure-resume",
+      "code": 0,
+      "signal": null,
+      "endedAt": "2026-10-09T02:30:04.295Z"
+    }
+  ]
+}
