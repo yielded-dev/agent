@@ -1,0 +1,29 @@
+Attempt acquisition review follow-up
+
+Product commit: d233f12bc23f859cbc8473014ab8c02943441fdb
+Review: https://github.com/yielded-dev/agent/pull/829#pullrequestreview-5473673385
+Source: packages/effect-agent/src/engine/internal/agent-runtime.ts
+Source SHA-256: 7b3477b91908516bd148e1064db6f9e76a09009956ffc0c635712a78abb77bfb
+
+The model Stream.onStart Effect acquires CurrentProvisionalTextAttempt directly.
+The RunContext field and Run-boundary acquisition are removed. The Thread identity
+and restart guard, Attempt Scope, and close/discard paths are preserved.
+
+Replayed the three existing probes in review-live-text.test.ts from this directory.
+Copy that file to packages/platform-cloudflare/test/review-live-text.test.ts on the
+product commit and run:
+vp run -F @yielded/agent-platform-cloudflare test --project workerd test/review-live-text.test.ts
+
+Observed output:
+Test Files  1 passed (1)
+Tests       3 passed (3)
+Exit code   0
+
+Removed the temporary probe, then ran vp run ready: exit 0, 71 tasks, 10 cache hits.
+Node 24.20.0 was on PATH; Bun 1.4.2; frozen install with scripts disabled followed
+by vp run patch:tsgo; isolated loopback PostgreSQL 18; no vendored third-party/node_modules.
+The commit hook left the validated source hash unchanged.
+The temporary PostgreSQL server was stopped successfully after the gate.
+
+These are local correctness checks, not new latency measurements.
+No Cloudflare resources were created by this review follow-up.
