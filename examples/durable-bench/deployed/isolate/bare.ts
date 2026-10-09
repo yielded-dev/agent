@@ -4,7 +4,7 @@ import { turn } from "../../src/plan.ts";
 import { attach } from "../worker/observe.ts";
 import { errorText, parseIdentity, parseIsolate, readQuery } from "./native-protocol.ts";
 import { buildMismatch, INGRESS_HEADER, markRouterSubmit, observeFetch } from "./observation.ts";
-import type { Env } from "./protocol.ts";
+import type { Env, IsolateState, Query } from "./protocol.ts";
 import {
   coldBisectAfterInit,
   coldBisectBeforeInit,
@@ -23,6 +23,37 @@ export class BareDO extends DurableObject<Env> {
     super(ctx, env);
     this.meter = attach(ctx, env);
     timeline(ctx.storage)?.point("constructor.return");
+  }
+  // Match the production ThreadObject's native RPC transport while retaining the
+  // framework-free one-write control. Setup, reset and metrics keep their fetch routes.
+  async benchSubmit(query: Query, ingress: IsolateState) {
+    if (query.target !== "bare" || query.history !== 0)
+      throw new Error("Bare history must be zero");
+    this.meter.begin(query, ingress);
+    this.meter.marker("submit");
+    this.ctx.storage.sql.exec("INSERT INTO bare_receipts VALUES (?)", query.sample);
+    timeline(this.ctx.storage)?.point("bare.write.return");
+    await this.ctx.storage.sync();
+    timeline(this.ctx.storage)?.point("submit.complete");
+    // A single post-durability provider probe supplies a comparable first-request boundary.
+    // Its response is awaited separately; it is never part of the receipt's write floor.
+    this.pending = (async () => {
+      const response = await this.meter.fetch(this.env.PROVIDER_URL + "/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "scripted-1",
+          stream: true,
+          messages: [{ role: "user", content: turn(query.sample, 0).text }],
+        }),
+      });
+
+      await response.text();
+      if (!response.ok) throw new Error("Bare provider probe failed");
+    })();
+    this.ctx.waitUntil(this.pending);
+
+    return { ok: true, receipt: { id: query.sample } };
   }
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -63,31 +94,9 @@ export class BareDO extends DurableObject<Env> {
     if (url.pathname === "/submit") {
       const ingress = request.headers.get(INGRESS_HEADER);
 
-      this.meter.begin(query, ingress === null ? undefined : parseIsolate(JSON.parse(ingress)));
-      this.meter.marker("submit");
-      this.ctx.storage.sql.exec("INSERT INTO bare_receipts VALUES (?)", query.sample);
-      timeline(this.ctx.storage)?.point("bare.write.return");
-      await this.ctx.storage.sync();
-      timeline(this.ctx.storage)?.point("submit.complete");
-      // A single post-durability provider probe supplies a comparable first-request boundary.
-      // Its response is awaited separately; it is never part of the receipt's write floor.
-      this.pending = (async () => {
-        const response = await this.meter.fetch(this.env.PROVIDER_URL + "/chat/completions", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            model: "scripted-1",
-            stream: true,
-            messages: [{ role: "user", content: turn(query.sample, 0).text }],
-          }),
-        });
+      if (ingress === null) throw new Error("Missing routing build identity");
 
-        await response.text();
-        if (!response.ok) throw new Error("Bare provider probe failed");
-      })();
-      this.ctx.waitUntil(this.pending);
-
-      return Response.json({ ok: true, receipt: { id: query.sample } });
+      return Response.json(await this.benchSubmit(query, parseIsolate(JSON.parse(ingress))));
     }
     if (url.pathname === "/await") {
       if (!this.pending) throw new Error("No submitted probe in this incarnation");
@@ -158,6 +167,7 @@ export default {
           { status: threadAborted ? 200 : 502 },
         );
       }
+      if (url.pathname === "/submit") return Response.json(await stub.benchSubmit(query, ingress));
       const headers = new Headers(request.headers);
 
       headers.set(INGRESS_HEADER, JSON.stringify(ingress));
