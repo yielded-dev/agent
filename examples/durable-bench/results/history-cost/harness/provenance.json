@@ -1,0 +1,10 @@
+{
+  "benchRef": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "privatePatchSha256": "aceb02724b3dcb3a2b24a23ff07931b313e3e9acff405a63c7787d084abc877d",
+  "publishedPatchSha256": "30bd0ba714fa9b3945d9353228144c17bbdd59d127c7ff505a2d74c3dcfb59de",
+  "pathSubstitutions": [
+    "Product credential checkout -> /path/to/agent",
+    "Task temporary root -> /tmp/history-cost"
+  ],
+  "appliesTo": "Separate benchmark checkout only; never to a product PR"
+}

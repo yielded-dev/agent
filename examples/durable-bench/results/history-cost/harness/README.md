@@ -1,0 +1,13 @@
+# Benchmark adaptations
+
+Apply `bench.patch` to a separate checkout of `78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3` (#828). Replace `/path/to/agent` with the credential-enabled checkout and `/tmp/history-cost` with a private mode-700 task directory. Run commands through `vp`, with Cloudflare credentials supplied by `direnv exec .`. The patch contains setup, measurement and reporting adaptations only; product candidates do not contain it.
+
+The deployed canonical importer repeatedly exceeded its storage timeout at 250/1,000 turns. The adapted seed phase canonically imports each addressed fixture locally, then restores an exact SQLite snapshot into a fresh deployed Object. It copies no old ownership or claim rows: the real importer has already normalized them. Restored rows, schema text, columns, indexes and triggers must have the same SHA-256 as that source; complete table counts and transcript fingerprints are checked again. Triggers are installed after rows to avoid duplicating derivative updates. The offline seed bundle cannot execute native submission RPCs. Production ThreadObject replaces it on the same Worker/namespace/Object identities before timing. Native gates, prearming, alarms and confirmed durability are unchanged.
+
+Provider arrival is captured before body parsing or artificial TTFT. Three clock probes traverse each measured Object before and after its timed turn. Cold probes finish before abort; no Object invocation follows the abort until the timer starts. Post-probes follow the completion timestamp. Matching provider-colo probes bound the clock offset; intersected bounds assume stable host clock offsets within that colo. The report retains uncertainty and excludes inconsistent probes and incomplete A/B Object coverage.
+
+`compact-results.py` reduces a retained raw result into numeric samples, Object summaries, control drift, clock uncertainty, failures and observed CPU outcomes. Large raw results and fixture archives are not published. `snapshot-roundtrip.json` records successful 50/250/1,000 restoration proof.
+
+The primary matrix uses `--rigorous --baseline 07f0272e7ba49a494064b6b74c6318b55514ae19 --candidate 0451aacb627ec3dbe76618c043bce9d6b91596ad --targets yielded,pi --sizes 50,250,1000 --ttft 0,400 --objects 10 --repeats 6 --concurrency 10`. Local canonical preparations run with concurrency at most four; deployed imports are serialized. All seeding ends before any timed turn.
+
+Run `deployed -- --teardown` through the same benchmark task and private Alchemy state after measurement. Keep state until prefix-wide API checks show no `history-cost` Workers or Durable Object namespaces.

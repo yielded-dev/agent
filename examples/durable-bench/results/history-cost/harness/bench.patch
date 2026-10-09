@@ -1,0 +1,1265 @@
+diff --git a/examples/durable-bench/deployed/build.ts b/examples/durable-bench/deployed/build.ts
+index f7ebf2d0..644091fa 100644
+--- a/examples/durable-bench/deployed/build.ts
++++ b/examples/durable-bench/deployed/build.ts
+@@ -23,6 +23,7 @@ const entries = {
+   driver: "driver.ts",
+   provider: "provider.ts",
+   target: "../third-party/src/deployed/index.ts",
++  seed: "../third-party/src/deployed/index.ts",
+ };
+ 
+ /** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
+@@ -77,6 +78,10 @@ export const build = Effect.fnUntraced(function* (
+   const resolver: Plugin = {
+     name: "durable-bench-dependencies",
+     setup(bundler) {
++      if (entry === "seed")
++        bundler.onResolve({ filter: /deployed\/worker\/yielded\.ts$/ }, () => ({
++          path: join(directory, "worker/offline-yielded.ts"),
++        }));
+       bundler.onResolve({ filter: /^[^./]/ }, (args) => {
+         const localPackage = [...packages].some(
+           (name) => args.path === name || args.path.startsWith(name + "/"),
+diff --git a/examples/durable-bench/deployed/cloudflare.ts b/examples/durable-bench/deployed/cloudflare.ts
+index ba55e9e6..75bafc98 100644
+--- a/examples/durable-bench/deployed/cloudflare.ts
++++ b/examples/durable-bench/deployed/cloudflare.ts
+@@ -65,7 +65,7 @@ const connect = Effect.gen(function* () {
+     Schema.Struct({ subdomain: Schema.NonEmptyString }),
+   );
+ 
+-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
++  const resources = Effect.fnUntraced(function* (prefix = "history-cost") {
+     const workers = (yield* api("workers/scripts", Workers))
+       .filter((w) => w.id.startsWith(prefix))
+       .map((w) => w.id);
+diff --git a/examples/durable-bench/deployed/deploy.ts b/examples/durable-bench/deployed/deploy.ts
+index e24bc0e8..ab99e7bc 100644
+--- a/examples/durable-bench/deployed/deploy.ts
++++ b/examples/durable-bench/deployed/deploy.ts
+@@ -19,7 +19,7 @@ import {
+ } from "./platform.ts";
+ 
+ const Stack = Schema.Struct({
+-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
++  name: Schema.String.check(Schema.isPattern(/^history-cost-[a-z0-9-]+$/)),
+   kind: Schema.Literals(["infrastructure", "target"]),
+   bundle: Schema.String,
+   build: Schema.String,
+@@ -32,7 +32,7 @@ const State = Schema.Struct({
+   version: Schema.Literal(1),
+   accountId: Schema.String,
+   token: Schema.String,
+-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
++  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^history-cost-shared-[a-f0-9]{8}$/)),
+   infrastructure: Schema.optionalKey(Stack),
+   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
+   targets: Schema.Record(Schema.String, Stack),
+@@ -57,13 +57,13 @@ export const deployments = Effect.gen(function* () {
+     if (!existing.verified)
+       return yield* new BenchError({
+         message:
+-          "durable-bench resources exist without local ownership state. Restore the private state before deploying or tearing down.",
++          "history-cost resources exist without local ownership state. Restore the private state before deploying or tearing down.",
+       });
+     state = {
+       version: 1,
+       accountId: cloud.accountId,
+       token: nonce() + nonce(),
+-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
++      infrastructurePrefix: "history-cost-shared-" + nonce().slice(0, 8),
+       targets: {},
+     };
+   }
+@@ -164,7 +164,7 @@ export const deployments = Effect.gen(function* () {
+     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
+ 
+     const infrastructure: Stack = {
+-      name: "durable-bench-infrastructure",
++      name: "history-cost-infrastructure",
+       kind: "infrastructure",
+       bundle: output,
+       build: revision,
+@@ -266,7 +266,7 @@ export const deployments = Effect.gen(function* () {
+ 
+     if (!remaining.verified)
+       return yield* new BenchError({
+-        message: "durable-bench resources remain in this account; cleanup is not verified.",
++        message: "history-cost resources remain in this account; cleanup is not verified.",
+       });
+     yield* fs.remove(privateDirectory, { recursive: true });
+ 
+diff --git a/examples/durable-bench/deployed/driver.ts b/examples/durable-bench/deployed/driver.ts
+index 3a4aa6e5..0462e3c9 100644
+--- a/examples/durable-bench/deployed/driver.ts
++++ b/examples/durable-bench/deployed/driver.ts
+@@ -1,7 +1,7 @@
+ import { Schema } from "effect";
+ 
+-import { MeasureRequest } from "./model.ts";
+-import { AwaitResult, RunResult, SubmitResult } from "./worker/protocol.ts";
++import { MeasureRequest, type ProviderClock } from "./model.ts";
++import { AwaitResult, ColdResult, RunResult, SubmitResult } from "./worker/protocol.ts";
+ 
+ interface Env {
+   BENCH_TOKEN: string;
+@@ -9,6 +9,10 @@ interface Env {
+   BUILD: string;
+ }
+ 
++const decodeClock = Schema.decodeUnknownSync(
++  Schema.Struct({ arrivalMs: Schema.Number, colo: Schema.NullOr(Schema.String) }),
++);
++
+ export default {
+   async fetch(request: Request, env: Env): Promise<Response> {
+     if (request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
+@@ -28,7 +32,7 @@ export default {
+         target.protocol !== "https:" ||
+         target.username ||
+         target.password ||
+-        !target.hostname.startsWith("durable-bench-") ||
++        !target.hostname.startsWith("history-cost-") ||
+         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
+       )
+         return new Response("invalid target", { status: 400 });
+@@ -36,7 +40,7 @@ export default {
+         return fetch(new URL("/health?probe=" + Date.now(), target), {
+           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
+         });
+-      const { query } = Schema.decodeUnknownSync(MeasureRequest)(input);
++      const { query, reset: shouldReset } = Schema.decodeUnknownSync(MeasureRequest)(input);
+ 
+       const invoke = async (path: string, body?: unknown) => {
+         const url = new URL(path, target);
+@@ -61,6 +65,20 @@ export default {
+         return response.json();
+       };
+ 
++      // Follow the Object's route to the provider so probes reach the same colo as model calls.
++      // Cold probes happen BEFORE abort; no Object invocation follows abort before the turn timer.
++      const providerClocks: (typeof ProviderClock.Type)[] = [];
++      const probeClock = async () => {
++        const sentMs = Date.now();
++        const clock = decodeClock(await invoke("/clock"));
++        providerClocks.push({ sentMs, receivedMs: Date.now(), ...clock });
++      };
++      for (let index = 0; index < 3; index++) await probeClock();
++      const reset = shouldReset
++        ? Schema.decodeUnknownSync(ColdResult)(await invoke("/cold"))
++        : undefined;
++      if (reset && (!reset.ok || !reset.threadAborted || reset.directoryAborted === false))
++        throw new Error("Cold abort was not acknowledged; no benchmark input was sent.");
+       const started = Date.now();
+       let admissionMs: number | undefined;
+ 
+@@ -80,11 +98,15 @@ export default {
+       }
+ 
+       const observedMs = Date.now();
++      for (let index = 0; index < 3; index++) await probeClock();
+ 
+       return Response.json({
+         ok: true,
+         driverMs: observedMs - started,
++        startedMs: started,
+         observedMs,
++        providerClocks,
++        ...(reset === undefined ? {} : { reset }),
+         admissionMs,
+         colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
+       });
+diff --git a/examples/durable-bench/deployed/fixtures.ts b/examples/durable-bench/deployed/fixtures.ts
+index 90197497..bfa30ba3 100644
+--- a/examples/durable-bench/deployed/fixtures.ts
++++ b/examples/durable-bench/deployed/fixtures.ts
+@@ -1,11 +1,13 @@
+ import { builtinModules } from "node:module";
+ import { fileURLToPath } from "node:url";
+ 
++import { canonicalJson } from "@yielded/agent/digest";
+ import { Effect, FileSystem, Schema } from "effect";
+ import { ChildProcess, ChildProcessSpawner } from "effect/process";
+ import { build } from "esbuild";
+ import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
+ 
++import { hash } from "./platform.ts";
+ import {
+   type BulkFixture,
+   Counts,
+@@ -77,6 +79,7 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
+       path: string,
+       body?: BulkFixture,
+       actor = false,
++      object = "main",
+     ) {
+       const className =
+         target === "yielded"
+@@ -122,7 +125,7 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
+ 
+         return yield* boundary("Transfer local fixture", async () => {
+           const response = await mf.dispatchFetch(
+-            `http://fixture${path}?target=${target}&actor=${actor}`,
++            `http://fixture${path}?target=${target}&actor=${actor}&object=${encodeURIComponent(object)}`,
+             body === undefined ? {} : { method: "POST", body: JSON.stringify(body) },
+           );
+ 
+@@ -227,12 +230,10 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
+             );
+ 
+           if (differences.length > 0) {
+-            const { archive: _archive, ...source } = fixture;
+-
+             fixture = {
+-              ...source,
+-              mode: "replay",
+-              fallbackReason: `Canonical import changes source table counts: ${differences.join(", ")}`,
++              ...fixture,
++              tables: normalized.tables,
++              fallbackReason: `Import-normalized table counts: ${differences.join(", ")}; canonical history and transcript unchanged`,
+             };
+           }
+         }
+@@ -247,9 +248,44 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
+       }
+     }
+ 
+-    return result;
++    let restored = 0;
++    const snapshot = Effect.fnUntraced(function* (fixture: BulkFixture, object: string) {
++      if (fixture.target !== "yielded") return fixture;
++      const normalized = yield* read(
++        "yielded",
++        `${scratch}/restore-${restored++}`,
++        "/import",
++        fixture,
++        false,
++        object,
++      );
++
++      if (
++        !normalized.dump ||
++        normalized.fingerprint !== fixture.fingerprint ||
++        canonicalJson(normalized.tables) !== canonicalJson(fixture.tables)
++      )
++        return yield* new FixtureError({
++          message: "Addressed canonical import differs from the verified fixture",
++        });
++
++      return {
++        version: fixture.version,
++        target: fixture.target,
++        history: fixture.history,
++        fingerprint: fixture.fingerprint,
++        sourceVersion: fixture.sourceVersion,
++        tables: normalized.tables,
++        mode: fixture.mode,
++        ...(fixture.fallbackReason === undefined ? {} : { fallbackReason: fixture.fallbackReason }),
++        destination: object,
++        snapshotDigest: hash(canonicalJson(normalized.dump)),
++        thread: normalized.dump,
++      };
++    });
++
++    return { fixtures: result, snapshot };
+   },
+-  Effect.scoped,
+   Effect.mapError((cause) =>
+     cause instanceof FixtureError ? cause : failure("Prepare local fixtures")(cause),
+   ),
+diff --git a/examples/durable-bench/deployed/model.ts b/examples/durable-bench/deployed/model.ts
+index a8e4debf..d45e351b 100644
+--- a/examples/durable-bench/deployed/model.ts
++++ b/examples/durable-bench/deployed/model.ts
+@@ -1,6 +1,6 @@
+ import { Schema } from "effect";
+ 
+-import { Query, Target } from "./worker/protocol.ts";
++import { ColdResult, Query, Target } from "./worker/protocol.ts";
+ 
+ export interface Options {
+   readonly targets: readonly (typeof Target.Type)[];
+@@ -29,6 +29,13 @@ export const Invocation = Schema.Struct({
+ 
+ export type Invocation = typeof Invocation.Type;
+ 
++export const ProviderClock = Schema.Struct({
++  sentMs: Schema.Number,
++  receivedMs: Schema.Number,
++  arrivalMs: Schema.Number,
++  colo: Schema.NullOr(Schema.String),
++});
++
+ export const Sample = Schema.Struct({
+   ...Query.fields,
+   build: Schema.Literals(["working", "baseline", "candidate"]),
+@@ -38,6 +45,15 @@ export const Sample = Schema.Struct({
+   status: Schema.Literals(["running", "ok", "failed"]),
+   driverMs: Schema.optionalKey(Schema.Number),
+   admissionMs: Schema.optionalKey(Schema.Number),
++  firstRequestMs: Schema.optionalKey(Schema.Number),
++  firstRequestRawMs: Schema.optionalKey(Schema.Number),
++  driverStartedMs: Schema.optionalKey(Schema.Number),
++  firstRequestArrivalMs: Schema.optionalKey(Schema.Number),
++  firstRequestLowerMs: Schema.optionalKey(Schema.Number),
++  firstRequestUpperMs: Schema.optionalKey(Schema.Number),
++  firstRequestClockValid: Schema.optionalKey(Schema.Boolean),
++  providerColo: Schema.optionalKey(Schema.NullOr(Schema.String)),
++  providerClocks: Schema.optionalKey(Schema.Array(ProviderClock)),
+   gapMs: Schema.optionalKey(Schema.Number),
+   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
+   controllerMs: Schema.optionalKey(Schema.Number),
+@@ -69,6 +85,7 @@ export const Result = Schema.Struct({
+   wallMs: Schema.Number,
+   infrastructureReused: Schema.Boolean,
+   options: Schema.Json,
++  seedBuild: Schema.optionalKey(Schema.Struct({ revision: Schema.String, sha256: Schema.String })),
+   builds: Schema.Array(
+     Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
+   ),
+@@ -93,12 +110,19 @@ export const Result = Schema.Struct({
+ 
+ export type Result = typeof Result.Type;
+ 
+-export const MeasureRequest = Schema.Struct({ query: Query, targetUrl: Schema.String });
++export const MeasureRequest = Schema.Struct({
++  query: Query,
++  targetUrl: Schema.String,
++  reset: Schema.Boolean,
++});
+ 
+ export const MeasureResponse = Schema.Struct({
+   ok: Schema.Literal(true),
+   driverMs: Schema.Number,
++  startedMs: Schema.Number,
+   observedMs: Schema.Number,
++  providerClocks: Schema.Array(ProviderClock),
++  reset: Schema.optionalKey(ColdResult),
+   admissionMs: Schema.optionalKey(Schema.Number),
+   colo: Schema.NullOr(Schema.String),
+ });
+diff --git a/examples/durable-bench/deployed/platform.ts b/examples/durable-bench/deployed/platform.ts
+index c456592a..ec071df8 100644
+--- a/examples/durable-bench/deployed/platform.ts
++++ b/examples/durable-bench/deployed/platform.ts
+@@ -1,5 +1,4 @@
+ import { createHash, randomBytes } from "node:crypto";
+-import { homedir } from "node:os";
+ import { dirname, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+@@ -13,7 +12,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
+ export const directory = dirname(fileURLToPath(import.meta.url));
+ export const workspace = resolve(directory, "..");
+ export const repository = resolve(workspace, "../..");
+-export const privateDirectory = resolve(homedir(), ".local/state/durable-bench");
++export const privateDirectory = "/tmp/history-cost/private-state";
+ 
+ export const hash = (value: string | Uint8Array) =>
+   createHash("sha256").update(value).digest("hex");
+diff --git a/examples/durable-bench/deployed/provider.ts b/examples/durable-bench/deployed/provider.ts
+index d557a617..77b7f863 100644
+--- a/examples/durable-bench/deployed/provider.ts
++++ b/examples/durable-bench/deployed/provider.ts
+@@ -18,6 +18,14 @@ export default {
+     const url = new URL(request.url);
+ 
+     if (url.pathname === "/health") return Response.json({ ok: true, build: env.BUILD });
++    if (url.pathname === "/echo")
++      return Response.json(
++        {
++          arrivalMs: Date.now(),
++          colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
++        },
++        { headers: { "cache-control": "no-store" } },
++      );
+     if (url.pathname !== "/v1/chat/completions" || request.method !== "POST")
+       return new Response("not found", { status: 404 });
+     const arrivalMs = Date.now();
+diff --git a/examples/durable-bench/deployed/report.ts b/examples/durable-bench/deployed/report.ts
+index 8d78b01a..af6b3ac1 100644
+--- a/examples/durable-bench/deployed/report.ts
++++ b/examples/durable-bench/deployed/report.ts
+@@ -30,9 +30,12 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
+   return result;
+ };
+ 
+-export const objectMedians = (rows: readonly Sample[]) =>
++export const objectMedians = (
++  rows: readonly Sample[],
++  metric: "driverMs" | "firstRequestMs" = "driverMs",
++) =>
+   [...group(rows, (row) => row.object).values()].map((items) =>
+-    median(items.flatMap((item) => (item.driverMs === undefined ? [] : [item.driverMs]))),
++    median(items.flatMap((item) => (item[metric] === undefined ? [] : [item[metric]]))),
+   );
+ 
+ export const table = (result: Result): string => {
+@@ -48,87 +51,144 @@ export const table = (result: Result): string => {
+ 
+   const lines = [
+     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
+-    "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
++    "Milliseconds; median [Q1–Q3] of Object medians.",
+     "Yielded/pi ranges use min(Y)/max(pi)–max(Y)/min(pi) of Object medians; descriptive, unpaired, not confidence intervals.",
+     "",
+   ];
+ 
+-  for (const [cell, samples] of group(
+-    rows,
+-    (row) => `${row.history} history · ${row.ttftMs} ms TTFT · ${row.state} · ${row.build}`,
+-  )) {
++  const repeats =
++    typeof result.options === "object" &&
++    result.options !== null &&
++    !Array.isArray(result.options) &&
++    "repeats" in result.options &&
++    typeof result.options.repeats === "number"
++      ? result.options.repeats
++      : NaN;
++  const epochsPerBuild = result.builds.length === 2 ? 2 : 1;
++
++  for (const metric of ["firstRequestMs", "driverMs"] as const) {
++    const availableRows = rows.filter((row) => row[metric] !== undefined);
++    const measuredRows = [
++      ...group(
++        availableRows,
++        (row) => `${row.history}/${row.ttftMs}/${row.state}/${row.target}/${row.object}`,
++      ).values(),
++    ].flatMap((turns) => {
++      const builds = group(turns, (row) => row.build);
++      const expected = turns[0]?.state === "warm" ? repeats : 1;
++
++      return builds.size === result.builds.length &&
++        [...builds.values()].every((build) => {
++          const epochs = group(build, (row) => String(row.epoch));
++
++          return (
++            epochs.size === epochsPerBuild &&
++            [...epochs.values()].every(
++              (epoch) =>
++                epoch.length === expected &&
++                new Set(epoch.map((row) => row.repeat)).size === expected,
++            )
++          );
++        })
++        ? turns
++        : [];
++    });
++    const mediansFor = (samples: readonly Sample[]) => objectMedians(samples, metric);
+     lines.push(
+-      cell,
++      metric === "firstRequestMs"
++        ? "Submission to first provider arrival"
++        : "Driver-observed complete turn",
++      "",
++      `${availableRows.length - measuredRows.length} otherwise available samples are excluded because their Object lacks the full epoch/repeat coverage for both builds.`,
+       "",
+-      "| Target | Turn ms | Object median range | Repeat range, median / max | Objects |",
+-      "|---|---:|---:|---:|---:|",
+     );
+-    for (const target of TARGETS) {
+-      const turns = samples.filter((row) => row.target === target);
+-
+-      if (!turns.length) continue;
+-      const medians = objectMedians(turns);
+-
+-      const spreads = [...group(turns, (row) => row.object).values()].map((items) => {
+-        const values = items.flatMap((row) => (row.driverMs === undefined ? [] : [row.driverMs]));
+-
+-        return Math.max(...values) - Math.min(...values);
+-      });
+-
+-      lines.push(
+-        `| ${target} | ${interval(medians)} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
++    if (metric === "firstRequestMs") {
++      const widths = measuredRows.map(
++        (row) => (row.firstRequestUpperMs ?? NaN) - (row.firstRequestLowerMs ?? NaN),
+       );
+-    }
+-
+-    const yielded = objectMedians(samples.filter((row) => row.target === "yielded"));
+-    const pi = objectMedians(samples.filter((row) => row.target === "pi"));
+-    const ratio = median(yielded) / median(pi);
+-
+-    if (Number.isFinite(ratio)) {
+-      const low = Math.min(...yielded) / Math.max(...pi);
+-      const high = Math.max(...yielded) / Math.min(...pi);
+-
+       lines.push(
++        `Clock-offset interval width: median ${n(median(widths))} ms, max ${n(Math.max(...widths))} ms. ${rows.length - availableRows.length} samples lack consistent same-colo before/after probes and are excluded from this metric.`,
++        "Arrival times are corrected by the midpoint of intersected echo bounds; this assumes stable clock offsets among provider hosts in the same colo. Raw differences and all probes are retained.",
+         "",
+-        `Yielded ÷ pi: **${ratio.toFixed(2)}×**; observed ratio range **${low.toFixed(2)}–${high.toFixed(2)}×** (${yielded.length} Yielded / ${pi.length} pi Objects).`,
+       );
+     }
+-    lines.push("");
+-  }
+-  if (rows.some((row) => row.build === "baseline")) {
+-    lines.push(
+-      "Same-Object Yielded A/B (candidate ÷ baseline; <1 is faster):",
+-      "",
+-      "| Cell | Paired ratio, median | Baseline repeat drift, median / max |",
+-      "|---|---:|---:|",
+-    );
+     for (const [cell, samples] of group(
+-      rows.filter((row) => row.target === "yielded"),
+-      (row) => `${row.history}/${row.ttftMs}/${row.state}`,
++      measuredRows,
++      (row) => `${row.history} history · ${row.ttftMs} ms TTFT · ${row.state} · ${row.build}`,
+     )) {
+-      const ratios: number[] = [];
+-      const drifts: number[] = [];
++      lines.push(
++        cell,
++        "",
++        "| Target | Latency ms | Object median range | Repeat range, median / max | Objects |",
++        "|---|---:|---:|---:|---:|",
++      );
++      for (const target of TARGETS) {
++        const turns = samples.filter((row) => row.target === target);
++
++        if (!turns.length) continue;
++        const medians = mediansFor(turns);
+ 
+-      for (const turns of group(samples, (row) => row.object).values()) {
+-        const a = turns.filter((row) => row.build === "baseline");
+-        const b = turns.filter((row) => row.build === "candidate");
++        const spreads = [...group(turns, (row) => row.object).values()].map((items) => {
++          const values = items.flatMap((row) => (row[metric] === undefined ? [] : [row[metric]]));
+ 
+-        const epochs = [...group(a, (row) => String(row.epoch)).values()].map((epoch) =>
+-          median(objectMedians(epoch)),
++          return Math.max(...values) - Math.min(...values);
++        });
++
++        lines.push(
++          `| ${target} | ${interval(medians)} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
+         );
++      }
++
++      const yielded = mediansFor(samples.filter((row) => row.target === "yielded"));
++      const pi = mediansFor(samples.filter((row) => row.target === "pi"));
++      const ratio = median(yielded) / median(pi);
+ 
+-        ratios.push(median(objectMedians(b)) / median(objectMedians(a)));
+-        drifts.push(Math.max(...epochs) / Math.min(...epochs) - 1);
++      if (Number.isFinite(ratio)) {
++        const low = Math.min(...yielded) / Math.max(...pi);
++        const high = Math.max(...yielded) / Math.min(...pi);
++
++        lines.push(
++          "",
++          `Yielded ÷ pi: **${ratio.toFixed(2)}×**; observed ratio range **${low.toFixed(2)}–${high.toFixed(2)}×** (${yielded.length} Yielded / ${pi.length} pi Objects).`,
++        );
+       }
++      lines.push("");
++    }
++    if (measuredRows.some((row) => row.build === "baseline")) {
+       lines.push(
+-        `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
++        "Same-Object Yielded A/B (candidate ÷ baseline; <1 is faster):",
++        "",
++        "| Cell | Paired ratio, median | Baseline repeat drift, median / max | Complete pairs |",
++        "|---|---:|---:|---:|",
++      );
++      for (const [cell, samples] of group(
++        measuredRows.filter((row) => row.target === "yielded"),
++        (row) => `${row.history}/${row.ttftMs}/${row.state}`,
++      )) {
++        const ratios: number[] = [];
++        const drifts: number[] = [];
++
++        for (const turns of group(samples, (row) => row.object).values()) {
++          const a = turns.filter((row) => row.build === "baseline");
++          const b = turns.filter((row) => row.build === "candidate");
++
++          const epochs = [...group(a, (row) => String(row.epoch)).values()].map((epoch) =>
++            median(mediansFor(epoch)),
++          );
++
++          ratios.push(median(mediansFor(b)) / median(mediansFor(a)));
++          drifts.push(Math.max(...epochs) / Math.min(...epochs) - 1);
++        }
++        lines.push(
++          `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% | ${ratios.length} |`,
++        );
++      }
++      lines.push(
++        "",
++        "Do not claim gains smaller than the repeat/control spread. Histories grow across the balanced build sequence.",
++        "",
+       );
+     }
+-    lines.push(
+-      "",
+-      "Do not claim gains smaller than the repeat/control spread. Histories grow across the balanced build sequence.",
+-      "",
+-    );
+   }
+   if (result.cpu) {
+     lines.push(
+diff --git a/examples/durable-bench/deployed/run.ts b/examples/durable-bench/deployed/run.ts
+index 09e7a96c..346807f6 100644
+--- a/examples/durable-bench/deployed/run.ts
++++ b/examples/durable-bench/deployed/run.ts
+@@ -28,7 +28,7 @@ import {
+   workspace,
+ } from "./platform.ts";
+ import { median, table } from "./report.ts";
+-import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
++import { ImportResult, Metrics, type Query } from "./worker/protocol.ts";
+ 
+ const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
+   Object.keys(a).length === Object.keys(b).length &&
+@@ -68,7 +68,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+   const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const fs = yield* FileSystem.FileSystem;
+-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
++  const runName = `history-cost-${started.toString(36)}-${nonce().slice(0, 8)}`;
+   const output = join(workspace, "results", runName);
+   const lock = yield* Semaphore.make(1);
+ 
+@@ -113,7 +113,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+   let targetStarted = false;
+   let telemetryFrom = started;
+ 
+-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
++  yield* Console.error("Preparing fixtures in the verified benchmark account…");
+   yield* update((value) => value);
+ 
+   const finish = (exit: Exit.Exit<unknown, unknown>) =>
+@@ -190,7 +190,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ 
+   yield* Effect.gen(function* () {
+     yield* ensureVendor;
+-    const fixtures = yield* prepareFixtures({ targets: options.targets, sizes: options.sizes });
++    const prepared = yield* prepareFixtures({ targets: options.targets, sizes: options.sizes });
++    const { fixtures } = prepared;
+ 
+     yield* update((value) => ({
+       ...value,
+@@ -273,12 +274,23 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
+       targetStarted = true;
+ 
+-      const endpoint = yield* deploy.target(
+-        runName,
+-        compiled.file,
+-        compiled.sha256 + `-e${epoch}`,
+-        options.cpu,
+-      );
++      const deployMeasured = () =>
++        deploy.target(runName, compiled.file, compiled.sha256 + `-e${epoch}`, options.cpu);
++      let endpoint: string;
++
++      if (epoch === 0) {
++        const seed = yield* build(
++          join(privateDirectory, runName, "seed"),
++          "seed",
++          options.baseline,
++        );
++
++        yield* update((value) => ({
++          ...value,
++          seedBuild: { revision: seed.revision, sha256: seed.sha256 },
++        }));
++        endpoint = yield* deploy.target(runName, seed.file, seed.sha256 + "-seed", options.cpu);
++      } else endpoint = yield* deployMeasured();
+ 
+       const url = (path: string, query: Query) => {
+         const address = new URL(path, endpoint);
+@@ -292,6 +304,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
+       if (epoch === 0) {
+         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
++        const seedUploads = yield* Semaphore.make(1);
++        let seededCount = 0;
++
+         yield* Effect.forEach(
+           shuffle(cohorts),
+           (cohort) =>
+@@ -302,12 +317,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ 
+               if (!fixture) return yield* new BenchError({ message: "Missing fixture." });
+ 
+-              const seeded = (yield* request(
+-                url("/import", cohort),
+-                deploy.token,
+-                ImportResult,
+-                fixture,
+-                "10 minutes",
++              const snapshot = yield* prepared.snapshot(fixture, cohort.object);
++              const seeded = (yield* seedUploads.withPermit(
++                request(url("/import", cohort), deploy.token, ImportResult, snapshot, "10 minutes"),
+               )).value;
+ 
+               if (
+@@ -323,6 +335,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                   message:
+                     "Deployed seed fingerprint or complete table counts differ from the local fixture.",
+                 });
++              if (++seededCount % 10 === 0)
++                yield* Console.error(`Verified ${seededCount}/${cohorts.length} seeded Objects…`);
+             }).pipe(
+               Effect.tapCause((cause) =>
+                 update((value) => ({
+@@ -334,8 +348,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                 })),
+               ),
+             ),
+-          { concurrency: options.concurrency, discard: true },
++          {
++            concurrency: Math.min(4, options.concurrency),
++            discard: true,
++          },
+         );
++        endpoint = yield* deployMeasured();
+       }
+ 
+       yield* Console.error(
+@@ -345,12 +363,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+         shuffle(cohorts),
+         (cohort) =>
+           Effect.gen(function* () {
+-            // Discard constructor caches after import, and restart the same stored Object after every build change.
+-            const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
+-              .value;
+-
+-            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
+-              return yield* new BenchError({ message: "Cold abort was not acknowledged." });
+             let incarnation = "";
+             let directoryIncarnation: string | undefined;
+ 
+@@ -386,7 +398,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                   deploy.driver + "/measure",
+                   deploy.token,
+                   MeasureResponse,
+-                  { query, targetUrl: endpoint },
++                  { query, targetUrl: endpoint, reset: index === 0 },
+                 );
+ 
+                 const after = yield* Clock.currentTimeMillis;
+@@ -395,6 +407,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                   .value;
+ 
+                 const expected = references.get(query.history)?.get(query.sample);
++                const reset = measured.value.reset;
+ 
+                 if (
+                   !expected ||
+@@ -415,6 +428,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ 
+                 const coldVerified =
+                   index === 0 &&
++                  reset !== undefined &&
+                   metrics.identity.incarnation !== reset.before.incarnation &&
+                   metrics.identity.firstEntry &&
+                   metrics.identity.priorAlarms === 0;
+@@ -424,7 +438,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                 const actorVerified =
+                   cohort.target !== "tardie" ||
+                   (index === 0
+-                    ? metrics.directory?.incarnation !== reset.directoryBefore?.incarnation &&
++                    ? metrics.directory?.incarnation !== reset?.directoryBefore?.incarnation &&
+                       metrics.directory?.firstEntry === true &&
+                       metrics.directory.priorAlarms === 0
+                     : metrics.directory?.incarnation === directoryIncarnation);
+@@ -442,6 +456,28 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                   .map((call, i) => call.startMs - (metrics.calls[i]?.endMs ?? NaN));
+ 
+                 const lastEnd = metrics.calls.at(-1)?.endMs;
++                const first = metrics.calls[0]?.receipt;
++                if (!first)
++                  return yield* new BenchError({
++                    message: "First provider arrival receipt missing.",
++                  });
++                const clocks = measured.value.providerClocks.filter(
++                  (probe) => probe.colo !== null && probe.colo === first.colo,
++                );
++                // An echo arrival lies between the driver's send/receive timestamps.
++                // Intersect the bounds before and after the turn, allowing 2 ms for clock resolution.
++                // Reject cross-colo or inconsistent bounds rather than presenting false precision.
++                const offsetLow = Math.max(
++                  ...clocks.map((probe) => probe.arrivalMs - probe.receivedMs - 2),
++                );
++                const offsetHigh = Math.min(
++                  ...clocks.map((probe) => probe.arrivalMs - probe.sentMs + 2),
++                );
++                const firstRequestClockValid =
++                  clocks.some((probe) => probe.receivedMs <= measured.value.startedMs) &&
++                  clocks.some((probe) => probe.sentMs >= measured.value.observedMs) &&
++                  offsetLow <= offsetHigh;
++                const firstRequestRawMs = first.arrivalMs - measured.value.startedMs;
+ 
+                 yield* update((value) => ({
+                   ...value,
+@@ -451,6 +487,19 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+                           ...sample,
+                           status: "ok",
+                           driverMs: measured.value.driverMs,
++                          firstRequestRawMs,
++                          driverStartedMs: measured.value.startedMs,
++                          firstRequestArrivalMs: first.arrivalMs,
++                          firstRequestClockValid,
++                          providerColo: first.colo,
++                          providerClocks: measured.value.providerClocks,
++                          ...(firstRequestClockValid
++                            ? {
++                                firstRequestMs: firstRequestRawMs - (offsetLow + offsetHigh) / 2,
++                                firstRequestLowerMs: firstRequestRawMs - offsetHigh,
++                                firstRequestUpperMs: firstRequestRawMs - offsetLow,
++                              }
++                            : {}),
+                           ...(measured.value.admissionMs === undefined
+                             ? {}
+                             : { admissionMs: measured.value.admissionMs }),
+@@ -498,7 +547,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ }, Effect.scoped);
+ 
+ export const teardown = Effect.gen(function* () {
+-  const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const cleanup = yield* deploy.teardown;
+ 
+@@ -509,6 +557,6 @@ export const teardown = Effect.gen(function* () {
+ 
+   yield* save(join(workspace, "results", "cleanup.json"), result);
+   yield* Console.log(
+-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
++    "Cleanup verified: no history-cost Workers or Durable Object namespaces remain.",
+   );
+ });
+diff --git a/examples/durable-bench/deployed/stack.ts b/examples/durable-bench/deployed/stack.ts
+index 9a2ca2e2..b0ac3e5a 100644
+--- a/examples/durable-bench/deployed/stack.ts
++++ b/examples/durable-bench/deployed/stack.ts
+@@ -3,7 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
+ import { Config, Effect } from "effect";
+ 
+ export default Alchemy.Stack(
+-  "durable-bench",
++  "history-cost",
+   {
+     providers: Cloudflare.providers(),
+     state: Alchemy.localState(),
+@@ -37,25 +37,28 @@ export default Alchemy.Stack(
+     if (kind === "infrastructure") {
+       const prefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
+ 
+-      const provider = yield* Cloudflare.Worker("durable-bench-provider", {
++      const provider = yield* Cloudflare.Worker("history-cost-provider", {
+         ...options,
+         name: prefix + "-provider",
+         main: bundle + "/provider.mjs",
+         env,
+       });
+ 
+-      const driver = yield* Cloudflare.Worker("durable-bench-driver", {
++      const driver = yield* Cloudflare.Worker("history-cost-driver", {
+         ...options,
+         name: prefix + "-driver",
+         main: bundle + "/driver.mjs",
+         placement: { region: "aws:us-west-1" },
+-        env: { ...env, WORKERS_SUBDOMAIN: yield* Config.NonEmptyString("DURABLE_BENCH_SUBDOMAIN") },
++        env: {
++          ...env,
++          WORKERS_SUBDOMAIN: yield* Config.NonEmptyString("DURABLE_BENCH_SUBDOMAIN"),
++        },
+       });
+ 
+       return { driver: driver.url, provider: provider.url };
+     }
+ 
+-    const worker = yield* Cloudflare.Worker("durable-bench-target", {
++    const worker = yield* Cloudflare.Worker("history-cost-target", {
+       ...options,
+       name,
+       main: bundle,
+@@ -64,10 +67,10 @@ export default Alchemy.Stack(
+         ...env,
+         CPU: cpu,
+         PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
+-        YIELDED: Cloudflare.DurableObject("durable-bench-yielded", { className: "YieldedDO" }),
+-        PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
+-        ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
+-        THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
++        YIELDED: Cloudflare.DurableObject("history-cost-yielded", { className: "YieldedDO" }),
++        PI: Cloudflare.DurableObject("history-cost-pi", { className: "PiDO" }),
++        ACTORS: Cloudflare.DurableObject("history-cost-actors", { className: "ActorDO" }),
++        THREADS: Cloudflare.DurableObject("history-cost-threads", { className: "ThreadDO" }),
+       },
+     });
+ 
+diff --git a/examples/durable-bench/deployed/worker/fixture-worker.ts b/examples/durable-bench/deployed/worker/fixture-worker.ts
+index 1e99da66..17b73aba 100644
+--- a/examples/durable-bench/deployed/worker/fixture-worker.ts
++++ b/examples/durable-bench/deployed/worker/fixture-worker.ts
+@@ -4,11 +4,8 @@ import { Effect, Schema } from "effect";
+ 
+ import { fingerprint } from "../../src/plan.ts";
+ import { tables } from "../../src/serve.ts";
+-import { BulkFixture, SqlDump } from "./protocol.ts";
+-import { exportCanonical, importCanonical, transcript } from "./storage.ts";
+-import { YieldedDO as ProductionYieldedDO } from "./yielded.ts";
+-
+-const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
++import { BulkFixture } from "./protocol.ts";
++import { exportCanonical, exportRows, importCanonical, transcript } from "./storage.ts";
+ 
+ async function transfer(storage: DurableObjectStorage, request: Request) {
+   const url = new URL(request.url);
+@@ -17,7 +14,9 @@ async function transfer(storage: DurableObjectStorage, request: Request) {
+     const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
+ 
+     if (!fixture.archive) throw new Error("Missing canonical archive");
+-    await Effect.runPromise(importCanonical(storage, fixture.archive, "main"));
++    await Effect.runPromise(
++      importCanonical(storage, fixture.archive, url.searchParams.get("object") ?? "main"),
++    );
+   }
+ 
+   const target = Schema.decodeUnknownSync(BulkFixture.fields.target)(
+@@ -30,59 +29,10 @@ async function transfer(storage: DurableObjectStorage, request: Request) {
+       tables: tables(storage.sql),
+       fingerprint: await fingerprint(transcript(storage.sql, target)),
+     });
+-  if (url.pathname === "/import")
+-    return Response.json({
+-      tables: tables(storage.sql),
+-      fingerprint: await fingerprint(transcript(storage.sql, target)),
+-    });
+   const sql = storage.sql;
+ 
+-  const schema = sql
+-    .exec<{ name: string; sql: string }>(
+-      "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY rowid",
+-    )
+-    .toArray();
+-
+-  const dump = Schema.decodeUnknownSync(SqlDump)({
+-    tables: schema.map((table) => {
+-      const columns = sql
+-        .exec<{ name: string }>(`PRAGMA table_info(${quote(table.name)})`)
+-        .toArray()
+-        .map((column) => column.name);
+-
+-      return {
+-        ...table,
+-        columns,
+-        rows: sql
+-          .exec(`SELECT * FROM ${quote(table.name)}`)
+-          .toArray()
+-          .map((row) =>
+-            columns.map((column) => {
+-              const value = row[column];
+-
+-              return value instanceof ArrayBuffer
+-                ? {
+-                    blob: btoa(
+-                      Array.from(new Uint8Array(value), (byte) => String.fromCharCode(byte)).join(
+-                        "",
+-                      ),
+-                    ),
+-                  }
+-                : value;
+-            }),
+-          ),
+-      };
+-    }),
+-    indexes: sql
+-      .exec<{ sql: string }>(
+-        "SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'",
+-      )
+-      .toArray()
+-      .map((row) => row.sql),
+-  });
+-
+   return Response.json({
+-    dump,
++    dump: exportRows(storage),
+     tables: tables(sql),
+     ...(url.searchParams.get("actor") === "true"
+       ? {}
+@@ -97,11 +47,8 @@ class FixtureDO extends DurableObject {
+   alarm() {}
+ }
+ 
+-export class NormalizedYieldedDO extends ProductionYieldedDO {
+-  override fetch(request: Request) {
+-    return transfer(this.ctx.storage, request);
+-  }
+-}
++/** Import fixtures with no running ThreadObject or maintenance alarm. */
++export class NormalizedYieldedDO extends FixtureDO {}
+ 
+ export class YieldedDO extends FixtureDO {}
+ export class PiDO extends FixtureDO {}
+@@ -115,7 +62,9 @@ export default {
+     const actor = url.searchParams.get("actor") === "true";
+ 
+     return env.OBJECT.getByName(
+-      target === "tardie" && !actor ? JSON.stringify(["bench-agent", "main", "bench"]) : "main",
++      target === "tardie" && !actor
++        ? JSON.stringify(["bench-agent", "main", "bench"])
++        : (url.searchParams.get("object") ?? "main"),
+     ).fetch(request);
+   },
+ };
+diff --git a/examples/durable-bench/deployed/worker/host.ts b/examples/durable-bench/deployed/worker/host.ts
+index 5ca1a14c..87099398 100644
+--- a/examples/durable-bench/deployed/worker/host.ts
++++ b/examples/durable-bench/deployed/worker/host.ts
+@@ -49,31 +49,40 @@ export class Host {
+ 
+     if (query.target !== this.target) throw new Error("Target mismatch");
+     if (url.pathname === "/identity") return Response.json(this.meter.identity());
++    if (url.pathname === "/clock")
++      return fetch(new URL("/echo", this.env.PROVIDER_URL), {
++        headers: { authorization: `Bearer ${this.env.BENCH_TOKEN}`, "cache-control": "no-store" },
++        signal: AbortSignal.timeout(10_000),
++      });
+     if (url.pathname === "/cold") {
+       await this.ctx.storage.sync();
+       this.ctx.abort(COLD_ABORT);
+     }
+     try {
+       if (url.pathname === "/import") {
+-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
++        // Prevent alarm/storage interleaving during import and verification. This gate is seed-only;
++        // the controller evicts the Object before every measured build.
++        return this.ctx.blockConcurrencyWhile(async () => {
++          const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
+ 
+-        if (fixture.target !== query.target || fixture.history !== query.history)
+-          throw new Error("Fixture/query mismatch");
+-        if (fixture.mode === "replay" && fixture.target !== "yielded")
+-          throw new Error("Only Yielded supports the fixture replay fallback");
+-        await handlers.import(fixture, query);
+-        const verified = await Effect.runPromise(verifyFixture(this.ctx.storage, fixture));
++          if (fixture.target !== query.target || fixture.history !== query.history)
++            throw new Error("Fixture/query mismatch");
++          if (fixture.mode === "replay" && fixture.target !== "yielded")
++            throw new Error("Only Yielded supports the fixture replay fallback");
++          await handlers.import(fixture, query);
++          const verified = await Effect.runPromise(verifyFixture(this.ctx.storage, fixture));
+ 
+-        return Response.json({
+-          ok: true,
+-          target: query.target,
+-          history: query.history,
+-          ...verified,
+-          mode: fixture.mode,
+-          ...(fixture.fallbackReason === undefined
+-            ? {}
+-            : { fallbackReason: fixture.fallbackReason }),
+-          identity: this.meter.identity(),
++          return Response.json({
++            ok: true,
++            target: query.target,
++            history: query.history,
++            ...verified,
++            mode: fixture.mode,
++            ...(fixture.fallbackReason === undefined
++              ? {}
++              : { fallbackReason: fixture.fallbackReason }),
++            identity: this.meter.identity(),
++          });
+         });
+       }
+       if (url.pathname === "/run") {
+diff --git a/examples/durable-bench/deployed/worker/protocol.ts b/examples/durable-bench/deployed/worker/protocol.ts
+index 281e4dcb..4361be2c 100644
+--- a/examples/durable-bench/deployed/worker/protocol.ts
++++ b/examples/durable-bench/deployed/worker/protocol.ts
+@@ -52,6 +52,7 @@ export const SqlTable = Schema.Struct({
+ export const SqlDump = Schema.Struct({
+   tables: Schema.Array(SqlTable),
+   indexes: Schema.Array(Schema.String),
++  triggers: Schema.optionalKey(Schema.Array(Schema.String)),
+ });
+ 
+ export type SqlDump = typeof SqlDump.Type;
+@@ -67,6 +68,8 @@ export const BulkFixture = Schema.Struct({
+   tables: Counts,
+   mode: FixtureMode,
+   fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
++  destination: Schema.optionalKey(Schema.NonEmptyString),
++  snapshotDigest: Schema.optionalKey(Schema.NonEmptyString),
+   // Canonical pages stay encoded until the storage importer decodes their schema.
+   archive: Schema.optionalKey(Schema.Array(Schema.Json)),
+   thread: Schema.optionalKey(SqlDump),
+diff --git a/examples/durable-bench/deployed/worker/storage.ts b/examples/durable-bench/deployed/worker/storage.ts
+index b3053419..f17220f5 100644
+--- a/examples/durable-bench/deployed/worker/storage.ts
++++ b/examples/durable-bench/deployed/worker/storage.ts
+@@ -10,7 +10,7 @@ import { Prompt } from "effect/ai";
+ 
+ import { fingerprint, type Message } from "../../src/plan.ts";
+ import { tables } from "../../src/serve.ts";
+-import { expectedSeed, type BulkFixture, type SqlDump, type Target } from "./protocol.ts";
++import { expectedSeed, SqlDump, type BulkFixture, type Target } from "./protocol.ts";
+ 
+ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureError", {
+   message: Schema.String,
+@@ -45,9 +45,72 @@ export const importRows = (storage: DurableObjectStorage, dump: SqlDump): void =
+     }
+     for (const index of dump.indexes)
+       storage.sql.exec(index.replace(/^CREATE (UNIQUE )?INDEX /i, "CREATE $1INDEX IF NOT EXISTS "));
++    for (const trigger of dump.triggers ?? []) storage.sql.exec(trigger);
+   });
+ };
+ 
++/** Exact SQLite snapshot of a fixture already imported through the canonical API. */
++export const exportRows = (storage: DurableObjectStorage): SqlDump => {
++  const sql = storage.sql;
++
++  const schema = sql
++    .exec<{ name: string; sql: string }>(
++      "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY rowid",
++    )
++    .toArray();
++
++  return Schema.decodeUnknownSync(SqlDump)({
++    tables: schema.map((table) => {
++      const columns = sql
++        .exec<{ name: string }>(`PRAGMA table_info(${quote(table.name)})`)
++        .toArray()
++        .map((column) => column.name);
++
++      return {
++        ...table,
++        columns,
++        rows: sql
++          .exec(`SELECT * FROM ${quote(table.name)}`)
++          .toArray()
++          .map((row) =>
++            columns.map((column) => {
++              const value = row[column];
++
++              return value instanceof ArrayBuffer
++                ? {
++                    blob: btoa(
++                      Array.from(new Uint8Array(value), (byte) => String.fromCharCode(byte)).join(
++                        "",
++                      ),
++                    ),
++                  }
++                : value;
++            }),
++          ),
++      };
++    }),
++    triggers: sql
++      .exec<{ sql: string }>(
++        "SELECT sql FROM sqlite_master WHERE type='trigger' AND sql IS NOT NULL ORDER BY rowid",
++      )
++      .toArray()
++      .map((row) => row.sql),
++    indexes: sql
++      .exec<{ sql: string }>(
++        "SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'",
++      )
++      .toArray()
++      .map((row) => row.sql),
++  });
++};
++
++export const snapshotDigest = async (dump: SqlDump): Promise<string> => {
++  const bytes = new TextEncoder().encode(canonicalJson(dump));
++  const digest = await crypto.subtle.digest("SHA-256", bytes);
++
++  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
++};
++
+ const Manifest = Schema.Struct({
+   format: ThreadArchive.fields.format,
+   threadId: ThreadArchive.fields.threadId,
+diff --git a/examples/durable-bench/third-party/src/deployed/index.ts b/examples/durable-bench/third-party/src/deployed/index.ts
+index 3f62478b..2f6a4b5d 100644
+--- a/examples/durable-bench/third-party/src/deployed/index.ts
++++ b/examples/durable-bench/third-party/src/deployed/index.ts
+@@ -115,7 +115,7 @@ export default {
+ 
+       if (mutating && request.method !== "POST")
+         return new Response("POST required", { status: 405 });
+-      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics"].includes(url.pathname))
++      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/clock"].includes(url.pathname))
+         return new Response("not found", { status: 404 });
+ 
+       const actor =
+diff --git a/examples/durable-bench/third-party/src/deployed/tardie.ts b/examples/durable-bench/third-party/src/deployed/tardie.ts
+index 2334427f..71a0396e 100644
+--- a/examples/durable-bench/third-party/src/deployed/tardie.ts
++++ b/examples/durable-bench/third-party/src/deployed/tardie.ts
+@@ -249,7 +249,7 @@ export class ThreadDO extends actorWorker.ThreadObject {
+   }
+   override fetch(request: Request) {
+     if (
+-      !["/identity", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
++      !["/identity", "/import", "/run", "/metrics", "/cold", "/clock"].includes(new URL(request.url).pathname)
+     )
+       return super.fetch(request);
+ 
+diff --git a/examples/durable-bench/vite.config.ts b/examples/durable-bench/vite.config.ts
+index 3e0dc6e2..4bcf7a44 100644
+--- a/examples/durable-bench/vite.config.ts
++++ b/examples/durable-bench/vite.config.ts
+@@ -3,7 +3,11 @@ import { defineConfig } from "vite-plus";
+ export default defineConfig({
+   run: {
+     tasks: {
+-      deployed: { command: "direnv exec . vp exec bun deployed/main.ts", cache: false },
++      check: { command: "tsc --noEmit -p tsconfig.json", cache: false },
++      deployed: {
++        command: "direnv exec /path/to/agent vp exec bun deployed/main.ts",
++        cache: false,
++      },
+       seed: { command: "bun bench/seed.ts", cache: false },
+       vendor: { command: "bun install --cwd third-party", cache: false },
+     },
+diff --git a/examples/durable-bench/deployed/worker/offline-yielded.ts b/examples/durable-bench/deployed/worker/offline-yielded.ts
+new file mode 100644
+index 00000000..e79dc485
+--- /dev/null
++++ b/examples/durable-bench/deployed/worker/offline-yielded.ts
+@@ -0,0 +1,37 @@
++/** Setup-only canonical import. Timed builds always export the production ThreadObject. */
++import { DurableObject } from "cloudflare:workers";
++
++import { Host } from "./host.ts";
++import type { Env } from "./protocol.ts";
++import { exportRows, importRows, snapshotDigest } from "./storage.ts";
++
++export { agent, definitions } from "./yielded.ts";
++
++export class YieldedDO extends DurableObject<Env> {
++  private readonly host: Host;
++  constructor(ctx: DurableObjectState, env: Env) {
++    super(ctx, env);
++    this.host = new Host(ctx, env, "yielded");
++  }
++  override fetch(request: Request): Promise<Response> {
++    return this.host.fetch(request, {
++      import: async (fixture, query) => {
++        if (
++          fixture.mode !== "import" ||
++          !fixture.thread ||
++          !fixture.snapshotDigest ||
++          fixture.destination !== query.object
++        )
++          throw new Error("Offline setup requires an addressed, canonically imported snapshot");
++        if ((await snapshotDigest(fixture.thread)) !== fixture.snapshotDigest)
++          throw new Error("Fixture snapshot transport digest mismatch");
++        importRows(this.ctx.storage, fixture.thread);
++        if ((await snapshotDigest(exportRows(this.ctx.storage))) !== fixture.snapshotDigest)
++          throw new Error("Restored SQLite snapshot differs from its verified source");
++      },
++    });
++  }
++  override alarm(): never {
++    throw new Error("A quiesced fixture must not have a running maintenance alarm");
++  }
++}

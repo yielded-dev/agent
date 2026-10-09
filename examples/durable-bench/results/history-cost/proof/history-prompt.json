@@ -1,0 +1,9 @@
+{
+  "valid": 5,
+  "rejected": 10,
+  "nativeValuesEqual": true,
+  "nativeEncodingEqual": true,
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+  "privateProofSourceSha256": "367ae90c7fe7940d0a1d9d963728558c1b948f36bd1dc7cf768b313de5ae65be"
+}

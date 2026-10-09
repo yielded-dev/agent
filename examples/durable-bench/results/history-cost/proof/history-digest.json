@@ -1,0 +1,11 @@
+{
+  "cases": 24,
+  "accepted": 10,
+  "rejected": 14,
+  "canonicalBytesEqual": true,
+  "digestsEqual": true,
+  "successClassificationEqual": true,
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "442c988c7485c6b088a10f56547daa70668fc0d6",
+  "privateProofSourceSha256": "9b0fb156f0a25b46ab0c9679286bf575802ab18bff490026996032f60df6b5b4"
+}

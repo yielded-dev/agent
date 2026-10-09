@@ -11,9 +11,10 @@ The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #
 | Candidate | Commit | Change | Status |
 |---|---|---|---|
 | Single message-schema traversal | `40485f33` | Remove the outer encoded-message validation while retaining the native decoder | No demonstrated warm gain; no PR |
-| Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Deployed measurement in progress |
+| Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Counts and full gate passed; deployed setup failures retained |
 | Terminal filtering | `4417a095` | Omit a duplicate settlement when an earlier terminal record is in the logical read range | Counts complete; timing pending |
 | Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Counts and full gate passed; deployed timing pending |
+| Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Exact digest equivalence, counts and full gate passed; deployed timing pending |
 
 Canonical append/import/recovery codecs, hash-chain verification, continuation verification, fencing, claims, leases, Unknown handling and confirmed durability remain in place. No warm in-memory context cache is introduced.
 
@@ -49,7 +50,9 @@ Native constructor restoration removes the second message-schema decode while re
 
 A separate identical digest-scope hook on both builds attributes 27,703 → 110,703 Schema nodes and 2,753 → 10,861 Effects to history-digest preparation from 250 → 1,000 turns. That explains 83,000 of the 84,000 extra Schema nodes outside readPrompt. Constructor restoration does not change digest preparation. Removing the extra scope counters exactly reproduces the previous count maps and model snapshots.
 
-Reproduction, exact counters, module/capture hashes and limitations: [baseline/codec/pi](counts/codec-and-pi/REPORT.md), [input filter](counts/prompt-reads/REPORT.md), [terminal filter](counts/terminal-reads/REPORT.md), [first-model breakdown](counts/first-model/REPORT.md). Each bundle has an explicit publication allowlist and SHA-256 manifest. Large archives, databases and raw capture logs remain outside this branch.
+Direct history digest encoding removes the Prompt wrapper’s second traversal while retaining upstream message encoding and canonical JSON. At 50/250/1,000/3,500 turns, digest Schema visits fall 5,601 → 3,507 / 27,703 → 17,355 / 110,703 → 69,355 / 387,401 → 242,707 (about 37%). First-model Schema visits fall by 9.9–11.4%; Effect evaluations change by only 6–8. SQL, bytes, record/projection counts and fingerprints remain identical. This isolates a second candidate; it is not a latency claim.
+
+Reproduction, exact counters, module/capture hashes and limitations: [baseline/codec/pi](counts/codec-and-pi/REPORT.md), [input filter](counts/prompt-reads/REPORT.md), [terminal filter](counts/terminal-reads/REPORT.md), [first-model breakdown](counts/first-model/REPORT.md), [native constructor restoration and digest scope](counts/prompt-hydration/REPORT.md), [direct digest encoding](counts/digest-encoding/REPORT.md). Each bundle has an explicit publication allowlist and SHA-256 manifest. Large archives, databases and raw capture logs remain outside this branch.
 
 ## Deployed experiments
 
@@ -66,15 +69,21 @@ The first completed experiment removed only the outer encoded-message traversal.
 
 These are complete-turn measurements, before provider-arrival retention was added. Warm baseline epoch drift medians were 10.5% and 5.3%; apparent gains were within the control/repeat spread. The change is not proposed as a PR. [Compact samples and outcomes](runs/codec.json), [full small table](runs/codec.md).
 
-First-arrival measurements use the provider's receipt timestamp and the driver's submission start. Three echo probes before and after each turn bound the driver/provider offset, outside the timer and without contacting the measured Object. Corrected values use the interval midpoint and require consistent same-colo bounds across the turn. They assume stable provider-host clock offsets within that colo; raw differences and probe evidence are retained. Invalid clock checks are excluded from this metric and explicitly counted.
+First-arrival measurements use the provider's receipt timestamp and the driver's submission start. Three echo probes before and after each turn travel through the measured Object to bound the driver/provider offset. Pre-probes finish before cold eviction and the timer; post-probes follow the completion timestamp. No Object call occurs between the cold abort and the timed submission. Corrected values use the interval midpoint and require consistent same-colo bounds across the turn. They assume stable provider-host clock offsets within that colo; raw differences and probe evidence are retained. Invalid clock checks are excluded from this metric and explicitly counted. Ratios require complete epoch/repeat coverage for both builds on each Object; incomplete pairs are excluded and counted. The earlier direct driver-to-provider probes reached different colos from model requests, invalidating 24 of 32 non-warmup timestamps in the [one-Object smoke](runs/seed-gate-clock-smoke.json). That smoke makes no latency claim.
 
 ### Setup outcomes retained
 
 - [3,500-turn import](runs/import-3500-memory-limit.json): isolate memory reset before any timed samples. Target cleanup verified.
 - [Required-size matrix import](runs/import-250-storage-timeout.json): storage timeout/reset during a 250-turn seed, before timing. Target cleanup verified.
+- [First-arrival matrix import](runs/first-arrival-input-seed-timeout.json): another storage timeout/reset during a 250-turn seed, before timing. Target cleanup verified. Its serial 250/1,000 setup ran for about 16 minutes; observed import fetch CPU was under one second while separate alarm invocations consumed tens of seconds. This suggested alarm/storage interleaving, but does not prove partial canonical rows were visible.
+- [Native-client import](runs/native-import-seed-timeout.json): a 1,000-turn seed timed out despite using the production SQL client and mutation gate. Observed fetch CPU was 139 ms and a concurrent alarm used 44,490 ms; no timed turn ran. Target cleanup verified.
 - [1,000-turn capability probe](runs/import-1000-smoke.json): canonical import and all 24 measured/warmup turns succeeded. One Object per target and one warm repeat; diagnostic only, not an improvement claim.
 
 Every controller/sample failure and every observed non-ok invocation outcome is kept in compact run evidence. Telemetry can be delayed or incomplete; missing CPU rows are not treated as zero. Imported histories omit old Attempt rows through the real importer, so normalized inventories are compared; claims or ownership rows are never copied to bypass that normalization. No failed or uncertain measured input is replayed.
+
+The seed gate and native-client changes did not eliminate setup timeouts. A subsequent [offline canonical import](runs/offline-import-seed-timeout.json) also timed out at 1,000 turns with no alarm observed: fetch CPU was 70,552 ms over 85,588 ms elapsed. This refutes alarms as a sufficient explanation of the timeout. No timed sample ran; target cleanup was verified. The current harness canonically imports every destination fixture locally, then deploys an explicit offline seed bundle to restore its exact SQLite snapshot into a fresh Object. It verifies the source and restored SHA-256, complete normalized table counts, and transcript fingerprints, including all indexes and triggers. Old Attempts and ownership were normalized by the real importer; no canonical payload is rewritten. The seed class cannot execute native submission RPCs. Production `ThreadObject` then replaces it on the same Worker, namespace and Object names before timing. Native gates, alarms, confirmed writes and recovery remain unchanged. [Adaptation patch, method and snapshot proof](harness/README.md).
+
+Pre-probes instantiate the production host before the timed cold eviction. “Cold” therefore means a fresh production instance over the prepared store. Native initialization, gates, alarms, submission, settlement and recovery stay active during all measured builds. The seed bundle hash and framework revision are retained alongside the two measured build hashes.
 
 ## Validation and cleanup
 

@@ -1,0 +1,40 @@
+{
+  "snapshotRoundtripVerified": true,
+  "results": [
+    {
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "canonicalRows": 603,
+      "snapshotDigest": "fe7175377659bf8a30b36bc6f06a7f6b77113ebf5cdd20ac6cbeca7e869ff241",
+      "indexes": 102,
+      "triggers": 12
+    },
+    {
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "canonicalRows": 3002,
+      "snapshotDigest": "31d487a556d3d0e11fa28966fa649fe1c347dd8c27b5cdb8da6e2a558c25a8ca",
+      "indexes": 102,
+      "triggers": 12
+    },
+    {
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "canonicalRows": 12002,
+      "snapshotDigest": "83e14da8b11f4371a06d4f5154cefd60887c06954720777e2eb6378f1339385b",
+      "indexes": 102,
+      "triggers": 12
+    },
+    {
+      "history": 3500,
+      "fingerprint": "0a8c8e4b0d9a0794",
+      "canonicalRows": 42003,
+      "snapshotDigest": "7b070e6caa132e99eab5ac9577ec29486aebc6089d2cd0cc52053c9f007ac5b1",
+      "indexes": 102,
+      "triggers": 12
+    }
+  ],
+  "commandExitCode": 0,
+  "sourceSha256": "434d3d1bf029ca6695985ababf9d2753234b9e46e4f50035aa0a7581e29cb954",
+  "note": "Each destination was canonically imported locally, then restored into a fresh Object. Hashes include import-time operational timestamps and are expected to differ across separate preparations."
+}
