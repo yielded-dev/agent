@@ -160,6 +160,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         consecutiveRounds: 3,
         measuredObjectsTouched: false,
       },
+      measuredBuildReadiness: {
+        propagationWaitMs: 60000,
+        ingresses: ["controller", "driver"],
+        consecutiveRounds: 10,
+        measuredObjectsTouched: false,
+      },
     },
     sequence: [...sequence],
     builds: [],
@@ -465,10 +471,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         let health: typeof Health.Type | undefined;
         let last = "No matching health response.";
         const readinessFailures: NonNullable<Upload["readinessFailures"]>[number][] = [];
+        const requiredRounds = phase === "seed" ? 3 : 10;
 
         // New Worker routes and their Object bindings propagate separately. These disposable
         // identity probes are used only for the untimed seed version, never a measured epoch.
-        if (phase === "seed") yield* Effect.sleep("30 seconds");
+        // A previous build served measured pi requests after three matching health rounds.
+        // Wait before stateless readiness; never probe or retry a measured Object here.
+        yield* Effect.sleep(phase === "seed" ? "30 seconds" : "60 seconds");
 
         for (let attempt = 0; attempt < 30; attempt++) {
           const [controller, probe] = yield* Effect.all(
@@ -579,7 +588,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           ) {
             health = probe.value.value;
             consecutive++;
-            if (consecutive === 3) break;
+            if (consecutive === requiredRounds) break;
           } else {
             consecutive = 0;
             last =
@@ -589,7 +598,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           }
           yield* Effect.sleep("1 second");
         }
-        if (consecutive !== 3 || health === undefined)
+        if (consecutive !== requiredRounds || health === undefined)
           return yield* new BenchError({
             message: `Target build readiness failed; no Object lookup was requested. ${last}`,
           });
