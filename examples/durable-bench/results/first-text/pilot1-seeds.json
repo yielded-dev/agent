@@ -1,0 +1,17 @@
+[
+  {
+    "framework": "pi",
+    "history": 50,
+    "index": 0,
+    "object": "first-text-f9112703-pilot1-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4"
+  },
+  {
+    "framework": "yielded",
+    "history": 50,
+    "index": 0,
+    "object": "first-text-f9112703-pilot1-h50-d400-o0",
+    "afterSequence": 603,
+    "fingerprint": "b017b487524e44a4"
+  }
+]

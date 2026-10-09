@@ -1,0 +1,74 @@
+{
+  "50/m0/0": {
+    "fingerprint": "b026ded91606964df840cfd42453473e6feb0cae902e3461fd0c466b45ac4260",
+    "framework": "yielded"
+  },
+  "50/m0/1": {
+    "fingerprint": "274339a9b61f898bf1a856812be037a56dfac6ab7feed5147f1f09046450fd12",
+    "framework": "yielded"
+  },
+  "50/m0/2": {
+    "fingerprint": "f068d140ae84824975c4fa939d06534f68cc689ac74b432da2af003a5319a0c9",
+    "framework": "yielded"
+  },
+  "50/m0/3": {
+    "fingerprint": "18ecd5d4acf12cdba57e5050d6c4a3e122a17c1d748365ec99f79dd3ff82b8b4",
+    "framework": "yielded"
+  },
+  "50/m0/4": {
+    "fingerprint": "d07a1df9801ec4a3b90875787be49946cd14889a7e862336482b123b8a7dd556",
+    "framework": "yielded"
+  },
+  "50/m0/5": {
+    "fingerprint": "d0021350734c36a7bf7279f3600f607bf5a6b55c830856f8d8e97a2c9470918a",
+    "framework": "yielded"
+  },
+  "50/m0/6": {
+    "fingerprint": "e7459fd1af8f731e504e54b262227c0ff6ece9c4872d65f430145c75a3932141",
+    "framework": "yielded"
+  },
+  "50/m0/7": {
+    "fingerprint": "f8d26fe6775755a1089a408850cd98e7a8c146182fa1cb4a5b9be7bbd0bef654",
+    "framework": "yielded"
+  },
+  "50/m0/8": {
+    "fingerprint": "dc9460ba1e603b7f3d3ee826056c124c6da57ad7b3cf81c5b1fee30170cabfd9",
+    "framework": "yielded"
+  },
+  "50/m1/0": {
+    "fingerprint": "f3e58da28de2da42f0907b905faaaaae7393beba6f922fcb8081985fd3ef8d57",
+    "framework": "yielded"
+  },
+  "50/m1/1": {
+    "fingerprint": "3250be33dc90f524065e42f26994d94fae08945338fb0d7b07fa0c1eb6287095",
+    "framework": "yielded"
+  },
+  "50/m1/2": {
+    "fingerprint": "8bf356e0f8a0a949f530a1cb8f5250313946f532c1cb623ee89f5aac6926c508",
+    "framework": "yielded"
+  },
+  "50/m1/3": {
+    "fingerprint": "10ffc73eabf874b761c36c5f8f4ff7df5f9f47bc2315d3e225add9149ef83a70",
+    "framework": "yielded"
+  },
+  "50/m1/4": {
+    "fingerprint": "fcbb37fd1b3870e8bbd062b191ebd956a9b798a06908ad5d0acebb680cd68af1",
+    "framework": "yielded"
+  },
+  "50/m1/5": {
+    "fingerprint": "6ae15083634e3e693d0319a92c9028a044270ac47813ac9845aad1d46048161d",
+    "framework": "yielded"
+  },
+  "50/m1/6": {
+    "fingerprint": "4606cd818cbf544a22411c976d6ea822f9c3a376832611c7a162c3d65b587e0c",
+    "framework": "yielded"
+  },
+  "50/m1/7": {
+    "fingerprint": "2334eec372b98d229edd05a0e64e36f03bd2175d0b5ff3ac13de3f7a888e00dc",
+    "framework": "yielded"
+  },
+  "50/m1/8": {
+    "fingerprint": "ae821f7c5c6507223c425742a1c7ed95504a07cc697de1c990330cc673689294",
+    "framework": "yielded"
+  }
+}

@@ -1,0 +1,1 @@
+{"stage":"measure","phase":"pilot2","framework":"yielded","history":50,"index":0,"object":"first-text-f9112703-pilot2-h50-d400-o0","afterSequence":603,"sample":"m0","error":"Error: Model-visible request parity failed: 50/m0/0","noRetry":true}

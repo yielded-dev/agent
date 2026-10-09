@@ -1,4 +1,5 @@
 dist
 fixtures
-results
+results/*
+!results/first-text/
 third-party/node_modules

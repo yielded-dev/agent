@@ -1,0 +1,258 @@
+[
+  {
+    "name": "provider",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "91ce757ae7600b866700ef970f13e52f9c1aa38ae0fa2c40477eedc4e062b43c",
+    "bundleBytes": 560107,
+    "gzipBytes": 114368,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "88080c8a5b6d67ed57455c28d6071a24ad8a7ceef3d17ba170408165baa0d5fa",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "9b8394183a55a7f6c458932065bdcc87a7cc0220dc670747186fe418f63d9be5",
+    "bundleBytes": 5841219,
+    "gzipBytes": 1107895,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "4a8b206e82dd1cc92a02f8be828ea05f8fc45967690c454710b7b1020e5eb920",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "4797c07643b3fc6ecb7acf23fbf41cb6d2f2095b6498d1cf7dccd13a75a86405",
+    "bundleBytes": 5843676,
+    "gzipBytes": 1108463,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "9d06814e1fc087dd7a6730cfe93485ea7e530b29a782f6077fd6912b360873fb",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "provider",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "9e8a8864f084e2a30339e624eb8a38e7e4506f161c98884e616799fb1cb5e992",
+    "bundleBytes": 560697,
+    "gzipBytes": 114455,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "af31ac721511e343a51a81661cb7391dfbc98002ea5247d3599c3b3c4bcc188b",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "provider",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "fb80fd2ff3fbe80e3e4dfae4b45d722d72001561738938db08de6a3e022a3800",
+    "bundleBytes": 561795,
+    "gzipBytes": 114722,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "de6722c0f5c772c6ba59a037230c5980a551d54e0fa848a5a9ed98faa83774be",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "2ff64934df4d7a98c0edd31a80ae6e1bf3e4236481d327ff37ea66034695734b",
+    "bundleBytes": 5311066,
+    "gzipBytes": 1000855,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "b3530fd52767d096e4e66ce107a4d275386d7ec9966ee133dd1b6c709f9cbe2b",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "79350744aeb684f784cb4de3a54a3aeb64a3c7d9da6a4d993466dea3be48059b",
+    "bundleBytes": 5311498,
+    "gzipBytes": 1000938,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "bfa1e0f3235eabb99b73c155e338e73598c50928c80a50e619e7602c5c9533fb",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "c53cd159208c16c794739da2e35c82df17e6366c",
+    "dirty": true,
+    "bundleSha256": "4bf5ad1a12153a3148d72f9f3211dc70395827fc760357e5003c2478408017f4",
+    "bundleBytes": 5311355,
+    "gzipBytes": 1000906,
+    "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "f6ddd4da3912664c54b7944133d4a95eb88ca34b9104638f970bb9a75395f1ca",
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "effectVersion": "4.0.0"
+  }
+]
