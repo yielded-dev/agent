@@ -1,3 +1,12 @@
 [install]
+linker = "isolated"
+globalStore = true
+
 # Only explicit workspace: dependencies use local framework source.
 linkWorkspacePackages = false
+
+# Keep mutable native compiler packages checkout-local through trustedDependencies.
+# React stays local so its consumers resolve this checkout's React declarations.
+# The explicit trust list also preserves Bun's default trusted packages in this lockfile.
+
+# safe-buffer needs the local hoisted buffer polyfill in browser-targeted Worker bundles.
