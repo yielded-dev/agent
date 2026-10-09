@@ -166,6 +166,11 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         consecutiveRounds: 10,
         measuredObjectsTouched: false,
       },
+      paddingPreparation: {
+        when: "label changes",
+        paddingBytesMeasuredAt: "preparation",
+        currentDatabaseBytesMeasuredAfterEveryTurn: true,
+      },
     },
     sequence: [...sequence],
     builds: [],
@@ -689,14 +694,16 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     if (seedFailed)
       return yield* new BenchError({ message: "Seeding failed; no measured epoch was uploaded." });
 
+    const paddingByObject = new Map<string, PaddingResult>();
+
     for (const [epoch, label] of sequence.entries()) {
       const resets = new Map<string, { readonly build: string; readonly response: ColdResult }>();
       let resetFailed = false;
-      const paddingByObject = new Map<string, PaddingResult>();
 
       // Prepare every database before old-code resets and uploads. Never touch an Object
-      // between its fresh upload and the measured first turn.
-      if (options.storageProbe !== "none") {
+      // between its fresh upload and the measured first turn. Repeated labels retain their
+      // existing padding; measured turns append canonical facts without changing that table.
+      if (options.storageProbe !== "none" && (epoch === 0 || sequence[epoch - 1] !== label)) {
         yield* Console.error(`Preparing ${label} storage on old builds before all resets…`);
         yield* Effect.forEach(
           cohorts,
