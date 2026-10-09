@@ -8236,7 +8236,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       };
 
       const takeJournalMetadata = (): JournalMetadata | undefined => {
-        const metadata = journalMetadata?.snapshot();
+        const metadata = journalMetadata?.finish();
 
         // Release admission metadata before model or Tool waits; it is not a warm context cache.
         journalMetadata = undefined;

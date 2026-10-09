@@ -930,7 +930,7 @@ describe("engine compaction records and projection (RUN-026)", () => {
               RUN_ID,
               undefined,
               undefined,
-              metadata.snapshot(),
+              metadata.finish(),
             );
 
             expect(prepared).toEqual(projection);
@@ -1237,7 +1237,7 @@ describe("engine compaction records and projection (RUN-026)", () => {
           const metadata = makeJournalMetadata(LATER_RUN_ID);
 
           for (const record of prefix) metadata.add(record);
-          const captured = metadata.snapshot();
+          const captured = metadata.finish();
           const settled = envelopesOf([batch])[2];
 
           if (settled === undefined) return yield* Effect.die("Expected a settled Tool fixture");
@@ -1245,7 +1245,9 @@ describe("engine compaction records and projection (RUN-026)", () => {
           // KOM-416: committed coverage stays stable; newer history pairs factual late results.
           const late = envelopeAt(prefix.length + 1, settled.record);
 
-          metadata.add(late);
+          const newerMetadata = makeJournalMetadata(LATER_RUN_ID);
+
+          for (const record of [...prefix, late]) newerMetadata.add(record);
 
           const projected = yield* projectRunJournalStream(
             Stream.fromIterable(prefix),
@@ -1267,7 +1269,7 @@ describe("engine compaction records and projection (RUN-026)", () => {
             LATER_RUN_ID,
             undefined,
             undefined,
-            metadata.snapshot(),
+            newerMetadata.finish(),
           );
 
           if (kind === "summarize") {
