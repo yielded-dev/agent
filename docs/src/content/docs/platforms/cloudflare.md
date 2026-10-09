@@ -239,6 +239,8 @@ addressed Thread, including within a shared Object. It retains drafts for active
 model-call generations even without observers, entirely in that Object incarnation's memory.
 Unlike persisted partials, these memory drafts are lost if the Object is evicted mid-response.
 
+Open `watchText` before or alongside `submit`, because processing can start before the admission receipt arrives.
+
 In an authenticated Worker handler, authorize the requested Thread and forward its draft
 snapshots and live text to the browser as SSE:
 
