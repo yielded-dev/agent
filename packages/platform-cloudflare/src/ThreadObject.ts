@@ -1273,7 +1273,8 @@ export const make = <
       if (isSubmitSucceeded(response) && this.#pendingPass === undefined && !this.#hintPending) {
         this.#hintPending = true;
         this.ctx.waitUntil(
-          Promise.resolve()
+          // Let the native RPC response unwind before starting maintenance CPU work.
+          new Promise<void>((resolve) => setTimeout(resolve, 0))
             .then(() => this.alarm())
             .finally(() => {
               this.#hintPending = false;
